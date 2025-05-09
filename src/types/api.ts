@@ -37,6 +37,8 @@ export interface Booking {
   vehicleNumber?: string;
   notes?: string;
   billingAddress?: string;
+  payment_status?: string;  // Added payment_status property
+  payment_method?: string;  // Added payment_method property
   extraCharges?: {
     amount: number;
     description: string;

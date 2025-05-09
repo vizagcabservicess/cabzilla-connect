@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Database setup script to ensure all required tables exist
@@ -292,6 +291,203 @@ try {
         }
         
         file_put_contents($setupLogFile, "[$setupTimestamp] Created bookings table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the payroll_entries table
+    $checkPayrollTable = $conn->query("SHOW TABLES LIKE 'payroll_entries'");
+    
+    if (!$checkPayrollTable || $checkPayrollTable->num_rows === 0) {
+        // Create payroll_entries table
+        $createPayrollSQL = "
+            CREATE TABLE IF NOT EXISTS payroll_entries (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                driver_id VARCHAR(50) NOT NULL,
+                date DATE NOT NULL,
+                description TEXT NOT NULL,
+                amount DECIMAL(12,2) NOT NULL,
+                type ENUM('expense') NOT NULL DEFAULT 'expense',
+                category VARCHAR(50) NOT NULL DEFAULT 'Salary',
+                payment_method VARCHAR(50),
+                status ENUM('reconciled', 'pending') DEFAULT 'pending',
+                pay_period_start DATE NOT NULL,
+                pay_period_end DATE NOT NULL,
+                basic_salary DECIMAL(10,2) NOT NULL,
+                days_worked INT(3) NOT NULL DEFAULT 0,
+                days_leave INT(3) NOT NULL DEFAULT 0,
+                overtime_hours DECIMAL(5,2) DEFAULT 0,
+                net_salary DECIMAL(12,2) NOT NULL,
+                payment_status ENUM('pending', 'partial', 'paid') DEFAULT 'pending',
+                payment_date DATE,
+                payslip_issued TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY driver_id (driver_id),
+                KEY pay_period (pay_period_start, pay_period_end),
+                KEY payment_status (payment_status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createPayrollSQL)) {
+            throw new Exception("Failed to create payroll_entries table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created payroll_entries table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the salary_components table
+    $checkSalaryComponentsTable = $conn->query("SHOW TABLES LIKE 'salary_components'");
+    
+    if (!$checkSalaryComponentsTable || $checkSalaryComponentsTable->num_rows === 0) {
+        // Create salary_components table
+        $createComponentsSQL = "
+            CREATE TABLE IF NOT EXISTS salary_components (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                name VARCHAR(100) NOT NULL,
+                type ENUM('basic', 'allowance', 'deduction', 'advance', 'bonus') NOT NULL,
+                amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                is_fixed TINYINT(1) NOT NULL DEFAULT 1,
+                calculation_method VARCHAR(20),
+                calculation_base VARCHAR(20),
+                calculation_value DECIMAL(10,2),
+                description TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createComponentsSQL)) {
+            throw new Exception("Failed to create salary_components table: " . $conn->error);
+        }
+        
+        // Insert default salary components
+        $defaultComponents = [
+            ["Basic Salary", "basic", 15000, 1, NULL, NULL, NULL, "Base salary amount"],
+            ["Daily Allowance (Batha)", "allowance", 200, 0, "perDay", NULL, NULL, "Daily allowance for food"],
+            ["Fuel Allowance", "allowance", 3000, 1, NULL, NULL, NULL, "Monthly fuel allowance"],
+            ["Mobile Allowance", "allowance", 500, 1, NULL, NULL, NULL, "Monthly mobile recharge allowance"],
+            ["Trip Bonus", "bonus", 0, 0, "perTrip", NULL, NULL, "Bonus per completed trip"],
+            ["Provident Fund", "deduction", 0, 0, "percentage", "basic", 12, "PF deduction"]
+        ];
+        
+        foreach ($defaultComponents as $component) {
+            $insertSQL = "INSERT INTO salary_components (name, type, amount, is_fixed, calculation_method, calculation_base, calculation_value, description) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            $stmt = $conn->prepare($insertSQL);
+            $stmt->bind_param("ssdiisds", $component[0], $component[1], $component[2], $component[3], $component[4], $component[5], $component[6], $component[7]);
+            $stmt->execute();
+            $stmt->close();
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created salary_components table with default components\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the payroll_allowances table
+    $checkAllowancesTable = $conn->query("SHOW TABLES LIKE 'payroll_allowances'");
+    
+    if (!$checkAllowancesTable || $checkAllowancesTable->num_rows === 0) {
+        // Create payroll_allowances table
+        $createAllowancesSQL = "
+            CREATE TABLE IF NOT EXISTS payroll_allowances (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                payroll_id INT(11) NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY payroll_id (payroll_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createAllowancesSQL)) {
+            throw new Exception("Failed to create payroll_allowances table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created payroll_allowances table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the payroll_deductions table
+    $checkDeductionsTable = $conn->query("SHOW TABLES LIKE 'payroll_deductions'");
+    
+    if (!$checkDeductionsTable || $checkDeductionsTable->num_rows === 0) {
+        // Create payroll_deductions table
+        $createDeductionsSQL = "
+            CREATE TABLE IF NOT EXISTS payroll_deductions (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                payroll_id INT(11) NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY payroll_id (payroll_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createDeductionsSQL)) {
+            throw new Exception("Failed to create payroll_deductions table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created payroll_deductions table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the salary_advances table
+    $checkAdvancesTable = $conn->query("SHOW TABLES LIKE 'salary_advances'");
+    
+    if (!$checkAdvancesTable || $checkAdvancesTable->num_rows === 0) {
+        // Create salary_advances table
+        $createAdvancesSQL = "
+            CREATE TABLE IF NOT EXISTS salary_advances (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                driver_id VARCHAR(50) NOT NULL,
+                payroll_id INT(11),
+                date DATE NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY driver_id (driver_id),
+                KEY payroll_id (payroll_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createAdvancesSQL)) {
+            throw new Exception("Failed to create salary_advances table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created salary_advances table\n", FILE_APPEND);
+    }
+    
+    // Verify and set up the attendance_records table
+    $checkAttendanceTable = $conn->query("SHOW TABLES LIKE 'attendance_records'");
+    
+    if (!$checkAttendanceTable || $checkAttendanceTable->num_rows === 0) {
+        // Create attendance_records table
+        $createAttendanceSQL = "
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                driver_id VARCHAR(50) NOT NULL,
+                date DATE NOT NULL,
+                status ENUM('present', 'absent', 'half-day', 'paid-leave', 'unpaid-leave', 'holiday') NOT NULL,
+                hours_worked DECIMAL(4,2),
+                overtime_hours DECIMAL(4,2) DEFAULT 0,
+                notes TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY driver_date (driver_id, date),
+                KEY driver_id (driver_id),
+                KEY date (date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if (!$conn->query($createAttendanceSQL)) {
+            throw new Exception("Failed to create attendance_records table: " . $conn->error);
+        }
+        
+        file_put_contents($setupLogFile, "[$setupTimestamp] Created attendance_records table\n", FILE_APPEND);
     }
     
     file_put_contents($setupLogFile, "[$setupTimestamp] Database setup completed successfully\n", FILE_APPEND);

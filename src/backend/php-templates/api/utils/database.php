@@ -1,283 +1,176 @@
 
 <?php
 /**
- * Database utility functions for establishing connections
+ * Database utility functions
  */
 
-// Create logs directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0777, true);
-}
-
-// Define a function to log database connection info
-function logDbConnection($message, $data = []) {
-    global $logDir;
-    $logFile = $logDir . '/db_connection_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message";
+// Connect to the MySQL database
+function connectToDatabase() {
+    $db_host = getenv('DB_HOST') ?: 'localhost';
+    $db_user = getenv('DB_USER') ?: 'vizagtaxiuser';
+    $db_pass = getenv('DB_PASS') ?: 'vizagtaxipassword';
+    $db_name = getenv('DB_NAME') ?: 'vizagtaxidb';
     
-    if (!empty($data)) {
-        $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE);
+    // Create a new mysqli connection
+    $mysqli = new mysqli($db_host, $db_user, $db_pass, $db_name);
+    
+    // Check for connection errors
+    if ($mysqli->connect_error) {
+        error_log("Database connection failed: " . $mysqli->connect_error);
+        throw new Exception("Database connection failed: " . $mysqli->connect_error);
     }
     
-    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
-    error_log($logEntry);
+    // Set character set to UTF-8
+    $mysqli->set_charset("utf8mb4");
+    
+    return $mysqli;
 }
 
-// Get database connection with improved error handling
+// Get a database connection with error handling and retry mechanism
 function getDbConnection() {
-    // Disable any output buffering to prevent HTML contamination
-    if (ob_get_level()) ob_end_clean();
+    static $db = null;
     
-    // Database credentials - CRITICAL: DIRECT HARD-CODED VALUES FOR RELIABILITY
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    try {
-        logDbConnection("Attempting database connection", [
-            'host' => $dbHost, 
-            'dbname' => $dbName
-        ]);
-        
-        // Create connection with error reporting
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            logDbConnection("Database connection failed", ['error' => $conn->connect_error]);
-            throw new Exception("Connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset to prevent encoding issues
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query to ensure it's working
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            logDbConnection("Database test query failed", ['error' => $conn->error]);
-            throw new Exception("Database connection test query failed: " . $conn->error);
-        }
-        
-        logDbConnection("Database connection successful", ['server_info' => $conn->server_info]);
-        return $conn;
-    } catch (Exception $e) {
-        // Log error to both custom log and PHP error log
-        logDbConnection("Database connection error", ['error' => $e->getMessage()]);
-        error_log("Database connection error: " . $e->getMessage());
-        
-        return null;
-    }
-}
-
-// Function for sending JSON responses
-function sendDbJsonResponse($data, $statusCode = 200) {
-    // Clear any existing output to prevent contamination
-    if (ob_get_length()) ob_clean();
-    
-    // Set HTTP status code
-    http_response_code($statusCode);
-    
-    // Ensure content type is application/json
-    header('Content-Type: application/json');
-    
-    // Output JSON
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// Enhanced direct database connection function that NEVER fails silently
-function getDirectDatabaseConnection() {
-    // Disable any output buffering
-    if (ob_get_level()) ob_end_clean();
-    
-    // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    // Log the attempt
-    error_log("Attempting direct database connection to {$dbHost}/{$dbName}");
-    
-    try {
-        // Create connection
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            error_log("Direct database connection failed: " . $conn->connect_error);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            error_log("Connection test query failed: " . $conn->error);
-            throw new Exception("Connection test query failed: " . $conn->error);
-        }
-        
-        error_log("Direct database connection successful");
-        return $conn;
-    } catch (Exception $e) {
-        // Log the error
-        error_log("Direct database connection error: " . $e->getMessage());
-        return null;
-    }
-}
-
-// Function to safely escape a value for database queries
-function dbEscape($conn, $value) {
-    if ($conn) {
-        return $conn->real_escape_string($value);
+    if ($db === null) {
+        $db = connectToDatabase();
     }
     
-    // Fallback if no connection
-    return str_replace(["'", "\""], ["\'", "\\\""], $value);
-}
-
-// Function to check if a table exists
-function tableExists($conn, $tableName) {
-    if (!$conn) {
-        return false;
+    // Check if connection is still alive
+    if (!$db->ping()) {
+        // Try to reconnect
+        $db->close();
+        $db = connectToDatabase();
     }
     
-    $result = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($tableName) . "'");
-    return $result && $result->num_rows > 0;
+    return $db;
 }
 
-// Direct database testing function for diagnostics
-function testDirectDatabaseConnection() {
-    // Disable any output buffering
-    if (ob_get_level()) ob_end_clean();
+// Get a database connection with retry
+function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 1) {
+    $attempts = 0;
+    $lastException = null;
     
-    $result = [
-        'status' => 'error',
-        'message' => 'Database connection test failed',
-        'connection' => false,
-        'timestamp' => time()
-    ];
-    
-    try {
-        // CRITICAL FIX: Use hardcoded database credentials for maximum reliability
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        logDbConnection("Testing direct database connection", [
-            'host' => $dbHost, 
-            'dbname' => $dbName
-        ]);
-        
-        // Create connection
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        // Check connection
-        if ($conn->connect_error) {
-            logDbConnection("Direct connection failed", ['error' => $conn->connect_error]);
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set charset
-        $conn->set_charset("utf8mb4");
-        
-        // Test connection with a simple query
-        $testResult = $conn->query("SELECT 1");
-        if (!$testResult) {
-            logDbConnection("Test query failed", ['error' => $conn->error]);
-            throw new Exception("Test query failed: " . $conn->error);
-        }
-        
-        // Check if bookings table exists
-        $bookingsTableExists = tableExists($conn, 'bookings');
-        
-        // Try simple insert and delete on bookings table
-        $testInsertSuccess = false;
-        
-        if ($bookingsTableExists) {
-            // Generate test booking number
-            $testBookingNumber = 'TEST' . time() . rand(1000, 9999);
+    while ($attempts < $maxRetries) {
+        try {
+            return getDbConnection();
+        } catch (Exception $e) {
+            $lastException = $e;
+            $attempts++;
+            error_log("Database connection attempt $attempts failed: " . $e->getMessage());
             
-            // Try insert with MINIMUM required fields only
-            $testInsertSql = "INSERT INTO bookings (booking_number, pickup_location, pickup_date, cab_type, trip_type, trip_mode, total_amount, passenger_name, passenger_phone, passenger_email) 
-                             VALUES ('$testBookingNumber', 'Test connection', NOW(), 'Test', 'test', 'test', 100, 'Test User', '1234567890', 'test@example.com')";
-            $testInsertResult = $conn->query($testInsertSql);
-            
-            $testInsertSuccess = $testInsertResult !== false;
-            logDbConnection("Test insert result", [
-                'success' => $testInsertSuccess, 
-                'error' => $testInsertSuccess ? null : $conn->error,
-                'sql' => $testInsertSql
-            ]);
-            
-            // Delete test record
-            if ($testInsertSuccess) {
-                $conn->query("DELETE FROM bookings WHERE booking_number = '$testBookingNumber'");
+            if ($attempts < $maxRetries) {
+                // Wait before retrying
+                sleep($retryDelay);
+                // Increase delay for next attempt (exponential backoff)
+                $retryDelay *= 2;
             }
         }
-        
-        // Build success response
-        $result = [
-            'status' => 'success',
-            'message' => 'Database connection and query test successful',
-            'connection' => true,
-            'timestamp' => time(),
-            'server' => $conn->server_info ?? 'unknown',
-            'php_version' => phpversion(),
-            'bookings_table_exists' => $bookingsTableExists,
-            'test_insert_success' => $testInsertSuccess
-        ];
-        
-        logDbConnection("Direct test successful", ['result' => $result]);
-        
-        // Close connection
-        $conn->close();
-        
-    } catch (Exception $e) {
-        // Log error and build error response
-        logDbConnection("Direct database connection test failed", ['error' => $e->getMessage()]);
-        
-        $result = [
-            'status' => 'error',
-            'message' => $e->getMessage(),
-            'connection' => false,
-            'timestamp' => time(),
-            'php_version' => phpversion(),
-            'mysql_client_version' => mysqli_get_client_info()
-        ];
     }
     
-    return $result;
+    // All attempts failed, throw the last exception
+    throw $lastException ?: new Exception("Failed to connect to database after $maxRetries attempts");
 }
 
-// Function to verify database integrity
-function verifyDatabaseIntegrity($conn) {
-    if (!$conn) {
-        return ['status' => 'error', 'message' => 'No database connection'];
-    }
+// Format a date string for MySQL
+function formatDateForMySQL($date) {
+    if (empty($date)) return null;
     
-    $requiredTables = ['bookings'];
-    $missingTables = [];
-    
-    foreach ($requiredTables as $table) {
-        if (!tableExists($conn, $table)) {
-            $missingTables[] = $table;
+    if (is_string($date)) {
+        // If already in YYYY-MM-DD format, return as is
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date;
         }
+        
+        // Try to convert the string to a timestamp
+        $timestamp = strtotime($date);
+        if ($timestamp === false) return null;
+        
+        return date('Y-m-d', $timestamp);
     }
     
-    if (count($missingTables) > 0) {
-        return [
-            'status' => 'warning', 
-            'message' => 'Missing required tables', 
-            'missing_tables' => $missingTables
-        ];
+    // If it's already a timestamp
+    if (is_numeric($date)) {
+        return date('Y-m-d', $date);
     }
     
-    return ['status' => 'success', 'message' => 'Database integrity verified'];
+    return null;
+}
+
+// Format a datetime string for MySQL
+function formatDateTimeForMySQL($datetime) {
+    if (empty($datetime)) return null;
+    
+    if (is_string($datetime)) {
+        // If already in YYYY-MM-DD HH:MM:SS format, return as is
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $datetime)) {
+            return $datetime;
+        }
+        
+        // Try to convert the string to a timestamp
+        $timestamp = strtotime($datetime);
+        if ($timestamp === false) return null;
+        
+        return date('Y-m-d H:i:s', $timestamp);
+    }
+    
+    // If it's already a timestamp
+    if (is_numeric($datetime)) {
+        return date('Y-m-d H:i:s', $datetime);
+    }
+    
+    return null;
+}
+
+// Escape and quote a string for MySQL
+function escapeString($db, $string) {
+    if ($string === null) return 'NULL';
+    return "'" . $db->real_escape_string($string) . "'";
+}
+
+// Execute a parameterized query with proper error handling
+function executeQuery($conn, $sql, $params = [], $types = "") {
+    try {
+        $stmt = $conn->prepare($sql);
+        
+        if ($stmt === false) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
+        }
+        
+        // Only bind parameters if there are any
+        if (!empty($params) && !empty($types)) {
+            if (strlen($types) !== count($params)) {
+                $types = str_repeat("s", count($params));
+            }
+            
+            // Create a bind_param array with references
+            $bindParams = array($types);
+            foreach ($params as $key => $value) {
+                $bindParams[] = &$params[$key];
+            }
+            
+            // Call bind_param with the unpacked bindParams array
+            call_user_func_array(array($stmt, 'bind_param'), $bindParams);
+        }
+        
+        // Execute the statement
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to execute statement: " . $stmt->error);
+        }
+        
+        // Get the result and return it
+        $result = $stmt->get_result();
+        
+        // If there's no result (e.g., for INSERT, UPDATE), return the affected rows and insert ID
+        if ($result === false) {
+            return [
+                'affected_rows' => $stmt->affected_rows,
+                'insert_id' => $stmt->insert_id,
+                'success' => true
+            ];
+        }
+        
+        return $result;
+    } catch (Exception $e) {
+        error_log("Query execution error: " . $e->getMessage());
+        throw $e;
+    }
 }

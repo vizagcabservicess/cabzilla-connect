@@ -1,14 +1,11 @@
+import axios from 'axios';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
 
-import { toast } from 'sonner';
-import { apiBaseUrl } from '@/config/api';
-import { directVehicleOperation } from '@/utils/apiHelper';
-
-// Define common fare data interface with optional fields to support different fare types
 export interface FareData {
-  id?: number;
-  vehicleId: string;
-  vehicle_id?: string; // Make this optional since we'll set it from vehicleId
-  basePrice?: number; // Make these optional since not all fare types need them
+  [key: string]: any;
+  vehicleId?: string;
+  vehicle_id?: string;
+  basePrice?: number;
   pricePerKm?: number;
   pickupPrice?: number;
   dropPrice?: number;
@@ -17,359 +14,264 @@ export interface FareData {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
+  // Local package fares
   price4hrs40km?: number;
   price8hrs80km?: number;
   price10hrs100km?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
-  name?: string; // Vehicle name
-  [key: string]: any;
 }
 
-// Function to clear browser cache for fare data
-export const clearFareCache = () => {
-  const keys = Object.keys(localStorage);
-  const cacheKeys = keys.filter(key => key.includes('fare') || key.includes('Fare'));
-  
-  cacheKeys.forEach(key => {
-    localStorage.removeItem(key);
-  });
-  
-  toast.info('Fare cache cleared');
+// Function to parse numeric values safely
+export const parseNumericValue = (value: any): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
 };
 
-// Initialize database tables for fare management
-export const initializeDatabaseTables = async (): Promise<boolean> => {
+export const normalizeResponse = (response: any): FareData[] => {
+  // If response is already an array of fares, return it
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  let fares: FareData[] = [];
+
+  // Check for various response formats
+  if (response.fares) {
+    if (Array.isArray(response.fares)) {
+      fares = response.fares;
+    } else if (typeof response.fares === 'object') {
+      fares = Object.values(response.fares);
+    }
+  } else if (response.data && response.data.fares) {
+    if (Array.isArray(response.data.fares)) {
+      fares = response.data.fares;
+    } else if (typeof response.data.fares === 'object') {
+      fares = Object.values(response.data.fares);
+    }
+  }
+
+  return fares;
+};
+
+export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]> => {
   try {
-    // Append a timestamp to prevent caching
-    const timestamp = new Date().getTime();
+    console.log(`Fetching airport fares for vehicle ${vehicleId || 'all'}`);
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/fix-collation.php?_t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to initialize database tables: ${response.status}`);
+    const params: Record<string, string> = {};
+    if (vehicleId) {
+      params.vehicleId = vehicleId;
     }
     
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      console.log('Database tables initialized successfully:', result);
-      return true;
+    // Add timestamp to bust cache
+    params._t = Date.now().toString();
+
+    const response = await axios.get(getApiUrl('api/admin/direct-airport-fares'), {
+      params,
+      headers: {
+        ...forceRefreshHeaders,
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true'
+      }
+    });
+
+    console.log('Airport fares API response:', response.data);
+
+    if (response.data && (response.data.status === 'success' || response.data.fares)) {
+      return normalizeResponse(response.data);
     } else {
-      console.error('Failed to initialize database tables:', result?.message || 'Unknown error');
-      return false;
+      console.error('Invalid airport fares response format:', response.data);
+      throw new Error('Invalid response format from airport fares API');
     }
-  } catch (error) {
-    console.error('Error initializing database tables:', error);
-    return false;
-  }
-};
-
-// Get local fares for a specific vehicle
-export const fetchLocalFares = async (vehicleId: string): Promise<FareData[]> => {
-  try {
-    // Append a timestamp to prevent browser caching
-    const timestamp = new Date().getTime();
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-local-fares.php?vehicleId=${vehicleId}&_t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch local fares: ${response.status}`);
-    }
-    
-    const responseData = await response.json();
-    
-    if (responseData && responseData.status === 'success' && responseData.fares) {
-      return Array.isArray(responseData.fares) ? responseData.fares : [responseData.fares];
-    }
-    
-    return [];
-  } catch (error) {
-    console.error('Error fetching local fares:', error);
-    throw error;
-  }
-};
-
-// Update local fares for a specific vehicle
-export const updateLocalFares = async (fareData: FareData): Promise<any> => {
-  try {
-    if (!fareData.vehicleId) {
-      throw new Error('Vehicle ID is required');
-    }
-    
-    // Ensure vehicle_id is set
-    fareData.vehicle_id = fareData.vehicleId;
-    
-    // Create form data to pass to the API
-    const formData = new FormData();
-    formData.append('vehicleId', fareData.vehicleId);
-    formData.append('vehicle_id', fareData.vehicleId);
-    
-    // Append all fare fields that exist in the data
-    if (fareData.price4hrs40km !== undefined) formData.append('price4hrs40km', String(fareData.price4hrs40km));
-    if (fareData.price8hrs80km !== undefined) formData.append('price8hrs80km', String(fareData.price8hrs80km));
-    if (fareData.price10hrs100km !== undefined) formData.append('price10hrs100km', String(fareData.price10hrs100km));
-    if (fareData.priceExtraKm !== undefined) formData.append('priceExtraKm', String(fareData.priceExtraKm));
-    if (fareData.priceExtraHour !== undefined) formData.append('priceExtraHour', String(fareData.priceExtraHour));
-    
-    // Add compatibility for both field naming conventions
-    if (fareData.extraKmCharge !== undefined) formData.append('extraKmCharge', String(fareData.extraKmCharge));
-    
-    // Append a timestamp to prevent caching
-    const timestamp = new Date().getTime();
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to update local fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Dispatch custom event to notify other components
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'local',
-          vehicleId: fareData.vehicleId
-        }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to update local fares');
-    }
-  } catch (error) {
-    console.error('Error updating local fares:', error);
-    throw error;
-  }
-};
-
-// Get airport fares for a specific vehicle
-export const fetchAirportFares = async (vehicleId: string): Promise<any> => {
-  try {
-    // Append a timestamp to prevent browser caching
-    const timestamp = new Date().getTime();
-    
-    console.log(`Fetching airport fares for vehicle ${vehicleId} at ${timestamp}`);
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-airport-fares.php?vehicleId=${vehicleId}&_t=${timestamp}&force_refresh=true`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch airport fares: ${response.status}`);
-    }
-    
-    // Return the raw response directly to simplify handling
-    const responseData = await response.json();
-    console.log('Airport fares raw response:', responseData);
-    
-    // Return the entire response object to allow for more flexible processing
-    return responseData;
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     throw error;
   }
 };
 
-// Update airport fares for a specific vehicle
 export const updateAirportFares = async (fareData: FareData): Promise<any> => {
   try {
-    if (!fareData.vehicleId) {
-      throw new Error('Vehicle ID is required');
+    console.log('Updating airport fares:', fareData);
+    
+    // Ensure we have a vehicle ID
+    if (!fareData.vehicleId && !fareData.vehicle_id) {
+      throw new Error('Vehicle ID is required to update fares');
     }
     
-    // Ensure vehicle_id is set
-    fareData.vehicle_id = fareData.vehicleId;
+    const vehicleId = fareData.vehicleId || fareData.vehicle_id;
     
-    // Create form data to pass to the API
-    const formData = new FormData();
-    formData.append('vehicleId', fareData.vehicleId);
-    formData.append('vehicle_id', fareData.vehicleId);
-    
-    // Append all fare fields (handling optionals with defaults)
-    formData.append('basePrice', String(fareData.basePrice || 0));
-    formData.append('pricePerKm', String(fareData.pricePerKm || 0));
-    formData.append('pickupPrice', String(fareData.pickupPrice || 0));
-    formData.append('dropPrice', String(fareData.dropPrice || 0));
-    formData.append('tier1Price', String(fareData.tier1Price || 0));
-    formData.append('tier2Price', String(fareData.tier2Price || 0));
-    formData.append('tier3Price', String(fareData.tier3Price || 0));
-    formData.append('tier4Price', String(fareData.tier4Price || 0));
-    formData.append('extraKmCharge', String(fareData.extraKmCharge || 0));
-    
-    // Also append in snake_case format for compatibility with PHP backend
-    formData.append('base_price', String(fareData.basePrice || 0));
-    formData.append('price_per_km', String(fareData.pricePerKm || 0));
-    formData.append('pickup_price', String(fareData.pickupPrice || 0));
-    formData.append('drop_price', String(fareData.dropPrice || 0));
-    formData.append('tier1_price', String(fareData.tier1Price || 0));
-    formData.append('tier2_price', String(fareData.tier2Price || 0));
-    formData.append('tier3_price', String(fareData.tier3Price || 0));
-    formData.append('tier4_price', String(fareData.tier4Price || 0));
-    formData.append('extra_km_charge', String(fareData.extraKmCharge || 0));
-    
-    // Append a timestamp to prevent caching
-    const timestamp = new Date().getTime();
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to update airport fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Dispatch custom event to notify other components
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'airport',
-          vehicleId: fareData.vehicleId
+    // Use direct API endpoint for updating
+    const response = await axios.post(
+      getApiUrl('api/admin/airport-fares-update'),
+      {
+        ...fareData,
+        vehicleId,
+        vehicle_id: vehicleId,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
         }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to update airport fares');
-    }
+      }
+    );
+    
+    console.log('Airport fares update response:', response.data);
+    
+    return response.data;
   } catch (error) {
     console.error('Error updating airport fares:', error);
     throw error;
   }
 };
 
-// Sync local fare tables (update or create tables if needed)
-export const syncLocalFares = async (): Promise<any> => {
+// Sync airport fares between tables
+export const syncAirportFares = async (): Promise<any> => {
   try {
-    // Append a timestamp to prevent caching
-    const timestamp = new Date().getTime();
+    const timestamp = Date.now();
+    const response = await axios.get(
+      `${getApiUrl('api/admin/sync-fares')}?type=airport&_t=${timestamp}`,
+      {
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        }
+      }
+    );
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/sync-local-fares.php?force_sync=true&_t=${timestamp}`, {
-      method: 'GET',
+    console.log('Sync airport fares response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error syncing airport fares:', error);
+    throw error;
+  }
+};
+
+// Fetch local package fares
+export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> => {
+  try {
+    console.log(`Fetching local fares for vehicle ${vehicleId || 'all'}`);
+    
+    const params: Record<string, string> = {};
+    if (vehicleId) {
+      params.vehicleId = vehicleId;
+    }
+    
+    // Add timestamp to bust cache
+    params._t = Date.now().toString();
+
+    const response = await axios.get(getApiUrl('api/admin/direct-local-fares'), {
+      params,
       headers: {
-        'X-Requested-With': 'XMLHttpRequest',
+        ...forceRefreshHeaders,
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
+        'X-Debug': 'true'
       }
     });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to sync local fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Refresh fare cache
-      clearFareCache();
-      
-      // Dispatch custom event
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'local',
-          allVehicles: true
-        }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
+
+    console.log('Local fares API response:', response.data);
+
+    if (response.data && (response.data.status === 'success' || response.data.fares)) {
+      return normalizeResponse(response.data);
     } else {
-      throw new Error(result?.message || 'Failed to sync local fares');
+      console.error('Invalid local fares response format:', response.data);
+      throw new Error('Invalid response format from local fares API');
     }
+  } catch (error) {
+    console.error('Error fetching local fares:', error);
+    throw error;
+  }
+};
+
+// Update local package fares
+export const updateLocalFares = async (fareData: FareData): Promise<any> => {
+  try {
+    console.log('Updating local fares:', fareData);
+    
+    // Ensure we have a vehicle ID
+    if (!fareData.vehicleId && !fareData.vehicle_id) {
+      throw new Error('Vehicle ID is required to update fares');
+    }
+    
+    const vehicleId = fareData.vehicleId || fareData.vehicle_id;
+    
+    // Use direct API endpoint for updating
+    const response = await axios.post(
+      getApiUrl('api/admin/local-fares-update'),
+      {
+        ...fareData,
+        vehicleId,
+        vehicle_id: vehicleId,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        }
+      }
+    );
+    
+    console.log('Local fares update response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error updating local fares:', error);
+    throw error;
+  }
+};
+
+// Sync local package fares between tables
+export const syncLocalFares = async (): Promise<any> => {
+  try {
+    const timestamp = Date.now();
+    const response = await axios.get(
+      `${getApiUrl('api/admin/sync-fares')}?type=local&_t=${timestamp}`,
+      {
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        }
+      }
+    );
+    
+    console.log('Sync local fares response:', response.data);
+    return response.data;
   } catch (error) {
     console.error('Error syncing local fares:', error);
     throw error;
   }
 };
 
-// Sync airport fare tables (update or create tables if needed)
-export const syncAirportFares = async (): Promise<any> => {
+// Initialize database tables
+export const initializeDatabaseTables = async (): Promise<boolean> => {
   try {
-    // Append a timestamp to prevent caching
-    const timestamp = new Date().getTime();
-    
-    const response = await fetch(`${apiBaseUrl}/api/admin/sync-airport-fares.php?force_sync=true&_t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to sync airport fares: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result && result.status === 'success') {
-      // Refresh fare cache
-      clearFareCache();
-      
-      // Dispatch custom event
-      const event = new CustomEvent('fare-data-updated', {
-        detail: {
-          fareType: 'airport',
-          allVehicles: true
+    const timestamp = Date.now();
+    const response = await axios.get(
+      `${getApiUrl('api/admin/db-setup')}?_t=${timestamp}`,
+      {
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
         }
-      });
-      window.dispatchEvent(event);
-      
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to sync airport fares');
-    }
+      }
+    );
+    
+    console.log('Database initialization response:', response.data);
+    return response.data && response.data.status === 'success';
   } catch (error) {
-    console.error('Error syncing airport fares:', error);
-    throw error;
+    console.error('Error initializing database tables:', error);
+    return false;
   }
 };

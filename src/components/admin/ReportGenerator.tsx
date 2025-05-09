@@ -45,13 +45,17 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { GstReportData } from '@/types/api';
 import { 
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  fetchReport,
+  exportReportToCSV
+} from '@/services/reportsAPI';
+import { ReportFilterParams } from '@/types/reports';
 
 interface ReportGeneratorProps {
   reportType?: string;
@@ -69,79 +73,6 @@ const PAYMENT_METHODS = [
   { value: 'other', label: 'Other' },
 ];
 
-// This will be imported from a proper API service
-const fetchReportData = async (
-  reportType: string, 
-  dateRange: DateRange | undefined,
-  periodFilter: string = 'custom',
-  withGst: boolean = false,
-  paymentMethod: string = '',
-  onlyGstEnabled: boolean = false
-) => {
-  try {
-    let apiParams: Record<string, string> = {
-      type: reportType,
-      period: periodFilter
-    };
-    
-    // Only include date range if period is 'custom'
-    if (periodFilter === 'custom' && dateRange) {
-      const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : format(new Date(new Date().setDate(new Date().getDate() - 30)), 'yyyy-MM-dd');
-      const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-      apiParams.start_date = startDate;
-      apiParams.end_date = endDate;
-    }
-    
-    if (withGst) {
-      apiParams.gst = 'true';
-    }
-    
-    if (paymentMethod) {
-      apiParams.payment_method = paymentMethod;
-    }
-    
-    // Add parameter for GST filtering
-    if (onlyGstEnabled || reportType === 'gst') {
-      apiParams.only_gst_enabled = 'true';
-    }
-    
-    const queryString = Object.entries(apiParams)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-      .join('&');
-    
-    const apiBaseUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
-      ? `${window.location.protocol}//${window.location.host}`
-      : 'https://vizagup.com';
-    
-    const url = `${apiBaseUrl}/api/admin/reports.php?${queryString}`;
-    console.log('Fetching report from:', url);
-    
-    const response = await fetch(url, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'X-Force-Refresh': 'true',
-        'X-Debug': 'true'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch report: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log('Report API response:', data);
-    
-    if (data.status === 'success') {
-      return data.data;
-    } else {
-      throw new Error(data.message || 'Failed to retrieve report data');
-    }
-  } catch (error) {
-    console.error('Error fetching report:', error);
-    throw error;
-  }
-};
-
 export function ReportGenerator({ reportType: initialReportType, dateRange: initialDateRange }: ReportGeneratorProps = {}) {
   const [activeTab, setActiveTab] = useState<string>(initialReportType || 'bookings');
   const [loading, setLoading] = useState<boolean>(false);
@@ -156,7 +87,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   const [withGst, setWithGst] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [onlyGstEnabled, setOnlyGstEnabled] = useState<boolean>(true); // Default to true for GST reports
-  const [filtersVisible, setFiltersVisible] = useState<boolean>(false);
   const { toast } = useToast();
 
   // Effect for loading report data
@@ -171,19 +101,21 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     }
   }, [activeTab]);
 
-  // Don't auto-reload when date changes, only when tab or period changes
-  // This prevents multiple reloads when adjusting dates
+  // Load report data
   const loadReport = async () => {
     try {
       setLoading(true);
-      const data = await fetchReportData(
-        activeTab, 
-        dateRange, 
-        periodFilter, 
-        withGst, 
+      
+      const filterParams: ReportFilterParams = {
+        reportType: activeTab,
+        dateRange,
+        periodFilter,
+        withGst,
         paymentMethod,
-        onlyGstEnabled
-      );
+        onlyGstEnabled: activeTab === 'gst' ? true : onlyGstEnabled
+      };
+      
+      const data = await fetchReport(filterParams);
       console.log('Processed report data:', data);
       setReportData(data);
     } catch (error) {
@@ -214,103 +146,25 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   };
 
   const handleExportCSV = () => {
-    // Check if there's data to export based on the report type
-    let dataEmpty = false;
-    
-    if (activeTab === 'gst' && reportData) {
-      // GST report has a specific structure
-      dataEmpty = !reportData.gstInvoices || reportData.gstInvoices.length === 0;
-    } else if (Array.isArray(reportData)) {
-      // For other reports, check if data is an empty array
-      dataEmpty = reportData.length === 0;
-    } else if (!reportData) {
-      // No data at all
-      dataEmpty = true;
-    }
-    
-    if (dataEmpty) {
-      toast({
-        title: "Nothing to export",
-        description: "Generate a report first before exporting",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      // Handle different data structures based on report type
-      let dataToExport: any[] = [];
-      
-      if (activeTab === 'gst' && reportData.gstInvoices) {
-        // GST report has a nested structure
-        dataToExport = reportData.gstInvoices;
-      } else if (Array.isArray(reportData)) {
-        // Regular array data
-        dataToExport = reportData;
-      } else if (reportData && typeof reportData === 'object') {
-        // Handle nested data structures
-        if (activeTab === 'bookings' && reportData.dailyBookings) {
-          dataToExport = reportData.dailyBookings;
-        } else if (activeTab === 'drivers' && reportData.drivers) {
-          dataToExport = reportData.drivers;
-        } else if (activeTab === 'vehicles' && reportData.vehicles) {
-          dataToExport = reportData.vehicles;
-        } else if (activeTab === 'maintenance' && reportData.maintenance) {
-          dataToExport = reportData.maintenance;
-        } else if (activeTab === 'nongst' && reportData.bills) {
-          dataToExport = reportData.bills;
-        } else if (activeTab === 'ledger' && reportData.entries) {
-          dataToExport = reportData.entries;
-        } else if (activeTab === 'fuels' && reportData.fuels) {
-          dataToExport = reportData.fuels;
-        } else {
-          // Just use the report data as is (may need to be flattened)
-          dataToExport = [reportData];
-        }
-      } else {
-        // Single object or other structure, convert appropriately
-        dataToExport = [reportData];
-      }
-
-      // Get headers from the first object
-      if (dataToExport.length > 0) {
-        const headers = Object.keys(dataToExport[0]);
-        
-        // Convert data to CSV rows
-        const csvRows = [
-          headers.join(','), // Header row
-          ...dataToExport.map(row => headers.map(header => {
-            const value = row[header];
-            // Handle different types of values
-            if (value === null || value === undefined) return '""';
-            if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
-            if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
-            return `"${value}"`;
-          }).join(','))
-        ];
-        
-        // Join rows with newlines
-        const csvString = csvRows.join('\n');
-        
-        // Create download link
-        const blob = new Blob([csvString], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${activeTab}_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-        link.click();
-        
+      // Check if there's data to export
+      if (!reportData || 
+          (Array.isArray(reportData) && reportData.length === 0) || 
+          (typeof reportData === 'object' && Object.keys(reportData).length === 0)) {
         toast({
-          title: "CSV Export Complete",
-          description: "Your report has been exported to CSV successfully"
-        });
-      } else {
-        toast({
-          title: "Export Failed",
-          description: "No data available for export",
+          title: "Nothing to export",
+          description: "Generate a report first before exporting",
           variant: "destructive",
         });
+        return;
       }
+
+      exportReportToCSV(activeTab, reportData);
+      
+      toast({
+        title: "CSV Export Complete",
+        description: "Your report has been exported to CSV successfully"
+      });
     } catch (error) {
       console.error('Export error:', error);
       toast({
@@ -467,9 +321,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
 
                 <Button 
                   className="w-full" 
-                  onClick={() => {
-                    handleApplyFilters();
-                  }}
+                  onClick={handleApplyFilters}
                 >
                   Apply Filters
                 </Button>
