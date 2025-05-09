@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { DateRange } from "react-day-picker";
 import { format } from 'date-fns';
@@ -17,6 +16,7 @@ export interface LedgerEntry {
   status?: 'completed' | 'pending' | 'cancelled' | 'reconciled';
   entityId?: string;
   entityType?: 'vehicle' | 'driver' | 'customer' | 'project';
+  notes?: string;
 }
 
 export interface LedgerSummary {
@@ -302,7 +302,7 @@ const scheduleExport = async (format: 'pdf' | 'excel' | 'csv', email: string, fr
 };
 
 // CRUD operations for ledger entries
-const createLedgerEntry = async (entry: Omit<LedgerEntry, 'id' | 'balance'>): Promise<LedgerEntry> => {
+const createLedgerEntry = async (entry: Omit<LedgerEntry, "id" | "balance">): Promise<LedgerEntry> => {
   try {
     // Convert our interface to API format
     const apiEntry = {
@@ -335,7 +335,8 @@ const createLedgerEntry = async (entry: Omit<LedgerEntry, 'id' | 'balance'>): Pr
       balance: Number(newEntry.balance),
       status: newEntry.status,
       entityId: newEntry.entity_id,
-      entityType: newEntry.entity_type
+      entityType: newEntry.entity_type,
+      notes: newEntry.notes
     };
   } catch (error) {
     console.error("Error creating ledger entry:", error);
@@ -358,6 +359,7 @@ const updateLedgerEntry = async (id: string | number, entry: Partial<LedgerEntry
     if (entry.entityType) apiEntry.entity_type = entry.entityType;
     if (entry.entityId) apiEntry.entity_id = entry.entityId;
     if (entry.status) apiEntry.status = entry.status;
+    if (entry.notes !== undefined) apiEntry.notes = entry.notes;
     
     const response = await axios.put(`/api/admin/ledger.php?id=${id}`, apiEntry);
     
@@ -375,7 +377,8 @@ const updateLedgerEntry = async (id: string | number, entry: Partial<LedgerEntry
       balance: Number(updatedEntry.balance),
       status: updatedEntry.status,
       entityId: updatedEntry.entity_id,
-      entityType: updatedEntry.entity_type
+      entityType: updatedEntry.entity_type,
+      notes: updatedEntry.notes
     };
   } catch (error) {
     console.error("Error updating ledger entry:", error);
