@@ -71,6 +71,40 @@ const createDefaultFare = (vehicleId: string): AirportFare => {
   };
 };
 
+// Helper function to safely parse JSON from a possibly string response
+const safelyParseJson = (data: any): any => {
+  if (data === null || data === undefined) {
+    return null;
+  }
+  
+  if (typeof data === 'object') {
+    return data;
+  }
+  
+  if (typeof data === 'string') {
+    try {
+      // Try to find the beginning and end of the JSON object in the string
+      const jsonStart = data.indexOf('{');
+      const jsonEnd = data.lastIndexOf('}');
+      
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        // Extract what looks like JSON
+        const jsonString = data.substring(jsonStart, jsonEnd + 1);
+        return JSON.parse(jsonString);
+      } else {
+        // Try parsing the whole string
+        return JSON.parse(data);
+      }
+    } catch (error) {
+      console.error('Failed to parse response as JSON', error);
+      console.log('First 200 chars of invalid response:', data.substring(0, 200));
+      return null;
+    }
+  }
+  
+  return null;
+};
+
 export const airportFareAPI = {
   /**
    * Get all airport fares or specific fare for a vehicle
@@ -95,8 +129,12 @@ export const airportFareAPI = {
         params.id = vehicleId;
       }
       
-      // Use safer endpoint with better JSON handling
-      const response = await axios.get(getApiUrl('api/admin/direct-airport-fares'), {
+      // Use optimized endpoint path
+      const endpoint = vehicleId 
+        ? `api/admin/direct-airport-fares.php?id=${encodeURIComponent(vehicleId)}`
+        : 'api/admin/direct-airport-fares.php';
+      
+      const response = await axios.get(getApiUrl(endpoint), {
         params,
         headers: {
           ...forceRefreshHeaders,
@@ -110,25 +148,16 @@ export const airportFareAPI = {
         // Set a low timeout to prevent long waits for failed requests
         timeout: 10000,
         // Explicitly tell axios to parse as JSON
-        responseType: 'json'
+        responseType: 'json',
+        // Ensure axios doesn't try to parse the response automatically if it's not valid JSON
+        transformResponse: [(data) => {
+          return safelyParseJson(data);
+        }]
       });
       
       console.log('Airport fares raw API response:', response);
       
-      if (typeof response.data === 'string') {
-        console.error('Received string response instead of JSON. First 100 chars:', response.data.substring(0, 100));
-        
-        // Try to parse the string as JSON
-        try {
-          const parsedData = JSON.parse(response.data);
-          console.log('Successfully parsed string response as JSON:', parsedData);
-          response.data = parsedData;
-        } catch (parseError) {
-          console.error('Failed to parse string response as JSON:', parseError);
-          throw new Error('Invalid response format: expected JSON, got unparseable string');
-        }
-      }
-      
+      // Check if the response is valid
       if (!response.data) {
         console.error('Empty response data');
         throw new Error('Empty response data');
@@ -136,15 +165,25 @@ export const airportFareAPI = {
       
       // Extract fares from the response based on various possible formats
       let fares: AirportFare[] = [];
+      const data = response.data;
       
-      if (response.data.fares && Array.isArray(response.data.fares)) {
-        fares = response.data.fares.map(normalizeFare);
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        fares = response.data.data.map(normalizeFare);
-      } else if (response.data.data && response.data.data.fares && Array.isArray(response.data.data.fares)) {
-        fares = response.data.data.fares.map(normalizeFare);
+      if (data.fares && Array.isArray(data.fares)) {
+        fares = data.fares.map(normalizeFare);
+      } else if (data.data && Array.isArray(data.data)) {
+        fares = data.data.map(normalizeFare);
+      } else if (data.data && data.data.fares && Array.isArray(data.data.fares)) {
+        fares = data.data.fares.map(normalizeFare);
+      } else if (typeof data === 'object' && !Array.isArray(data)) {
+        // Try to find any array property that might contain fares
+        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+        if (arrayProps.length > 0) {
+          // Use the first array property found
+          fares = data[arrayProps[0]].map(normalizeFare);
+        } else {
+          console.error('No arrays found in response data:', data);
+        }
       } else {
-        console.error('Could not find fares array in response:', response.data);
+        console.error('Could not find fares array in response:', data);
       }
       
       // Return default fare if no fares found and vehicleId is specified
@@ -199,7 +238,7 @@ export const airportFareAPI = {
       };
       
       const response = await axios.post(
-        getApiUrl('api/admin/airport-fares-update'),
+        getApiUrl('api/admin/airport-fares-update.php'),
         updatedFare,
         {
           headers: {
@@ -208,7 +247,10 @@ export const airportFareAPI = {
             ...forceRefreshHeaders,
             'X-Admin-Mode': 'true',
             'X-Debug': 'true'
-          }
+          },
+          transformResponse: [(data) => {
+            return safelyParseJson(data);
+          }]
         }
       );
       
@@ -230,14 +272,17 @@ export const airportFareAPI = {
       const timestamp = Date.now();
       
       const response = await axios.get(
-        `${getApiUrl('api/admin/sync-fares')}?type=airport&_t=${timestamp}`,
+        `${getApiUrl('api/admin/sync-airport-fares.php')}?_t=${timestamp}`,
         {
           headers: {
             ...forceRefreshHeaders,
             'Accept': 'application/json',
             'X-Admin-Mode': 'true',
             'X-Debug': 'true'
-          }
+          },
+          transformResponse: [(data) => {
+            return safelyParseJson(data);
+          }]
         }
       );
       
