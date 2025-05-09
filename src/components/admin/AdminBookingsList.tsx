@@ -39,6 +39,7 @@ import { BookingDetailsModal } from './BookingDetailsModal';
 import { getStatusColorClass } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
 import { formatPrice } from '@/lib/utils';
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -59,7 +60,7 @@ export function AdminBookingsList() {
   
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const customScrollRef = useRef<HTMLDivElement>(null);
-  const [showCustomScrollbar, setShowCustomScrollbar] = useState(false);
+  const [showCustomScrollbar, setShowCustomScrollbar] = useState(true);
   
   const fetchBookings = async () => {
     try {
@@ -620,22 +621,17 @@ export function AdminBookingsList() {
       customScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
     }
   };
+  
   const handleCustomScroll = () => {
     if (tableScrollRef.current && customScrollRef.current) {
       tableScrollRef.current.scrollLeft = customScrollRef.current.scrollLeft;
     }
   };
-  // Check if horizontal scroll is needed
+
+  // Always show custom scrollbar
   useEffect(() => {
-    const checkScroll = () => {
-      if (tableScrollRef.current) {
-        setShowCustomScrollbar(tableScrollRef.current.scrollWidth > tableScrollRef.current.clientWidth);
-      }
-    };
-    checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
-  }, [filteredBookings]);
+    setShowCustomScrollbar(true);
+  }, []);
 
   if (isLoading && retryCount === 0) {
     return (
@@ -788,7 +784,12 @@ export function AdminBookingsList() {
           <div
             ref={tableScrollRef}
             className="w-full"
-            style={{ maxHeight: '70vh', overflowX: 'auto', overflowY: 'auto' }}
+            style={{ 
+              maxHeight: 'calc(70vh - 20px)', 
+              overflowX: 'scroll',  // Always show horizontal scrollbar
+              overflowY: 'auto',
+              scrollbarWidth: 'thin'
+            }}
             onScroll={handleTableScroll}
           >
             <Table className="text-sm min-w-[2000px]">
@@ -902,16 +903,23 @@ export function AdminBookingsList() {
               </TableBody>
             </Table>
           </div>
-          {showCustomScrollbar && (
-            <div
-              ref={customScrollRef}
-              className="absolute left-0 right-0 bg-white border-t"
-              style={{ bottom: 0, height: 16, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', pointerEvents: 'auto' }}
-              onScroll={handleCustomScroll}
-            >
-              <div style={{ width: tableScrollRef.current ? Math.max(tableScrollRef.current.scrollWidth, 2000) : 2000 }} />
-            </div>
-          )}
+          
+          {/* Always visible custom scrollbar */}
+          <div
+            ref={customScrollRef}
+            className="sticky bottom-0 left-0 right-0 bg-white border-t shadow-md z-10"
+            style={{ 
+              height: '16px', 
+              overflowX: 'scroll', 
+              overflowY: 'hidden', 
+              WebkitOverflowScrolling: 'touch', 
+              pointerEvents: 'auto',
+              display: 'block' // Always visible
+            }}
+            onScroll={handleCustomScroll}
+          >
+            <div style={{ width: tableScrollRef.current ? Math.max(tableScrollRef.current.scrollWidth, 2000) : 2000, height: '1px' }} />
+          </div>
         </div>
       ) : (
         <div className="text-center py-10">
