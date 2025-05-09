@@ -4,7 +4,7 @@ import { Payment, PaymentFilterParams, PaymentSummary, PaymentsResponse, Payment
 import { getApiUrl, defaultHeaders } from '@/config/api';
 
 // Base URL for payments API
-const PAYMENTS_API_URL = `${getApiUrl()}/admin/payments.php`;
+const PAYMENTS_API_URL = `${getApiUrl('admin/payments')}`;
 
 /**
  * Get payments with optional filtering
@@ -64,7 +64,7 @@ const updatePaymentStatus = async (
 ): Promise<Payment> => {
   try {
     const response = await axios.post(
-      `${getApiUrl()}/admin/payment-update.php`, 
+      `${getApiUrl('admin/payment-update')}`, 
       {
         payment_id: paymentId,
         status,
@@ -92,7 +92,7 @@ const sendPaymentReminder = async (
 ): Promise<{ success: boolean }> => {
   try {
     const response = await axios.post(
-      `${getApiUrl()}/admin/send-payment-reminder.php`,
+      `${getApiUrl('admin/send-payment-reminder')}`,
       {
         payment_id: paymentId,
         reminder_type: reminderType,
@@ -114,7 +114,7 @@ const sendPaymentReminder = async (
 const getPaymentReminders = async (paymentId: number | string): Promise<PaymentRemindersResponse> => {
   try {
     const response = await axios.get(
-      `${getApiUrl()}/admin/payment-reminders.php`,
+      `${getApiUrl('admin/payment-reminders')}`,
       {
         params: { payment_id: paymentId },
         headers: defaultHeaders
