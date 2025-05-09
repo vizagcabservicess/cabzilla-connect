@@ -95,25 +95,38 @@ export const airportFareAPI = {
         params.id = vehicleId;
       }
       
-      const response = await axios.get(getApiUrl('api/direct-airport-fares'), {
+      // Use safer endpoint with better JSON handling
+      const response = await axios.get(getApiUrl('api/admin/direct-airport-fares'), {
         params,
         headers: {
           ...forceRefreshHeaders,
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
+          'Accept': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
           'Expires': '0'
         },
         // Set a low timeout to prevent long waits for failed requests
-        timeout: 10000
+        timeout: 10000,
+        // Explicitly tell axios to parse as JSON
+        responseType: 'json'
       });
       
       console.log('Airport fares raw API response:', response);
       
       if (typeof response.data === 'string') {
         console.error('Received string response instead of JSON. First 100 chars:', response.data.substring(0, 100));
-        throw new Error('Invalid response format: expected JSON, got string');
+        
+        // Try to parse the string as JSON
+        try {
+          const parsedData = JSON.parse(response.data);
+          console.log('Successfully parsed string response as JSON:', parsedData);
+          response.data = parsedData;
+        } catch (parseError) {
+          console.error('Failed to parse string response as JSON:', parseError);
+          throw new Error('Invalid response format: expected JSON, got unparseable string');
+        }
       }
       
       if (!response.data) {
@@ -191,6 +204,7 @@ export const airportFareAPI = {
         {
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             ...forceRefreshHeaders,
             'X-Admin-Mode': 'true',
             'X-Debug': 'true'
@@ -220,6 +234,7 @@ export const airportFareAPI = {
         {
           headers: {
             ...forceRefreshHeaders,
+            'Accept': 'application/json',
             'X-Admin-Mode': 'true',
             'X-Debug': 'true'
           }

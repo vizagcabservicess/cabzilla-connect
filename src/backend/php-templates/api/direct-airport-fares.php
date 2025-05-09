@@ -74,12 +74,32 @@ $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 // Set debug mode for extra output
 $_SERVER['HTTP_X_DEBUG'] = 'true';
 
-// Important: Clear any output buffers to prevent HTML contamination
+// CRITICAL: Clear any output buffers to prevent HTML contamination
 while (ob_get_level()) {
     ob_end_clean();
 }
 
-// Forward the request to the admin endpoint
+// Instead of include_once, we'll use output buffering to capture any unwanted output
+ob_start();
 include_once __DIR__ . '/admin/direct-airport-fares.php';
-// Exit after including to prevent any trailing output
-exit;
+$output = ob_get_clean();
+
+// Check if the output is valid JSON
+json_decode($output);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    // Output is not valid JSON, we need to create a valid JSON response
+    file_put_contents($logFile, "[$timestamp] WARNING: Invalid JSON returned from admin endpoint. First 100 chars: " . substr($output, 0, 100) . "\n", FILE_APPEND);
+    
+    // Create a valid JSON response
+    $errorResponse = json_encode([
+        'status' => 'error',
+        'message' => 'Error processing request - invalid response format',
+        'debug_info' => 'The endpoint returned invalid JSON format. Check server logs for details.',
+        'timestamp' => time()
+    ]);
+    
+    echo $errorResponse;
+} else {
+    // Output is valid JSON, send it as is
+    echo $output;
+}

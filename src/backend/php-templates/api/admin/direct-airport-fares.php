@@ -270,21 +270,47 @@ try {
         'timestamp' => time()
     ];
     
-    // Log the response for debugging
-    file_put_contents($logFile, "[$timestamp] Sending response: " . json_encode($responseData, JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", FILE_APPEND);
+    // Clear all previous output buffers to be safe
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
     
-    // Clean any previous output
-    ob_end_clean();
+    // Start fresh output buffer - important for clean JSON
+    ob_start();
+    
+    // Log the response before sending
+    $jsonResponse = json_encode($responseData);
+    file_put_contents($logFile, "[$timestamp] Sending JSON response: " . substr($jsonResponse, 0, 200) . "...\n", FILE_APPEND);
     
     // Send the JSON response
-    echo json_encode($responseData);
+    echo $jsonResponse;
+    
+    // Get buffer contents and end it
+    $output = ob_get_clean();
+    
+    // Double-check that output is valid JSON
+    json_decode($output);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        file_put_contents($logFile, "[$timestamp] ERROR: Generated invalid JSON output. First 100 chars: " . substr($output, 0, 100) . "\n", FILE_APPEND);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Error generating JSON response',
+            'debug_info' => 'The endpoint generated invalid JSON. Check server logs for details.',
+            'timestamp' => time()
+        ]);
+    } else {
+        // Send the validated JSON output
+        echo $output;
+    }
     
 } catch (Exception $e) {
     // Log the error
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     
     // Clean any previous output
-    ob_end_clean();
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
     
     // Create error response
     $errorResponse = [
