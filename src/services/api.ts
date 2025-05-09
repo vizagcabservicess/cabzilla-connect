@@ -1,4 +1,5 @@
 
+
 import axios from 'axios';
 import { BookingRequest, Booking } from '@/types/api';
 import { getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
@@ -10,6 +11,7 @@ import { fleetAPI } from './api/fleetAPI';
 import { userAPI } from './api/userAPI';
 import { expenseAPI } from './api/expenseAPI';
 import { payrollAPI } from './api/payrollAPI';
+import { paymentsAPI } from './api/paymentsAPI';
 
 const API_URL = '/api';
 
@@ -78,7 +80,8 @@ export {
   fleetAPI, 
   userAPI,
   expenseAPI,
-  payrollAPI
+  payrollAPI,
+  paymentsAPI
 };
 
 // Also export a default object for compatibility
@@ -90,5 +93,6 @@ export default {
   fleet: fleetAPI,
   user: userAPI,
   expense: expenseAPI,
-  payroll: payrollAPI
+  payroll: payrollAPI,
+  payments: paymentsAPI
 };
