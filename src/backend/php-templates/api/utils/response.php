@@ -1,8 +1,9 @@
-
 <?php
 /**
  * API response utility functions for standardized JSON responses
  */
+
+require_once __DIR__ . '/../common/db_helper.php';
 
 // Function to send a success response
 function sendSuccessResponse($data = [], $message = 'Operation completed successfully', $statusCode = 200) {
@@ -59,33 +60,6 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $e
 }
 
 // Helper function to execute a parameterized query
-function executeQuery($conn, $sql, $params = [], $types = "") {
-    // If no parameters, just run the query directly
-    if (empty($params)) {
-        $result = $conn->query($sql);
-        if (!$result) {
-            throw new Exception("Query failed: " . $conn->error);
-        }
-        return $result;
-    }
-    
-    // Prepare the statement
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Prepare failed: " . $conn->error);
-    }
-    
-    // Bind parameters if there are any
-    if (!empty($params) && !empty($types)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    
-    // Execute the statement
-    if (!$stmt->execute()) {
-        throw new Exception("Execute failed: " . $stmt->error);
-    }
-    
-    // Get the result
-    $result = $stmt->get_result();
-    return $result;
-}
+// function executeQuery($conn, $sql, $params = [], $types = "") {
+//     ... (removed duplicate implementation)
+// }
