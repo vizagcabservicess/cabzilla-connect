@@ -56,11 +56,11 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
 if ($vehicleId) {
     // Make sure the vehicle_id parameter is set for the forward
     $_GET['vehicle_id'] = $vehicleId;
-    $_SERVER['QUERY_STRING'] = 'vehicle_id=' . urlencode($vehicleId);
-    
-    // Ensure other possible keys are also set for compatibility
     $_GET['vehicleId'] = $vehicleId;
     $_GET['id'] = $vehicleId;
+    
+    // Ensure query string is properly formatted
+    $_SERVER['QUERY_STRING'] = http_build_query($_GET);
     
     file_put_contents($logFile, "[$timestamp] Set explicit vehicle_id in query string: $vehicleId\n", FILE_APPEND);
     file_put_contents($logFile, "[$timestamp] Updated QUERY_STRING: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);

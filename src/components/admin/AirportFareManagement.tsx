@@ -1,13 +1,30 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import VehicleSelection from '@/components/admin/VehicleSelection';
 import AirportFareForm from '@/components/admin/AirportFareForm';
-import { FareData, updateAirportFares, syncAirportFares, fetchAirportFares, parseNumericValue } from '@/services/fareManagementService';
+import { updateAirportFares, syncAirportFares, parseNumericValue } from '@/services/fareManagementService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
+import axios from 'axios';
+import { getApiUrl, forceRefreshHeaders } from '@/config/api';
+
+// Define the interfaces locally to avoid type mismatches
+interface FareData {
+  [key: string]: any;
+  vehicleId?: string;
+  vehicle_id?: string;
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
 
 interface ApiResponseFare {
   id?: number;
@@ -45,6 +62,148 @@ interface ApiResponse {
   [key: string]: any;
 }
 
+// Custom fetchAirportFares function directly in this component to avoid dependency issues
+const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]> => {
+  try {
+    console.log(`Fetching airport fares for vehicle ${vehicleId || 'all'}`);
+    
+    const params: Record<string, string> = {};
+    if (vehicleId) {
+      params.vehicleId = vehicleId;
+      params.vehicle_id = vehicleId;
+      params.id = vehicleId;
+    }
+    
+    // Add timestamp to bust cache
+    params._t = Date.now().toString();
+    params._cb = Math.random().toString(36).substring(2, 15); // Add cache buster
+
+    const response = await axios.get(getApiUrl('api/direct-airport-fares'), {
+      params,
+      headers: {
+        ...forceRefreshHeaders,
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+
+    console.log('Airport fares API raw response:', response);
+    console.log('Airport fares API response data:', response.data);
+    
+    // Basic response validation
+    if (!response.data) {
+      console.error('Empty response from airport fares API');
+      throw new Error('Empty response from airport fares API');
+    }
+
+    let normalizedFares: FareData[] = [];
+    
+    try {
+      // Normalize the response to a consistent format
+      const responseData = response.data;
+      
+      if (responseData.fares && Array.isArray(responseData.fares)) {
+        normalizedFares = responseData.fares.map(normalizeFare);
+      } else if (responseData.fares && typeof responseData.fares === 'object') {
+        normalizedFares = Object.values(responseData.fares).map(normalizeFare);
+      } else if (responseData.data?.fares && Array.isArray(responseData.data.fares)) {
+        normalizedFares = responseData.data.fares.map(normalizeFare);
+      } else if (responseData.data?.fares && typeof responseData.data.fares === 'object') {
+        normalizedFares = Object.values(responseData.data.fares).map(normalizeFare);
+      } else if (responseData.data && Array.isArray(responseData.data)) {
+        normalizedFares = responseData.data.map(normalizeFare);
+      } else if (responseData.vehicles && Array.isArray(responseData.vehicles)) {
+        normalizedFares = responseData.vehicles.map(normalizeFare);
+      }
+    } catch (error) {
+      console.error('Error during response normalization:', error);
+    }
+      
+    if (normalizedFares.length === 0 && vehicleId) {
+      console.log('Creating default fare for vehicle:', vehicleId);
+      return [{
+        vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }];
+    }
+      
+    // Filter for requested vehicle if we have a specific ID
+    if (vehicleId && normalizedFares.length > 0) {
+      const vehicleSpecificFares = normalizedFares.filter(fare => 
+        (fare.vehicleId?.toString().toLowerCase() === vehicleId.toLowerCase()) || 
+        (fare.vehicle_id?.toString().toLowerCase() === vehicleId.toLowerCase())
+      );
+      
+      if (vehicleSpecificFares.length > 0) {
+        return vehicleSpecificFares;
+      }
+      
+      return [{
+        vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }];
+    }
+    
+    return normalizedFares;
+  } catch (error) {
+    console.error('Error fetching airport fares:', error);
+    if (vehicleId) {
+      return [{
+        vehicleId,
+        vehicle_id: vehicleId,
+        basePrice: 0,
+        pricePerKm: 0,
+        pickupPrice: 0,
+        dropPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      }];
+    }
+    throw error;
+  }
+};
+
+// Function to normalize fare data with proper type handling
+const normalizeFare = (fare: ApiResponseFare): FareData => {
+  return {
+    vehicleId: fare.vehicleId || fare.vehicle_id || '',
+    vehicle_id: fare.vehicleId || fare.vehicle_id || '',
+    basePrice: parseNumericValue(fare.basePrice ?? fare.base_price ?? 0),
+    pricePerKm: parseNumericValue(fare.pricePerKm ?? fare.price_per_km ?? 0),
+    pickupPrice: parseNumericValue(fare.pickupPrice ?? fare.pickup_price ?? 0),
+    dropPrice: parseNumericValue(fare.dropPrice ?? fare.drop_price ?? 0),
+    tier1Price: parseNumericValue(fare.tier1Price ?? fare.tier1_price ?? 0),
+    tier2Price: parseNumericValue(fare.tier2Price ?? fare.tier2_price ?? 0),
+    tier3Price: parseNumericValue(fare.tier3Price ?? fare.tier3_price ?? 0),
+    tier4Price: parseNumericValue(fare.tier4Price ?? fare.tier4_price ?? 0),
+    extraKmCharge: parseNumericValue(fare.extraKmCharge ?? fare.extra_km_charge ?? 0)
+  };
+};
+
 const AirportFareManagement: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [fares, setFares] = useState<FareData | null>(null);
@@ -80,23 +239,23 @@ const AirportFareManagement: React.FC = () => {
         
         console.log('Using fare data:', matchingFare);
         
-        // Ensure all required fields have values (default to 0 if missing)
-        const normalizedFareData: FareData = {
+        // Ensure all required fields are present
+        const normalizedFare: FareData = {
           vehicleId: vehicleId,
           vehicle_id: vehicleId,
-          basePrice: parseNumericValue(matchingFare.basePrice ?? matchingFare.base_price ?? 0),
-          pricePerKm: parseNumericValue(matchingFare.pricePerKm ?? matchingFare.price_per_km ?? 0),
-          pickupPrice: parseNumericValue(matchingFare.pickupPrice ?? matchingFare.pickup_price ?? 0),
-          dropPrice: parseNumericValue(matchingFare.dropPrice ?? matchingFare.drop_price ?? 0),
-          tier1Price: parseNumericValue(matchingFare.tier1Price ?? matchingFare.tier1_price ?? 0),
-          tier2Price: parseNumericValue(matchingFare.tier2Price ?? matchingFare.tier2_price ?? 0),
-          tier3Price: parseNumericValue(matchingFare.tier3Price ?? matchingFare.tier3_price ?? 0),
-          tier4Price: parseNumericValue(matchingFare.tier4Price ?? matchingFare.tier4_price ?? 0),
-          extraKmCharge: parseNumericValue(matchingFare.extraKmCharge ?? matchingFare.extra_km_charge ?? 0)
+          basePrice: parseNumericValue(matchingFare.basePrice || 0),
+          pricePerKm: parseNumericValue(matchingFare.pricePerKm || 0),
+          pickupPrice: parseNumericValue(matchingFare.pickupPrice || 0),
+          dropPrice: parseNumericValue(matchingFare.dropPrice || 0),
+          tier1Price: parseNumericValue(matchingFare.tier1Price || 0),
+          tier2Price: parseNumericValue(matchingFare.tier2Price || 0),
+          tier3Price: parseNumericValue(matchingFare.tier3Price || 0),
+          tier4Price: parseNumericValue(matchingFare.tier4Price || 0),
+          extraKmCharge: parseNumericValue(matchingFare.extraKmCharge || 0)
         };
         
-        console.log('Normalized fare data:', normalizedFareData);
-        setFares(normalizedFareData);
+        console.log('Normalized fare data:', normalizedFare);
+        setFares(normalizedFare);
         setInitialized(true);
       } else {
         console.log('No valid fare data found, creating default');
