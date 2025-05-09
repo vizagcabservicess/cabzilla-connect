@@ -2,26 +2,11 @@
 import React from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-// Define the FareData interface directly in this component for clarity
-interface FareData {
-  [key: string]: any;
-  vehicleId?: string;
-  vehicle_id?: string;
-  basePrice: number;
-  pricePerKm: number;
-  pickupPrice: number;
-  dropPrice: number;
-  tier1Price: number;
-  tier2Price: number;
-  tier3Price: number;
-  tier4Price: number;
-  extraKmCharge: number;
-}
+import { AirportFare } from '@/services/api/airportFareAPI';
 
 interface AirportFareFormProps {
-  fareData: FareData;
-  onChange: (fareData: FareData) => void;
+  fareData: AirportFare;
+  onChange: (fareData: AirportFare) => void;
 }
 
 const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange }) => {
@@ -58,7 +43,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="basePrice"
             name="basePrice"
             type="number"
-            value={safeData.basePrice || 0}
+            value={safeData.basePrice}
             onChange={handleInputChange}
           />
         </div>
@@ -69,7 +54,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="pricePerKm"
             name="pricePerKm"
             type="number"
-            value={safeData.pricePerKm || 0}
+            value={safeData.pricePerKm}
             onChange={handleInputChange}
           />
         </div>
@@ -82,7 +67,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="pickupPrice"
             name="pickupPrice"
             type="number"
-            value={safeData.pickupPrice || 0}
+            value={safeData.pickupPrice}
             onChange={handleInputChange}
           />
         </div>
@@ -93,7 +78,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="dropPrice"
             name="dropPrice"
             type="number"
-            value={safeData.dropPrice || 0}
+            value={safeData.dropPrice}
             onChange={handleInputChange}
           />
         </div>
@@ -106,7 +91,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="tier1Price"
             name="tier1Price"
             type="number"
-            value={safeData.tier1Price || 0}
+            value={safeData.tier1Price}
             onChange={handleInputChange}
           />
         </div>
@@ -117,7 +102,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="tier2Price"
             name="tier2Price"
             type="number"
-            value={safeData.tier2Price || 0}
+            value={safeData.tier2Price}
             onChange={handleInputChange}
           />
         </div>
@@ -130,18 +115,18 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="tier3Price"
             name="tier3Price"
             type="number"
-            value={safeData.tier3Price || 0}
+            value={safeData.tier3Price}
             onChange={handleInputChange}
           />
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="tier4Price">Tier 4 Price ({`>`} 30km) (₹)</Label>
+          <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
           <Input
             id="tier4Price"
             name="tier4Price"
             type="number"
-            value={safeData.tier4Price || 0}
+            value={safeData.tier4Price}
             onChange={handleInputChange}
           />
         </div>
@@ -154,7 +139,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
             id="extraKmCharge"
             name="extraKmCharge"
             type="number"
-            value={safeData.extraKmCharge || 0}
+            value={safeData.extraKmCharge}
             onChange={handleInputChange}
           />
         </div>

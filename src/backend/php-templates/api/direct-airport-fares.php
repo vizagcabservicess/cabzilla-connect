@@ -7,8 +7,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -73,10 +74,12 @@ $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 // Set debug mode for extra output
 $_SERVER['HTTP_X_DEBUG'] = 'true';
 
-// Force cache-busting 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Important: Clear any output buffers to prevent HTML contamination
+while (ob_get_level()) {
+    ob_end_clean();
+}
 
 // Forward the request to the admin endpoint
-require_once __DIR__ . '/admin/direct-airport-fares.php';
+include_once __DIR__ . '/admin/direct-airport-fares.php';
+// Exit after including to prevent any trailing output
+exit;

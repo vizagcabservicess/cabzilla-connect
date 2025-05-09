@@ -25,6 +25,9 @@ while (ob_get_level()) {
     ob_end_clean();
 }
 
+// Start output buffering to ensure clean output
+ob_start();
+
 // Include utility files
 require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
@@ -270,12 +273,18 @@ try {
     // Log the response for debugging
     file_put_contents($logFile, "[$timestamp] Sending response: " . json_encode($responseData, JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", FILE_APPEND);
     
+    // Clean any previous output
+    ob_end_clean();
+    
     // Send the JSON response
     echo json_encode($responseData);
     
 } catch (Exception $e) {
     // Log the error
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    // Clean any previous output
+    ob_end_clean();
     
     // Create error response
     $errorResponse = [
