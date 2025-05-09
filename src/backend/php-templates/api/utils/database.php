@@ -25,6 +25,35 @@ function connectToDatabase() {
     return $mysqli;
 }
 
+// Get a database connection with error handling
+function getDbConnection() {
+    static $db = null;
+    
+    if ($db === null) {
+        $db = connectToDatabase();
+        
+        // Set up error handling
+        if (!$db) {
+            error_log("Database connection failed");
+            return false;
+        }
+    }
+    
+    // Check if connection is still alive
+    if (!$db->ping()) {
+        // Try to reconnect
+        $db->close();
+        $db = connectToDatabase();
+        
+        if (!$db) {
+            error_log("Database reconnection failed");
+            return false;
+        }
+    }
+    
+    return $db;
+}
+
 // Format a date string for MySQL
 function formatDateForMySQL($date) {
     if (empty($date)) return null;

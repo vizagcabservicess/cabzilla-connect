@@ -9,7 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, PlusCircle, MinusCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -70,8 +70,10 @@ export function PayrollEntryForm({
       setSalaryComponents(components);
     };
     
-    loadComponents();
-  }, []);
+    if (open) {
+      loadComponents();
+    }
+  }, [open]);
   
   // Setup form
   const form = useForm<PayrollFormValues>({
@@ -132,56 +134,90 @@ export function PayrollEntryForm({
   };
   
   const getNetSalary = () => {
-    const basicSalary = form.watch('basicSalary') || 0;
-    return basicSalary + getTotalAllowances() - getTotalDeductions() - getTotalAdvances();
+    const basicSalary = form.watch('basicSalary');
+    const totalAllowances = getTotalAllowances();
+    const totalDeductions = getTotalDeductions();
+    const totalAdvances = getTotalAdvances();
+    
+    return basicSalary + totalAllowances - totalDeductions - totalAdvances;
   };
   
-  // Handle form submission
-  const onSubmit = async (data: PayrollFormValues) => {
+  // Add/remove allowances, deductions, advances
+  const addAllowance = () => {
+    const currentAllowances = form.getValues('allowances');
+    form.setValue('allowances', [...currentAllowances, { type: '', amount: 0 }]);
+  };
+  
+  const removeAllowance = (index: number) => {
+    const currentAllowances = form.getValues('allowances');
+    form.setValue('allowances', currentAllowances.filter((_, i) => i !== index));
+  };
+  
+  const addDeduction = () => {
+    const currentDeductions = form.getValues('deductions');
+    form.setValue('deductions', [...currentDeductions, { type: '', amount: 0 }]);
+  };
+  
+  const removeDeduction = (index: number) => {
+    const currentDeductions = form.getValues('deductions');
+    form.setValue('deductions', currentDeductions.filter((_, i) => i !== index));
+  };
+  
+  const addAdvance = () => {
+    const currentAdvances = form.getValues('advances');
+    form.setValue('advances', [...currentAdvances, { date: new Date(), amount: 0 }]);
+  };
+  
+  const removeAdvance = (index: number) => {
+    const currentAdvances = form.getValues('advances');
+    form.setValue('advances', currentAdvances.filter((_, i) => i !== index));
+  };
+  
+  // Form submission
+  const onSubmit = async (values: PayrollFormValues) => {
     try {
       setIsLoading(true);
       
+      // Format the data for API
       const payrollData = {
-        driverId: data.driverId,
-        date: format(data.payPeriodEnd, 'yyyy-MM-dd'),
-        description: `Salary for ${format(data.payPeriodStart, 'MMM yyyy')} - ${
-          drivers.find(d => d.id.toString() === data.driverId)?.name || 'Driver'
-        }`,
-        amount: getNetSalary(),
-        type: 'expense' as const,
-        category: 'Salary',
-        paymentMethod: 'Bank Transfer',
-        status: data.paymentStatus === 'paid' ? 'reconciled' : 'pending' as 'reconciled' | 'pending', // Explicitly cast to the expected type
+        driverId: values.driverId,
         payPeriod: {
-          startDate: format(data.payPeriodStart, 'yyyy-MM-dd'),
-          endDate: format(data.payPeriodEnd, 'yyyy-MM-dd'),
+          startDate: format(values.payPeriodStart, 'yyyy-MM-dd'),
+          endDate: format(values.payPeriodEnd, 'yyyy-MM-dd'),
         },
-        basicSalary: data.basicSalary,
-        allowances: data.allowances,
-        deductions: data.deductions,
-        advances: data.advances.map(a => ({
-          ...a, 
+        basicSalary: values.basicSalary,
+        allowances: values.allowances,
+        deductions: values.deductions,
+        advances: values.advances.map(a => ({
+          ...a,
           date: format(a.date, 'yyyy-MM-dd')
         })),
-        daysWorked: data.daysWorked,
-        daysLeave: data.daysLeave,
+        daysWorked: values.daysWorked,
+        daysLeave: values.daysLeave,
+        paymentStatus: values.paymentStatus,
+        paymentDate: values.paymentDate ? format(values.paymentDate, 'yyyy-MM-dd') : undefined,
+        // Calculate description based on period
+        description: `Salary for ${format(values.payPeriodStart, 'MMM yyyy')} - ${drivers.find(d => d.id.toString() === values.driverId)?.name || 'Driver'}`,
+        // Set default type and category
+        type: 'expense' as const,
+        category: 'Salary',
+        // Calculate net amount
+        amount: getNetSalary(),
         netSalary: getNetSalary(),
-        paymentStatus: data.paymentStatus,
-        paymentDate: data.paymentDate ? format(data.paymentDate, 'yyyy-MM-dd') : undefined,
-        payslipIssued: data.paymentStatus === 'paid',
       };
       
       if (payrollToEdit) {
+        // Update existing payroll
         await payrollAPI.updatePayrollEntry(payrollToEdit.id, payrollData);
       } else {
-        await payrollAPI.createPayrollEntry(payrollData);
+        // Create new payroll entry
+        await payrollAPI.createPayrollEntry(payrollData as any);
       }
       
-      onPayrollAdded();
       onOpenChange(false);
+      onPayrollAdded();
     } catch (error) {
-      console.error("Error saving payroll entry:", error);
-      toast.error("Failed to save payroll entry");
+      console.error("Error saving payroll:", error);
     } finally {
       setIsLoading(false);
     }
@@ -189,33 +225,30 @@ export function PayrollEntryForm({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {payrollToEdit ? "Edit Payroll Entry" : "Create Payroll Entry"}
-          </DialogTitle>
+          <DialogTitle>{payrollToEdit ? 'Edit Payroll Entry' : 'Add New Payroll Entry'}</DialogTitle>
           <DialogDescription>
             {payrollToEdit 
-              ? "Edit salary details and payment information" 
-              : "Enter salary details for the selected pay period"
-            }
+              ? 'Update this payroll record details' 
+              : 'Create a new payroll entry for a driver'}
           </DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Driver Selection */}
               <FormField
                 control={form.control}
                 name="driverId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Driver</FormLabel>
-                    <Select
+                    <Select 
+                      value={field.value} 
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      disabled={isLoading || !!selectedDriverId}
+                      disabled={!!selectedDriverId || isLoading}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -235,6 +268,7 @@ export function PayrollEntryForm({
                 )}
               />
               
+              {/* Basic Salary */}
               <FormField
                 control={form.control}
                 name="basicSalary"
@@ -245,33 +279,32 @@ export function PayrollEntryForm({
                       <Input 
                         type="number" 
                         {...field} 
-                        onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                        placeholder="Basic salary amount" 
+                        onChange={e => field.onChange(parseFloat(e.target.value))} 
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-            
-            {/* Pay Period */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Pay Period Start */}
               <FormField
                 control={form.control}
                 name="payPeriodStart"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Pay Period Start</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
-                            variant={"outline"}
+                            variant="outline"
                             className={cn(
                               "w-full pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
+                            disabled={isLoading}
                           >
                             {field.value ? (
                               format(field.value, "PPP")
@@ -287,9 +320,7 @@ export function PayrollEntryForm({
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("2020-01-01")
-                          }
+                          disabled={isLoading}
                           initialFocus
                         />
                       </PopoverContent>
@@ -299,21 +330,23 @@ export function PayrollEntryForm({
                 )}
               />
               
+              {/* Pay Period End */}
               <FormField
                 control={form.control}
                 name="payPeriodEnd"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Pay Period End</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
-                            variant={"outline"}
+                            variant="outline"
                             className={cn(
                               "w-full pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
+                            disabled={isLoading}
                           >
                             {field.value ? (
                               format(field.value, "PPP")
@@ -329,9 +362,7 @@ export function PayrollEntryForm({
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < form.watch('payPeriodStart')
-                          }
+                          disabled={isLoading}
                           initialFocus
                         />
                       </PopoverContent>
@@ -340,10 +371,8 @@ export function PayrollEntryForm({
                   </FormItem>
                 )}
               />
-            </div>
-            
-            {/* Attendance Data */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Days Worked */}
               <FormField
                 control={form.control}
                 name="daysWorked"
@@ -354,8 +383,8 @@ export function PayrollEntryForm({
                       <Input 
                         type="number" 
                         {...field} 
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                        placeholder="Number of days worked" 
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormMessage />
@@ -363,18 +392,19 @@ export function PayrollEntryForm({
                 )}
               />
               
+              {/* Days Leave */}
               <FormField
                 control={form.control}
                 name="daysLeave"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Days on Leave</FormLabel>
+                    <FormLabel>Days Leave</FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
                         {...field} 
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                        placeholder="Number of leave days" 
+                        onChange={e => field.onChange(parseInt(e.target.value))}
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormMessage />
@@ -383,54 +413,276 @@ export function PayrollEntryForm({
               />
             </div>
             
-            {/* Summary and Payment */}
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h4 className="font-medium mb-2">Salary Summary</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Basic Salary:</span>
-                  <span>₹{form.watch('basicSalary')?.toLocaleString('en-IN') || 0}</span>
+            <Separator />
+            
+            {/* Allowances */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium">Allowances</h3>
+                <Button type="button" variant="outline" size="sm" onClick={addAllowance} disabled={isLoading}>
+                  <PlusCircle className="h-4 w-4 mr-1" /> Add Allowance
+                </Button>
+              </div>
+              
+              {form.watch('allowances').map((_, index) => (
+                <div key={index} className="flex gap-2 items-center mb-2">
+                  <FormField
+                    control={form.control}
+                    name={`allowances.${index}.type`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <Select 
+                          value={field.value} 
+                          onValueChange={field.onChange}
+                          disabled={isLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {salaryComponents
+                              .filter(c => c.type === 'allowance' || c.type === 'bonus')
+                              .map((component) => (
+                                <SelectItem key={component.id} value={component.id.toString()}>
+                                  {component.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name={`allowances.${index}.amount`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="Amount" 
+                            {...field}
+                            onChange={e => field.onChange(parseFloat(e.target.value))}
+                            disabled={isLoading}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeAllowance(index)}
+                    disabled={isLoading}
+                  >
+                    <MinusCircle className="h-4 w-4 text-red-500" />
+                  </Button>
                 </div>
-                <div className="flex justify-between">
-                  <span>Allowances:</span>
-                  <span>+ ₹{getTotalAllowances().toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Deductions:</span>
-                  <span>- ₹{getTotalDeductions().toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Advances:</span>
-                  <span>- ₹{getTotalAdvances().toLocaleString('en-IN')}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between font-semibold">
-                  <span>Net Salary:</span>
-                  <span>₹{getNetSalary().toLocaleString('en-IN')}</span>
-                </div>
+              ))}
+              
+              <div className="text-right text-sm font-medium mt-1">
+                Total Allowances: ₹{getTotalAllowances().toLocaleString('en-IN')}
               </div>
             </div>
             
-            {/* Payment Status */}
+            <Separator />
+            
+            {/* Deductions */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium">Deductions</h3>
+                <Button type="button" variant="outline" size="sm" onClick={addDeduction} disabled={isLoading}>
+                  <PlusCircle className="h-4 w-4 mr-1" /> Add Deduction
+                </Button>
+              </div>
+              
+              {form.watch('deductions').map((_, index) => (
+                <div key={index} className="flex gap-2 items-center mb-2">
+                  <FormField
+                    control={form.control}
+                    name={`deductions.${index}.type`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <Select 
+                          value={field.value} 
+                          onValueChange={field.onChange}
+                          disabled={isLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {salaryComponents
+                              .filter(c => c.type === 'deduction')
+                              .map((component) => (
+                                <SelectItem key={component.id} value={component.id.toString()}>
+                                  {component.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name={`deductions.${index}.amount`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="Amount" 
+                            {...field} 
+                            onChange={e => field.onChange(parseFloat(e.target.value))}
+                            disabled={isLoading}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeDeduction(index)}
+                    disabled={isLoading}
+                  >
+                    <MinusCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+              
+              <div className="text-right text-sm font-medium mt-1">
+                Total Deductions: ₹{getTotalDeductions().toLocaleString('en-IN')}
+              </div>
+            </div>
+            
+            <Separator />
+            
+            {/* Advances */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-medium">Salary Advances</h3>
+                <Button type="button" variant="outline" size="sm" onClick={addAdvance} disabled={isLoading}>
+                  <PlusCircle className="h-4 w-4 mr-1" /> Add Advance
+                </Button>
+              </div>
+              
+              {form.watch('advances').map((_, index) => (
+                <div key={index} className="flex gap-2 items-center mb-2">
+                  <FormField
+                    control={form.control}
+                    name={`advances.${index}.date`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full pl-3 text-left font-normal",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                                disabled={isLoading}
+                              >
+                                {field.value ? (
+                                  format(field.value, "MMM dd, yyyy")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              disabled={isLoading}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name={`advances.${index}.amount`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="Amount" 
+                            {...field} 
+                            onChange={e => field.onChange(parseFloat(e.target.value))}
+                            disabled={isLoading}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeAdvance(index)}
+                    disabled={isLoading}
+                  >
+                    <MinusCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+              
+              <div className="text-right text-sm font-medium mt-1">
+                Total Advances: ₹{getTotalAdvances().toLocaleString('en-IN')}
+              </div>
+            </div>
+            
+            <Separator />
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Payment Status */}
               <FormField
                 control={form.control}
                 name="paymentStatus"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment Status</FormLabel>
-                    <Select
+                    <Select 
+                      value={field.value} 
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      disabled={isLoading}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
+                          <SelectValue placeholder="Status" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="partial">Partial</SelectItem>
+                        <SelectItem value="partial">Partially Paid</SelectItem>
                         <SelectItem value="paid">Paid</SelectItem>
                       </SelectContent>
                     </Select>
@@ -439,22 +691,24 @@ export function PayrollEntryForm({
                 )}
               />
               
+              {/* Payment Date - Only shown if status is 'paid' */}
               {form.watch('paymentStatus') === 'paid' && (
                 <FormField
                   control={form.control}
                   name="paymentDate"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    <FormItem>
                       <FormLabel>Payment Date</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
-                              variant={"outline"}
+                              variant="outline"
                               className={cn(
                                 "w-full pl-3 text-left font-normal",
                                 !field.value && "text-muted-foreground"
                               )}
+                              disabled={isLoading}
                             >
                               {field.value ? (
                                 format(field.value, "PPP")
@@ -470,7 +724,7 @@ export function PayrollEntryForm({
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            disabled={(date) => date > new Date()}
+                            disabled={isLoading}
                             initialFocus
                           />
                         </PopoverContent>
@@ -482,18 +736,20 @@ export function PayrollEntryForm({
               )}
             </div>
             
-            {/* Submit Button */}
+            {/* Net salary calculation */}
+            <div className="bg-gray-50 p-4 rounded-md">
+              <div className="font-medium text-right">
+                Net Salary: <span className="text-lg">₹{getNetSalary().toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+            
             <div className="flex justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : payrollToEdit ? "Update" : "Create"}
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {payrollToEdit ? 'Update Payroll' : 'Create Payroll Entry'}
               </Button>
             </div>
           </form>
