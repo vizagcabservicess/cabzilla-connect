@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
+import { isPreviewMode } from '@/utils/apiHelper';
 
 interface VehicleSelectionProps {
   onVehicleSelect: (vehicleId: string) => void;
@@ -20,6 +21,15 @@ interface Vehicle {
   vehicleId?: string;
   name: string;
 }
+
+// Mock vehicles data for preview mode
+const mockVehicles: Vehicle[] = [
+  { id: 'sedan', name: 'Sedan' },
+  { id: 'ertiga', name: 'Ertiga' },
+  { id: 'innova_crysta', name: 'Innova Crysta' },
+  { id: 'tempo_traveller', name: 'Tempo Traveller' },
+  { id: 'mpv', name: 'Innova Hycross' }
+];
 
 const VehicleSelection: React.FC<VehicleSelectionProps> = ({ onVehicleSelect, selectedVehicleId }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -33,6 +43,20 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({ onVehicleSelect, se
   const fetchVehicles = async () => {
     setIsLoading(true);
     try {
+      // Check if we're in preview mode first
+      if (isPreviewMode()) {
+        console.log('Using mock vehicles in preview mode');
+        setVehicles(mockVehicles);
+        
+        // Auto-select first vehicle if none selected
+        if (!selectedVehicleId && mockVehicles.length > 0) {
+          onVehicleSelect(mockVehicles[0].id);
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      // Real API call for production
       const timestamp = Date.now();
       const response = await directVehicleOperation(
         `api/admin/direct-vehicle-modify.php?action=load&includeInactive=false&_t=${timestamp}`, 
@@ -60,10 +84,22 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({ onVehicleSelect, se
       } else {
         console.warn('Invalid vehicles data format:', response);
         setError('Failed to load vehicles data');
+        
+        // Fallback to mock data
+        setVehicles(mockVehicles);
+        if (!selectedVehicleId && mockVehicles.length > 0) {
+          onVehicleSelect(mockVehicles[0].id);
+        }
       }
     } catch (err) {
       console.error('Error fetching vehicles:', err);
       setError('Failed to load vehicles');
+      
+      // Fallback to mock data
+      setVehicles(mockVehicles);
+      if (!selectedVehicleId && mockVehicles.length > 0) {
+        onVehicleSelect(mockVehicles[0].id);
+      }
     } finally {
       setIsLoading(false);
     }

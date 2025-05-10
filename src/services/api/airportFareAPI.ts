@@ -1,6 +1,6 @@
-
 import axios from 'axios';
 import { getApiUrl, forceRefreshHeaders } from '@/config/api';
+import { isPreviewMode } from '@/utils/apiHelper';
 
 export interface AirportFare {
   id?: number;
@@ -25,6 +25,85 @@ export interface FareResponse {
   fares?: AirportFare[];
   timestamp?: number;
 }
+
+// Mock data for preview mode
+const mockAirportFares: Record<string, AirportFare> = {
+  'sedan': {
+    id: 1,
+    vehicleId: 'sedan',
+    vehicle_id: 'sedan',
+    name: 'Sedan',
+    basePrice: 1200,
+    pricePerKm: 13,
+    pickupPrice: 500,
+    dropPrice: 550,
+    tier1Price: 1200,
+    tier2Price: 1800,
+    tier3Price: 2400,
+    tier4Price: 3000,
+    extraKmCharge: 13
+  },
+  'ertiga': {
+    id: 2,
+    vehicleId: 'ertiga',
+    vehicle_id: 'ertiga',
+    name: 'Ertiga',
+    basePrice: 1500,
+    pricePerKm: 16,
+    pickupPrice: 600, 
+    dropPrice: 650,
+    tier1Price: 1500,
+    tier2Price: 2200,
+    tier3Price: 2900,
+    tier4Price: 3600,
+    extraKmCharge: 16
+  },
+  'innova_crysta': {
+    id: 3,
+    vehicleId: 'innova_crysta',
+    vehicle_id: 'innova_crysta',
+    name: 'Innova Crysta',
+    basePrice: 1800,
+    pricePerKm: 18,
+    pickupPrice: 700,
+    dropPrice: 750,
+    tier1Price: 1800,
+    tier2Price: 2500,
+    tier3Price: 3200,
+    tier4Price: 3900,
+    extraKmCharge: 18
+  },
+  'tempo_traveller': {
+    id: 4,
+    vehicleId: 'tempo_traveller',
+    vehicle_id: 'tempo_traveller',
+    name: 'Tempo Traveller',
+    basePrice: 2400,
+    pricePerKm: 24,
+    pickupPrice: 900,
+    dropPrice: 950,
+    tier1Price: 2400,
+    tier2Price: 3200,
+    tier3Price: 4000,
+    tier4Price: 4800,
+    extraKmCharge: 24
+  },
+  'mpv': {
+    id: 5,
+    vehicleId: 'mpv',
+    vehicle_id: 'mpv',
+    name: 'Innova Hycross',
+    basePrice: 1700,
+    pricePerKm: 17,
+    pickupPrice: 650,
+    dropPrice: 700,
+    tier1Price: 1700,
+    tier2Price: 2400,
+    tier3Price: 3100,
+    tier4Price: 3800,
+    extraKmCharge: 17
+  }
+};
 
 const parseNumericValue = (value: any): number => {
   if (value === null || value === undefined) return 0;
@@ -112,6 +191,16 @@ export const airportFareAPI = {
   getAirportFares: async (vehicleId?: string): Promise<AirportFare[]> => {
     try {
       console.log(`Getting airport fares for vehicle: ${vehicleId || 'all'}`);
+      
+      // If we're in preview mode, return mock data
+      if (isPreviewMode()) {
+        console.log('Using mock airport fare data in preview mode');
+        if (vehicleId) {
+          const mockFare = mockAirportFares[vehicleId] || createDefaultFare(vehicleId);
+          return [mockFare];
+        }
+        return Object.values(mockAirportFares);
+      }
       
       // Add cache-busting parameters
       const timestamp = Date.now();
@@ -211,6 +300,16 @@ export const airportFareAPI = {
     } catch (error) {
       console.error('Error getting airport fares:', error);
       
+      // Return mock data in preview mode or when API fails
+      if (isPreviewMode() || error.message === "Failed to fetch") {
+        console.log("Using mock data due to API failure or preview mode");
+        if (vehicleId) {
+          const mockFare = mockAirportFares[vehicleId] || createDefaultFare(vehicleId);
+          return [mockFare];
+        }
+        return Object.values(mockAirportFares);
+      }
+      
       // Return a default fare if vehicleId is specified
       if (vehicleId) {
         return [createDefaultFare(vehicleId)];
@@ -225,6 +324,26 @@ export const airportFareAPI = {
   updateAirportFare: async (fare: AirportFare): Promise<FareResponse> => {
     try {
       console.log('Updating airport fare:', fare);
+      
+      // In preview mode, simulate success
+      if (isPreviewMode()) {
+        console.log('Preview mode: simulating successful fare update');
+        
+        // Update mock data
+        if (mockAirportFares[fare.vehicleId]) {
+          mockAirportFares[fare.vehicleId] = {
+            ...mockAirportFares[fare.vehicleId],
+            ...fare
+          };
+        } else {
+          mockAirportFares[fare.vehicleId] = fare;
+        }
+        
+        return {
+          status: 'success',
+          message: 'Airport fare updated successfully (Preview Mode)'
+        };
+      }
       
       if (!fare.vehicleId && !fare.vehicle_id) {
         throw new Error('Vehicle ID is required');
@@ -257,6 +376,15 @@ export const airportFareAPI = {
       return response.data;
     } catch (error) {
       console.error('Error updating airport fare:', error);
+      
+      // In preview mode, still return success
+      if (isPreviewMode()) {
+        return {
+          status: 'success',
+          message: 'Airport fare updated successfully (Preview Mode)'
+        };
+      }
+      
       throw error;
     }
   },
@@ -267,6 +395,15 @@ export const airportFareAPI = {
   syncAirportFares: async (): Promise<FareResponse> => {
     try {
       console.log('Syncing airport fares tables');
+      
+      // In preview mode, simulate success
+      if (isPreviewMode()) {
+        return {
+          status: 'success',
+          message: 'Airport fare tables synchronized successfully (Preview Mode)',
+          timestamp: Date.now()
+        };
+      }
       
       // Add cache-busting parameters
       const timestamp = Date.now();
@@ -289,6 +426,16 @@ export const airportFareAPI = {
       return response.data;
     } catch (error) {
       console.error('Error syncing airport fares:', error);
+      
+      // In preview mode, still return success
+      if (isPreviewMode()) {
+        return {
+          status: 'success',
+          message: 'Airport fare tables synchronized successfully (Preview Mode)',
+          timestamp: Date.now()
+        };
+      }
+      
       throw error;
     }
   }
