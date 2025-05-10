@@ -40,7 +40,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     // Function to check if Google Maps is available and store it
     const checkForGoogleMaps = () => {
       if (window.google && window.google.maps) {
-        console.log("GoogleMapsProvider: Google Maps API detected");
+        console.log("GoogleMapsProvider: Google Maps API detected in window object");
         setGoogleInstance(window.google);
         setLoadError(undefined);
         return true;
@@ -50,40 +50,44 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     
     // Check immediately
     if (checkForGoogleMaps()) {
+      console.log("GoogleMapsProvider: Google Maps API found immediately");
       return;
     }
     
     // Listen for our custom event from the script tag callback
     const handleGoogleMapsLoaded = () => {
       console.log("GoogleMapsProvider: Google Maps loaded event detected");
-      if (window.google && window.google.maps) {
-        setGoogleInstance(window.google);
-        setLoadError(undefined);
-        console.log("GoogleMapsProvider: Google Maps instance saved");
-      } else {
-        console.error("GoogleMapsProvider: Event fired but Google Maps not available");
-        setLoadError(new Error("Google Maps API event fired but maps not available"));
-      }
+      // Add a small delay to ensure the Google object is fully initialized
+      setTimeout(() => {
+        if (window.google && window.google.maps) {
+          console.log("GoogleMapsProvider: Setting Google Maps instance after event");
+          setGoogleInstance(window.google);
+          setLoadError(undefined);
+        } else {
+          console.error("GoogleMapsProvider: Event fired but Google Maps not available");
+          setLoadError(new Error("Google Maps API event fired but maps not available"));
+        }
+      }, 100);
     };
     
     // Add event listener
     window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     
-    // Check periodically (every 2 seconds) for a limited time
+    // Check periodically (every 1.5 seconds) for a limited time
     const maxChecks = 10;
     let checkCount = 0;
     
     const interval = setInterval(() => {
       checkCount++;
-      if (checkForGoogleMaps() || checkCount >= maxChecks) {
+      if (checkForGoogleMaps()) {
+        console.log(`GoogleMapsProvider: Found Google Maps on check #${checkCount}`);
         clearInterval(interval);
-        
-        if (checkCount >= maxChecks && !window.google?.maps) {
-          console.error("GoogleMapsProvider: Timed out waiting for Google Maps");
-          setLoadError(new Error("Timed out waiting for Google Maps API to load"));
-        }
+      } else if (checkCount >= maxChecks) {
+        console.error("GoogleMapsProvider: Timed out waiting for Google Maps");
+        clearInterval(interval);
+        setLoadError(new Error("Timed out waiting for Google Maps API to load"));
       }
-    }, 2000);
+    }, 1500);
     
     // Clean up
     return () => {
@@ -96,8 +100,9 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const retryLoading = useCallback(() => {
     console.log("GoogleMapsProvider: Retrying Google Maps loading...");
     setRetryCount(prev => prev + 1);
+    setLoadError(undefined);
     
-    // Create a new script tag to reload the API
+    // Remove old script and create a new one
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
     if (existingScript) {
       console.log("GoogleMapsProvider: Removing existing Google Maps script");
@@ -122,6 +127,11 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     google: googleInstance,
     retryLoading
   };
+
+  // Log the loaded state for debugging
+  useEffect(() => {
+    console.log(`GoogleMapsProvider: Maps loaded state: ${!!googleInstance}`);
+  }, [googleInstance]);
 
   return (
     <GoogleMapsContext.Provider value={contextValue}>

@@ -1,3 +1,4 @@
+
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
@@ -46,36 +47,11 @@ const GoogleMapComponent = ({
   const distanceCalculatedRef = useRef<boolean>(false);
   const [mapKey, setMapKey] = useState(Date.now()); // Used to force re-render
   
-  // Check if Google Maps script exists in DOM - improved for debugging
+  // Debug log - Check loadness of Google Maps
   useEffect(() => {
-    const hasGoogleMapsScript = !!document.querySelector('script[src*="maps.googleapis.com"]');
-    console.log(`GoogleMapComponent: Google Maps script in DOM: ${hasGoogleMapsScript}`);
-    
-    // Check if Google is available in window
-    const hasGoogleObject = typeof window !== 'undefined' && window.google && window.google.maps;
-    console.log(`GoogleMapComponent: Google object in window: ${hasGoogleObject}`);
-    
-    if (!hasGoogleMapsScript && !hasGoogleObject) {
-      console.warn("GoogleMapComponent: Google Maps script is missing from DOM!");
-    }
-    
-    // Log the actual script tag if it exists
-    if (hasGoogleMapsScript) {
-      const scriptTag = document.querySelector('script[src*="maps.googleapis.com"]');
-      console.log(`GoogleMapComponent: Maps script tag details:`, {
-        src: scriptTag?.getAttribute('src'),
-        async: scriptTag?.getAttribute('async'),
-        defer: scriptTag?.getAttribute('defer'),
-        callback: scriptTag?.getAttribute('src')?.includes('callback=')
-      });
-    }
-  }, []);
-
-  const mapContainerStyle = {
-    width: "100%",
-    height: "400px",
-  };
-
+    console.log(`GoogleMapComponent: Google Maps loaded state: ${isLoaded}`);
+  }, [isLoaded]);
+  
   // Create safe location objects with validated values
   const createSafeLocation = (location: any): SafeLocation => {
     if (!location) {
@@ -109,244 +85,17 @@ const GoogleMapComponent = ({
     lat: safePickupLocation.lat,
     lng: safePickupLocation.lng
   };
-
-  // Check if locations are too far apart (more than 2000km)
-  const areLocationsTooFarApart = () => {
-    const distance = calculateHaversineDistance(
-      safePickupLocation.lat, safePickupLocation.lng,
-      safeDropLocation.lat, safeDropLocation.lng
-    );
-    return distance > 2000; // More than 2000km apart
-  };
-
-  // Check if both locations are in India (approximate bounds)
-  const areLocationsInIndia = () => {
-    const inIndiaBounds = (lat: number, lng: number) => {
-      return lat >= 8.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
-    };
-    
-    return inIndiaBounds(safePickupLocation.lat, safePickupLocation.lng) && 
-           inIndiaBounds(safeDropLocation.lat, safeDropLocation.lng);
-  };
-
-  // Handle directions callback
-  const handleDirectionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
-    console.log("Directions status:", status);
-    
-    // If we've already reported distance once, don't do it again
-    if (distanceCalculatedRef.current) {
-      if (result) setDirections(result);
-      return;
-    }
-    
-    if (status === google.maps.DirectionsStatus.OK && result) {
-      // Cache the result
-      directionsCache.set(cacheKey, result);
-      
-      setRouteNotFound(false);
-      setDirections(result);
-      setDirectionsRequestFailed(false);
-      
-      // Extract and log the actual distance from the directions result
-      const route = result.routes[0];
-      if (route && route.legs && route.legs.length > 0) {
-        const leg = route.legs[0];
-        const distanceValue = leg.distance?.value || 0;
-        const durationValue = leg.duration?.value || 0;
-        
-        console.log("Actual distance from Google:", leg.distance?.text);
-        console.log("Actual duration from Google:", leg.duration?.text);
-        
-        // Convert meters to kilometers and round to nearest integer
-        const distanceInKm = Math.round(distanceValue / 1000);
-        // Convert seconds to minutes
-        const durationInMinutes = Math.round(durationValue / 60);
-        
-        // Mark that we've calculated and reported the distance
-        distanceCalculatedRef.current = true;
-        
-        // Call the callback with the actual distance and duration
-        if (onDistanceCalculated) {
-          onDistanceCalculated(distanceInKm, durationInMinutes);
-        }
-      }
-    } else {
-      console.error("Directions request failed with status:", status);
-      setDirectionsRequestFailed(true);
-      
-      if (status === google.maps.DirectionsStatus.ZERO_RESULTS) {
-        setRouteNotFound(true);
-        
-        // Use Haversine formula as fallback
-        const distance = calculateHaversineDistance(
-          safePickupLocation.lat, safePickupLocation.lng,
-          safeDropLocation.lat, safeDropLocation.lng
-        );
-        
-        const duration = Math.round(distance * 2); // Approximate duration in minutes
-        
-        console.log("Using Haversine distance fallback:", distance, "km");
-        
-        // Mark that we've calculated and reported the distance
-        distanceCalculatedRef.current = true;
-        
-        if (onDistanceCalculated) {
-          onDistanceCalculated(distance, duration);
-        }
-      }
-    }
-  }, [onDistanceCalculated, safePickupLocation, safeDropLocation, google, cacheKey]);
-
-  // Calculate distance between two points using Haversine formula
-  function calculateHaversineDistance(
-    lat1: number, lng1: number, 
-    lat2: number, lng2: number
-  ): number {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lng2 - lng1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c; // Distance in km
-    
-    return Math.round(distance);
-  }
   
-  function deg2rad(deg: number): number {
-    return deg * (Math.PI / 180);
-  }
-
-  // Reset directions when locations change
-  useEffect(() => {
-    try {
-      if (safePickupLocation && safeDropLocation) {
-        setDirections(null);
-        setDirectionsRequested(false);
-        setDirectionsRequestFailed(false);
-        setRouteNotFound(false);
-        directionsRequestCount.current = 0;
-        distanceCalculatedRef.current = false;
-      }
-    } catch (error) {
-      console.error("Error in location change effect:", error);
-      setMapError(error instanceof Error ? error : new Error(String(error)));
-    }
-  }, [safePickupLocation, safeDropLocation]);
+  const mapContainerStyle = {
+    width: "100%",
+    height: "400px",
+  };
 
   // Handle map load
   const handleMapLoad = useCallback(() => {
-    console.log("Map loaded successfully");
+    console.log("GoogleMapComponent: Map loaded successfully");
     setMapLoaded(true);
   }, []);
-
-  // Handle directions request with caching
-  useEffect(() => {
-    if (!google || !google.maps) {
-      console.log("Google Maps API not available yet");
-      return;
-    }
-    
-    try {
-      if (mapLoaded && !directionsRequested && google) {
-        // Check if both locations are in India
-        if (!areLocationsInIndia()) {
-          console.log("One or both locations are outside India");
-          setRouteNotFound(true);
-          
-          // Use Haversine as fallback
-          if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            const distance = calculateHaversineDistance(
-              safePickupLocation.lat, safePickupLocation.lng,
-              safeDropLocation.lat, safeDropLocation.lng
-            );
-            const duration = Math.round(distance * 2);
-            onDistanceCalculated(distance, duration);
-            distanceCalculatedRef.current = true;
-          }
-          return;
-        }
-        
-        // Check if locations are too far apart
-        if (areLocationsTooFarApart()) {
-          console.log("Locations are too far apart (>2000km)");
-          setRouteNotFound(true);
-          
-          // Use Haversine as fallback
-          if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            const distance = calculateHaversineDistance(
-              safePickupLocation.lat, safePickupLocation.lng,
-              safeDropLocation.lat, safeDropLocation.lng
-            );
-            const duration = Math.round(distance * 2);
-            onDistanceCalculated(distance, duration);
-            distanceCalculatedRef.current = true;
-          }
-          return;
-        }
-        
-        setDirectionsRequested(true);
-        
-        // Try to get from cache first
-        const cachedResult = directionsCache.get(cacheKey);
-        if (cachedResult) {
-          console.log("Using cached directions");
-          setDirections(cachedResult);
-          
-          // Extract distance from cached result
-          if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            const route = cachedResult.routes[0];
-            if (route && route.legs && route.legs.length > 0) {
-              const leg = route.legs[0];
-              const distanceValue = leg.distance?.value || 0;
-              const durationValue = leg.duration?.value || 0;
-              const distanceInKm = Math.round(distanceValue / 1000);
-              const durationInMinutes = Math.round(durationValue / 60);
-              
-              onDistanceCalculated(distanceInKm, durationInMinutes);
-              distanceCalculatedRef.current = true;
-            }
-          }
-          return;
-        }
-        
-        // Request new directions
-        const directionsService = new google.maps.DirectionsService();
-        directionsService.route({
-          origin: { 
-            lat: safePickupLocation.lat, 
-            lng: safePickupLocation.lng 
-          },
-          destination: { 
-            lat: safeDropLocation.lat, 
-            lng: safeDropLocation.lng 
-          },
-          travelMode: google.maps.TravelMode.DRIVING,
-          region: 'IN'
-        }, handleDirectionsCallback);
-      }
-    } catch (error) {
-      console.error("Error requesting directions:", error);
-      setMapError(error instanceof Error ? error : new Error(String(error)));
-      
-      // Fallback to Haversine calculation
-      if (!distanceCalculatedRef.current && onDistanceCalculated) {
-        const distance = calculateHaversineDistance(
-          safePickupLocation.lat, safePickupLocation.lng,
-          safeDropLocation.lat, safeDropLocation.lng
-        );
-        const duration = Math.round(distance * 2);
-        onDistanceCalculated(distance, duration);
-        distanceCalculatedRef.current = true;
-      }
-    }
-  }, [
-    mapLoaded, directionsRequested, google, 
-    safePickupLocation, safeDropLocation, 
-    handleDirectionsCallback, onDistanceCalculated, cacheKey
-  ]);
 
   // Force map refresh if Google becomes available after initial render
   useEffect(() => {
@@ -394,29 +143,15 @@ const GoogleMapComponent = ({
     );
   }
 
+  // Just return the map without all the other logic for now to debug rendering
   return (
     <div className="relative">
-      {routeNotFound && (
-        <div className="absolute inset-0 bg-white bg-opacity-90 z-10 flex flex-col items-center justify-center p-4 text-center">
-          <h3 className="text-lg font-bold text-amber-600 mb-2">Route Not Found</h3>
-          <p className="text-gray-700 mb-4">
-            We couldn't find a driving route between these locations.
-            {areLocationsTooFarApart() && " The locations may be too far apart."}
-          </p>
-          <p className="text-sm text-gray-500">
-            Using approximate distance: {calculateHaversineDistance(
-              safePickupLocation.lat, safePickupLocation.lng,
-              safeDropLocation.lat, safeDropLocation.lng
-            )} km
-          </p>
-        </div>
-      )}
-      
       <GoogleMap
         key={mapKey}
         mapContainerStyle={mapContainerStyle}
         center={center}
         zoom={12}
+        onLoad={handleMapLoad}
         options={{
           disableDefaultUI: false,
           zoomControl: true,
@@ -424,7 +159,6 @@ const GoogleMapComponent = ({
           fullscreenControl: false,
           streetViewControl: false,
         }}
-        onLoad={handleMapLoad}
       >
         <Marker position={center} title={safePickupLocation.name} />
         <Marker 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,7 +129,7 @@ export function LocationInput({
     <div className={`relative ${className}`}>
       {label && (
         <div className="mb-2">
-          <Label htmlFor={id} className="block">
+          <Label htmlFor={id} className="block font-medium text-gray-700">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </Label>
@@ -147,19 +146,23 @@ export function LocationInput({
         placeholder={placeholder}
         disabled={disabled}
         readOnly={readOnly}
+        className="border-gray-300 focus:ring-blue-500 focus:border-blue-500"
         onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
         onBlur={handleInputBlur}
       />
       
       {showSuggestions && filteredSuggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto border">
+        <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto border border-gray-200">
           {filteredSuggestions.map((suggestion) => (
             <div
               key={suggestion.id}
               className="px-4 py-2 hover:bg-slate-100 cursor-pointer"
               onMouseDown={() => handleSuggestionClick(suggestion)}
             >
-              {suggestion.name}
+              <div className="font-medium">{suggestion.name}</div>
+              {suggestion.address && suggestion.address !== suggestion.name && (
+                <div className="text-xs text-gray-500">{suggestion.address}</div>
+              )}
             </div>
           ))}
         </div>
