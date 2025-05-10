@@ -1,10 +1,6 @@
 
 import { ReactNode, createContext, useContext, useEffect, useState, useCallback } from "react";
-import { useLoadScript } from "@react-google-maps/api";
 import { toast } from "sonner";
-
-// Define libraries array as a constant to prevent unnecessary re-renders
-const libraries = ["places"] as ["places"];
 
 // Create a comprehensive context
 interface GoogleMapsContextType {
@@ -35,14 +31,13 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [scriptLoadAttempted, setScriptLoadAttempted] = useState(false);
   
   // Check if Google Maps API is already loaded via script tag
   useEffect(() => {
     // Function to check if Google Maps is available
     const checkForGoogleMaps = () => {
       if (window.google && window.google.maps) {
-        console.log("Google Maps already loaded via script tag");
+        console.log("Google Maps API detected");
         setGoogleInstance(window.google);
         return true;
       }
@@ -54,7 +49,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       return;
     }
     
-    // If not available, listen for the load event
+    // Listen for our custom event from main.tsx
     const handleGoogleMapsLoaded = () => {
       console.log("Google Maps load event detected");
       if (window.google && window.google.maps) {
@@ -65,28 +60,24 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     // Listen for our custom event from main.tsx
     window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     
-    // Set up an interval to check for Google Maps
-    const interval = setInterval(checkForGoogleMaps, 1000);
+    // Check periodically (every 2 seconds)
+    const interval = setInterval(() => {
+      if (checkForGoogleMaps()) {
+        clearInterval(interval);
+      }
+    }, 2000);
     
     // Clean up
     return () => {
       clearInterval(interval);
       window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     };
-  }, []);
+  }, [retryCount]);
 
   // Retry loading function - can be called manually if needed
   const retryLoading = useCallback(() => {
     console.log("Retrying Google Maps loading...");
     setRetryCount(prev => prev + 1);
-    
-    // Check if script already exists in DOM
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (!existingScript) {
-      console.log("No Google Maps script found, relying on script in index.html");
-    } else {
-      console.log("Google Maps script already exists in DOM");
-    }
   }, []);
 
   // Provide context values

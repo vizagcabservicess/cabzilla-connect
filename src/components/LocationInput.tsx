@@ -113,14 +113,31 @@ export function LocationInput({
     // Delay hiding suggestions to allow clicking on them
     setTimeout(() => setShowSuggestions(false), 150);
   };
+
+  // Determine subtitle text based on props
+  const getSubtitleText = () => {
+    if (isPickupLocation) {
+      return "Please select a location in Visakhapatnam";
+    } else if (isAirportTransfer) {
+      return "Please select a location in Visakhapatnam";
+    }
+    return "";
+  };
+  
+  const subtitleText = getSubtitleText();
   
   return (
     <div className={`relative ${className}`}>
       {label && (
-        <Label htmlFor={id} className="mb-2 block">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </Label>
+        <div className="mb-2">
+          <Label htmlFor={id} className="block">
+            {label}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </Label>
+          {subtitleText && (
+            <p className="text-xs text-gray-500 mt-0.5">{subtitleText}</p>
+          )}
+        </div>
       )}
       
       <Input

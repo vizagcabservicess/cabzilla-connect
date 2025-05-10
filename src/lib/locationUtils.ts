@@ -6,6 +6,15 @@ import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtil
 // Re-export the safe string utility functions from safeStringUtils
 export { safeIncludes, safeLowerCase, safeGetString };
 
+// Visakhapatnam city center coordinates
+const VIZAG_CENTER = {
+  lat: 17.6868,
+  lng: 83.2185
+};
+
+// Maximum distance for a location to be considered in Vizag (in km)
+const VIZAG_RADIUS_KM = 30;
+
 /**
  * Converts a location from the application format to the API format
  */
@@ -41,6 +50,9 @@ export const createLocationChangeHandler = (
     // Safely extract address information
     const locationAddress = newLocation.address || newLocation.name || '';
     
+    // Calculate if the location is in Vizag based on the 30km radius
+    const isInVizag = determineIfLocationIsInVizag(newLocation);
+    
     // Convert API location format to app location format with safe defaults
     const appLocation: AppLocation = {
       id,
@@ -52,8 +64,7 @@ export const createLocationChangeHandler = (
       lng: typeof newLocation.lng === 'number' ? newLocation.lng : 0,
       type: 'other',
       popularityScore: 50,
-      isInVizag: typeof newLocation.isInVizag === 'boolean' ? 
-        newLocation.isInVizag : determineIfLocationIsInVizag(newLocation)
+      isInVizag
     };
     
     console.log('Location changed:', appLocation);
@@ -71,8 +82,24 @@ export const createLocationChangeHandler = (
 };
 
 /**
- * Safely determine if a location is in Visakhapatnam based on its properties
- * Uses safeIncludes to prevent errors with null/undefined values
+ * Calculate distance between two points using Haversine formula
+ */
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // Distance in km
+  
+  return distance;
+}
+
+/**
+ * Determine if a location is within the specified radius of Visakhapatnam
  */
 function determineIfLocationIsInVizag(location: ApiLocation | null | undefined): boolean {
   if (!location) return false;
@@ -83,14 +110,21 @@ function determineIfLocationIsInVizag(location: ApiLocation | null | undefined):
       !isNaN(location.lat) && 
       !isNaN(location.lng)) {
     
-    // Check if coordinates are within Vizag bounds
-    if (location.lat >= 17.6 && location.lat <= 17.9 && 
-        location.lng >= 83.1 && location.lng <= 83.4) {
+    // Calculate distance from Vizag center
+    const distance = calculateDistance(
+      location.lat, 
+      location.lng, 
+      VIZAG_CENTER.lat, 
+      VIZAG_CENTER.lng
+    );
+    
+    // Check if within 30km radius
+    if (distance <= VIZAG_RADIUS_KM) {
       return true;
     }
   }
   
-  // Check location name and address for Vizag keywords
+  // Check location name and address for Vizag keywords as fallback
   const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
   for (const keyword of vizagKeywords) {
@@ -115,17 +149,22 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     return location.isInVizag;
   }
   
-  // Check by coordinates (Visakhapatnam approximate bounds)
+  // Check distance from Vizag center if coordinates are available
   const hasValidCoordinates = 
     typeof location.lat === 'number' && !isNaN(location.lat) && 
     typeof location.lng === 'number' && !isNaN(location.lng);
     
   if (hasValidCoordinates) {
-    const isInVizagBounds = 
-      location.lat >= 17.6 && location.lat <= 17.9 && 
-      location.lng >= 83.1 && location.lng <= 83.4;
+    const distance = calculateDistance(
+      location.lat, 
+      location.lng, 
+      VIZAG_CENTER.lat, 
+      VIZAG_CENTER.lng
+    );
     
-    if (isInVizagBounds) return true;
+    if (distance <= VIZAG_RADIUS_KM) {
+      return true;
+    }
   }
   
   // Using safeIncludes for all string checks to avoid toLowerCase on undefined
@@ -189,3 +228,33 @@ function extractStateFromAddress(address: string | undefined | null): string {
   
   return 'Andhra Pradesh'; // Default fallback
 }
+
+/**
+ * Check if a location is within the specified radius of Visakhapatnam
+ * Returns distance if it's outside the radius, null if within radius
+ */
+export const checkDistanceFromVizag = (location: AppLocation | ApiLocation | null | undefined): number | null => {
+  if (!location) return null;
+  
+  // Check if location has valid coordinates
+  const hasValidCoordinates = 
+    typeof location.lat === 'number' && !isNaN(location.lat) && 
+    typeof location.lng === 'number' && !isNaN(location.lng);
+    
+  if (hasValidCoordinates) {
+    const distance = calculateDistance(
+      location.lat, 
+      location.lng, 
+      VIZAG_CENTER.lat, 
+      VIZAG_CENTER.lng
+    );
+    
+    if (distance <= VIZAG_RADIUS_KM) {
+      return null; // Within radius
+    } else {
+      return Math.round(distance); // Return distance if outside radius
+    }
+  }
+  
+  return null; // Cannot calculate distance
+};

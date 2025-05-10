@@ -14,6 +14,8 @@ const root = ReactDOM.createRoot(document.getElementById('root')!);
 const checkGoogleMaps = () => {
   if (window.google && window.google.maps) {
     console.log('✅ Google Maps API detected on initialization');
+    // Dispatch an event to notify components that Google Maps is loaded
+    window.dispatchEvent(new Event('google-maps-loaded'));
   } else {
     console.warn('⚠️ Google Maps API not detected on initialization, waiting for script to load');
   }
