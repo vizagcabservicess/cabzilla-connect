@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,7 +85,7 @@ export function DateTimePicker({
   return (
     <div className="space-y-2">
       {label && (
-        <label className="text-xs font-medium text-gray-600 mb-1">
+        <label className="text-xs font-medium text-gray-600 mb-1 text-left block">
           {label}
         </label>
       )}

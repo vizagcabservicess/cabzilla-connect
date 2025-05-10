@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,15 +7,7 @@
     <meta name="description" content="Lovable Generated Project" />
     <meta name="author" content="Lovable" />
     <meta property="og:image" content="/og-image.png" />
-    <!-- Google Maps API with necessary libraries - using async/defer properly -->
-    <script>
-      // Setup callback function before the script loads
-      window.initGoogleMaps = function() {
-        console.log('✅ Google Maps API loaded via callback');
-        window.dispatchEvent(new Event('google-maps-loaded'));
-      };
-    </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4&libraries=places&callback=initGoogleMaps" async defer></script>
+    <!-- Google Maps API with necessary libraries -->
   </head>
 
   <body>

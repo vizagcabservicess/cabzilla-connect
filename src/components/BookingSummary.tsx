@@ -780,15 +780,15 @@ export const BookingSummary = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
-      <h2 className="text-xl font-bold mb-4">Booking Summary</h2>
+      <h2 className="text-xl font-bold mb-4 text-left">Booking Summary</h2>
 
       <div className="space-y-4">
         <div className="border-b pb-4">
           <div className="flex items-start gap-2 mb-3">
             <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">TRIP TYPE</p>
-              <p className="font-medium capitalize">
+            <div className="text-left">
+              <p className="text-sm text-gray-500 text-left">TRIP TYPE</p>
+              <p className="font-medium capitalize text-left">
                 {tripType === 'outstation' ? `${tripType} (${tripMode})` : tripType}
                 {tripType === 'local' && ` - ${hourlyPackage}`}
               </p>
@@ -797,26 +797,26 @@ export const BookingSummary = ({
 
           <div className="flex items-start gap-2 mb-3">
             <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">TOTAL DISTANCE</p>
-              <p className="font-medium">{distance} KM</p>
+            <div className="text-left">
+              <p className="text-sm text-gray-500 text-left">TOTAL DISTANCE</p>
+              <p className="font-medium text-left">{distance} KM</p>
             </div>
           </div>
 
           <div className="flex items-start gap-2 mb-3">
             <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500">PICKUP</p>
-              <p className="font-medium">{pickupLocation.address || pickupLocation.name}</p>
+            <div className="text-left">
+              <p className="text-sm text-gray-500 text-left">PICKUP</p>
+              <p className="font-medium text-left">{pickupLocation.address || pickupLocation.name}</p>
             </div>
           </div>
 
           {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
             <div className="flex items-start gap-2 mb-3">
               <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-gray-500">DROP-OFF</p>
-                <p className="font-medium">{dropLocation.address || dropLocation.name}</p>
+              <div className="text-left">
+                <p className="text-sm text-gray-500 text-left">DROP-OFF</p>
+                <p className="font-medium text-left">{dropLocation.address || dropLocation.name}</p>
               </div>
             </div>
           )}
@@ -836,7 +836,7 @@ export const BookingSummary = ({
           <div className="flex items-start gap-2 mb-3">
             <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm text-gray-500">PICKUP DATE</p>
+              <p className="text-sm text-gray-500 text-left">PICKUP DATE</p>
               <p className="font-medium">
                 {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
               </p>

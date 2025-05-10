@@ -1,4 +1,3 @@
-
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
@@ -137,6 +136,12 @@ function determineIfLocationIsInVizag(location: ApiLocation | null | undefined):
   return false;
 }
 
+// Add more Vizag suburbs/areas to the recognized list
+const vizagNames = [
+  'visakhapatnam', 'vizag', 'waltair', 'vizianagaram',
+  'pendurthi', 'gajuwaka', 'madhurawada', 'mvp colony', 'nad junction', 'dwaraka nagar', 'akkayyapalem', 'gopalapatnam', 'kurmannapalem', 'sheela nagar', 'bhel', 'autonagar', 'simhachalam', 'bhimili', 'bhimli', 'ananthapuram', 'yendada', 'rushikonda', 'kailasagiri', 'jagadamba', 'seethammadhara', 'dondaparthi', 'railway colony', 'old gajuwaka', 'new gajuwaka', 'murali nagar', 'kancharapalem', 'chinna waltair', 'lawsons bay', 'siripuram', 'ramnagar', 'hb colony', 'marripalem', 'peda waltair', 'sagar nagar', 'kirlampudi', 'sriharipuram', 'malkapuram', 'scindia', 'gopalapatnam', 'pothinamallayya palem', 'arilova', 'bakkannapalem', 'gambhiram', 'ananthapuram', 'gopalapatnam', 'gajuwaka', 'pendurthi', 'madhurawada', 'mvp', 'nad', 'jagadamba', 'rk beach', 'beach road', 'airport', 'railway station', 'rtc complex'
+];
+
 /**
  * Check if a location is in Visakhapatnam based on coordinates and address
  * Safe handling of potentially undefined values
@@ -166,9 +171,6 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
       return true;
     }
   }
-  
-  // Using safeIncludes for all string checks to avoid toLowerCase on undefined
-  const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
   // Check if any Vizag name appears in the location's address, name, or city
   return vizagNames.some(vizagName => 

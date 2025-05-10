@@ -1,4 +1,3 @@
-
 import { ReactNode, createContext, useContext, useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +31,29 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [loadError, setLoadError] = useState<Error | undefined>(undefined);
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Dynamically load the Google Maps script if not present
+  useEffect(() => {
+    if (!apiKey) {
+      setLoadError(new Error("Google Maps API key is missing"));
+      return;
+    }
+    // Check if script already exists
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        window.dispatchEvent(new Event('google-maps-loaded'));
+      };
+      script.onerror = () => {
+        setLoadError(new Error("Failed to load Google Maps script"));
+      };
+      document.body.appendChild(script);
+    }
+  }, [apiKey, retryCount]);
   
   // Initialize Google Maps check
   useEffect(() => {

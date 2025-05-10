@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -189,7 +188,7 @@ export function EditableContactDetailsForm({
       {!showPaymentGateway ? (
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Contact Information</h3>
+            <h3 className="text-xl font-semibold text-left">Contact Information</h3>
             {!isEditing && !isReadOnly && (
               <Button 
                 variant="outline" 
@@ -205,7 +204,7 @@ export function EditableContactDetailsForm({
           
           <form onSubmit={handleContactDetailsSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name" className="text-left block">Full Name</Label>
               <Input
                 type="text"
                 id="name"
@@ -218,7 +217,7 @@ export function EditableContactDetailsForm({
               />
             </div>
             <div>
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email" className="text-left block">Email Address</Label>
               <Input
                 type="email"
                 id="email"
@@ -231,7 +230,7 @@ export function EditableContactDetailsForm({
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone" className="text-left block">Phone Number</Label>
               <Input
                 type="tel"
                 id="phone"

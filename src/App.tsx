@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Index from "@/pages/Index";
 import CabsPage from "@/pages/CabsPage";
@@ -18,7 +17,7 @@ import './App.css';
 const App = () => {
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
-      <GoogleMapsProvider>
+      <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Router>
           <Routes>
             <Route path="/" element={<Index />} />

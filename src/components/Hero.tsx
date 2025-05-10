@@ -110,15 +110,23 @@ export function Hero() {
     setPickupLocation(location);
   };
   
-  const handleDropLocationChange = (location: Location) => {
-    if (!location) return; // Safety check
-    
+  const handleDropLocationChange = (location: Location | null) => {
+    // Allow clearing the drop location
+    if (!location) {
+      setDropLocation(null);
+      // Re-evaluate trip type logic when drop location is cleared
+      if (tripType === 'airport' || tripType === 'outstation') {
+        // If pickup is in Vizag, allow switching to Airport tab
+        if (pickupLocation && isLocationInVizag(pickupLocation)) {
+          setTripType('airport');
+        }
+      }
+      return;
+    }
     // Make sure isInVizag is determined if not already set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
-    
-    console.log("Drop location changed:", location);
     setDropLocation(location);
   };
 
@@ -412,6 +420,20 @@ export function Hero() {
     setCurrentStep(2);
   };
 
+  // Custom handler for tab (trip type) changes
+  const handleTabChange = (type: TripType) => {
+    setTripType(type);
+    if (type === 'airport') {
+      // Reset drop location if not in Vizag or if empty
+      if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
+        setDropLocation(null);
+      }
+    }
+    if (type === 'local') {
+      setDropLocation(null);
+    }
+  };
+
   return (
     <section className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 overflow-hidden mobile-safe-bottom">
       <div className="container mx-auto px-4">
@@ -431,7 +453,7 @@ export function Hero() {
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
-                  onTabChange={setTripType}
+                  onTabChange={handleTabChange}
                   onTripModeChange={setTripMode}
                 />
 
@@ -504,9 +526,9 @@ export function Hero() {
                 <div className="mt-8 flex justify-end">
                   <Button
                     onClick={handleContinue}
-                    disabled={!isFormValid || isCalculatingDistance}
+                    disabled={!isFormValid || isCalculatingDistance || !pickupLocation || !(pickupLocation.name || pickupLocation.address)}
                     className={`px-10 py-6 rounded-md ${
-                      isFormValid && !isCalculatingDistance
+                      isFormValid && !isCalculatingDistance && pickupLocation && (pickupLocation.name || pickupLocation.address)
                         ? "bg-blue-500 text-white"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
@@ -522,39 +544,39 @@ export function Hero() {
                 <div className="lg:col-span-2 space-y-6">
                   <div className="bg-white rounded-xl shadow-card p-6">
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-xl font-semibold">Trip Details</h3>
+                      <h3 className="text-xl font-semibold text-left">Trip Details</h3>
                       <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
                         Edit
                       </Button>
                     </div>
                     <div className="grid grid-cols-2 gap-y-4 gap-x-6">
                       <div>
-                        <p className="text-xs">PICKUP LOCATION</p>
-                        <p className="font-medium">{pickupLocation?.name}</p>
+                        <p className="text-xs text-left">PICKUP LOCATION</p>
+                        <p className="font-medium text-left">{pickupLocation?.name}</p>
                       </div>
                       {(tripType === 'outstation' || tripType === 'airport') && (
                         <div>
-                          <p className="text-xs">DROP LOCATION</p>
-                          <p className="font-medium">{dropLocation?.name}</p>
+                          <p className="text-xs text-left">DROP LOCATION</p>
+                          <p className="font-medium text-left">{dropLocation?.name}</p>
                         </div>
                       )}
                       {tripType === 'local' && (
                         <div>
-                          <p className="text-xs">PACKAGE</p>
-                          <p className="font-medium">
+                          <p className="text-xs text-left">PACKAGE</p>
+                          <p className="font-medium text-left">
                             {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
                           </p>
                         </div>
                       )}
                       <div className="col-span-2 border-t pt-3 mt-2 flex justify-between">
                         <div>
-                          <p className="text-xs">PICKUP DATE & TIME</p>
-                          <p className="font-medium">{pickupDate?.toLocaleString()}</p>
+                          <p className="text-xs text-left">PICKUP DATE & TIME</p>
+                          <p className="font-medium text-left">{pickupDate?.toLocaleString()}</p>
                         </div>
                         {tripMode === 'round-trip' && returnDate && (
                           <div>
-                            <p className="text-xs">RETURN DATE & TIME</p>
-                            <p className="font-medium">{returnDate?.toLocaleString()}</p>
+                            <p className="text-xs text-left">RETURN DATE & TIME</p>
+                            <p className="font-medium text-left">{returnDate?.toLocaleString()}</p>
                           </div>
                         )}
                       </div>

@@ -63,8 +63,8 @@ export function CabOptionCard({
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-gray-900 mb-1">{cab.name}</h3>
-            <p className="text-sm text-gray-500 truncate">{cab.description}</p>
+            <h3 className="font-medium text-gray-900 mb-1 text-left">{cab.name}</h3>
+            <p className="text-sm text-gray-500 truncate text-left">{cab.description}</p>
           </div>
 
           <div className="text-right">
