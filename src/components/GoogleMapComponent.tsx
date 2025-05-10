@@ -1,3 +1,4 @@
+
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
@@ -35,7 +36,7 @@ const GoogleMapComponent = ({
   dropLocation,
   onDistanceCalculated 
 }: GoogleMapComponentProps) => {
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded, google, retryLoading } = useGoogleMaps();
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [directionsRequested, setDirectionsRequested] = useState(false);
@@ -46,6 +47,7 @@ const GoogleMapComponent = ({
   const maxRetries = useRef(3);
   const directionsServiceRef = useRef<any>(null);
   const distanceCalculatedRef = useRef<boolean>(false);
+  const [mapKey, setMapKey] = useState(Date.now()); // Used to force re-render
 
   const mapContainerStyle = {
     width: "100%",
@@ -236,141 +238,204 @@ const GoogleMapComponent = ({
           setDirectionsRequestFailed(true);
           
           if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            // Provide a fallback distance for non-Indian locations
+            // Use Haversine as fallback
             const distance = calculateHaversineDistance(
               safePickupLocation.lat, safePickupLocation.lng,
               safeDropLocation.lat, safeDropLocation.lng
             );
             const duration = Math.round(distance * 2);
-            distanceCalculatedRef.current = true;
             onDistanceCalculated(distance, duration);
-          }
-          return;
-        }
-        
-        // Check for cached result first
-        if (directionsCache.has(cacheKey)) {
-          console.log('🔄 Using cached directions result');
-          const cachedDirections = directionsCache.get(cacheKey)!;
-          setDirections(cachedDirections);
-          
-          // If we have a cached result, extract the distance and duration
-          if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            const route = cachedDirections.routes[0];
-            if (route && route.legs && route.legs.length > 0) {
-              const leg = route.legs[0];
-              const distanceValue = leg.distance?.value || 0;
-              const durationValue = leg.duration?.value || 0;
-              
-              // Convert meters to kilometers and round to nearest integer
-              const distanceInKm = Math.round(distanceValue / 1000);
-              // Convert seconds to minutes
-              const durationInMinutes = Math.round(durationValue / 60);
-              
-              distanceCalculatedRef.current = true;
-              onDistanceCalculated(distanceInKm, durationInMinutes);
-            }
+            distanceCalculatedRef.current = true;
           }
           return;
         }
         
         // Check if locations are too far apart
         if (areLocationsTooFarApart()) {
-          console.warn("Locations are very far apart (>2000km), route might not be found");
+          console.error("Locations are too far apart (>2000km)");
+          setRouteNotFound(true);
+          setDirectionsRequestFailed(true);
+          
+          if (!distanceCalculatedRef.current && onDistanceCalculated) {
+            // Use Haversine as fallback
+            const distance = calculateHaversineDistance(
+              safePickupLocation.lat, safePickupLocation.lng,
+              safeDropLocation.lat, safeDropLocation.lng
+            );
+            const duration = Math.round(distance * 2);
+            onDistanceCalculated(distance, duration);
+            distanceCalculatedRef.current = true;
+          }
+          return;
         }
         
         setDirectionsRequested(true);
         directionsRequestCount.current += 1;
-        console.log(`Making directions request #${directionsRequestCount.current}`);
+
+        // Try to get from cache first
+        const cachedResult = directionsCache.get(cacheKey);
+        if (cachedResult) {
+          console.log("Using cached directions for:", cacheKey);
+          setDirections(cachedResult);
+          
+          // Extract distance from cached result
+          if (!distanceCalculatedRef.current && onDistanceCalculated) {
+            const route = cachedResult.routes[0];
+            if (route && route.legs && route.legs.length > 0) {
+              const leg = route.legs[0];
+              const distanceValue = leg.distance?.value || 0;
+              const durationValue = leg.duration?.value || 0;
+              const distanceInKm = Math.round(distanceValue / 1000);
+              const durationInMinutes = Math.round(durationValue / 60);
+              
+              onDistanceCalculated(distanceInKm, durationInMinutes);
+              distanceCalculatedRef.current = true;
+            }
+          }
+          return;
+        }
+        
+        // Create service if not already created
+        if (!directionsServiceRef.current && google.maps) {
+          directionsServiceRef.current = new google.maps.DirectionsService();
+        }
+        
+        if (directionsServiceRef.current) {
+          console.log("Requesting directions for:", cacheKey);
+          directionsServiceRef.current.route({
+            origin: { 
+              lat: safePickupLocation.lat, 
+              lng: safePickupLocation.lng 
+            },
+            destination: { 
+              lat: safeDropLocation.lat, 
+              lng: safeDropLocation.lng 
+            },
+            travelMode: google.maps.TravelMode.DRIVING,
+            region: 'IN'
+          }, handleDirectionsCallback);
+        } else {
+          console.error("Directions service is not available");
+          setDirectionsRequestFailed(true);
+          
+          // Fallback to Haversine calculation
+          if (!distanceCalculatedRef.current && onDistanceCalculated) {
+            const distance = calculateHaversineDistance(
+              safePickupLocation.lat, safePickupLocation.lng,
+              safeDropLocation.lat, safeDropLocation.lng
+            );
+            const duration = Math.round(distance * 2);
+            onDistanceCalculated(distance, duration);
+            distanceCalculatedRef.current = true;
+          }
+        }
       }
     } catch (error) {
-      console.error("Error in directions request effect:", error);
+      console.error("Error requesting directions:", error);
       setMapError(error instanceof Error ? error : new Error(String(error)));
+      setDirectionsRequestFailed(true);
+      
+      // Fallback to Haversine calculation
+      if (!distanceCalculatedRef.current && onDistanceCalculated) {
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
+        const duration = Math.round(distance * 2);
+        onDistanceCalculated(distance, duration);
+        distanceCalculatedRef.current = true;
+      }
     }
-  }, [mapLoaded, directionsRequested, google, cacheKey, safePickupLocation, safeDropLocation, onDistanceCalculated]);
+  }, [
+    mapLoaded, directionsRequested, google, 
+    safePickupLocation, safeDropLocation, 
+    handleDirectionsCallback, onDistanceCalculated, cacheKey
+  ]);
 
-  // Handle errors
-  if (mapError) {
+  // Force map refresh if Google becomes available after initial render
+  useEffect(() => {
+    if (google && !mapLoaded) {
+      setMapKey(Date.now());
+    }
+  }, [google, mapLoaded]);
+
+  if (!isLoaded || !google) {
     return (
-      <ApiErrorFallback 
-        error={mapError}
-        onRetry={() => window.location.reload()}
-        title="Map Error"
-      />
+      <div className="bg-white rounded-md shadow p-4 text-center h-[400px] flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+        <h3 className="text-lg font-medium mb-2">Loading Google Maps...</h3>
+        <p className="text-gray-500 mb-4">Please wait while we load the map service</p>
+        <button 
+          onClick={retryLoading}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          Retry Loading Maps
+        </button>
+      </div>
     );
   }
 
-  if (!isLoaded) {
-    return <div className="p-4 text-center bg-gray-100 rounded-lg">Loading map...</div>;
+  if (mapError) {
+    return (
+      <div className="bg-white rounded-md shadow p-4">
+        <h3 className="text-lg font-bold text-red-600 mb-2">Error Loading Map</h3>
+        <p className="text-gray-700 mb-4">{mapError.message}</p>
+        <button 
+          onClick={() => {
+            setMapError(null);
+            setMapKey(Date.now());
+            retryLoading();
+          }}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
   }
 
   return (
     <div className="relative">
+      {routeNotFound && (
+        <div className="absolute inset-0 bg-white bg-opacity-90 z-10 flex flex-col items-center justify-center p-4 text-center">
+          <h3 className="text-lg font-bold text-amber-600 mb-2">Route Not Found</h3>
+          <p className="text-gray-700 mb-4">
+            We couldn't find a driving route between these locations.
+            {areLocationsTooFarApart() && " The locations may be too far apart."}
+          </p>
+          <p className="text-sm text-gray-500">
+            Using approximate distance: {calculateHaversineDistance(
+              safePickupLocation.lat, safePickupLocation.lng,
+              safeDropLocation.lat, safeDropLocation.lng
+            )} km
+          </p>
+        </div>
+      )}
+      
       <GoogleMap
+        key={mapKey}
         mapContainerStyle={mapContainerStyle}
         center={center}
         zoom={12}
-        onLoad={handleMapLoad}
-        options={{ 
-          mapTypeControl: false,
+        options={{
+          disableDefaultUI: false,
+          zoomControl: true,
+          scrollwheel: true,
+          fullscreenControl: false,
           streetViewControl: false,
-          fullscreenControl: true,
-          // Restrict to India view
-          restriction: {
-            latLngBounds: {
-              north: 37.0,
-              south: 8.0,
-              west: 68.0,
-              east: 97.0
-            },
-            strictBounds: false
-          }
         }}
+        onLoad={handleMapLoad}
       >
-        {mapLoaded && !directions && directionsRequested && !directionsRequestFailed && (
-          <DirectionsService
-            options={{
-              origin: { lat: safePickupLocation.lat, lng: safePickupLocation.lng },
-              destination: { lat: safeDropLocation.lat, lng: safeDropLocation.lng },
-              travelMode: google?.maps.TravelMode.DRIVING,
-              region: 'in', // India region code
-              avoidFerries: true,
-              avoidHighways: false,
-              avoidTolls: false,
-            }}
-            callback={handleDirectionsCallback}
-          />
-        )}
-
-        {directions && (
-          <DirectionsRenderer
-            options={{
-              directions: directions,
-              suppressMarkers: false,
-            }}
-          />
-        )}
-
-        {!directions && (
-          <>
-            <Marker
-              position={{ lat: safePickupLocation.lat, lng: safePickupLocation.lng }}
-              label={{ text: "A", color: "white" }}
-            />
-            <Marker
-              position={{ lat: safeDropLocation.lat, lng: safeDropLocation.lng }}
-              label={{ text: "B", color: "white" }}
-            />
-          </>
-        )}
+        <Marker position={center} title={safePickupLocation.name} />
+        <Marker 
+          position={{ 
+            lat: safeDropLocation.lat, 
+            lng: safeDropLocation.lng
+          }} 
+          title={safeDropLocation.name}
+        />
+        {directions && <DirectionsRenderer directions={directions} />}
       </GoogleMap>
-      
-      {routeNotFound && (
-        <div className="absolute bottom-0 left-0 right-0 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">
-          <p className="font-medium">No route found between these locations</p>
-          <p className="text-sm">We've calculated an approximate straight-line distance instead.</p>
-        </div>
-      )}
     </div>
   );
 };
