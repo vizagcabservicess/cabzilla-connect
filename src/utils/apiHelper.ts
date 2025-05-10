@@ -18,6 +18,107 @@ export const isPreviewMode = () => {
 };
 
 /**
+ * Format data for multipart/form-data submission
+ * @param data The data object to format
+ * @returns FormData object
+ */
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  // Convert object to FormData
+  Object.entries(data).forEach(([key, value]) => {
+    // Skip null or undefined values
+    if (value === null || value === undefined) {
+      return;
+    }
+    
+    // Handle arrays (like amenities)
+    if (Array.isArray(value)) {
+      // For PHP to parse correctly, we need to use array notation in the key
+      value.forEach((item, index) => {
+        formData.append(`${key}[${index}]`, item);
+      });
+    } 
+    // Handle objects recursively
+    else if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+      Object.entries(value).forEach(([subKey, subValue]) => {
+        formData.append(`${key}[${subKey}]`, String(subValue));
+      });
+    }
+    // Handle primitives
+    else {
+      formData.append(key, String(value));
+    }
+  });
+  
+  return formData;
+};
+
+/**
+ * Check database connection and return details
+ */
+export interface DatabaseConnectionResponse {
+  connection: boolean;
+  message?: string;
+  version?: string;
+  details?: Record<string, any>;
+}
+
+export const checkDatabaseConnection = async (): Promise<DatabaseConnectionResponse> => {
+  try {
+    if (isPreviewMode()) {
+      console.log('Preview mode: simulating database connection check');
+      return { 
+        connection: true, 
+        message: 'Database connection simulated in preview mode',
+        version: 'PREVIEW'
+      };
+    }
+    
+    const timestamp = Date.now();
+    const response = await fetch(`${API_BASE_URL}/api/admin/check-connection.php?_t=${timestamp}`, {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      return { 
+        connection: false, 
+        message: `HTTP error! Status: ${response.status}` 
+      };
+    }
+
+    const result = await response.json();
+    return {
+      connection: result.connection || result.status === 'success',
+      message: result.message,
+      version: result.version,
+      details: result.details
+    };
+  } catch (error) {
+    console.error('Error checking database connection:', error);
+    
+    if (isPreviewMode()) {
+      return { 
+        connection: true, 
+        message: 'Database connection simulated in preview mode after error',
+        version: 'PREVIEW'
+      };
+    }
+    
+    return { 
+      connection: false, 
+      message: error instanceof Error ? error.message : 'Unknown error checking connection'
+    };
+  }
+};
+
+/**
  * Direct operation to vehicle API endpoints
  * @param endpoint The API endpoint to call
  * @param method The HTTP method to use
