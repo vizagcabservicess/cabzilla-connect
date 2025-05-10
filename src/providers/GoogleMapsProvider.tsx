@@ -33,11 +33,10 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [loadError, setLoadError] = useState<Error | undefined>(undefined);
   const [retryCount, setRetryCount] = useState(0);
   
-  // Check if Google Maps API is already loaded via script tag
+  // Initialize Google Maps check
   useEffect(() => {
     console.log("GoogleMapsProvider: Initializing Google Maps check");
     
-    // Function to check if Google Maps is available and store it
     const checkForGoogleMaps = () => {
       if (window.google && window.google.maps) {
         console.log("GoogleMapsProvider: Google Maps API detected in window object");
@@ -48,16 +47,14 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       return false;
     };
     
-    // Check immediately
+    // Check immediately (might already be loaded in the page)
     if (checkForGoogleMaps()) {
-      console.log("GoogleMapsProvider: Google Maps API found immediately");
       return;
     }
     
     // Listen for our custom event from the script tag callback
     const handleGoogleMapsLoaded = () => {
       console.log("GoogleMapsProvider: Google Maps loaded event detected");
-      // Add a small delay to ensure the Google object is fully initialized
       setTimeout(() => {
         if (window.google && window.google.maps) {
           console.log("GoogleMapsProvider: Setting Google Maps instance after event");
@@ -70,24 +67,22 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       }, 100);
     };
     
-    // Add event listener
+    // Add event listener for our custom event
     window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     
-    // Check periodically (every 1.5 seconds) for a limited time
+    // Check periodically for a limited time
     const maxChecks = 10;
     let checkCount = 0;
     
     const interval = setInterval(() => {
       checkCount++;
       if (checkForGoogleMaps()) {
-        console.log(`GoogleMapsProvider: Found Google Maps on check #${checkCount}`);
         clearInterval(interval);
       } else if (checkCount >= maxChecks) {
-        console.error("GoogleMapsProvider: Timed out waiting for Google Maps");
         clearInterval(interval);
         setLoadError(new Error("Timed out waiting for Google Maps API to load"));
       }
-    }, 1500);
+    }, 1000);
     
     // Clean up
     return () => {
@@ -95,44 +90,26 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
     };
   }, [retryCount]);
-
-  // Retry loading function - can be called manually if needed
+  
+  // Retry loading function
   const retryLoading = useCallback(() => {
     console.log("GoogleMapsProvider: Retrying Google Maps loading...");
     setRetryCount(prev => prev + 1);
     setLoadError(undefined);
     
-    // Remove old script and create a new one
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existingScript) {
-      console.log("GoogleMapsProvider: Removing existing Google Maps script");
-      existingScript.remove();
-    }
-    
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey || 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4'}&libraries=places&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-    
     toast.info("Reloading Google Maps API...", {
       duration: 3000,
     });
-  }, [apiKey]);
-
-  // Provide context values
+  }, []);
+  
+  // Context value
   const contextValue = {
     isLoaded: !!googleInstance, 
     loadError: loadError,
     google: googleInstance,
     retryLoading
   };
-
-  // Log the loaded state for debugging
-  useEffect(() => {
-    console.log(`GoogleMapsProvider: Maps loaded state: ${!!googleInstance}`);
-  }, [googleInstance]);
-
+  
   return (
     <GoogleMapsContext.Provider value={contextValue}>
       {children}
