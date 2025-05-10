@@ -3,13 +3,10 @@ import { ReactNode, createContext, useContext, useEffect, useState, useCallback 
 import { useLoadScript } from "@react-google-maps/api";
 import { toast } from "sonner";
 
-// Environment variable for Google Maps API Key
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-
 // Define libraries array as a constant to prevent unnecessary re-renders
 const libraries = ["places"] as ["places"];
 
-// Create a more comprehensive context
+// Create a comprehensive context
 interface GoogleMapsContextType {
   isLoaded: boolean;
   loadError: Error | undefined;
@@ -38,17 +35,45 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [scriptLoadAttempted, setScriptLoadAttempted] = useState(false);
   
-  // Use provided apiKey or fallback to environment variable
-  const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
-  
-  // Load the Google Maps script with India region bias
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey,
-    libraries,
-    region: 'IN', // Set region to India
-    language: 'en',
-  });
+  // Check if Google Maps API is already loaded via script tag
+  useEffect(() => {
+    // Function to check if Google Maps is available
+    const checkForGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        console.log("Google Maps already loaded via script tag");
+        setGoogleInstance(window.google);
+        return true;
+      }
+      return false;
+    };
+    
+    // Check immediately
+    if (checkForGoogleMaps()) {
+      return;
+    }
+    
+    // If not available, listen for the load event
+    const handleGoogleMapsLoaded = () => {
+      console.log("Google Maps load event detected");
+      if (window.google && window.google.maps) {
+        setGoogleInstance(window.google);
+      }
+    };
+    
+    // Listen for our custom event from main.tsx
+    window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
+    
+    // Set up an interval to check for Google Maps
+    const interval = setInterval(checkForGoogleMaps, 1000);
+    
+    // Clean up
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
+    };
+  }, []);
 
   // Retry loading function - can be called manually if needed
   const retryLoading = useCallback(() => {
@@ -58,79 +83,17 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     // Check if script already exists in DOM
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
     if (!existingScript) {
-      console.log("No Google Maps script found, manually injecting");
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=Function.prototype`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
+      console.log("No Google Maps script found, relying on script in index.html");
     } else {
       console.log("Google Maps script already exists in DOM");
     }
-  }, [googleMapsApiKey]);
+  }, []);
 
-  // Store the google object once loaded
-  useEffect(() => {
-    if (isLoaded && !loadError && window.google) {
-      setGoogleInstance(window.google);
-      console.log("✅ Google Maps API loaded successfully");
-      
-      // Set default bounds to India if Maps loaded successfully
-      if (window.google.maps) {
-        try {
-          // Set default map options for all instances
-          const indiaBounds = new window.google.maps.LatLngBounds(
-            new window.google.maps.LatLng(8.0, 68.0),  // SW corner of India
-            new window.google.maps.LatLng(37.0, 97.0)  // NE corner of India
-          );
-          
-          // Store default bounds in window object for later use
-          (window as any).indiaBounds = indiaBounds;
-          console.log("Default India bounds set for Maps");
-        } catch (error) {
-          console.error("Error setting default bounds:", error);
-        }
-      }
-    } else if (loadError) {
-      console.error("❌ Error loading Google Maps API:", loadError);
-      
-      // Auto-retry logic (only retry a few times to avoid infinite loops)
-      if (retryCount < 2) {
-        console.log(`Auto-retrying Google Maps load (attempt ${retryCount + 1})...`);
-        const timer = setTimeout(() => {
-          retryLoading();
-        }, 3000); // Wait 3 seconds before retrying
-        
-        return () => clearTimeout(timer);
-      } else {
-        // Show toast notification after several failed attempts
-        toast.error("Google Maps failed to load. Some features may not work correctly.");
-      }
-    }
-  }, [isLoaded, loadError, retryCount, retryLoading]);
-  
-  // Check for window.google as a backup
-  useEffect(() => {
-    const checkGoogleMaps = () => {
-      if (!isLoaded && window.google && window.google.maps) {
-        console.log("Google Maps detected in window despite useLoadScript reporting not loaded");
-        setGoogleInstance(window.google);
-      }
-    };
-    
-    // Run an initial check
-    checkGoogleMaps();
-    
-    // Set up a backup interval to periodically check
-    const checkInterval = setInterval(checkGoogleMaps, 2000);
-    return () => clearInterval(checkInterval);
-  }, [isLoaded]);
-
-  // Provide context values - ensure we have a consistent value for the google object
+  // Provide context values
   const contextValue = {
-    isLoaded, 
-    loadError,
-    google: googleInstance || (window.google || null),
+    isLoaded: !!googleInstance, 
+    loadError: googleInstance ? undefined : new Error("Google Maps not loaded"),
+    google: googleInstance,
     retryLoading
   };
 

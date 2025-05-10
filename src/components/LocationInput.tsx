@@ -40,11 +40,23 @@ export function LocationInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Location[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
-  const isInitialMount = useRef(true);
+  const valueRef = useRef<Location | string | undefined>(value);
+  const locationRef = useRef(location);
+  const initializedRef = useRef(false);
   
   // Initialize input value from either value or location only on first render
   // or when value/location changes from external sources
   useEffect(() => {
+    // Skip if the value hasn't actually changed to avoid loops
+    if (valueRef.current === value && locationRef.current === location) {
+      return;
+    }
+    
+    // Update refs
+    valueRef.current = value;
+    locationRef.current = location;
+    
+    // Set input value based on value or location
     if (typeof value === 'string') {
       setInputValue(value);
     } else if (value && typeof value === 'object') {
@@ -52,6 +64,9 @@ export function LocationInput({
     } else if (location) {
       setInputValue(location.name || location.address || "");
     }
+    
+    // Mark as initialized
+    initializedRef.current = true;
   }, [value, location]);
   
   // Filter suggestions based on input value

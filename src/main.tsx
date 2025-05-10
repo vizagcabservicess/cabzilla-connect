@@ -47,4 +47,3 @@ root.render(
 
 // Log for debugging
 console.log('Application initialized successfully');
-
