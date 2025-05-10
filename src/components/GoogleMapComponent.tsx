@@ -1,4 +1,3 @@
-
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
@@ -46,8 +45,8 @@ const GoogleMapComponent = ({
   const directionsRequestCount = useRef(0);
   const distanceCalculatedRef = useRef<boolean>(false);
   const [mapKey, setMapKey] = useState(Date.now()); // Used to force re-render
-
-  // Check if Google Maps script exists in DOM
+  
+  // Check if Google Maps script exists in DOM - improved for debugging
   useEffect(() => {
     const hasGoogleMapsScript = !!document.querySelector('script[src*="maps.googleapis.com"]');
     console.log(`GoogleMapComponent: Google Maps script in DOM: ${hasGoogleMapsScript}`);
@@ -57,7 +56,18 @@ const GoogleMapComponent = ({
     console.log(`GoogleMapComponent: Google object in window: ${hasGoogleObject}`);
     
     if (!hasGoogleMapsScript && !hasGoogleObject) {
-      console.warn("Google Maps script is missing from DOM!");
+      console.warn("GoogleMapComponent: Google Maps script is missing from DOM!");
+    }
+    
+    // Log the actual script tag if it exists
+    if (hasGoogleMapsScript) {
+      const scriptTag = document.querySelector('script[src*="maps.googleapis.com"]');
+      console.log(`GoogleMapComponent: Maps script tag details:`, {
+        src: scriptTag?.getAttribute('src'),
+        async: scriptTag?.getAttribute('async'),
+        defer: scriptTag?.getAttribute('defer'),
+        callback: scriptTag?.getAttribute('src')?.includes('callback=')
+      });
     }
   }, []);
 
@@ -341,7 +351,7 @@ const GoogleMapComponent = ({
   // Force map refresh if Google becomes available after initial render
   useEffect(() => {
     if (google && !mapLoaded) {
-      console.log("Google object became available, forcing map refresh");
+      console.log("GoogleMapComponent: Google object became available, forcing map refresh");
       setMapKey(Date.now());
     }
   }, [google, mapLoaded]);
@@ -351,13 +361,16 @@ const GoogleMapComponent = ({
       <div className="bg-white rounded-md shadow p-4 text-center h-[400px] flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
         <h3 className="text-lg font-medium mb-2">Loading Google Maps...</h3>
-        <p className="text-gray-500 mb-4">Please wait while we load the map service</p>
+        <p className="text-gray-500 mb-4">Please wait while we connect to the map service</p>
         <button 
           onClick={retryLoading}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
           Retry Loading Maps
         </button>
+        <p className="text-xs text-gray-400 mt-4">
+          API Status: {google ? 'Loaded' : 'Not Loaded'} | Script: {document.querySelector('script[src*="maps.googleapis.com"]') ? 'Found' : 'Not Found'}
+        </p>
       </div>
     );
   }
