@@ -38,7 +38,6 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [manualRetryFlag, setManualRetryFlag] = useState(0);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
@@ -53,22 +52,20 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
 
   // Retry loading function - can be called manually if needed
   const retryLoading = useCallback(() => {
+    console.log("Retrying Google Maps loading...");
     setRetryCount(prev => prev + 1);
-    setManualRetryFlag(prev => prev + 1);
     
-    // Try to reload the script via DOM
-    try {
-      const existingScripts = document.querySelectorAll('script[src*="maps.googleapis.com"]');
-      if (existingScripts.length === 0) {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=Function.prototype`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-        console.log("Manually injected Google Maps script");
-      }
-    } catch (error) {
-      console.error("Failed to manually inject Google Maps script:", error);
+    // Check if script already exists in DOM
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (!existingScript) {
+      console.log("No Google Maps script found, manually injecting");
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=Function.prototype`;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    } else {
+      console.log("Google Maps script already exists in DOM");
     }
   }, [googleMapsApiKey]);
 
@@ -98,35 +95,42 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       console.error("❌ Error loading Google Maps API:", loadError);
       
       // Auto-retry logic (only retry a few times to avoid infinite loops)
-      if (retryCount < 3) {
+      if (retryCount < 2) {
         console.log(`Auto-retrying Google Maps load (attempt ${retryCount + 1})...`);
         const timer = setTimeout(() => {
           retryLoading();
         }, 3000); // Wait 3 seconds before retrying
         
         return () => clearTimeout(timer);
-      } else if (retryCount === 3) {
+      } else {
         // Show toast notification after several failed attempts
         toast.error("Google Maps failed to load. Some features may not work correctly.");
       }
     }
   }, [isLoaded, loadError, retryCount, retryLoading]);
   
-  // Check for window.google even if useLoadScript says it's not ready
+  // Check for window.google as a backup
   useEffect(() => {
-    // Double-check if Google Maps is actually available despite load errors
-    if (!isLoaded && window.google && window.google.maps) {
-      console.log("Google Maps detected in window despite useLoadScript reporting not loaded");
-      setGoogleInstance(window.google);
-    }
-  }, [isLoaded, manualRetryFlag]);
+    const checkGoogleMaps = () => {
+      if (!isLoaded && window.google && window.google.maps) {
+        console.log("Google Maps detected in window despite useLoadScript reporting not loaded");
+        setGoogleInstance(window.google);
+      }
+    };
+    
+    // Run an initial check
+    checkGoogleMaps();
+    
+    // Set up a backup interval to periodically check
+    const checkInterval = setInterval(checkGoogleMaps, 2000);
+    return () => clearInterval(checkInterval);
+  }, [isLoaded]);
 
   // Provide context values - ensure we have a consistent value for the google object
   const contextValue = {
     isLoaded, 
     loadError,
-    // Always use window.google as a fallback to ensure it's available even if state hasn't updated
-    google: googleInstance || (isLoaded && window.google ? window.google : null),
+    google: googleInstance || (window.google || null),
     retryLoading
   };
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Location } from "@/types/api";
@@ -40,8 +40,10 @@ export function LocationInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Location[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
+  const isInitialMount = useRef(true);
   
-  // Initialize input value from either value or location
+  // Initialize input value from either value or location only on first render
+  // or when value/location changes from external sources
   useEffect(() => {
     if (typeof value === 'string') {
       setInputValue(value);
@@ -52,6 +54,7 @@ export function LocationInput({
     }
   }, [value, location]);
   
+  // Filter suggestions based on input value
   useEffect(() => {
     if (inputValue && suggestions.length > 0) {
       const filtered = suggestions.filter(suggestion => 

@@ -44,10 +44,22 @@ const GoogleMapComponent = ({
   const [mapError, setMapError] = useState<Error | null>(null);
   const [routeNotFound, setRouteNotFound] = useState(false);
   const directionsRequestCount = useRef(0);
-  const maxRetries = useRef(3);
-  const directionsServiceRef = useRef<any>(null);
   const distanceCalculatedRef = useRef<boolean>(false);
   const [mapKey, setMapKey] = useState(Date.now()); // Used to force re-render
+
+  // Check if Google Maps script exists in DOM
+  useEffect(() => {
+    const hasGoogleMapsScript = !!document.querySelector('script[src*="maps.googleapis.com"]');
+    console.log(`GoogleMapComponent: Google Maps script in DOM: ${hasGoogleMapsScript}`);
+    
+    // Check if Google is available in window
+    const hasGoogleObject = typeof window !== 'undefined' && window.google && window.google.maps;
+    console.log(`GoogleMapComponent: Google object in window: ${hasGoogleObject}`);
+    
+    if (!hasGoogleMapsScript && !hasGoogleObject) {
+      console.warn("Google Maps script is missing from DOM!");
+    }
+  }, []);
 
   const mapContainerStyle = {
     width: "100%",
@@ -107,7 +119,7 @@ const GoogleMapComponent = ({
            inIndiaBounds(safeDropLocation.lat, safeDropLocation.lng);
   };
 
-  // Handle directions callback - single definition to avoid duplicates
+  // Handle directions callback
   const handleDirectionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
@@ -155,28 +167,21 @@ const GoogleMapComponent = ({
       if (status === google.maps.DirectionsStatus.ZERO_RESULTS) {
         setRouteNotFound(true);
         
-        // If both locations have valid coordinates, use Haversine formula as fallback
-        if (typeof safePickupLocation.lat === 'number' && 
-            typeof safePickupLocation.lng === 'number' &&
-            typeof safeDropLocation.lat === 'number' && 
-            typeof safeDropLocation.lng === 'number') {
-          
-          // Calculate approximate distance using the Haversine formula
-          const distance = calculateHaversineDistance(
-            safePickupLocation.lat, safePickupLocation.lng,
-            safeDropLocation.lat, safeDropLocation.lng
-          );
-          
-          const duration = Math.round(distance * 2); // Approximate duration in minutes
-          
-          console.log("Using Haversine distance fallback:", distance, "km");
-          
-          // Mark that we've calculated and reported the distance
-          distanceCalculatedRef.current = true;
-          
-          if (onDistanceCalculated) {
-            onDistanceCalculated(distance, duration);
-          }
+        // Use Haversine formula as fallback
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
+        
+        const duration = Math.round(distance * 2); // Approximate duration in minutes
+        
+        console.log("Using Haversine distance fallback:", distance, "km");
+        
+        // Mark that we've calculated and reported the distance
+        distanceCalculatedRef.current = true;
+        
+        if (onDistanceCalculated) {
+          onDistanceCalculated(distance, duration);
         }
       }
     }
@@ -204,9 +209,9 @@ const GoogleMapComponent = ({
     return deg * (Math.PI / 180);
   }
 
+  // Reset directions when locations change
   useEffect(() => {
     try {
-      // Reset directions when locations change
       if (safePickupLocation && safeDropLocation) {
         setDirections(null);
         setDirectionsRequested(false);
@@ -221,24 +226,28 @@ const GoogleMapComponent = ({
     }
   }, [safePickupLocation, safeDropLocation]);
 
-  // Handle map load - single definition to avoid duplicates
+  // Handle map load
   const handleMapLoad = useCallback(() => {
     console.log("Map loaded successfully");
     setMapLoaded(true);
   }, []);
 
-  // Handle directions request - now with caching
+  // Handle directions request with caching
   useEffect(() => {
+    if (!google || !google.maps) {
+      console.log("Google Maps API not available yet");
+      return;
+    }
+    
     try {
       if (mapLoaded && !directionsRequested && google) {
         // Check if both locations are in India
         if (!areLocationsInIndia()) {
-          console.error("One or both locations are outside India");
+          console.log("One or both locations are outside India");
           setRouteNotFound(true);
-          setDirectionsRequestFailed(true);
           
+          // Use Haversine as fallback
           if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            // Use Haversine as fallback
             const distance = calculateHaversineDistance(
               safePickupLocation.lat, safePickupLocation.lng,
               safeDropLocation.lat, safeDropLocation.lng
@@ -252,12 +261,11 @@ const GoogleMapComponent = ({
         
         // Check if locations are too far apart
         if (areLocationsTooFarApart()) {
-          console.error("Locations are too far apart (>2000km)");
+          console.log("Locations are too far apart (>2000km)");
           setRouteNotFound(true);
-          setDirectionsRequestFailed(true);
           
+          // Use Haversine as fallback
           if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            // Use Haversine as fallback
             const distance = calculateHaversineDistance(
               safePickupLocation.lat, safePickupLocation.lng,
               safeDropLocation.lat, safeDropLocation.lng
@@ -270,12 +278,11 @@ const GoogleMapComponent = ({
         }
         
         setDirectionsRequested(true);
-        directionsRequestCount.current += 1;
-
+        
         // Try to get from cache first
         const cachedResult = directionsCache.get(cacheKey);
         if (cachedResult) {
-          console.log("Using cached directions for:", cacheKey);
+          console.log("Using cached directions");
           setDirections(cachedResult);
           
           // Extract distance from cached result
@@ -295,45 +302,24 @@ const GoogleMapComponent = ({
           return;
         }
         
-        // Create service if not already created
-        if (!directionsServiceRef.current && google.maps) {
-          directionsServiceRef.current = new google.maps.DirectionsService();
-        }
-        
-        if (directionsServiceRef.current) {
-          console.log("Requesting directions for:", cacheKey);
-          directionsServiceRef.current.route({
-            origin: { 
-              lat: safePickupLocation.lat, 
-              lng: safePickupLocation.lng 
-            },
-            destination: { 
-              lat: safeDropLocation.lat, 
-              lng: safeDropLocation.lng 
-            },
-            travelMode: google.maps.TravelMode.DRIVING,
-            region: 'IN'
-          }, handleDirectionsCallback);
-        } else {
-          console.error("Directions service is not available");
-          setDirectionsRequestFailed(true);
-          
-          // Fallback to Haversine calculation
-          if (!distanceCalculatedRef.current && onDistanceCalculated) {
-            const distance = calculateHaversineDistance(
-              safePickupLocation.lat, safePickupLocation.lng,
-              safeDropLocation.lat, safeDropLocation.lng
-            );
-            const duration = Math.round(distance * 2);
-            onDistanceCalculated(distance, duration);
-            distanceCalculatedRef.current = true;
-          }
-        }
+        // Request new directions
+        const directionsService = new google.maps.DirectionsService();
+        directionsService.route({
+          origin: { 
+            lat: safePickupLocation.lat, 
+            lng: safePickupLocation.lng 
+          },
+          destination: { 
+            lat: safeDropLocation.lat, 
+            lng: safeDropLocation.lng 
+          },
+          travelMode: google.maps.TravelMode.DRIVING,
+          region: 'IN'
+        }, handleDirectionsCallback);
       }
     } catch (error) {
       console.error("Error requesting directions:", error);
       setMapError(error instanceof Error ? error : new Error(String(error)));
-      setDirectionsRequestFailed(true);
       
       // Fallback to Haversine calculation
       if (!distanceCalculatedRef.current && onDistanceCalculated) {
@@ -355,6 +341,7 @@ const GoogleMapComponent = ({
   // Force map refresh if Google becomes available after initial render
   useEffect(() => {
     if (google && !mapLoaded) {
+      console.log("Google object became available, forcing map refresh");
       setMapKey(Date.now());
     }
   }, [google, mapLoaded]);

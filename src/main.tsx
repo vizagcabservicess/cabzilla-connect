@@ -13,14 +13,31 @@ const root = ReactDOM.createRoot(document.getElementById('root')!);
 // Check if Google Maps is available
 const checkGoogleMaps = () => {
   if (window.google && window.google.maps) {
-    console.log('Google Maps API detected on initialization');
+    console.log('✅ Google Maps API detected on initialization');
   } else {
-    console.warn('Google Maps API not detected on initialization, waiting for script to load');
+    console.warn('⚠️ Google Maps API not detected on initialization, waiting for script to load');
   }
 };
 
 // Start with a clean check
 setTimeout(checkGoogleMaps, 500);
+
+// Event listener to detect when Google Maps loads
+window.addEventListener('load', () => {
+  const googleMapsInterval = setInterval(() => {
+    if (window.google && window.google.maps) {
+      console.log('✅ Google Maps API confirmed loaded');
+      clearInterval(googleMapsInterval);
+      // Dispatch an event to notify components that Google Maps is loaded
+      window.dispatchEvent(new Event('google-maps-loaded'));
+    }
+  }, 1000);
+  
+  // Stop checking after 10 seconds to avoid infinite checking
+  setTimeout(() => {
+    clearInterval(googleMapsInterval);
+  }, 10000);
+});
 
 root.render(
   <React.StrictMode>
@@ -28,14 +45,6 @@ root.render(
   </React.StrictMode>,
 )
 
-// Add a periodic check for Google Maps availability
-setTimeout(() => {
-  if (window.google && window.google.maps) {
-    console.log('Google Maps API confirmed loaded');
-  } else {
-    console.warn('Google Maps API may not be available - check network requests');
-  }
-}, 3000);
-
 // Log for debugging
 console.log('Application initialized successfully');
+

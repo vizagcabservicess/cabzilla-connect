@@ -25,8 +25,8 @@ export function TabTripSelector({
   const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
   const lastClearTimeRef = useRef<number>(0);
   const clearThrottleTime = 2000; // 2 seconds minimum between clears
-
-  // Function to clear form state but preserve map-related data
+  
+  // Less aggressive form state clearing - preserves map-related data
   const clearFormState = useCallback(() => {
     // Check if we've cleared recently to prevent loops
     const now = Date.now();
@@ -44,44 +44,20 @@ export function TabTripSelector({
     const pickupLoc = sessionStorage.getItem('pickupLocation');
     const dropLoc = sessionStorage.getItem('dropLocation');
     
-    // Clear booking-related data
+    // Clear booking-related data but NOT the location data
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
     sessionStorage.removeItem('tourPackage');
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('calculatedFares');
-    sessionStorage.removeItem('cabFares');
     
-    // Find and clear text inputs but not map-related fields
-    const inputFields = document.querySelectorAll('input[type="text"]');
-    inputFields.forEach(input => {
-      const inputElement = input as HTMLInputElement;
-      // Skip map location fields when clearing
-      if (inputElement.placeholder && 
-          !(inputElement.placeholder.toLowerCase().includes('pickup') || 
-            inputElement.placeholder.toLowerCase().includes('drop') ||
-            inputElement.placeholder.toLowerCase().includes('location'))) {
-        
-        // Clear the input value
-        inputElement.value = '';
-        
-        // Dispatch both input and change events to ensure React state is updated
-        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    });
+    // Don't clear the cabFares here which can cause maps not to show
     
     // Store the current time of last clear operation
     sessionStorage.setItem('lastFormClear', Date.now().toString());
-    
-    // Restore location data if needed for the same trip type
-    if (pickupCoords) sessionStorage.setItem('pickupCoordinates', pickupCoords);
-    if (dropCoords) sessionStorage.setItem('dropCoordinates', dropCoords);
-    if (pickupLoc) sessionStorage.setItem('pickupLocation', pickupLoc);
-    if (dropLoc) sessionStorage.setItem('dropLocation', dropLoc);
   }, [clearThrottleTime]);
   
-  // Function to clear cache data with throttling
+  // Simplified cache data clearing that preserves map-related data
   const clearCacheData = useCallback(() => {
     // Check if we've cleared recently to prevent loops
     const now = Date.now();
@@ -96,60 +72,17 @@ export function TabTripSelector({
     // Store the old trip type to compare
     const oldTripType = sessionStorage.getItem('tripType');
     
-    // Only clear fare and booking data, preserve location data
+    // Only clear fare data but NOT location data
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
     sessionStorage.removeItem('tourPackage');
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('calculatedFares');
     
-    // Force clear trip-specific data when changing trip types
-    if (oldTripType && oldTripType !== selectedTab) {
-      console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
-      
-      // Always clear the fare cache when changing trip types - but don't do this
-      // in a way that will cause a cascade of events
-      const lastFareCacheClear = parseInt(sessionStorage.getItem('lastFareCacheClear') || '0', 10);
-      if (now - lastFareCacheClear > clearThrottleTime) {
-        fareService.clearCache();
-        sessionStorage.removeItem('cabFares');
-        localStorage.removeItem('cabFares');
-        sessionStorage.setItem('lastFareCacheClear', now.toString());
-      }
-    }
-    
-    // Clear localStorage items that might cache fare data
-    localStorage.removeItem('lastTripType');
-    localStorage.removeItem('lastTripMode');
-    
-    // Clear any other cache items with standard prefixes
-    const localKeys = ['fare-', 'discount-', 'cab-', 'price-'];
-    
-    // Loop through sessionStorage to find items with these keys
-    Object.keys(sessionStorage).forEach(key => {
-      for (const prefix of localKeys) {
-        if (key.startsWith(prefix)) {
-          console.log(`Removing cached item: ${key}`);
-          sessionStorage.removeItem(key);
-          break;
-        }
-      }
-    });
-    
-    // Store current trip type in sessionStorage
+    // Store current trip type in sessionStorage without clearing location data
     sessionStorage.setItem('tripType', selectedTab);
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
-    
-    // Dispatch a custom event to notify other components of the cleared state
-    // but use a flag to prevent duplicate events
-    const hasDispatchedRecently = sessionStorage.getItem('lastCacheClearedEvent');
-    if (!hasDispatchedRecently || (now - parseInt(hasDispatchedRecently, 10)) > clearThrottleTime) {
-      document.dispatchEvent(new CustomEvent('cacheCleared', { 
-        detail: { tripType: selectedTab } 
-      }));
-      sessionStorage.setItem('lastCacheClearedEvent', now.toString());
-    }
   }, [selectedTab, tripMode, clearThrottleTime]);
   
   // Clear cache data when tab changes with debouncing
@@ -192,18 +125,13 @@ export function TabTripSelector({
       }
       
       // Force reload cab types when switching tabs to ensure fresh data
-      // but use a larger timeout and check if we've done this recently
-      const lastCabTypeReload = parseInt(sessionStorage.getItem('lastCabTypeReload') || '0', 10);
-      if (now - lastCabTypeReload > 5000) { // Only reload if it's been more than 5 seconds
-        const reloadTimer = setTimeout(() => {
-          reloadCabTypes().catch(err => {
-            console.error("Failed to reload cab types:", err);
-          });
-          sessionStorage.setItem('lastCabTypeReload', Date.now().toString());
-        }, 800); // Increased timeout to ensure other cleanups complete first
-        
-        setRefreshTimer(reloadTimer);
-      }
+      const reloadTimer = setTimeout(() => {
+        reloadCabTypes().catch(err => {
+          console.error("Failed to reload cab types:", err);
+        });
+      }, 800);
+      
+      setRefreshTimer(reloadTimer);
       
       return () => {
         if (refreshTimer) clearTimeout(refreshTimer);
@@ -237,14 +165,6 @@ export function TabTripSelector({
     // Use the less aggressive clearing method
     clearFormState();
     clearCacheData();
-    
-    // Force a cache clear regardless of whether it's the same tab or not
-    // but only if we haven't cleared recently
-    const lastFareServiceClear = parseInt(sessionStorage.getItem('lastFareServiceClear') || '0', 10);
-    if (now - lastFareServiceClear > clearThrottleTime) {
-      fareService.clearCache();
-      sessionStorage.setItem('lastFareServiceClear', now.toString());
-    }
     
     // Update the tab - this needs to happen AFTER all the clearing operations
     // to ensure React state is updated with clean data
