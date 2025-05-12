@@ -1,106 +1,117 @@
 
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Car, 
-  Map, 
-  Users, 
-  BarChart3, 
+import { Link, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import {
+  BarChart3,
+  Calendar,
+  CreditCard,
+  File,
+  FilePenLine,
+  Package,
+  Receipt,
   Settings,
-  LogOut,
-  User,
-  Fuel,
-  Wrench,
-  Book,
-  CircleDollarSign,
-  Banknote,
-  CreditCard
+  Users,
+  Landmark,
+  Truck
 } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import { ModeToggle } from '@/components/ModeToggle';
 
-interface AdminSidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-}
-
-export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
-  const navigate = useNavigate();
+export function AdminSidebar() {
+  const { pathname } = useLocation();
+  
+  const isActive = (path: string) => pathname.includes(path);
   
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin/bookings' },
-    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin/vehicles' },
-    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin/fares' },
-    { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },
-    { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
-    { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
-    { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
-    { id: 'expenses', label: 'Expenses', icon: <CircleDollarSign size={20} />, path: '/admin/expenses' },
-    { id: 'payroll', label: 'Payroll', icon: <Banknote size={20} />, path: '/admin/payroll' },
-    { id: 'payments', label: 'Payments', icon: <CreditCard size={20} />, path: '/admin/payments' },
-    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
-    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
+    {
+      href: '/admin',
+      icon: BarChart3,
+      text: 'Dashboard',
+      active: pathname === '/admin' || pathname === '/admin/',
+    },
+    {
+      href: '/admin/bookings',
+      icon: Calendar,
+      text: 'Bookings',
+      active: isActive('/admin/bookings'),
+    },
+    {
+      href: '/admin/drivers',
+      icon: Users,
+      text: 'Drivers',
+      active: isActive('/admin/drivers'),
+    },
+    {
+      href: '/admin/vehicles',
+      icon: Truck,
+      text: 'Vehicles',
+      active: isActive('/admin/vehicles'),
+    },
+    {
+      href: '/admin/payments',
+      icon: CreditCard,
+      text: 'Payments',
+      active: isActive('/admin/payments'),
+    },
+    {
+      href: '/admin/users',
+      icon: Users,
+      text: 'Users',
+      active: isActive('/admin/users'),
+    },
+    {
+      href: '/admin/gst-report',
+      icon: Receipt,
+      text: 'GST Reports',
+      active: isActive('/admin/gst'),
+    },
+    {
+      href: '/admin/expenses',
+      icon: Landmark,
+      text: 'Expenses',
+      active: isActive('/admin/expenses'),
+    },
+    {
+      href: '/admin/payroll',
+      icon: Receipt,
+      text: 'Payroll',
+      active: isActive('/admin/payroll'),
+    },
+    {
+      href: '/admin/settings',
+      icon: Settings,
+      text: 'Settings',
+      active: isActive('/admin/settings'),
+    },
   ];
-
-  const handleMenuClick = (item: { id: string; path: string }) => {
-    setActiveTab(item.id);
-    navigate(item.path);
-  };
-
+  
   return (
-    <aside className="w-64 bg-gray-900 text-white hidden md:flex md:flex-col">
-      {/* Sidebar Header/Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-800">
-        <Link to="/admin" className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
-            VT
-          </div>
-          <span className="font-bold text-lg">Vizag Taxi Hub</span>
-        </Link>
+    <aside className="hidden lg:flex flex-col w-64 border-r px-6 py-8 sticky top-0 h-screen">
+      <div className="flex items-center gap-2 mb-6">
+        <Package className="h-6 w-6" />
+        <span className="text-lg font-semibold">Admin Panel</span>
       </div>
-      
-      {/* Main Menu */}
-      <div className="flex-1 overflow-y-auto py-6 px-4">
-        <nav className="space-y-1">
-          {menuItems.map((item) => (
-            <Button
-              key={item.id}
-              variant="ghost"
-              className={`w-full justify-start text-left px-3 py-2 ${
-                activeTab === item.id 
-                  ? 'bg-gray-800 text-white' 
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`}
-              onClick={() => handleMenuClick(item)}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </Button>
-          ))}
-        </nav>
-      </div>
-      
-      {/* User Profile Section */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
-            <User size={18} />
-          </div>
-          <div>
-            <p className="font-medium">Admin User</p>
-            <p className="text-xs text-gray-400">admin@vizagtaxihub.com</p>
-          </div>
-        </div>
-        <Button 
-          variant="outline" 
-          className="w-full justify-start text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-white"
-        >
-          <LogOut size={18} className="mr-2" />
-          Logout
-        </Button>
+      <nav className="space-y-1.5 flex-1">
+        {menuItems.map((item) => (
+          <Link
+            key={item.href}
+            to={item.href}
+            className={cn(
+              buttonVariants({ variant: 'ghost' }),
+              'w-full justify-start',
+              item.active && 'bg-muted hover:bg-muted'
+            )}
+          >
+            <item.icon className="h-4 w-4 mr-2" />
+            {item.text}
+          </Link>
+        ))}
+      </nav>
+      <div className="border-t pt-4 flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          Admin Portal
+        </span>
+        <ModeToggle />
       </div>
     </aside>
   );

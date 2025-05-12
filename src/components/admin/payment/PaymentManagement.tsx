@@ -29,6 +29,7 @@ export function PaymentManagement() {
   } = useQuery({
     queryKey: ['payments', filters, searchTerm],
     queryFn: () => paymentsAPI.getPayments({ ...filters, search: searchTerm }),
+    refetchOnWindowFocus: false,
   });
   
   // Handle search
@@ -82,25 +83,11 @@ export function PaymentManagement() {
   
   // Error handling
   useEffect(() => {
-    if (isError) {
-      toast.error(`Error loading payments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    if (isError && error instanceof Error) {
+      toast.error(`Error loading payments: ${error.message}`);
+      console.error('Payment loading error:', error);
     }
   }, [isError, error]);
-  
-  // Default empty summary for when data is loading or has an error
-  const emptySummary = {
-    totalAmount: 0,
-    totalPaid: 0,
-    totalPending: 0,
-    totalOverdue: 0,
-    countByStatus: {
-      pending: 0,
-      partial: 0,
-      paid: 0,
-      cancelled: 0
-    },
-    countByMethod: {}
-  };
   
   return (
     <div>
