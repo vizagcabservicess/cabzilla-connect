@@ -67,7 +67,7 @@ export function LedgerDateRangePicker({
 
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-10">
+          <Button variant="outline" size="sm" className="h-10" disabled={disabled}>
             <Calendar className="h-4 w-4 mr-2" />
             Presets
           </Button>

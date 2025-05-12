@@ -17,24 +17,28 @@ interface DatePickerWithRangeProps {
   date: DateRange | undefined;
   setDate: (date: DateRange | undefined) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 export function DatePickerWithRange({
   date,
   setDate,
   className,
+  disabled = false,
 }: DatePickerWithRangeProps) {
   return (
     <div className={cn("grid gap-2", className)}>
       <Popover>
-        <PopoverTrigger asChild>
+        <PopoverTrigger asChild disabled={disabled}>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
               "w-full justify-start text-left font-normal",
-              !date && "text-muted-foreground"
+              !date && "text-muted-foreground",
+              disabled && "opacity-50 cursor-not-allowed"
             )}
+            disabled={disabled}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
             {date?.from ? (
@@ -59,6 +63,7 @@ export function DatePickerWithRange({
             selected={date}
             onSelect={setDate}
             numberOfMonths={2}
+            disabled={disabled}
           />
         </PopoverContent>
       </Popover>

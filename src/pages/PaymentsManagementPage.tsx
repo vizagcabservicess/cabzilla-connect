@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { PaymentManagement } from '@/components/admin/payment/PaymentManagement';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
 
 // Create a client specifically for this page to avoid conflicts
 const queryClient = new QueryClient({
@@ -16,6 +17,8 @@ const queryClient = new QueryClient({
 });
 
 export default function PaymentsManagementPage() {
+  const [activeTab, setActiveTab] = React.useState('payments');
+  
   useEffect(() => {
     // Set page title
     document.title = 'Payment Management | Admin Dashboard';
@@ -25,8 +28,16 @@ export default function PaymentsManagementPage() {
   }, []);
 
   return (
-    <div className="container mx-auto py-8">
-      <PaymentManagement />
+    <div className="flex h-screen bg-gray-50">
+      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main className="flex-1 overflow-y-auto p-8">
+        <div className="container mx-auto py-8">
+          <h1 className="text-2xl font-bold mb-6">Payment Management</h1>
+          <QueryClientProvider client={queryClient}>
+            <PaymentManagement />
+          </QueryClientProvider>
+        </div>
+      </main>
     </div>
   );
 }

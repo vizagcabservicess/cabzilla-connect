@@ -17,10 +17,21 @@ import {
 import { buttonVariants } from '@/components/ui/button';
 import { ModeToggle } from '@/components/ModeToggle';
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  activeTab?: string;
+  setActiveTab?: (tab: string) => void;
+}
+
+export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   const { pathname } = useLocation();
   
   const isActive = (path: string) => pathname.includes(path);
+  
+  const handleTabClick = (tabId: string) => {
+    if (setActiveTab) {
+      setActiveTab(tabId);
+    }
+  };
   
   const menuItems = [
     {
@@ -28,60 +39,70 @@ export function AdminSidebar() {
       icon: BarChart3,
       text: 'Dashboard',
       active: pathname === '/admin' || pathname === '/admin/',
+      id: 'dashboard'
     },
     {
       href: '/admin/bookings',
       icon: Calendar,
       text: 'Bookings',
       active: isActive('/admin/bookings'),
+      id: 'bookings'
     },
     {
       href: '/admin/drivers',
       icon: Users,
       text: 'Drivers',
       active: isActive('/admin/drivers'),
+      id: 'drivers'
     },
     {
       href: '/admin/vehicles',
       icon: Truck,
       text: 'Vehicles',
       active: isActive('/admin/vehicles'),
+      id: 'vehicles'
     },
     {
       href: '/admin/payments',
       icon: CreditCard,
       text: 'Payments',
       active: isActive('/admin/payments'),
+      id: 'payments'
     },
     {
       href: '/admin/users',
       icon: Users,
       text: 'Users',
       active: isActive('/admin/users'),
+      id: 'users'
     },
     {
       href: '/admin/gst-report',
       icon: Receipt,
       text: 'GST Reports',
       active: isActive('/admin/gst'),
+      id: 'reports'
     },
     {
       href: '/admin/expenses',
       icon: Landmark,
       text: 'Expenses',
       active: isActive('/admin/expenses'),
+      id: 'expenses'
     },
     {
       href: '/admin/payroll',
       icon: Receipt,
       text: 'Payroll',
       active: isActive('/admin/payroll'),
+      id: 'payroll'
     },
     {
       href: '/admin/settings',
       icon: Settings,
       text: 'Settings',
       active: isActive('/admin/settings'),
+      id: 'settings'
     },
   ];
   
@@ -101,6 +122,7 @@ export function AdminSidebar() {
               'w-full justify-start',
               item.active && 'bg-muted hover:bg-muted'
             )}
+            onClick={() => handleTabClick(item.id)}
           >
             <item.icon className="h-4 w-4 mr-2" />
             {item.text}
