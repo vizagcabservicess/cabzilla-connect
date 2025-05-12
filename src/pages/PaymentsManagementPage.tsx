@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PaymentManagement } from '@/components/admin/payment/PaymentManagement';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
 });
 
 export default function PaymentsManagementPage() {
-  const [activeTab, setActiveTab] = React.useState('payments');
+  const [activeTab, setActiveTab] = useState('payments');
   
   useEffect(() => {
     // Set page title
@@ -28,7 +28,7 @@ export default function PaymentsManagementPage() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="flex-1 overflow-y-auto p-8">
         <div className="container mx-auto py-8">

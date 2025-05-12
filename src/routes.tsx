@@ -2,28 +2,23 @@
 import { createBrowserRouter } from 'react-router-dom';
 import App from './App';
 import PaymentsManagementPage from './pages/PaymentsManagementPage';
-import DashboardPage from './pages/AdminDashboardPage'; // Using existing page
-import ExpensesPage from './pages/ExpensesPage'; // Using existing page
-import LedgerPage from './pages/LedgerPage'; // Using existing page
+import DashboardPage from './pages/AdminDashboardPage'; 
+import ExpensesPage from './pages/ExpensesPage'; 
+import LedgerPage from './pages/LedgerPage'; 
 import LoginPage from './pages/LoginPage';
+import Index from './pages/Index';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
     children: [
-      { path: '', element: <PaymentsManagementPage /> },
+      { path: '', element: <Index /> },
+      { path: 'admin/payments', element: <PaymentsManagementPage /> },
+      { path: 'admin', element: <DashboardPage /> },
+      { path: 'admin/expenses', element: <ExpensesPage /> },
+      { path: 'admin/ledger', element: <LedgerPage /> },
+      { path: 'login', element: <LoginPage /> },
     ],
   },
-  {
-    path: '/admin',
-    element: <App />,
-    children: [
-      { path: '', element: <DashboardPage /> },
-      { path: 'payments', element: <PaymentsManagementPage /> },
-      { path: 'expenses', element: <ExpensesPage /> },
-      { path: 'ledger', element: <LedgerPage /> },
-    ],
-  },
-  { path: '/login', element: <LoginPage /> },
 ]);
