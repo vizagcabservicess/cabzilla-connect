@@ -1,7 +1,8 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
+import { RouterProvider } from 'react-router-dom'
+import { router } from './routes'
 import './index.css'
 
 // Log application initialization
@@ -17,10 +18,10 @@ if (window.google && window.google.maps) {
   console.log('⚠️ Google Maps API not detected on initialization, will be loaded via callback');
 }
 
-// Render the app
+// Render the app with RouterProvider
 root.render(
   <React.StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </React.StrictMode>,
 )
 
