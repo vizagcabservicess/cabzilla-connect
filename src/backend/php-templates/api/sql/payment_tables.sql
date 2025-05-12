@@ -34,13 +34,3 @@ CREATE TABLE IF NOT EXISTS `payment_reminders` (
   PRIMARY KEY (`id`),
   KEY `booking_id` (`booking_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Add payment_status and payment_method columns to bookings table if they don't exist
-ALTER TABLE `bookings` 
-  ADD COLUMN IF NOT EXISTS `payment_status` 
-    enum('payment_pending', 'payment_received', 'cancelled') 
-    NOT NULL DEFAULT 'payment_pending' AFTER `status`;
-
-ALTER TABLE `bookings` 
-  ADD COLUMN IF NOT EXISTS `payment_method` 
-    varchar(50) DEFAULT NULL AFTER `payment_status`;

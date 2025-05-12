@@ -32,8 +32,7 @@ export const forceRefreshHeaders = {
 // Default headers for API requests
 export const defaultHeaders = {
   'Content-Type': 'application/json',
-  'X-Requested-With': 'XMLHttpRequest',
-  ...forceRefreshHeaders
+  'X-Requested-With': 'XMLHttpRequest'
 };
 
 // Export configuration options

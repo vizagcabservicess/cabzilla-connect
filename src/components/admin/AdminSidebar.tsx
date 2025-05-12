@@ -1,82 +1,107 @@
 
-import { Link } from "react-router-dom";
+import React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
+  CalendarDays, 
   Car, 
-  Calendar, 
+  Map, 
   Users, 
-  FileText, 
-  CreditCard, 
-  Receipt, 
-  Fuel, 
-  Wallet, 
-  User,
-  ChevronDown,
-  BookOpen,
+  BarChart3, 
   Settings,
-  Wrench
-} from "lucide-react";
-import { ModeToggle } from "@/components/ModeToggle"; // This will now correctly point to our component
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+  LogOut,
+  User,
+  Fuel,
+  Wrench,
+  Book,
+  CircleDollarSign,
+  Banknote,
+  CreditCard
+} from 'lucide-react';
 
-type AdminSidebarProps = {
-  activeTab?: string;
-  setActiveTab?: React.Dispatch<React.SetStateAction<string>>;
+interface AdminSidebarProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
-export const AdminSidebar = ({ activeTab = 'dashboard', setActiveTab }: AdminSidebarProps) => {
-  const handleTabClick = (tab: string) => {
-    if (setActiveTab) {
-      setActiveTab(tab);
-    }
-  };
-
+export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
+  const navigate = useNavigate();
+  
   const menuItems = [
-    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard', href: '/admin' },
-    { id: 'payments', icon: <CreditCard size={20} />, label: 'Payments', href: '/admin/payments' },
-    { id: 'expenses', icon: <Receipt size={20} />, label: 'Expenses', href: '/admin/expenses' },
-    { id: 'ledger', icon: <Wallet size={20} />, label: 'Ledger', href: '/admin/ledger' },
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
+    { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin/bookings' },
+    { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin/vehicles' },
+    { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin/fares' },
+    { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },
+    { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
+    { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
+    { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
+    { id: 'expenses', label: 'Expenses', icon: <CircleDollarSign size={20} />, path: '/admin/expenses' },
+    { id: 'payroll', label: 'Payroll', icon: <Banknote size={20} />, path: '/admin/payroll' },
+    { id: 'payments', label: 'Payments', icon: <CreditCard size={20} />, path: '/admin/payments' },
+    { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
+    { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
   ];
 
+  const handleMenuClick = (item: { id: string; path: string }) => {
+    setActiveTab(item.id);
+    navigate(item.path);
+  };
+
   return (
-    <div className="h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-800 dark:text-white">Admin Panel</h1>
-          <ModeToggle />
-        </div>
+    <aside className="w-64 bg-gray-900 text-white hidden md:flex md:flex-col">
+      {/* Sidebar Header/Logo */}
+      <div className="h-16 flex items-center px-6 border-b border-gray-800">
+        <Link to="/admin" className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
+            VT
+          </div>
+          <span className="font-bold text-lg">Vizag Taxi Hub</span>
+        </Link>
       </div>
       
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => (
-          <Link 
-            key={item.id}
-            to={item.href}
-            className={cn(
-              "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              activeTab === item.id 
-                ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white" 
-                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
-            )}
-            onClick={() => handleTabClick(item.id)}
-          >
-            <span className="mr-3">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Main Menu */}
+      <div className="flex-1 overflow-y-auto py-6 px-4">
+        <nav className="space-y-1">
+          {menuItems.map((item) => (
+            <Button
+              key={item.id}
+              variant="ghost"
+              className={`w-full justify-start text-left px-3 py-2 ${
+                activeTab === item.id 
+                  ? 'bg-gray-800 text-white' 
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`}
+              onClick={() => handleMenuClick(item)}
+            >
+              <span className="mr-3">{item.icon}</span>
+              {item.label}
+            </Button>
+          ))}
+        </nav>
+      </div>
       
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex items-center">
-          <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-            <User size={16} className="text-gray-600 dark:text-gray-300" />
+      {/* User Profile Section */}
+      <div className="p-4 border-t border-gray-800">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+            <User size={18} />
           </div>
-          <div className="ml-3">
-            <p className="text-sm font-medium text-gray-800 dark:text-white">Admin User</p>
+          <div>
+            <p className="font-medium">Admin User</p>
+            <p className="text-xs text-gray-400">admin@vizagtaxihub.com</p>
           </div>
         </div>
+        <Button 
+          variant="outline" 
+          className="w-full justify-start text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-white"
+        >
+          <LogOut size={18} className="mr-2" />
+          Logout
+        </Button>
       </div>
-    </div>
+    </aside>
   );
-};
+}
