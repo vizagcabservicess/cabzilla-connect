@@ -143,6 +143,12 @@ try {
     $bookingId = time() . rand(1000, 9999);
     $bookingNumber = 'CB' . $bookingId;
     
+    // Check if this was created by admin (for admin discount feature)
+    $createdByAdmin = isset($data['createdByAdmin']) && $data['createdByAdmin'] === true;
+    $discount = isset($data['discount']) ? (float)$data['discount'] : 0;
+    $discountType = isset($data['discountType']) ? $data['discountType'] : null;
+    $originalAmount = isset($data['originalAmount']) ? (float)$data['originalAmount'] : null;
+    
     // Create a booking record
     $booking = [
         'id' => (int)$bookingId,
@@ -162,7 +168,12 @@ try {
         'passengerPhone' => $data['passengerPhone'],
         'passengerEmail' => $data['passengerEmail'],
         'hourlyPackage' => isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null,
-        'created_at' => date('Y-m-d H:i:s')
+        'created_at' => date('Y-m-d H:i:s'),
+        'notes' => isset($data['notes']) ? $data['notes'] : null,
+        'createdByAdmin' => $createdByAdmin,
+        'discount' => $discount,
+        'discountType' => $discountType,
+        'originalAmount' => $originalAmount
     ];
     
     logBooking("Created booking response", $booking);
@@ -177,12 +188,13 @@ try {
             throw new Exception("Failed to ensure bookings table exists");
         }
         
-        // Prepare the SQL query
+        // Prepare the SQL query - Extended for admin discount fields
         $sql = "INSERT INTO bookings (
             booking_number, pickup_location, drop_location, pickup_date, return_date,
             cab_type, distance, trip_type, trip_mode, total_amount, status,
-            passenger_name, passenger_phone, passenger_email, hourly_package
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            passenger_name, passenger_phone, passenger_email, hourly_package, notes,
+            created_by_admin, discount, discount_type, original_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -198,9 +210,12 @@ try {
             $returnDateFormatted = date('Y-m-d H:i:s', strtotime($booking['returnDate']));
         }
         
+        // Convert boolean to integer for database
+        $createdByAdminValue = $createdByAdmin ? 1 : 0;
+        
         // Bind parameters
         $stmt->bind_param(
-            "ssssssdssdsssss",
+            "ssssssdssdssssssissd",
             $booking['bookingNumber'],
             $booking['pickupLocation'],
             $booking['dropLocation'],
@@ -215,7 +230,12 @@ try {
             $booking['passengerName'],
             $booking['passengerPhone'],
             $booking['passengerEmail'],
-            $booking['hourlyPackage']
+            $booking['hourlyPackage'],
+            $booking['notes'],
+            $createdByAdminValue,
+            $discount,
+            $discountType,
+            $originalAmount
         );
         
         // Execute the query

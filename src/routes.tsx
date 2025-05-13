@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -20,6 +19,8 @@ import LedgerPage from './pages/LedgerPage';
 import ExpensesPage from './pages/ExpensesPage';
 import PayrollPage from './pages/PayrollPage';
 import PaymentsManagementPage from './pages/PaymentsManagementPage';
+import AdminBookingCreationPage from './pages/AdminBookingCreationPage';
+import AdminBookingConfirmationPage from './pages/AdminBookingConfirmationPage';
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +43,15 @@ export const router = createBrowserRouter([
   {
     path: '/admin',
     element: <AdminDashboardPage />,
+  },
+  // New admin booking routes
+  {
+    path: '/admin/create-booking',
+    element: <AdminBookingCreationPage />,
+  },
+  {
+    path: '/admin/booking/:bookingId/confirmation',
+    element: <AdminBookingConfirmationPage />,
   },
   {
     path: '/admin/database',

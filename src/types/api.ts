@@ -1,4 +1,3 @@
-
 // If this file doesn't exist, we'll create it with the needed types
 export type BookingStatus = 
   | 'pending' 
@@ -49,6 +48,11 @@ export interface Booking {
     companyName: string;
     companyAddress: string;
   };
+  // Fields for the admin discount feature
+  discount?: number;
+  discountType?: 'percentage' | 'fixed';
+  originalAmount?: number;
+  createdByAdmin?: boolean;
 }
 
 export interface BookingRequest {
@@ -66,6 +70,11 @@ export interface BookingRequest {
   passengerEmail: string;
   userId?: number;
   notes?: string;
+  // Fields for the admin discount feature
+  discount?: number;
+  discountType?: 'percentage' | 'fixed';
+  originalAmount?: number;
+  createdByAdmin?: boolean;
   [key: string]: any; // To allow for additional properties
 }
 
