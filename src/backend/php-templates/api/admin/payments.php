@@ -1,11 +1,13 @@
-
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 /**
  * Payments API endpoint for the admin panel
  */
 
-require_once __DIR__ . '/../utils/response.php';
-require_once __DIR__ . '/../utils/database.php';
+include_once __DIR__ . '/../utils/response.php';
+include_once __DIR__ . '/../utils/database.php';
 
 // Set headers
 header('Content-Type: application/json');
@@ -41,13 +43,13 @@ try {
     $query = "
         SELECT 
             b.id AS booking_id,
-            b.bookingNumber,
-            b.passengerName AS customer_name,
-            b.passengerPhone AS customer_phone,
-            b.passengerEmail AS customer_email,
-            b.totalAmount AS amount,
+            b.booking_number,
+            b.passenger_name AS customer_name,
+            b.passenger_phone AS customer_phone,
+            b.passenger_email AS customer_email,
+            b.total_amount AS amount,
             COALESCE(p.paid_amount, 0) AS paid_amount,
-            (b.totalAmount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
+            (b.total_amount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
             CASE
                 WHEN b.payment_status = 'payment_received' THEN 'paid'
                 WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'
@@ -55,9 +57,9 @@ try {
                 ELSE 'pending'
             END AS payment_status,
             b.payment_method,
-            b.pickupDate AS due_date,
-            b.createdAt,
-            b.updatedAt
+            b.pickup_date AS due_date,
+            b.created_at,
+            b.updated_at
         FROM bookings b
         LEFT JOIN (
             SELECT 
@@ -75,13 +77,13 @@ try {
     $types = "";
     
     if ($fromDate) {
-        $query .= " AND b.pickupDate >= ?";
+        $query .= " AND b.pickup_date >= ?";
         $params[] = $fromDate;
         $types .= "s";
     }
     
     if ($toDate) {
-        $query .= " AND b.pickupDate <= ?";
+        $query .= " AND b.pickup_date <= ?";
         $params[] = $toDate;
         $types .= "s";
     }
@@ -110,7 +112,7 @@ try {
     
     if ($search) {
         $searchTerm = "%{$search}%";
-        $query .= " AND (b.bookingNumber LIKE ? OR b.passengerName LIKE ? OR b.passengerPhone LIKE ? OR b.passengerEmail LIKE ?)";
+        $query .= " AND (b.booking_number LIKE ? OR b.passenger_name  LIKE ? OR b.passenger_phone LIKE ? OR b.passenger_email LIKE ?)";
         $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -119,7 +121,7 @@ try {
     }
     
     // Order by due date
-    $query .= " ORDER BY b.pickupDate DESC";
+    $query .= " ORDER BY b.pickup_date DESC";
     
     // Execute the query
     $stmt = $db->prepare($query);
@@ -138,19 +140,20 @@ try {
     $totalPending = 0;
     $totalOverdue = 0;
     $countByStatus = [
-        'pending' => 0,
-        'partial' => 0,
         'paid' => 0,
+        'partial' => 0,
+        'pending' => 0,
         'cancelled' => 0
     ];
     $countByMethod = [];
+    $today = new DateTime();
     
     // Fetch payments and calculate summary
     while ($row = $result->fetch_assoc()) {
         $payment = [
             'id' => $row['booking_id'],
             'bookingId' => $row['booking_id'],
-            'bookingNumber' => $row['bookingNumber'],
+            'bookingNumber' => $row['booking_number'],
             'customerName' => $row['customer_name'],
             'customerPhone' => $row['customer_phone'],
             'customerEmail' => $row['customer_email'],
@@ -160,8 +163,8 @@ try {
             'paymentStatus' => $row['payment_status'],
             'paymentMethod' => $row['payment_method'],
             'dueDate' => $row['due_date'],
-            'createdAt' => $row['createdAt'],
-            'updatedAt' => $row['updatedAt']
+            'createdAt' => $row['created_at'],
+            'updatedAt' => $row['updated_at']
         ];
         
         // Calculate partial payment status
@@ -169,27 +172,35 @@ try {
             $payment['paymentStatus'] = 'partial';
         }
         
-        // Update summary
+        // Update summary totals
         $totalAmount += $payment['amount'];
-        $totalPaid += $payment['paidAmount'];
+        // Only sum paidAmount for paid or partial
+        if ($payment['paymentStatus'] === 'paid' || $payment['paymentStatus'] === 'partial') {
+            $totalPaid += $payment['paidAmount'];
+        }
         $totalPending += $payment['remainingAmount'];
         
-        // Check if overdue
-        $dueDate = new DateTime($row['due_date']);
-        $today = new DateTime();
+        // Overdue logic: not paid/cancelled and due date < today
+        $dueDate = new DateTime($payment['dueDate']);
         if ($payment['paymentStatus'] !== 'paid' && $payment['paymentStatus'] !== 'cancelled' && $dueDate < $today) {
             $totalOverdue += $payment['remainingAmount'];
         }
         
         // Update status counts
-        $countByStatus[$payment['paymentStatus']]++;
+        if (isset($countByStatus[$payment['paymentStatus']])) {
+            $countByStatus[$payment['paymentStatus']]++;
+        }
         
-        // Update method counts
-        if ($row['payment_method']) {
-            if (!isset($countByMethod[$row['payment_method']])) {
-                $countByMethod[$row['payment_method']] = 0;
+        // Update method counts with amounts
+        if ($payment['paymentMethod']) {
+            if (!isset($countByMethod[$payment['paymentMethod']])) {
+                $countByMethod[$payment['paymentMethod']] = [
+                    'count' => 0,
+                    'amount' => 0
+                ];
             }
-            $countByMethod[$row['payment_method']]++;
+            $countByMethod[$payment['paymentMethod']]['count']++;
+            $countByMethod[$payment['paymentMethod']]['amount'] += $payment['amount'];
         }
         
         $payments[] = $payment;
@@ -202,7 +213,12 @@ try {
         'totalPending' => $totalPending,
         'totalOverdue' => $totalOverdue,
         'countByStatus' => $countByStatus,
-        'countByMethod' => $countByMethod
+        'countByMethod' => $countByMethod,
+        'metrics' => [
+            'completionRate' => $totalAmount > 0 ? ($totalPaid / $totalAmount) * 100 : 0,
+            'overdueRate' => $totalPending > 0 ? ($totalOverdue / $totalPending) * 100 : 0,
+            'averagePayment' => count($payments) > 0 ? $totalAmount / count($payments) : 0
+        ]
     ];
     
     // Send success response

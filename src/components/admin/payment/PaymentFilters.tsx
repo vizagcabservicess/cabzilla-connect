@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -32,8 +31,8 @@ interface PaymentFiltersProps {
 export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [status, setStatus] = useState<PaymentStatus | ''>('');
-  const [method, setMethod] = useState<PaymentMethod | ''>('');
+  const [status, setStatus] = useState<PaymentStatus | 'all'>('all');
+  const [method, setMethod] = useState<PaymentMethod | 'all'>('all');
   
   const handleSearch = () => {
     onSearch(searchTerm);
@@ -53,16 +52,16 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
     } = {};
     
     if (dateRange) filters.dateRange = dateRange;
-    if (status) filters.status = status as PaymentStatus;
-    if (method) filters.method = method as PaymentMethod;
+    if (status && status !== 'all') filters.status = status as PaymentStatus;
+    if (method && method !== 'all') filters.method = method as PaymentMethod;
     
     onFilter(filters);
   };
   
   const handleReset = () => {
     setDateRange(undefined);
-    setStatus('');
-    setMethod('');
+    setStatus('all');
+    setMethod('all');
     onFilter({});
   };
   
@@ -108,12 +107,12 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Payment Status</label>
-                <Select value={status} onValueChange={(value) => setStatus(value as PaymentStatus | '')}>
+                <Select value={status} onValueChange={(value) => setStatus(value as PaymentStatus | 'all')}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Statuses</SelectItem>
+                    <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="partial">Partial</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
@@ -124,12 +123,12 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Payment Method</label>
-                <Select value={method} onValueChange={(value) => setMethod(value as PaymentMethod | '')}>
+                <Select value={method} onValueChange={(value) => setMethod(value as PaymentMethod | 'all')}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Payment Methods" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Methods</SelectItem>
+                    <SelectItem value="all">All Methods</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="card">Card</SelectItem>
                     <SelectItem value="upi">UPI</SelectItem>
@@ -155,7 +154,7 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
       </div>
       
       {/* Active Filters */}
-      {(dateRange?.from || status || method) && (
+      {(dateRange?.from || (status && status !== 'all') || (method && method !== 'all')) && (
         <div className="flex flex-wrap gap-2 items-center text-sm">
           <span className="text-muted-foreground">Active filters:</span>
           
@@ -167,13 +166,13 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
             </div>
           )}
           
-          {status && (
+          {status && status !== 'all' && (
             <div className="bg-secondary text-secondary-foreground px-2 py-1 rounded-md">
               Status: {status.charAt(0).toUpperCase() + status.slice(1)}
             </div>
           )}
           
-          {method && (
+          {method && method !== 'all' && (
             <div className="bg-secondary text-secondary-foreground px-2 py-1 rounded-md">
               Method: {method.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </div>

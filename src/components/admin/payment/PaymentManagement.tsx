@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -13,6 +12,21 @@ import { paymentsAPI } from '@/services/api/paymentsAPI';
 import { PaymentFilters } from './PaymentFilters';
 import { PaymentSummary } from './PaymentSummary';
 import { PaymentsList } from './PaymentsList';
+
+// Default empty summary for when data is loading or has an error
+const emptySummary = {
+  totalAmount: 0,
+  totalPaid: 0,
+  totalPending: 0,
+  totalOverdue: 0,
+  countByStatus: {
+    pending: 0,
+    partial: 0,
+    paid: 0,
+    cancelled: 0
+  },
+  countByMethod: {}
+};
 
 export function PaymentManagement() {
   // Filter state
@@ -29,6 +43,28 @@ export function PaymentManagement() {
   } = useQuery({
     queryKey: ['payments', filters, searchTerm],
     queryFn: () => paymentsAPI.getPayments({ ...filters, search: searchTerm }),
+  });
+  
+  // Debug: log the data
+  useEffect(() => {
+    console.log('Payments API data:', data);
+  }, [data]);
+  
+  // Defensive: ensure data shape
+  const payments = data && Array.isArray(data.payments) ? data.payments : [];
+  const summary = data && data.summary ? data.summary : emptySummary;
+  
+  // Apply frontend filtering for computed status and method
+  const filteredPayments = payments.filter(payment => {
+    let statusMatch = true;
+    let methodMatch = true;
+    if (filters.status) {
+      statusMatch = payment.paymentStatus === filters.status;
+    }
+    if (filters.method) {
+      methodMatch = payment.paymentMethod === filters.method;
+    }
+    return statusMatch && methodMatch;
   });
   
   // Handle search
@@ -87,21 +123,6 @@ export function PaymentManagement() {
     }
   }, [isError, error]);
   
-  // Default empty summary for when data is loading or has an error
-  const emptySummary = {
-    totalAmount: 0,
-    totalPaid: 0,
-    totalPending: 0,
-    totalOverdue: 0,
-    countByStatus: {
-      pending: 0,
-      partial: 0,
-      paid: 0,
-      cancelled: 0
-    },
-    countByMethod: {}
-  };
-  
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight mb-4">Payment Management</h1>
@@ -113,13 +134,11 @@ export function PaymentManagement() {
       />
       
       {/* Summary Cards */}
-      {data?.summary && (
-        <PaymentSummary summary={data.summary} />
-      )}
+      <PaymentSummary summary={summary} />
       
       {/* Payments List */}
       <PaymentsList
-        payments={data?.payments || []}
+        payments={filteredPayments}
         onUpdatePaymentStatus={handleUpdatePaymentStatus}
         onSendReminder={handleSendReminder}
         isLoading={isLoading}

@@ -43,7 +43,7 @@ function getDbConnection() {
     return $db;
 }
 
-// Get a database connection with retry
+if (!function_exists('getDbConnectionWithRetry')) {
 function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 1) {
     $attempts = 0;
     $lastException = null;
@@ -67,6 +67,7 @@ function getDbConnectionWithRetry($maxRetries = 3, $retryDelay = 1) {
     
     // All attempts failed, throw the last exception
     throw $lastException ?: new Exception("Failed to connect to database after $maxRetries attempts");
+}
 }
 
 // Format a date string for MySQL
@@ -125,40 +126,27 @@ function escapeString($db, $string) {
     return "'" . $db->real_escape_string($string) . "'";
 }
 
-// Execute a parameterized query with proper error handling
+if (!function_exists('executeQuery')) {
 function executeQuery($conn, $sql, $params = [], $types = "") {
     try {
         $stmt = $conn->prepare($sql);
-        
         if ($stmt === false) {
             throw new Exception("Failed to prepare statement: " . $conn->error);
         }
-        
-        // Only bind parameters if there are any
         if (!empty($params) && !empty($types)) {
             if (strlen($types) !== count($params)) {
                 $types = str_repeat("s", count($params));
             }
-            
-            // Create a bind_param array with references
             $bindParams = array($types);
             foreach ($params as $key => $value) {
                 $bindParams[] = &$params[$key];
             }
-            
-            // Call bind_param with the unpacked bindParams array
             call_user_func_array(array($stmt, 'bind_param'), $bindParams);
         }
-        
-        // Execute the statement
         if (!$stmt->execute()) {
             throw new Exception("Failed to execute statement: " . $stmt->error);
         }
-        
-        // Get the result and return it
         $result = $stmt->get_result();
-        
-        // If there's no result (e.g., for INSERT, UPDATE), return the affected rows and insert ID
         if ($result === false) {
             return [
                 'affected_rows' => $stmt->affected_rows,
@@ -166,10 +154,10 @@ function executeQuery($conn, $sql, $params = [], $types = "") {
                 'success' => true
             ];
         }
-        
         return $result;
     } catch (Exception $e) {
         error_log("Query execution error: " . $e->getMessage());
         throw $e;
     }
+}
 }

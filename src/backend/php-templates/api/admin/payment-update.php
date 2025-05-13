@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Update payment status endpoint
@@ -108,13 +107,13 @@ try {
     $stmt = $db->prepare("
         SELECT 
             b.id AS booking_id,
-            b.bookingNumber,
-            b.passengerName AS customer_name,
-            b.passengerPhone AS customer_phone,
-            b.passengerEmail AS customer_email,
-            b.totalAmount AS amount,
+            b.booking_number,
+            b.passenger_name AS customer_name,
+            b.passenger_phone AS customer_phone,
+            b.passenger_email AS customer_email,
+            b.total_amount AS amount,
             COALESCE(p.paid_amount, 0) AS paid_amount,
-            (b.totalAmount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
+            (b.total_amount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
             CASE
                 WHEN b.payment_status = 'payment_received' THEN 'paid'
                 WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'
@@ -122,9 +121,9 @@ try {
                 ELSE 'pending'
             END AS payment_status,
             b.payment_method,
-            b.pickupDate AS due_date,
-            b.createdAt,
-            b.updatedAt
+            b.pickup_date AS due_date,
+            b.created_at,
+            b.updated_at
         FROM bookings b
         LEFT JOIN (
             SELECT 
@@ -157,7 +156,7 @@ try {
     $paymentData = [
         'id' => $payment['booking_id'],
         'bookingId' => $payment['booking_id'],
-        'bookingNumber' => $payment['bookingNumber'],
+        'bookingNumber' => $payment['booking_number'],
         'customerName' => $payment['customer_name'],
         'customerPhone' => $payment['customer_phone'],
         'customerEmail' => $payment['customer_email'],
@@ -167,12 +166,107 @@ try {
         'paymentStatus' => $payment['payment_status'],
         'paymentMethod' => $payment['payment_method'],
         'dueDate' => $payment['due_date'],
-        'createdAt' => $payment['createdAt'],
-        'updatedAt' => $payment['updatedAt']
+        'createdAt' => $payment['created_at'],
+        'updatedAt' => $payment['updated_at']
     ];
     
-    // Send success response
-    sendSuccessResponse($paymentData, 'Payment status updated successfully');
+    // Recalculate summary statistics
+    $summaryQuery = "
+        SELECT 
+            SUM(b.total_amount) as total_amount,
+            SUM(COALESCE(p.paid_amount, 0)) as total_paid,
+            SUM(b.total_amount - COALESCE(p.paid_amount, 0)) as total_pending,
+            COUNT(CASE WHEN b.payment_status = 'payment_received' THEN 1 END) as paid_count,
+            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND COALESCE(p.paid_amount, 0) > 0 THEN 1 END) as partial_count,
+            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND COALESCE(p.paid_amount, 0) = 0 THEN 1 END) as pending_count,
+            COUNT(CASE WHEN b.status = 'cancelled' THEN 1 END) as cancelled_count
+        FROM bookings b
+        LEFT JOIN (
+            SELECT 
+                booking_id,
+                SUM(amount) AS paid_amount
+            FROM payments
+            WHERE status = 'confirmed'
+            GROUP BY booking_id
+        ) p ON p.booking_id = b.id
+    ";
+    
+    $summaryStmt = $db->prepare($summaryQuery);
+    $summaryStmt->execute();
+    $summaryResult = $summaryStmt->get_result();
+    $summaryData = $summaryResult->fetch_assoc();
+    
+    // Calculate overdue amount
+    $overdueQuery = "
+        SELECT SUM(b.total_amount - COALESCE(p.paid_amount, 0)) as total_overdue
+        FROM bookings b
+        LEFT JOIN (
+            SELECT 
+                booking_id,
+                SUM(amount) AS paid_amount
+            FROM payments
+            WHERE status = 'confirmed'
+            GROUP BY booking_id
+        ) p ON p.booking_id = b.id
+        WHERE b.pickup_date < CURDATE()
+        AND b.payment_status != 'payment_received'
+        AND b.status != 'cancelled'
+    ";
+    
+    $overdueStmt = $db->prepare($overdueQuery);
+    $overdueStmt->execute();
+    $overdueResult = $overdueStmt->get_result();
+    $overdueData = $overdueResult->fetch_assoc();
+    
+    // Get payment method statistics
+    $methodQuery = "
+        SELECT 
+            b.payment_method,
+            COUNT(*) as count,
+            SUM(b.total_amount) as amount
+        FROM bookings b
+        WHERE b.payment_method IS NOT NULL
+        GROUP BY b.payment_method
+    ";
+    
+    $methodStmt = $db->prepare($methodQuery);
+    $methodStmt->execute();
+    $methodResult = $methodStmt->get_result();
+    
+    $countByMethod = [];
+    while ($methodRow = $methodResult->fetch_assoc()) {
+        $countByMethod[$methodRow['payment_method']] = [
+            'count' => (int)$methodRow['count'],
+            'amount' => (float)$methodRow['amount']
+        ];
+    }
+    
+    // Prepare summary response
+    $summary = [
+        'totalAmount' => (float)$summaryData['total_amount'],
+        'totalPaid' => (float)$summaryData['total_paid'],
+        'totalPending' => (float)$summaryData['total_pending'],
+        'totalOverdue' => (float)$overdueData['total_overdue'],
+        'countByStatus' => [
+            'paid' => (int)$summaryData['paid_count'],
+            'partial' => (int)$summaryData['partial_count'],
+            'pending' => (int)$summaryData['pending_count'],
+            'cancelled' => (int)$summaryData['cancelled_count']
+        ],
+        'countByMethod' => $countByMethod,
+        'metrics' => [
+            'completionRate' => $summaryData['total_amount'] > 0 ? 
+                ($summaryData['total_paid'] / $summaryData['total_amount']) * 100 : 0,
+            'overdueRate' => $summaryData['total_pending'] > 0 ? 
+                ($overdueData['total_overdue'] / $summaryData['total_pending']) * 100 : 0
+        ]
+    ];
+    
+    // Send success response with both payment data and updated summary
+    sendSuccessResponse([
+        'payment' => $paymentData,
+        'summary' => $summary
+    ], 'Payment status updated successfully');
     
 } catch (Exception $e) {
     // Rollback transaction if active
