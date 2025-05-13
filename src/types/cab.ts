@@ -1,25 +1,32 @@
-
 export interface CabType {
   id: string;
   name: string;
   description: string;
   image: string;
   capacity: number;
+  luggageCapacity: number;
   basePrice: number;
   pricePerKm: number;
   amenities: string[];
-  luggageCapacity?: number;
-  ac?: boolean;
-  // Add missing properties that are causing errors
+  ac: boolean;
   price?: number;
   driverAllowance?: number;
   nightHaltCharge?: number;
   isActive?: boolean;
   vehicleId?: string;
-  localPackageFares?: LocalPackageFare[];
+  localPackageFares?: {
+    price8hrs80km?: number;
+  };
 }
 
-// Add FleetVehicle type that's missing
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kms: number; // Replace kilometers with kms
+  basePrice: number;
+}
+
 export interface FleetVehicle {
   id: string;
   vehicleNumber: string;
@@ -33,72 +40,45 @@ export interface FleetVehicle {
   nextServiceDue?: string;
   nextServiceOdometer?: number;
   fuelType?: string;
-  capacity: number;
-  cabTypeId?: string;
-  luggageCapacity?: number;
-  isActive?: boolean;
-  currentOdometer?: number;
+  fuelEfficiency?: number;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  insuranceExpiry?: string;
+  registrationExpiry?: string;
   createdAt?: string;
   updatedAt?: string;
+  vehicleName?: string; // Add this property for compatibility
 }
 
-// Add HourlyPackage type
-export interface HourlyPackage {
-  id: string;
-  name: string;
-  hours: number;
-  distance: number;
-  price: number;
-  vehicleType?: string;
-  description?: string;
-  isActive?: boolean;
-}
-
-// Add LocalPackageFare type
-export interface LocalPackageFare {
-  packageId: string;
-  packageName: string;
-  basePrice: number;
-  hours: number;
-  kilometers: number;
-  extraHourRate?: number;
-  extraKmRate?: number;
-}
-
-// Add missing types for fuel-related components
 export interface FuelPrice {
-  id: string | number;
-  fuelType: string;
+  id: string;
+  fuelType: "Diesel" | "Petrol" | "CNG";
   price: number;
-  date: string;
-  location?: string;
-  updatedAt?: string;
+  location: string;
+  effectiveDate: string;
+  date?: string; // Added for compatibility
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FuelRecord {
-  id?: string | number;
+  id: string;
   vehicleId: string;
-  fuelType: string;
+  refillDate: string;
+  fuelType: "Diesel" | "Petrol" | "CNG";
   liters: number;
-  costPerLiter: number;
-  totalCost: number;
+  pricePerLiter: number;
+  totalAmount: number;
   odometer: number;
-  date: string;
-  paymentMode?: string;
-  stationName?: string;
+  location?: string;
   notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-// Add types that are re-exported from lib/index.ts
-export interface FareCache {}
-export interface TourInfo {}
-export interface TourFares {}
-export interface ExtraCharges {}
-export interface LocalPackagePriceMatrix {}
-export interface FareCalculationParams {}
-export interface VehiclePricing {}
-export interface OutstationFare {}
-export interface LocalFare {}
-export interface AirportFare {}
+export interface LocalPackageFare {
+  id: string;
+  packageId: string;
+  price: number;
+  price8hrs80km?: number;
+}

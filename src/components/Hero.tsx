@@ -11,7 +11,7 @@ import {
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
-import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
+import { TripType, TripMode } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,10 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
-import { Car, Home, User } from 'lucide-react';
+import { Car, Home, User, Clock } from 'lucide-react';
+
+// Import ensureCustomerTripType from the correct location
+import { ensureCustomerTripType } from '@/lib/tripTypes';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -615,7 +618,7 @@ export function Hero() {
                       selectedCab={selectedCab!} 
                       distance={distance} 
                       tripType={tripType} 
-                      tripMode={tripMode} 
+                      tripMode={tripMode === 'pickup' ? 'one-way' : tripMode} // Fix for tripMode type issue
                       totalPrice={totalPrice}
                       hourlyPackage={hourlyPackage}
                     />
@@ -658,7 +661,7 @@ export function Hero() {
                 distance={distance}
                 totalPrice={totalPrice}
                 tripType={tripType}
-                tripMode={tripMode}
+                tripMode={tripMode === 'pickup' ? 'one-way' : tripMode} // Fix for tripMode type issue
                 hourlyPackage={hourlyPackage}
               />
             </div>
@@ -676,7 +679,7 @@ export function Hero() {
           <span className="bottom-nav-label">Cabs</span>
         </button>
         <button className="bottom-nav-item">
-          <History size={20} />
+          <Clock size={20} /> {/* Changed from History to Clock */}
           <span className="bottom-nav-label">History</span>
         </button>
         <button className="bottom-nav-item">

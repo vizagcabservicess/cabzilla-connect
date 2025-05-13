@@ -244,3 +244,42 @@ export interface VehiclePricingUpdateRequest extends FareUpdateRequest {
   nightHaltCharge?: number;
   driverAllowance?: number;
 }
+
+export interface OutstationFare {
+  id: string;
+  vehicleId: string;
+  pricePerKm: number;
+  basePrice: number;
+  driverAllowance: number;
+  roundTripPricePerKm?: number;
+  roundTripBasePrice?: number;
+  nightHaltCharge?: number;
+  minKm?: number;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface AirportFare {
+  id: string;
+  vehicleId: string;
+  basePrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface LocalFare {
+  id: string;
+  vehicleId: string;
+  price4hrs40km: number;  // Changed from package4hr40km
+  price8hrs80km: number;  // Changed from package8hr80km
+  price10hrs100km: number; // Changed from package10hr100km
+  extraKmRate: number;
+  extraHourRate: number;
+  description?: string;
+  isActive?: boolean;
+}

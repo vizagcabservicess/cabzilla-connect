@@ -50,21 +50,21 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
         id: '4hrs-40km',
         name: '4 Hours Package',
         hours: 4,
-        kilometers: 40,
+        kms: 40,  // Changed from kilometers to kms
         basePrice: 1000
       },
       {
         id: '8hrs-80km',
         name: '8 Hours Package',
         hours: 8,
-        kilometers: 80,
+        kms: 80,  // Changed from kilometers to kms
         basePrice: 2000
       },
       {
         id: '10hrs-100km',
         name: '10 Hours Package',
         hours: 10,
-        kilometers: 100,
+        kms: 100,  // Changed from kilometers to kms
         basePrice: 2500
       }
     ];
@@ -239,7 +239,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
                 <Label htmlFor={pkg.id} className="flex flex-col cursor-pointer">
                   <span className="font-medium">{pkg.name}</span>
                   <span className="text-sm text-muted-foreground">
-                    {pkg.hours} hours, up to {pkg.kilometers} km
+                    {pkg.hours} hours, up to {pkg.kms} km
                   </span>
                 </Label>
               </div>
