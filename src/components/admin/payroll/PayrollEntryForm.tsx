@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -191,7 +192,7 @@ export function PayrollEntryForm({
   };
   
   // Form submission
-  const onSubmit: async (values: PayrollFormValues) => {
+  const onSubmit = async (values: PayrollFormValues) => {
     try {
       setIsLoading(true);
       // Filter out invalid allowances/deductions before sending to API
