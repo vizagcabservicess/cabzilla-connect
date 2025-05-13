@@ -53,6 +53,8 @@ export interface Booking {
   discountType?: 'percentage' | 'fixed';
   originalAmount?: number;
   createdByAdmin?: boolean;
+  // Added hourlyPackage property to fix BookingDetails.tsx errors
+  hourlyPackage?: string;
 }
 
 export interface BookingRequest {

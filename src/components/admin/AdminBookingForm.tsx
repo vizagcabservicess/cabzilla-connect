@@ -29,6 +29,8 @@ const mockCabTypes: CabType[] = [
     basePrice: 1500,
     pricePerKm: 15,
     amenities: ['AC', 'Water', 'Music'],
+    luggageCapacity: 3,
+    ac: true,
   },
   {
     id: 'suv',
@@ -39,6 +41,8 @@ const mockCabTypes: CabType[] = [
     basePrice: 2500,
     pricePerKm: 20,
     amenities: ['AC', 'Water', 'Music', 'Extra Space'],
+    luggageCapacity: 5,
+    ac: true,
   },
   {
     id: 'tempo',
@@ -49,6 +53,8 @@ const mockCabTypes: CabType[] = [
     basePrice: 3500,
     pricePerKm: 25,
     amenities: ['AC', 'Water', 'Music', 'Spacious'],
+    luggageCapacity: 8,
+    ac: true,
   },
 ];
 
