@@ -1,4 +1,3 @@
-
 <?php
 // driver.php - Handle individual driver operations (GET, UPDATE, DELETE)
 require_once __DIR__ . '/../../config.php';
@@ -77,6 +76,22 @@ if (!$driverId && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $jsonData = file_get_contents('php://input');
     $data = json_decode($jsonData, true);
     $driverId = isset($data['id']) ? (int)$data['id'] : null;
+}
+
+// List all drivers if no ID is provided and method is GET
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$driverId) {
+    try {
+        $result = $conn->query("SELECT * FROM drivers");
+        $drivers = [];
+        while ($row = $result->fetch_assoc()) {
+            $drivers[] = $row;
+        }
+        sendJsonResponse(['status' => 'success', 'data' => $drivers]);
+        exit;
+    } catch (Exception $e) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Failed to fetch drivers: ' . $e->getMessage()], 500);
+        exit;
+    }
 }
 
 // Ensure we have a driver ID for all methods except POST (which is for creating new drivers)

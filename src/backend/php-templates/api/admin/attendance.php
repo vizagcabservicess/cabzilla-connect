@@ -1,11 +1,15 @@
-
 <?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 /**
  * API endpoint for attendance management
  */
 
 // Include necessary files
-require_once __DIR__ . '/../../utils/database.php';
+require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../common/db_helper.php';
 require_once __DIR__ . '/db_setup.php';

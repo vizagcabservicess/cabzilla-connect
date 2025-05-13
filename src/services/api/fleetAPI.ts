@@ -286,46 +286,22 @@ export const fleetAPI = {
    */
   getDrivers: async () => {
     try {
-      // Try direct API call first with correct domain
-      try {
-        const apiUrl = getApiUrl('/api/admin/fleet-drivers');
-        console.log("Fetching drivers from:", apiUrl);
-        
-        const response = await axios.get(apiUrl, {
-          headers: {
-            ...forceRefreshHeaders
-          }
-        });
-        
-        if (response.data && (Array.isArray(response.data.drivers) || Array.isArray(response.data))) {
-          const drivers = Array.isArray(response.data.drivers) ? response.data.drivers : response.data;
-          return drivers;
+      // Fetch from the correct driver API endpoint
+      const apiUrl = getApiUrl('/api/admin/driver.php');
+      console.log("Fetching drivers from:", apiUrl);
+      const response = await axios.get(apiUrl, {
+        headers: {
+          ...forceRefreshHeaders
         }
-      } catch (directError) {
-        console.warn("Direct API call failed:", directError);
-        
-        // Try with explicit API_BASE_URL
-        try {
-          const apiUrl = `${API_BASE_URL}/api/admin/fleet-drivers.php`;
-          console.log("Trying alternative URL:", apiUrl);
-          
-          const response = await axios.get(apiUrl, {
-            headers: {
-              ...forceRefreshHeaders
-            }
-          });
-          
-          if (response.data && (Array.isArray(response.data.drivers) || Array.isArray(response.data))) {
-            const drivers = Array.isArray(response.data.drivers) ? response.data.drivers : response.data;
-            return drivers;
-          }
-        } catch (baseUrlError) {
-          console.warn("API_BASE_URL call failed:", baseUrlError);
-          throw new Error("Failed to fetch drivers from API");
+      });
+      if (response.data) {
+        if (response.data.status === 'success' && Array.isArray(response.data.data)) {
+          return response.data.data;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
         }
       }
-      
-      // If both API calls fail, use mock data
+      // If API call fails or returns unexpected data, use mock data
       console.log("Using mock driver data");
       return mockDrivers;
     } catch (error) {

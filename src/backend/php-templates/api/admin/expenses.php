@@ -1,4 +1,9 @@
 <?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 /**
  * Expense Management API Endpoint
  * Handles CRUD operations for expenses
@@ -857,9 +862,8 @@ function handleDeleteRequest($conn) {
     }
 }
 
-/**
- * Helper function to get database connection
- */
+// Helper function to get database connection
+if (!function_exists('getDbConnection')) {
 function getDbConnection() {
     $host = getenv('DB_HOST') ?: 'localhost';
     $username = getenv('DB_USER') ?: 'root';
@@ -874,4 +878,5 @@ function getDbConnection() {
     
     $conn->set_charset("utf8mb4");
     return $conn;
+}
 }

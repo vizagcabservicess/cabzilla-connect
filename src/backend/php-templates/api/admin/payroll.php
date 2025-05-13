@@ -1,11 +1,15 @@
-
 <?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 /**
  * API endpoint for payroll management
  */
 
 // Include necessary files
-require_once __DIR__ . '/../../utils/database.php';
+require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../common/db_helper.php';
 require_once __DIR__ . '/db_setup.php';
@@ -46,6 +50,9 @@ try {
                 getSalaryComponents($conn);
             } else if ($action === 'summary') {
                 getPayrollSummary($conn);
+            } else if ($action === 'driver_summary') {
+                $driverId = $_GET['driver_id'] ?? null;
+                getDriverPaySummary($conn, $driverId);
             } else {
                 getPayrollEntries($conn);
             }
@@ -498,14 +505,32 @@ function addPayrollEntry($conn, $data) {
         
         $status = ($paymentStatus === 'paid') ? 'reconciled' : 'pending';
         
+        // Assign all bind_param arguments to variables
+        $driverIdVar = $driverId;
+        $dateVar = $date;
+        $descriptionVar = $description;
+        $netSalaryVar = $netSalary;
+        $typeVar = $data['type'] ?? 'expense';
+        $categoryVar = $data['category'] ?? 'Salary';
+        $paymentMethodVar = $paymentMethod;
+        $statusVar = $status;
+        $payPeriodStartVar = $payPeriodStart;
+        $payPeriodEndVar = $payPeriodEnd;
+        $basicSalaryVar = $basicSalary;
+        $daysWorkedVar = $daysWorked;
+        $daysLeaveVar = $daysLeave;
+        $overtimeHoursVar = $overtimeHours;
+        $netSalaryVar2 = $netSalary;
+        $paymentStatusVar = $paymentStatus;
+        $paymentDateVar = $paymentDate;
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
             "sssdssssssdiiidss",
-            $driverId, $date, $description, $netSalary, 
-            $data['type'] ?? 'expense', $data['category'] ?? 'Salary', 
-            $paymentMethod, $status, $payPeriodStart, $payPeriodEnd, 
-            $basicSalary, $daysWorked, $daysLeave, $overtimeHours, 
-            $netSalary, $paymentStatus, $paymentDate
+            $driverIdVar, $dateVar, $descriptionVar, $netSalaryVar, 
+            $typeVar, $categoryVar, 
+            $paymentMethodVar, $statusVar, $payPeriodStartVar, $payPeriodEndVar, 
+            $basicSalaryVar, $daysWorkedVar, $daysLeaveVar, $overtimeHoursVar, 
+            $netSalaryVar2, $paymentStatusVar, $paymentDateVar
         );
         $stmt->execute();
         
@@ -1205,13 +1230,21 @@ function getDriverPaySummary($conn, $driverId, $month = null, $year = null) {
         if (!isset($driverId)) {
             sendErrorResponse('Driver ID is required', 400);
         }
-        
-        // Get current month/year if not provided
-        if ($month === null) $month = date('n');
-        if ($year === null) $year = date('Y');
-        
-        $startDate = "$year-$month-01";
-        $endDate = date('Y-m-t', strtotime($startDate));
+        // Use from_date and to_date from GET if provided
+        $fromDate = $_GET['from_date'] ?? null;
+        $toDate = $_GET['to_date'] ?? null;
+        if ($fromDate && $toDate) {
+            $startDate = $fromDate;
+            $endDate = $toDate;
+        } else {
+            // Get current month/year if not provided
+            if ($month === null) $month = date('n');
+            if ($year === null) $year = date('Y');
+            $startDate = "$year-$month-01";
+            $endDate = date('Y-m-t', strtotime($startDate));
+        }
+        // Ensure driverId is a string for SQL binding
+        $driverId = (string)$driverId;
         
         // Get driver info
         $driverSql = "SELECT name FROM drivers WHERE id = ?";
@@ -1240,25 +1273,21 @@ function getDriverPaySummary($conn, $driverId, $month = null, $year = null) {
         // Get attendance summary
         $attendanceSql = "
             SELECT
-                SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as days_present,
-                SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as days_absent,
-                SUM(CASE WHEN status = 'paid-leave' THEN 1 ELSE 0 END) as paid_leaves,
-                SUM(CASE WHEN status = 'unpaid-leave' THEN 1 ELSE 0 END) as unpaid_leaves
+                SUM(CASE WHEN LOWER(status) = 'present' THEN 1 ELSE 0 END) as days_present,
+                SUM(CASE WHEN LOWER(status) = 'absent' THEN 1 ELSE 0 END) as days_absent,
+                SUM(CASE WHEN LOWER(status) = 'half-day' THEN 1 ELSE 0 END) as half_days
             FROM attendance_records
             WHERE driver_id = ? AND date BETWEEN ? AND ?
         ";
-        
         $attendanceStmt = $conn->prepare($attendanceSql);
         $attendanceStmt->bind_param("sss", $driverId, $startDate, $endDate);
         $attendanceStmt->execute();
         $attendanceResult = $attendanceStmt->get_result();
         $attendanceRow = $attendanceResult->fetch_assoc();
-        
         $attendanceSummary = [
             'daysPresent' => (int)($attendanceRow['days_present'] ?? 0),
             'daysAbsent' => (int)($attendanceRow['days_absent'] ?? 0),
-            'paidLeaves' => (int)($attendanceRow['paid_leaves'] ?? 0),
-            'unpaidLeaves' => (int)($attendanceRow['unpaid_leaves'] ?? 0),
+            'halfDays' => (int)($attendanceRow['half_days'] ?? 0),
         ];
         
         // Get outstanding advances

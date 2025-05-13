@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,6 +14,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { PayrollEntry, SalaryComponent } from '@/types/ledger';
 import { payrollAPI } from '@/services/api/payrollAPI';
+import { fleetAPI } from '@/services/api/fleetAPI';
 
 interface PayrollEntryFormProps {
   open: boolean;
@@ -56,11 +56,7 @@ export function PayrollEntryForm({
   selectedDriverId
 }: PayrollEntryFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [drivers, setDrivers] = useState<{ id: string | number, name: string }[]>([
-    { id: 'DRV001', name: 'Rajesh Kumar' },
-    { id: 'DRV002', name: 'Suresh Singh' },
-    { id: 'DRV003', name: 'Mahesh Reddy' },
-  ]);
+  const [drivers, setDrivers] = useState<{ id: string | number, name: string }[]>([]);
   const [salaryComponents, setSalaryComponents] = useState<SalaryComponent[]>([]);
   
   // Load salary components
@@ -72,6 +68,13 @@ export function PayrollEntryForm({
     
     if (open) {
       loadComponents();
+    }
+  }, [open]);
+  
+  // Load drivers from API when form opens
+  useEffect(() => {
+    if (open) {
+      fleetAPI.getDrivers().then(setDrivers).catch(() => setDrivers([]));
     }
   }, [open]);
   
@@ -120,26 +123,30 @@ export function PayrollEntryForm({
     }
   }, [payrollToEdit, form, selectedDriverId]);
   
-  // Calculate totals
+  // Utility to filter valid rows
+  const filterValidRows = (arr: any[]) => (arr || []).filter(a => a && a.type && !isNaN(a.amount) && a.amount !== null && a.amount !== '');
+
   const getTotalAllowances = () => {
-    return form.watch('allowances').reduce((sum, item) => sum + item.amount, 0);
+    const allowances = filterValidRows(form.watch('allowances'));
+    return allowances.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
   };
-  
+
   const getTotalDeductions = () => {
-    return form.watch('deductions').reduce((sum, item) => sum + item.amount, 0);
+    const deductions = filterValidRows(form.watch('deductions'));
+    return deductions.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
   };
-  
+
   const getTotalAdvances = () => {
-    return form.watch('advances').reduce((sum, item) => sum + item.amount, 0);
+    const advances = (form.watch('advances') || []).filter(a => !isNaN(a.amount) && a.amount !== null && a.amount !== '');
+    return advances.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
   };
-  
+
   const getNetSalary = () => {
-    const basicSalary = form.watch('basicSalary');
+    const basicSalary = Number(form.watch('basicSalary')) || 0;
     const totalAllowances = getTotalAllowances();
     const totalDeductions = getTotalDeductions();
     const totalAdvances = getTotalAdvances();
-    
-    return basicSalary + totalAllowances - totalDeductions - totalAdvances;
+    return basicSalary + totalAllowances - totalDeductions - totalAdvances || 0;
   };
   
   // Add/remove allowances, deductions, advances
@@ -173,11 +180,23 @@ export function PayrollEntryForm({
     form.setValue('advances', currentAdvances.filter((_, i) => i !== index));
   };
   
+  // Validation: block submission if any allowance/deduction has empty type or invalid amount
+  const hasInvalidRows = () => {
+    const allowances = form.watch('allowances') || [];
+    const deductions = form.watch('deductions') || [];
+    return (
+      allowances.some(a => !a.type || isNaN(a.amount)) ||
+      deductions.some(d => !d.type || isNaN(d.amount))
+    );
+  };
+  
   // Form submission
   const onSubmit = async (values: PayrollFormValues) => {
     try {
       setIsLoading(true);
-      
+      // Filter out invalid allowances/deductions before sending to API
+      const filteredAllowances = filterValidRows(values.allowances);
+      const filteredDeductions = filterValidRows(values.deductions);
       // Format the data for API
       const payrollData = {
         driverId: values.driverId,
@@ -186,9 +205,9 @@ export function PayrollEntryForm({
           endDate: format(values.payPeriodEnd, 'yyyy-MM-dd'),
         },
         basicSalary: values.basicSalary,
-        allowances: values.allowances,
-        deductions: values.deductions,
-        advances: values.advances.map(a => ({
+        allowances: filteredAllowances,
+        deductions: filteredDeductions,
+        advances: (values.advances || []).filter(a => !isNaN(a.amount) && a.amount !== null && a.amount !== '').map(a => ({
           ...a,
           date: format(a.date, 'yyyy-MM-dd')
         })),
@@ -747,11 +766,16 @@ export function PayrollEntryForm({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || hasInvalidRows()}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {payrollToEdit ? 'Update Payroll' : 'Create Payroll Entry'}
               </Button>
             </div>
+            {hasInvalidRows() && (
+              <div className="text-red-500 text-sm text-right mt-2">
+                Please select a type and enter a valid amount for all allowances and deductions.
+              </div>
+            )}
           </form>
         </Form>
       </DialogContent>

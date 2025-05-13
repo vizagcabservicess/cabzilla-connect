@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +15,7 @@ import { PayrollEntryForm } from '@/components/admin/payroll/PayrollEntryForm';
 import { DriverSelector } from '@/components/admin/payroll/DriverSelector';
 import { PayrollCharts } from '@/components/admin/payroll/PayrollCharts';
 import { DriverPayrollHistory } from '@/components/admin/payroll/DriverPayrollHistory';
+import { fleetAPI } from '@/services/api/fleetAPI';
 
 export default function PayrollPage() {
   // Set default date range to current month
@@ -38,6 +38,7 @@ export default function PayrollPage() {
   // Data state
   const [payrollEntries, setPayrollEntries] = useState<PayrollEntry[]>([]);
   const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
+  const [drivers, setDrivers] = useState<any[]>([]);
   
   // Fetch payroll data based on filters
   const fetchPayrollData = useCallback(async (refresh = false) => {
@@ -76,6 +77,13 @@ export default function PayrollPage() {
     fetchPayrollData();
   }, [fetchPayrollData]);
   
+  // Fetch drivers for fallback display
+  useEffect(() => {
+    if (payrollEntries.length === 0) {
+      fleetAPI.getDrivers().then(setDrivers).catch(() => setDrivers([]));
+    }
+  }, [payrollEntries]);
+  
   // Apply date range filter
   const handleApplyDateRange = () => {
     fetchPayrollData(true);
@@ -109,6 +117,11 @@ export default function PayrollPage() {
   const handlePayrollAdded = () => {
     fetchPayrollData(true);
   };
+
+  // Find the summary for the selected driver
+  const selectedDriverSummary = payrollSummary?.byDriver?.find(
+    (d) => String(d.driverId) === String(selectedDriverId)
+  );
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -167,16 +180,77 @@ export default function PayrollPage() {
             />
           )}
           
-          {/* Payroll Table */}
+          {/* Selected Driver Summary */}
+          {showDriverView && selectedDriverSummary && (
+            <div className="mb-6">
+              <Card>
+                <CardContent className="p-6 flex flex-col md:flex-row gap-6">
+                  <div>
+                    <div className="text-gray-500">Driver</div>
+                    <div className="font-bold">{selectedDriverSummary.driverName}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Total Paid</div>
+                    <div className="font-bold">₹{selectedDriverSummary.amount.toLocaleString('en-IN')}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Status</div>
+                    <div className="font-bold">{selectedDriverSummary.status}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          
+          {/* Payroll Table or Fallback */}
           <Card>
             <CardContent className="p-6">
-              <PayrollTable 
-                data={payrollEntries} 
-                isLoading={isLoading || isRefreshing}
-                onViewDetails={handleEditPayroll}
-                onGeneratePayslip={(id) => payrollAPI.generatePayslip(id, 'pdf')}
-                showDriverColumn={!showDriverView}
-              />
+              {payrollEntries.length > 0 ? (
+                <PayrollTable 
+                  data={payrollEntries} 
+                  isLoading={isLoading || isRefreshing}
+                  onViewDetails={handleEditPayroll}
+                  onGeneratePayslip={(id) => payrollAPI.generatePayslip(id, 'pdf')}
+                  showDriverColumn={!showDriverView}
+                />
+              ) : (
+                <div>
+                  <div className="mb-4 flex justify-between items-center">
+                    <span className="text-lg font-semibold text-gray-700">Drivers</span>
+                    <Button onClick={() => setFormOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" /> New Payroll Entry
+                    </Button>
+                  </div>
+                  {drivers.length > 0 ? (
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {drivers.map(driver => (
+                            <tr key={driver.id}>
+                              <td className="px-6 py-4 whitespace-nowrap font-medium">{driver.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">{driver.phone}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">{driver.status}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Button size="sm" onClick={() => { setSelectedDriverId(driver.id); setFormOpen(true); }}>Add Payroll Entry</Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">No drivers found.</div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
           
