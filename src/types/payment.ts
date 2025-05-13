@@ -19,12 +19,32 @@ export interface Payment {
   createdAt: string;
   updatedAt?: string;
   dueDate?: string;
+  // Add missing properties that are causing errors
+  paymentStatus?: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  remainingAmount?: number;
+  paidAmount?: number;
+  bookingNumber?: string;
 }
 
 export interface PaymentFilterParams {
   dateRange?: DateRange;
   search?: string;
-  // Add these properties to fix the errors
   status?: PaymentStatus;
   method?: PaymentMethod;
+}
+
+// Add missing PaymentSummary interface
+export interface PaymentSummary {
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalOverdue: number;
+  countByStatus: {
+    pending: number;
+    partial: number;
+    paid: number;
+    cancelled: number;
+  };
+  countByMethod: Record<string, number>;
 }

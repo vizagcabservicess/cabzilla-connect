@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -35,10 +34,12 @@ interface PayrollFormValues {
   allowances: {
     type: string;
     amount: number;
+    includeInPayroll: boolean;
   }[];
   deductions: {
     type: string;
     amount: number;
+    includeInPayroll: boolean;
   }[];
   advances: {
     date: Date;
@@ -89,11 +90,11 @@ export function PayrollEntryForm({
       daysWorked: 22,
       daysLeave: 8,
       allowances: [
-        { type: 'batha', amount: 4000 },
-        { type: 'fuel', amount: 3000 },
+        { type: 'batha', amount: 4000, includeInPayroll: true },
+        { type: 'fuel', amount: 3000, includeInPayroll: true },
       ],
       deductions: [
-        { type: 'pf', amount: 1800 },
+        { type: 'pf', amount: 1800, includeInPayroll: true },
       ],
       advances: [],
       paymentStatus: 'pending',
@@ -444,7 +445,7 @@ export function PayrollEntryForm({
                 </Button>
               </div>
               
-              {form.watch('allowances').map((_, index) => (
+              {form.watch('allowances').map((allowance, index) => (
                 <div key={index} className="flex gap-2 items-center mb-2">
                   <FormField
                     control={form.control}
@@ -495,6 +496,19 @@ export function PayrollEntryForm({
                     )}
                   />
                   
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="includeInPayroll" 
+                      checked={allowance.includeInPayroll}
+                      onCheckedChange={(checked) => {
+                        const newAllowances = [...allowances];
+                        newAllowances[index].includeInPayroll = checked === true;
+                        setAllowances(newAllowances);
+                      }}
+                    />
+                    <Label htmlFor="includeInPayroll">Include in payroll</Label>
+                  </div>
+                  
                   <Button 
                     type="button" 
                     variant="ghost" 
@@ -523,7 +537,7 @@ export function PayrollEntryForm({
                 </Button>
               </div>
               
-              {form.watch('deductions').map((_, index) => (
+              {form.watch('deductions').map((deduction, index) => (
                 <div key={index} className="flex gap-2 items-center mb-2">
                   <FormField
                     control={form.control}
@@ -573,6 +587,19 @@ export function PayrollEntryForm({
                       </FormItem>
                     )}
                   />
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="includeInPayroll" 
+                      checked={deduction.includeInPayroll}
+                      onCheckedChange={(checked) => {
+                        const newDeductions = [...deductions];
+                        newDeductions[index].includeInPayroll = checked === true;
+                        setDeductions(newDeductions);
+                      }}
+                    />
+                    <Label htmlFor="includeInPayroll">Include in payroll</Label>
+                  </div>
                   
                   <Button 
                     type="button" 

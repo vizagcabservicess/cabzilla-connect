@@ -25,7 +25,7 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
-import { Car, History, Home, User } from 'lucide-react';
+import { Car, Home, User } from 'lucide-react';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
