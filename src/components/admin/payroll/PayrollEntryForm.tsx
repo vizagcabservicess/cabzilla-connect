@@ -16,14 +16,6 @@ import { cn } from "@/lib/utils";
 import { CalendarIcon, PlusCircle, TrashIcon } from "lucide-react";
 import { format } from 'date-fns';
 
-// Fix the imports for components and type issues
-
-interface PayrollEntryFormProps {
-  onSubmit: (data: any) => void;
-  initialData?: any;
-  isLoading?: boolean;
-}
-
 // Define our allowance and deduction interfaces with required fields
 interface Allowance {
   type: string;
@@ -39,7 +31,21 @@ interface Deduction {
 
 // Form schema for payroll entry
 const formSchema = z.object({
-  // ... keep existing schema
+  employeeId: z.string().min(1, { message: "Employee ID is required" }),
+  payPeriod: z.enum(["daily", "weekly", "monthly"]),
+  payDate: z.date(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  basicSalary: z.string().or(z.number()),
+  hoursWorked: z.string().or(z.number()),
+  hourlyRate: z.string().or(z.number()),
+  overtimeHours: z.string().or(z.number()).optional(),
+  overtimeRate: z.string().or(z.number()).optional(),
+  bonus: z.string().or(z.number()).optional(),
+  tax: z.string().or(z.number()).optional(),
+  totalEarnings: z.string().or(z.number()).optional(),
+  totalDeductions: z.string().or(z.number()).optional(),
+  netPay: z.string().or(z.number()).optional(),
 });
 
 export function PayrollEntryForm({ onSubmit, initialData, isLoading = false }: PayrollEntryFormProps) {
@@ -62,7 +68,13 @@ export function PayrollEntryForm({ onSubmit, initialData, isLoading = false }: P
       basicSalary: 0,
       hoursWorked: 0,
       hourlyRate: 0,
-      // ... other default values
+      overtimeHours: 0,
+      overtimeRate: 0,
+      bonus: 0,
+      tax: 0,
+      totalEarnings: 0,
+      totalDeductions: 0,
+      netPay: 0,
     },
   });
   
@@ -247,6 +259,7 @@ export function PayrollEntryForm({ onSubmit, initialData, isLoading = false }: P
                     setNewAllowances(updatedAllowances);
                     calculateTotals();
                   }} 
+                  id={`includeAllowance-${index}`}
                 />
                 <Label htmlFor={`includeAllowance-${index}`} className="ml-0 mr-auto">Include</Label>
                 <Button 
@@ -310,6 +323,7 @@ export function PayrollEntryForm({ onSubmit, initialData, isLoading = false }: P
                     setNewDeductions(updatedDeductions);
                     calculateTotals();
                   }} 
+                  id={`includeDeduction-${index}`}
                 />
                 <Label htmlFor={`includeDeduction-${index}`} className="ml-0 mr-auto">Include</Label>
                 <Button 

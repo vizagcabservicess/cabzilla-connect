@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,8 @@ export function VehicleAssignment({ bookingId, onAssign }: VehicleAssignmentProp
       model: "Innova",
       year: 2023,
       vehicleType: "suv",
-      status: "Active"
+      status: "Active",
+      fuelType: "Petrol" // Added required field
     };
     onAssign(mockVehicle);
   };
@@ -34,7 +36,8 @@ export function VehicleAssignment({ bookingId, onAssign }: VehicleAssignmentProp
       model: "Swift",
       year: 2022,
       vehicleType: "sedan",
-      status: "Active"
+      status: "Active",
+      fuelType: "Diesel" // Added required field
     };
     onAssign(mockVehicle);
   };

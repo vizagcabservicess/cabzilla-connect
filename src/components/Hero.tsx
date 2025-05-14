@@ -12,11 +12,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TripMode, TripType, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabPicker } from '@/components/CabPicker';
 import { LocationSearchInput } from '@/components/LocationSearchInput';
-
-// Rest of imports...
 
 // Update trip form schema to accept all TripMode values
 const tripFormSchema = z.object({
@@ -232,16 +232,11 @@ const Hero = () => {
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <PopoverTrigger className="bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-md px-4 py-2">
-                            {field.value === 'one-way' ? 'One Way' :
-                              field.value === 'round-trip' ? 'Round Trip' :
-                                field.value === 'pickup' ? 'Pickup' :
-                                  field.value === 'drop' ? 'Drop' :
-                                    field.value === 'continued' ? 'Continued' :
-                                      'Select Trip Mode'}
-                          </PopoverTrigger>
+                          <SelectTrigger className="bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-md px-4 py-2">
+                            <SelectValue placeholder="Select Trip Mode" />
+                          </SelectTrigger>
                         </FormControl>
-                        <PopoverContent className="w-auto">
+                        <SelectContent className="w-auto">
                           <Tabs defaultValue="customer" className="w-[400px]">
                             <TabsList>
                               <TabsTrigger value="customer">Customer</TabsTrigger>
@@ -275,7 +270,7 @@ const Hero = () => {
                               </div>
                             </TabsContent>
                           </Tabs>
-                        </PopoverContent>
+                        </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>

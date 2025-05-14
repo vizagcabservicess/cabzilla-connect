@@ -1,41 +1,40 @@
 
 export interface Payment {
-  id: string | number;
-  bookingId: string | number;
-  bookingNumber: string;
-  customerName: string;
-  customerPhone?: string;
-  customerEmail?: string;
+  id: string;
+  bookingId: string;
   amount: number;
   paidAmount: number;
-  remainingAmount: number;
-  paymentStatus: PaymentStatus;
+  pendingAmount?: number;
+  status: PaymentStatus;
   paymentMethod?: PaymentMethod;
-  dueDate: string;
+  transactionId?: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  dueDate?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type PaymentStatus = 'paid' | 'pending' | 'partial' | 'cancelled';
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'other';
+export type PaymentStatus = 'paid' | 'pending' | 'partial' | 'refunded' | 'failed' | 'overdue';
 
-export interface PaymentSummary {
-  totalPaid: number;
-  totalPending: number;
-  totalOverdue: number;
-  countByStatus: {
-    paid: number;
-    pending: number;
-    partial: number;
-    cancelled: number;
-  };
-}
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'other';
 
 export interface PaymentFilterParams {
   status?: PaymentStatus;
   method?: PaymentMethod;
-  dateFrom?: string;
-  dateTo?: string;
+  fromDate?: string;
+  toDate?: string;
+  minAmount?: number;
+  maxAmount?: number;
   search?: string;
-  overdue?: boolean;
+}
+
+export interface PaymentSummary {
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalOverdue: number;
+  countByStatus: Record<PaymentStatus, number>;
 }

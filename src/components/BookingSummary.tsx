@@ -488,21 +488,25 @@ export const BookingSummary = ({
 
         newDriverAllowance = 250;
       } else if (tripType === 'local') {
-        const localFares = await getLocalFaresForVehicle(normalizeVehicleId(selectedCab.id));
-        console.log('BookingSummary: Retrieved local fares:', localFares);
+        try {
+          const localFares = await getLocalFaresForVehicle(normalizeVehicleId(selectedCab.id));
+          console.log('BookingSummary: Retrieved local fares:', localFares);
 
-        if (localFares.price8hrs80km > 0) {
-          newBaseFare = localFares.price8hrs80km;
-        } else if (selectedCab.localPackageFares?.price8hrs80km) {
-          newBaseFare = selectedCab.localPackageFares.price8hrs80km;
-        } else {
-          if (normalizeVehicleId(selectedCab.id).includes('sedan')) newBaseFare = 1500;
-          else if (normalizeVehicleId(selectedCab.id).includes('ertiga')) newBaseFare = 1800;
-          else if (normalizeVehicleId(selectedCab.id).includes('innova')) newBaseFare = 2200;
-          else newBaseFare = 1500;
+          if (localFares.price8hr80km > 0) {
+            newBaseFare = localFares.price8hr80km;
+          } else if (selectedCab.localPackageFares && selectedCab.localPackageFares.price8hrs80km) {
+            newBaseFare = selectedCab.localPackageFares.price8hrs80km;
+          } else {
+            if (normalizeVehicleId(selectedCab.id).includes('sedan')) newBaseFare = 1500;
+            else if (normalizeVehicleId(selectedCab.id).includes('ertiga')) newBaseFare = 1800;
+            else if (normalizeVehicleId(selectedCab.id).includes('innova')) newBaseFare = 2200;
+            else newBaseFare = 1500;
+          }
+
+          newDriverAllowance = 0;
+        } catch (error) {
+          console.error('Error calculating local fare:', error);
         }
-
-        newDriverAllowance = 0;
       }
 
       console.log('BookingSummary: Calculated fare details:', {
@@ -817,100 +821,3 @@ export const BookingSummary = ({
               <div className="text-left">
                 <p className="text-sm text-gray-500 text-left">DROP-OFF</p>
                 <p className="font-medium text-left">{dropLocation.address || dropLocation.name}</p>
-              </div>
-            </div>
-          )}
-
-          {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
-            <div className="flex items-start gap-2">
-              <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-gray-500">RETURN DATE</p>
-                <p className="font-medium">
-                  {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500 text-left">PICKUP DATE</p>
-              <p className="font-medium">
-                {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-b pb-4">
-          <div className="flex items-center gap-2">
-            <Car className="h-5 w-5 text-blue-500" />
-            <p className="font-medium">{selectedCab.name}</p>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-500" />
-            <p className="text-sm text-gray-500">{selectedCab.capacity} persons</p>
-          </div>
-        </div>
-
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <p className="text-gray-600">Base fare</p>
-            <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
-          </div>
-
-          {tripType !== 'airport' && breakdown.driverAllowance > 0 && (
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-gray-600">Driver allowance</p>
-              <p className="font-medium">{formatPrice(breakdown.driverAllowance)}</p>
-            </div>
-          )}
-
-          {breakdown.nightCharges > 0 && (
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-gray-600">Night charges</p>
-              <p>{formatPrice(breakdown.nightCharges)}</p>
-            </div>
-          )}
-
-          {breakdown.extraDistanceFare > 0 && (
-            <div className="flex justify-between items-center mb-2 group">
-              <div className="flex items-center gap-1">
-                <p className="text-gray-600">Extra distance charges</p>
-                <div className="relative">
-                  <Info className="h-4 w-4 text-blue-500 cursor-help" />
-                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 invisible group-hover:visible transition-opacity z-10">
-                    {Math.round(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1))} km × ₹{breakdown.extraKmCharge || 0}/km
-                  </div>
-                </div>
-              </div>
-              <p>{formatPrice(breakdown.extraDistanceFare)}</p>
-            </div>
-          )}
-
-          {tripType === 'airport' && breakdown.airportFee > 0 && (
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-gray-600">Airport fee</p>
-              <p>{formatPrice(breakdown.airportFee)}</p>
-            </div>
-          )}
-
-          <Separator className="my-3" />
-
-          <div className="flex justify-between items-center">
-            <p className="font-semibold">Total Price</p>
-            <p className="font-bold text-lg">{formatPrice(finalTotal)}</p>
-          </div>
-
-          {isLoading && (
-            <div className="mt-3 text-center">
-              <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
