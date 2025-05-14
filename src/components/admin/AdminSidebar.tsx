@@ -17,8 +17,7 @@ import {
   Book,
   CircleDollarSign,
   Banknote,
-  CreditCard,
-  CalendarPlus
+  CreditCard
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -32,7 +31,6 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
     { id: 'bookings', label: 'Bookings', icon: <CalendarDays size={20} />, path: '/admin/bookings' },
-    { id: 'create-booking', label: 'Create Booking', icon: <CalendarPlus size={20} />, path: '/admin/create-booking' },
     { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin/vehicles' },
     { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin/fares' },
     { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },

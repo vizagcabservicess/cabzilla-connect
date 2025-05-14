@@ -34,7 +34,7 @@ export function AddFleetVehicleDialog({
   const form = useForm<Partial<FleetVehicle>>({
     defaultValues: {
       vehicleNumber: '',
-      vehicleName: '',
+      name: '',
       model: '',
       make: '',
       year: new Date().getFullYear(),
@@ -54,7 +54,7 @@ export function AddFleetVehicleDialog({
     if (open) {
       form.reset({
         vehicleNumber: '',
-        vehicleName: '',
+        name: '',
         model: '',
         make: '',
         year: new Date().getFullYear(),
@@ -89,7 +89,7 @@ export function AddFleetVehicleDialog({
       // Create a complete FleetVehicle object with odometer readings
       const vehicleToSubmit: Partial<FleetVehicle> = {
         vehicleNumber: data.vehicleNumber || '',
-        vehicleName: data.vehicleName || data.model || '',
+        name: data.name || data.model || '',
         model: data.model || '',
         make: data.make || '',
         year: data.year || new Date().getFullYear(),
@@ -153,7 +153,7 @@ export function AddFleetVehicleDialog({
               
               <FormField
                 control={form.control}
-                name="vehicleName"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Display Name</FormLabel>

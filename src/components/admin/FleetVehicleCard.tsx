@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,7 @@ export function FleetVehicleCard({ vehicle, onEdit, onView }: FleetVehicleCardPr
             </div>
             <div>
               <p className="text-xs text-gray-500">Capacity</p>
-              <p className="font-medium">{vehicle.capacity || 'N/A'} passengers</p>
+              <p className="font-medium">{vehicle.capacity} passengers</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Vehicle Type</p>
@@ -54,7 +55,7 @@ export function FleetVehicleCard({ vehicle, onEdit, onView }: FleetVehicleCardPr
             </div>
             <div>
               <p className="text-xs text-gray-500">Luggage</p>
-              <p className="font-medium">{vehicle.luggageCapacity || 'N/A'} units</p>
+              <p className="font-medium">{vehicle.luggageCapacity} units</p>
             </div>
           </div>
           
@@ -63,7 +64,7 @@ export function FleetVehicleCard({ vehicle, onEdit, onView }: FleetVehicleCardPr
             nextServiceDue={vehicle.nextServiceDue}
             lastServiceOdometer={vehicle.lastServiceOdometer}
             nextServiceOdometer={vehicle.nextServiceOdometer}
-            currentOdometer={vehicle.currentOdometer || undefined}
+            currentOdometer={vehicle.currentOdometer}
           />
         </div>
         

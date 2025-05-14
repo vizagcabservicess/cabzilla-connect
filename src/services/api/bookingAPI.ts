@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { BookingRequest, BookingStatus, Booking } from '@/types/api';
@@ -120,23 +119,12 @@ export const bookingAPI = {
    */
   getBookingById: async (id: number | string) => {
     try {
-      // First try direct path
-      try {
-        const response = await axios.get(`/api/booking-details.php?id=${id}`, {
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
-        });
-        return response.data;
-      } catch (directError) {
-        // Try with API_BASE_URL
-        const response = await axios.get(`${API_BASE_URL}/api/booking-details.php?id=${id}`, {
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
-        });
-        return response.data;
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/booking-details.php?id=${id}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
+      return response.data;
     } catch (error) {
       console.error(`Error fetching booking with id ${id}:`, error);
       throw error;
@@ -148,29 +136,12 @@ export const bookingAPI = {
    */
   createBooking: async (bookingData: BookingRequest) => {
     try {
-      console.log('Creating booking with data:', bookingData);
-      
-      // First try direct path
-      try {
-        const response = await axios.post(`/api/book.php`, bookingData, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        console.log('Booking created successfully (direct path):', response.data);
-        return response.data;
-      } catch (directError) {
-        console.warn('Direct path booking creation failed:', directError);
-        
-        // Try with API_BASE_URL
-        const response = await axios.post(`${API_BASE_URL}/api/book.php`, bookingData, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        console.log('Booking created successfully (with API_BASE_URL):', response.data);
-        return response.data;
-      }
+      const response = await axios.post(`${API_BASE_URL}/api/bookings.php`, bookingData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
     } catch (error) {
       console.error('Error creating booking:', error);
       throw error;
@@ -356,26 +327,6 @@ export const bookingAPI = {
     } catch (error) {
       console.error('Error fetching pending bookings:', error);
       throw error; // Let the calling code handle the error
-    }
-  },
-
-  /**
-   * Send booking confirmation email
-   */
-  sendBookingConfirmationEmail: async (bookingId: number | string) => {
-    try {
-      // First try direct path
-      try {
-        const response = await axios.post(`/api/send-booking-confirmation.php?booking_id=${bookingId}`);
-        return response.data;
-      } catch (directError) {
-        // Try with API_BASE_URL
-        const response = await axios.post(`${API_BASE_URL}/api/send-booking-confirmation.php?booking_id=${bookingId}`);
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Error sending booking confirmation email:', error);
-      throw error;
     }
   }
 };

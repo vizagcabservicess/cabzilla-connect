@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, Database, RefreshCw, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
-import { CabType, LocalFare } from '@/types/cab';
+import { CabType } from '@/types/cab';
 import { fareService } from '@/services/fareService';
 import { hourlyPackages } from '@/lib/packageData';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
@@ -313,10 +314,9 @@ export function LocalFareManagement() {
         setError(new Error(errorMessage || 'Failed to update local fares'));
         toast.error(`Failed to update local fares: ${errorMessage || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error("Error updating local fares:", error);
-      toast.error(`Failed to update fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setError(error instanceof Error ? error : new Error('Failed to update fares'));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to update local fares'));
+      toast.error(`Failed to update local fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
       

@@ -1,33 +1,29 @@
 
-// Create or update the tripTypes.ts file to include the required types
-export type TripMode = 'one-way' | 'round-trip' | 'pickup' | 'drop' | 'continued';
-export type TripType = 'local' | 'outstation' | 'airport' | 'tour';
+export type TripType = 'outstation' | 'local' | 'airport' | 'tour' | 'admin';
+export type TripMode = 'one-way' | 'round-trip';
+export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 
-// Add the missing functions that are imported elsewhere
-export const isAdminTripType = (tripType: string): boolean => {
-  return ['admin', 'fleet', 'maintenance', 'fuel'].includes(tripType);
-};
-
-export const isTourTripType = (tripType: string): boolean => {
+// Helper functions for trip type validation
+export const isTourTripType = (tripType: TripType): boolean => {
   return tripType === 'tour';
 };
 
-export const isRegularTripType = (tripType: string): boolean => {
-  return ['local', 'outstation', 'airport'].includes(tripType);
+export const isAdminTripType = (tripType: TripType): boolean => {
+  return tripType === 'admin';
 };
 
-export const ensureCustomerTripType = (tripType: string): TripType => {
-  if (['local', 'outstation', 'airport', 'tour'].includes(tripType)) {
-    return tripType as TripType;
-  }
-  return 'local';
+export const isRegularTripType = (tripType: TripType): boolean => {
+  return tripType === 'outstation' || tripType === 'local' || tripType === 'airport';
 };
 
-// These functions are likely imported elsewhere but not used in the error list
-export const isCustomerTripType = (tripType: string): boolean => {
-  return ['local', 'outstation', 'airport', 'tour'].includes(tripType);
+// Helper to check if tripType is a customer-facing type (not admin)
+export const isCustomerTripType = (tripType: TripType): boolean => {
+  return tripType === 'outstation' || tripType === 'local' || tripType === 'airport' || tripType === 'tour';
 };
 
-export const isAdminTripType2 = (tripType: string): boolean => {
-  return ['admin', 'fleet', 'maintenance', 'fuel'].includes(tripType);
+// Function to ensure trip type is customer-facing for UI components
+export const ensureCustomerTripType = (tripType: TripType): 'outstation' | 'local' | 'airport' | 'tour' => {
+  return isCustomerTripType(tripType) 
+    ? tripType as 'outstation' | 'local' | 'airport' | 'tour'
+    : 'outstation'; // Default to outstation if admin type is passed
 };

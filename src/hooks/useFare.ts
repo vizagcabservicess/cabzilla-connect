@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -363,14 +364,8 @@ export function useFare(
                   basePrice: fare,
                   packageLabel: packageType,
                   extraDistanceFare: 0,
-                  extraKmCharge: 
-                    localFares.priceExtraKm || 
-                    localFares.extraKmRate || 
-                    localFares.extra_km_charge || 0,
-                  extraHourCharge: 
-                    localFares.priceExtraHour || 
-                    localFares.extraHourRate || 
-                    localFares.extra_hour_charge || 0
+                  extraKmCharge: localFares.priceExtraKm || localFares.extra_km_charge || 0,
+                  extraHourCharge: localFares.priceExtraHour || localFares.extra_hour_charge || 0
                 };
                 
                 localStorage.removeItem(fareKey);
@@ -432,9 +427,7 @@ export function useFare(
               image: "/cars/sedan.png",
               amenities: ["AC"],
               description: "Default vehicle",
-              ac: true,
-              basePrice: 3000,   // Add required fields
-              pricePerKm: 14
+              ac: true
             };
             
             const params = {

@@ -488,25 +488,21 @@ export const BookingSummary = ({
 
         newDriverAllowance = 250;
       } else if (tripType === 'local') {
-        try {
-          const localFares = await getLocalFaresForVehicle(normalizeVehicleId(selectedCab.id));
-          console.log('BookingSummary: Retrieved local fares:', localFares);
+        const localFares = await getLocalFaresForVehicle(normalizeVehicleId(selectedCab.id));
+        console.log('BookingSummary: Retrieved local fares:', localFares);
 
-          if (localFares.price8hr80km > 0) {
-            newBaseFare = localFares.price8hr80km;
-          } else if (selectedCab.localPackageFares && selectedCab.localPackageFares.price8hrs80km) {
-            newBaseFare = selectedCab.localPackageFares.price8hrs80km;
-          } else {
-            if (normalizeVehicleId(selectedCab.id).includes('sedan')) newBaseFare = 1500;
-            else if (normalizeVehicleId(selectedCab.id).includes('ertiga')) newBaseFare = 1800;
-            else if (normalizeVehicleId(selectedCab.id).includes('innova')) newBaseFare = 2200;
-            else newBaseFare = 1500;
-          }
-
-          newDriverAllowance = 0;
-        } catch (error) {
-          console.error('Error calculating local fare:', error);
+        if (localFares.price8hrs80km > 0) {
+          newBaseFare = localFares.price8hrs80km;
+        } else if (selectedCab.localPackageFares?.price8hrs80km) {
+          newBaseFare = selectedCab.localPackageFares.price8hrs80km;
+        } else {
+          if (normalizeVehicleId(selectedCab.id).includes('sedan')) newBaseFare = 1500;
+          else if (normalizeVehicleId(selectedCab.id).includes('ertiga')) newBaseFare = 1800;
+          else if (normalizeVehicleId(selectedCab.id).includes('innova')) newBaseFare = 2200;
+          else newBaseFare = 1500;
         }
+
+        newDriverAllowance = 0;
       }
 
       console.log('BookingSummary: Calculated fare details:', {
@@ -825,133 +821,94 @@ export const BookingSummary = ({
             </div>
           )}
 
-          <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">PICKUP DATE & TIME</p>
-              <p className="font-medium text-left">
-                {pickupDate ? format(pickupDate, 'dd MMM yyyy, hh:mm a') : 'Not Selected'}
-              </p>
-            </div>
-          </div>
-
-          {returnDate && (
-            <div className="flex items-start gap-2 mb-3">
+          {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
+            <div className="flex items-start gap-2">
               <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="text-left">
-                <p className="text-sm text-gray-500 text-left">RETURN DATE & TIME</p>
-                <p className="font-medium text-left">
-                  {format(returnDate, 'dd MMM yyyy, hh:mm a')}
+              <div>
+                <p className="text-sm text-gray-500">RETURN DATE</p>
+                <p className="font-medium">
+                  {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
                 </p>
               </div>
             </div>
           )}
+
+          <div className="flex items-start gap-2 mb-3">
+            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm text-gray-500 text-left">PICKUP DATE</p>
+              <p className="font-medium">
+                {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="border-b pb-4">
-          <div className="flex items-start gap-2 mb-3">
-            <Car className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">VEHICLE</p>
-              <p className="font-medium text-left">{selectedCab.name}</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Car className="h-5 w-5 text-blue-500" />
+            <p className="font-medium">{selectedCab.name}</p>
           </div>
-
-          <div className="flex items-start gap-2 mb-3">
-            <User className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">CAPACITY</p>
-              <p className="font-medium text-left">{selectedCab.capacity} Persons</p>
-            </div>
+          <div className="mt-2 flex items-center gap-2">
+            <User className="h-4 w-4 text-gray-500" />
+            <p className="text-sm text-gray-500">{selectedCab.capacity} persons</p>
           </div>
         </div>
 
-        {showDetailsLoading ? (
-          <div className="py-2 text-center">
-            <div className="inline-block animate-spin rounded-full border-t-2 border-b-2 border-blue-500 h-5 w-5 mr-2"></div>
-            <span className="text-sm text-gray-500">Calculating fare details...</span>
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-gray-600">Base fare</p>
+            <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {tripType === 'local' && (
-              <div>
-                <p className="text-gray-700 flex items-center justify-between">
-                  <span className="text-sm">Package {hourlyPackage}</span>
-                  <span className="font-medium">{formatPrice(baseFare || finalTotal || 0)}</span>
-                </p>
+
+          {tripType !== 'airport' && breakdown.driverAllowance > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Driver allowance</p>
+              <p className="font-medium">{formatPrice(breakdown.driverAllowance)}</p>
+            </div>
+          )}
+
+          {breakdown.nightCharges > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Night charges</p>
+              <p>{formatPrice(breakdown.nightCharges)}</p>
+            </div>
+          )}
+
+          {breakdown.extraDistanceFare > 0 && (
+            <div className="flex justify-between items-center mb-2 group">
+              <div className="flex items-center gap-1">
+                <p className="text-gray-600">Extra distance charges</p>
+                <div className="relative">
+                  <Info className="h-4 w-4 text-blue-500 cursor-help" />
+                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 invisible group-hover:visible transition-opacity z-10">
+                    {Math.round(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1))} km × ₹{breakdown.extraKmCharge || 0}/km
+                  </div>
+                </div>
               </div>
-            )}
+              <p>{formatPrice(breakdown.extraDistanceFare)}</p>
+            </div>
+          )}
 
-            {tripType === 'outstation' && baseFare > 0 && (
-              <div className="space-y-2">
-                <p className="text-gray-700 flex items-center justify-between">
-                  <span className="text-sm">Base fare</span>
-                  <span className="font-medium">{formatPrice(baseFare)}</span>
-                </p>
-                {extraDistance > 0 && (
-                  <p className="text-gray-700 flex items-center justify-between">
-                    <span className="text-sm">Extra distance ({extraDistance} km @ ₹{perKmRate}/km)</span>
-                    <span className="font-medium">{formatPrice(extraDistanceFare)}</span>
-                  </p>
-                )}
-                <p className="text-gray-700 flex items-center justify-between">
-                  <span className="text-sm">Driver allowance</span>
-                  <span className="font-medium">{formatPrice(driverAllowance)}</span>
-                </p>
-                {nightCharges > 0 && (
-                  <p className="text-gray-700 flex items-center justify-between">
-                    <span className="text-sm">Night charges</span>
-                    <span className="font-medium">{formatPrice(nightCharges)}</span>
-                  </p>
-                )}
-                <p className="text-gray-700 flex items-center justify-between italic text-xs">
-                  <span>Total trip distance {effectiveDistance} km</span>
-                </p>
-              </div>
-            )}
+          {tripType === 'airport' && breakdown.airportFee > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Airport fee</p>
+              <p>{formatPrice(breakdown.airportFee)}</p>
+            </div>
+          )}
 
-            {tripType === 'airport' && baseFare > 0 && (
-              <div className="space-y-2">
-                <p className="text-gray-700 flex items-center justify-between">
-                  <span className="text-sm">Base fare</span>
-                  <span className="font-medium">{formatPrice(baseFare)}</span>
-                </p>
-                {extraDistance > 0 && (
-                  <p className="text-gray-700 flex items-center justify-between">
-                    <span className="text-sm">Extra distance ({extraDistance} km @ ₹{perKmRate}/km)</span>
-                    <span className="font-medium">{formatPrice(extraDistanceFare)}</span>
-                  </p>
-                )}
-                <p className="text-gray-700 flex items-center justify-between">
-                  <span className="text-sm">Driver allowance</span>
-                  <span className="font-medium">{formatPrice(driverAllowance)}</span>
-                </p>
-                {nightCharges > 0 && (
-                  <p className="text-gray-700 flex items-center justify-between">
-                    <span className="text-sm">Night charges</span>
-                    <span className="font-medium">{formatPrice(nightCharges)}</span>
-                  </p>
-                )}
-              </div>
-            )}
+          <Separator className="my-3" />
 
-            <Separator className="my-2" />
-
-            <p className="font-bold text-xl flex items-center justify-between py-1">
-              <span>Total</span>
-              <span>{formatPrice(calculatedFare || finalTotal || 0)}</span>
-            </p>
+          <div className="flex justify-between items-center">
+            <p className="font-semibold">Total Price</p>
+            <p className="font-bold text-lg">{formatPrice(finalTotal)}</p>
           </div>
-        )}
-        <div className="text-xs text-gray-500 mt-4">
-          <div className="flex items-center">
-            <Info className="h-3 w-3 mr-1" />
-            <span>Price includes all taxes</span>
-          </div>
-          <div className="flex items-center mt-1">
-            <Info className="h-3 w-3 mr-1" />
-            <span>Toll and parking charges are extra</span>
-          </div>
+
+          {isLoading && (
+            <div className="mt-3 text-center">
+              <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
