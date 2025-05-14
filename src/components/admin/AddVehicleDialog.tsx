@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -113,7 +112,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
           // First create the fleet vehicle
           const fleetVehicleData: Partial<FleetVehicle> = {
             vehicleNumber: formData.vehicleNumber,
-            name: formData.name,
+            vehicleName: formData.name,
             model: formData.model || formData.name,
             make: formData.make || '',
             year: formData.year || new Date().getFullYear(),
@@ -126,7 +125,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
             capacity: formData.capacity,
             luggageCapacity: formData.luggageCapacity,
             isActive: formData.isActive || true,
-            currentOdometer: formData.currentOdometer
+            currentOdometer: parseInt(formData.currentOdometer?.toString() || '0')
           };
 
           await fleetAPI.addVehicle(fleetVehicleData);

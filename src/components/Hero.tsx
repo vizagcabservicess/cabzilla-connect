@@ -338,7 +338,7 @@ export function Hero() {
 
   let totalPrice = calculatePrice();
 
-  async function handleGuestDetailsSubmit(guestDetails: any) {
+  const handleSubmit = async (guestDetails: any) => {
     try {
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);
@@ -351,7 +351,7 @@ export function Hero() {
         cabType: selectedCab?.name || '',
         distance: distance,
         tripType: tripType,
-        tripMode: tripMode,
+        tripMode: (tripMode === 'pickup' || tripMode === 'drop' || tripMode === 'continued' ? 'one-way' : tripMode) as 'one-way' | 'round-trip', // Type casting to fix error
         totalAmount: totalPrice,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
@@ -618,7 +618,7 @@ export function Hero() {
                       selectedCab={selectedCab!} 
                       distance={distance} 
                       tripType={tripType} 
-                      tripMode={tripMode === 'pickup' ? 'one-way' : tripMode} // Fix for tripMode type issue
+                      tripMode={(tripMode === 'pickup' || tripMode === 'drop' || tripMode === 'continued' ? 'one-way' : tripMode) as 'one-way' | 'round-trip'} // Type casting to fix error
                       totalPrice={totalPrice}
                       hourlyPackage={hourlyPackage}
                     />
@@ -644,7 +644,7 @@ export function Hero() {
                 </div>
                 
                 <GuestDetailsForm 
-                  onSubmit={handleGuestDetailsSubmit}
+                  onSubmit={handleSubmit}
                   totalPrice={totalPrice}
                   onBack={handleBackToSelection}
                 />
@@ -661,7 +661,7 @@ export function Hero() {
                 distance={distance}
                 totalPrice={totalPrice}
                 tripType={tripType}
-                tripMode={tripMode === 'pickup' ? 'one-way' : tripMode} // Fix for tripMode type issue
+                tripMode={(tripMode === 'pickup' || tripMode === 'drop' || tripMode === 'continued' ? 'one-way' : tripMode) as 'one-way' | 'round-trip'} // Type casting to fix error
                 hourlyPackage={hourlyPackage}
               />
             </div>
@@ -679,7 +679,7 @@ export function Hero() {
           <span className="bottom-nav-label">Cabs</span>
         </button>
         <button className="bottom-nav-item">
-          <Clock size={20} /> {/* Changed from History to Clock */}
+          <Clock size={20} /> {/* Using Clock component instead of History */}
           <span className="bottom-nav-label">History</span>
         </button>
         <button className="bottom-nav-item">

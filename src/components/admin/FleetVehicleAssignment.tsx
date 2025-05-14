@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,7 +32,7 @@ export function FleetVehicleAssignment({
       try {
         setLoading(true);
         setError(null);
-        const response = await vehicleAPI.getFleetVehicles();
+        const response = await vehicleAPI.getVehicles(); // Using getVehicles instead of getFleetVehicles
         
         // Filter for active vehicles that match the booking's cab type
         const availableVehicles = response.filter((vehicle: FleetVehicle) => 

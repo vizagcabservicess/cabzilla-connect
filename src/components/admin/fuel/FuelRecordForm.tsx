@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,14 +68,14 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
       if (editingRecord) {
         // Populate form with editing record data
         setVehicleId(editingRecord.vehicleId);
-        setFillDate(editingRecord.fillDate ? format(new Date(editingRecord.fillDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
-        setQuantity(editingRecord.quantity.toString());
-        setPricePerUnit(editingRecord.pricePerUnit.toString());
-        setTotalCost(editingRecord.totalCost.toString());
-        setOdometer(editingRecord.odometer.toString());
-        setFuelStation(editingRecord.fuelStation || '');
+        setFillDate(editingRecord.refillDate ? format(new Date(editingRecord.refillDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
+        setQuantity(editingRecord.liters?.toString() || editingRecord.quantity?.toString() || '');
+        setPricePerUnit(editingRecord.pricePerLiter?.toString() || editingRecord.pricePerUnit?.toString() || '');
+        setTotalCost(editingRecord.totalAmount?.toString() || editingRecord.totalCost?.toString() || '');
+        setOdometer(editingRecord.odometer?.toString() || '');
+        setFuelStation(editingRecord.fuelStation || editingRecord.location || '');
         // Cast the string to the specific type to avoid TypeScript errors
-        setFuelType(editingRecord.fuelType as 'Petrol' | 'Diesel' | 'CNG' | 'Electric');
+        setFuelType(editingRecord.fuelType as "Diesel" | "Petrol" | "CNG" | "Electric");
         setPaymentMethod(editingRecord.paymentMethod as 'Cash' | 'Card' | 'Company' | 'Customer');
         if (editingRecord.paymentDetails) {
           setBankName(editingRecord.paymentDetails.bankName || '');
@@ -212,14 +211,13 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
       
       const fuelRecord: Partial<FuelRecord> = {
         vehicleId,
-        fillDate,
-        quantity: parseFloat(quantity),
-        pricePerUnit: parseFloat(pricePerUnit),
-        totalCost: parseFloat(totalCost),
+        refillDate: fillDate,
+        liters: parseFloat(quantity),
+        pricePerLiter: parseFloat(pricePerUnit),
+        totalAmount: parseFloat(totalCost),
         odometer: parseInt(odometer),
-        fuelStation,
-        fuelType,
-        paymentMethod,
+        location: fuelStation,
+        fuelType: fuelType as "Diesel" | "Petrol" | "CNG" | "Electric",
         notes: notes.trim() || undefined,
       };
 
@@ -230,6 +228,7 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
 
       // Add payment details if using card
       if (paymentMethod === 'Card' && bankName) {
+        fuelRecord.paymentMethod = 'Card';
         fuelRecord.paymentDetails = {
           bankName,
           lastFourDigits: lastFourDigits.substring(0, 4)
@@ -332,7 +331,7 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
               <SelectContent>
                 {vehicles.map((vehicle) => (
                   <SelectItem key={vehicle.id} value={vehicle.id}>
-                    {vehicle.vehicleNumber} - {vehicle.name} {vehicle.model}
+                    {vehicle.vehicleNumber} - {vehicle.model} {vehicle.make}
                   </SelectItem>
                 ))}
               </SelectContent>

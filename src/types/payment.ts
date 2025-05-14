@@ -1,3 +1,21 @@
+
+export type PaymentStatus = 
+  | 'paid' 
+  | 'partially_paid' 
+  | 'pending' 
+  | 'overdue' 
+  | 'cancelled' 
+  | 'refunded';
+
+export type PaymentMethod = 
+  | 'cash'
+  | 'card'
+  | 'bank_transfer'
+  | 'online'
+  | 'upi'
+  | 'wallet'
+  | 'other';
+
 export interface Payment {
   id: string;
   bookingId: string;
@@ -6,26 +24,32 @@ export interface Payment {
   paidAmount?: number;
   remainingAmount?: number;
   paymentDate: string;
-  paymentMethod?: string;
-  paymentStatus?: string;
+  paymentMethod?: PaymentMethod;
+  paymentStatus?: PaymentStatus;
   transactionId?: string;
-  receiptUrl?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface PaymentSummary {
-  totalPayments: number;
-  totalAmount: number;
-  paidAmount: number;
-  pendingAmount: number;
+  customerName?: string;
+  contactNumber?: string;
 }
 
 export interface PaymentFilterParams {
-  startDate?: string;
-  endDate?: string;
-  bookingId?: string;
-  status?: string;
-  method?: string;
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  search?: string; // Added to fix error
+}
+
+export interface PaymentSummary {
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalOverdue: number;
+  countByStatus: {
+    [key in PaymentStatus]?: number;
+  };
 }
