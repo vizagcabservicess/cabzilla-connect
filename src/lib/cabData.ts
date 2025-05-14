@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
@@ -47,6 +46,7 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
       capacity: Number(vehicle.capacity) || 4,
       luggageCapacity: Number(vehicle.luggageCapacity) || 2,
       price: Number(vehicle.price || vehicle.basePrice) || 0,
+      basePrice: Number(vehicle.basePrice || vehicle.price) || 0, // Ensure basePrice exists
       pricePerKm: Number(vehicle.pricePerKm) || 0,
       image: vehicle.image || '/cars/sedan.png',
       amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
@@ -65,8 +65,8 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
     
     // Filter out vehicles with missing critical fields
     const validVehicles = processedVehicles.filter(v => 
-      v.id && v.name && (v.price > 0 || v.pricePerKm > 0)
-    );
+      v.id && v.name && (v.price > 0 || v.pricePerKm > 0 || v.basePrice > 0)
+    ) as CabType[];
     
     // Store in sessionStorage for later use
     if (validVehicles.length > 0) {
@@ -86,13 +86,14 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
     console.error('Error loading cab types:', error);
     
     // Return default cabs as fallback
-    const defaultCabs = [
+    const defaultCabs: CabType[] = [
       {
         id: 'sedan',
         name: 'Sedan',
         capacity: 4,
         luggageCapacity: 2,
         price: 4200,
+        basePrice: 4200, // Ensure basePrice exists
         pricePerKm: 14,
         image: '/cars/sedan.png',
         amenities: ['AC', 'Bottle Water', 'Music System'],
@@ -108,6 +109,7 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
         capacity: 6,
         luggageCapacity: 3,
         price: 5400,
+        basePrice: 5400, // Ensure basePrice exists
         pricePerKm: 18,
         image: '/cars/ertiga.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -123,6 +125,7 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
         capacity: 7,
         luggageCapacity: 4,
         price: 6000,
+        basePrice: 6000, // Ensure basePrice exists
         pricePerKm: 20,
         image: '/cars/innova.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
@@ -154,6 +157,7 @@ export const cabTypes: CabType[] = [
     capacity: 4,
     luggageCapacity: 2,
     price: 4200,
+    basePrice: 4200, // Ensure basePrice exists
     pricePerKm: 14,
     image: '/cars/sedan.png',
     amenities: ['AC', 'Bottle Water', 'Music System'],
@@ -169,6 +173,7 @@ export const cabTypes: CabType[] = [
     capacity: 6,
     luggageCapacity: 3,
     price: 5400,
+    basePrice: 5400, // Ensure basePrice exists
     pricePerKm: 18,
     image: '/cars/ertiga.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -184,6 +189,7 @@ export const cabTypes: CabType[] = [
     capacity: 7,
     luggageCapacity: 4,
     price: 6000,
+    basePrice: 6000, // Ensure basePrice exists
     pricePerKm: 20,
     image: '/cars/innova.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
@@ -247,6 +253,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggageCapacity) || 2,
           price: Number(vehicle.price || vehicle.basePrice) || 0,
+          basePrice: Number(vehicle.basePrice || vehicle.price) || 0, // Ensure basePrice exists
           pricePerKm: Number(vehicle.pricePerKm) || 0,
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
@@ -307,6 +314,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggage_capacity) || 2,
           price: Number(vehicle.price || vehicle.base_price) || 0,
+          basePrice: Number(vehicle.base_price || vehicle.price) || 0, // Ensure basePrice exists
           pricePerKm: Number(vehicle.price_per_km) || 0,
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
@@ -365,6 +373,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggageCapacity) || 2,
           price: Number(vehicle.price || vehicle.basePrice) || 0,
+          basePrice: Number(vehicle.basePrice || vehicle.price) || 0, // Ensure basePrice exists
           pricePerKm: Number(vehicle.pricePerKm) || 0,
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
@@ -406,6 +415,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 4,
         luggageCapacity: 2,
         price: 4200,
+        basePrice: 4200, // Ensure basePrice exists
         pricePerKm: 14,
         image: '/cars/sedan.png',
         amenities: ['AC', 'Bottle Water', 'Music System'],
@@ -421,6 +431,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 6,
         luggageCapacity: 3,
         price: 5400,
+        basePrice: 5400, // Ensure basePrice exists
         pricePerKm: 18,
         image: '/cars/ertiga.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -436,6 +447,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 7,
         luggageCapacity: 4,
         price: 6000,
+        basePrice: 6000, // Ensure basePrice exists
         pricePerKm: 20,
         image: '/cars/innova.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
@@ -467,6 +479,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 4,
         luggageCapacity: 2,
         price: 4200,
+        basePrice: 4200, // Ensure basePrice exists
         pricePerKm: 14,
         image: '/cars/sedan.png',
         amenities: ['AC', 'Bottle Water', 'Music System'],
@@ -482,6 +495,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 6,
         luggageCapacity: 3,
         price: 5400,
+        basePrice: 5400, // Ensure basePrice exists
         pricePerKm: 18,
         image: '/cars/ertiga.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -497,6 +511,7 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
         capacity: 7,
         luggageCapacity: 4,
         price: 6000,
+        basePrice: 6000, // Ensure basePrice exists
         pricePerKm: 20,
         image: '/cars/innova.png',
         amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],

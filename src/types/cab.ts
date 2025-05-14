@@ -2,35 +2,28 @@
 export interface CabType {
   id: string;
   name: string;
-  description: string;
-  image: string;
   capacity: number;
   luggageCapacity: number;
   basePrice: number;
+  price?: number;  // Legacy support
   pricePerKm: number;
+  image: string;
   amenities: string[];
+  description: string;
   ac: boolean;
-  price?: number;
-  driverAllowance?: number;
   nightHaltCharge?: number;
+  driverAllowance?: number;
   isActive?: boolean;
   vehicleId?: string;
-  localPackageFares?: {
-    price8hrs80km?: number;
-  };
-}
-
-export interface HourlyPackage {
-  id: string;
-  name: string;
-  hours: number;
-  kms: number; 
-  basePrice: number;
+  outstationFares?: OutstationFare;
+  localPackageFares?: LocalPackageFare[];
+  airportFares?: AirportFare;
 }
 
 export interface FleetVehicle {
   id: string;
   vehicleNumber: string;
+  vehicleName?: string;
   make: string;
   model: string;
   year: number;
@@ -40,83 +33,66 @@ export interface FleetVehicle {
   lastServiceOdometer?: number;
   nextServiceDue?: string;
   nextServiceOdometer?: number;
-  fuelType?: string;
-  fuelEfficiency?: number;
-  purchaseDate?: string;
-  purchasePrice?: number;
+  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
+  registration?: string;
+  insurance?: string;
   insuranceExpiry?: string;
-  registrationExpiry?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  vehicleName?: string; // Added for backward compatibility
-  // Adding properties used in components but missing from the interface
+  permit?: string;
+  permitExpiry?: string;
+  pollution?: string;
+  pollutionExpiry?: string;
+  currentOdometer?: number;
   capacity?: number;
   luggageCapacity?: number;
   isActive?: boolean;
-  currentOdometer?: number;
-  cabTypeId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface FuelPrice {
+export interface HourlyPackage {
   id: string;
-  fuelType: "Diesel" | "Petrol" | "CNG" | "Electric";  // Added Electric to fix error
-  price: number;
-  location: string;
-  effectiveDate: string;
-  date?: string; // Added for compatibility
-  createdAt: string;
-  updatedAt: string;
+  name: string;
+  hours: number;
+  kms: number;
+  basePrice?: number;  // Added basePrice for compatibility
 }
 
-export interface FuelRecord {
-  id: string;
+export interface LocalFare {
   vehicleId: string;
-  refillDate: string;
-  fillDate?: string; // Added for backward compatibility
-  fuelType: "Diesel" | "Petrol" | "CNG" | "Electric";
-  liters: number;
-  quantity?: number; // Added for backward compatibility
-  pricePerLiter: number;
-  pricePerUnit?: number; // Added for backward compatibility
-  totalAmount: number;
-  totalCost?: number; // Added for backward compatibility
-  odometer: number;
-  location?: string;
-  notes?: string;
-  fuelStation?: string; // Added for backward compatibility
-  createdAt: string;
-  updatedAt: string;
-  mileage?: number;
-  paymentMethod?: 'Cash' | 'Card' | 'Company' | 'Customer';
-  paymentDetails?: {
-    bankName?: string;
-    lastFourDigits?: string;
-  };
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+  // Legacy field names compatibility
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  extra_km_charge?: number;
+  extra_hour_charge?: number;
 }
 
 export interface LocalPackageFare {
-  id: string;
-  packageId: string;
-  price: number;
-  price8hrs80km?: number;
+  vehicleId: string;
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
 }
 
 export interface OutstationFare {
-  id: string;
   vehicleId: string;
-  pricePerKm: number;
   basePrice: number;
+  pricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
   driverAllowance: number;
-  roundTripPricePerKm?: number;
-  roundTripBasePrice?: number;
-  nightHaltCharge?: number;
-  minKm?: number;
-  description?: string;
-  isActive?: boolean;
 }
 
 export interface AirportFare {
-  id: string;
   vehicleId: string;
   basePrice: number;
   tier1Price: number;
@@ -124,18 +100,41 @@ export interface AirportFare {
   tier3Price: number;
   tier4Price: number;
   extraKmCharge: number;
-  description?: string;
-  isActive?: boolean;
 }
 
-export interface LocalFare {
+export interface FuelPrice {
+  id: string;
+  fuelType: 'Diesel' | 'Petrol' | 'CNG' | 'Electric';
+  price: number;
+  effectiveDate: string;
+  location: string;
+  createdAt: string;
+  updatedAt: string;
+  date?: string; // For compatibility
+}
+
+export interface FuelRecord {
   id: string;
   vehicleId: string;
-  price4hrs40km: number;
-  price8hrs80km: number;
-  price10hrs100km: number;
-  extraKmRate?: number;
-  extraHourRate?: number;
-  description?: string;
-  isActive?: boolean;
+  refillDate: string;
+  liters: number;
+  pricePerLiter: number;
+  totalAmount: number;
+  odometer: number;
+  fuelType: 'Diesel' | 'Petrol' | 'CNG' | 'Electric';
+  location?: string;
+  notes?: string;
+  paymentMethod?: 'Cash' | 'Card' | 'Company' | 'Customer';
+  paymentDetails?: {
+    bankName?: string;
+    lastFourDigits?: string;
+  };
+  mileage?: number;
+  
+  // For compatibility with form fields
+  quantity?: number;
+  pricePerUnit?: number;
+  totalCost?: number;
+  fuelStation?: string;
+  fillDate?: string;
 }

@@ -29,7 +29,7 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
   const [editingPrice, setEditingPrice] = useState<FuelPrice | null>(null);
   
   // Form state
-  const [fuelType, setFuelType] = useState<'Petrol' | 'Diesel' | 'CNG'>('Petrol');
+  const [fuelType, setFuelType] = useState<'Petrol' | 'Diesel' | 'CNG' | 'Electric'>('Petrol');
   const [price, setPrice] = useState<string>('');
   const [location, setLocation] = useState<string>('Visakhapatnam');
 
@@ -97,10 +97,10 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
       // Update local state first for immediate feedback
       if (editingPrice) {
         setFuelPrices(prev => 
-          prev.map(p => p.id === editingPrice.id ? updatedPrice : p)
+          prev.map(p => p.id === editingPrice.id ? updatedPrice as FuelPrice : p)
         );
       } else {
-        setFuelPrices(prev => [...prev.filter(p => p.fuelType !== fuelType), updatedPrice]);
+        setFuelPrices(prev => [...prev.filter(p => p.fuelType !== fuelType), updatedPrice as FuelPrice]);
       }
 
       // Mock API call
@@ -206,7 +206,7 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
               <Label htmlFor="fuelType">Fuel Type</Label>
               <Select 
                 value={fuelType} 
-                onValueChange={(value: 'Petrol' | 'Diesel' | 'CNG') => setFuelType(value)}
+                onValueChange={(value: 'Petrol' | 'Diesel' | 'CNG' | 'Electric') => setFuelType(value)}
                 disabled={!!editingPrice}
               >
                 <SelectTrigger>
@@ -216,6 +216,7 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
                   <SelectItem value="Petrol">Petrol</SelectItem>
                   <SelectItem value="Diesel">Diesel</SelectItem>
                   <SelectItem value="CNG">CNG</SelectItem>
+                  <SelectItem value="Electric">Electric</SelectItem>
                 </SelectContent>
               </Select>
             </div>

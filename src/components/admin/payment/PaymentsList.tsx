@@ -205,7 +205,9 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">{payment.customerName}</div>
-                  <div className="text-sm text-muted-foreground">{payment.customerPhone}</div>
+                  {payment.customerPhone && (
+                    <div className="text-sm text-muted-foreground">{payment.customerPhone}</div>
+                  )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <div className={`${isOverdue(payment.dueDate) && payment.paymentStatus !== 'paid' ? 'text-red-500 font-medium' : ''}`}>

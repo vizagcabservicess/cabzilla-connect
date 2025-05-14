@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,10 +36,10 @@ export function FleetVehicleAssignment({
         const response = await vehicleAPI.getVehicles(); // Using getVehicles instead of getFleetVehicles
         
         // Filter for active vehicles that match the booking's cab type
-        const availableVehicles = response.filter((vehicle: FleetVehicle) => 
+        const availableVehicles = response.vehicles?.filter((vehicle: FleetVehicle) => 
           vehicle.status === 'active' && 
           vehicle.vehicleType?.toLowerCase() === booking.cabType?.toLowerCase()
-        );
+        ) || [];
         
         setVehicles(availableVehicles);
         setFilteredVehicles(availableVehicles);
@@ -65,7 +66,7 @@ export function FleetVehicleAssignment({
     const lowerCaseQuery = query.toLowerCase();
     const filtered = vehicles.filter(vehicle => 
       vehicle.vehicleNumber.toLowerCase().includes(lowerCaseQuery) ||
-      vehicle.vehicleName?.toLowerCase().includes(lowerCaseQuery) ||
+      (vehicle.vehicleName && vehicle.vehicleName.toLowerCase().includes(lowerCaseQuery)) ||
       vehicle.make.toLowerCase().includes(lowerCaseQuery) ||
       vehicle.model.toLowerCase().includes(lowerCaseQuery)
     );
