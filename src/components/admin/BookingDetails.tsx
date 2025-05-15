@@ -7,6 +7,7 @@ import { BookingEditForm } from './BookingEditForm';
 import { DriverAssignment } from './DriverAssignment';
 import { FleetVehicleAssignment } from './FleetVehicleAssignment';
 import { BookingInvoice } from './BookingInvoice';
+import { BookingDetailsWhatsApp } from './BookingDetailsWhatsApp';
 import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
@@ -54,6 +55,7 @@ export function BookingDetails({
   const isEditDisabled = isCancelled;
   const isAssignmentDisabled = isCancelled || isCompleted;
   const isInvoiceDisabled = isCancelled;
+  const isWhatsAppDisabled = false; // WhatsApp messaging is always enabled
 
   // Construct the PDF URL for the invoice download
   const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
@@ -90,6 +92,7 @@ export function BookingDetails({
           <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Fleet Vehicle</TabsTrigger>
           <TabsTrigger value="driver" disabled={isAssignmentDisabled}>Assign Driver</TabsTrigger>
           <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
+          <TabsTrigger value="whatsapp" disabled={isWhatsAppDisabled}>WhatsApp</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="py-4">
@@ -198,6 +201,13 @@ export function BookingDetails({
             onClose={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
             pdfUrl={pdfUrl}
+          />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="py-4">
+          <BookingDetailsWhatsApp 
+            booking={booking}
+            onClose={() => handleTabChange('details')}
           />
         </TabsContent>
       </Tabs>

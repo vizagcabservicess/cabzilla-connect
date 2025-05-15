@@ -1,279 +1,213 @@
-import { useEffect, useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle, Info, Loader2 } from 'lucide-react';
-import { Navbar } from '@/components/Navbar';
-import { toast } from "sonner";
+
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Download, ArrowLeft, Printer, MessageCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/components/ui/use-toast';
+import { Booking } from '@/types/api';
+import { formatPrice } from '@/lib/utils';
+import { bookingAPI } from '@/services/api/bookingAPI';
+import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
 
 export default function BookingConfirmationPage() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [bookingDetails, setBookingDetails] = useState<any>(null);
-  const [secondsRemaining, setSecondsRemaining] = useState(10);
-  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | 'pending' | 'unknown'>('unknown');
-
-  const isNewBooking = location.state?.newBooking === true;
-  const emailSent = location.state?.emailSent;
+  const { toast } = useToast();
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isNewBooking) {
-      if (emailSent === true) {
-        setEmailStatus('sent');
-        toast.success("Booking confirmation email sent successfully!");
-      } else if (emailSent === false) {
-        setEmailStatus('failed');
-        toast.error("Failed to send confirmation email. We'll try again later.");
-      } else if (emailSent === undefined) {
-        setEmailStatus('pending');
-        toast.info("Email confirmation status is pending. Please check your inbox in a few minutes.");
-      }
-    }
-
-    const bookingDetailsFromStorage = sessionStorage.getItem('bookingDetails');
-    if (bookingDetailsFromStorage) {
+    const fetchBookingDetails = async () => {
       try {
-        const parsedDetails = JSON.parse(bookingDetailsFromStorage);
-        setBookingDetails(parsedDetails);
-      } catch (error) {
-        console.error('Error parsing booking details:', error);
-      }
-    }
-  }, [isNewBooking, emailSent]);
+        setIsLoading(true);
+        if (!id) {
+          throw new Error('Booking ID is missing');
+        }
 
-  useEffect(() => {
-    if (isNewBooking) {
-      const intervalId = setInterval(() => {
-        setSecondsRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(intervalId);
-            navigate('/dashboard', { state: { fromBooking: true } });
-            return 0;
-          }
-          return prev - 1;
+        const data = await bookingAPI.getBookingById(id);
+        setBooking(data);
+      } catch (err) {
+        console.error('Failed to fetch booking details:', err);
+        setError('Failed to load booking details. Please try again later.');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Could not load booking details.",
         });
-      }, 1000);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-      return () => clearInterval(intervalId);
-    }
-  }, [isNewBooking, navigate]);
+    fetchBookingDetails();
+  }, [id, toast]);
 
-  const formatDate = (dateString: string) => {
+  const handleDownloadReceipt = () => {
+    if (!booking) return;
+    
     try {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('en-IN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(date);
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString;
+      const receiptUrl = `/api/receipt.php?id=${booking.id}&download=1`;
+      window.open(receiptUrl, '_blank');
+    } catch (err) {
+      console.error('Failed to download receipt:', err);
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Could not download receipt. Please try again later.",
+      });
     }
   };
 
-  if (!bookingDetails) {
+  const handlePrintReceipt = () => {
+    if (!booking) return;
+    
+    try {
+      const printUrl = `/api/receipt.php?id=${booking.id}&print=1`;
+      const printWindow = window.open(printUrl, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+    } catch (err) {
+      console.error('Failed to print receipt:', err);
+      toast({
+        variant: "destructive",
+        title: "Print Failed",
+        description: "Could not print receipt. Please try again later.",
+      });
+    }
+  };
+
+  const handleBackToHome = () => {
+    navigate('/');
+  };
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-lg mx-auto text-center">
-            <h1 className="text-2xl font-bold mb-4">No Booking Found</h1>
-            <p className="text-gray-600 mb-6">We couldn't find any booking details. Please try again.</p>
-            <Button onClick={() => navigate('/')} className="mt-4">
-              Return to Home
-            </Button>
-          </div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-1/3" />
+              <Skeleton className="h-6 w-1/4" />
+            </div>
+            <div className="mt-6 space-y-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-36 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error || !booking) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertDescription>
+            {error || 'Booking information not found. Please check the booking ID or try again later.'}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={handleBackToHome} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Home
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
-          <div className="bg-green-500 p-6 text-white text-center">
-            <CheckCircle2 className="h-16 w-16 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold">Booking Confirmed!</h1>
-            <p className="mt-2">Your booking has been successfully confirmed.</p>
-            {bookingDetails?.bookingNumber && (
-              <div className="mt-3 bg-white text-green-800 py-2 px-4 rounded-md inline-block font-bold">
-                Booking #: {bookingDetails.bookingNumber}
-              </div>
-            )}
+    <div className="container mx-auto px-4 py-8">
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-green-600">Booking Confirmed!</h1>
+            <p className="text-gray-600 mt-1">Your booking has been successfully confirmed.</p>
           </div>
-          
-          <div className="p-6 space-y-6">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold border-b pb-2">Trip Details</h2>
-                
-                <div className="flex items-start">
-                  <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Pickup Location</p>
-                    <p className="font-medium">{bookingDetails?.pickupLocation?.name || bookingDetails?.pickupLocation}</p>
-                  </div>
-                </div>
-                
-                {bookingDetails?.dropLocation && (
-                  <div className="flex items-start">
-                    <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-gray-500">Drop Location</p>
-                      <p className="font-medium">{bookingDetails.dropLocation?.name || bookingDetails.dropLocation}</p>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex items-start">
-                  <Calendar className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Pickup Date & Time</p>
-                    <p className="font-medium">{bookingDetails?.pickupDate ? formatDate(bookingDetails.pickupDate) : ''}</p>
-                  </div>
-                </div>
 
-                {bookingDetails?.bookingType === 'airport' && (
-                  <>
-                    <div className="flex items-start">
-                      <Calendar className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                      <div>
-                        <p className="text-sm text-gray-500">Trip Type</p>
-                        <p className="font-medium">Airport Transfer</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                      <div>
-                        <p className="text-sm text-gray-500">Total Distance</p>
-                        <p className="font-medium">{bookingDetails.distance} KM</p>
-                      </div>
-                    </div>
-                  </>
+          <div className="border p-4 rounded-md mb-6">
+            <h2 className="font-semibold text-lg border-b pb-2 mb-3">Booking Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p><span className="font-medium">Booking #:</span> {booking.bookingNumber}</p>
+                <p><span className="font-medium">Status:</span> {booking.status.toUpperCase()}</p>
+                <p><span className="font-medium">Trip Type:</span> {booking.tripType}</p>
+                <p><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
+              </div>
+              <div>
+                <p><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
+                {booking.dropLocation && (
+                  <p><span className="font-medium">Drop:</span> {booking.dropLocation}</p>
                 )}
+                <p><span className="font-medium">Date:</span> {new Date(booking.pickupDate).toLocaleString()}</p>
               </div>
-              
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold border-b pb-2">Booking Details</h2>
-                
-                <div className="flex items-start">
-                  <Car className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Vehicle Type</p>
-                    <p className="font-medium">{bookingDetails?.selectedCab?.name}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <CircleDollarSign className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold text-lg">₹{bookingDetails?.totalPrice?.toLocaleString('en-IN')}</p>
-                  </div>
-                </div>
-                
-                <div className={`flex items-start mt-4 p-3 rounded-md border ${
-                  emailStatus === 'sent' 
-                    ? 'bg-blue-50 border-blue-100' 
-                    : emailStatus === 'failed' 
-                      ? 'bg-amber-50 border-amber-100' 
-                      : emailStatus === 'pending'
-                        ? 'bg-purple-50 border-purple-100'
-                        : 'bg-gray-50 border-gray-100'
-                }`}>
-                  {emailStatus === 'sent' ? (
-                    <Mail className="h-5 w-5 mr-3 text-blue-500 mt-1" />
-                  ) : emailStatus === 'failed' ? (
-                    <AlertTriangle className="h-5 w-5 mr-3 text-amber-500 mt-1" />
-                  ) : emailStatus === 'pending' ? (
-                    <Loader2 className="h-5 w-5 mr-3 text-purple-500 mt-1 animate-spin" />
-                  ) : (
-                    <Mail className="h-5 w-5 mr-3 text-gray-500 mt-1" />
-                  )}
-                  
-                  <div>
-                    <p className={`text-sm font-medium ${
-                      emailStatus === 'sent' 
-                        ? 'text-blue-800' 
-                        : emailStatus === 'failed' 
-                          ? 'text-amber-800' 
-                          : emailStatus === 'pending'
-                            ? 'text-purple-800'
-                            : 'text-gray-800'
-                    }`}>
-                      {emailStatus === 'sent' 
-                        ? 'Email Confirmation Sent' 
-                        : emailStatus === 'failed' 
-                          ? 'Email Delivery Failed' 
-                          : emailStatus === 'pending'
-                            ? 'Email Delivery in Progress'
-                            : 'Email Confirmation'}
-                    </p>
-                    <p className={`text-sm ${
-                      emailStatus === 'sent' 
-                        ? 'text-blue-600' 
-                        : emailStatus === 'failed' 
-                          ? 'text-amber-600' 
-                          : emailStatus === 'pending'
-                            ? 'text-purple-600'
-                            : 'text-gray-600'
-                    }`}>
-                      {emailStatus === 'sent' 
-                        ? `A confirmation has been sent to ${bookingDetails?.guestDetails?.email || bookingDetails?.passengerEmail || 'your email'}`
-                        : emailStatus === 'failed' 
-                          ? 'We could not send an email confirmation. Please save your booking number.'
-                          : emailStatus === 'pending'
-                            ? 'Your confirmation email is being processed. Please check your inbox in a few minutes.'
-                            : 'Please check your email for booking details'}
-                    </p>
-                    
-                    {emailStatus === 'failed' && (
-                      <div className="mt-3">
-                        <p className="text-sm text-amber-700 mb-2">
-                          Please make a note of your booking number shown above. You can also view your booking in your dashboard.
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-amber-700 border-amber-300 hover:bg-amber-50"
-                          onClick={() => {
-                            if (bookingDetails?.bookingNumber) {
-                              navigator.clipboard.writeText(bookingDetails.bookingNumber);
-                              toast.success("Booking number copied to clipboard");
-                            }
-                          }}
-                        >
-                          Copy Booking Number
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="border-t pt-6 flex flex-col-reverse md:flex-row justify-between items-center gap-4">
-              {isNewBooking ? (
-                <p className="text-gray-600">
-                  Redirecting to your dashboard in {secondsRemaining} seconds...
-                </p>
-              ) : (
-                <p className="text-gray-600">
-                  A confirmation has been sent to your registered email and phone number.
-                </p>
-              )}
-              <Button onClick={() => navigate('/dashboard', { state: { fromBooking: true } })} size="lg" className="bg-blue-600 hover:bg-blue-700 flex items-center">
-                View My Bookings
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
             </div>
           </div>
-        </div>
-      </div>
+
+          <div className="border p-4 rounded-md mb-6">
+            <h2 className="font-semibold text-lg border-b pb-2 mb-3">Passenger Information</h2>
+            <p><span className="font-medium">Name:</span> {booking.passengerName}</p>
+            <p><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
+            <p><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
+          </div>
+
+          {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
+            <div className="border p-4 rounded-md mb-6 bg-green-50">
+              <h2 className="font-semibold text-lg border-b border-green-200 pb-2 mb-3">Driver Information</h2>
+              {booking.driverName && (
+                <p><span className="font-medium">Name:</span> {booking.driverName}</p>
+              )}
+              {booking.driverPhone && (
+                <p><span className="font-medium">Contact:</span> {booking.driverPhone}</p>
+              )}
+              {booking.vehicleNumber && (
+                <p><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>
+              )}
+            </div>
+          )}
+
+          <div className="border-t pt-4 mt-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <p className="text-sm text-gray-500">Total Amount</p>
+                <p className="font-bold text-xl">₹{formatPrice(booking.totalAmount)}</p>
+              </div>
+              <div className="text-sm bg-gray-100 px-3 py-1 rounded-full">
+                {booking.isPaid ? 'Paid' : 'Payment Due'}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 justify-between">
+              <Button variant="outline" onClick={handleBackToHome}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+              
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={handlePrintReceipt}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
+                
+                <Button onClick={handleDownloadReceipt}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+                
+                <WhatsAppShareButton booking={booking} variant="whatsapp">
+                  Share Details
+                </WhatsAppShareButton>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
