@@ -136,7 +136,7 @@ export const bookingAPI = {
    */
   createBooking: async (bookingData: BookingRequest) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/bookings.php`, bookingData, {
+      const response = await axios.post(`${API_BASE_URL}/api/admin/bookings.php`, bookingData, {
         headers: {
           'Content-Type': 'application/json',
         },

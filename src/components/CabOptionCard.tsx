@@ -8,7 +8,7 @@ interface CabOptionCardProps {
   cab: CabType;
   fare: number | string;
   isSelected: boolean;
-  onSelect: (cab: CabType) => void;
+  onSelect: (...args: any[]) => void;
   fareDetails: string;
   isCalculating: boolean;
   tripType?: string;
@@ -20,7 +20,7 @@ export function CabOptionCard({
   cab, 
   fare, 
   isSelected, 
-  onSelect, 
+  onSelect = () => {},
   fareDetails,
   isCalculating,
   tripType = 'local',
@@ -42,7 +42,7 @@ export function CabOptionCard({
           ? "border-blue-500 bg-blue-50/50" 
           : "border-gray-200 hover:border-gray-300"
       )}
-      onClick={() => onSelect(cab)}
+      onClick={() => { if (typeof onSelect === 'function') onSelect(); }}
       role="button"
       tabIndex={0}
     >

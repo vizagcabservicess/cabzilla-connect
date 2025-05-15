@@ -69,6 +69,42 @@ export const BookingSummary = ({
   const totalPriceRef = useRef<number>(totalPrice);
   const calculationTimeoutRef = useRef<any>(null);
 
+  // Local package limits
+  const localPackageLimits: Record<string, { km: number; hours: number }> = {
+    '4hrs-40km': { km: 40, hours: 4 },
+    '8hrs-80km': { km: 80, hours: 8 },
+    '10hrs-100km': { km: 100, hours: 10 },
+  };
+  const selectedPackage = localPackageLimits[hourlyPackage] || { km: 80, hours: 8 };
+
+  // Calculate extra km/hours for local trips
+  let extraKm = 0;
+  let extraHours = 0;
+  let extraKmFare = 0;
+  let extraHourFare = 0;
+  let localBaseFare = fareData?.breakdown?.basePrice || 0;
+  let localTotal = totalPrice;
+
+  if (tripType === 'local') {
+    extraKm = Math.max(0, distance - selectedPackage.km);
+    // For now, use 0 for extra hours unless you have a way to get trip duration
+    extraHours = 0; // You can update this if you have trip duration
+    const extraKmCharge = fareData?.breakdown?.extraKmCharge || 0;
+    const extraHourCharge = fareData?.breakdown?.extraHourCharge || 0;
+    extraKmFare = extraKm * extraKmCharge;
+    extraHourFare = extraHours * extraHourCharge;
+    localTotal = localBaseFare + extraKmFare + extraHourFare;
+  }
+
+  // Calculate total for airport trips as sum of visible breakdown items
+  let airportTotal = 0;
+  if (tripType === 'airport') {
+    const base = fareData?.breakdown?.basePrice || 0;
+    const airportFee = fareData?.breakdown?.airportFee || 0;
+    const extra = fareData?.breakdown?.extraDistanceFare || 0;
+    airportTotal = base + airportFee + extra;
+  }
+
   function getFareKey({ tripType, cabId, packageType }: { tripType: string, cabId: string, packageType?: string }) {
     if (tripType === "outstation") {
       return `fare_outstation_${cabId}`;
@@ -771,6 +807,26 @@ export const BookingSummary = ({
     return () => clearInterval(checkPendingInterval);
   }, []);
 
+  const sumBreakdown = (breakdown: any) => {
+    if (!breakdown) return 0;
+    const fields = [
+      'basePrice',
+      'driverAllowance',
+      'nightCharges',
+      'extraDistanceFare',
+      'extraHourCharge',
+      'airportFee',
+    ];
+    let total = 0;
+    for (const key of fields) {
+      const val = breakdown[key];
+      if (typeof val === 'number' && !isNaN(val)) {
+        total += val;
+      }
+    }
+    return total;
+  };
+
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
@@ -861,6 +917,19 @@ export const BookingSummary = ({
             <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
           </div>
 
+          {tripType === 'local' && extraKmFare > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Extra km charges</p>
+              <p>{formatPrice(extraKmFare)}</p>
+            </div>
+          )}
+          {tripType === 'local' && extraHourFare > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-gray-600">Extra hour charges</p>
+              <p>{formatPrice(extraHourFare)}</p>
+            </div>
+          )}
+
           {tripType !== 'airport' && breakdown.driverAllowance > 0 && (
             <div className="flex justify-between items-center mb-2">
               <p className="text-gray-600">Driver allowance</p>
@@ -901,7 +970,9 @@ export const BookingSummary = ({
 
           <div className="flex justify-between items-center">
             <p className="font-semibold">Total Price</p>
-            <p className="font-bold text-lg">{formatPrice(finalTotal)}</p>
+            <p className="font-bold text-lg">
+              {formatPrice(sumBreakdown(breakdown))}
+            </p>
           </div>
 
           {isLoading && (

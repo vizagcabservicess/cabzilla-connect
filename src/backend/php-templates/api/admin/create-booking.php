@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -90,7 +89,7 @@ try {
     
     // Bind parameters
     $stmt->bind_param(
-        "sssssdsssdssssssdssi",
+        "ssssssdssdsssssdidsis",
         $bookingNumber,
         $requestData['pickupLocation'],
         $dropLocation,
@@ -148,10 +147,3 @@ try {
 
 // Close connection
 $conn->close();
-
-// Helper function to send JSON response
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    echo json_encode($data);
-    exit;
-}

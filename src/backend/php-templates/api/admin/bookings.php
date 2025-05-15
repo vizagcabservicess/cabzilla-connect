@@ -22,6 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Forward POST requests to create-booking.php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require __DIR__ . '/create-booking.php';
+    exit;
+}
+
 // Only allow GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);

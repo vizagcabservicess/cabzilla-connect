@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -21,6 +20,8 @@ import { cabTypes } from '@/lib/cabData';
 import { convertToApiLocation } from '@/lib/locationUtils';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
+import { useFare } from '@/hooks/useFare';
+import { calculateDistanceMatrix } from '@/lib/distanceService';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -48,6 +49,8 @@ export function AdminBookingForm() {
   // Vehicle selection
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [distance, setDistance] = useState(0);
+  const [selectedFare, setSelectedFare] = useState<number>(0);
+  const [selectedFareBreakdown, setSelectedFareBreakdown] = useState<any>(null);
   
   // Admin-specific fields
   const [adminNotes, setAdminNotes] = useState('');
@@ -58,59 +61,97 @@ export function AdminBookingForm() {
   // Form validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
   
+  // Add useFare for unified fare calculation
+  const { fareData, isLoading: isFareLoading, error: fareError } = useFare(
+    selectedCab?.id || '',
+    tripType,
+    distance,
+    tripType === 'local' ? hourlyPackage : undefined,
+    pickupDate
+  );
+  
+  // Replace Haversine formula with Google Maps API distance calculation
+  useEffect(() => {
+    const fetchDistance = async () => {
+      if (tripType === 'local') {
+        // For local trips, use the package distance
+        const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
+        if (selectedPackage) {
+          setDistance(selectedPackage.kilometers);
+        } else {
+          setDistance(0);
+        }
+        return;
+      }
+      if (pickupLocation && dropLocation) {
+        try {
+          const result = await calculateDistanceMatrix(pickupLocation, dropLocation);
+          if (result.status === 'OK') {
+            setDistance(result.distance);
+          } else {
+            setDistance(0);
+          }
+        } catch (error) {
+          setDistance(0);
+        }
+      } else {
+        setDistance(0);
+      }
+    };
+    fetchDistance();
+  }, [pickupLocation, dropLocation, tripType, hourlyPackage]);
+  
   // Handle distance calculation from map component
   const handleDistanceCalculated = (calculatedDistance: number, calculatedDuration: number) => {
     setDistance(calculatedDistance);
   };
   
-  // Calculate pricing logic based on selected vehicle, distance, trip type
-  const calculatePrice = () => {
-    if (!selectedCab) return 0;
-    
-    let basePrice = 0;
-    
-    if (tripType === 'airport') {
-      // Airport transfer pricing logic
-      basePrice = selectedCab.price;
-    } else if (tripType === 'local') {
-      // Local package pricing logic
-      basePrice = hourlyPackage === '8hrs-80km' ? 
-        selectedCab.price * 0.8 : selectedCab.price * 1;
-    } else if (tripType === 'outstation') {
-      // Outstation pricing logic
-      const baseKmRate = selectedCab.pricePerKm || 10;
-      basePrice = selectedCab.price + (distance * baseKmRate);
-      
-      // Add driver allowance
-      basePrice += 250;
-      
-      // For round trip
-      if (tripMode === 'round-trip' && returnDate) {
-        const days = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        basePrice *= days > 0 ? days : 1;
-      }
-    }
-    
-    return Math.ceil(basePrice);
+  // Handle cab selection with fare and breakdown
+  const handleCabSelect = (cab: CabType, fare: number, breakdown?: any) => {
+    setSelectedCab(cab);
+    setSelectedFare(fare);
+    setSelectedFareBreakdown(breakdown || null);
   };
   
-  // Calculate final price after discount
+  // Add this helper at the top, after selectedFareBreakdown:
+  const sumBreakdown = (breakdown: any) => {
+    if (!breakdown) return 0;
+    const fields = [
+      'basePrice',
+      'driverAllowance',
+      'nightCharges',
+      'extraDistanceFare',
+      'extraHourCharge',
+      'airportFee',
+    ];
+    let total = 0;
+    for (const key of fields) {
+      const val = breakdown[key];
+      if (typeof val === 'number' && !isNaN(val)) {
+        total += val;
+      }
+    }
+    return total;
+  };
+  
+  // Update calculatePrice to use sumBreakdown:
+  const calculatePrice = () => {
+    return sumBreakdown(selectedFareBreakdown) || selectedFare || 0;
+  };
+  
+  // Update calculateFinalPrice to use the new calculatePrice:
   const calculateFinalPrice = () => {
     const basePrice = calculatePrice();
-    
     if (discountType === 'none' || discountValue <= 0) {
       return basePrice;
     }
-    
     if (discountType === 'percentage') {
       const discount = basePrice * (discountValue / 100);
       return Math.max(0, basePrice - discount);
     }
-    
     if (discountType === 'fixed') {
       return Math.max(0, basePrice - discountValue);
     }
-    
     return basePrice;
   };
   
@@ -393,16 +434,18 @@ export function AdminBookingForm() {
       {/* Vehicle Selection */}
       <Card className="p-6">
         <h2 className="text-xl font-semibold mb-4">Vehicle Selection</h2>
+        console.log('Distance passed to CabOptions:', distance);
         <CabOptions
           cabTypes={cabTypes}
           selectedCab={selectedCab}
-          onSelectCab={setSelectedCab}
+          onSelectCab={handleCabSelect}
           distance={distance}
           tripType={tripType}
           tripMode={tripMode}
           hourlyPackage={hourlyPackage}
           pickupDate={pickupDate}
           returnDate={returnDate}
+          isCalculatingFares={false}
         />
         {errors.selectedCab && (
           <p className="text-xs text-red-500 mt-2">{errors.selectedCab}</p>
@@ -412,6 +455,53 @@ export function AdminBookingForm() {
       {/* Pricing & Discount */}
       <Card className="p-6">
         <h2 className="text-xl font-semibold mb-4">Pricing & Discount</h2>
+        
+        {/* Fare Breakup Styled Section */}
+        {selectedFareBreakdown && (
+          <div className="mb-4">
+            <h3 className="text-md font-semibold mb-2">Fare Breakup</h3>
+            <div className="space-y-2">
+              {selectedFareBreakdown.basePrice !== undefined && (
+                <div className="flex justify-between text-gray-800">
+                  <span>Base fare</span>
+                  <span>₹{selectedFareBreakdown.basePrice.toLocaleString()}</span>
+                </div>
+              )}
+              {selectedFareBreakdown.driverAllowance !== undefined && (
+                <div className="flex justify-between text-gray-800">
+                  <span>Driver allowance</span>
+                  <span>₹{selectedFareBreakdown.driverAllowance.toLocaleString()}</span>
+                </div>
+              )}
+              {selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0 && (
+                <div className="flex justify-between text-gray-800">
+                  <span>Night charges</span>
+                  <span>₹{selectedFareBreakdown.nightCharges.toLocaleString()}</span>
+                </div>
+              )}
+              {selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0 && (
+                <div className="flex justify-between text-gray-800">
+                  <span>Extra distance charges</span>
+                  <span>₹{selectedFareBreakdown.extraDistanceFare.toLocaleString()}</span>
+                </div>
+              )}
+              {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHourCharge > 0 && (
+                <div className="flex justify-between text-gray-800">
+                  <span>Extra hour charges</span>
+                  <span>₹{selectedFareBreakdown.extraHourCharge.toLocaleString()}</span>
+                </div>
+              )}
+              {/* If only basePrice is present, show a message */}
+              {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
+                <div className="text-gray-500 text-sm">No detailed breakup available.</div>
+              )}
+            </div>
+            <div className="flex justify-between font-bold border-t pt-2 mt-2 text-lg">
+              <span>Total Price</span>
+              <span>₹{calculatePrice().toLocaleString()}</span>
+            </div>
+          </div>
+        )}
         
         {/* Base Price */}
         <div className="flex justify-between py-2 border-b">

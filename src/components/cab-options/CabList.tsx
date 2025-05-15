@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -9,7 +8,7 @@ interface CabListProps {
   cabTypes: CabType[];
   selectedCabId: string | null;
   isCalculatingFares: boolean;
-  handleSelectCab: (cab: CabType, fareAmount: number, fareSource: string) => void;
+  handleSelectCab: (cab: CabType, fareAmount: number, breakdown?: any) => void;
   isAirportTransfer?: boolean;
   tripType?: string;
   tripMode?: string;
@@ -17,6 +16,26 @@ interface CabListProps {
   packageType?: string;
   pickupDate?: Date; // Add pickupDate prop
 }
+
+const sumBreakdown = (breakdown: any) => {
+  if (!breakdown) return 0;
+  const fields = [
+    'basePrice',
+    'driverAllowance',
+    'nightCharges',
+    'extraDistanceFare',
+    'extraHourCharge',
+    'airportFee',
+  ];
+  let total = 0;
+  for (const key of fields) {
+    const val = breakdown[key];
+    if (typeof val === 'number' && !isNaN(val)) {
+      total += val;
+    }
+  }
+  return total;
+};
 
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
@@ -59,8 +78,8 @@ export const CabList: React.FC<CabListProps> = ({
     };
   }, []);
 
-  const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string) => {
-    handleSelectCab(cab, fare, fareSource);
+  const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
+    handleSelectCab(cab, fare, breakdown);
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
 
     setTimeout(() => {
@@ -118,9 +137,40 @@ export const CabList: React.FC<CabListProps> = ({
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
           } else if (fareData) {
-            fare = fareData.totalPrice;
+            // Always use sumBreakdown for all trip types
+            fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
             fareSource = fareData.source || 'unknown';
-            
+
+            // --- PATCH: For local trips, add extra km/hour charges to fare ---
+            if (tripType === 'local') {
+              // Local package limits
+              const localPackageLimits: Record<string, { km: number; hours: number }> = {
+                '4hrs-40km': { km: 40, hours: 4 },
+                '8hrs-80km': { km: 80, hours: 8 },
+                '10hrs-100km': { km: 100, hours: 10 },
+              };
+              const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
+              const extraKm = Math.max(0, distance - selectedPackage.km);
+              const extraHours = 0; // Default, update if you have trip duration
+              const breakdown = fareData.breakdown || {};
+              const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
+              const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
+              const extraKmFare = extraKm * extraKmCharge;
+              const extraHourFare = extraHours * extraHourCharge;
+              fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
+            }
+            // --- END PATCH ---
+
+            // --- PATCH: For airport trips, sum base fare + airport fee + extra distance charges ---
+            if (tripType === 'airport') {
+              const breakdown = fareData.breakdown || {};
+              const base = breakdown.basePrice || 0;
+              const airportFee = breakdown.airportFee || 0;
+              const extra = breakdown.extraDistanceFare || 0;
+              fare = base + airportFee + extra;
+            }
+            // --- END PATCH ---
+
             if (fareSource === 'database') {
               fareText = `₹${fare.toLocaleString()} (verified)`;
             } else if (fareSource === 'stored') {
@@ -130,36 +180,21 @@ export const CabList: React.FC<CabListProps> = ({
             } else {
               fareText = `₹${fare.toLocaleString()}`;
             }
-            
-            console.log(`Cab ${cab.name} fare: ${fare} (source: ${fareSource})`);
-          }
-
-          let tripTypeLabel = "Trip";
-          if (tripType === 'local') {
-            tripTypeLabel = "Local Package";
-          } else if (tripType === 'airport') {
-            tripTypeLabel = "Airport Transfer";
-          } else if (tripType === 'outstation') {
-            tripTypeLabel = tripMode === 'round-trip' ? "Outstation Round Trip" : "Outstation One Way";
           }
 
           return (
-            <div 
-              key={`${cab.id}-${refreshKey}`}
-              className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
-            >
-              <CabOptionCard 
-                cab={cab}
-                fare={fare}
-                isSelected={selectedCabId === cab.id}
-                onSelect={() => enhancedSelectCab(cab, fare, fareSource)}
-                isCalculating={isLoading}
-                fareDetails={error ? "Error fetching fare" : fareText}
-                tripType={tripType}
-                tripMode={tripMode}
-                fareSource={fareSource}
-              />
-            </div>
+            <CabOptionCard
+              key={cab.id}
+              cab={cab}
+              fare={fare}
+              isSelected={selectedCabId === cab.id}
+              onSelect={() => enhancedSelectCab(cab, fare, fareSource, fareData?.breakdown)}
+              fareDetails={fareText}
+              isCalculating={isLoading}
+              tripType={tripType}
+              tripMode={tripMode}
+              fareSource={fareSource}
+            />
           );
         })
       )}

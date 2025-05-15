@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -471,8 +470,22 @@ export function useFare(
           }
         }
 
+        // Patch: Calculate totalPrice as the sum of all breakdown fields
+        const sumBreakdown = (breakdownObj: any) => {
+          let total = 0;
+          if (breakdownObj) {
+            for (const key of Object.keys(breakdownObj)) {
+              const val = breakdownObj[key];
+              if (typeof val === 'number' && !isNaN(val)) {
+                total += val;
+              }
+            }
+          }
+          return total;
+        };
+        const patchedTotalPrice = sumBreakdown(breakdown);
         setFareData({
-          totalPrice: fare,
+          totalPrice: patchedTotalPrice > 0 ? patchedTotalPrice : fare,
           basePrice: breakdown.basePrice || fare,
           breakdown,
           source,

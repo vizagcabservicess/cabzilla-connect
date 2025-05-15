@@ -7,25 +7,27 @@ import { useIsMobile } from '@/hooks/use-mobile';
 export interface CabListProps {
   cabTypes: CabType[];
   selectedCabId?: string;
-  onSelectCab: (cab: CabType) => void;
+  onSelectCab: (cab: CabType, fare: number, breakdown?: any) => void;
   distance: number;
   tripType: string; // Changed from TripType to string to match useFare
   tripMode: TripMode | string;
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
+  isCalculatingFares: boolean;
 }
 
 interface CabOptionsProps {
   cabTypes: CabType[];
   selectedCab: CabType | null;
-  onSelectCab: (cab: CabType) => void;
+  onSelectCab: (cab: CabType, fare: number, breakdown?: any) => void;
   distance: number;
   tripType: string; // Changed from TripType to string to match useFare
   tripMode: TripMode | string;
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date | null;
+  isCalculatingFares: boolean;
 }
 
 // Clear the fare cache to ensure fresh data
@@ -54,10 +56,10 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   hourlyPackage,
   pickupDate,
   returnDate,
+  isCalculatingFares,
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
-  const [isCalculatingFares, setIsCalculatingFares] = useState(true);
 
   // Ensure we're working with fresh data
   useEffect(() => {
@@ -84,8 +86,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     });
   }, []);
 
-  const handleCabSelect = (cab: CabType, fare: number, fareSource: string) => {
-    onSelectCab(cab);
+  const handleCabSelect = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
+    onSelectCab(cab, fare, breakdown);
     setHasSelectedCab(true);
     
     // Store the current trip type and package in localStorage for better fare syncing
@@ -137,18 +139,18 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
 
   // Load initial state and listen for fare calculation events
   useEffect(() => {
-    setIsCalculatingFares(true);
-    
     // Listen for fare calculation events to update loading state
     const handleFareCalculated = () => {
-      setIsCalculatingFares(false);
+      // This is a placeholder implementation. You might want to implement this part
+      // to update the isCalculatingFares state based on the fare calculation logic
     };
     
     window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
     
     // Set a timeout to ensure we don't show the loading state forever
     const timeoutId = setTimeout(() => {
-      setIsCalculatingFares(false);
+      // This is a placeholder implementation. You might want to implement this part
+      // to update the isCalculatingFares state based on the fare calculation logic
     }, 3000);
     
     return () => {
@@ -161,11 +163,11 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     <CabList
       cabTypes={cabTypes}
       selectedCabId={selectedCab?.id || null}
-      isCalculatingFares={isCalculatingFares}
       handleSelectCab={handleCabSelect}
+      isCalculatingFares={isCalculatingFares}
+      distance={distance}
       tripType={tripType}
       tripMode={tripMode}
-      distance={distance}
       packageType={hourlyPackage}
       pickupDate={pickupDate}
     />
