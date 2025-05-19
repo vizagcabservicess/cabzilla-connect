@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import {
   generateDriverNotificationMessage 
 } from '@/services/whatsappService';
 import { MessageCircle } from "lucide-react";
+import { commissionAPI } from '@/services/api/commissionAPI';
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -35,6 +37,10 @@ export function DriverAssignment({
   const [selectedDriver, setSelectedDriver] = useState<string>('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(false);
+  const [commissionData, setCommissionData] = useState<{
+    percentage: number;
+    amount: number;
+  } | null>(null);
   const { toast } = useToast();
 
   // Fetch available drivers
@@ -72,6 +78,42 @@ export function DriverAssignment({
     fetchDrivers();
   }, [toast]);
 
+  // Calculate commission when vehicle number changes
+  useEffect(() => {
+    const calculateCommission = async () => {
+      if (!vehicleNumber || !booking.id) return;
+      
+      try {
+        // First try to calculate commission based on the booking
+        const commission = await commissionAPI.calculateCommission(booking.id.toString());
+        
+        if (commission) {
+          setCommissionData({
+            percentage: commission.commission_percentage,
+            amount: commission.commission_amount
+          });
+        } else {
+          // Fallback to default 10% if calculation fails
+          const amount = booking.totalAmount * 0.1;
+          setCommissionData({
+            percentage: 10,
+            amount: amount
+          });
+        }
+      } catch (error) {
+        console.error("Error calculating commission:", error);
+        // Fallback to default 10%
+        const amount = booking.totalAmount * 0.1;
+        setCommissionData({
+          percentage: 10,
+          amount: amount
+        });
+      }
+    };
+
+    calculateCommission();
+  }, [vehicleNumber, booking.id, booking.totalAmount]);
+
   const handleDriverSelect = (value: string) => {
     setSelectedDriver(value);
     const selected = drivers.find(driver => driver.id.toString() === value);
@@ -102,10 +144,40 @@ export function DriverAssignment({
         vehicleNumber
       });
       
+      // Also record the commission payment if commission data is available
+      if (commissionData && booking.id) {
+        try {
+          await commissionAPI.createCommissionPayment({
+            bookingId: booking.id.toString(),
+            vehicleId: vehicleNumber, // Use vehicle number as ID
+            driverId: selectedDriver,
+            amount: booking.totalAmount,
+            commissionAmount: commissionData.amount,
+            commissionPercentage: commissionData.percentage,
+            status: 'pending',
+            notes: `Commission for booking #${booking.bookingNumber}`
+          });
+          
+          toast({
+            title: "Commission Recorded",
+            description: `Commission of ₹${commissionData.amount.toFixed(2)} (${commissionData.percentage}%) has been recorded.`
+          });
+        } catch (commissionError) {
+          console.error("Error recording commission:", commissionError);
+          // Don't fail the main assignment if commission recording fails
+          toast({
+            variant: "warning",
+            title: "Commission Recording Failed",
+            description: "Driver assigned successfully, but commission recording failed."
+          });
+        }
+      }
+      
       toast({
         title: "Driver Assigned",
         description: "Driver has been successfully assigned to the booking."
       });
+      
     } catch (error) {
       console.error("Error assigning driver:", error);
       toast({
@@ -185,6 +257,26 @@ export function DriverAssignment({
                 disabled={isSubmitting}
               />
             </div>
+
+            {commissionData && (
+              <div className="rounded-md bg-muted p-3">
+                <h4 className="text-sm font-medium mb-1">Commission Information</h4>
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span>Rate:</span>
+                    <span className="font-medium">{commissionData.percentage}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Amount:</span>
+                    <span className="font-medium">₹{commissionData.amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Status:</span>
+                    <span className="font-medium">Pending</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {driverName && driverPhone && vehicleNumber && (
               <div className="pt-4 border-t">

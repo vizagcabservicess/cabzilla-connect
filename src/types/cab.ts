@@ -26,6 +26,9 @@ export interface CabType {
   outstationFares?: OutstationFare;
   localPackageFares?: LocalFare;
   airportFares?: AirportFare;
+  // Commission properties
+  commissionPercentage?: number;
+  defaultCommission?: boolean;
 }
 
 export interface OutstationFare {
@@ -196,6 +199,7 @@ export interface FleetVehicle {
   updatedAt: string;
   vehicle_number?: string;
   emi?: number; // Vehicle EMI (optional)
+  commissionPercentage?: number; // Commission percentage for this vehicle
 }
 
 export interface VehicleDocument {
@@ -261,4 +265,48 @@ export interface FuelPrice {
   location?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Commission-related interfaces
+export interface CommissionSetting {
+  id: string;
+  name: string;
+  description?: string;
+  defaultPercentage: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionPayment {
+  id: string;
+  bookingId: string;
+  vehicleId: string;
+  driverId?: string;
+  amount: number;
+  commissionAmount: number;
+  commissionPercentage: number;
+  status: 'pending' | 'paid' | 'cancelled';
+  paymentDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionReport {
+  totalBookings: number;
+  totalRevenue: number;
+  totalCommission: number;
+  paidCommission: number;
+  pendingCommission: number;
+  vehicleWiseCommission: {
+    vehicleId: string;
+    vehicleName: string;
+    bookings: number;
+    revenue: number;
+    commission: number;
+    percentage: number;
+  }[];
+  periodStart: string;
+  periodEnd: string;
 }
