@@ -18,7 +18,8 @@ import {
   CircleDollarSign,
   Banknote,
   CreditCard,
-  CalendarPlus
+  CalendarPlus,
+  BadgePercent
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -36,6 +37,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     { id: 'vehicles', label: 'Vehicles', icon: <Car size={20} />, path: '/admin/vehicles' },
     { id: 'fares', label: 'Fares', icon: <Map size={20} />, path: '/admin/fares' },
     { id: 'fleet', label: 'Fleet Management', icon: <Car size={20} />, path: '/admin/fleet' },
+    { id: 'commission', label: 'Commission', icon: <BadgePercent size={20} />, path: '/admin/commission' },
     { id: 'fuel', label: 'Fuel Management', icon: <Fuel size={20} />, path: '/admin/fuel' },
     { id: 'maintenance', label: 'Vehicle Maintenance', icon: <Wrench size={20} />, path: '/admin/maintenance' },
     { id: 'ledger', label: 'Ledger', icon: <Book size={20} />, path: '/admin/ledger' },
