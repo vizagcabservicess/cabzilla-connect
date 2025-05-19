@@ -57,23 +57,9 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 
-    // Connect to the database with improved error handling
+    // Connect to the database using the common function
     try {
-        // Direct database connection for maximum reliability
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        
+        $conn = getDbConnection();
         logDriversError("Database connection established successfully");
     } catch (Exception $e) {
         logDriversError("Database connection error", ['error' => $e->getMessage()]);
@@ -97,12 +83,15 @@ try {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
                 phone VARCHAR(20) NOT NULL,
-                license_number VARCHAR(50) NOT NULL,
-                vehicle_type VARCHAR(50),
-                vehicle_number VARCHAR(20),
-                status ENUM('active', 'inactive', 'on_trip') DEFAULT 'active',
-                address TEXT,
-                date_joined DATE,
+                email VARCHAR(100),
+                license_no VARCHAR(50),
+                status ENUM('available', 'busy', 'offline') DEFAULT 'available',
+                total_rides INT DEFAULT 0,
+                earnings DECIMAL(10,2) DEFAULT 0,
+                rating DECIMAL(3,2) DEFAULT 5.0,
+                location VARCHAR(255) DEFAULT 'Visakhapatnam',
+                vehicle VARCHAR(100),
+                vehicle_id VARCHAR(50),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY (phone)
@@ -122,11 +111,11 @@ try {
             logDriversError("Adding sample data to drivers table");
             
             $insertSampleData = "
-                INSERT INTO drivers (name, phone, license_number, vehicle_type, vehicle_number, status, address, date_joined) 
+                INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle) 
                 VALUES 
-                ('Rajesh Kumar', '9876543210', 'AP12345678901234', 'sedan', 'AP 31 AB 1234', 'active', 'Visakhapatnam', '2023-01-15'),
-                ('Suresh Reddy', '8765432109', 'AP98765432109876', 'suv', 'AP 32 BC 5678', 'on_trip', 'Visakhapatnam', '2023-02-20'),
-                ('Mahesh Babu', '7654321098', 'AP45678901234567', 'hatchback', 'AP 33 CD 9012', 'active', 'Visakhapatnam', '2023-03-10')
+                ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'AP12345678901234', 'available', 'Visakhapatnam', 'Sedan'),
+                ('Suresh Reddy', '8765432109', 'suresh@example.com', 'AP98765432109876', 'busy', 'Visakhapatnam', 'SUV'),
+                ('Mahesh Babu', '7654321098', 'mahesh@example.com', 'AP45678901234567', 'available', 'Visakhapatnam', 'Hatchback')
             ";
             
             $insertResult = $conn->query($insertSampleData);

@@ -124,7 +124,8 @@ try {
                     'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
                     'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                     'createdAt' => $row['created_at'],
-                    'updatedAt' => $row['updated_at']
+                    'updatedAt' => $row['updated_at'],
+                    'emi' => isset($row['emi']) ? (float)$row['emi'] : null,
                 ];
             }
             
@@ -171,7 +172,8 @@ try {
                 'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
                 'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
-                'updatedAt' => $row['updated_at']
+                'updatedAt' => $row['updated_at'],
+                'emi' => isset($row['emi']) ? (float)$row['emi'] : null,
             ];
             
             echo json_encode([
@@ -307,13 +309,16 @@ try {
                 exit;
             }
             
+            // Find the variable assignments for POST
+            $emi = isset($data['emi']) ? floatval($data['emi']) : null;
+            
             // Insert new vehicle
             $stmt = $conn->prepare("
                 INSERT INTO fleet_vehicles (
                     vehicle_number, name, model, make, year, status, last_service_date, next_service_due,
-                    fuel_type, vehicle_type, cab_type_id, capacity, luggage_capacity, is_active, current_odometer,
+                    fuel_type, vehicle_type, cab_type_id, capacity, luggage_capacity, emi, is_active, current_odometer,
                     last_service_odometer, next_service_odometer
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $name = $data['name'] ?? $data['vehicleNumber'];
@@ -336,9 +341,9 @@ try {
             $isActiveInt = $isActive ? 1 : 0;
             
             $stmt->bind_param(
-                "ssssssssssiiiiii",
+                "ssssssssssiiidiii",
                 $data['vehicleNumber'], $name, $model, $make, $year, $status, $lastService, $nextServiceDue,
-                $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $isActiveInt, $currentOdometer,
+                $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $emi, $isActiveInt, $currentOdometer,
                 $lastServiceOdometer, $nextServiceOdometer
             );
             
@@ -375,7 +380,8 @@ try {
                 'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
                 'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
-                'updatedAt' => $row['updated_at']
+                'updatedAt' => $row['updated_at'],
+                'emi' => isset($row['emi']) ? (float)$row['emi'] : null,
             ];
             
             echo json_encode([
@@ -631,7 +637,8 @@ try {
                 'luggageCapacity' => ['field' => 'luggage_capacity', 'type' => 'i'],
                 'isActive' => ['field' => 'is_active', 'type' => 'i'],
                 'assignedDriverId' => ['field' => 'assigned_driver_id', 'type' => 'i'],
-                'currentOdometer' => ['field' => 'current_odometer', 'type' => 'i']
+                'currentOdometer' => ['field' => 'current_odometer', 'type' => 'i'],
+                'emi' => ['field' => 'emi', 'type' => 'd'],
             ];
             
             foreach ($data as $key => $value) {
@@ -707,7 +714,8 @@ try {
                 'lastServiceOdometer' => isset($row['last_service_odometer']) ? (int)$row['last_service_odometer'] : 0,
                 'nextServiceOdometer' => isset($row['next_service_odometer']) ? (int)$row['next_service_odometer'] : 0,
                 'createdAt' => $row['created_at'],
-                'updatedAt' => $row['updated_at']
+                'updatedAt' => $row['updated_at'],
+                'emi' => isset($row['emi']) ? (float)$row['emi'] : null,
             ];
             
             echo json_encode([

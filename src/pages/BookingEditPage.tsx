@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -34,9 +33,6 @@ export default function BookingEditPage() {
     address: '' 
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
-  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>([]);
-  const [newExtraAmount, setNewExtraAmount] = useState('');
-  const [newExtraDesc, setNewExtraDesc] = useState('');
   const isAdmin = authAPI.isAdmin();
 
   useEffect(() => {
@@ -98,38 +94,6 @@ export default function BookingEditPage() {
             setPickupDate(dateObj);
           }
         }
-
-        // Improved handling of extraCharges with standardized format
-        if (response.extraCharges && Array.isArray(response.extraCharges)) {
-          // Normalize the structure to ensure amount is a number and description is a string
-          setExtraCharges(response.extraCharges.map(c => ({
-            amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-            description: c.description || c.label || ''
-          })));
-        } else if (response.extra_charges && Array.isArray(response.extra_charges)) {
-          setExtraCharges(response.extra_charges.map(c => ({
-            amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-            description: c.description || c.label || ''
-          })));
-        } else {
-          // Check if it's a JSON string that needs parsing
-          if (typeof response.extraCharges === 'string') {
-            try {
-              const parsedCharges = JSON.parse(response.extraCharges);
-              if (Array.isArray(parsedCharges)) {
-                setExtraCharges(parsedCharges.map(c => ({
-                  amount: typeof c.amount === 'string' ? parseFloat(c.amount) : Number(c.amount),
-                  description: c.description || c.label || ''
-                })));
-              }
-            } catch (e) {
-              console.error("Failed to parse extraCharges string:", e);
-              setExtraCharges([]);
-            }
-          } else {
-            setExtraCharges([]);
-          }
-        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
         setError(errorMessage);
@@ -146,6 +110,10 @@ export default function BookingEditPage() {
     fetchBooking();
   }, [bookingId, navigate, toast]);
 
+  useEffect(() => {
+    console.log('Booking in parent changed:', booking);
+  }, [booking]);
+
   const handleStatusChange = async (newStatus: BookingStatus) => {
     if (!booking || !bookingId) return;
     
@@ -155,11 +123,7 @@ export default function BookingEditPage() {
       const response = await bookingAPI.updateBookingStatus(bookingIdNumber, newStatus);
       
       if (response) {
-        setBooking({
-          ...booking,
-          status: newStatus,
-          updatedAt: response.updatedAt || booking.updatedAt
-        });
+        setBooking(response);
         toast({
           title: "Status Updated",
           description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
@@ -197,31 +161,37 @@ export default function BookingEditPage() {
     }
   };
 
-  const handleAddExtraCharge = () => {
-    if (!newExtraAmount || isNaN(Number(newExtraAmount)) || Number(newExtraAmount) <= 0) return;
-    // Ensure amount is saved as a number, not a string
-    setExtraCharges([...extraCharges, { 
-      amount: parseFloat(newExtraAmount), 
-      description: newExtraDesc 
-    }]);
-    setNewExtraAmount('');
-    setNewExtraDesc('');
+  const handleEdit = async (updatedData) => {
+    if (!booking || !booking.id) return;
+    try {
+      setIsSubmitting(true);
+      // Save to backend and use the response data directly
+      const result = await bookingAPI.updateBooking(booking.id, updatedData);
+      console.log('Backend update response:', result);
+      if (result && result.data) {
+        setBooking(result.data);
+        console.log('Setting booking to:', result.data);
+      }
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update booking",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRemoveExtraCharge = (idx: number) => {
-    setExtraCharges(extraCharges.filter((_, i) => i !== idx));
-  };
+  useEffect(() => {
+    console.log('Booking in parent after setBooking:', booking);
+  }, [booking]);
 
   const handleSubmit = async (contactDetails: any) => {
     if (!booking || !bookingId) return;
     setIsSubmitting(true);
     try {
-      // Ensure extra charges have consistent field names (amount and description)
-      const standardizedExtraCharges = extraCharges.map(c => ({
-        amount: Number(c.amount), // Ensure it's a number
-        description: c.description // Use description as the standard field
-      }));
-
       const updatedData = {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
@@ -229,18 +199,12 @@ export default function BookingEditPage() {
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
-        extraCharges: standardizedExtraCharges
+        extraCharges: booking.extraCharges
       };
       const bookingIdNumber = parseInt(bookingId, 10);
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
       if (result) {
-        // Important: Update the local state with the new data to ensure persistence
-        setBooking({ 
-          ...booking, 
-          ...result,
-          // Explicitly update extraCharges to ensure it's in the right format
-          extraCharges: standardizedExtraCharges 
-        });
+        setBooking(result.data);
         toast({ title: "Booking Updated", description: "Your booking has been updated successfully!" });
       }
     } catch (error) {
@@ -398,48 +362,6 @@ export default function BookingEditPage() {
                   onDateChange={setPickupDate}
                   minDate={new Date()}
                 />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Extra Charges</CardTitle>
-              <CardDescription>Add or edit extra charges for this booking</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {extraCharges.length === 0 && <div className="text-gray-500 mb-2">No extra charges added</div>}
-              {extraCharges.length > 0 && (
-                <ul className="mb-4">
-                  {extraCharges.map((charge, idx) => (
-                    <li key={idx} className="flex items-center mb-2">
-                      <span className="mr-2">₹{charge.amount}</span>
-                      <span className="mr-2">{charge.description}</span>
-                      <button type="button" className="ml-2 text-red-500 hover:text-red-700" onClick={() => handleRemoveExtraCharge(idx)}>
-                        <Trash2 size={16} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Amount (₹)"
-                  className="border rounded px-2 py-1 w-28"
-                  value={newExtraAmount}
-                  onChange={e => setNewExtraAmount(e.target.value)}
-                />
-                <input
-                  type="text"
-                  placeholder="Description"
-                  className="border rounded px-2 py-1 flex-1"
-                  value={newExtraDesc}
-                  onChange={e => setNewExtraDesc(e.target.value)}
-                />
-                <button type="button" className="bg-blue-500 text-white px-3 py-1 rounded flex items-center" onClick={handleAddExtraCharge}>
-                  <Plus size={16} className="mr-1" /> Add
-                </button>
               </div>
             </CardContent>
           </Card>

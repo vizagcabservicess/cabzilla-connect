@@ -1,4 +1,3 @@
-
 <?php
 // CRITICAL: No output before this point
 // Turn off output buffering and disable implicit flush
@@ -247,6 +246,7 @@ try {
 
     // Calculate tax components based on includeTax setting
     $totalAmount = (float)$booking['total_amount'];
+    $baseFare = $totalAmount - $extraChargesTotal;
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
@@ -480,7 +480,7 @@ try {
                     </tr>
                     <tr>
                         <td>Base Fare'.($includeTax && $gstEnabled ? ' (excluding tax)' : '').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($baseAmountBeforeTax, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($baseFare, 2).'</td>
                     </tr>';
 
     // Add extra charges section if there are any extra charges
@@ -538,7 +538,7 @@ try {
     $content .= '
                     <tr class="total-row">
                         <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
-                        <td><span class="rupee-symbol">₹</span> '.number_format($grandTotal, 2).'</td>
+                        <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
                     </tr>
                 </table>';
 

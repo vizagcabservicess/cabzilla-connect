@@ -195,6 +195,7 @@ export interface FleetVehicle {
   createdAt: string;
   updatedAt: string;
   vehicle_number?: string;
+  emi?: number; // Vehicle EMI (optional)
 }
 
 export interface VehicleDocument {

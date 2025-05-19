@@ -454,34 +454,88 @@ try {
             break;
             
         case 'vehicles':
-            // Get vehicle utilization statistics
+            // Get vehicle utilization statistics (auto-sync with assigned fleet vehicles)
             try {
-                $sql = "SELECT cab_type as vehicleType, COUNT(*) as bookings, SUM(total_amount) as revenue 
-                        FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? 
-                        GROUP BY cab_type ORDER BY bookings DESC";
+                // 1. Main vehicle stats
+                $sql = "SELECT 
+                            v.id as vehicle_id,
+                            v.name as vehicle_name,
+                            v.vehicle_number,
+                            v.vehicle_type,
+                            COUNT(*) as total_trips,
+                            SUM(b.total_amount) as total_revenue
+                        FROM bookings b
+                        JOIN fleet_vehicles v ON b.fleet_vehicle_id = v.id
+                        WHERE b.fleet_vehicle_id IS NOT NULL
+                          AND DATE(b.created_at) BETWEEN ? AND ?
+                        GROUP BY v.id
+                        ORDER BY total_trips DESC";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param("ss", $startDate, $endDate);
                 $stmt->execute();
                 $result = $stmt->get_result();
-                
                 $vehicleStats = [];
                 while ($row = $result->fetch_assoc()) {
-                    $vehicleStats[] = [
-                        'vehicleType' => $row['vehicleType'],
-                        'bookings' => (int)$row['bookings'],
-                        'revenue' => (float)$row['revenue']
+                    $vehicleStats[$row['vehicle_id']] = [
+                        'vehicle_id' => $row['vehicle_id'],
+                        'vehicle_name' => $row['vehicle_name'],
+                        'vehicle_number' => $row['vehicle_number'],
+                        'vehicle_type' => $row['vehicle_type'],
+                        'total_trips' => (int)$row['total_trips'],
+                        'total_revenue' => (float)$row['total_revenue'],
+                        'fuel_cost' => 0,
+                        'maintenance_cost' => 0,
+                        'profit' => 0
                     ];
                 }
-                
-                $reportData = $vehicleStats;
+
+                // 2. Fuel costs
+                $fuelCosts = [];
+                $sql = "SELECT vehicle_id, SUM(total_cost) AS fuel_cost FROM fuel_records WHERE vehicle_id IS NOT NULL AND DATE(fill_date) BETWEEN ? AND ? GROUP BY vehicle_id";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                while ($row = $result->fetch_assoc()) {
+                    $fuelCosts[$row['vehicle_id']] = (float)$row['fuel_cost'];
+                }
+
+                // 3. Maintenance costs
+                $maintenanceCosts = [];
+                $sql = "SELECT vehicle_id, SUM(cost) AS maintenance_cost FROM maintenance_records WHERE vehicle_id IS NOT NULL AND DATE(service_date) BETWEEN ? AND ? GROUP BY vehicle_id";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                while ($row = $result->fetch_assoc()) {
+                    $maintenanceCosts[$row['vehicle_id']] = (float)$row['maintenance_cost'];
+                }
+
+                // 4. Merge costs into vehicleStats
+                foreach ($vehicleStats as $id => &$stat) {
+                    $stat['fuel_cost'] = $fuelCosts[$id] ?? 0;
+                    $stat['maintenance_cost'] = $maintenanceCosts[$id] ?? 0;
+                    $stat['profit'] = $stat['total_revenue'] - $stat['fuel_cost'] - $stat['maintenance_cost'];
+                }
+                unset($stat);
+
+                // 5. Return as indexed array
+                $reportData = array_values($vehicleStats);
             } catch (Exception $e) {
                 debugLog("Error in vehicles report: " . $e->getMessage());
                 // Provide sample data as fallback
                 $reportData = [
-                    ['vehicleType' => 'Sedan', 'bookings' => 45, 'revenue' => 175640],
-                    ['vehicleType' => 'Ertiga', 'bookings' => 32, 'revenue' => 92601],
-                    ['vehicleType' => 'Innova Crysta', 'bookings' => 28, 'revenue' => 98000],
-                    ['vehicleType' => 'Tempo Traveller', 'bookings' => 12, 'revenue' => 120000]
+                    [
+                        'vehicle_id' => 1,
+                        'vehicle_name' => 'Toyota Etios',
+                        'vehicle_number' => 'AP31AB1234',
+                        'vehicle_type' => 'sedan',
+                        'total_trips' => 45,
+                        'total_revenue' => 175640,
+                        'fuel_cost' => 10000,
+                        'maintenance_cost' => 5000,
+                        'profit' => 160640
+                    ]
                 ];
             }
             break;

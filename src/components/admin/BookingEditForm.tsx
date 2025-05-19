@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,27 +36,43 @@ export function BookingEditForm({
     billingAddress: booking.billingAddress || '',
   });
 
-  // Standardize extra charges data format
-  const initializeExtraCharges = () => {
-    if (booking.extraCharges && Array.isArray(booking.extraCharges)) {
-      return booking.extraCharges.map(charge => ({
+  // Reset form data when booking prop changes
+  useEffect(() => {
+    setFormData({
+      passengerName: booking.passengerName || '',
+      passengerPhone: booking.passengerPhone || '',
+      passengerEmail: booking.passengerEmail || '',
+      pickupLocation: booking.pickupLocation || '',
+      dropLocation: booking.dropLocation || '',
+      pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
+      billingAddress: booking.billingAddress || '',
+    });
+  }, [booking]);
+
+  const extraCharges = booking.extraCharges && Array.isArray(booking.extraCharges)
+    ? booking.extraCharges.map(charge => ({
         amount: typeof charge.amount === 'number' ? charge.amount : parseFloat(String(charge.amount)),
         description: charge.description || (charge as any).label || ''
-      }));
-    }
-    return [];
-  };
-
-  const [extraCharges, setExtraCharges] = useState<{ amount: number; description: string }[]>(
-    initializeExtraCharges()
-  );
+      }))
+    : [];
 
   const [newCharge, setNewCharge] = useState<{ amount: number; description: string }>({
     amount: 0,
     description: ''
   });
 
+  const [pendingExtraCharges, setPendingExtraCharges] = useState<null | { amount: number; description: string }[]>(null);
+
+  // Always use pendingExtraCharges if set, otherwise use booking.extraCharges
+  const displayedExtraCharges = pendingExtraCharges !== null ? pendingExtraCharges : extraCharges;
+
+  // Reset pendingExtraCharges whenever booking.extraCharges changes
+  useEffect(() => {
+    setPendingExtraCharges(null);
+  }, [booking.extraCharges]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -99,20 +114,20 @@ export function BookingEditForm({
     }));
   };
 
+  // Update add/remove functions to work directly on extraCharges and submit the new array on save
   const addExtraCharge = () => {
     if (newCharge.description.trim() === '' || newCharge.amount <= 0) {
       return;
     }
-    
-    setExtraCharges(prev => [...prev, { 
-      amount: newCharge.amount,
-      description: newCharge.description
-    }]);
+    setPendingExtraCharges([
+      ...displayedExtraCharges,
+      { amount: newCharge.amount, description: newCharge.description }
+    ]);
     setNewCharge({ amount: 0, description: '' });
   };
 
   const removeExtraCharge = (index: number) => {
-    setExtraCharges(prev => prev.filter((_, i) => i !== index));
+    setPendingExtraCharges(displayedExtraCharges.filter((_, i) => i !== index));
   };
 
   const validateForm = () => {
@@ -142,45 +157,54 @@ export function BookingEditForm({
     return Object.keys(newErrors).length === 0;
   };
 
-  const calculateTotal = () => {
-    let total = parseFloat(booking.totalAmount.toString()) || 0;
-    const additionalCharges = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
-    return total + additionalCharges;
-  };
+  // PATCH: Base fare is the original booking fare, total is base + extra charges
+  const initialExtraCharges = Array.isArray(booking.extraCharges)
+    ? booking.extraCharges.reduce((sum, c) => sum + (c.amount || 0), 0)
+    : 0;
+  const baseAmount = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - initialExtraCharges;
+  const extraChargesTotal = displayedExtraCharges.reduce((sum, charge) => sum + charge.amount, 0);
+  const totalAmount = baseAmount + extraChargesTotal;
+
+  console.log('booking.totalAmount', booking.totalAmount);
+  console.log('booking.extraCharges', booking.extraCharges);
+  console.log('initialExtraCharges', initialExtraCharges);
+  console.log('baseAmount', baseAmount);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) {
       return;
     }
-    
-    // Ensure extra charges are properly formatted
-    const standardizedExtraCharges = extraCharges.map(charge => ({
-      amount: charge.amount,
-      description: charge.description
-    }));
-    
-    const updatedData = {
-      passengerName: formData.passengerName,
-      passengerPhone: formData.passengerPhone,
-      passengerEmail: formData.passengerEmail,
-      pickupLocation: formData.pickupLocation,
-      dropLocation: formData.dropLocation,
-      pickupDate: formData.pickupDate.toISOString(),
-      billingAddress: formData.billingAddress,
-      extraCharges: standardizedExtraCharges,
-      totalAmount: calculateTotal(),
-    };
-    
-    // Use onSubmit if provided (for backward compatibility), otherwise use onSave
-    const submitHandler = onSubmit || onSave;
-    if (submitHandler) {
-      await submitHandler(updatedData);
+
+    setIsSaving(true);
+    try {
+      const updatedData = {
+        passengerName: formData.passengerName,
+        passengerPhone: formData.passengerPhone,
+        passengerEmail: formData.passengerEmail,
+        pickupLocation: formData.pickupLocation,
+        dropLocation: formData.dropLocation,
+        pickupDate: formData.pickupDate.toISOString(),
+        billingAddress: formData.billingAddress,
+        extraCharges: displayedExtraCharges,
+        totalAmount: totalAmount,
+      };
+      const submitHandler = onSubmit || onSave;
+      if (submitHandler) {
+        await submitHandler(updatedData);
+        // Clear pending charges after successful save
+        setPendingExtraCharges(null);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const isEditable = isBookingEditable(booking.status);
+
+  useEffect(() => {
+    console.log('Booking prop in modal changed:', booking);
+  }, [booking]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -320,23 +344,24 @@ export function BookingEditForm({
         </CardHeader>
         <CardContent>
           <div className="mb-4">
-            {extraCharges.length > 0 ? (
+            {displayedExtraCharges.length > 0 ? (
               <div className="space-y-2">
-                {extraCharges.map((charge, index) => (
+                {displayedExtraCharges.map((charge, index) => (
                   <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
                     <div>
                       <span className="font-medium">{charge.description}</span>
                       <span className="ml-2 text-sm text-gray-500">₹{charge.amount}</span>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeExtraCharge(index)}
-                      disabled={!isEditable || isSubmitting}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    {isEditable && !isSaving && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeExtraCharge(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -345,7 +370,7 @@ export function BookingEditForm({
             )}
           </div>
 
-          {isEditable && (
+          {isEditable && !isSaving && (
             <div className="grid grid-cols-3 gap-2 items-end mt-4">
               <div className="col-span-1">
                 <Label htmlFor="amount">Amount (₹)</Label>
@@ -357,7 +382,7 @@ export function BookingEditForm({
                   step="50"
                   value={newCharge.amount || ''}
                   onChange={handleNewChargeChange}
-                  disabled={isSubmitting}
+                  disabled={isSaving}
                 />
               </div>
               <div className="col-span-1">
@@ -367,14 +392,14 @@ export function BookingEditForm({
                   name="description"
                   value={newCharge.description}
                   onChange={handleNewChargeChange}
-                  disabled={isSubmitting}
+                  disabled={isSaving}
                 />
               </div>
               <div className="col-span-1">
                 <Button
                   type="button"
                   onClick={addExtraCharge}
-                  disabled={!newCharge.description || newCharge.amount <= 0 || isSubmitting}
+                  disabled={!newCharge.description || newCharge.amount <= 0 || isSaving}
                   className="w-full"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -385,25 +410,25 @@ export function BookingEditForm({
           )}
 
           <div className="mt-4 text-right">
-            <p className="text-sm text-gray-500">Base Amount: ₹{booking.totalAmount}</p>
-            {extraCharges.length > 0 && (
+            <p className="text-sm text-gray-500">Base Amount: ₹{baseAmount}</p>
+            {displayedExtraCharges.length > 0 && (
               <p className="text-sm text-gray-500">
-                Additional Charges: ₹{extraCharges.reduce((sum, charge) => sum + charge.amount, 0)}
+                Additional Charges: ₹{extraChargesTotal}
               </p>
             )}
             <p className="text-lg font-bold">
-              Total Amount: ₹{calculateTotal()}
+              Total Amount: ₹{totalAmount}
             </p>
           </div>
         </CardContent>
       </Card>
       
       <div className="flex justify-end gap-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!isEditable || isSubmitting}>
-          {isSubmitting ? "Saving..." : "Save Changes"}
+        <Button type="submit" disabled={!isEditable || isSaving}>
+          {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>
     </form>

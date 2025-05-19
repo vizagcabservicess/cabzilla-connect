@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file - use absolute path with __DIR__
 require_once __DIR__ . '/../../config.php';
@@ -192,18 +191,14 @@ try {
     // Calculate base amount and extra charges
     $totalAmount = (float)$booking['total_amount'];
     $extraChargesTotal = 0;
-    
-    // Calculate total of extra charges
     if (!empty($extraCharges)) {
         foreach ($extraCharges as $charge) {
             $amount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
             $extraChargesTotal += $amount;
         }
     }
-    
-    // Add extra charges to total if they aren't already included
-    $baseAmountWithoutExtra = $totalAmount;
-    $totalAmountWithExtra = $totalAmount + $extraChargesTotal;
+    // PATCH: Calculate base fare correctly
+    $baseFare = $totalAmount - $extraChargesTotal;
     
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
@@ -369,7 +364,7 @@ try {
                     <tbody>
                         <tr>
                             <td>Base Fare</td>
-                            <td>₹ " . number_format($baseAmountBeforeTax, 2) . "</td>
+                            <td>₹ " . number_format($baseFare, 2) . "</td>
                         </tr>";
     
     // Add GST rows if applicable
@@ -395,7 +390,7 @@ try {
     
     $htmlContent .= "
                         <tr class='total-row'>
-                            <td>Subtotal</td>
+                            <td>Total Amount</td>
                             <td>₹ " . number_format($totalAmount, 2) . "</td>
                         </tr>";
     

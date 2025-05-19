@@ -227,6 +227,26 @@ export function EditFleetVehicleDialog({
                     </FormItem>
                   )}
                 />
+                {/* Vehicle EMI Field */}
+                <FormField
+                  control={form.control}
+                  name="emi"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vehicle EMI</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={100}
+                          placeholder="Enter EMI amount"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
               
               {/* Service Information Section */}

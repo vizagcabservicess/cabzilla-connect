@@ -60,11 +60,18 @@ export function BookingInvoice({
     'Cash', 'Credit Card', 'Current Account', 'Overdraft account', 'PhonePe'
   ];
 
+  // PATCH: Calculate base fare and extra charges correctly
+  const extraChargesTotal = Array.isArray(booking.extraCharges)
+    ? booking.extraCharges.reduce((sum, c) => sum + (c.amount || 0), 0)
+    : 0;
+  const baseFare = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - extraChargesTotal;
+
   useEffect(() => {
     if (booking && booking.id) {
       handleGenerateInvoice();
     }
-  }, [booking?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking]);
 
   const validateGSTDetails = () => {
     if (gstEnabled) {
@@ -667,6 +674,24 @@ export function BookingInvoice({
             )}
           </div>
           
+          {/* PATCH: Render correct fare breakdown in the invoice preview (HTML or JSX) */}
+          <div className="fare-breakdown mb-6">
+            <div className="flex justify-between">
+              <span>Base Fare</span>
+              <span>₹{baseFare}</span>
+            </div>
+            {extraChargesTotal > 0 && (
+              <div className="flex justify-between">
+                <span>Extra Charges</span>
+                <span>₹{extraChargesTotal}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold border-t pt-2 mt-2 text-lg">
+              <span>Total Amount</span>
+              <span>₹{booking.totalAmount}</span>
+            </div>
+          </div>
+
           <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full mb-4">
               <TabsTrigger value="html" className="flex-1">HTML View</TabsTrigger>

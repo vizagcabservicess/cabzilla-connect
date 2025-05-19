@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,37 +42,35 @@ export function DriverAssignment({
     const fetchDrivers = async () => {
       setLoading(true);
       try {
-        // Example: This would be replaced with an actual API call to get drivers
         const response = await fetch('/api/admin/get-drivers.php');
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data)) {
-            setDrivers(data);
-          } else {
-            // Fallback to a default driver for testing
-            setDrivers([
-              { id: 1, name: 'John Driver', phone: '9876543210', license_no: 'DL12345', status: 'available', location: 'City Center', vehicle: 'Sedan', email: 'john@example.com' }
-            ]);
-          }
+        const result = await response.json();
+        
+        if (response.ok && result.status === 'success' && Array.isArray(result.data)) {
+          setDrivers(result.data);
         } else {
-          // Fallback to a default driver for testing
-          setDrivers([
-            { id: 1, name: 'John Driver', phone: '9876543210', license_no: 'DL12345', status: 'available', location: 'City Center', vehicle: 'Sedan', email: 'john@example.com' }
-          ]);
+          console.error("Invalid API response:", result);
+          toast({
+            variant: "destructive",
+            title: "Error Loading Drivers",
+            description: result.message || "Failed to load drivers. Please try again."
+          });
+          setDrivers([]);
         }
       } catch (error) {
         console.error("Error fetching drivers:", error);
-        // Fallback to a default driver for testing
-        setDrivers([
-          { id: 1, name: 'John Driver', phone: '9876543210', license_no: 'DL12345', status: 'available', location: 'City Center', vehicle: 'Sedan', email: 'john@example.com' }
-        ]);
+        toast({
+          variant: "destructive",
+          title: "Error Loading Drivers",
+          description: "Failed to connect to the server. Please try again."
+        });
+        setDrivers([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchDrivers();
-  }, []);
+  }, [toast]);
 
   const handleDriverSelect = (value: string) => {
     setSelectedDriver(value);

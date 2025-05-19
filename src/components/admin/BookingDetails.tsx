@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +33,10 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
+
+  useEffect(() => {
+    console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
+  }, [booking]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -168,9 +171,13 @@ export function BookingDetails({
         </TabsContent>
 
         <TabsContent value="edit" className="py-4">
-          <BookingEditForm 
-            booking={booking} 
-            onSubmit={onEdit}
+          <BookingEditForm
+            key={booking.updatedAt || booking.id}
+            booking={booking}
+            onSubmit={async (updatedData) => {
+              await onEdit(updatedData);
+              setActiveTab('details');
+            }}
             onCancel={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
           />
