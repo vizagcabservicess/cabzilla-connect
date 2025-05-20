@@ -46,8 +46,8 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
-      <div className="space-y-3">
-        <Label htmlFor="name">Full Name</Label>
+      <div className="mobile-form-group">
+        <Label htmlFor="name" className="mobile-label">Full Name</Label>
         <Input
           id="name"
           className="mobile-input"
@@ -55,17 +55,18 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
           {...register('name', { required: 'Name is required' })}
         />
         {errors.name && (
-          <p className="text-red-500 text-sm">{errors.name.message}</p>
+          <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
         )}
       </div>
       
-      <div className="space-y-3">
-        <Label htmlFor="phone">Phone Number</Label>
+      <div className="mobile-form-group">
+        <Label htmlFor="phone" className="mobile-label">Phone Number</Label>
         <Input
           id="phone"
           className="mobile-input"
           placeholder="Enter your phone number"
           type="tel"
+          inputMode="tel"
           {...register('phone', { 
             required: 'Phone number is required',
             pattern: {
@@ -75,17 +76,18 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
           })}
         />
         {errors.phone && (
-          <p className="text-red-500 text-sm">{errors.phone.message}</p>
+          <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
         )}
       </div>
       
-      <div className="space-y-3">
-        <Label htmlFor="email">Email Address</Label>
+      <div className="mobile-form-group">
+        <Label htmlFor="email" className="mobile-label">Email Address</Label>
         <Input
           id="email"
           className="mobile-input"
           placeholder="Enter your email address"
           type="email"
+          inputMode="email"
           {...register('email', {
             required: 'Email is required',
             pattern: {
@@ -95,7 +97,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
           })}
         />
         {errors.email && (
-          <p className="text-red-500 text-sm">{errors.email.message}</p>
+          <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
         )}
       </div>
       
@@ -105,7 +107,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             type="button" 
             variant="outline" 
             onClick={onBack}
-            className="w-full md:w-auto mobile-button order-2 md:order-1"
+            className="w-full md:w-auto mobile-button bg-gray-100 order-2 md:order-1"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back

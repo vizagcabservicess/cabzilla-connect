@@ -37,7 +37,7 @@ export const MobileNavigation = () => {
   ];
   
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom animate-slide-up">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => (
           <Link
@@ -53,6 +53,9 @@ export const MobileNavigation = () => {
               {item.icon}
             </div>
             <span className="text-xs mt-1">{item.label}</span>
+            {currentPath === item.href && (
+              <span className="absolute bottom-0 w-6 h-1 bg-blue-600 rounded-t-md animate-fade-in"></span>
+            )}
           </Link>
         ))}
       </div>

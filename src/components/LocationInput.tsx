@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Location } from "@/types/api";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
-import { X } from "lucide-react";
+import { X, Search, MapPin } from "lucide-react";
 
 interface LocationInputProps {
   id?: string;
@@ -22,21 +23,29 @@ interface LocationInputProps {
   readOnly?: boolean;
 }
 
+// Vizag coordinates
+const VIZAG_LAT = 17.6868;
+const VIZAG_LNG = 83.2185;
+const MAX_DISTANCE_KM = 30;
+
 // Helper to calculate distance between two lat/lng points (Haversine formula)
-function getDistanceFromVizag(lat, lng) {
-  const vizagLat = 17.6868;
-  const vizagLng = 83.2185;
-  const toRad = (value) => (value * Math.PI) / 180;
+function getDistanceFromLatLng(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
   const R = 6371; // Earth radius in km
-  const dLat = toRad(lat - vizagLat);
-  const dLng = toRad(lng - vizagLng);
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(vizagLat)) *
-      Math.cos(toRad(lat)) *
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
       Math.sin(dLng / 2) * Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// Helper to check if a location is within distance from Vizag
+function isWithinVizagRange(lat: number, lng: number, maxDistance: number = MAX_DISTANCE_KM): boolean {
+  return getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng) <= maxDistance;
 }
 
 export function LocationInput({
@@ -96,17 +105,21 @@ export function LocationInput({
   useEffect(() => {
     if (inputValue && suggestions.length > 0) {
       let filtered = suggestions.filter(suggestion => 
-        suggestion.name.toLowerCase().includes(inputValue.toLowerCase())
+        (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase())
       );
-      // If this is a pickup location, filter to within 30km of Vizag
+      
+      // For pickup locations, strictly filter to within 30km of Vizag
       if (isPickupLocation) {
         filtered = filtered.filter(suggestion => {
           if (suggestion.lat && suggestion.lng) {
-            return getDistanceFromVizag(suggestion.lat, suggestion.lng) <= 30;
+            const lat = typeof suggestion.lat === 'string' ? parseFloat(suggestion.lat) : suggestion.lat;
+            const lng = typeof suggestion.lng === 'string' ? parseFloat(suggestion.lng) : suggestion.lng;
+            return isWithinVizagRange(lat, lng);
           }
           return false;
         });
       }
+      
       setFilteredSuggestions(filtered);
     } else {
       setFilteredSuggestions([]);
@@ -121,31 +134,48 @@ export function LocationInput({
         types: ["geocode"],
         componentRestrictions: { country: "in" },
       };
+      
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
+      
       // Restrict to 30km radius for pickup locations
       if (isPickupLocation) {
-        const vizagCenter = new google.maps.LatLng(17.6868, 83.2185);
+        const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
         const circle = new google.maps.Circle({
           center: vizagCenter,
-          radius: 30000, // 30km in meters
+          radius: MAX_DISTANCE_KM * 1000, // 30km in meters
         });
-        autocompleteRef.current.setBounds(circle.getBounds());
+        autocompleteRef.current.setBounds(circle.getBounds() as google.maps.LatLngBounds);
         autocompleteRef.current.setOptions({ strictBounds: true });
       }
+      
       autocompleteRef.current.addListener("place_changed", () => {
         const place = autocompleteRef.current?.getPlace();
         if (place && place.formatted_address) {
           setInputValue(place.formatted_address);
+          
           if (onChange) onChange(place.formatted_address);
-          if (onLocationChange) onLocationChange({
-            id: place.place_id || place.formatted_address,
-            name: place.name || place.formatted_address,
-            address: place.formatted_address,
-            lat: place.geometry?.location?.lat() || 0,
-            lng: place.geometry?.location?.lng() || 0,
-          });
+          
+          if (onLocationChange && place.geometry?.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            
+            // Check if within range for pickup locations
+            if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
+              alert("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+              return;
+            }
+            
+            onLocationChange({
+              id: place.place_id || place.formatted_address,
+              name: place.name || place.formatted_address,
+              address: place.formatted_address,
+              lat: lat,
+              lng: lng,
+            });
+          }
         }
       });
+      
       autocompleteInitializedRef.current = true;
       initializationAttemptsRef.current = 0;
     } catch (error) {
@@ -158,7 +188,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-  }, [isLoaded, google, inputRef.current, isPickupLocation]);
+  }, [isLoaded, google, inputRef.current, isPickupLocation, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -196,7 +226,7 @@ export function LocationInput({
   // Determine subtitle text based on props
   const getSubtitleText = () => {
     if (isPickupLocation) {
-      return "Please select a location in Visakhapatnam";
+      return "Please select a location within 30km of Visakhapatnam";
     } else if (isAirportTransfer) {
       return "Please select a location in Visakhapatnam";
     }
@@ -209,13 +239,14 @@ export function LocationInput({
     <div className={`relative ${className}`}>
       {label && (
         <div className="mb-2">
-          <Label htmlFor={id} className="block font-medium text-gray-700 text-left">
+          <Label htmlFor={id} className="block font-medium text-gray-700 text-left mobile-label">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </Label>
         </div>
       )}
-      <div className="relative">
+      <div className="ios-search-input-wrapper">
+        <Search className="search-icon w-4 h-4" />
         <Input
           id={id}
           ref={inputRef}
@@ -224,14 +255,14 @@ export function LocationInput({
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10"
+          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10 ios-search-input pl-10"
           onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
           onBlur={handleInputBlur}
         />
         {inputValue && !readOnly && (
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-2"
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
@@ -254,12 +285,12 @@ export function LocationInput({
           {filteredSuggestions.map((suggestion) => (
             <div
               key={suggestion.id}
-              className="px-4 py-2 hover:bg-slate-100 cursor-pointer"
+              className="location-suggestion"
               onMouseDown={() => handleSuggestionClick(suggestion)}
             >
-              <div className="font-medium">{suggestion.name}</div>
+              <div className="location-name">{suggestion.name}</div>
               {suggestion.address && suggestion.address !== suggestion.name && (
-                <div className="text-xs text-gray-500">{suggestion.address}</div>
+                <div className="location-address">{suggestion.address}</div>
               )}
             </div>
           ))}
