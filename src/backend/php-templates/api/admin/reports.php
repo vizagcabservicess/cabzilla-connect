@@ -462,6 +462,7 @@ try {
                             v.name as vehicle_name,
                             v.vehicle_number,
                             v.vehicle_type,
+                            v.emi,
                             COUNT(*) as total_trips,
                             SUM(b.total_amount) as total_revenue
                         FROM bookings b
@@ -481,10 +482,13 @@ try {
                         'vehicle_name' => $row['vehicle_name'],
                         'vehicle_number' => $row['vehicle_number'],
                         'vehicle_type' => $row['vehicle_type'],
+                        'emi' => isset($row['emi']) ? (float)$row['emi'] : 0,
                         'total_trips' => (int)$row['total_trips'],
                         'total_revenue' => (float)$row['total_revenue'],
                         'fuel_cost' => 0,
                         'maintenance_cost' => 0,
+                        'commission' => 0,
+                        'avg_driver_salary' => 0,
                         'profit' => 0
                     ];
                 }
@@ -515,11 +519,56 @@ try {
                 foreach ($vehicleStats as $id => &$stat) {
                     $stat['fuel_cost'] = $fuelCosts[$id] ?? 0;
                     $stat['maintenance_cost'] = $maintenanceCosts[$id] ?? 0;
-                    $stat['profit'] = $stat['total_revenue'] - $stat['fuel_cost'] - $stat['maintenance_cost'];
                 }
                 unset($stat);
 
-                // 5. Return as indexed array
+                // 5. Commission per vehicle
+                $commissions = [];
+                $sql = "SELECT vehicle_id, SUM(commission_amount) AS total_commission FROM fleet_commission_payments WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY vehicle_id";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                while ($row = $result->fetch_assoc()) {
+                    $commissions[$row['vehicle_id']] = (float)$row['total_commission'];
+                }
+
+                // 6. Get average driver salary for all drivers in the period
+                $avgDriverSalary = 0;
+                $sql = "SELECT AVG(net_salary) AS avg_driver_salary FROM payroll_entries WHERE status = 'reconciled' AND DATE(date) BETWEEN ? AND ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                if ($row = $result->fetch_assoc()) {
+                    $avgDriverSalary = (float)$row['avg_driver_salary'];
+                }
+
+                // 6b. Get average and total expenses for all expenses in the period
+                $avgExpense = 0;
+                $totalExpense = 0;
+                $sql = "SELECT AVG(amount) AS avg_expense, SUM(amount) AS total_expense FROM financial_ledger WHERE type = 'expense' AND date BETWEEN ? AND ? AND is_deleted = 0";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ss", $startDate, $endDate);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                if ($row = $result->fetch_assoc()) {
+                    $avgExpense = (float)$row['avg_expense'];
+                    $totalExpense = (float)$row['total_expense'];
+                }
+
+                // 7. Merge commission, avg_driver_salary, and expenses into vehicleStats
+                foreach ($vehicleStats as $id => &$stat) {
+                    $stat['commission'] = $commissions[$id] ?? 0;
+                    $stat['avg_driver_salary'] = $avgDriverSalary;
+                    $stat['expenses'] = $avgExpense;
+                    $stat['total_expenses'] = $totalExpense;
+                    // Updated profit calculation
+                    $stat['profit'] = $stat['total_revenue'] - $stat['fuel_cost'] - $stat['maintenance_cost'] - $stat['commission'] - $stat['emi'] - $stat['avg_driver_salary'] - $stat['expenses'];
+                }
+                unset($stat);
+
+                // 8. Return as indexed array
                 $reportData = array_values($vehicleStats);
             } catch (Exception $e) {
                 debugLog("Error in vehicles report: " . $e->getMessage());

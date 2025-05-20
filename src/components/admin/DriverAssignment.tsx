@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,10 +14,11 @@ import {
 } from '@/services/whatsappService';
 import { MessageCircle } from "lucide-react";
 import { commissionAPI } from '@/services/api/commissionAPI';
+import { fleetAPI } from '@/services/api/fleetAPI';
 
 interface DriverAssignmentProps {
   booking: Booking;
-  onAssign: (driverData: { driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
+  onAssign: (driverData: { bookingId: string; driverId: string; driverName: string; driverPhone: string; vehicleNumber: string }) => Promise<void>;
   onCancel: () => void;
   onClose: () => void;
   isSubmitting: boolean;
@@ -41,6 +41,8 @@ export function DriverAssignment({
     percentage: number;
     amount: number;
   } | null>(null);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const { toast } = useToast();
 
   // Fetch available drivers
@@ -76,7 +78,25 @@ export function DriverAssignment({
     };
 
     fetchDrivers();
-  }, [toast]);
+    // Fetch fleet vehicles from the same endpoint as FleetVehicleAssignment
+    const fetchFleetVehicles = async () => {
+      try {
+        const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
+        const response = await fetch(apiUrl).then(res => res.json());
+        const vehicles = response.vehicles || [];
+        // Filter to only show true fleet vehicles (with vehicleNumber, name, and year)
+        const filteredFleetVehicles = vehicles.filter((v) =>
+          typeof v.vehicleNumber === 'string' && v.vehicleNumber.trim() !== '' &&
+          typeof v.name === 'string' && v.name.trim() !== '' &&
+          typeof v.year === 'number' && v.year > 1900
+        );
+        setVehicles(filteredFleetVehicles);
+      } catch (error) {
+        setVehicles([]);
+      }
+    };
+    fetchFleetVehicles();
+  }, [toast, booking.vehicleNumber]);
 
   // Calculate commission when vehicle number changes
   useEffect(() => {
@@ -114,6 +134,31 @@ export function DriverAssignment({
     calculateCommission();
   }, [vehicleNumber, booking.id, booking.totalAmount]);
 
+  // Reactively update selected vehicle if booking.vehicleNumber or vehicles change
+  useEffect(() => {
+    if (
+      Array.isArray(vehicles) &&
+      vehicles.length > 0 &&
+      (booking.vehicleId || booking.vehicleNumber)
+    ) {
+      let found;
+      if (booking.vehicleId) {
+        found = vehicles.find(v => v.id?.toString() === booking.vehicleId?.toString());
+      }
+      if (!found && booking.vehicleNumber) {
+        found = vehicles.find(
+          v =>
+            v.vehicleNumber === booking.vehicleNumber ||
+            v.vehicle_number === booking.vehicleNumber
+        );
+      }
+      if (found && selectedVehicleId !== found.id.toString()) {
+        setSelectedVehicleId(found.id.toString());
+        setVehicleNumber(found.vehicleNumber || found.vehicle_number);
+      }
+    }
+  }, [booking.vehicleId, booking.vehicleNumber, vehicles, selectedVehicleId]);
+
   const handleDriverSelect = (value: string) => {
     setSelectedDriver(value);
     const selected = drivers.find(driver => driver.id.toString() === value);
@@ -125,31 +170,47 @@ export function DriverAssignment({
     }
   };
 
+  const handleVehicleSelect = (val: string) => {
+    setSelectedVehicleId(val);
+    const found = vehicles.find(v => v.id.toString() === val);
+    if (found) {
+      setVehicleNumber(found.vehicleNumber || found.vehicle_number);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!driverName || !driverPhone || !vehicleNumber) {
+    if (!driverName || !driverPhone || !vehicleNumber || !selectedVehicleId) {
       toast({
         variant: "destructive",
         title: "Missing Information",
-        description: "Please fill in all driver details."
+        description: "Please fill in all driver details and select a valid vehicle."
       });
       return;
     }
-    
     try {
       await onAssign({
+        bookingId: booking.id,
+        driverId: selectedDriver,
         driverName,
         driverPhone,
         vehicleNumber
       });
-      
       // Also record the commission payment if commission data is available
       if (commissionData && booking.id) {
+        const vehicle = vehicles.find(v => v.id.toString() === selectedVehicleId);
+        if (!vehicle) {
+          toast({
+            variant: "destructive",
+            title: "Vehicle Not Found",
+            description: `Could not find a vehicle with the selected ID. Please select a valid vehicle.`
+          });
+          return;
+        }
         try {
           await commissionAPI.createCommissionPayment({
             bookingId: booking.id.toString(),
-            vehicleId: vehicleNumber, // Use vehicle number as ID
+            vehicleId: vehicle.id, // Use the correct database ID
             driverId: selectedDriver,
             amount: booking.totalAmount,
             commissionAmount: commissionData.amount,
@@ -157,14 +218,12 @@ export function DriverAssignment({
             status: 'pending',
             notes: `Commission for booking #${booking.bookingNumber}`
           });
-          
           toast({
             title: "Commission Recorded",
             description: `Commission of ₹${commissionData.amount.toFixed(2)} (${commissionData.percentage}%) has been recorded.`
           });
         } catch (commissionError) {
           console.error("Error recording commission:", commissionError);
-          // Don't fail the main assignment if commission recording fails
           toast({
             variant: "warning",
             title: "Commission Recording Failed",
@@ -172,12 +231,10 @@ export function DriverAssignment({
           });
         }
       }
-      
       toast({
         title: "Driver Assigned",
         description: "Driver has been successfully assigned to the booking."
       });
-      
     } catch (error) {
       console.error("Error assigning driver:", error);
       toast({
@@ -249,13 +306,23 @@ export function DriverAssignment({
             </div>
 
             <div>
-              <Label htmlFor="vehicle-number">Vehicle Number</Label>
-              <Input
-                id="vehicle-number"
-                value={vehicleNumber}
-                onChange={(e) => setVehicleNumber(e.target.value)}
-                disabled={isSubmitting}
-              />
+              <Label htmlFor="vehicle-select">Select Fleet Vehicle</Label>
+              <Select
+                value={selectedVehicleId}
+                onValueChange={handleVehicleSelect}
+                disabled={isSubmitting || vehicles.length === 0}
+              >
+                <SelectTrigger id="vehicle-select">
+                  <SelectValue placeholder="Select a fleet vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((v) => (
+                    <SelectItem key={v.id} value={v.id.toString()}>
+                      {v.vehicleNumber || v.vehicle_number} - {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {commissionData && (

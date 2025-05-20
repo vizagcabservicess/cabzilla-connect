@@ -42,11 +42,11 @@ export function BookingDetails({
     setActiveTab(value);
   };
   
-  // Handle vehicle assignment (will update booking.vehicleNumber)
-  const handleAssignVehicle = async (vehicleData: { vehicleNumber: string }) => {
-    // Only update the vehicle number, let the driver assignment handle the rest
+  // Handle vehicle assignment (will update booking.vehicleNumber and vehicleId)
+  const handleAssignVehicle = async (vehicleData: { vehicleNumber: string; vehicleId: string }) => {
     await onEdit({ 
       vehicleNumber: vehicleData.vehicleNumber,
+      vehicleId: vehicleData.vehicleId,
       status: 'confirmed' as BookingStatus 
     });
   };

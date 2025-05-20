@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
 
 interface FleetVehicleAssignmentProps {
   booking: Booking;
-  onAssign: (vehicleData: { vehicleNumber: string }) => Promise<void>;
+  onAssign: (vehicleData: { vehicleNumber: string; vehicleId: string }) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -82,7 +82,8 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
       
       // Call the onAssign function with the vehicle details
       await onAssign({
-        vehicleNumber: selectedVehicle.vehicleNumber
+        vehicleNumber: selectedVehicle.vehicleNumber,
+        vehicleId: selectedVehicle.id
       });
       
       toast.success("Fleet vehicle assigned successfully");

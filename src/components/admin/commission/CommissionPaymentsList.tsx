@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,13 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { commissionAPI } from '@/services/api/commissionAPI';
 import { CommissionPayment } from '@/types/cab';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 interface CommissionPaymentsListProps {
   vehicleId?: string;
   onPaymentUpdated?: () => void;
 }
 
-export function CommissionPaymentsList({ vehicleId, onPaymentUpdated }: CommissionPaymentsListProps) {
+export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpdated }: CommissionPaymentsListProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [payments, setPayments] = useState<CommissionPayment[]>([]);
   const [status, setStatus] = useState<string | undefined>(undefined);
@@ -28,33 +28,91 @@ export function CommissionPaymentsList({ vehicleId, onPaymentUpdated }: Commissi
   const [total, setTotal] = useState(0);
   const [limit] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [vehicleId, setVehicleId] = useState<string>('');
+
+  useEffect(() => {
+    async function fetchVehicles() {
+      // Fetch from the same endpoint as FleetVehicleAssignment
+      try {
+        const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
+        const response = await fetch(apiUrl).then(res => res.json());
+        const vehicles = response.vehicles || [];
+        // Filter to only show true fleet vehicles (with vehicleNumber, name, and year)
+        const filteredFleetVehicles = vehicles.filter((v) =>
+          typeof v.vehicleNumber === 'string' && v.vehicleNumber.trim() !== '' &&
+          typeof v.name === 'string' && v.name.trim() !== '' &&
+          typeof v.year === 'number' && v.year > 1900
+        );
+        setVehicles(filteredFleetVehicles);
+        if (filteredFleetVehicles.length > 0 && (!vehicleId || !filteredFleetVehicles.some(v => String(v.id) === vehicleId))) {
+          setVehicleId(String(filteredFleetVehicles[0].id));
+        }
+      } catch (error) {
+        setVehicles([]);
+      }
+    }
+    fetchVehicles();
+    // eslint-disable-next-line
+  }, []);
+
+  useEffect(() => {
+    if (propVehicleId) setVehicleId(String(propVehicleId));
+  }, [propVehicleId]);
+
+  useEffect(() => {
+    if (vehicles.length > 0 && (!vehicleId || !vehicles.some(v => String(v.id) === vehicleId))) {
+      setVehicleId(String(vehicles[0].id));
+    }
+  }, [vehicles, vehicleId]);
+
+  const toCamelCasePayment = (payment: any): CommissionPayment => ({
+    id: payment.id,
+    bookingId: payment.booking_id,
+    bookingNumber: payment.booking_number,
+    vehicleId: payment.vehicle_id,
+    driverId: payment.driver_id,
+    amount: Number(payment.total_amount),
+    commissionAmount: Number(payment.commission_amount),
+    commissionPercentage: Number(payment.commission_percentage),
+    status: payment.status,
+    paymentDate: payment.payment_date,
+    notes: payment.notes,
+    createdAt: payment.created_at,
+    updatedAt: payment.updated_at,
+  });
 
   const loadPayments = async () => {
+    console.log('loadPayments called with vehicleId:', vehicleId);
     setIsLoading(true);
     try {
+      if (!vehicleId) {
+        setPayments([]);
+        setTotal(0);
+        setIsLoading(false);
+        return;
+      }
       const params: any = {
         limit,
         offset: (page - 1) * limit
       };
-      
       if (vehicleId) {
-        params.vehicleId = vehicleId;
+        params.vehicleId = Number(vehicleId);
       }
-      
       if (status && status !== 'all') {
         params.status = status;
       }
-      
       if (startDate) {
         params.startDate = format(startDate, 'yyyy-MM-dd');
       }
-      
       if (endDate) {
         params.endDate = format(endDate, 'yyyy-MM-dd');
       }
-      
       const response = await commissionAPI.getCommissionPayments(params);
-      setPayments(response.payments);
+      const mappedPayments = Array.isArray(response.payments)
+        ? response.payments.map(toCamelCasePayment)
+        : [];
+      setPayments(mappedPayments);
       setTotal(response.pagination.total);
     } catch (error) {
       console.error('Error loading commission payments:', error);
@@ -104,6 +162,14 @@ export function CommissionPaymentsList({ vehicleId, onPaymentUpdated }: Commissi
 
   const totalPages = Math.ceil(total / limit);
 
+  const handleCreateCommissionPayment = async (paymentData) => {
+    if (!vehicleId || vehicleId === '0' || !vehicles.some(v => String(v.id) === vehicleId)) {
+      toast.error('Please select a valid vehicle before creating a commission payment.');
+      return;
+    }
+    // ... existing code to create commission payment ...
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -112,6 +178,20 @@ export function CommissionPaymentsList({ vehicleId, onPaymentUpdated }: Commissi
           Manage and track commission payments for fleet vehicles
         </CardDescription>
         <div className="flex flex-wrap gap-2 mt-4">
+          <div>
+            <Select value={vehicleId} onValueChange={setVehicleId}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select Vehicle" />
+              </SelectTrigger>
+              <SelectContent>
+                {(Array.isArray(vehicles) ? vehicles : []).map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.vehicle_number || v.vehicleNumber} - {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex-1 min-w-[200px]">
             <Input 
               placeholder="Search by booking ID or amount"
@@ -201,14 +281,14 @@ export function CommissionPaymentsList({ vehicleId, onPaymentUpdated }: Commissi
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4">Loading...</TableCell>
                 </TableRow>
-              ) : filteredPayments.length === 0 ? (
+              ) : (Array.isArray(filteredPayments) ? filteredPayments : []).length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4">No commission payments found</TableCell>
                 </TableRow>
               ) : (
-                filteredPayments.map((payment) => (
+                (Array.isArray(filteredPayments) ? filteredPayments : []).map((payment) => (
                   <TableRow key={payment.id}>
-                    <TableCell>{payment.bookingId}</TableCell>
+                    <TableCell>{payment.bookingNumber}</TableCell>
                     <TableCell>{payment.vehicleId}</TableCell>
                     <TableCell>₹{payment.amount?.toFixed(2)}</TableCell>
                     <TableCell>₹{payment.commissionAmount?.toFixed(2)}</TableCell>

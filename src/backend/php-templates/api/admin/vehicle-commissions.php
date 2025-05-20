@@ -1,4 +1,3 @@
-
 <?php
 // Set proper headers
 header('Content-Type: application/json');
@@ -54,7 +53,7 @@ try {
             }
             
             $payment = $result->fetch_assoc();
-            sendResponse(['status' => 'success', 'data' => $payment]);
+            sendResponse(['status' => 'success', 'data' => [$payment]]);
         }
         else if (isset($_GET['booking_id'])) {
             // Get commission payment for a specific booking
@@ -68,11 +67,11 @@ try {
             $result = $stmt->get_result();
             
             if ($result->num_rows === 0) {
-                sendResponse(['status' => 'error', 'message' => 'No commission payment found for this booking'], 404);
+                sendResponse(['status' => 'success', 'data' => []]);
             }
             
             $payment = $result->fetch_assoc();
-            sendResponse(['status' => 'success', 'data' => $payment]);
+            sendResponse(['status' => 'success', 'data' => [$payment]]);
         }
         else if (isset($_GET['vehicle_id'])) {
             // Get commission payments for a specific vehicle
@@ -240,8 +239,8 @@ try {
                     if ($vehicleResult->num_rows === 0) {
                         // Try to find by vehicle type/cab type
                         if (isset($booking['cab_type']) && !empty($booking['cab_type'])) {
-                            $vehicleStmt = $conn->prepare("SELECT id, commission_percentage, use_default_commission FROM fleet_vehicles WHERE vehicleType = ? OR vehicle_type = ? LIMIT 1");
-                            $vehicleStmt->bind_param("ss", $booking['cab_type'], $booking['cab_type']);
+                            $vehicleStmt = $conn->prepare("SELECT id, commission_percentage, use_default_commission FROM fleet_vehicles WHERE vehicle_type = ? LIMIT 1");
+                            $vehicleStmt->bind_param("s", $booking['cab_type']);
                             $vehicleStmt->execute();
                             $vehicleResult = $vehicleStmt->get_result();
                         }
@@ -315,9 +314,28 @@ try {
                 sendResponse(['status' => 'error', 'message' => 'Missing required fields'], 400);
             }
             
-            $bookingId = intval($data['booking_id']);
+            // Before inserting commission payment, check if vehicle_id exists
             $vehicleId = intval($data['vehicle_id']);
-            $driverId = isset($data['driver_id']) ? intval($data['driver_id']) : null;
+            $vehicleCheck = $conn->prepare("SELECT id FROM fleet_vehicles WHERE id = ?");
+            $vehicleCheck->bind_param("i", $vehicleId);
+            $vehicleCheck->execute();
+            $vehicleResult = $vehicleCheck->get_result();
+            if ($vehicleResult->num_rows === 0) {
+                // Fetch all valid vehicle IDs for a more helpful error
+                $validIdsResult = $conn->query("SELECT id FROM fleet_vehicles");
+                $validIds = [];
+                while ($row = $validIdsResult->fetch_assoc()) {
+                    $validIds[] = $row['id'];
+                }
+                logCommissionError('Attempted to use invalid vehicle_id', ['attempted_vehicle_id' => $vehicleId, 'valid_vehicle_ids' => $validIds]);
+                sendResponse([
+                    'status' => 'error',
+                    'message' => 'Invalid vehicle_id: vehicle does not exist. Attempted vehicle_id: ' . $vehicleId . '. Valid IDs: ' . implode(', ', $validIds)
+                ], 400);
+            }
+            
+            $bookingId = intval($data['booking_id']);
+            $driverId = null; // Always null for vehicle commission
             $totalAmount = floatval($data['total_amount']);
             $commissionPercentage = floatval($data['commission_percentage']);
             $commissionAmount = floatval($data['commission_amount']);

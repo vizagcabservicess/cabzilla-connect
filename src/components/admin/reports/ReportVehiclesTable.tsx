@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Table,
@@ -21,6 +20,11 @@ interface VehiclesReportData {
   net_profit?: number;
   utilization_rate?: number;
   downtime_days?: number;
+  commission?: number;
+  avg_driver_salary?: number;
+  emi?: number;
+  expenses?: number;
+  total_expenses?: number;
 }
 
 interface ReportVehiclesTableProps {
@@ -74,6 +78,13 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
       acc.total_revenue += Number(row.total_revenue || 0);
       acc.fuel_cost += Number(row.fuel_cost || 0);
       acc.maintenance_cost += Number(row.maintenance_cost || 0);
+      acc.commission += Number(row.commission || 0);
+      acc.avg_driver_salary += Number(row.avg_driver_salary || 0);
+      acc.emi += Number(row.emi || 0);
+      // For total expenses, just take the first non-undefined value (since it's the same for all vehicles)
+      if (acc.total_expenses === undefined && row.total_expenses !== undefined) {
+        acc.total_expenses = row.total_expenses;
+      }
       return acc;
     },
     {
@@ -81,15 +92,23 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
       total_revenue: 0,
       fuel_cost: 0,
       maintenance_cost: 0,
-    }
+      commission: 0,
+      avg_driver_salary: 0,
+      emi: 0,
+      total_expenses: undefined,
+    } as any
   );
 
-  // Calculate net profit
-  const netProfit = totals.total_revenue - totals.fuel_cost - totals.maintenance_cost;
+  // Calculate net profit (updated formula)
+  const netProfit = totals.total_revenue - totals.fuel_cost - totals.maintenance_cost - totals.commission - totals.emi - totals.avg_driver_salary - totals.total_expenses;
 
   // Find top performers
   const topRevenue = [...reportData].sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0))[0];
   const topUtilized = [...reportData].sort((a, b) => (b.utilization_rate || 0) - (a.utilization_rate || 0))[0];
+
+  // Get total and average expenses from the first row (same for all vehicles)
+  const totalExpenses = reportData[0]?.total_expenses || 0;
+  const avgExpense = reportData[0]?.expenses || 0;
 
   return (
     <div className="space-y-6">
@@ -105,13 +124,22 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
                 <TableHead className="text-right">Revenue</TableHead>
                 <TableHead className="text-right">Fuel Cost</TableHead>
                 <TableHead className="text-right">Maintenance</TableHead>
+                <TableHead className="text-right">Commission</TableHead>
+                <TableHead className="text-right">EMI</TableHead>
+                <TableHead className="text-right">Avg Driver Salary</TableHead>
+                <TableHead className="text-right">Expenses</TableHead>
                 <TableHead className="text-right">Profit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {reportData.map((row, index) => {
-                const profit = (row.total_revenue || 0) - (row.fuel_cost || 0) - (row.maintenance_cost || 0);
-                
+                const profit = (row.total_revenue || 0)
+                  - (row.fuel_cost || 0)
+                  - (row.maintenance_cost || 0)
+                  - (row.commission || 0)
+                  - (row.emi || 0)
+                  - (row.avg_driver_salary || 0)
+                  - (row.expenses || 0);
                 return (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{row.vehicle_name}</TableCell>
@@ -120,6 +148,10 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
                     <TableCell className="text-right">{formatCurrency(row.total_revenue)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.fuel_cost)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.maintenance_cost)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(row.commission)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(row.emi)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(row.avg_driver_salary)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(row.expenses)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(profit)}</TableCell>
                   </TableRow>
                 );
@@ -131,6 +163,10 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
                 <TableCell className="text-right">{formatCurrency(totals.total_revenue)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(totals.fuel_cost)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(totals.maintenance_cost)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totals.commission)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totals.emi)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totals.avg_driver_salary)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(netProfit)}</TableCell>
               </TableRow>
             </TableBody>
@@ -174,7 +210,7 @@ export function ReportVehiclesTable({ data }: ReportVehiclesTableProps) {
           </div>
           <div className="rounded-md border p-4">
             <div className="text-sm text-muted-foreground">Total Expenses</div>
-            <div className="text-2xl font-bold">{formatCurrency(totals.fuel_cost + totals.maintenance_cost)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
           </div>
           <div className="rounded-md border p-4">
             <div className="text-sm text-muted-foreground">Net Profit</div>
