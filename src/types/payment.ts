@@ -16,6 +16,7 @@ export type PaymentMethod =
   | 'bank_transfer'
   | 'wallet'
   | 'cheque'
+  | 'razorpay'  // Added Razorpay payment method
   | 'other';
 
 // Payment interface
@@ -37,6 +38,22 @@ export interface Payment {
   createdAt: string;
   updatedAt: string;
   booking?: Booking;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
+// Razorpay payment specific details
+export interface RazorpayPaymentDetails {
+  paymentId: string;
+  orderId: string;
+  signature: string;
+  amount: number;
+  status: string;
+  method?: string;
+  email?: string;
+  contact?: string;
+  createdAt: string;
 }
 
 // Payment filter parameters

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -11,17 +11,27 @@ import {
   Globe, 
   Wallet, 
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  AlertCircle
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { 
+  initRazorpay, 
+  createRazorpayOrder, 
+  openRazorpayCheckout, 
+  verifyRazorpayPayment, 
+  RazorpayResponse 
+} from '@/services/razorpayService';
 
 interface PaymentGatewayProps {
   totalAmount: number;
   onPaymentComplete: () => void;
+  bookingDetails?: any;
 }
 
-export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewayProps) {
+export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails }: PaymentGatewayProps) {
   const [paymentMethod, setPaymentMethod] = useState<string>("upi");
   const [upiId, setUpiId] = useState<string>("");
   const [cardNumber, setCardNumber] = useState<string>("");
@@ -29,13 +39,111 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
   const [cardCvv, setCardCvv] = useState<string>("");
   const [cardName, setCardName] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const { toast } = useToast();
+  const [razorpayLoaded, setRazorpayLoaded] = useState<boolean>(false);
+  const { toast: useToastFn } = useToast();
   const navigate = useNavigate();
+  
+  // Load Razorpay on component mount
+  useEffect(() => {
+    const loadRazorpay = async () => {
+      const loaded = await initRazorpay();
+      setRazorpayLoaded(loaded);
+    };
+    
+    loadRazorpay();
+  }, []);
 
-  const handlePayment = () => {
+  const handleRazorpayPayment = async () => {
+    if (!razorpayLoaded) {
+      toast.error('Razorpay failed to load. Please refresh and try again.');
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // Create order on server
+      const order = await createRazorpayOrder(totalAmount);
+      
+      if (!order) {
+        toast.error('Failed to create payment order');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Configure Razorpay options
+      const options = {
+        key: "rzp_test_41fJeGiVFyU9OQ", // Your Key ID
+        amount: order.amount,
+        currency: order.currency,
+        name: "CabBooking Service",
+        description: "Cab Booking Payment",
+        order_id: order.id,
+        prefill: {
+          name: bookingDetails?.customerName || "",
+          email: bookingDetails?.customerEmail || "",
+          contact: bookingDetails?.customerPhone || ""
+        },
+        theme: {
+          color: "#3B82F6"
+        },
+        handler: function (response: RazorpayResponse) {
+          // Handle success callback
+          handlePaymentSuccess(response);
+        },
+        modal: {
+          ondismiss: function() {
+            setIsProcessing(false);
+            toast.warning('Payment cancelled');
+          }
+        }
+      };
+      
+      // Open Razorpay checkout
+      openRazorpayCheckout(
+        options,
+        handlePaymentSuccess,
+        (error) => {
+          console.error('Razorpay error:', error);
+          toast.error(error.description || 'Payment failed');
+          setIsProcessing(false);
+        }
+      );
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      toast.error('Payment failed. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+  
+  const handlePaymentSuccess = async (response: RazorpayResponse) => {
+    try {
+      // Verify payment on server
+      const verified = await verifyRazorpayPayment(
+        response.razorpay_payment_id, 
+        response.razorpay_order_id, 
+        response.razorpay_signature,
+        bookingDetails?.id
+      );
+      
+      if (verified) {
+        toast.success(`Your payment of ₹${totalAmount.toLocaleString('en-IN')} was successful!`);
+        onPaymentComplete();
+      } else {
+        toast.error('Payment verification failed. Please contact support.');
+      }
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      toast.error('Payment verification failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDefaultPayment = () => {
     // Validate payment details based on selected method
     if (paymentMethod === "upi" && !upiId) {
-      toast({
+      useToastFn({
         title: "UPI ID Required",
         description: "Please enter a valid UPI ID to proceed with payment",
         variant: "destructive",
@@ -45,7 +153,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
 
     if (paymentMethod === "card") {
       if (!cardNumber || !cardExpiry || !cardCvv || !cardName) {
-        toast({
+        useToastFn({
           title: "Card Details Required",
           description: "Please fill in all the required card details",
           variant: "destructive",
@@ -60,7 +168,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
     setTimeout(() => {
       setIsProcessing(false);
       
-      toast({
+      useToastFn({
         title: "Payment Successful",
         description: `Your payment of ₹${totalAmount.toLocaleString('en-IN')} was successful!`,
         duration: 5000,
@@ -68,6 +176,14 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
       
       onPaymentComplete();
     }, 2000);
+  };
+  
+  const handlePayment = () => {
+    if (paymentMethod === "razorpay") {
+      handleRazorpayPayment();
+    } else {
+      handleDefaultPayment();
+    }
   };
 
   return (
@@ -86,7 +202,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
       </div>
       
       <Tabs defaultValue="upi" value={paymentMethod} onValueChange={setPaymentMethod} className="w-full">
-        <TabsList className="grid grid-cols-4 mb-4">
+        <TabsList className="grid grid-cols-5 mb-4">
           <TabsTrigger value="upi" className="flex flex-col items-center py-3">
             <Smartphone size={16} className="mb-1" />
             <span className="text-xs">UPI</span>
@@ -102,6 +218,14 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
           <TabsTrigger value="wallet" className="flex flex-col items-center py-3">
             <Wallet size={16} className="mb-1" />
             <span className="text-xs">Wallet</span>
+          </TabsTrigger>
+          <TabsTrigger value="razorpay" className="flex flex-col items-center py-3">
+            <img 
+              src="https://razorpay.com/assets/razorpay-glyph.svg" 
+              alt="Razorpay" 
+              className="h-4 mb-1" 
+            />
+            <span className="text-xs">Razorpay</span>
           </TabsTrigger>
         </TabsList>
         
@@ -126,10 +250,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
                     key={app} 
                     className="border rounded-md p-2 text-center text-xs cursor-pointer hover:bg-gray-50"
                     onClick={() => {
-                      toast({
-                        title: `${app} Selected`,
-                        description: "Please enter your UPI ID to proceed",
-                      });
+                      toast.info(`${app} Selected, please enter your UPI ID to proceed`);
                     }}
                   >
                     {app}
@@ -225,6 +346,50 @@ export function PaymentGateway({ totalAmount, onPaymentComplete }: PaymentGatewa
                 </div>
               ))}
             </RadioGroup>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="razorpay" className="mt-4">
+          <div className="space-y-4">
+            <div className="bg-blue-50 p-4 rounded-lg flex items-start">
+              <div className="mr-3 mt-1">
+                <CheckCircle2 className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-blue-800">Fast & Secure Payment</h3>
+                <p className="text-sm text-blue-600 mt-1">
+                  Pay securely using Razorpay - India's trusted payment gateway. Your payment will be processed instantly.
+                </p>
+              </div>
+            </div>
+            
+            {!razorpayLoaded && (
+              <div className="bg-amber-50 p-4 rounded-lg flex items-start">
+                <div className="mr-3 mt-1">
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-amber-800">Loading Payment Gateway</h3>
+                  <p className="text-sm text-amber-600 mt-1">
+                    Please wait while we connect to Razorpay...
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="border rounded-md p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm font-medium">Total Amount</p>
+                  <p className="text-xl font-bold text-blue-600">₹{totalAmount.toLocaleString('en-IN')}</p>
+                </div>
+                <img 
+                  src="https://razorpay.com/assets/razorpay-logo.svg" 
+                  alt="Razorpay" 
+                  className="h-8" 
+                />
+              </div>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

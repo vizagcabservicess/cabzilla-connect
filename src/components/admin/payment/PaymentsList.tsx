@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { format } from 'date-fns';
-import { MoreHorizontal, Mail, AlertTriangle, Check } from 'lucide-react';
+import { MoreHorizontal, Mail, AlertTriangle, Check, ExternalLink } from 'lucide-react';
 import { Payment, PaymentStatus } from '@/types/payment';
 import { 
   Table, 
@@ -59,6 +59,7 @@ interface PaymentsListProps {
 export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, isLoading }: PaymentsListProps) {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
+  const [razorpayDetailsOpen, setRazorpayDetailsOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   
   // Update payment status state
@@ -106,6 +107,12 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
   const openReminderDialog = (payment: Payment) => {
     setSelectedPayment(payment);
     setReminderDialogOpen(true);
+  };
+  
+  // Open Razorpay details dialog
+  const openRazorpayDetails = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setRazorpayDetailsOpen(true);
   };
   
   // Handle update payment
@@ -166,6 +173,12 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
   const isOverdue = (dueDate: string) => {
     return new Date(dueDate) < new Date();
   };
+
+  // Check if payment is via Razorpay
+  const isRazorpayPayment = (payment: Payment) => {
+    return payment.paymentMethod === 'razorpay' || 
+           (payment.notes && payment.notes.includes('razorpay'));
+  };
   
   return (
     <div className="rounded-md border">
@@ -177,13 +190,14 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
             <TableHead className="hidden md:table-cell">Due Date</TableHead>
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Method</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-10">
+              <TableCell colSpan={7} className="text-center py-10">
                 <div className="flex flex-col items-center justify-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-800 mb-2"></div>
                   <p>Loading payments...</p>
@@ -192,7 +206,7 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
             </TableRow>
           ) : payments.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-10">
+              <TableCell colSpan={7} className="text-center py-10">
                 <p className="text-muted-foreground">No payments found</p>
                 <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search terms.</p>
               </TableCell>
@@ -227,6 +241,15 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                   )}
                 </TableCell>
                 <TableCell>{getStatusBadge(payment.paymentStatus)}</TableCell>
+                <TableCell>
+                  {isRazorpayPayment(payment) ? (
+                    <Badge className="bg-blue-500 hover:bg-blue-600 cursor-pointer" onClick={() => openRazorpayDetails(payment)}>
+                      Razorpay
+                    </Badge>
+                  ) : (
+                    <span className="text-sm">{payment.paymentMethod || 'Not specified'}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -241,6 +264,12 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                         <Check className="h-4 w-4 mr-2" />
                         Update Payment
                       </DropdownMenuItem>
+                      {isRazorpayPayment(payment) && (
+                        <DropdownMenuItem onClick={() => openRazorpayDetails(payment)}>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Razorpay Details
+                        </DropdownMenuItem>
+                      )}
                       {payment.paymentStatus !== 'paid' && payment.customerEmail && (
                         <>
                           <DropdownMenuSeparator />
@@ -312,6 +341,7 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                       <SelectItem value="upi">UPI</SelectItem>
                       <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                       <SelectItem value="wallet">Wallet</SelectItem>
+                      <SelectItem value="razorpay">Razorpay</SelectItem>
                       <SelectItem value="cheque">Cheque</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
@@ -386,6 +416,77 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
             </Button>
             <Button onClick={handleSendReminder}>
               Send Reminder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Razorpay Details Dialog */}
+      <Dialog open={razorpayDetailsOpen} onOpenChange={setRazorpayDetailsOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Razorpay Payment Details</DialogTitle>
+            <DialogDescription>
+              Details for payment #{selectedPayment?.id} via Razorpay
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            {selectedPayment && (
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-blue-800">Transaction Information</h3>
+                  <img 
+                    src="https://razorpay.com/assets/razorpay-glyph.svg" 
+                    alt="Razorpay" 
+                    className="h-6" 
+                  />
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center border-b border-blue-100 pb-2">
+                    <span className="text-sm text-blue-700">Payment ID:</span>
+                    <span className="font-mono text-sm">{selectedPayment.notes ? selectedPayment.notes.split('razorpay_payment_id:')[1]?.split(',')[0]?.trim() || 'N/A' : 'N/A'}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center border-b border-blue-100 pb-2">
+                    <span className="text-sm text-blue-700">Order ID:</span>
+                    <span className="font-mono text-sm">{selectedPayment.notes ? selectedPayment.notes.split('razorpay_order_id:')[1]?.split(',')[0]?.trim() || 'N/A' : 'N/A'}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center border-b border-blue-100 pb-2">
+                    <span className="text-sm text-blue-700">Amount:</span>
+                    <span className="font-medium">{formatCurrency(selectedPayment.amount)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center border-b border-blue-100 pb-2">
+                    <span className="text-sm text-blue-700">Status:</span>
+                    <span>{getStatusBadge(selectedPayment.paymentStatus)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-blue-700">Timestamp:</span>
+                    <span className="text-sm">{selectedPayment.paymentDate ? format(new Date(selectedPayment.paymentDate), 'dd MMM yyyy, HH:mm:ss') : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-2">
+              <Button 
+                variant="outline" 
+                className="w-full flex items-center justify-center"
+                onClick={() => window.open("https://dashboard.razorpay.com/app/dashboard", "_blank")}
+              >
+                <ExternalLink size={16} className="mr-2" />
+                Open Razorpay Dashboard
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={() => setRazorpayDetailsOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
