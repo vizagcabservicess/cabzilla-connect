@@ -37,7 +37,7 @@ export const MobileNavigation = () => {
   ];
   
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom animate-slide-up">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => (
           <Link
