@@ -63,7 +63,7 @@ export const MobileNavigation = () => {
             {currentPath === item.href && (
               <motion.div
                 layoutId="navBottomIndicator"
-                className="absolute bottom-0 w-6 h-1 bg-blue-600 rounded-t-md"
+                className="absolute bottom-0 w-12 h-1 bg-blue-600 rounded-t-md"
                 initial={false}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
               />

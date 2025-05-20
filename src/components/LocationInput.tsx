@@ -17,6 +17,7 @@ export interface Location {
   isInVizag?: boolean;
   city?: string;
   state?: string;
+  popularityScore?: number;
 }
 
 interface LocationInputProps {
@@ -144,45 +145,47 @@ export function LocationInput({
     if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
     
     try {
-      console.log("Initializing Google Maps Autocomplete with relaxed bounds");
+      console.log("Initializing Google Maps Autocomplete with restricted bounds");
+      
+      // Create a circle around Vizag city center
+      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+      const circle = new google.maps.Circle({
+        center: vizagCenter,
+        radius: MAX_DISTANCE_KM * 1000, // Convert km to meters
+      });
+      
+      const strictBounds = circle.getBounds() as google.maps.LatLngBounds;
+      
+      // Configure Autocomplete options with strict bounds
       const options: google.maps.places.AutocompleteOptions = {
-        types: ["geocode", "establishment"], // Allow more place types
+        types: ["geocode", "establishment"],
         componentRestrictions: { country: "in" },
+        bounds: strictBounds,
+        strictBounds: isPickupLocation, // Enforce strict bounds for pickup locations
       };
       
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
-      // Set a much larger radius for search (100km instead of 30km)
-      // This allows finding more places but we'll filter them after
-      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-      const circle = new google.maps.Circle({
-        center: vizagCenter,
-        radius: 100000, // 100km in meters (larger search area)
-      });
-      autocompleteRef.current.setBounds(circle.getBounds() as google.maps.LatLngBounds);
-      
-      // Only use strict bounds for airport transfers
-      if (isAirportTransfer) {
-        autocompleteRef.current.setOptions({ strictBounds: true });
-      }
-      
+      // Add place_changed listener
       autocompleteRef.current.addListener("place_changed", () => {
         const place = autocompleteRef.current?.getPlace();
-        if (place && place.formatted_address) {
-          setInputValue(place.formatted_address);
+        if (place && place.geometry?.location) {
+          setInputValue(place.name || place.formatted_address || "");
           
-          if (onChange) onChange(place.formatted_address);
+          if (onChange && place.formatted_address) {
+            onChange(place.formatted_address);
+          }
           
-          if (onLocationChange && place.geometry?.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            
-            // Check if within range for pickup locations
-            if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
-              toast("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-              return;
-            }
-            
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          
+          // Check if within range for pickup locations
+          if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
+            toast("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+            return;
+          }
+          
+          if (onLocationChange) {
             onLocationChange({
               id: place.place_id || place.formatted_address || "",
               name: place.name || place.formatted_address || "",
@@ -266,8 +269,8 @@ export function LocationInput({
           </Label>
         </div>
       )}
-      <div className="ios-search-input-wrapper">
-        <Search className="search-icon w-4 h-4" />
+      <div className="ios-search-input-wrapper relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <Input
           id={id}
           ref={inputRef}
@@ -276,7 +279,7 @@ export function LocationInput({
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10 ios-search-input pl-10"
+          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input"
           onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
           onBlur={handleInputBlur}
         />
@@ -306,12 +309,12 @@ export function LocationInput({
           {filteredSuggestions.map((suggestion) => (
             <div
               key={suggestion.id}
-              className="location-suggestion"
+              className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
               onMouseDown={() => handleSuggestionClick(suggestion)}
             >
-              <div className="location-name">{suggestion.name}</div>
+              <div className="font-medium">{suggestion.name}</div>
               {suggestion.address && suggestion.address !== suggestion.name && (
-                <div className="location-address">{suggestion.address}</div>
+                <div className="text-sm text-gray-500">{suggestion.address}</div>
               )}
             </div>
           ))}

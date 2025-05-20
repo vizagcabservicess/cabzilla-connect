@@ -36,17 +36,17 @@ export const TabBar: React.FC<TabBarProps> = ({
             key={tab.id}
             onClick={() => handleTabClick(tab.id)}
             className={`flex-1 relative py-3 text-sm font-medium transition-colors z-10
-              ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500'}`}
+              ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`}
           >
-            {tab.label}
             {activeTab === tab.id && (
               <motion.div 
-                layoutId="activeTabIndicator"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 mx-auto w-12"
+                layoutId="activeTabBackground"
+                className="absolute inset-0 bg-blue-600 rounded-lg"
                 initial={false}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
               />
             )}
+            <span className="relative z-10">{tab.label}</span>
           </button>
         ))}
       </div>

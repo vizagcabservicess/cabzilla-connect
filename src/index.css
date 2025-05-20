@@ -1,754 +1,179 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*
-  The screen utility is added here to fix a weird Next.js error:
-  https://github.com/tailwindlabs/tailwindcss/issues/4184
-*/
-@layer utilities {
-  @variants responsive {
-    .screen {
-      @apply block;
-    }
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+ 
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
   }
 }
 
-/* Importing Montserrat font */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
-
-/* Applying Montserrat to the body */
-body {
-  font-family: 'Montserrat', sans-serif;
-}
-
-/* Custom CSS */
-.container {
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-/* Custom Colors */
-.cab-blue {
-  color: #3B82F6;
-}
-
-.cab-gray {
-  color: #64748B;
-}
-
-.bg-cabBlue-100 {
-  background-color: #EBF4FF;
-}
-
-.bg-cabBlue-200 {
-  background-color: #C6DAF7;
-}
-
-.bg-cabBlue-300 {
-  background-color: #A3C0F0;
-}
-
-.bg-cabBlue-400 {
-  background-color: #80A6E9;
-}
-
-.bg-cabBlue-500 {
-  background-color: #5D8DDF;
-}
-
-.bg-cabBlue-600 {
-  background-color: #3B82F6;
-}
-
-.bg-cabBlue-700 {
-  background-color: #2A69D4;
-}
-
-.bg-cabBlue-800 {
-  background-color: #1E4DAA;
-}
-
-.bg-cabBlue-900 {
-  background-color: #163A79;
-}
-
-.text-cabBlue-100 {
-  color: #EBF4FF;
-}
-
-.text-cabBlue-200 {
-  color: #C6DAF7;
-}
-
-.text-cabBlue-300 {
-  color: #A3C0F0;
-}
-
-.text-cabBlue-400 {
-  color: #80A6E9;
-}
-
-.text-cabBlue-500 {
-  color: #5D8DDF;
-}
-
-.text-cabBlue-600 {
-  color: #3B82F6;
-}
-
-.text-cabBlue-700 {
-  color: #2A69D4;
-}
-
-.text-cabBlue-800 {
-  color: #1E4DAA;
-}
-
-.text-cabBlue-900 {
-  color: #163A79;
-}
-
-.bg-cabGray-100 {
-  background-color: #F1F5F9;
-}
-
-.bg-cabGray-200 {
-  background-color: #E2E8F0;
-}
-
-.bg-cabGray-300 {
-  background-color: #CBD5E1;
-}
-
-.bg-cabGray-400 {
-  background-color: #94A3B8;
-}
-
-.bg-cabGray-500 {
-  background-color: #64748B;
-}
-
-.bg-cabGray-600 {
-  background-color: #475569;
-}
-
-.bg-cabGray-700 {
-  background-color: #334155;
-}
-
-.bg-cabGray-800 {
-  background-color: #1E293B;
-}
-
-.bg-cabGray-900 {
-  background-color: #0F172A;
-}
-
-.text-cabGray-100 {
-  color: #F1F5F9;
-}
-
-.text-cabGray-200 {
-  color: #E2E8F0;
-}
-
-.text-cabGray-300 {
-  color: #CBD5E1;
-}
-
-.text-cabGray-400 {
-  color: #94A3B8;
-}
-
-.text-cabGray-500 {
-  color: #64748B;
-}
-
-.text-cabGray-600 {
-  color: #475569;
-}
-
-.text-cabGray-700 {
-  color: #334155;
-}
-
-.text-cabGray-800 {
-  color: #1E293B;
-}
-
-.text-cabGray-900 {
-  color: #0F172A;
-}
-
-/* Mobile app specific styles */
-:root {
-  --app-header-height: 60px;
-  --app-bottom-nav-height: 64px;
-}
-
-html, body {
-  overscroll-behavior: none;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-@media (max-width: 768px) {
-  html, body {
-    -webkit-overflow-scrolling: touch;
+@layer base {
+  * {
+    @apply border-border;
   }
-  
   body {
-    padding-bottom: calc(var(--app-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
-  }
-  
-  /* Fix for iOS bottom inset */
-  .mobile-safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    @apply bg-background text-foreground;
   }
 }
 
-/* Mobile App Animations */
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulse-once {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slide-in {
-  from {
-    transform: translateX(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.animate-slide-up {
-  animation: slide-up 0.3s ease-out;
-}
-
-.animate-pulse-once {
-  animation: pulse-once 0.3s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-.animate-slide-in {
-  animation: slide-in 0.3s ease-out;
-}
-
-/* Enhanced Mobile Bottom Navigation */
-.bottom-nav {
-  display: flex;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: white;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 50;
-  height: var(--app-bottom-nav-height);
-  padding-bottom: env(safe-area-inset-bottom, 0);
-}
-
-.bottom-nav-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #9CA3AF;
-  font-size: 0.75rem;
-  transition: color 0.2s;
-  position: relative;
-}
-
-.bottom-nav-item.active {
-  color: #3B82F6;
-}
-
-.bottom-nav-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: 24px;
-  height: 3px;
-  background-color: #3B82F6;
-  border-top-left-radius: 3px;
-  border-top-right-radius: 3px;
-  animation: fade-in 0.3s ease-out;
-}
-
-.bottom-nav-label {
-  margin-top: 4px;
-  font-size: 0.625rem;
-}
-
-/* Enhanced Mobile Form Elements */
-.mobile-input {
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 12px;
-  padding: 16px;
-  font-size: 16px;
-  border: 1px solid #E5E7EB;
-  background-color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-  height: 52px;
-}
-
-.mobile-input:focus {
-  border-color: #3B82F6;
-  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.3);
-  outline: none;
-}
-
-.mobile-button {
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 12px;
-  padding: 16px;
-  font-size: 16px;
-  font-weight: 500;
-  border: none;
-  background-color: #3B82F6;
-  color: white;
-  transition: all 0.2s;
-  touch-action: manipulation;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mobile-button:active {
-  transform: scale(0.98);
-  background-color: #2563EB;
-}
-
-/* App-like containers */
-.app-card {
-  border-radius: 16px;
-  background-color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  transition: all 0.2s;
-}
-
-.app-card:active {
-  transform: scale(0.99);
-}
-
-/* Improved Shadcn Elements for Mobile */
-@media (max-width: 768px) {
-  .shadcn-btn {
-    min-height: 52px; /* Larger touch target */
-  }
-  
-  .shadcn-input {
-    height: 52px;
-    font-size: 16px; /* Prevent zoom on iOS */
-  }
-  
-  .shadcn-select {
-    height: 52px;
-  }
-}
-
-/* Shadow Card for mobile */
-.shadow-card {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.3s, transform 0.3s;
-}
-
-.shadow-card:active {
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transform: translateY(1px);
-}
-
-/* Transitions for page changes */
-.page-transition-enter {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.page-transition-enter-active {
-  opacity: 1;
-  transform: translateX(0);
-  transition: opacity 300ms, transform 300ms;
-}
-
-.page-transition-exit {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.page-transition-exit-active {
-  opacity: 0;
-  transform: translateX(-20px);
-  transition: opacity 300ms, transform 300ms;
-}
-
-/* Full screen modal styles */
-.app-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: white;
-  z-index: 100;
-  transform: translateY(100%);
-  transition: transform 0.3s ease-out;
-}
-
-.app-modal.open {
-  transform: translateY(0);
-}
-
-.app-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #E5E7EB;
-}
-
-.app-modal-body {
-  padding: 16px;
-  overflow-y: auto;
-  max-height: calc(100vh - 64px);
-  -webkit-overflow-scrolling: touch;
-}
-
-/* New mobile-specific style improvements */
-.mobile-sheet {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: white;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-  z-index: 50;
-  transform: translateY(100%);
-  transition: transform 0.3s ease-out;
-  padding: 20px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0));
-}
-
-.mobile-sheet.open {
-  transform: translateY(0);
-}
-
-.mobile-sheet-handle {
-  width: 36px;
-  height: 5px;
-  background-color: #E5E7EB;
-  border-radius: 3px;
-  margin: 0 auto 16px;
-}
-
-/* Enhanced form spacing for mobile */
-.mobile-form-group {
-  margin-bottom: 20px;
-}
-
-.mobile-label {
-  font-weight: 500;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.page-container {
-  padding-bottom: calc(var(--app-bottom-nav-height) + 16px + env(safe-area-inset-bottom, 0px));
-}
-
-.ios-search-input {
-  border-radius: 10px;
-  background-color: #f5f7fa;
-  padding-left: 40px;
-  font-size: 16px;
-  height: 48px;
-  box-shadow: none;
-  border: 1px solid rgba(0,0,0,0.07);
-}
-
-.ios-search-input-wrapper {
-  position: relative;
-}
-
-.ios-search-input-wrapper .search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9CA3AF;
-}
-
-/* Location suggestion styles */
-.location-suggestion {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f5f5f5;
-  transition: all 0.15s ease;
-}
-
-.location-suggestion:active {
-  background-color: #f0f7ff;
-}
-
-.location-name {
-  font-weight: 500;
-  font-size: 15px;
-  color: #333;
-}
-
-.location-address {
-  font-size: 13px;
-  color: #64748B;
-  margin-top: 2px;
-}
-
-/* Fix for overlap with bottom navigation */
-.content-wrapper {
-  padding-bottom: calc(var(--app-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
-}
-
-/* Add new styles for improved 30km radius search */
-.radius-indicator {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 2px dashed rgba(59, 130, 246, 0.5);
-  pointer-events: none;
-}
-
-/* Mobile-first booking form */
-.mobile-booking-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.mobile-booking-row {
-  background-color: #fff;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-/* FrameMotion inspired animations */
-.slide-up {
-  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Add framer motion animations to support motion library */
-@keyframes scale-up {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.scale-up {
-  animation: scale-up 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* New Mobile App Tab Bar */
-.app-tab-bar {
-  display: flex;
-  width: 100%;
-  background-color: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.app-tab {
-  flex: 1;
-  padding: 12px 8px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-  position: relative;
-  color: #64748B;
-}
-
-.app-tab.active {
-  color: #3B82F6;
-}
-
-.app-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 24px;
-  height: 3px;
-  background-color: #3B82F6;
-  border-radius: 3px 3px 0 0;
-}
-
-/* Enhanced location search styles */
-.ios-search-input {
-  border-radius: 10px;
-  background-color: #f5f7fa;
-  padding-left: 40px;
-  font-size: 16px;
-  height: 48px;
-  box-shadow: none;
-  border: 1px solid rgba(0,0,0,0.07);
-}
-
-.ios-search-input:focus {
-  background-color: #fff;
-  border-color: #3B82F6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-.ios-search-input-wrapper {
-  position: relative;
-}
-
-.ios-search-input-wrapper .search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9CA3AF;
-}
-
-/* Enhanced location suggestion styles */
-.location-suggestion {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f5f5f5;
-  transition: all 0.15s ease;
-}
-
-.location-suggestion:active {
-  background-color: #f0f7ff;
-}
-
-.location-name {
-  font-weight: 500;
-  font-size: 15px;
-  color: #333;
-}
-
-.location-address {
-  font-size: 13px;
-  color: #64748B;
-  margin-top: 2px;
-}
-
-/* New Booking Form Styles */
-.booking-form {
-  border-radius: 16px;
-  background-color: white;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-}
-
-.booking-form-header {
-  padding: 16px;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.booking-form-body {
-  padding: 16px;
-}
-
-/* New Tabs Component */
+/* Mobile Tabs */
 .mobile-tabs {
-  display: flex;
-  width: 100%;
-  background-color: #f5f7fa;
-  border-radius: 12px;
-  padding: 4px;
-  position: relative;
-  margin-bottom: 16px;
+  @apply flex relative bg-gray-100 p-1 rounded-lg overflow-hidden;
 }
 
+/* Improved active tab styling */
 .mobile-tab {
-  flex: 1;
-  text-align: center;
-  padding: 10px 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748B;
-  position: relative;
-  z-index: 2;
-  transition: color 0.2s ease;
+  @apply relative flex-1 py-3 px-2 text-sm font-medium text-center transition-colors z-10;
 }
 
 .mobile-tab.active {
-  color: #333;
+  @apply text-white;
 }
 
 .mobile-tab-indicator {
-  position: absolute;
-  height: calc(100% - 8px);
-  top: 4px;
-  left: 4px;
-  border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  z-index: 1;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  @apply absolute top-0 left-0 h-full bg-blue-600 rounded-md z-0;
+}
+
+/* Custom Input Styling for iOS-like Search */
+.ios-search-input-wrapper {
+  @apply relative;
+}
+
+.ios-search-input {
+  @apply pl-10 h-12 rounded-xl shadow-sm border-gray-200 bg-gray-50 focus:bg-white focus:border-blue-500 transition-all;
+}
+
+/* Mobile form styling */
+.mobile-form-group {
+  @apply mb-4;
+}
+
+.mobile-label {
+  @apply text-sm font-medium text-gray-700 mb-1;
+}
+
+.mobile-input {
+  @apply h-12 rounded-xl border-gray-200 w-full;
+}
+
+.mobile-button {
+  @apply h-12 rounded-xl;
+}
+
+.location-suggestion {
+  @apply p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100;
+}
+
+.location-name {
+  @apply font-medium;
+}
+
+.location-address {
+  @apply text-sm text-gray-500;
+}
+
+/* Fix for iOS Safari bottom safe area */
+.mobile-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.4s ease-in-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Card shadow */
+.shadow-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* App card for maps */
+.app-card {
+  @apply rounded-xl overflow-hidden shadow-sm border border-gray-200;
 }
