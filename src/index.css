@@ -177,3 +177,13 @@
 .app-card {
   @apply rounded-xl overflow-hidden shadow-sm border border-gray-200;
 }
+
+/* Fix for Search Button in mobile view */
+button[disabled] {
+  opacity: 0.5;
+}
+
+button:not([disabled]) {
+  opacity: 1;
+  cursor: pointer;
+}

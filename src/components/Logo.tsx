@@ -21,8 +21,8 @@ export const Logo: React.FC<LogoProps> = ({
     }
   };
 
-  // Using the uploaded logo
-  const logoPath = '/lovable-uploads/a7c4aa76-7528-425a-8dcc-2168607d3fe2.png';
+  // Using the correct uploaded logo
+  const logoPath = '/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png';
 
   return (
     <Link to="/" className={`block ${className}`}>

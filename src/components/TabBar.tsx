@@ -30,12 +30,12 @@ export const TabBar: React.FC<TabBarProps> = ({
   
   return (
     <div className={`w-full overflow-hidden bg-white rounded-xl ${className}`}>
-      <div className="flex relative">
+      <div className="grid grid-cols-4 relative">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => handleTabClick(tab.id)}
-            className={`flex-1 relative py-3 text-sm font-medium transition-colors z-10
+            className={`relative py-3 text-sm font-medium transition-colors z-10
               ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`}
           >
             {activeTab === tab.id && (

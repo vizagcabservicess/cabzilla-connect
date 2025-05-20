@@ -56,7 +56,7 @@ export function TabTripSelector({
     
     // Store the current time of last clear operation
     sessionStorage.setItem('lastFormClear', Date.now().toString());
-  }, [clearThrottleTime]);
+  }, []);
   
   // Simplified cache data clearing that preserves map-related data
   const clearCacheData = useCallback(() => {
@@ -84,7 +84,7 @@ export function TabTripSelector({
     sessionStorage.setItem('tripType', selectedTab);
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
-  }, [selectedTab, tripMode, clearThrottleTime]);
+  }, [selectedTab, tripMode]);
   
   // Clear cache data when tab changes with debouncing
   useEffect(() => {
