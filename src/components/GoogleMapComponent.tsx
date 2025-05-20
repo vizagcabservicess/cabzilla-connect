@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
@@ -15,6 +14,7 @@ import {
 interface GoogleMapComponentProps {
   pickupLocation: Location;
   dropLocation: Location;
+  tripType: string;
   onDistanceCalculated?: (distance: number, duration: number) => void;
 }
 
@@ -33,6 +33,7 @@ const generateCacheKey = (origin: any, destination: any): string => {
 const GoogleMapComponent = ({ 
   pickupLocation, 
   dropLocation,
+  tripType,
   onDistanceCalculated 
 }: GoogleMapComponentProps) => {
   const { isLoaded, google } = useGoogleMaps();
@@ -109,18 +110,6 @@ const GoogleMapComponent = ({
         directionsCache.set(cacheKey, results);
         setDirections(results);
         
-        // Extract distance and duration if callback provided
-        if (onDistanceCalculated && results.routes[0]?.legs[0]) {
-          const { distance, duration } = results.routes[0].legs[0];
-          const distanceValue = distance?.value ? Math.round(distance.value / 1000) : 0;
-          const durationValue = duration?.value ? Math.round(duration.value / 60) : 0;
-          
-          onDistanceCalculated(distanceValue, durationValue);
-          distanceCalculated.current = true;
-          
-          console.log(`Route calculated: ${distanceValue} km, ${durationValue} min`);
-        }
-        
       } catch (err) {
         console.error("Error calculating directions:", err);
         setError("Failed to calculate route");
@@ -129,12 +118,25 @@ const GoogleMapComponent = ({
     };
     
     fetchDirections();
-  }, [map, directionsService, pickupCoords, dropCoords, google, onDistanceCalculated]);
+  }, [map, directionsService, pickupCoords, dropCoords, google, tripType]);
   
-  // Reset the calculated flag when locations change
+  // Reset the calculated flag when locations or tripType change
   useEffect(() => {
     distanceCalculated.current = false;
-  }, [pickupLocation, dropLocation]);
+  }, [pickupLocation, dropLocation, tripType]);
+  
+  // Add this after the main useEffect for fetching directions
+  useEffect(() => {
+    if (directions && onDistanceCalculated) {
+      const leg = directions.routes[0]?.legs[0];
+      if (leg) {
+        const distanceValue = leg.distance?.value ? Math.round(leg.distance.value / 1000) : 0;
+        const durationValue = leg.duration?.value ? Math.round(leg.duration.value / 60) : 0;
+        onDistanceCalculated(distanceValue, durationValue);
+        distanceCalculated.current = true;
+      }
+    }
+  }, [directions, onDistanceCalculated]);
   
   if (!isLoaded || !google) {
     return (

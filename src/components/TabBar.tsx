@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -20,6 +19,11 @@ export const TabBar: React.FC<TabBarProps> = ({
   className = ''
 }) => {
   const [activeTab, setActiveTab] = useState(defaultTabId || tabs[0]?.id);
+  
+  // Sync activeTab with defaultTabId from parent
+  useEffect(() => {
+    setActiveTab(defaultTabId || tabs[0]?.id);
+  }, [defaultTabId, tabs]);
   
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);

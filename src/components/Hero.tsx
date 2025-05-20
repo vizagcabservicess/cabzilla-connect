@@ -99,6 +99,16 @@ export function Hero() {
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Validate form fields and set isFormValid
+  useEffect(() => {
+    let valid = true;
+    if (!pickupLocation || !pickupLocation.name) valid = false;
+    if ((tripType === 'outstation' || tripType === 'airport') && !dropLocation) valid = false;
+    if (!pickupDate) valid = false;
+    if (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) valid = false;
+    setIsFormValid(valid);
+  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode]);
+
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
     
@@ -255,14 +265,11 @@ export function Hero() {
     if (tripType === 'airport') {
       totalPrice = calculateAirportFare(selectedCab.name, distance);
     } else if (tripType === 'local') {
-      // Get the local package kilometers
-      const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      
-      // For local trips, use the exact package km for price calculation
+      // For local trips, use only the package price (no driver allowance or extras)
       totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
-      
       // Only add extra distance if it's specifically calculated for local trips
       // and is greater than the package limit
+      const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm && tripType === 'local') {
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
@@ -414,14 +421,17 @@ export function Hero() {
   // Custom handler for tab (trip type) changes
   const handleTabChange = (type: TripType) => {
     setTripType(type);
+    setDistance(0);
+    setDuration(0);
+    // Always clear drop location for Local and Tour
+    if (type === 'local' || type === 'tour') {
+      setDropLocation(null);
+    }
+    // For airport, clear drop location if pickup is not in Vizag
     if (type === 'airport') {
-      // Reset drop location if not in Vizag or if empty
       if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
         setDropLocation(null);
       }
-    }
-    if (type === 'local') {
-      setDropLocation(null);
     }
   };
 
@@ -594,8 +604,10 @@ export function Hero() {
                     {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
                       <div className="mt-6 app-card">
                         <GoogleMapComponent
+                          key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
                           pickupLocation={pickupLocation}
                           dropLocation={dropLocation}
+                          tripType={tripType}
                           onDistanceCalculated={handleDistanceCalculated}
                         />
                       </div>
