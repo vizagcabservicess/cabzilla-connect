@@ -35,7 +35,7 @@ export const TabBar: React.FC<TabBarProps> = ({
           <button
             key={tab.id}
             onClick={() => handleTabClick(tab.id)}
-            className={`relative py-3 text-sm font-medium transition-colors z-10
+            className={`relative py-3 text-sm font-medium transition-colors z-10 px-1
               ${activeTab === tab.id ? 'text-white' : 'text-gray-500'}`}
           >
             {activeTab === tab.id && (

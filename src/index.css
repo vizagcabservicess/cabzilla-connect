@@ -181,6 +181,7 @@
 /* Fix for Search Button in mobile view */
 button[disabled] {
   opacity: 0.5;
+  pointer-events: none;
 }
 
 button:not([disabled]) {
