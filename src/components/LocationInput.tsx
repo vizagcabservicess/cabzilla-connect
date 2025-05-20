@@ -2,9 +2,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Location } from "@/types/api";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { X, Search, MapPin } from "lucide-react";
+import { toast } from "sonner";
+
+// Define proper Location type to fix type errors
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  type?: string;
+  isInVizag?: boolean;
+  city?: string;
+  state?: string;
+}
 
 interface LocationInputProps {
   id?: string;
@@ -129,22 +142,27 @@ export function LocationInput({
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
     if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
+    
     try {
+      console.log("Initializing Google Maps Autocomplete with relaxed bounds");
       const options: google.maps.places.AutocompleteOptions = {
-        types: ["geocode"],
+        types: ["geocode", "establishment"], // Allow more place types
         componentRestrictions: { country: "in" },
       };
       
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
-      // Restrict to 30km radius for pickup locations
-      if (isPickupLocation) {
-        const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-        const circle = new google.maps.Circle({
-          center: vizagCenter,
-          radius: MAX_DISTANCE_KM * 1000, // 30km in meters
-        });
-        autocompleteRef.current.setBounds(circle.getBounds() as google.maps.LatLngBounds);
+      // Set a much larger radius for search (100km instead of 30km)
+      // This allows finding more places but we'll filter them after
+      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+      const circle = new google.maps.Circle({
+        center: vizagCenter,
+        radius: 100000, // 100km in meters (larger search area)
+      });
+      autocompleteRef.current.setBounds(circle.getBounds() as google.maps.LatLngBounds);
+      
+      // Only use strict bounds for airport transfers
+      if (isAirportTransfer) {
         autocompleteRef.current.setOptions({ strictBounds: true });
       }
       
@@ -161,16 +179,17 @@ export function LocationInput({
             
             // Check if within range for pickup locations
             if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
-              alert("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+              toast("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
               return;
             }
             
             onLocationChange({
-              id: place.place_id || place.formatted_address,
-              name: place.name || place.formatted_address,
-              address: place.formatted_address,
+              id: place.place_id || place.formatted_address || "",
+              name: place.name || place.formatted_address || "",
+              address: place.formatted_address || "",
               lat: lat,
               lng: lng,
+              isInVizag: isWithinVizagRange(lat, lng)
             });
           }
         }
@@ -179,16 +198,18 @@ export function LocationInput({
       autocompleteInitializedRef.current = true;
       initializationAttemptsRef.current = 0;
     } catch (error) {
+      console.error("Failed to initialize Google Maps Autocomplete:", error);
       initializationAttemptsRef.current++;
       if (initializationAttemptsRef.current < 3) {
         setTimeout(() => {
           autocompleteInitializedRef.current = false;
         }, 500 * initializationAttemptsRef.current);
       } else {
+        toast("Error initializing location search. Please try refreshing the page.");
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-  }, [isLoaded, google, inputRef.current, isPickupLocation, onLocationChange, onChange]);
+  }, [isLoaded, google, inputRef.current, isPickupLocation, isAirportTransfer, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;

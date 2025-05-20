@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Car, History, User } from 'lucide-react';
+import { Home, Car, Clock, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface NavItem {
   icon: React.ReactNode;
@@ -21,12 +22,12 @@ export const MobileNavigation = () => {
     },
     {
       icon: <Car size={20} />,
-      label: 'Cabs',
+      label: 'Book',
       href: '/cabs'
     },
     {
-      icon: <History size={20} />,
-      label: 'Bookings',
+      icon: <Clock size={20} />,
+      label: 'History',
       href: '/dashboard'
     },
     {
@@ -37,7 +38,7 @@ export const MobileNavigation = () => {
   ];
   
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom animate-slide-up">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => (
           <Link
@@ -47,14 +48,25 @@ export const MobileNavigation = () => {
               currentPath === item.href ? 'text-blue-600' : 'text-gray-500'
             }`}
           >
-            <div className={`flex items-center justify-center ${
-              currentPath === item.href ? 'animate-pulse-once' : ''
-            }`}>
+            <div className="relative">
+              {currentPath === item.href && (
+                <motion.div
+                  layoutId="navIndicator"
+                  className="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 rounded-full"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
               {item.icon}
             </div>
             <span className="text-xs mt-1">{item.label}</span>
             {currentPath === item.href && (
-              <span className="absolute bottom-0 w-6 h-1 bg-blue-600 rounded-t-md animate-fade-in"></span>
+              <motion.div
+                layoutId="navBottomIndicator"
+                className="absolute bottom-0 w-6 h-1 bg-blue-600 rounded-t-md"
+                initial={false}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
             )}
           </Link>
         ))}

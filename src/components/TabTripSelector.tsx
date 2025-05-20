@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { motion } from "framer-motion";
 import { useEffect, useCallback, useState, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
@@ -173,19 +173,63 @@ export function TabTripSelector({
     }, 50);
   };
   
+  // Calculate tab indicator position based on selected tab
+  const getTabIndicatorWidth = () => 100 / 4; // 4 tabs
+  const getTabIndicatorLeft = () => {
+    switch (selectedTab) {
+      case 'outstation': return 0;
+      case 'local': return getTabIndicatorWidth();
+      case 'airport': return getTabIndicatorWidth() * 2;
+      case 'tour': return getTabIndicatorWidth() * 3;
+      default: return 0;
+    }
+  };
+  
   return (
     <div className="space-y-4">
-      <Tabs value={selectedTab} className="w-full" onValueChange={handleTabChange}>
-        <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="outstation">Outstation</TabsTrigger>
-          <TabsTrigger value="local">Local</TabsTrigger>
-          <TabsTrigger value="airport">Airport</TabsTrigger>
-          <TabsTrigger value="tour">Tour Packages</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="mobile-tabs">
+        <motion.div 
+          className="mobile-tab-indicator"
+          initial={false}
+          animate={{
+            width: `${getTabIndicatorWidth()}%`,
+            x: `${getTabIndicatorLeft()}%`
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        />
+        <button 
+          className={`mobile-tab ${selectedTab === 'outstation' ? 'active' : ''}`}
+          onClick={() => handleTabChange('outstation')}
+        >
+          Outstation
+        </button>
+        <button 
+          className={`mobile-tab ${selectedTab === 'local' ? 'active' : ''}`}
+          onClick={() => handleTabChange('local')}
+        >
+          Local
+        </button>
+        <button 
+          className={`mobile-tab ${selectedTab === 'airport' ? 'active' : ''}`}
+          onClick={() => handleTabChange('airport')}
+        >
+          Airport
+        </button>
+        <button 
+          className={`mobile-tab ${selectedTab === 'tour' ? 'active' : ''}`}
+          onClick={() => handleTabChange('tour')}
+        >
+          Tour
+        </button>
+      </div>
       
       {selectedTab === 'outstation' && (
-        <div className="flex gap-3 mt-2">
+        <motion.div 
+          className="flex gap-3 mt-2"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
           <Button
             type="button"
             variant={tripMode === 'one-way' ? 'default' : 'outline'}
@@ -204,7 +248,7 @@ export function TabTripSelector({
           >
             Round Trip
           </Button>
-        </div>
+        </motion.div>
       )}
     </div>
   );
