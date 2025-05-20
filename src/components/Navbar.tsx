@@ -1,91 +1,240 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X, Phone } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
+import { Menu, X, User, ChevronDown } from 'lucide-react';
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuIndicator,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  NavigationMenuViewport,
+} from "@/components/ui/navigation-menu";
 
 export function Navbar() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+  const [userInfo, setUserInfo] = useState<any>(null);
+  
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
     };
-
+    
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
-
+  
+  useEffect(() => {
+    // Check if user is logged in
+    const checkUserLogin = () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const userInfoStr = localStorage.getItem('userInfo');
+        
+        if (token && userInfoStr) {
+          const userInfo = JSON.parse(userInfoStr);
+          setUserInfo(userInfo);
+        }
+      } catch (error) {
+        console.error('Error checking user login:', error);
+      }
+    };
+    
+    checkUserLogin();
+  }, []);
+  
   return (
-    <header
-      className={cn(
-        'sticky top-0 w-full z-50 transition-all duration-300',
-        isScrolled
-          ? 'bg-white/90 backdrop-blur-md shadow-sm'
-          : 'bg-white'
-      )}
+    <nav
+      className={`sticky top-0 left-0 right-0 z-50 transition-all duration-300 bg-white ${
+        isScrolled ? 'shadow-md py-2' : 'py-4'
+      }`}
     >
-      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-        <Link 
-          to="/" 
-          className="flex items-center space-x-2"
-        >
-          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-            CC
+      <div className="container mx-auto px-4">
+        <div className="flex justify-between items-center">
+          {/* Logo */}
+          <div className="flex items-center">
+            <Link to="/" className="flex items-center">
+              <img 
+                src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" 
+                alt="Vizag Taxi Hub" 
+                className="h-10 mr-3"
+              />
+            </Link>
           </div>
-          <span className="font-bold text-lg text-gray-900 hidden sm:inline-block">
-            CabZilla
-          </span>
-        </Link>
-
-        <div className="flex items-center space-x-4">
-          <a 
-            href="tel:+919966363662" 
-            className="flex items-center space-x-2 text-blue-600"
-          >
-            <Phone size={18} />
-            <span className="hidden sm:inline">+91 9966363662</span>
-          </a>
-          <Button 
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </Button>
+          
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-1">
+            <NavigationMenu>
+              <NavigationMenuList>
+                <NavigationMenuItem>
+                  <Link to="/">
+                    <NavigationMenuLink className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium">
+                      Home
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
+                <NavigationMenuItem>
+                  <Link to="/cabs">
+                    <NavigationMenuLink className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium">
+                      Our Cabs
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
+                <NavigationMenuItem>
+                  <Link to="/tours">
+                    <NavigationMenuLink className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium">
+                      Tour Packages
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
+                
+                {userInfo ? (
+                  <NavigationMenuItem>
+                    <NavigationMenuTrigger className="px-4 py-2 text-gray-700 font-medium">
+                      My Account
+                    </NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <div className="w-48 p-2">
+                        <div className="mb-2 px-2 py-1">
+                          <p className="text-sm font-medium">{userInfo.name || 'User'}</p>
+                          <p className="text-xs text-gray-500">{userInfo.email}</p>
+                        </div>
+                        <Link to="/dashboard" className="block px-2 py-1.5 text-sm rounded-md hover:bg-gray-100">
+                          Dashboard
+                        </Link>
+                        <Link to="/dashboard/bookings" className="block px-2 py-1.5 text-sm rounded-md hover:bg-gray-100">
+                          My Bookings
+                        </Link>
+                        <Link to="/profile" className="block px-2 py-1.5 text-sm rounded-md hover:bg-gray-100">
+                          Profile
+                        </Link>
+                        <button 
+                          className="w-full text-left px-2 py-1.5 text-sm text-red-600 rounded-md hover:bg-gray-100"
+                          onClick={() => {
+                            localStorage.removeItem('authToken');
+                            localStorage.removeItem('userInfo');
+                            window.location.href = '/';
+                          }}
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </NavigationMenuContent>
+                  </NavigationMenuItem>
+                ) : (
+                  <NavigationMenuItem>
+                    <Link to="/login">
+                      <Button variant="ghost" className="flex items-center">
+                        <User size={18} className="mr-1" />
+                        Login
+                      </Button>
+                    </Link>
+                  </NavigationMenuItem>
+                )}
+              </NavigationMenuList>
+            </NavigationMenu>
+          </div>
+          
+          {/* Mobile menu button */}
+          <div className="md:hidden">
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 focus:outline-none rounded-md hover:bg-gray-100"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
       </div>
-
-      {isMobileMenuOpen && (
-        <div className="fixed inset-x-0 top-14 bg-white border-t border-gray-100 animate-enter">
-          <nav className="container mx-auto px-4 py-4 space-y-2">
-            <MobileNavLink href="/" onClick={() => setIsMobileMenuOpen(false)}>Home</MobileNavLink>
-            <MobileNavLink href="/cabs" onClick={() => setIsMobileMenuOpen(false)}>Book Cab</MobileNavLink>
-            <MobileNavLink href="/offers" onClick={() => setIsMobileMenuOpen(false)}>Offers</MobileNavLink>
-          </nav>
+      
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden animate-fade-in">
+          <div className="bg-white shadow-lg rounded-b-lg px-4 py-3 space-y-2">
+            <Link 
+              to="/" 
+              className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Home
+            </Link>
+            <Link 
+              to="/cabs" 
+              className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Our Cabs
+            </Link>
+            <Link 
+              to="/tours" 
+              className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Tour Packages
+            </Link>
+            
+            <div className="border-t border-gray-200 my-2 pt-2">
+              {userInfo ? (
+                <div>
+                  <div className="px-3 py-2">
+                    <p className="font-medium">{userInfo.name || 'User'}</p>
+                    <p className="text-xs text-gray-500">{userInfo.email}</p>
+                  </div>
+                  <Link 
+                    to="/dashboard" 
+                    className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link 
+                    to="/dashboard/bookings" 
+                    className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    My Bookings
+                  </Link>
+                  <Link 
+                    to="/profile" 
+                    className="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Profile
+                  </Link>
+                  <button 
+                    className="w-full text-left px-3 py-2 text-red-600 rounded-md hover:bg-gray-100"
+                    onClick={() => {
+                      localStorage.removeItem('authToken');
+                      localStorage.removeItem('userInfo');
+                      setMobileMenuOpen(false);
+                      window.location.href = '/';
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <Link 
+                  to="/login" 
+                  className="flex items-center px-3 py-2 rounded-md text-blue-600 hover:bg-blue-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User size={18} className="mr-2" />
+                  Login / Sign Up
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       )}
-    </header>
-  );
-}
-
-interface MobileNavLinkProps {
-  href: string;
-  children: React.ReactNode;
-  onClick?: () => void;
-}
-
-function MobileNavLink({ href, children, onClick }: MobileNavLinkProps) {
-  return (
-    <Link 
-      to={href} 
-      className="block py-3 px-4 text-gray-800 font-medium rounded-lg hover:bg-gray-50 active:bg-gray-100"
-      onClick={onClick}
-    >
-      {children}
-    </Link>
+    </nav>
   );
 }

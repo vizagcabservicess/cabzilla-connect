@@ -13,7 +13,7 @@ import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -25,7 +25,7 @@ import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
-import { Car, History, Home, User } from 'lucide-react';
+import { MobileNavigation } from './MobileNavigation';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -97,6 +97,7 @@ export function Hero() {
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
@@ -205,22 +206,6 @@ export function Hero() {
   }, [hourlyPackage]);
 
   useEffect(() => {
-    if (tripType === 'local' && pickupLocation && pickupDate) {
-      setIsFormValid(true);
-    } else if (tripType === 'outstation' && pickupLocation && dropLocation && pickupDate) {
-      if (tripMode === "round-trip" && !returnDate) {
-        setIsFormValid(false);
-      } else {
-        setIsFormValid(true);
-      }
-    } else if (tripType === 'airport' && pickupLocation && dropLocation && pickupDate) {
-      setIsFormValid(true);
-    } else {
-      setIsFormValid(false);
-    }
-  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
-
-  useEffect(() => {
     if (tripType === 'local') {
       // For local trips, reset the distance to match the selected package
       const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;
@@ -244,9 +229,12 @@ export function Hero() {
       return;
     }
     
-    if (currentStep === 1) {
+    setIsLoading(true);
+    
+    setTimeout(() => {
       setCurrentStep(2);
-    }
+      setIsLoading(false);
+    }, 500); // Add a slight delay for animation effect
   };
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
@@ -337,6 +325,7 @@ export function Hero() {
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
+      setIsLoading(true);
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);
       
@@ -391,6 +380,8 @@ export function Hero() {
         variant: "destructive",
         duration: 5000,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -435,21 +426,30 @@ export function Hero() {
   };
 
   return (
-    <section className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 overflow-hidden mobile-safe-bottom">
+    <section className="relative min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h5 className="text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3">
+        <div className={`text-center mb-8 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
+          {currentStep > 1 && (
+            <button 
+              onClick={() => setCurrentStep(1)} 
+              className="flex items-center text-blue-600 mb-2 md:hidden animate-fade-in"
+            >
+              <ArrowLeft size={16} className="mr-1" />
+              <span>Back</span>
+            </button>
+          )}
+          <h5 className={`text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
             Book a Cab in Minutes
           </h5>
-          <h1 className="text-4xl md:text-5xl font-bold text-cabGray-800 mb-4">
-            Your Journey, Our Priority
+          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-4 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
+            {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
           </h1>
         </div>
 
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white rounded-xl shadow-card border p-8">
+              <div className="bg-white rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
@@ -485,7 +485,7 @@ export function Hero() {
                         value={hourlyPackage}
                         onValueChange={setHourlyPackage}
                       >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full mobile-input">
                           <SelectValue placeholder="Select package" />
                         </SelectTrigger>
                         <SelectContent>
@@ -526,26 +526,35 @@ export function Hero() {
                 <div className="mt-8 flex justify-end">
                   <Button
                     onClick={handleContinue}
-                    disabled={!isFormValid || isCalculatingDistance || !pickupLocation || !(pickupLocation.name || pickupLocation.address)}
-                    className={`px-10 py-6 rounded-md ${
-                      isFormValid && !isCalculatingDistance && pickupLocation && (pickupLocation.name || pickupLocation.address)
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    disabled={!isFormValid || isCalculatingDistance || !pickupLocation || !(pickupLocation.name || pickupLocation.address) || isLoading}
+                    className={`px-10 py-6 rounded-md mobile-button ${
+                      isFormValid && !isCalculatingDistance && pickupLocation && (pickupLocation.name || pickupLocation.address) && !isLoading
+                        ? ""
+                        : "opacity-70 cursor-not-allowed"
                     }`}
                   >
-                    SEARCH <ChevronRight className="ml-1" />
+                    {isLoading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <span>SEARCHING</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <span>SEARCH</span> <ChevronRight className="ml-1" />
+                      </div>
+                    )}
                   </Button>
                 </div>
               </div>
             )}
 
             {currentStep === 2 && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8 animate-fade-in">
                 <div className="lg:col-span-2 space-y-6">
                   <div className="bg-white rounded-xl shadow-card p-6">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-xl font-semibold text-left">Trip Details</h3>
-                      <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
+                      <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)} className="mobile-button">
                         Edit
                       </Button>
                     </div>
@@ -583,7 +592,7 @@ export function Hero() {
                     </div>
                     
                     {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
-                      <div className="mt-6">
+                      <div className="mt-6 app-card">
                         <GoogleMapComponent
                           pickupLocation={pickupLocation}
                           dropLocation={dropLocation}
@@ -602,6 +611,7 @@ export function Hero() {
                       hourlyPackage={hourlyPackage}
                       pickupDate={pickupDate}
                       returnDate={returnDate}
+                      isCalculatingFares={false}
                     />
                   </div>
                 </div>
@@ -623,17 +633,22 @@ export function Hero() {
                   
                   <Button 
                     onClick={handleBookNow}
-                    className="w-full mt-4 py-6 text-base"
-                    disabled={!isFormValid || !selectedCab}
+                    className="w-full mt-4 py-6 text-base mobile-button"
+                    disabled={!isFormValid || !selectedCab || isLoading}
                   >
-                    Book Now
+                    {isLoading ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <span>Processing...</span>
+                      </div>
+                    ) : "Book Now"}
                   </Button>
                 </div>
               </div>
             )}
           </>
         ) : (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-6 animate-fade-in">
             <div>
               <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
                 <div className="flex items-center justify-between mb-4">
@@ -644,6 +659,7 @@ export function Hero() {
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={totalPrice}
                   onBack={handleBackToSelection}
+                  isLoading={isLoading}
                 />
               </div>
             </div>
@@ -666,24 +682,8 @@ export function Hero() {
         )}
       </div>
       
-      <div className="bottom-nav md:hidden">
-        <button className="bottom-nav-item active">
-          <Home size={20} />
-          <span className="bottom-nav-label">Home</span>
-        </button>
-        <button className="bottom-nav-item">
-          <Car size={20} />
-          <span className="bottom-nav-label">Cabs</span>
-        </button>
-        <button className="bottom-nav-item">
-          <History size={20} />
-          <span className="bottom-nav-label">History</span>
-        </button>
-        <button className="bottom-nav-item">
-          <User size={20} />
-          <span className="bottom-nav-label">Profile</span>
-        </button>
-      </div>
+      {/* Mobile Navigation Bar */}
+      <MobileNavigation />
     </section>
   );
 }
