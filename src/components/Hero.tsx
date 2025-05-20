@@ -352,7 +352,12 @@ export function Hero() {
         hourlyPackage: tripType === 'local' ? hourlyPackage : null
       };
 
+      const response = await bookingAPI.createBooking(bookingData);
+      
+      console.log('Booking created:', response);
+      
       const bookingDataForStorage = {
+        bookingId: response.id || response.booking_id,
         pickupLocation,
         dropLocation,
         pickupDate: pickupDate?.toISOString(),
@@ -368,17 +373,8 @@ export function Hero() {
       };
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
 
-      const response = await bookingAPI.createBooking(bookingData);
-      
-      console.log('Booking created:', response);
-      
-      toast({
-        title: "Booking Confirmed!",
-        description: "Your cab has been booked successfully",
-        duration: 3000,
-      });
-      
-      navigate("/booking-confirmation");
+      // Redirect to payment page instead of confirmation
+      navigate("/payment");
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({
@@ -672,6 +668,7 @@ export function Hero() {
                   totalPrice={totalPrice}
                   onBack={handleBackToSelection}
                   isLoading={isLoading}
+                  paymentEnabled={true}
                 />
               </div>
             </div>

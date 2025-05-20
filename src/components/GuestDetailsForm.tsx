@@ -13,9 +13,10 @@ interface GuestDetailsFormProps {
   onBack?: () => void;
   totalPrice: number;
   isLoading?: boolean;
+  paymentEnabled?: boolean;
 }
 
-interface GuestDetails {
+export interface GuestDetails {
   name: string;
   phone: string;
   email: string;
@@ -25,7 +26,8 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   onSubmit, 
   onBack, 
   totalPrice, 
-  isLoading = false 
+  isLoading = false,
+  paymentEnabled = true
 }) => {
   const { register, handleSubmit, formState: { errors, isValid } } = useForm<GuestDetails>({
     mode: 'onChange',
@@ -141,7 +143,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               </div>
             ) : (
               <>
-                Confirm Booking - ₹{formatPrice(totalPrice)}
+                {paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - ₹{formatPrice(totalPrice)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

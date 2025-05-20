@@ -22,6 +22,7 @@ import PayrollPage from './pages/PayrollPage';
 import PaymentsManagementPage from './pages/PaymentsManagementPage';
 import CommissionManagementPage from './pages/CommissionManagementPage';
 import AdminBookingCreationPage from './pages/AdminBookingCreationPage';
+import PaymentPage from './pages/PaymentPage';
 
 export const router = createBrowserRouter([
   {
@@ -117,6 +118,10 @@ export const router = createBrowserRouter([
   {
     path: '/tours',
     element: <ToursPage />,
+  },
+  {
+    path: '/payment',
+    element: <PaymentPage />,
   },
   {
     path: '*',

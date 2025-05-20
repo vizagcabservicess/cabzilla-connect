@@ -408,6 +408,7 @@ const CabsPage = () => {
       console.log('Booking created:', response);
       
       const bookingDataForStorage = {
+        bookingId: response.id || response.booking_id,
         pickupLocation: pickup,
         dropLocation: dropoff,
         pickupDate: pickupDate?.toISOString(),
@@ -423,14 +424,8 @@ const CabsPage = () => {
       };
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
       
-      toast({
-        title: "Booking Confirmed!",
-        description: "Your cab has been booked successfully",
-        duration: 3000,
-      });
-      
-      // Fix the navigation to match the route in router.tsx
-      navigate(`/booking-confirmation`);
+      // Redirect to payment page instead of confirmation
+      navigate("/payment");
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({
@@ -595,6 +590,7 @@ const CabsPage = () => {
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={totalPrice}
                   onBack={handleBackToSelection}
+                  paymentEnabled={true}
                 />
               </div>
               

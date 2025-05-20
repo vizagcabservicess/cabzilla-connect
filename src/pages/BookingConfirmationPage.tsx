@@ -1,213 +1,325 @@
-
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
+import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
-import { Download, ArrowLeft, Printer, MessageCircle } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
+import { ArrowLeft, Check, Copy, Phone, Download, Star, MapPin, Calendar, Car, Clock, CreditCard } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
-import { formatPrice } from '@/lib/utils';
-import { bookingAPI } from '@/services/api/bookingAPI';
-import { WhatsAppShareButton } from '@/components/WhatsAppShareButton';
+import { formatDate, formatTime } from '@/lib/dateUtils';
+import { formatPrice } from '@/lib/cabData';
 
-export default function BookingConfirmationPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+function BookingConfirmationPage() {
+  const location = useLocation();
+  const { bookingId: bookingIdParam } = useParams<{ bookingId?: string }>();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  
   const [booking, setBooking] = useState<Booking | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchBookingDetails = async () => {
+    // If we have a booking ID in the URL, fetch that booking
+    if (bookingIdParam) {
+      fetchBookingById(bookingIdParam);
+    } else {
+      // Otherwise, try to get the booking from session storage
       try {
-        setIsLoading(true);
-        if (!id) {
-          throw new Error('Booking ID is missing');
+        const bookingDetails = sessionStorage.getItem('bookingDetails');
+        
+        if (bookingDetails) {
+          const parsedDetails = JSON.parse(bookingDetails);
+          if (parsedDetails.bookingId) {
+            fetchBookingById(parsedDetails.bookingId);
+          } else {
+            setError('No booking ID found in session storage');
+            setLoading(false);
+          }
+        } else {
+          setError('No booking found in session storage');
+          setLoading(false);
         }
-
-        const data = await bookingAPI.getBookingById(id);
-        setBooking(data);
-      } catch (err) {
-        console.error('Failed to fetch booking details:', err);
-        setError('Failed to load booking details. Please try again later.');
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Could not load booking details.",
-        });
-      } finally {
-        setIsLoading(false);
+      } catch (error) {
+        console.error('Error retrieving booking from session storage:', error);
+        setError('Error retrieving booking details');
+        setLoading(false);
       }
-    };
+    }
+  }, [bookingIdParam]);
 
-    fetchBookingDetails();
-  }, [id, toast]);
-
-  const handleDownloadReceipt = () => {
-    if (!booking) return;
-    
+  const fetchBookingById = async (id: string | number) => {
     try {
-      const receiptUrl = `/api/receipt.php?id=${booking.id}&download=1`;
-      window.open(receiptUrl, '_blank');
-    } catch (err) {
-      console.error('Failed to download receipt:', err);
+      setLoading(true);
+      const bookingData = await bookingAPI.getBookingById(id);
+      if (bookingData) {
+        setBooking(bookingData);
+      } else {
+        setError('Booking not found');
+      }
+    } catch (error) {
+      console.error('Error fetching booking details:', error);
+      setError('Error loading booking details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyBookingId = () => {
+    if (booking?.booking_number) {
+      navigator.clipboard.writeText(booking.booking_number);
       toast({
-        variant: "destructive",
-        title: "Download Failed",
-        description: "Could not download receipt. Please try again later.",
+        title: "Booking ID copied!",
+        description: `Booking ID ${booking.booking_number} copied to clipboard`,
+        duration: 3000,
       });
     }
   };
 
-  const handlePrintReceipt = () => {
-    if (!booking) return;
-    
-    try {
-      const printUrl = `/api/receipt.php?id=${booking.id}&print=1`;
-      const printWindow = window.open(printUrl, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
-    } catch (err) {
-      console.error('Failed to print receipt:', err);
-      toast({
-        variant: "destructive",
-        title: "Print Failed",
-        description: "Could not print receipt. Please try again later.",
-      });
-    }
-  };
-
-  const handleBackToHome = () => {
-    navigate('/');
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-1/3" />
-              <Skeleton className="h-6 w-1/4" />
-            </div>
-            <div className="mt-6 space-y-4">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-36 w-full" />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-gray-600">Loading booking details...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (error || !booking) {
+  if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Alert variant="destructive">
-          <AlertDescription>
-            {error || 'Booking information not found. Please check the booking ID or try again later.'}
-          </AlertDescription>
-        </Alert>
-        <Button onClick={handleBackToHome} className="mt-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Home
-        </Button>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-lg mx-auto bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+            <p className="text-gray-700 mb-6">{error}</p>
+            <div className="flex justify-between">
+              <Button onClick={() => navigate('/')} variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+              <Button onClick={() => navigate('/cabs')}>
+                Book a New Ride
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-green-600">Booking Confirmed!</h1>
-            <p className="text-gray-600 mt-1">Your booking has been successfully confirmed.</p>
-          </div>
-
-          <div className="border p-4 rounded-md mb-6">
-            <h2 className="font-semibold text-lg border-b pb-2 mb-3">Booking Details</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p><span className="font-medium">Booking #:</span> {booking.bookingNumber}</p>
-                <p><span className="font-medium">Status:</span> {booking.status.toUpperCase()}</p>
-                <p><span className="font-medium">Trip Type:</span> {booking.tripType}</p>
-                <p><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
-              </div>
-              <div>
-                <p><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
-                {booking.dropLocation && (
-                  <p><span className="font-medium">Drop:</span> {booking.dropLocation}</p>
-                )}
-                <p><span className="font-medium">Date:</span> {new Date(booking.pickupDate).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border p-4 rounded-md mb-6">
-            <h2 className="font-semibold text-lg border-b pb-2 mb-3">Passenger Information</h2>
-            <p><span className="font-medium">Name:</span> {booking.passengerName}</p>
-            <p><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
-            <p><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
-          </div>
-
-          {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
-            <div className="border p-4 rounded-md mb-6 bg-green-50">
-              <h2 className="font-semibold text-lg border-b border-green-200 pb-2 mb-3">Driver Information</h2>
-              {booking.driverName && (
-                <p><span className="font-medium">Name:</span> {booking.driverName}</p>
-              )}
-              {booking.driverPhone && (
-                <p><span className="font-medium">Contact:</span> {booking.driverPhone}</p>
-              )}
-              {booking.vehicleNumber && (
-                <p><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>
-              )}
-            </div>
-          )}
-
-          <div className="border-t pt-4 mt-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <p className="text-sm text-gray-500">Total Amount</p>
-                <p className="font-bold text-xl">₹{formatPrice(booking.totalAmount)}</p>
-              </div>
-              <div className="text-sm bg-gray-100 px-3 py-1 rounded-full">
-                {booking.isPaid ? 'Paid' : 'Payment Due'}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3 justify-between">
-              <Button variant="outline" onClick={handleBackToHome}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
-              </Button>
-              
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handlePrintReceipt}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print
-                </Button>
-                
-                <Button onClick={handleDownloadReceipt}>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <Button variant="outline" onClick={() => navigate('/')} className="text-gray-600">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Home
+            </Button>
+            {booking?.id && (
+              <Link to={`/receipt/${booking.id}`}>
+                <Button variant="outline" className="text-gray-600">
                   <Download className="mr-2 h-4 w-4" />
-                  Download
+                  View Receipt
                 </Button>
+              </Link>
+            )}
+          </div>
+          
+          <Card className="p-6 border rounded-lg shadow-sm bg-white">
+            <div className="mb-6 text-center">
+              <div className="mb-4 flex justify-center">
+                <div className="rounded-full bg-green-100 p-4">
+                  <Check className="h-12 w-12 text-green-600" />
+                </div>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h1>
+              {booking?.booking_number && (
+                <div className="flex items-center justify-center gap-2">
+                  <p className="text-gray-500">Booking ID: <span className="font-medium">{booking.booking_number}</span></p>
+                  <button onClick={copyBookingId} className="text-blue-500 hover:text-blue-600">
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              
+              {booking?.payment_status && (
+                <div className="mt-2">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                    booking.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
+                    booking.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    <CreditCard className="mr-1 h-3 w-3" />
+                    Payment {booking.payment_status === 'paid' ? 'Completed' : 'Pending'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+              <div>
+                <h2 className="font-semibold text-lg mb-4">Trip Details</h2>
                 
-                <WhatsAppShareButton booking={booking} variant="whatsapp">
-                  Share Details
-                </WhatsAppShareButton>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-5 w-5 text-blue-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-500">Pickup Location</p>
+                      <p className="font-medium">{booking?.pickup_location}</p>
+                    </div>
+                  </div>
+                  
+                  {booking?.drop_location && (
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-red-500 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500">Drop Location</p>
+                        <p className="font-medium">{booking.drop_location}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-5 w-5 text-gray-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-500">Pickup Date & Time</p>
+                      <p className="font-medium">
+                        {booking?.pickup_date ? (
+                          <>
+                            {formatDate(new Date(booking.pickup_date))} at {formatTime(new Date(booking.pickup_date))}
+                          </>
+                        ) : 'Not specified'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {booking?.return_date && (
+                    <div className="flex items-start gap-3">
+                      <Calendar className="h-5 w-5 text-gray-500 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500">Return Date & Time</p>
+                        <p className="font-medium">
+                          {formatDate(new Date(booking.return_date))} at {formatTime(new Date(booking.return_date))}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-start gap-3">
+                    <Car className="h-5 w-5 text-gray-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-500">Vehicle Type</p>
+                      <p className="font-medium">{booking?.cab_type}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-gray-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-500">Trip Type</p>
+                      <p className="font-medium capitalize">
+                        {booking?.trip_type} {booking?.trip_mode && `(${booking.trip_mode.replace('-', ' ')})`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h2 className="font-semibold text-lg mb-4">Passenger & Payment</h2>
+                
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="h-5 w-5 flex items-center justify-center text-blue-500 mt-0.5">
+                      <Phone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Contact</p>
+                      <p className="font-medium">{booking?.passenger_name}</p>
+                      <p className="text-sm">{booking?.passenger_phone}</p>
+                      <p className="text-sm">{booking?.passenger_email}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <CreditCard className="h-5 w-5 text-gray-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-500">Payment Details</p>
+                      <p className="font-medium">
+                        ₹{booking?.total_amount ? formatPrice(booking.total_amount) : '0'}
+                      </p>
+                      <p className="text-sm capitalize">
+                        Status: <span className={`
+                          ${booking?.payment_status === 'paid' ? 'text-green-600' : 
+                            booking?.payment_status === 'pending' ? 'text-yellow-600' : 'text-red-600'}
+                        `}>
+                          {booking?.payment_status || 'Pending'}
+                        </span>
+                      </p>
+                      
+                      {booking?.payment_method && (
+                        <p className="text-sm">
+                          Method: <span className="capitalize">{booking.payment_method}</span>
+                        </p>
+                      )}
+                      
+                      {booking?.razorpay_payment_id && (
+                        <p className="text-sm">
+                          Razorpay ID: <span className="font-mono text-xs">{booking.razorpay_payment_id}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {booking?.driver_name && (
+                    <div className="flex items-start gap-3">
+                      <div className="h-5 w-5 flex items-center justify-center text-green-500 mt-0.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Driver</p>
+                        <p className="font-medium">{booking.driver_name}</p>
+                        {booking.driver_phone && <p className="text-sm">{booking.driver_phone}</p>}
+                        {booking.vehicle_number && <p className="text-sm text-gray-600">Vehicle: {booking.vehicle_number}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-8">
+                  {booking?.payment_status !== 'paid' && (
+                    <Link to="/payment">
+                      <Button className="w-full">
+                        Complete Payment
+                      </Button>
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            <div className="border-t pt-6 mt-8">
+              <p className="text-center text-gray-500 text-sm">
+                Thank you for booking with us! If you have any questions or need assistance,
+                please contact our customer support.
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
+
+export default BookingConfirmationPage;
