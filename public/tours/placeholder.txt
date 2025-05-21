@@ -1,0 +1,11 @@
+
+This directory contains tour images. 
+
+Please add suitable images for:
+- araku_valley.jpg
+- yarada_beach.jpg
+- rushikonda.jpg
+- kailasagiri.jpg
+- borra_caves.jpg
+
+The images should be landscape orientation, approximately 800x450px, and show the beauty of each location.

@@ -1,3 +1,4 @@
+
 import { format } from "date-fns";
 
 export function formatDate(date: Date | string) {
@@ -11,3 +12,21 @@ export function formatTime(date: Date | string) {
   const d = typeof date === "string" ? new Date(date) : date;
   return format(d, "hh:mm a");
 } 
+
+export function formatDateTime(date: Date | string) {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return format(d, "dd MMM yyyy, hh:mm a");
+}
+
+export function formatShortDate(date: Date | string) {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return format(d, "dd MMM");
+}
+
+export function getDayName(date: Date | string) {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return format(d, "EEEE");
+}

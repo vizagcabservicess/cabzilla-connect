@@ -23,6 +23,20 @@ export const availableTours: TourInfo[] = [
     distance: 25,
     days: 1,
     image: '/tours/rushikonda.jpg'
+  },
+  {
+    id: 'kailasagiri',
+    name: 'Kailasagiri Hill Park',
+    distance: 30,
+    days: 1,
+    image: '/tours/kailasagiri.jpg'
+  },
+  {
+    id: 'borra_caves',
+    name: 'Borra Caves Adventure',
+    distance: 90,
+    days: 1,
+    image: '/tours/borra_caves.jpg'
   }
 ];
 
@@ -41,23 +55,44 @@ export const tourFares: TourFares = {
     sedan: 2000,
     ertiga: 3000,
     innova: 4000
+  },
+  kailasagiri: {
+    sedan: 2200,
+    ertiga: 3200, 
+    innova: 4200
+  },
+  borra_caves: {
+    sedan: 5500,
+    ertiga: 7000,
+    innova: 8500
   }
 };
 
 // Track ongoing tour fare fetch operations
 let isFetchingTourFares = false;
+let lastFetchTime = 0;
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
 // Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<TourFares> => {
+  const now = Date.now();
+  
+  // Skip if fetch already in progress or recent cache exists
   if (isFetchingTourFares) {
     console.log('Tour fare fetch already in progress, returning cached data');
+    return tourFares;
+  }
+  
+  // Use cached data if still fresh
+  if (now - lastFetchTime < CACHE_DURATION) {
+    console.log('Using cached tour fares, last fetch time:', new Date(lastFetchTime).toLocaleTimeString());
     return tourFares;
   }
   
   try {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
-    // Remove the timestamp parameter as it's not accepted by the API
+    
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
@@ -70,18 +105,47 @@ export const loadTourFares = async (): Promise<TourFares> => {
           dynamicTourFares[tour.tourId] = {
             sedan: tour.sedan || 0,
             ertiga: tour.ertiga || 0,
-            innova: tour.innova || 0
+            innova: tour.innova || 0,
+            tempo: tour.tempo || 0,
+            luxury: tour.luxury || 0
           };
         }
       });
+      
+      // Save last fetch time
+      lastFetchTime = now;
     }
     
     isFetchingTourFares = false;
-    return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
+    
+    // Return API data if available, otherwise use default
+    if (Object.keys(dynamicTourFares).length > 0) {
+      console.log('Using API tour fares');
+      return dynamicTourFares;
+    } else {
+      console.log('No tour fares from API, using defaults');
+      return tourFares;
+    }
   } catch (error) {
     console.error('Error loading tour fares:', error);
     isFetchingTourFares = false;
     // Fall back to default tour fares if API call fails
     return tourFares;
+  }
+};
+
+// Get specific tour fare
+export const getTourFare = async (tourId: string, cabType: string): Promise<number> => {
+  try {
+    const fares = await loadTourFares();
+    if (fares[tourId] && fares[tourId][cabType as keyof typeof fares[typeof tourId]]) {
+      return fares[tourId][cabType as keyof typeof fares[typeof tourId]] as number;
+    }
+    
+    // If specific fare not found, use default
+    return tourFares[tourId]?.[cabType as keyof typeof tourFares[typeof tourId]] || 0;
+  } catch (error) {
+    console.error(`Error getting fare for tour ${tourId}, cab ${cabType}:`, error);
+    return tourFares[tourId]?.[cabType as keyof typeof tourFares[typeof tourId]] || 0;
   }
 };
