@@ -1,5 +1,4 @@
 
-
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
 
@@ -13,6 +12,13 @@ export {
   calculateAirportFare,
   clearFareCache
 } from './fareCalculationService';
+
+// Export date utilities
+export {
+  formatDate,
+  formatTime,
+  formatDateTime
+} from './dateUtils';
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
@@ -105,4 +111,3 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
-
