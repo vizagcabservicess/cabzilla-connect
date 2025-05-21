@@ -11,6 +11,7 @@ import { userAPI } from './api/userAPI';
 import { expenseAPI } from './api/expenseAPI';
 import { payrollAPI } from './api/payrollAPI';
 import { paymentsAPI } from './api/paymentsAPI';
+import { tourAPI } from './api/tourAPI';
 
 const API_URL = '/api';
 
@@ -80,7 +81,8 @@ export {
   userAPI,
   expenseAPI,
   payrollAPI,
-  paymentsAPI
+  paymentsAPI,
+  tourAPI
 };
 
 // Also export a default object for compatibility
@@ -93,5 +95,6 @@ export default {
   user: userAPI,
   expense: expenseAPI,
   payroll: payrollAPI,
-  payments: paymentsAPI
+  payments: paymentsAPI,
+  tour: tourAPI
 };
