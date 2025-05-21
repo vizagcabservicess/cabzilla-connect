@@ -27,21 +27,3 @@ export const ensureCustomerTripType = (tripType: TripType): 'outstation' | 'loca
     ? tripType as 'outstation' | 'local' | 'airport' | 'tour'
     : 'outstation'; // Default to outstation if admin type is passed
 };
-
-// Get display name for trip type
-export const getTripTypeDisplayName = (tripType: TripType): string => {
-  switch (tripType) {
-    case 'outstation':
-      return 'Outstation Trip';
-    case 'local':
-      return 'Local Hourly Rental';
-    case 'airport':
-      return 'Airport Transfer';
-    case 'tour':
-      return 'Tour Package';
-    case 'admin':
-      return 'Custom Booking';
-    default:
-      return 'Trip';
-  }
-};

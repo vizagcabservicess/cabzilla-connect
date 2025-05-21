@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Car, Clock, User, Map } from 'lucide-react';
+import { Home, Car, Clock, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface NavItem {
@@ -26,11 +26,6 @@ export const MobileNavigation = () => {
       href: '/cabs'
     },
     {
-      icon: <Map size={20} />,
-      label: 'Tours',
-      href: '/tours'
-    },
-    {
       icon: <Clock size={20} />,
       label: 'History',
       href: '/dashboard'
@@ -44,7 +39,7 @@ export const MobileNavigation = () => {
   
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
-      <div className="grid grid-cols-5 h-16">
+      <div className="grid grid-cols-4 h-16">
         {navItems.map((item) => (
           <Link
             key={item.label}

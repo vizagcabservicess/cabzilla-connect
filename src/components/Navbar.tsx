@@ -1,90 +1,101 @@
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
-import Logo from './Logo';
+import { Button } from "@/components/ui/button";
+import { Menu, X, Phone } from "lucide-react";
+import { Logo } from "@/components/Logo";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const isActive = (path: string) => location.pathname === path;
-
-  const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/cabs', label: 'Book a Cab' },
-    { href: '/tours', label: 'Tours' },
-    { href: '/dashboard', label: 'My Bookings' },
+  
+  const isActive = (path: string) => {
+    return location.pathname === path;
+  };
+  
+  const navItems = [
+    { name: 'Home', href: '/' },
+    { name: 'About', href: '/about' },
+    { name: 'Services', href: '/services' },
+    { name: 'Contact', href: '/contact' }
   ];
-
+  
   return (
-    <nav className="w-full bg-white shadow-sm z-50 relative">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center">
-            <Logo />
-          </Link>
-
-          <div className="hidden md:flex items-center space-x-4">
-            {navLinks.map((link) => (
+    <header className="bg-white shadow-sm">
+      <div className="container flex justify-between items-center py-3">
+        <Logo />
+        
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center space-x-8">
+          <div className="flex space-x-6">
+            {navItems.map((item) => (
               <Link
-                key={link.href}
-                to={link.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive(link.href)
-                    ? 'text-blue-600'
-                    : 'text-gray-700 hover:text-blue-600'
-                }`}
+                key={item.name}
+                to={item.href}
+                className={`text-sm font-medium transition-colors hover:text-blue-600 
+                  ${isActive(item.href) ? 'text-blue-600' : 'text-gray-600'}`}
               >
-                {link.label}
+                {item.name}
               </Link>
             ))}
-
-            <Link
-              to="/login"
-              className="ml-4 px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white transition-colors hover:bg-blue-700"
-            >
-              Login
-            </Link>
           </div>
-
-          <div className="flex md:hidden">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-md text-gray-700 hover:text-blue-600 focus:outline-none"
-            >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-
+          
+          <Button asChild className="bg-blue-600 hover:bg-blue-700">
+            <a href="tel:+919966363662" className="flex items-center">
+              <Phone size={16} className="mr-2" />
+              <span>9966363662</span>
+            </a>
+          </Button>
+        </nav>
+        
+        {/* Mobile Menu Button */}
+        <button
+          className="md:hidden p-2 focus:outline-none"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle menu"
+        >
+          {isOpen ? (
+            <X size={24} className="text-gray-600" />
+          ) : (
+            <Menu size={24} className="text-gray-600" />
+          )}
+        </button>
+      </div>
+      
+      {/* Mobile Navigation */}
+      <AnimatePresence>
         {isOpen && (
-          <div className="md:hidden">
-            <div className="flex flex-col px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              {navLinks.map((link) => (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden bg-white overflow-hidden"
+          >
+            <div className="container py-4 flex flex-col space-y-4">
+              {navItems.map((item) => (
                 <Link
-                  key={link.href}
-                  to={link.href}
+                  key={item.name}
+                  to={item.href}
+                  className={`py-2 text-lg font-medium transition-colors 
+                    ${isActive(item.href) ? 'text-blue-600' : 'text-gray-600'}`}
                   onClick={() => setIsOpen(false)}
-                  className={`px-3 py-2 rounded-md text-base font-medium ${
-                    isActive(link.href)
-                      ? 'text-blue-600'
-                      : 'text-gray-700 hover:text-blue-600'
-                  }`}
                 >
-                  {link.label}
+                  {item.name}
                 </Link>
               ))}
-              <Link
-                to="/login"
-                onClick={() => setIsOpen(false)}
-                className="mt-4 block px-4 py-2 text-center rounded-md text-base font-medium bg-blue-600 text-white transition-colors hover:bg-blue-700"
-              >
-                Login
-              </Link>
+              
+              <Button asChild className="w-full mt-2 bg-blue-600 hover:bg-blue-700">
+                <a href="tel:+919966363662" className="flex items-center justify-center">
+                  <Phone size={16} className="mr-2" />
+                  <span>9966363662</span>
+                </a>
+              </Button>
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
-    </nav>
+      </AnimatePresence>
+    </header>
   );
 }
