@@ -1,9 +1,7 @@
 
 import { TourInfo, TourFares } from '@/types/cab';
-import { tourAPI } from '@/services/api/tourAPI';
-import { toast } from 'sonner';
+import { fareAPI } from '@/services/api';
 
-// Default tours that will be used while loading or if API fails
 export const availableTours: TourInfo[] = [
   {
     id: 'araku_valley',
@@ -28,7 +26,6 @@ export const availableTours: TourInfo[] = [
   }
 ];
 
-// Default fares that will be used while loading or if API fails
 export const tourFares: TourFares = {
   araku_valley: {
     sedan: 6000,
@@ -47,105 +44,44 @@ export const tourFares: TourFares = {
   }
 };
 
-// Track ongoing tour fetch operations
-let isFetchingTours = false;
+// Track ongoing tour fare fetch operations
 let isFetchingTourFares = false;
-let cachedTours: TourInfo[] | null = null;
-let cachedTourFares: TourFares | null = null;
-let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
-/**
- * Load tour information dynamically from API
- */
-export const loadTours = async (): Promise<TourInfo[]> => {
-  const now = Date.now();
-  
-  // Return cached data if available and recent
-  if (cachedTours && now - lastFetchTime < CACHE_DURATION) {
-    console.log('Using cached tour data');
-    return cachedTours;
-  }
-  
-  if (isFetchingTours) {
-    console.log('Tour fetch already in progress, returning default data');
-    return cachedTours || availableTours;
-  }
-  
-  try {
-    isFetchingTours = true;
-    console.log("Loading tours from API");
-    
-    // Use the tourAPI instead of direct fetch
-    const tourData = await tourAPI.getTours();
-    console.log("Tour data from API:", tourData);
-    
-    // If we got valid data, cache it
-    if (tourData && tourData.length > 0) {
-      cachedTours = tourData;
-      lastFetchTime = now;
-      return tourData;
-    } else {
-      console.warn('No valid tour data received from API, using defaults');
-      return availableTours;
-    }
-  } catch (error) {
-    console.error('Error loading tours:', error);
-    toast.error('Could not load tour information');
-    // Fall back to default tours if API call fails
-    return availableTours;
-  } finally {
-    isFetchingTours = false;
-  }
-};
-
-/**
- * Load tour fares dynamically from API
- */
+// Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<TourFares> => {
-  const now = Date.now();
-  
-  // Return cached data if available and recent
-  if (cachedTourFares && now - lastFetchTime < CACHE_DURATION) {
-    console.log('Using cached tour fare data');
-    return cachedTourFares;
-  }
-  
   if (isFetchingTourFares) {
-    console.log('Tour fare fetch already in progress, returning default data');
-    return cachedTourFares || tourFares;
+    console.log('Tour fare fetch already in progress, returning cached data');
+    return tourFares;
   }
   
   try {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
+    // Remove the timestamp parameter as it's not accepted by the API
+    const tourFareData = await fareAPI.getTourFares();
+    console.log("Tour fare data:", tourFareData);
     
-    // Use the tourAPI instead of direct fetch
-    const tourFareData = await tourAPI.getTourFares();
-    console.log("Tour fare data from API:", tourFareData);
+    // Convert the API data to match the existing structure
+    const dynamicTourFares: TourFares = {};
     
-    // If we got valid data, cache it
-    if (tourFareData && Object.keys(tourFareData).length > 0) {
-      cachedTourFares = tourFareData as TourFares;
-      lastFetchTime = now;
-      return tourFareData as TourFares;
-    } else {
-      console.warn('No valid tour fare data received from API, using defaults');
-      return tourFares;
+    if (Array.isArray(tourFareData) && tourFareData.length > 0) {
+      tourFareData.forEach((tour) => {
+        if (tour && tour.tourId) {
+          dynamicTourFares[tour.tourId] = {
+            sedan: tour.sedan || 0,
+            ertiga: tour.ertiga || 0,
+            innova: tour.innova || 0
+          };
+        }
+      });
     }
+    
+    isFetchingTourFares = false;
+    return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
   } catch (error) {
     console.error('Error loading tour fares:', error);
+    isFetchingTourFares = false;
     // Fall back to default tour fares if API call fails
     return tourFares;
-  } finally {
-    isFetchingTourFares = false;
   }
-};
-
-// Force reload of tour data and fares
-export const refreshTourData = () => {
-  cachedTours = null;
-  cachedTourFares = null;
-  lastFetchTime = 0;
-  console.log("Tour data cache cleared, will fetch fresh data on next request");
 };

@@ -112,11 +112,8 @@ export interface TourInfo {
   name: string;
   distance: number;
   days: number;
-  image?: string;
   description?: string;
-  highlights?: string[];
-  inclusions?: string[];
-  exclusions?: string[];
+  image?: string;
 }
 
 export interface TourFares {
