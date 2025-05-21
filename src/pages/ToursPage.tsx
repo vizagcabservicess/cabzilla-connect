@@ -18,7 +18,7 @@ import { TripType } from "@/lib/tripTypes";
 import { CabType, TourInfo, TourFares } from "@/types/cab";
 import { MapPin, Calendar, Check, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bookingAPI } from "@/services/api";
+import { bookingAPI, tourAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCabOptions, setShowCabOptions] = useState(false);
   
   // State for dynamic data
   const [tours, setTours] = useState<TourInfo[]>(availableTours);
@@ -90,7 +91,13 @@ const ToursPage = () => {
   
   const handleTourSelect = (tourId: string) => {
     setSelectedTour(tourId);
-    setSelectedCab(null);
+    setSelectedCab(null); // Reset selected cab when tour changes
+    setShowCabOptions(true); // Show cab options once a tour is selected
+    
+    // Scroll to cab options
+    setTimeout(() => {
+      document.getElementById("cab-options")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
   
   const getTourById = (tourId: string): TourInfo | undefined => {
@@ -407,42 +414,48 @@ const ToursPage = () => {
               
               {renderTourGrid()}
               
-              {selectedTour && (
+              {showCabOptions && selectedTour && (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-                    <LocationInput
-                      label="PICKUP LOCATION"
-                      placeholder="Enter your pickup location"
-                      value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                      onLocationChange={handlePickupLocationChange}
-                      isPickupLocation={true}
-                    />
+                  <div id="cab-options" className="pt-8 mt-8 border-t">
+                    <h3 className="text-xl font-semibold mb-4">Complete Your Tour Booking</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <LocationInput
+                        label="PICKUP LOCATION"
+                        placeholder="Enter your pickup location"
+                        value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                        onLocationChange={handlePickupLocationChange}
+                        isPickupLocation={true}
+                      />
+                      
+                      <DateTimePicker
+                        label="TOUR DATE & TIME"
+                        date={pickupDate}
+                        onDateChange={setPickupDate}
+                        minDate={new Date()}
+                      />
+                    </div>
                     
-                    <DateTimePicker
-                      label="TOUR DATE & TIME"
-                      date={pickupDate}
-                      onDateChange={setPickupDate}
-                      minDate={new Date()}
-                    />
+                    <div className="mt-6">
+                      <h4 className="text-lg font-semibold mb-3">Select Vehicle</h4>
+                      <CabOptions
+                        cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
+                        selectedCab={selectedCab}
+                        onSelectCab={handleCabSelect}
+                        distance={getTourById(selectedTour)?.distance || 0}
+                        tripType="tour"
+                        tripMode="one-way" // Tours are considered one-way
+                        pickupDate={pickupDate}
+                      />
+                    </div>
+                    
+                    <Button
+                      onClick={handleBookNow}
+                      disabled={!selectedTour || !pickupLocation || !pickupDate || !selectedCab}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
+                    >
+                      BOOK NOW
+                    </Button>
                   </div>
-                  
-                  <CabOptions
-                    cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
-                    selectedCab={selectedCab}
-                    onSelectCab={handleCabSelect}
-                    distance={getTourById(selectedTour)?.distance || 0}
-                    tripType="tour"
-                    tripMode="one-way" // Tours are considered one-way
-                    pickupDate={pickupDate}
-                  />
-                  
-                  <Button
-                    onClick={handleBookNow}
-                    disabled={!selectedTour || !pickupLocation || !pickupDate || !selectedCab}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
-                  >
-                    BOOK NOW
-                  </Button>
                 </>
               )}
             </div>

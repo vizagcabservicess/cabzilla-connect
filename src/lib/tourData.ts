@@ -1,6 +1,6 @@
 
 import { TourInfo, TourFares } from '@/types/cab';
-import { fareAPI } from '@/services/api';
+import { tourAPI } from '@/services/api/tourAPI';
 import { toast } from 'sonner';
 
 // Default tours that will be used while loading or if API fails
@@ -76,38 +76,15 @@ export const loadTours = async (): Promise<TourInfo[]> => {
     isFetchingTours = true;
     console.log("Loading tours from API");
     
-    // Use fetch directly to avoid axios dependency issues
-    const response = await fetch('/api/fares/tours.php');
-    if (!response.ok) {
-      throw new Error(`Failed to fetch tours: ${response.status} ${response.statusText}`);
-    }
-    
-    const tourData = await response.json();
+    // Use the tourAPI instead of direct fetch
+    const tourData = await tourAPI.getTours();
     console.log("Tour data from API:", tourData);
     
-    // Transform the API data to match our app's structure
-    const dynamicTours: TourInfo[] = [];
-    
-    if (Array.isArray(tourData) && tourData.length > 0) {
-      tourData.forEach((tour) => {
-        if (tour && tour.tourId) {
-          dynamicTours.push({
-            id: tour.tourId,
-            name: tour.tourName,
-            distance: parseFloat(tour.distance) || 50,
-            days: parseInt(tour.days) || 1,
-            image: tour.image || `/tours/${tour.tourId}.jpg`,
-            description: tour.description
-          });
-        }
-      });
-    }
-    
     // If we got valid data, cache it
-    if (dynamicTours.length > 0) {
-      cachedTours = dynamicTours;
+    if (tourData && tourData.length > 0) {
+      cachedTours = tourData;
       lastFetchTime = now;
-      return dynamicTours;
+      return tourData;
     } else {
       console.warn('No valid tour data received from API, using defaults');
       return availableTours;
@@ -143,35 +120,15 @@ export const loadTourFares = async (): Promise<TourFares> => {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
     
-    // Use fetch directly to avoid axios dependency issues
-    const response = await fetch('/api/fares/tours.php');
-    if (!response.ok) {
-      throw new Error(`Failed to fetch tour fares: ${response.status} ${response.statusText}`);
-    }
-    
-    const tourFareData = await response.json();
+    // Use the tourAPI instead of direct fetch
+    const tourFareData = await tourAPI.getTourFares();
     console.log("Tour fare data from API:", tourFareData);
     
-    // Convert the API data to match the existing structure
-    const dynamicTourFares: TourFares = {};
-    
-    if (Array.isArray(tourFareData) && tourFareData.length > 0) {
-      tourFareData.forEach((tour) => {
-        if (tour && tour.tourId) {
-          dynamicTourFares[tour.tourId] = {
-            sedan: parseFloat(tour.sedan) || 0,
-            ertiga: parseFloat(tour.ertiga) || 0,
-            innova: parseFloat(tour.innova) || 0
-          };
-        }
-      });
-    }
-    
     // If we got valid data, cache it
-    if (Object.keys(dynamicTourFares).length > 0) {
-      cachedTourFares = dynamicTourFares;
+    if (tourFareData && Object.keys(tourFareData).length > 0) {
+      cachedTourFares = tourFareData as TourFares;
       lastFetchTime = now;
-      return dynamicTourFares;
+      return tourFareData as TourFares;
     } else {
       console.warn('No valid tour fare data received from API, using defaults');
       return tourFares;

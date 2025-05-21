@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { getApiUrl, getForcedRequestConfig } from '@/config/requestConfig';
 import { TourInfo } from '@/types/cab';
+import { toast } from 'sonner';
 
 export const tourAPI = {
   /**
@@ -14,8 +15,21 @@ export const tourAPI = {
         getForcedRequestConfig()
       );
       
-      if (response.status === 200) {
-        return response.data || [];
+      if (response.status === 200 && response.data) {
+        // Transform the API data to match our app's structure
+        const tours: TourInfo[] = Array.isArray(response.data) ? response.data.map(tour => ({
+          id: tour.tourId || '',
+          name: tour.tourName || '',
+          distance: parseFloat(tour.distance) || 50,
+          days: parseInt(tour.days) || 1,
+          image: tour.image || `/tours/${tour.tourId}.jpg`,
+          description: tour.description || '',
+          highlights: tour.highlights ? JSON.parse(tour.highlights) : [],
+          inclusions: tour.inclusions ? JSON.parse(tour.inclusions) : [],
+          exclusions: tour.exclusions ? JSON.parse(tour.exclusions) : []
+        })) : [];
+        
+        return tours;
       }
       
       console.error('Failed to fetch tours:', response.statusText);
@@ -47,7 +61,10 @@ export const tourAPI = {
             distance: parseFloat(tour.distance) || 50,
             days: parseInt(tour.days) || 1,
             image: tour.image || `/tours/${tour.tourId}.jpg`,
-            description: tour.description
+            description: tour.description,
+            highlights: tour.highlights ? JSON.parse(tour.highlights) : [],
+            inclusions: tour.inclusions ? JSON.parse(tour.inclusions) : [],
+            exclusions: tour.exclusions ? JSON.parse(tour.exclusions) : []
           };
         }
       }
@@ -57,6 +74,45 @@ export const tourAPI = {
     } catch (error) {
       console.error(`Error fetching tour with ID ${tourId}:`, error);
       throw error;
+    }
+  },
+  
+  /**
+   * Get fares for all tours or a specific tour
+   */
+  getTourFares: async (tourId?: string) => {
+    try {
+      const url = tourId 
+        ? getApiUrl(`api/fares/tours.php?tourId=${tourId}`)
+        : getApiUrl('api/fares/tours.php');
+        
+      const response = await axios.get(url, getForcedRequestConfig());
+      
+      if (response.status === 200 && response.data) {
+        // Process and return the fare data
+        let fares = {};
+        const toursData = Array.isArray(response.data) ? response.data : [response.data];
+        
+        toursData.forEach((tour: any) => {
+          if (tour && tour.tourId) {
+            fares[tour.tourId] = {
+              sedan: parseFloat(tour.sedan) || 0,
+              ertiga: parseFloat(tour.ertiga) || 0,
+              innova: parseFloat(tour.innova) || 0,
+              tempo: parseFloat(tour.tempo) || 0,
+              luxury: parseFloat(tour.luxury) || 0
+            };
+          }
+        });
+        
+        return tourId ? fares[tourId] : fares;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching tour fares:', error);
+      toast('Failed to load tour price information');
+      return null;
     }
   }
 };
