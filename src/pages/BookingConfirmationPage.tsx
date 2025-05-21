@@ -10,15 +10,42 @@ import { Booking } from '@/types/api';
 import { formatDate, formatTime } from '@/lib/dateUtils';
 import { formatPrice } from '@/lib/cabData';
 
+type NormalizedBooking = Booking & {
+  bookingNumber?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupDate?: string;
+  returnDate?: string;
+  cabType?: string;
+  distance?: number;
+  tripType?: string;
+  tripMode?: string;
+  totalAmount?: number;
+  status?: string;
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  razorpayPaymentId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+};
+
 function BookingConfirmationPage() {
   const location = useLocation();
   const { bookingId: bookingIdParam } = useParams<{ bookingId?: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  const [booking, setBooking] = useState<Booking | null>(null);
+  const [booking, setBooking] = useState<NormalizedBooking | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const paymentStatus = booking?.paymentStatus || booking?.status || 'Pending';
 
   useEffect(() => {
     // If we have a booking ID in the URL, fetch that booking
@@ -54,7 +81,7 @@ function BookingConfirmationPage() {
       setLoading(true);
       const bookingData = await bookingAPI.getBookingById(id);
       if (bookingData) {
-        setBooking(bookingData);
+        setBooking(mapBackendBooking(bookingData));
       } else {
         setError('Booking not found');
       }
@@ -67,15 +94,44 @@ function BookingConfirmationPage() {
   };
 
   const copyBookingId = () => {
-    if (booking?.booking_number) {
-      navigator.clipboard.writeText(booking.booking_number);
+    if (booking?.bookingNumber) {
+      navigator.clipboard.writeText(booking.bookingNumber);
       toast({
         title: "Booking ID copied!",
-        description: `Booking ID ${booking.booking_number} copied to clipboard`,
+        description: `Booking ID ${booking.bookingNumber} copied to clipboard`,
         duration: 3000,
       });
     }
   };
+
+  // Add a mapping function to normalize backend fields to frontend usage
+  function mapBackendBooking(booking: any) {
+    return {
+      id: booking.id,
+      bookingNumber: booking.bookingNumber || booking.bookingNumber,
+      pickupLocation: booking.pickupLocation || booking.pickupLocation || 'N/A',
+      dropLocation: booking.dropLocation || booking.dropLocation || 'N/A',
+      pickupDate: booking.pickupDate || booking.pickupDate || '',
+      returnDate: booking.returnDate || booking.returnDate || '',
+      cabType: booking.cabType || booking.cabType || 'N/A',
+      distance: booking.distance || 0,
+      tripType: booking.tripType || booking.tripType || 'N/A',
+      tripMode: booking.tripMode || booking.tripMode || 'N/A',
+      totalAmount: booking.totalAmount || booking.totalAmount || 0,
+      status: booking.status,
+      passengerName: booking.passengerName || booking.passengerName || 'N/A',
+      passengerPhone: booking.passengerPhone || booking.passengerPhone || 'N/A',
+      passengerEmail: booking.passengerEmail || booking.passengerEmail || 'N/A',
+      paymentStatus: booking.payment_status || booking.status,
+      paymentMethod: booking.payment_method || '',
+      createdAt: booking.createdAt || booking.createdAt || '',
+      updatedAt: booking.updatedAt || booking.updatedAt || '',
+      razorpayPaymentId: booking.razorpay_payment_id || '',
+      driverName: booking.driver_name || '',
+      driverPhone: booking.driver_phone || '',
+      vehicleNumber: booking.vehicle_number || '',
+    };
+  }
 
   if (loading) {
     return (
@@ -142,24 +198,36 @@ function BookingConfirmationPage() {
                 </div>
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h1>
-              {booking?.booking_number && (
+              {booking?.bookingNumber && (
                 <div className="flex items-center justify-center gap-2">
-                  <p className="text-gray-500">Booking ID: <span className="font-medium">{booking.booking_number}</span></p>
+                  <p className="text-gray-500">Booking ID: <span className="font-medium">{booking.bookingNumber}</span></p>
                   <button onClick={copyBookingId} className="text-blue-500 hover:text-blue-600">
                     <Copy className="h-4 w-4" />
                   </button>
                 </div>
               )}
               
-              {booking?.payment_status && (
+              {paymentStatus === 'paid' && (
                 <div className="mt-2">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                    booking.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                    booking.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                    'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800`}>
                     <CreditCard className="mr-1 h-3 w-3" />
-                    Payment {booking.payment_status === 'paid' ? 'Completed' : 'Pending'}
+                    Payment Completed
+                  </span>
+                </div>
+              )}
+              {paymentStatus === 'pending' && (
+                <div className="mt-2">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800`}>
+                    <CreditCard className="mr-1 h-3 w-3" />
+                    Payment Pending
+                  </span>
+                </div>
+              )}
+              {paymentStatus === 'unpaid' && (
+                <div className="mt-2">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800`}>
+                    <CreditCard className="mr-1 h-3 w-3" />
+                    Payment Unpaid
                   </span>
                 </div>
               )}
@@ -174,16 +242,16 @@ function BookingConfirmationPage() {
                     <MapPin className="h-5 w-5 text-blue-500 mt-0.5" />
                     <div>
                       <p className="text-sm text-gray-500">Pickup Location</p>
-                      <p className="font-medium">{booking?.pickup_location}</p>
+                      <p className="font-medium">{booking?.pickupLocation}</p>
                     </div>
                   </div>
                   
-                  {booking?.drop_location && (
+                  {booking?.dropLocation && (
                     <div className="flex items-start gap-3">
                       <MapPin className="h-5 w-5 text-red-500 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Drop Location</p>
-                        <p className="font-medium">{booking.drop_location}</p>
+                        <p className="font-medium">{booking.dropLocation}</p>
                       </div>
                     </div>
                   )}
@@ -193,22 +261,22 @@ function BookingConfirmationPage() {
                     <div>
                       <p className="text-sm text-gray-500">Pickup Date & Time</p>
                       <p className="font-medium">
-                        {booking?.pickup_date ? (
+                        {booking?.pickupDate ? (
                           <>
-                            {formatDate(new Date(booking.pickup_date))} at {formatTime(new Date(booking.pickup_date))}
+                            {formatDate(new Date(booking.pickupDate))} at {formatTime(new Date(booking.pickupDate))}
                           </>
                         ) : 'Not specified'}
                       </p>
                     </div>
                   </div>
                   
-                  {booking?.return_date && (
+                  {booking?.tripType === 'outstation' && booking?.tripMode === 'round-trip' && booking?.returnDate && (
                     <div className="flex items-start gap-3">
                       <Calendar className="h-5 w-5 text-gray-500 mt-0.5" />
                       <div>
                         <p className="text-sm text-gray-500">Return Date & Time</p>
                         <p className="font-medium">
-                          {formatDate(new Date(booking.return_date))} at {formatTime(new Date(booking.return_date))}
+                          {formatDate(new Date(booking.returnDate))} at {formatTime(new Date(booking.returnDate))}
                         </p>
                       </div>
                     </div>
@@ -218,7 +286,7 @@ function BookingConfirmationPage() {
                     <Car className="h-5 w-5 text-gray-500 mt-0.5" />
                     <div>
                       <p className="text-sm text-gray-500">Vehicle Type</p>
-                      <p className="font-medium">{booking?.cab_type}</p>
+                      <p className="font-medium">{booking?.cabType}</p>
                     </div>
                   </div>
                   
@@ -227,7 +295,7 @@ function BookingConfirmationPage() {
                     <div>
                       <p className="text-sm text-gray-500">Trip Type</p>
                       <p className="font-medium capitalize">
-                        {booking?.trip_type} {booking?.trip_mode && `(${booking.trip_mode.replace('-', ' ')})`}
+                        {booking?.tripType} {booking?.tripMode && `(${booking.tripMode.replace('-', ' ')})`}
                       </p>
                     </div>
                   </div>
@@ -244,9 +312,9 @@ function BookingConfirmationPage() {
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Contact</p>
-                      <p className="font-medium">{booking?.passenger_name}</p>
-                      <p className="text-sm">{booking?.passenger_phone}</p>
-                      <p className="text-sm">{booking?.passenger_email}</p>
+                      <p className="font-medium">{booking?.passengerName}</p>
+                      <p className="text-sm">{booking?.passengerPhone}</p>
+                      <p className="text-sm">{booking?.passengerEmail}</p>
                     </div>
                   </div>
                   
@@ -255,32 +323,32 @@ function BookingConfirmationPage() {
                     <div>
                       <p className="text-sm text-gray-500">Payment Details</p>
                       <p className="font-medium">
-                        ₹{booking?.total_amount ? formatPrice(booking.total_amount) : '0'}
+                        {booking?.totalAmount ? formatPrice(booking.totalAmount) : '0'}
                       </p>
                       <p className="text-sm capitalize">
                         Status: <span className={`
-                          ${booking?.payment_status === 'paid' ? 'text-green-600' : 
-                            booking?.payment_status === 'pending' ? 'text-yellow-600' : 'text-red-600'}
+                          ${paymentStatus === 'paid' ? 'text-green-600' : 
+                            paymentStatus === 'pending' ? 'text-yellow-600' : 'text-red-600'}
                         `}>
-                          {booking?.payment_status || 'Pending'}
+                          {paymentStatus}
                         </span>
                       </p>
                       
-                      {booking?.payment_method && (
+                      {booking?.paymentMethod && (
                         <p className="text-sm">
-                          Method: <span className="capitalize">{booking.payment_method}</span>
+                          Method: <span className="capitalize">{booking.paymentMethod}</span>
                         </p>
                       )}
                       
-                      {booking?.razorpay_payment_id && (
+                      {booking?.razorpayPaymentId && (
                         <p className="text-sm">
-                          Razorpay ID: <span className="font-mono text-xs">{booking.razorpay_payment_id}</span>
+                          Razorpay ID: <span className="font-mono text-xs">{booking.razorpayPaymentId}</span>
                         </p>
                       )}
                     </div>
                   </div>
                   
-                  {booking?.driver_name && (
+                  {booking?.driverName && (
                     <div className="flex items-start gap-3">
                       <div className="h-5 w-5 flex items-center justify-center text-green-500 mt-0.5">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -289,16 +357,16 @@ function BookingConfirmationPage() {
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Driver</p>
-                        <p className="font-medium">{booking.driver_name}</p>
-                        {booking.driver_phone && <p className="text-sm">{booking.driver_phone}</p>}
-                        {booking.vehicle_number && <p className="text-sm text-gray-600">Vehicle: {booking.vehicle_number}</p>}
+                        <p className="font-medium">{booking.driverName}</p>
+                        {booking.driverPhone && <p className="text-sm">{booking.driverPhone}</p>}
+                        {booking.vehicleNumber && <p className="text-sm text-gray-600">Vehicle: {booking.vehicleNumber}</p>}
                       </div>
                     </div>
                   )}
                 </div>
                 
                 <div className="mt-8">
-                  {booking?.payment_status !== 'paid' && (
+                  {paymentStatus !== 'paid' && (
                     <Link to="/payment">
                       <Button className="w-full">
                         Complete Payment

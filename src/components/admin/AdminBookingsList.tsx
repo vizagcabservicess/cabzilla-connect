@@ -851,9 +851,15 @@ export function AdminBookingsList() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          className={booking.payment_status === 'payment_received' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
+                          className={
+                            (booking.paymentStatus || booking.payment_status || booking.status) === 'paid'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }
                         >
-                          {booking.payment_status === 'payment_received' ? 'Paid' : 'Pending'}
+                          {(booking.paymentStatus || booking.payment_status || booking.status) === 'paid'
+                            ? 'Paid'
+                            : 'Pending'}
                         </Badge>
                       </TableCell>
                       <TableCell>

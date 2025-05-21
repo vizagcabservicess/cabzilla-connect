@@ -645,11 +645,11 @@ export function BookingInvoice({
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">Payment Status:</span>
                   <span className={
-                    (booking.payment_status || invoiceData?.paymentStatus) === 'payment_received'
+                    (booking.paymentStatus || booking.payment_status || invoiceData?.paymentStatus || booking.status) === 'paid'
                       ? 'text-green-600'
-                      : 'text-red-600'
+                      : 'text-yellow-600'
                   }>
-                    {(booking.payment_status || invoiceData?.paymentStatus) === 'payment_received' ? 'Paid' : 'Pending'}
+                    {(booking.paymentStatus || booking.payment_status || invoiceData?.paymentStatus || booking.status) === 'paid' ? 'Paid' : 'Pending'}
                   </span>
                 </div>
                 {(booking.payment_status === 'payment_received' || invoiceData?.paymentStatus === 'payment_received') && (

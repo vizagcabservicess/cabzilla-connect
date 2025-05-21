@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
@@ -20,6 +19,7 @@ export interface GuestDetails {
   name: string;
   phone: string;
   email: string;
+  totalPrice: number;
 }
 
 export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({ 
@@ -34,7 +34,8 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     defaultValues: {
       name: sessionStorage.getItem('guestName') || '',
       phone: sessionStorage.getItem('guestPhone') || '',
-      email: sessionStorage.getItem('guestEmail') || ''
+      email: sessionStorage.getItem('guestEmail') || '',
+      totalPrice: totalPrice
     }
   });
   
@@ -44,7 +45,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     sessionStorage.setItem('guestPhone', data.phone);
     sessionStorage.setItem('guestEmail', data.email);
     
-    onSubmit(data);
+    onSubmit({ ...data, totalPrice });
   };
   
   return (
@@ -143,7 +144,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               </div>
             ) : (
               <>
-                {paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - ₹{formatPrice(totalPrice)}
+                {paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - {formatPrice(totalPrice)}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

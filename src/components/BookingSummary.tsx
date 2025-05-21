@@ -23,6 +23,7 @@ interface BookingSummaryProps {
   tripType: TripType;
   tripMode?: 'one-way' | 'round-trip';
   hourlyPackage: string;
+  onFinalTotalChange?: (total: number) => void;
 }
 
 export const BookingSummary = ({
@@ -35,7 +36,8 @@ export const BookingSummary = ({
   totalPrice,
   tripType,
   tripMode = 'one-way',
-  hourlyPackage
+  hourlyPackage,
+  onFinalTotalChange
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
@@ -826,6 +828,16 @@ export const BookingSummary = ({
     }
     return total;
   };
+
+  useEffect(() => {
+    if (onFinalTotalChange) {
+      if (tripType === 'local') {
+        onFinalTotalChange(localTotal);
+      } else {
+        onFinalTotalChange(sumBreakdown(fareData?.breakdown || {}));
+      }
+    }
+  }, [localTotal, fareData?.breakdown, tripType, onFinalTotalChange]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;

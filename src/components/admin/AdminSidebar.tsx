@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -67,7 +66,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
       </div>
       
       {/* Main Menu */}
-      <div className="flex-1 overflow-y-auto py-6 px-4">
+      <div className="flex-1 py-6 px-4">
         <nav className="space-y-1">
           {menuItems.map((item) => (
             <Button

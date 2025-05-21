@@ -83,16 +83,6 @@ const ReceiptPage = () => {
     }
   };
 
-  const calculatePriceBreakdown = (totalAmount: number) => {
-    if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
-      return { baseFare: 0, taxes: 0 };
-    }
-    
-    const baseFare = Math.round(totalAmount * 0.85);
-    const taxes = Math.round(totalAmount * 0.15);
-    return { baseFare, taxes };
-  };
-
   const formatCurrency = (amount: number) => {
     if (typeof amount !== 'number' || isNaN(amount)) return "₹0";
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -160,8 +150,8 @@ const ReceiptPage = () => {
   const totalAmount = typeof booking.totalAmount === 'number' 
     ? booking.totalAmount 
     : parseFloat(booking.totalAmount) || 0;
-    
-  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
+
+  const paymentStatus = booking?.paymentStatus || booking?.payment_status || booking?.status || 'Pending';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -241,7 +231,7 @@ const ReceiptPage = () => {
                     </div>
                   </div>
                   
-                  {booking?.returnDate && (
+                  {booking?.tripType === 'outstation' && booking?.tripMode === 'round-trip' && booking?.returnDate && (
                     <div className="flex items-start">
                       <Calendar className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
                       <div>
@@ -274,23 +264,38 @@ const ReceiptPage = () => {
               <div>
                 <h3 className="font-semibold text-gray-800 mb-3">Payment Details</h3>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex justify-between mb-2">
-                    <span>Base Fare</span>
-                    <span>{formatCurrency(baseFare)}</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span>Taxes & Fees</span>
-                    <span>{formatCurrency(taxes)}</span>
-                  </div>
+                  {booking.driverAllowance > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span>Driver Allowance</span>
+                      <span>{formatCurrency(booking.driverAllowance)}</span>
+                    </div>
+                  )}
+                  {booking.nightCharges > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span>Night Charges</span>
+                      <span>{formatCurrency(booking.nightCharges)}</span>
+                    </div>
+                  )}
+                  {booking.extraDistanceFare > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span>Extra Distance Charges</span>
+                      <span>{formatCurrency(booking.extraDistanceFare)}</span>
+                    </div>
+                  )}
+                  {booking.airportFee > 0 && (
+                    <div className="flex justify-between mb-2">
+                      <span>Airport Fee</span>
+                      <span>{formatCurrency(booking.airportFee)}</span>
+                    </div>
+                  )}
                   <Separator className="my-2" />
                   <div className="flex justify-between font-bold">
                     <span>Total Amount</span>
                     <span>{formatCurrency(totalAmount)}</span>
                   </div>
-                  <div className="mt-3 text-sm text-green-600 font-medium">
+                  <div className={`mt-3 text-sm font-medium ${paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>
                     <DollarSign className="w-4 h-4 inline mr-1" />
-                    Payment Status:{" "}
-                    {booking?.status === "payment_received" ? "Paid" : "Pending"}
+                    Payment Status: {paymentStatus === "paid" ? "Paid" : "Pending"}
                   </div>
                 </div>
 

@@ -119,11 +119,21 @@ export const bookingAPI = {
    */
   getBookingById: async (id: number | string) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/booking-details.php?id=${id}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php?id=${id}`, {
         headers: {
           'Cache-Control': 'no-cache',
         }
       });
+      // PATCH: Handle different response formats
+      if (response.data && Array.isArray(response.data.bookings) && response.data.bookings.length > 0) {
+        return response.data.bookings[0];
+      }
+      if (response.data && response.data.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+        return response.data.data[0];
+      }
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
     } catch (error) {
       console.error(`Error fetching booking with id ${id}:`, error);

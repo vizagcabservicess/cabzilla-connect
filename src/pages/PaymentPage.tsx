@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -31,6 +30,13 @@ const PaymentPage = () => {
     if (storedDetails) {
       try {
         const details = JSON.parse(storedDetails);
+        // Always use the latest totalPrice from sessionStorage
+        if (typeof details.totalPrice === 'number') {
+          details.totalPrice = details.totalPrice;
+        } else {
+          // fallback: try to get from summary or set to 0
+          details.totalPrice = 0;
+        }
         setBookingDetails(details);
         // Load the Razorpay SDK
         loadRazorpaySDK();
@@ -186,39 +192,41 @@ const PaymentPage = () => {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold mb-6">Complete Your Payment</h1>
             
-            {paymentStatus === 'pending' && (
+            {!bookingDetails ? (
+              <div className="flex justify-center items-center py-12">
+                <span className="text-gray-500">Loading booking details...</span>
+              </div>
+            ) : (
               <div className="space-y-6">
-                {bookingDetails && (
-                  <div className="border rounded-md p-4 bg-gray-50">
-                    <h2 className="font-semibold text-lg mb-2">Booking Summary</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Trip Type</p>
-                        <p className="font-medium">{bookingDetails.tripType} ({bookingDetails.tripMode})</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Cab Type</p>
-                        <p className="font-medium">{bookingDetails.selectedCab?.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Pickup Location</p>
-                        <p className="font-medium">{bookingDetails.pickupLocation?.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Drop Location</p>
-                        <p className="font-medium">{bookingDetails.dropLocation?.name || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Pickup Date</p>
-                        <p className="font-medium">{new Date(bookingDetails.pickupDate).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-medium text-lg">₹{formatPrice(bookingDetails.totalPrice)}</p>
-                      </div>
+                <div className="border rounded-md p-4 bg-gray-50">
+                  <h2 className="font-semibold text-lg mb-2">Booking Summary</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Trip Type</p>
+                      <p className="font-medium">{bookingDetails.tripType} ({bookingDetails.tripMode})</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Cab Type</p>
+                      <p className="font-medium">{bookingDetails.selectedCab?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Pickup Location</p>
+                      <p className="font-medium">{bookingDetails.pickupLocation?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Drop Location</p>
+                      <p className="font-medium">{bookingDetails.dropLocation?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Pickup Date</p>
+                      <p className="font-medium">{bookingDetails.pickupDate ? new Date(bookingDetails.pickupDate).toLocaleString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Amount</p>
+                      <p className="font-medium text-lg">{formatPrice(bookingDetails.totalPrice || 0)}</p>
                     </div>
                   </div>
-                )}
+                </div>
                 
                 <div className="flex flex-col items-center p-6 border rounded-md">
                   <CreditCard size={48} className="text-blue-500 mb-3" />
@@ -227,7 +235,7 @@ const PaymentPage = () => {
                   
                   <Button 
                     onClick={handlePayment} 
-                    disabled={!sdkReady || isLoading}
+                    disabled={!sdkReady || isLoading || !bookingDetails}
                     size="lg"
                     className="w-full md:w-auto px-8"
                   >
@@ -237,7 +245,7 @@ const PaymentPage = () => {
                         <span>Processing...</span>
                       </div>
                     ) : (
-                      <span>Pay Now - ₹{bookingDetails ? formatPrice(bookingDetails.totalPrice) : '0'}</span>
+                      <span>Pay Now - {formatPrice(bookingDetails.totalPrice || 0)}</span>
                     )}
                   </Button>
                 </div>

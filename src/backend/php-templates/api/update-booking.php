@@ -184,7 +184,8 @@ try {
         'passenger_name' => 'passengerName',
         'passenger_phone' => 'passengerPhone',
         'passenger_email' => 'passengerEmail',
-        'status' => 'status',
+        'status' => 'payment_status',
+        'payment_status' => 'payment_status',
         'driver_name' => 'driverName',
         'driver_phone' => 'driverPhone',
         'vehicle_number' => 'vehicleNumber',
@@ -192,8 +193,10 @@ try {
         'total_amount' => 'totalAmount',
         'billing_address' => 'billingAddress',
         'cab_type' => 'cabType',
-        'payment_status' => 'payment_status',
         'payment_method' => 'payment_method',
+        'razorpay_payment_id' => 'razorpay_payment_id',
+        'razorpay_order_id' => 'razorpay_order_id',
+        'razorpay_signature' => 'razorpay_signature',
     ];
     
     // Handle extra charges separately to ensure proper JSON encoding and standardized field naming
@@ -353,7 +356,10 @@ try {
         'gstDetails' => $formattedGstDetails,
         'billingAddress' => $updatedBooking['billing_address'] ?? null,
         'createdAt' => $updatedBooking['created_at'],
-        'updatedAt' => $updatedBooking['updated_at']
+        'updatedAt' => $updatedBooking['updated_at'],
+        'razorpay_payment_id' => $updatedBooking['razorpay_payment_id'] ?? null,
+        'razorpay_order_id' => $updatedBooking['razorpay_order_id'] ?? null,
+        'razorpay_signature' => $updatedBooking['razorpay_signature'] ?? null,
     ];
     
     // Send success response

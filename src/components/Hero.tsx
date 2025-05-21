@@ -98,6 +98,7 @@ export function Hero() {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [finalTotal, setFinalTotal] = useState<number>(0);
 
   // Validate form fields and set isFormValid
   useEffect(() => {
@@ -336,6 +337,8 @@ export function Hero() {
       const authToken = localStorage.getItem('authToken');
       console.log("Auth token available:", !!authToken);
       
+      // Use the totalPrice passed from GuestDetailsForm
+      const latestTotal = guestDetails.totalPrice;
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
         dropLocation: dropLocation?.address || dropLocation?.name || '',
@@ -345,7 +348,7 @@ export function Hero() {
         distance: distance,
         tripType: tripType,
         tripMode: tripMode,
-        totalAmount: totalPrice,
+        totalAmount: latestTotal,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
@@ -364,9 +367,9 @@ export function Hero() {
         returnDate: returnDate?.toISOString(),
         selectedCab,
         distance,
-        totalPrice,
+        totalPrice: latestTotal,
         discountAmount: 0,
-        finalPrice: totalPrice,
+        finalPrice: latestTotal,
         guestDetails,
         tripType,
         tripMode,
@@ -636,6 +639,7 @@ export function Hero() {
                       tripMode={tripMode} 
                       totalPrice={totalPrice}
                       hourlyPackage={hourlyPackage}
+                      onFinalTotalChange={setFinalTotal}
                     />
                   </div>
                   
@@ -649,7 +653,7 @@ export function Hero() {
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                         <span>Processing...</span>
                       </div>
-                    ) : "Book Now"}
+                    ) : `Book Now - ${formatPrice(finalTotal)}`}
                   </Button>
                 </div>
               </div>
@@ -665,7 +669,7 @@ export function Hero() {
                 
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={totalPrice}
+                  totalPrice={finalTotal}
                   onBack={handleBackToSelection}
                   isLoading={isLoading}
                   paymentEnabled={true}
@@ -685,6 +689,7 @@ export function Hero() {
                 tripType={tripType}
                 tripMode={tripMode}
                 hourlyPackage={hourlyPackage}
+                onFinalTotalChange={setFinalTotal}
               />
             </div>
           </div>

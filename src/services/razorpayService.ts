@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { BookingRequest } from "@/types/api";
 
@@ -107,7 +106,7 @@ export const verifyRazorpayPayment = async (
   bookingId?: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch("/api/verify-razorpay-payment.php", {
+    const response = await fetch("/api/admin/verify-razorpay-payment.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,12 +1,14 @@
-
 import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard } from 'lucide-react';
+import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard, ArrowRight, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
+import { bookingAPI } from '@/services/api';
+import { Booking } from '@/types/api';
+import { Separator } from '@/components/ui/separator';
 
 interface BookingDetails {
   pickupLocation: Location;
@@ -17,48 +19,99 @@ interface BookingDetails {
   totalPrice: number;
   discountAmount: number;
   finalPrice: number;
+  bookingId: string;
+  createdAt?: string;
+  returnDate?: string;
+  tripType?: string;
+  tripMode?: string;
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
+  status?: string;
 }
+
+const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any): BookingDetails => ({
+  pickupLocation: {
+    name: backendBooking.pickupLocation || backendBooking.pickup_location || 'N/A',
+    city: '',
+    state: '',
+  },
+  dropLocation: {
+    name: backendBooking.dropLocation || backendBooking.drop_location || 'N/A',
+    city: '',
+    state: '',
+  },
+  pickupDate: backendBooking.pickupDate || backendBooking.pickup_date || '',
+  selectedCab: {
+    name: backendBooking.cabType || backendBooking.cab_type || 'N/A',
+    capacity: 4,
+    luggageCapacity: 2,
+    price: 0,
+    pricePerKm: 0,
+  },
+  distance: backendBooking.distance || 0,
+  totalPrice: backendBooking.totalAmount || backendBooking.total_amount || fallbackBooking?.totalPrice || 0,
+  discountAmount: backendBooking.discountAmount || backendBooking.discount_amount || 0,
+  finalPrice: backendBooking.totalAmount || backendBooking.total_amount || fallbackBooking?.totalPrice || 0,
+  bookingId: backendBooking.id?.toString() || backendBooking.bookingId || backendBooking.booking_id || 'N/A',
+  createdAt: backendBooking.createdAt || backendBooking.created_at,
+  returnDate: backendBooking.returnDate || backendBooking.return_date,
+  tripType: backendBooking.tripType || backendBooking.trip_type,
+  tripMode: backendBooking.tripMode || backendBooking.trip_mode,
+  passengerName: backendBooking.passengerName || backendBooking.passenger_name,
+  passengerPhone: backendBooking.passengerPhone || backendBooking.passenger_phone,
+  passengerEmail: backendBooking.passengerEmail || backendBooking.passenger_email,
+  status: backendBooking.status || backendBooking.status_code,
+});
 
 const BookingConfirmation = () => {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [bookingId, setBookingId] = useState<string>('');
+  const [latestBooking, setLatestBooking] = useState<BookingDetails | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Generate a random booking ID
-    const generateBookingId = () => {
-      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let result = 'BK';
-      for (let i = 0; i < 8; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-      return result;
-    };
-
-    try {
-      // Retrieve booking details from sessionStorage
-      const storedBooking = sessionStorage.getItem('bookingDetails');
-      if (storedBooking) {
+    // Retrieve booking details from sessionStorage
+    const storedBooking = sessionStorage.getItem('bookingDetails');
+    if (storedBooking) {
+      try {
         const parsedBooking = JSON.parse(storedBooking);
         setBooking(parsedBooking);
-        setBookingId(generateBookingId());
-      } else {
-        // If no booking details found, redirect to home
+        setBookingId(parsedBooking.bookingId);
+        // Fetch the latest booking details from the backend
+        fetchLatestBooking(parsedBooking.bookingId);
+      } catch (error) {
+        console.error('Error parsing booking details:', error);
         navigate('/');
       }
-    } catch (error) {
-      console.error('Error retrieving booking details:', error);
+    } else {
       navigate('/');
     }
   }, [navigate]);
 
-  if (!booking) {
+  const fetchLatestBooking = async (id: string) => {
+    try {
+      const response = await bookingAPI.getBookingById(id);
+      console.log('API booking details response:', response);
+      const mapped = mapBackendBookingToFrontend(response, booking);
+      setLatestBooking(mapped);
+    } catch (error) {
+      console.error('Error fetching latest booking details:', error);
+    }
+  };
+
+  const bookingToShow = latestBooking || booking;
+
+  if (!bookingToShow) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cabGray-50">
         <div className="text-cabGray-600">Loading booking details...</div>
       </div>
     );
   }
+
+  const totalAmount = typeof bookingToShow.totalPrice === 'number' ? bookingToShow.totalPrice : parseFloat(bookingToShow.totalPrice) || 0;
+  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
 
   return (
     <div className="min-h-screen bg-cabGray-50">
@@ -76,122 +129,118 @@ const BookingConfirmation = () => {
               <h2 className="text-2xl font-bold mb-2">Booking Confirmed!</h2>
               <p className="text-white/80">Your cab has been booked successfully</p>
               <div className="mt-4 text-sm bg-white/10 rounded-md py-2 px-4 inline-block">
-                Booking ID: <span className="font-mono font-bold">{bookingId}</span>
+                Booking ID: <span className="font-mono font-bold">{bookingToShow.bookingId}</span>
               </div>
             </div>
             
             <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP LOCATION</p>
-                  <div className="flex items-start space-x-2">
-                    <MapPin size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">{booking.pickupLocation.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.pickupLocation.city}, {booking.pickupLocation.state}
-                      </p>
-                    </div>
-                  </div>
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-cabGray-800">
+                    Booking #{bookingToShow.bookingId}
+                  </h2>
                 </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">DROP LOCATION</p>
-                  <div className="flex items-start space-x-2">
-                    <MapPin size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">{booking.dropLocation.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.dropLocation.city}, {booking.dropLocation.state}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP DATE</p>
-                  <div className="flex items-start space-x-2">
-                    <Calendar size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">
-                        {format(new Date(booking.pickupDate), 'EEEE, MMMM d, yyyy')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP TIME</p>
-                  <div className="flex items-start space-x-2">
-                    <Clock size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">
-                        {format(new Date(booking.pickupDate), 'h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">CAB TYPE</p>
-                  <div className="flex items-start space-x-2">
-                    <Car size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">{booking.selectedCab.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.selectedCab.capacity} persons • {booking.selectedCab.luggageCapacity} bags
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PAYMENT</p>
-                  <div className="flex items-start space-x-2">
-                    <CreditCard size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">₹{booking.finalPrice.toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-cabGray-600">Pay at pickup (Cash/Card)</p>
-                    </div>
-                  </div>
+                <div className="text-right">
+                  <p className="text-sm text-cabGray-500">Booking Date</p>
+                  <p className="font-medium">
+                    {bookingToShow.createdAt ? formatDate(bookingToShow.createdAt) : 'N/A'}
+                  </p>
                 </div>
               </div>
-              
-              <div className="border-t border-cabGray-100 pt-6 mt-6">
-                <h3 className="text-lg font-semibold text-cabGray-800 mb-4">Driver Details</h3>
-                <div className="flex items-center">
-                  <div className="w-16 h-16 bg-cabGray-200 rounded-full mr-4 flex items-center justify-center text-cabGray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                  </div>
-                  <div>
-                    <p className="font-medium text-cabGray-800">Driver will be assigned 1 hour before pickup</p>
-                    <p className="text-sm text-cabGray-600">You'll receive driver details via SMS and email</p>
+              <Separator className="my-6" />
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-cabGray-800 mb-3">Trip Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <MapPin className="w-5 h-5 text-cabBlue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-cabGray-500">PICKUP LOCATION</p>
+                        <p className="font-medium">{bookingToShow.pickupLocation?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+                    {bookingToShow.dropLocation?.name && (
+                      <div className="flex items-start">
+                        <MapPin className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
+                        <div>
+                          <p className="text-xs text-cabGray-500">DROP LOCATION</p>
+                          <p className="font-medium">{bookingToShow.dropLocation.name}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start">
+                      <Calendar className="w-5 h-5 text-cabBlue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-cabGray-500">PICKUP DATE & TIME</p>
+                        <p className="font-medium">
+                          {bookingToShow.pickupDate ? formatDate(bookingToShow.pickupDate) : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    {bookingToShow.returnDate && (
+                      <div className="flex items-start">
+                        <Calendar className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
+                        <div>
+                          <p className="text-xs text-cabGray-500">RETURN DATE & TIME</p>
+                          <p className="font-medium">{formatDate(bookingToShow.returnDate)}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start">
+                      <Car className="w-5 h-5 text-cabBlue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-cabGray-500">CAB TYPE</p>
+                        <p className="font-medium">{bookingToShow.selectedCab?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <ArrowRight className="w-5 h-5 text-cabBlue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-cabGray-500">TRIP TYPE</p>
+                        <p className="font-medium">
+                          {formatTripType(bookingToShow.tripType, bookingToShow.tripMode)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="border-t border-cabGray-100 pt-6 mt-6">
-                <h3 className="text-lg font-semibold text-cabGray-800 mb-4">Fare Details</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-cabGray-600">Base fare</span>
-                    <span className="text-cabGray-800">₹{booking.selectedCab.price.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-cabGray-600">Distance charge ({booking.distance} km)</span>
-                    <span className="text-cabGray-800">
-                      ₹{(booking.distance * booking.selectedCab.pricePerKm).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  {booking.discountAmount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>Discount</span>
-                      <span>-₹{booking.discountAmount.toLocaleString('en-IN')}</span>
+                <div>
+                  <h3 className="font-semibold text-cabGray-800 mb-3">Payment Details</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between mb-2">
+                      <span>Base Fare</span>
+                      <span>{formatPrice(baseFare)}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between font-medium pt-2 border-t border-cabGray-100">
-                    <span>Total Amount</span>
-                    <span>₹{booking.finalPrice.toLocaleString('en-IN')}</span>
+                    <div className="flex justify-between mb-2">
+                      <span>Taxes & Fees</span>
+                      <span>{formatPrice(taxes)}</span>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-bold">
+                      <span>Total Amount</span>
+                      <span>{formatPrice(totalAmount)}</span>
+                    </div>
+                    <div className="mt-3 text-sm text-green-600 font-medium">
+                      <DollarSign className="w-4 h-4 inline mr-1" />
+                      Payment Status: {bookingToShow.status === 'payment_received' ? 'Paid' : 'Pending'}
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <h3 className="font-semibold text-cabGray-800 mb-3">Passenger Details</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-xs text-cabGray-500">NAME</p>
+                        <p className="font-medium">{bookingToShow.passengerName || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-cabGray-500">PHONE</p>
+                        <p className="font-medium">{bookingToShow.passengerPhone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-cabGray-500">EMAIL</p>
+                        <p className="font-medium">{bookingToShow.passengerEmail || 'N/A'}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -219,3 +268,46 @@ const BookingConfirmation = () => {
 };
 
 export default BookingConfirmation;
+
+// Helper functions (copied from ReceiptPage)
+const formatDate = (dateString: string) => {
+  if (!dateString) return 'N/A';
+  try {
+    if (dateString.includes(' ')) {
+      const [datePart, timePart] = dateString.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hour, minute, second] = timePart.split(':').map(Number);
+      const date = new Date(year, month - 1, day, hour, minute, second);
+      if (isNaN(date.getTime())) throw new Error('Invalid date');
+      return format(date, 'PPpp');
+    }
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) throw new Error('Invalid date');
+    return format(date, 'PPpp');
+  } catch {
+    return 'Invalid Date';
+  }
+};
+
+const calculatePriceBreakdown = (totalAmount: number) => {
+  if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
+    return { baseFare: 0, taxes: 0 };
+  }
+  const baseFare = Math.round(totalAmount * 0.85);
+  const taxes = Math.round(totalAmount * 0.15);
+  return { baseFare, taxes };
+};
+
+const formatTripType = (tripType?: string, tripMode?: string) => {
+  if (!tripType) return 'Standard Trip';
+  const type = tripType.charAt(0).toUpperCase() + tripType.slice(1);
+  let formattedMode = '';
+  if (tripMode) {
+    formattedMode = tripMode
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    return `${type} (${formattedMode})`;
+  }
+  return type;
+};

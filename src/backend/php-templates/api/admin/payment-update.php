@@ -3,6 +3,10 @@
  * Update payment status endpoint
  */
 
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/database.php';
 
@@ -47,11 +51,16 @@ try {
     $statusMap = [
         'paid' => 'payment_received',
         'pending' => 'payment_pending',
-        'partial' => 'payment_pending', // Partial is still pending in the booking table
+        'partial' => 'payment_pending',
         'cancelled' => 'cancelled'
     ];
     
-    $bookingStatus = isset($statusMap[$data['status']]) ? $statusMap[$data['status']] : 'payment_pending';
+    // Force payment_status to 'payment_received' if status is 'paid'
+    if ($data['status'] === 'paid') {
+        $bookingStatus = 'payment_received';
+    } else {
+        $bookingStatus = isset($statusMap[$data['status']]) ? $statusMap[$data['status']] : 'payment_pending';
+    }
     
     // Begin transaction
     $db->begin_transaction();
@@ -76,28 +85,48 @@ try {
     $stmt->bind_param($updateTypes, ...$updateParams);
     $stmt->execute();
     
-    // If amount is provided, insert a payment record
+    // If amount is provided, upsert a payment record (update if exists, insert if not)
     if (isset($data['amount']) && $data['amount'] > 0) {
-        $stmt = $db->prepare("
-            INSERT INTO payments (
-                booking_id,
-                amount,
-                payment_method,
-                payment_date,
-                status,
-                notes,
-                created_at,
-                updated_at
-            ) VALUES (?, ?, ?, NOW(), 'confirmed', ?, NOW(), NOW())
-        ");
-        
+        // Prepare Razorpay fields if provided
+        $razorpayPaymentId = isset($data['razorpay_payment_id']) ? $data['razorpay_payment_id'] : null;
+        $razorpayOrderId = isset($data['razorpay_order_id']) ? $data['razorpay_order_id'] : null;
+        $razorpaySignature = isset($data['razorpay_signature']) ? $data['razorpay_signature'] : null;
         $bookingId = $data['payment_id'];
         $amount = $data['amount'];
         $paymentMethod = isset($data['payment_method']) ? $data['payment_method'] : null;
         $notes = isset($data['notes']) ? $data['notes'] : null;
-        
-        $stmt->bind_param("idss", $bookingId, $amount, $paymentMethod, $notes);
-        $stmt->execute();
+
+        // Check if a confirmed payment record already exists for this booking_id
+        $checkStmt = $db->prepare("SELECT id FROM payments WHERE booking_id = ? AND status = 'confirmed' LIMIT 1");
+        $checkStmt->bind_param("i", $bookingId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+
+        if ($checkResult->num_rows > 0) {
+            // Update existing confirmed payment record
+            $row = $checkResult->fetch_assoc();
+            $paymentId = $row['id'];
+            $updatePaymentQuery = "UPDATE payments SET amount = ?, payment_method = ?, payment_date = NOW(), status = 'confirmed', notes = ?, updated_at = NOW(), razorpay_payment_id = ?, razorpay_order_id = ?, razorpay_signature = ? WHERE id = ?";
+            $updatePaymentStmt = $db->prepare($updatePaymentQuery);
+            if (!$updatePaymentStmt) {
+                error_log('Prepare failed: ' . $db->error);
+            }
+            $updatePaymentStmt->bind_param("dsssssi", $amount, $paymentMethod, $notes, $razorpayPaymentId, $razorpayOrderId, $razorpaySignature, $paymentId);
+            if (!$updatePaymentStmt->execute()) {
+                error_log('Execute failed: ' . $updatePaymentStmt->error);
+            }
+        } else {
+            // Insert new confirmed payment record
+            $insertPaymentQuery = "INSERT INTO payments (booking_id, amount, payment_method, payment_date, status, notes, created_at, updated_at, razorpay_payment_id, razorpay_order_id, razorpay_signature) VALUES (?, ?, ?, NOW(), 'confirmed', ?, NOW(), NOW(), ?, ?, ?)";
+            $insertPaymentStmt = $db->prepare($insertPaymentQuery);
+            if (!$insertPaymentStmt) {
+                error_log('Prepare failed: ' . $db->error);
+            }
+            $insertPaymentStmt->bind_param("idsssss", $bookingId, $amount, $paymentMethod, $notes, $razorpayPaymentId, $razorpayOrderId, $razorpaySignature);
+            if (!$insertPaymentStmt->execute()) {
+                error_log('Execute failed: ' . $insertPaymentStmt->error);
+            }
+        }
     }
     
     // Commit the transaction

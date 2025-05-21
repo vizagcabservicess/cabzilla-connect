@@ -22,6 +22,7 @@ import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { useFare } from '@/hooks/useFare';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
+import { formatPrice } from '@/lib/cabData';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -272,319 +273,281 @@ export function AdminBookingForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Customer Information */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Customer Information</h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            <Label htmlFor="passengerName">Full Name <span className="text-red-500">*</span></Label>
-            <Input 
-              id="passengerName" 
-              value={passengerName} 
-              onChange={(e) => setPassengerName(e.target.value)} 
-              className={errors.passengerName ? "border-red-500" : ""}
-            />
-            {errors.passengerName && (
-              <p className="text-xs text-red-500">{errors.passengerName}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="passengerPhone">Phone Number <span className="text-red-500">*</span></Label>
-            <Input 
-              id="passengerPhone" 
-              value={passengerPhone} 
-              onChange={(e) => setPassengerPhone(e.target.value)}
-              className={errors.passengerPhone ? "border-red-500" : ""}
-            />
-            {errors.passengerPhone && (
-              <p className="text-xs text-red-500">{errors.passengerPhone}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="passengerEmail">Email <span className="text-red-500">*</span></Label>
-            <Input 
-              id="passengerEmail" 
-              type="email" 
-              value={passengerEmail} 
-              onChange={(e) => setPassengerEmail(e.target.value)}
-              className={errors.passengerEmail ? "border-red-500" : ""}
-            />
-            {errors.passengerEmail && (
-              <p className="text-xs text-red-500">{errors.passengerEmail}</p>
-            )}
-          </div>
-        </div>
-      </Card>
-      
-      {/* Trip Information */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Trip Information</h2>
-        
-        {/* Trip Type Selection */}
-        <div className="mb-6">
-          <TabTripSelector
-            selectedTab={ensureCustomerTripType(tripType)}
-            tripMode={tripMode}
-            onTabChange={(type) => setTripType(type as TripType)}
-            onTripModeChange={setTripMode}
-          />
-        </div>
-        
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          {/* Pickup Location */}
-          <div className="space-y-2">
-            <Label>Pickup Location <span className="text-red-500">*</span></Label>
-            <LocationInput
-              label=""
-              placeholder="Enter pickup location"
-              value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-              onLocationChange={setPickupLocation}
-              isPickupLocation={true}
-              isAirportTransfer={tripType === 'airport'}
-            />
-            {errors.pickupLocation && (
-              <p className="text-xs text-red-500">{errors.pickupLocation}</p>
-            )}
-          </div>
-          
-          {/* Drop Location (for outstation & airport trips) */}
-          {(tripType === 'outstation' || tripType === 'airport') && (
-            <div className="space-y-2">
-              <Label>Drop Location <span className="text-red-500">*</span></Label>
-              <LocationInput
-                label=""
-                placeholder="Enter drop location"
-                value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
-                onLocationChange={setDropLocation}
-                isPickupLocation={false}
-                isAirportTransfer={tripType === 'airport'}
-              />
-              {errors.dropLocation && (
-                <p className="text-xs text-red-500">{errors.dropLocation}</p>
-              )}
-            </div>
-          )}
-          
-          {/* Hourly Package (for local trips) */}
-          {tripType === 'local' && (
-            <div className="space-y-2">
-              <Label>Hourly Package</Label>
-              <Select
-                value={hourlyPackage}
-                onValueChange={setHourlyPackage}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select package" />
-                </SelectTrigger>
-                <SelectContent>
-                  {hourlyPackageOptions.map((pkg) => (
-                    <SelectItem key={pkg.value} value={pkg.value}>
-                      {pkg.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {/* Pickup Date */}
-          <div className="space-y-2">
-            <Label>Pickup Date & Time <span className="text-red-500">*</span></Label>
-            <DateTimePicker
-              label=""
-              date={pickupDate}
-              onDateChange={setPickupDate}
-              minDate={new Date()}
-            />
-          </div>
-          
-          {/* Return Date (for round trips) */}
-          {tripType === 'outstation' && tripMode === 'round-trip' && (
-            <div className="space-y-2">
-              <Label>Return Date & Time <span className="text-red-500">*</span></Label>
-              <DateTimePicker
-                label=""
-                date={returnDate}
-                onDateChange={setReturnDate}
-                minDate={pickupDate}
-              />
-              {errors.returnDate && (
-                <p className="text-xs text-red-500">{errors.returnDate}</p>
-              )}
-            </div>
-          )}
-        </div>
-        
-        {/* Admin Notes */}
-        <div className="space-y-2 mt-4">
-          <Label htmlFor="adminNotes">Admin Notes</Label>
-          <textarea
-            id="adminNotes"
-            className="w-full min-h-[100px] p-2 border rounded-md"
-            value={adminNotes}
-            onChange={(e) => setAdminNotes(e.target.value)}
-            placeholder="Add any special instructions or notes for this booking"
-          ></textarea>
-        </div>
-      </Card>
-      
-      {/* Vehicle Selection */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Vehicle Selection</h2>
-        console.log('Distance passed to CabOptions:', distance);
-        <CabOptions
-          cabTypes={cabTypes}
-          selectedCab={selectedCab}
-          onSelectCab={handleCabSelect}
-          distance={distance}
-          tripType={tripType}
-          tripMode={tripMode}
-          hourlyPackage={hourlyPackage}
-          pickupDate={pickupDate}
-          returnDate={returnDate}
-          isCalculatingFares={false}
-        />
-        {errors.selectedCab && (
-          <p className="text-xs text-red-500 mt-2">{errors.selectedCab}</p>
-        )}
-      </Card>
-      
-      {/* Pricing & Discount */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Pricing & Discount</h2>
-        
-        {/* Fare Breakup Styled Section */}
-        {selectedFareBreakdown && (
-          <div className="mb-4">
-            <h3 className="text-md font-semibold mb-2">Fare Breakup</h3>
-            <div className="space-y-2">
-              {selectedFareBreakdown.basePrice !== undefined && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Base fare</span>
-                  <span>₹{selectedFareBreakdown.basePrice.toLocaleString()}</span>
-                </div>
-              )}
-              {selectedFareBreakdown.driverAllowance !== undefined && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Driver allowance</span>
-                  <span>₹{selectedFareBreakdown.driverAllowance.toLocaleString()}</span>
-                </div>
-              )}
-              {selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0 && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Night charges</span>
-                  <span>₹{selectedFareBreakdown.nightCharges.toLocaleString()}</span>
-                </div>
-              )}
-              {selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0 && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Extra distance charges</span>
-                  <span>₹{selectedFareBreakdown.extraDistanceFare.toLocaleString()}</span>
-                </div>
-              )}
-              {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHourCharge > 0 && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Extra hour charges</span>
-                  <span>₹{selectedFareBreakdown.extraHourCharge.toLocaleString()}</span>
-                </div>
-              )}
-              {/* If only basePrice is present, show a message */}
-              {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
-                <div className="text-gray-500 text-sm">No detailed breakup available.</div>
-              )}
-            </div>
-            <div className="flex justify-between font-bold border-t pt-2 mt-2 text-lg">
-              <span>Total Price</span>
-              <span>₹{calculatePrice().toLocaleString()}</span>
-            </div>
-          </div>
-        )}
-        
-        {/* Base Price */}
-        <div className="flex justify-between py-2 border-b">
-          <span className="text-gray-600">Base Price:</span>
-          <span className="font-medium">₹{calculatePrice()}</span>
-        </div>
-        
-        {/* Discount Options */}
-        <div className="mt-4 space-y-4">
-          <Label>Apply Discount</Label>
-          <RadioGroup
-            value={discountType}
-            onValueChange={(value) => setDiscountType(value as 'none' | 'percentage' | 'fixed')}
-            className="flex flex-col space-y-2"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="none" id="none" />
-              <Label htmlFor="none">No Discount</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="percentage" id="percentage" />
-              <Label htmlFor="percentage">Percentage Discount</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="fixed" id="fixed" />
-              <Label htmlFor="fixed">Fixed Amount Discount</Label>
-            </div>
-          </RadioGroup>
-          
-          {/* Discount Value Input */}
-          {discountType !== 'none' && (
-            <div className="flex items-center mt-2">
-              <Input
-                type="number"
-                value={discountValue}
-                onChange={(e) => setDiscountValue(Number(e.target.value))}
-                min={0}
-                max={discountType === 'percentage' ? 100 : calculatePrice()}
-                className={`w-32 ${errors.discountValue ? "border-red-500" : ""}`}
-              />
-              <span className="ml-2">{discountType === 'percentage' ? '%' : '₹'}</span>
+    <form onSubmit={handleSubmit} className="bg-gray-50 min-h-screen py-6 px-2 md:px-8">
+      <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-6">
+        {/* Left: Customer & Trip Info */}
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Customer Information</h2>
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="passengerName">Full Name <span className="text-red-500">*</span></Label>
+                <Input 
+                  id="passengerName" 
+                  value={passengerName} 
+                  onChange={(e) => setPassengerName(e.target.value)} 
+                  className={errors.passengerName ? "border-red-500" : ""}
+                />
+                {errors.passengerName && (
+                  <p className="text-xs text-red-500">{errors.passengerName}</p>
+                )}
+              </div>
               
-              {errors.discountValue && (
-                <p className="text-xs text-red-500 ml-4">{errors.discountValue}</p>
+              <div className="space-y-2">
+                <Label htmlFor="passengerPhone">Phone Number <span className="text-red-500">*</span></Label>
+                <Input 
+                  id="passengerPhone" 
+                  value={passengerPhone} 
+                  onChange={(e) => setPassengerPhone(e.target.value)}
+                  className={errors.passengerPhone ? "border-red-500" : ""}
+                />
+                {errors.passengerPhone && (
+                  <p className="text-xs text-red-500">{errors.passengerPhone}</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="passengerEmail">Email <span className="text-red-500">*</span></Label>
+                <Input 
+                  id="passengerEmail" 
+                  type="email" 
+                  value={passengerEmail} 
+                  onChange={(e) => setPassengerEmail(e.target.value)}
+                  className={errors.passengerEmail ? "border-red-500" : ""}
+                />
+                {errors.passengerEmail && (
+                  <p className="text-xs text-red-500">{errors.passengerEmail}</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Trip Information</h2>
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-2">
+                <TabTripSelector
+                  selectedTab={ensureCustomerTripType(tripType)}
+                  tripMode={tripMode}
+                  onTabChange={(type) => setTripType(type as TripType)}
+                  onTripModeChange={setTripMode}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Pickup Location <span className="text-red-500">*</span></Label>
+                <LocationInput
+                  label=""
+                  placeholder="Enter pickup location"
+                  value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                  onLocationChange={setPickupLocation}
+                  isPickupLocation={true}
+                  isAirportTransfer={tripType === 'airport'}
+                />
+                {errors.pickupLocation && (
+                  <p className="text-xs text-red-500">{errors.pickupLocation}</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Drop Location <span className="text-red-500">*</span></Label>
+                <LocationInput
+                  label=""
+                  placeholder="Enter drop location"
+                  value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
+                  onLocationChange={setDropLocation}
+                  isPickupLocation={false}
+                  isAirportTransfer={tripType === 'airport'}
+                />
+                {errors.dropLocation && (
+                  <p className="text-xs text-red-500">{errors.dropLocation}</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Hourly Package</Label>
+                <Select
+                  value={hourlyPackage}
+                  onValueChange={setHourlyPackage}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select package" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hourlyPackageOptions.map((pkg) => (
+                      <SelectItem key={pkg.value} value={pkg.value}>
+                        {pkg.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Pickup Date & Time <span className="text-red-500">*</span></Label>
+                <DateTimePicker
+                  label=""
+                  date={pickupDate}
+                  onDateChange={setPickupDate}
+                  minDate={new Date()}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Return Date & Time <span className="text-red-500">*</span></Label>
+                <DateTimePicker
+                  label=""
+                  date={returnDate}
+                  onDateChange={setReturnDate}
+                  minDate={pickupDate}
+                />
+                {errors.returnDate && (
+                  <p className="text-xs text-red-500">{errors.returnDate}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Right: Vehicle, Pricing, Actions */}
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Vehicle Selection</h2>
+            <CabOptions
+              cabTypes={cabTypes}
+              selectedCab={selectedCab}
+              onSelectCab={handleCabSelect}
+              distance={distance}
+              tripType={tripType}
+              tripMode={tripMode}
+              hourlyPackage={hourlyPackage}
+              pickupDate={pickupDate}
+              returnDate={returnDate}
+              isCalculatingFares={false}
+            />
+            {errors.selectedCab && (
+              <p className="text-xs text-red-500 mt-2">{errors.selectedCab}</p>
+            )}
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Pricing & Discount</h2>
+            {selectedFareBreakdown && (
+              <div className="mb-4">
+                <h3 className="text-md font-semibold mb-2">Fare Breakup</h3>
+                <div className="space-y-2">
+                  {selectedFareBreakdown.basePrice !== undefined && (
+                    <div className="flex justify-between text-gray-800">
+                      <span>Base fare</span>
+                      <span>{formatPrice(selectedFareBreakdown.basePrice)}</span>
+                    </div>
+                  )}
+                  {selectedFareBreakdown.driverAllowance !== undefined && (
+                    <div className="flex justify-between text-gray-800">
+                      <span>Driver allowance</span>
+                      <span>{formatPrice(selectedFareBreakdown.driverAllowance)}</span>
+                    </div>
+                  )}
+                  {selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0 && (
+                    <div className="flex justify-between text-gray-800">
+                      <span>Night charges</span>
+                      <span>{formatPrice(selectedFareBreakdown.nightCharges)}</span>
+                    </div>
+                  )}
+                  {selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0 && (
+                    <div className="flex justify-between text-gray-800">
+                      <span>Extra distance charges</span>
+                      <span>{formatPrice(selectedFareBreakdown.extraDistanceFare)}</span>
+                    </div>
+                  )}
+                  {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHourCharge > 0 && (
+                    <div className="flex justify-between text-gray-800">
+                      <span>Extra hour charges</span>
+                      <span>{formatPrice(selectedFareBreakdown.extraHourCharge)}</span>
+                    </div>
+                  )}
+                  {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
+                    <div className="text-gray-500 text-sm">No detailed breakup available.</div>
+                  )}
+                </div>
+                <div className="flex justify-between font-bold border-t pt-2 mt-2 text-lg">
+                  <span>Total Price</span>
+                  <span>{formatPrice(calculatePrice())}</span>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-gray-600">Base Price:</span>
+              <span className="font-medium">{formatPrice(calculatePrice())}</span>
+            </div>
+            
+            <div className="mt-4 space-y-4">
+              <Label>Apply Discount</Label>
+              <RadioGroup
+                value={discountType}
+                onValueChange={(value) => setDiscountType(value as 'none' | 'percentage' | 'fixed')}
+                className="flex flex-col space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="none" id="none" />
+                  <Label htmlFor="none">No Discount</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="percentage" id="percentage" />
+                  <Label htmlFor="percentage">Percentage Discount</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="fixed" id="fixed" />
+                  <Label htmlFor="fixed">Fixed Amount Discount</Label>
+                </div>
+              </RadioGroup>
+              
+              {discountType !== 'none' && (
+                <div className="flex items-center mt-2">
+                  <Input
+                    type="number"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(Number(e.target.value))}
+                    min={0}
+                    max={discountType === 'percentage' ? 100 : calculatePrice()}
+                    className={`w-32 ${errors.discountValue ? "border-red-500" : ""}`}
+                  />
+                  <span className="ml-2">{discountType === 'percentage' ? '%' : '₹'}</span>
+                  
+                  {errors.discountValue && (
+                    <p className="text-xs text-red-500 ml-4">{errors.discountValue}</p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-        
-        {/* Discount Amount */}
-        {discountType !== 'none' && discountValue > 0 && (
-          <div className="flex justify-between py-2 border-b mt-4">
-            <span className="text-gray-600">Discount:</span>
-            <span className="font-medium text-green-600">
-              - ₹{(calculatePrice() - calculateFinalPrice()).toFixed(2)}
-            </span>
+            
+            {discountType !== 'none' && discountValue > 0 && (
+              <div className="flex justify-between py-2 border-b mt-4">
+                <span className="text-gray-600">Discount:</span>
+                <span className="font-medium text-green-600">
+                  - {formatPrice(calculatePrice() - calculateFinalPrice())}
+                </span>
+              </div>
+            )}
+            
+            <div className="flex justify-between py-3 border-b border-t mt-4 text-lg">
+              <span className="font-semibold">Final Price:</span>
+              <span className="font-bold">{formatPrice(calculateFinalPrice())}</span>
+            </div>
+            
+            <div className="mt-4 flex items-center space-x-2">
+              <Checkbox 
+                id="markAsPaid" 
+                checked={markAsPaid} 
+                onCheckedChange={() => setMarkAsPaid(!markAsPaid)}
+              />
+              <Label htmlFor="markAsPaid" className="font-medium">
+                Mark as Paid
+              </Label>
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button type="submit" className="px-6 py-2 text-sm rounded-full bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 transition">Create Booking</Button>
+            </div>
           </div>
-        )}
-        
-        {/* Final Price */}
-        <div className="flex justify-between py-3 border-b border-t mt-4 text-lg">
-          <span className="font-semibold">Final Price:</span>
-          <span className="font-bold">₹{calculateFinalPrice()}</span>
         </div>
-        
-        {/* Payment Status */}
-        <div className="mt-4 flex items-center space-x-2">
-          <Checkbox 
-            id="markAsPaid" 
-            checked={markAsPaid} 
-            onCheckedChange={() => setMarkAsPaid(!markAsPaid)}
-          />
-          <Label htmlFor="markAsPaid" className="font-medium">
-            Mark as Paid
-          </Label>
-        </div>
-      </Card>
-      
-      {/* Submit Button */}
-      <div className="flex justify-end">
-        <Button type="submit" className="px-8 py-6">
-          Create Booking
-        </Button>
       </div>
     </form>
   );

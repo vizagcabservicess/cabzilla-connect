@@ -74,7 +74,7 @@ export function BookingDetails({
             </p>
           </div>
           <div className="text-right">
-            <p className="font-semibold">₹ {formatPrice(booking.totalAmount)}</p>
+            <p className="font-semibold">{formatPrice(booking.totalAmount)}</p>
             <div className="inline-block px-2 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-800 mt-1">
               {booking.status.replace('_', ' ').toUpperCase()}
             </div>
@@ -136,7 +136,7 @@ export function BookingDetails({
                 {booking.extraCharges.map((charge, index) => (
                   <div key={index} className="flex justify-between items-center py-1">
                     <span>{charge.description || 'Additional charge'}</span>
-                    <span>₹{formatPrice(charge.amount)}</span>
+                    <span>{formatPrice(charge.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -145,7 +145,7 @@ export function BookingDetails({
             <div className="mt-6 flex justify-between items-center border-t pt-4">
               <div>
                 <p className="text-sm text-gray-500">Total Amount</p>
-                <p className="font-bold text-xl">₹{formatPrice(booking.totalAmount)}</p>
+                <p className="font-bold text-xl">{formatPrice(booking.totalAmount)}</p>
               </div>
 
               <div className="space-x-2">
