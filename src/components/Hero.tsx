@@ -242,6 +242,18 @@ export function Hero() {
     
     setIsLoading(true);
     
+    // If trip type is tour, navigate to the tour page with location and date params
+    if (tripType === 'tour') {
+      navigate('/tours', { 
+        state: { 
+          pickupLocation, 
+          pickupDate 
+        } 
+      });
+      return;
+    }
+    
+    // For other trip types, continue with existing flow
     setTimeout(() => {
       setCurrentStep(2);
       setIsLoading(false);

@@ -1,8 +1,11 @@
 
 import { TourInfo, TourFares } from '@/types/cab';
 import { fareAPI } from '@/services/api';
+import { tourAPI } from '@/services/api/tourAPI';
+import { formatDate } from '@/lib/dateUtils';
 
-export const availableTours: TourInfo[] = [
+// Default tours as fallback
+export const defaultTours: TourInfo[] = [
   {
     id: 'araku_valley',
     name: 'Araku Valley Tour',
@@ -23,9 +26,24 @@ export const availableTours: TourInfo[] = [
     distance: 25,
     days: 1,
     image: '/tours/rushikonda.jpg'
+  },
+  {
+    id: 'vizag_city',
+    name: 'Vizag City Tour',
+    distance: 50,
+    days: 1,
+    image: '/tours/vizag_city.jpg'
+  },
+  {
+    id: 'srikakulam',
+    name: 'Srikakulam Temple Tour',
+    distance: 110,
+    days: 1,
+    image: '/tours/srikakulam.jpg'
   }
 ];
 
+// Default tour fares as fallback
 export const tourFares: TourFares = {
   araku_valley: {
     sedan: 6000,
@@ -41,24 +59,85 @@ export const tourFares: TourFares = {
     sedan: 2000,
     ertiga: 3000,
     innova: 4000
+  },
+  vizag_city: {
+    sedan: 3000,
+    ertiga: 3800,
+    innova: 4600
+  },
+  srikakulam: {
+    sedan: 5500,
+    ertiga: 6500,
+    innova: 8000
   }
 };
 
-// Track ongoing tour fare fetch operations
+// Cache management
+let toursCache: TourInfo[] | null = null;
+let tourFaresCache: TourFares | null = null;
+let lastFetchTimestamp = 0;
+const CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache
+
+// Track ongoing tour fetch operations
+let isFetchingTours = false;
 let isFetchingTourFares = false;
+
+// Function to load tours dynamically
+export const loadAvailableTours = async (): Promise<TourInfo[]> => {
+  // Check if we have a fresh cache
+  const now = Date.now();
+  if (toursCache && now - lastFetchTimestamp < CACHE_DURATION) {
+    console.log("Using cached tours data");
+    return toursCache;
+  }
+  
+  if (isFetchingTours) {
+    console.log('Tour fetch already in progress, returning cached or default data');
+    return toursCache || defaultTours;
+  }
+  
+  try {
+    isFetchingTours = true;
+    console.log("Loading tours from API");
+    
+    const tourData = await tourAPI.getAvailableTours();
+    console.log("Tours loaded:", tourData);
+    
+    if (Array.isArray(tourData) && tourData.length > 0) {
+      toursCache = tourData;
+      lastFetchTimestamp = now;
+      return tourData;
+    }
+    
+    console.log("No tour data received, using default tours");
+    return defaultTours;
+  } catch (error) {
+    console.error('Error loading tours:', error);
+    return defaultTours;
+  } finally {
+    isFetchingTours = false;
+  }
+};
 
 // Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<TourFares> => {
+  // Check if we have a fresh cache
+  const now = Date.now();
+  if (tourFaresCache && now - lastFetchTimestamp < CACHE_DURATION) {
+    console.log("Using cached tour fares data");
+    return tourFaresCache;
+  }
+  
   if (isFetchingTourFares) {
     console.log('Tour fare fetch already in progress, returning cached data');
-    return tourFares;
+    return tourFaresCache || tourFares;
   }
   
   try {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
-    // Remove the timestamp parameter as it's not accepted by the API
-    const tourFareData = await fareAPI.getTourFares();
+    
+    const tourFareData = await tourAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
     // Convert the API data to match the existing structure
@@ -74,14 +153,46 @@ export const loadTourFares = async (): Promise<TourFares> => {
           };
         }
       });
+      
+      tourFaresCache = dynamicTourFares;
+      lastFetchTimestamp = now;
+      return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
     }
     
-    isFetchingTourFares = false;
-    return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
+    return tourFares;
   } catch (error) {
     console.error('Error loading tour fares:', error);
-    isFetchingTourFares = false;
     // Fall back to default tour fares if API call fails
     return tourFares;
+  } finally {
+    isFetchingTourFares = false;
   }
+};
+
+// Function to get tour fare with fallback mechanism
+export const getTourFare = (tourId: string, cabId: string): number => {
+  if (!tourId || !cabId) return 0;
+  
+  console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
+  
+  // First check if we have this in the tour fares cache
+  if (tourFaresCache && tourFaresCache[tourId]) {
+    const fare = tourFaresCache[tourId][cabId as keyof typeof tourFaresCache[typeof tourId]];
+    if (fare) return fare as number;
+  }
+  
+  // Then check default tour fares
+  const tourFareMatrix = tourFares[tourId];
+  if (tourFareMatrix) {
+    const fare = tourFareMatrix[cabId as keyof typeof tourFareMatrix];
+    console.log(`Tour fare from matrix: ${fare}`);
+    if (fare) return fare as number;
+  }
+  
+  // Default prices if all else fails
+  if (cabId === 'sedan') return 3500;
+  if (cabId === 'ertiga') return 4500;
+  if (cabId === 'innova') return 5500;
+  
+  return 4000;
 };

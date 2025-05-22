@@ -8,6 +8,7 @@ import { userAPI } from './userAPI';
 import { ledgerAPI } from './ledgerAPI';
 import { commissionAPI } from './commissionAPI';
 import { apiHealthCheck } from './healthCheck';
+import { tourAPI } from './tourAPI';
 
 // Export all API services
 export {
@@ -19,7 +20,8 @@ export {
   userAPI,
   ledgerAPI,
   commissionAPI,
-  apiHealthCheck
+  apiHealthCheck,
+  tourAPI
 };
 
 // Default export
@@ -32,5 +34,6 @@ export default {
   user: userAPI,
   ledger: ledgerAPI,
   commission: commissionAPI,
-  health: apiHealthCheck
+  health: apiHealthCheck,
+  tour: tourAPI
 };

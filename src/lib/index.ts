@@ -1,5 +1,3 @@
-
-
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
 
@@ -105,4 +103,3 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
-
