@@ -66,8 +66,8 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
   };
   
   return (
-    <div className="flex flex-col gap-4 mb-6">
-      <div className="flex flex-col sm:flex-row gap-4">
+    <div className="space-y-6 overflow-x-hidden px-2 md:px-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
         <div className="flex w-full">
           <Input
             placeholder="Search by booking number, customer name, or phone..."

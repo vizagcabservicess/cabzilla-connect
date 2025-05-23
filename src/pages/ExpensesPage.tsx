@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -13,6 +12,7 @@ import { MonthlyBudgetChart } from '@/components/admin/expense/MonthlyBudgetChar
 import { ExpenseAnalytics } from '@/components/admin/expense/ExpenseAnalytics';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function ExpensesPage() {
   // Set default date range to current month
@@ -122,101 +122,98 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeView} setActiveTab={setActiveView} />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Expense Management</h1>
-              <p className="text-gray-500">Track and manage your business expenses</p>
-            </div>
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
-              <LedgerDateRangePicker 
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-                onApply={handleApplyDateRange}
-                disabled={isLoading}
-              />
-              <Button onClick={handleAddNew}>
-                <Plus className="h-4 w-4 mr-2" /> New Expense
-              </Button>
-            </div>
+    <AdminLayout activeTab="expenses">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Expense Management</h1>
+            <p className="text-gray-500">Track and manage your business expenses</p>
           </div>
-          
-          {/* Expense Table */}
-          <Card>
-            <CardContent className="p-6">
-              {expenses.length > 0 ? (
-                <ExpenseTable 
-                  data={expenses} 
-                  isLoading={isLoading || isRefreshing}
-                  categories={categories}
-                  onEdit={handleEditExpense}
-                  onDelete={handleDeleteExpense}
-                  onAddNew={handleAddNew}
-                />
-              ) : (
-                // Show all categories if there are no expenses
-                <div>
-                  <div className="mb-4 flex justify-between items-center">
-                    <span className="text-lg font-semibold text-gray-700">Expense Categories</span>
-                    <Button onClick={handleAddNew}>
-                      <Plus className="h-4 w-4 mr-2" /> Add Expense
-                    </Button>
-                  </div>
-                  {categories.length > 0 ? (
-                    <div className="rounded-md border overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {categories.map(category => (
-                            <tr key={category.id}>
-                              <td className="px-6 py-4 whitespace-nowrap font-medium">{category.name}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">{category.description}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="inline-block w-6 h-6 rounded-full border" style={{ backgroundColor: category.color || '#6B7280', borderColor: category.color || '#6B7280' }}></span>
-                                <span className="ml-2 text-xs text-gray-500">{category.color}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500 py-8">No categories found.</div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Charts and Analytics */}
-          {summary && !isLoading && expenses.length > 0 && (
-            <div className="space-y-6">
-              {/* Monthly Budget Chart */}
-              <MonthlyBudgetChart 
-                data={summary} 
-                categories={categories}
-                monthlyBudget={50000} // This could be dynamic
-              />
-              
-              {/* Analytics Charts */}
-              <ExpenseAnalytics 
-                summary={summary}
-                categories={categories}
-              />
-            </div>
-          )}
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
+            <LedgerDateRangePicker 
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onApply={handleApplyDateRange}
+              disabled={isLoading}
+            />
+            <Button onClick={handleAddNew}>
+              <Plus className="h-4 w-4 mr-2" /> New Expense
+            </Button>
+          </div>
         </div>
-      </main>
+        
+        {/* Expense Table */}
+        <Card>
+          <CardContent className="p-6">
+            {expenses.length > 0 ? (
+              <ExpenseTable 
+                data={expenses} 
+                isLoading={isLoading || isRefreshing}
+                categories={categories}
+                onEdit={handleEditExpense}
+                onDelete={handleDeleteExpense}
+                onAddNew={handleAddNew}
+              />
+            ) : (
+              // Show all categories if there are no expenses
+              <div>
+                <div className="mb-4 flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-700">Expense Categories</span>
+                  <Button onClick={handleAddNew}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Expense
+                  </Button>
+                </div>
+                {categories.length > 0 ? (
+                  <div className="rounded-md border overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {categories.map(category => (
+                          <tr key={category.id}>
+                            <td className="px-6 py-4 whitespace-nowrap font-medium">{category.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{category.description}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="inline-block w-6 h-6 rounded-full border" style={{ backgroundColor: category.color || '#6B7280', borderColor: category.color || '#6B7280' }}></span>
+                              <span className="ml-2 text-xs text-gray-500">{category.color}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">No categories found.</div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Charts and Analytics */}
+        {summary && !isLoading && expenses.length > 0 && (
+          <div className="space-y-6">
+            {/* Monthly Budget Chart */}
+            <MonthlyBudgetChart 
+              data={summary} 
+              categories={categories}
+              monthlyBudget={50000} // This could be dynamic
+            />
+            
+            {/* Analytics Charts */}
+            <ExpenseAnalytics 
+              summary={summary}
+              categories={categories}
+            />
+          </div>
+        )}
+      </div>
       
       {/* Expense Entry Form Dialog */}
       <ExpenseEntryForm 
@@ -226,6 +223,6 @@ export default function ExpensesPage() {
         expenseToEdit={currentExpense}
         categories={categories}
       />
-    </div>
+    </AdminLayout>
   );
 }

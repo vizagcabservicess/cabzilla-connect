@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -71,7 +70,7 @@ export function ReportingAnalytics() {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
   return (
-    <div>
+    <div className="space-y-6 overflow-x-hidden px-2 md:px-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Reports & Analytics</h2>
         <div className="space-x-2">

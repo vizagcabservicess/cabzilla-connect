@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api/bookingAPI';
 import { BookingRequest } from '@/types/api';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 const AdminBookingCreationPage = () => {
   const navigate = useNavigate();
@@ -48,20 +49,11 @@ const AdminBookingCreationPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar activeTab="create-booking" setActiveTab={() => {}} />
-      <main className="flex-1 container mx-auto pt-6 pb-2">
-        <h1 className="text-2xl font-bold mb-6">Create Customer Booking</h1>
-        <Card>
-          <CardHeader>
-            <CardTitle>New Booking Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AdminBookingForm />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+    <AdminLayout activeTab="create-booking">
+      <div className="container mx-auto py-6 px-4 md:px-6">
+        <AdminBookingForm />
+      </div>
+    </AdminLayout>
   );
 };
 

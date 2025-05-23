@@ -16,6 +16,7 @@ import { DriverSelector } from '@/components/admin/payroll/DriverSelector';
 import { PayrollCharts } from '@/components/admin/payroll/PayrollCharts';
 import { DriverPayrollHistory } from '@/components/admin/payroll/DriverPayrollHistory';
 import { fleetAPI } from '@/services/api/fleetAPI';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function PayrollPage() {
   // Set default date range to current month
@@ -124,156 +125,153 @@ export default function PayrollPage() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeView} setActiveTab={setActiveView} />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {showDriverView ? 'Driver Payroll Management' : 'Payroll Management'}
-              </h1>
-              <p className="text-gray-500">
-                {showDriverView 
-                  ? `Manage salary and attendance for selected driver` 
-                  : 'Process driver salaries, advances, and attendance'
-                }
-              </p>
-            </div>
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
-              <LedgerDateRangePicker 
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-                onApply={handleApplyDateRange}
-                disabled={isLoading}
-              />
-              {!showDriverView && (
-                <Button onClick={handleAddNew}>
-                  <Plus className="h-4 w-4 mr-2" /> New Payroll Entry
-                </Button>
-              )}
-              {showDriverView && (
-                <Button variant="outline" onClick={handleResetDriverView}>
-                  View All Drivers
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {/* Driver Selector (when not in driver-specific view) */}
-          {!showDriverView && payrollSummary && (
-            <DriverSelector 
-              drivers={payrollSummary.byDriver} 
-              onSelectDriver={handleDriverSelect}
-              isLoading={isLoading}
-            />
-          )}
-          
-          {/* Summary Cards */}
-          {payrollSummary && !showDriverView && (
-            <PayrollSummaryCards
-              totalPaid={payrollSummary.totalPaid}
-              totalPending={payrollSummary.totalPending}
-              totalDrivers={payrollSummary.totalDrivers}
-              isLoading={isLoading}
-            />
-          )}
-          
-          {/* Selected Driver Summary */}
-          {showDriverView && selectedDriverSummary && (
-            <div className="mb-6">
-              <Card>
-                <CardContent className="p-6 flex flex-col md:flex-row gap-6">
-                  <div>
-                    <div className="text-gray-500">Driver</div>
-                    <div className="font-bold">{selectedDriverSummary.driverName}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Total Paid</div>
-                    <div className="font-bold">₹{selectedDriverSummary.amount.toLocaleString('en-IN')}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Status</div>
-                    <div className="font-bold">{selectedDriverSummary.status}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          
-          {/* Payroll Table or Fallback */}
-          <Card>
-            <CardContent className="p-6">
-              {payrollEntries.length > 0 ? (
-                <PayrollTable 
-                  data={payrollEntries} 
-                  isLoading={isLoading || isRefreshing}
-                  onViewDetails={handleEditPayroll}
-                  onGeneratePayslip={(id) => payrollAPI.generatePayslip(id, 'pdf')}
-                  showDriverColumn={!showDriverView}
-                />
-              ) : (
-                <div>
-                  <div className="mb-4 flex justify-between items-center">
-                    <span className="text-lg font-semibold text-gray-700">Drivers</span>
-                    <Button onClick={() => setFormOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" /> New Payroll Entry
-                    </Button>
-                  </div>
-                  {drivers.length > 0 ? (
-                    <div className="rounded-md border overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {drivers.map(driver => (
-                            <tr key={driver.id}>
-                              <td className="px-6 py-4 whitespace-nowrap font-medium">{driver.name}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">{driver.phone}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">{driver.status}</td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <Button size="sm" onClick={() => { setSelectedDriverId(driver.id); setFormOpen(true); }}>Add Payroll Entry</Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500 py-8">No drivers found.</div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Charts and Analytics */}
-          {payrollSummary && !isLoading && payrollEntries.length > 0 && !showDriverView && (
-            <PayrollCharts 
-              summary={payrollSummary}
-            />
-          )}
-          
-          {/* Driver-specific payroll history */}
-          {showDriverView && selectedDriverId && (
-            <DriverPayrollHistory 
-              driverId={selectedDriverId}
-              isLoading={isLoading}
-              onRecordAdvance={(amount, date, notes) => 
-                payrollAPI.recordSalaryAdvance(selectedDriverId, amount, date, notes)
+    <AdminLayout activeTab="payroll">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {showDriverView ? 'Driver Payroll Management' : 'Payroll Management'}
+            </h1>
+            <p className="text-gray-500">
+              {showDriverView 
+                ? `Manage salary and attendance for selected driver` 
+                : 'Process driver salaries, advances, and attendance'
               }
-              onRefresh={() => fetchPayrollData(true)}
+            </p>
+          </div>
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
+            <LedgerDateRangePicker 
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onApply={handleApplyDateRange}
+              disabled={isLoading}
             />
-          )}
+            {!showDriverView && (
+              <Button onClick={handleAddNew}>
+                <Plus className="h-4 w-4 mr-2" /> New Payroll Entry
+              </Button>
+            )}
+            {showDriverView && (
+              <Button variant="outline" onClick={handleResetDriverView}>
+                View All Drivers
+              </Button>
+            )}
+          </div>
         </div>
-      </main>
+        
+        {/* Driver Selector (when not in driver-specific view) */}
+        {!showDriverView && payrollSummary && (
+          <DriverSelector 
+            drivers={payrollSummary.byDriver} 
+            onSelectDriver={handleDriverSelect}
+            isLoading={isLoading}
+          />
+        )}
+        
+        {/* Summary Cards */}
+        {payrollSummary && !showDriverView && (
+          <PayrollSummaryCards
+            totalPaid={payrollSummary.totalPaid}
+            totalPending={payrollSummary.totalPending}
+            totalDrivers={payrollSummary.totalDrivers}
+            isLoading={isLoading}
+          />
+        )}
+        
+        {/* Selected Driver Summary */}
+        {showDriverView && selectedDriverSummary && (
+          <div className="mb-6">
+            <Card>
+              <CardContent className="p-6 flex flex-col md:flex-row gap-6">
+                <div>
+                  <div className="text-gray-500">Driver</div>
+                  <div className="font-bold">{selectedDriverSummary.driverName}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Total Paid</div>
+                  <div className="font-bold">₹{selectedDriverSummary.amount.toLocaleString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Status</div>
+                  <div className="font-bold">{selectedDriverSummary.status}</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        
+        {/* Payroll Table or Fallback */}
+        <Card>
+          <CardContent className="p-6">
+            {payrollEntries.length > 0 ? (
+              <PayrollTable 
+                data={payrollEntries} 
+                isLoading={isLoading || isRefreshing}
+                onViewDetails={handleEditPayroll}
+                onGeneratePayslip={(id) => payrollAPI.generatePayslip(id, 'pdf')}
+                showDriverColumn={!showDriverView}
+              />
+            ) : (
+              <div>
+                <div className="mb-4 flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-700">Drivers</span>
+                  <Button onClick={() => setFormOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" /> New Payroll Entry
+                  </Button>
+                </div>
+                {drivers.length > 0 ? (
+                  <div className="rounded-md border overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {drivers.map(driver => (
+                          <tr key={driver.id}>
+                            <td className="px-6 py-4 whitespace-nowrap font-medium">{driver.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{driver.phone}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">{driver.status}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Button size="sm" onClick={() => { setSelectedDriverId(driver.id); setFormOpen(true); }}>Add Payroll Entry</Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">No drivers found.</div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Charts and Analytics */}
+        {payrollSummary && !isLoading && payrollEntries.length > 0 && !showDriverView && (
+          <PayrollCharts 
+            summary={payrollSummary}
+          />
+        )}
+        
+        {/* Driver-specific payroll history */}
+        {showDriverView && selectedDriverId && (
+          <DriverPayrollHistory 
+            driverId={selectedDriverId}
+            isLoading={isLoading}
+            onRecordAdvance={(amount, date, notes) => 
+              payrollAPI.recordSalaryAdvance(selectedDriverId, amount, date, notes)
+            }
+            onRefresh={() => fetchPayrollData(true)}
+          />
+        )}
+      </div>
       
       {/* Payroll Entry Form Dialog */}
       <PayrollEntryForm 
@@ -283,6 +281,6 @@ export default function PayrollPage() {
         payrollToEdit={currentPayroll}
         selectedDriverId={selectedDriverId}
       />
-    </div>
+    </AdminLayout>
   );
 }

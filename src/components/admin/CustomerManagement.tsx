@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { 
   Table, TableBody, TableCaption, TableCell, 
@@ -18,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 export function CustomerManagement() {
   const { toast } = useToast();
@@ -134,8 +134,8 @@ export function CustomerManagement() {
   const totalRevenue = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div className="space-y-6 overflow-x-hidden px-2 md:px-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
         <h2 className="text-2xl font-bold">Customer Management</h2>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -183,86 +183,89 @@ export function CustomerManagement() {
         </Card>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableCaption>List of all registered customers</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer Name</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Total Rides</TableHead>
-                <TableHead>Total Spent</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Ride</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCustomers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col text-sm">
-                      <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" /> {customer.phone}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" /> {customer.email}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{customer.totalRides}</TableCell>
-                  <TableCell>₹{customer.totalSpent.toLocaleString('en-IN')}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <span className="font-bold mr-1">{customer.rating}</span>
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    </div>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(customer.status)}</TableCell>
-                  <TableCell>{new Date(customer.lastRide).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
-                          <Eye className="h-3.5 w-3.5 mr-2" /> View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleCustomerFlag(customer.id)}>
-                          {customer.status === 'flagged' ? (
-                            <>
-                              <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Remove Flag
-                            </>
-                          ) : (
-                            <>
-                              <AlertTriangle className="h-3.5 w-3.5 mr-2" /> Flag Customer
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => issueRefund(customer.id)}>
-                          <ArrowRightLeft className="h-3.5 w-3.5 mr-2" /> Issue Refund
-                        </DropdownMenuItem>
-                        {customer.status !== 'blocked' && (
-                          <DropdownMenuItem className="text-red-600">
-                            <Ban className="h-3.5 w-3.5 mr-2" /> Block Customer
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+      <div className="relative">
+        <ScrollArea className="h-[calc(70vh-20px)] w-full rounded-md border">
+          <div className="w-full overflow-x-auto">
+            <Table>
+              <TableCaption>List of all registered customers</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Total Rides</TableHead>
+                  <TableHead>Total Spent</TableHead>
+                  <TableHead>Rating</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Ride</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {filteredCustomers.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-sm">
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> {customer.phone}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> {customer.email}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{customer.totalRides}</TableCell>
+                    <TableCell>₹{customer.totalSpent.toLocaleString('en-IN')}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <span className="font-bold mr-1">{customer.rating}</span>
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      </div>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(customer.status)}</TableCell>
+                    <TableCell>{new Date(customer.lastRide).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem>
+                            <Eye className="h-3.5 w-3.5 mr-2" /> View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleCustomerFlag(customer.id)}>
+                            {customer.status === 'flagged' ? (
+                              <>
+                                <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Remove Flag
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="h-3.5 w-3.5 mr-2" /> Flag Customer
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => issueRefund(customer.id)}>
+                            <ArrowRightLeft className="h-3.5 w-3.5 mr-2" /> Issue Refund
+                          </DropdownMenuItem>
+                          {customer.status !== 'blocked' && (
+                            <DropdownMenuItem className="text-red-600">
+                              <Ban className="h-3.5 w-3.5 mr-2" /> Block Customer
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <ScrollBar orientation="horizontal" className="h-3 bg-gray-100" />
+        </ScrollArea>
       </div>
     </div>
   );

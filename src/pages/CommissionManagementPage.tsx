@@ -1,16 +1,13 @@
-
 import React from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
-import { CommissionManagement } from '@/components/admin/commission/CommissionManagement';
 import { Separator } from '@/components/ui/separator';
+import { CommissionManagement } from '@/components/admin/commission/CommissionManagement';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function CommissionManagementPage() {
   const [activeTab, setActiveTab] = React.useState('commission');
 
   return (
-    <div className="flex h-screen bg-background">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+    <AdminLayout activeTab="commission">
       <div className="flex flex-col flex-1 overflow-auto">
         <div className="flex-1 space-y-4 p-8 pt-6">
           <div className="space-y-0.5">
@@ -25,6 +22,6 @@ export default function CommissionManagementPage() {
           <CommissionManagement />
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }

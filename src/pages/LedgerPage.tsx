@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRange } from "react-day-picker";
 import { format } from 'date-fns';
@@ -22,6 +21,7 @@ import { LedgerTable } from '@/components/admin/ledger/LedgerTable';
 import { LedgerCharts } from '@/components/admin/ledger/LedgerCharts';
 import { LedgerVehicleEmis } from '@/components/admin/ledger/LedgerVehicleEmis';
 import { LedgerEntityView } from '@/components/admin/ledger/LedgerEntityView';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function LedgerPage() {
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -193,99 +193,96 @@ export default function LedgerPage() {
   }, [entityType, fetchEntityData, activeTab]);
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeView} setActiveTab={setActiveView} />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Financial Ledger</h1>
-              <p className="text-gray-500">Track income, expenses and financial transactions</p>
-            </div>
-            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
-              <LedgerDateRangePicker 
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-                onApply={handleApplyDateRange}
-                disabled={isLoading}
-              />
-              <LedgerExportActions
-                dateRange={dateRange}
-                activeTab={activeTab}
-              />
-            </div>
+    <AdminLayout activeTab="ledger">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Financial Ledger</h1>
+            <p className="text-gray-500">Track income, expenses and financial transactions</p>
           </div>
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">
+            <LedgerDateRangePicker 
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onApply={handleApplyDateRange}
+              disabled={isLoading}
+            />
+            <LedgerExportActions
+              dateRange={dateRange}
+              activeTab={activeTab}
+            />
+          </div>
+        </div>
+        
+        {/* Summary Cards */}
+        {ledgerSummary && (
+          <LedgerSummaryCards
+            totalIncome={ledgerSummary.totalIncome}
+            totalExpenses={ledgerSummary.totalExpenses}
+            netBalance={ledgerSummary.netBalance}
+            cashAccepted={ledgerSummary.cashAccepted}
+            inBankAccount={ledgerSummary.inBankAccount}
+            pendingPayments={ledgerSummary.pendingPayments}
+            isLoading={isLoading}
+          />
+        )}
+        
+        {/* Tab Navigation */}
+        <Card>
+          <CardContent className="p-2">
+            <LedgerTabs 
+              activeTab={activeTab} 
+              onTabChange={handleTabChange} 
+              tabs={tabs}
+            />
+          </CardContent>
+        </Card>
+        
+        {/* Dynamic Content based on active tab */}
+        <div className="space-y-6">
+          {/* All Transactions, Payments, Expenses */}
+          {(activeTab === 'all' || activeTab === 'payments' || activeTab === 'expenses') && (
+            <>
+              <LedgerTable 
+                data={ledgerEntries} 
+                isLoading={isLoading} 
+                onEntryUpdated={handleEntryUpdated}
+                onEntryDeleted={handleEntryDeleted}
+              />
+              
+              {/* Charts only show when we have data and after loading */}
+              {!isLoading && ledgerEntries.length > 0 && (
+                <LedgerCharts 
+                  categorySummaries={categorySummaries} 
+                  paymentMethodSummaries={paymentMethodSummaries}
+                  recentEntries={ledgerEntries}
+                  isLoading={isLoading}
+                />
+              )}
+            </>
+          )}
           
-          {/* Summary Cards */}
-          {ledgerSummary && (
-            <LedgerSummaryCards
-              totalIncome={ledgerSummary.totalIncome}
-              totalExpenses={ledgerSummary.totalExpenses}
-              netBalance={ledgerSummary.netBalance}
-              cashAccepted={ledgerSummary.cashAccepted}
-              inBankAccount={ledgerSummary.inBankAccount}
-              pendingPayments={ledgerSummary.pendingPayments}
-              isLoading={isLoading}
+          {/* Vehicle EMIs Tab */}
+          {activeTab === 'emis' && (
+            <LedgerVehicleEmis 
+              data={vehicleEmis} 
+              isLoading={isLoading} 
+              onUpdate={fetchEmiData}
             />
           )}
           
-          {/* Tab Navigation */}
-          <Card>
-            <CardContent className="p-2">
-              <LedgerTabs 
-                activeTab={activeTab} 
-                onTabChange={handleTabChange} 
-                tabs={tabs}
-              />
-            </CardContent>
-          </Card>
-          
-          {/* Dynamic Content based on active tab */}
-          <div className="space-y-6">
-            {/* All Transactions, Payments, Expenses */}
-            {(activeTab === 'all' || activeTab === 'payments' || activeTab === 'expenses') && (
-              <>
-                <LedgerTable 
-                  data={ledgerEntries} 
-                  isLoading={isLoading} 
-                  onEntryUpdated={handleEntryUpdated}
-                  onEntryDeleted={handleEntryDeleted}
-                />
-                
-                {/* Charts only show when we have data and after loading */}
-                {!isLoading && ledgerEntries.length > 0 && (
-                  <LedgerCharts 
-                    categorySummaries={categorySummaries} 
-                    paymentMethodSummaries={paymentMethodSummaries}
-                    recentEntries={ledgerEntries}
-                    isLoading={isLoading}
-                  />
-                )}
-              </>
-            )}
-            
-            {/* Vehicle EMIs Tab */}
-            {activeTab === 'emis' && (
-              <LedgerVehicleEmis 
-                data={vehicleEmis} 
-                isLoading={isLoading} 
-                onUpdate={fetchEmiData}
-              />
-            )}
-            
-            {/* Entity-Specific Tab */}
-            {activeTab === 'entity' && (
-              <LedgerEntityView
-                entitySummaries={entitySummaries}
-                entityType={entityType}
-                onEntityTypeChange={handleEntityTypeChange}
-                isLoading={isLoading}
-              />
-            )}
-          </div>
+          {/* Entity-Specific Tab */}
+          {activeTab === 'entity' && (
+            <LedgerEntityView
+              entitySummaries={entitySummaries}
+              entityType={entityType}
+              onEntityTypeChange={handleEntityTypeChange}
+              isLoading={isLoading}
+            />
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

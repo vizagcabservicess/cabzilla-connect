@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -37,6 +36,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function VehicleMaintenancePage() {
   const [activeTab, setActiveTab] = useState<string>("maintenance");
@@ -278,9 +278,8 @@ export default function VehicleMaintenancePage() {
   }).length;
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 overflow-y-auto p-8">
+    <AdminLayout activeTab="maintenance">
+      <div className="flex-1 overflow-y-auto p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Vehicle Maintenance</h1>
@@ -559,7 +558,7 @@ export default function VehicleMaintenancePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

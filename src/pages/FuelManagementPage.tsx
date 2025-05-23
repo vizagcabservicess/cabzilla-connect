@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function FuelManagementPage() {
   const [activeTab, setActiveTab] = useState<string>("fuel");
@@ -343,9 +344,8 @@ export default function FuelManagementPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 overflow-y-auto p-8">
+    <AdminLayout activeTab="fuel">
+      <div className="flex-1 overflow-y-auto p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Fuel Management</h1>
@@ -671,7 +671,7 @@ export default function FuelManagementPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

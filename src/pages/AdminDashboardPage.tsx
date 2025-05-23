@@ -17,7 +17,7 @@ import { Database, Settings, LayoutDashboard, LogOut,
   BarChart3, User, FileText, Tag, BellRing, CreditCard, Car, CalendarDays, Users, 
   Map, Fuel, Wrench, Book } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import AdminLayout from "@/components/admin/AdminLayout";
 import { AdminStatsCards } from '@/components/admin/AdminStatsCards';
 import { AdminOrdersChart } from '@/components/admin/AdminOrdersChart';
 import { AdminNotifications } from '@/components/admin/AdminNotifications';
@@ -73,10 +73,8 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      <main className="flex-1 overflow-y-auto p-6 pb-16">
+    <AdminLayout activeTab="dashboard">
+      <div className="flex-1 overflow-y-auto p-6 pb-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -398,7 +396,7 @@ export default function AdminDashboardPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

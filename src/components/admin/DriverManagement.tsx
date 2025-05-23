@@ -28,6 +28,7 @@ import { AddDriverDialog } from './AddDriverDialog';
 import { toast } from "sonner";
 import { Driver } from '@/types/api';
 import { FixDatabaseButton } from './FixDatabaseButton';
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 export function DriverManagement() {
   const { toast: uiToast } = useToast();
@@ -298,163 +299,170 @@ export function DriverManagement() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
-            <Car className="h-5 w-5" /> Driver Management
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={retryFetchDrivers}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <FixDatabaseButton />
-            <Button 
-              size="sm" 
-              onClick={openAddDriverDialog}
-            >
-              <Plus className="h-4 w-4 mr-1" /> Add Driver
-            </Button>
+    <div className="space-y-6 overflow-x-hidden px-2 md:px-6">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5" /> Driver Management
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={retryFetchDrivers}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <FixDatabaseButton />
+              <Button 
+                size="sm" 
+                onClick={openAddDriverDialog}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Add Driver
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert className="mb-4" variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        <div className="flex gap-4 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search drivers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert className="mb-4" variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="flex gap-4 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search drivers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
           </div>
-        </div>
-        
-        {isLoading ? (
-          <div className="flex justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          </div>
-        ) : filteredDrivers.length > 0 ? (
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDrivers.map((driver) => (
-                  <TableRow key={driver.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{driver.name}</div>
-                        <div className="text-sm text-gray-500">License: {driver.license_no || 'N/A'}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1 text-sm">
-                          <Phone className="h-3 w-3" /> {driver.phone}
-                        </div>
-                        {driver.email && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Mail className="h-3 w-3" /> {driver.email}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {driver.vehicle ? (
-                        <div className="flex items-center">
-                          <Car className="h-4 w-4 mr-1 text-gray-500" />
-                          <span>{driver.vehicle}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">No vehicle</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(driver.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1 text-gray-500" />
-                        <span>{driver.location || 'Unknown'}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleDriverStatus(driver)}
-                        >
-                          {driver.status === 'available' ? (
-                            <>
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Set Offline
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Set Available
-                            </>
-                          )}
-                        </Button>
-                        
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openEditDriverDialog(driver)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-red-600"
-                              onClick={() => openDeleteDriverDialog(driver)}
-                            >
-                              <XCircle className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            No drivers found matching your search criteria.
-          </div>
-        )}
-      </CardContent>
+          
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : filteredDrivers.length > 0 ? (
+            <div className="relative">
+              <ScrollArea className="h-[calc(70vh-20px)] w-full rounded-md border">
+                <div className="w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Vehicle</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDrivers.map((driver) => (
+                        <TableRow key={driver.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{driver.name}</div>
+                              <div className="text-sm text-gray-500">License: {driver.license_no || 'N/A'}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1 text-sm">
+                                <Phone className="h-3 w-3" /> {driver.phone}
+                              </div>
+                              {driver.email && (
+                                <div className="flex items-center gap-1 text-sm">
+                                  <Mail className="h-3 w-3" /> {driver.email}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {driver.vehicle ? (
+                              <div className="flex items-center">
+                                <Car className="h-4 w-4 mr-1 text-gray-500" />
+                                <span>{driver.vehicle}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500">No vehicle</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(driver.status)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              <MapPin className="h-4 w-4 mr-1 text-gray-500" />
+                              <span>{driver.location || 'Unknown'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleDriverStatus(driver)}
+                              >
+                                {driver.status === 'available' ? (
+                                  <>
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Set Offline
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Set Available
+                                  </>
+                                )}
+                              </Button>
+                              
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => openEditDriverDialog(driver)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    className="text-red-600"
+                                    onClick={() => openDeleteDriverDialog(driver)}
+                                  >
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <ScrollBar orientation="horizontal" className="h-3 bg-gray-100" />
+              </ScrollArea>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No drivers found matching your search criteria.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Driver Dialogs */}
       {isAddDriverDialogOpen && (
@@ -491,6 +499,6 @@ export function DriverManagement() {
           isSubmitting={isSubmitting}
         />
       )}
-    </Card>
+    </div>
   );
 }

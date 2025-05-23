@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -26,9 +25,10 @@ import {
 interface AdminSidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onClose?: () => void;
 }
 
-export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
+export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   
@@ -54,6 +54,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   const handleMenuClick = (item: { id: string; path: string }) => {
     setActiveTab(item.id);
     navigate(item.path);
+    if (isMobile && onClose) onClose();
   };
 
   const sidebarWidth = isMobile ? 'w-full h-screen overflow-auto' : 'w-64';

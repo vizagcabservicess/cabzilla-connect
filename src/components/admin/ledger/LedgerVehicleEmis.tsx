@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { Badge } from "@/components/ui/badge";
 import { VehicleEmi, ledgerAPI } from '@/services/api/ledgerAPI';
 import { toast } from "sonner";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface LedgerVehicleEmisProps {
   data: VehicleEmi[];
@@ -98,7 +99,7 @@ export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerV
   const pendingAmount = [...overdueEmis, ...pendingEmis].reduce((sum, emi) => sum + (emi.emiAmount || 0), 0);
 
   return (
-    <Card>
+    <Card className="space-y-6 overflow-x-hidden px-2 md:px-6">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Vehicle EMIs</CardTitle>
         <div className="text-sm text-gray-500">
@@ -108,52 +109,53 @@ export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerV
       </CardHeader>
       <CardContent>
         {safeData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 w-full">
-            <svg className="w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <p className="text-gray-500">No EMIs found.</p>
+          <div className="text-center p-6">
+            <p className="text-muted-foreground">No EMIs found.</p>
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Bank</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...overdueEmis, ...pendingEmis, ...paidEmis].map((emi) => (
-                  <TableRow key={emi.id} className={emi.status === 'overdue' ? 'bg-red-50' : ''}>
-                    <TableCell className="font-medium">{emi.vehicleNumber}</TableCell>
-                    <TableCell>{formatDate(emi.dueDate)}</TableCell>
-                    <TableCell>{emi.bankName}</TableCell>
-                    <TableCell>{emi.loanRef}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(emi.emiAmount)}</TableCell>
-                    <TableCell>{getStatusBadge(emi.status)}</TableCell>
-                    <TableCell className="text-right">
-                      {emi.status !== 'paid' && (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => handleMarkPaid(emi)}
-                          disabled={processingIds.has(emi.id)}
-                        >
-                          {processingIds.has(emi.id) ? 'Processing...' : 'Mark Paid'}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="relative">
+            <ScrollArea className="h-[calc(60vh-20px)] w-full rounded-md border">
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vehicle</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Bank</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...overdueEmis, ...pendingEmis, ...paidEmis].map((emi) => (
+                      <TableRow key={emi.id} className={emi.status === 'overdue' ? 'bg-red-50' : ''}>
+                        <TableCell className="font-medium">{emi.vehicleNumber}</TableCell>
+                        <TableCell>{formatDate(emi.dueDate)}</TableCell>
+                        <TableCell>{emi.bankName}</TableCell>
+                        <TableCell>{emi.loanRef}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(emi.emiAmount)}</TableCell>
+                        <TableCell>{getStatusBadge(emi.status)}</TableCell>
+                        <TableCell className="text-right">
+                          {emi.status !== 'paid' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleMarkPaid(emi)}
+                              disabled={processingIds.has(emi.id)}
+                            >
+                              {processingIds.has(emi.id) ? 'Processing...' : 'Mark Paid'}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <ScrollBar orientation="horizontal" className="h-3 bg-gray-100" />
+            </ScrollArea>
           </div>
         )}
       </CardContent>

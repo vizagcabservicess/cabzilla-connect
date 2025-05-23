@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ReportGenerator } from '@/components/admin/ReportGenerator';
 import { DateRange } from "react-day-picker";
 import { addDays } from "date-fns";
+import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<string>("reports");
@@ -14,11 +13,10 @@ export default function ReportsPage() {
   });
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 overflow-y-auto p-8">
+    <AdminLayout activeTab="reports">
+      <div className="flex-1 overflow-y-auto p-8">
         <ReportGenerator reportType={reportType} dateRange={date} />
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

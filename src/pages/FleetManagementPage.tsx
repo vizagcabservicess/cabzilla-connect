@@ -19,7 +19,7 @@ import { FleetVehicleCard } from '@/components/admin/FleetVehicleCard';
 import { generateUUID } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialogHeader, AlertDialogFooter, AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import AdminLayout from "@/components/admin/AdminLayout";
 
 function FleetManagementPage() {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
@@ -190,9 +190,7 @@ function FleetManagementPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+    <AdminLayout activeTab="fleet">
       <div className="flex-1 overflow-y-auto">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
@@ -442,7 +440,7 @@ function FleetManagementPage() {
           </AlertDialog>
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }
 
