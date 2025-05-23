@@ -23,6 +23,14 @@ import PaymentsManagementPage from './pages/PaymentsManagementPage';
 import CommissionManagementPage from './pages/CommissionManagementPage';
 import AdminBookingCreationPage from './pages/AdminBookingCreationPage';
 import PaymentPage from './pages/PaymentPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
+import ServicesPage from './pages/ServicesPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import RefundsPage from './pages/RefundsPage';
+import BlogPage from './pages/BlogPage';
+import FAQPage from './pages/FAQPage';
 
 export const router = createBrowserRouter([
   {
@@ -122,6 +130,39 @@ export const router = createBrowserRouter([
   {
     path: '/payment',
     element: <PaymentPage />,
+  },
+  // New pages
+  {
+    path: '/about',
+    element: <AboutPage />,
+  },
+  {
+    path: '/contact',
+    element: <ContactPage />,
+  },
+  {
+    path: '/services',
+    element: <ServicesPage />,
+  },
+  {
+    path: '/terms',
+    element: <TermsPage />,
+  },
+  {
+    path: '/privacy',
+    element: <PrivacyPage />,
+  },
+  {
+    path: '/refunds',
+    element: <RefundsPage />,
+  },
+  {
+    path: '/blog',
+    element: <BlogPage />,
+  },
+  {
+    path: '/faq',
+    element: <FAQPage />,
   },
   {
     path: '*',
