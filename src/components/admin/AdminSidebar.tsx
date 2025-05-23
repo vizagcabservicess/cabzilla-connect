@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -28,6 +30,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
@@ -53,10 +56,12 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
     navigate(item.path);
   };
 
+  const sidebarWidth = isMobile ? 'w-full h-screen overflow-auto' : 'w-64';
+
   return (
-    <aside className="w-64 bg-gray-900 text-white hidden md:flex md:flex-col">
-      {/* Sidebar Header/Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-800">
+    <aside className={`${sidebarWidth} bg-gray-900 text-white flex flex-col z-20`}>
+      {/* Sidebar Header/Logo (hidden on mobile as we show it in the top bar) */}
+      <div className="h-16 hidden md:flex items-center px-6 border-b border-gray-800">
         <Link to="/admin" className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
             VT
@@ -66,7 +71,7 @@ export function AdminSidebar({ activeTab, setActiveTab }: AdminSidebarProps) {
       </div>
       
       {/* Main Menu */}
-      <div className="flex-1 py-6 px-4">
+      <div className="flex-1 py-6 px-4 overflow-y-auto">
         <nav className="space-y-1">
           {menuItems.map((item) => (
             <Button
