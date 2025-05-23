@@ -321,7 +321,7 @@ try {
             
         case 'gst':
             try {
-                $sql = "SELECT id, invoice_number, gst_number, company_name, company_address, base_amount as taxable_value, tax_amount as gst_amount, total_amount, invoice_date as created_at FROM invoices WHERE DATE(invoice_date) BETWEEN ? AND ? AND (gst_enabled = 1 OR is_igst = 1)";
+                $sql = "SELECT id, booking_id, invoice_number, gst_number, company_name, company_address, base_amount as taxable_value, tax_amount as gst_amount, total_amount, invoice_date as created_at FROM invoices WHERE DATE(invoice_date) BETWEEN ? AND ? AND (gst_enabled = 1 OR is_igst = 1)";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param("ss", $startDate, $endDate);
                 $stmt->execute();
@@ -335,6 +335,7 @@ try {
                     $gstRate = $taxableValue > 0 ? round(($gstAmount / $taxableValue) * 100) : 0;
                     $gstReportData[] = [
                         'id' => $row['id'],
+                        'bookingId' => $row['booking_id'],
                         'invoiceNumber' => $row['invoice_number'],
                         'customerName' => $row['company_name'] ?? 'N/A',
                         'gstNumber' => $row['gst_number'] ?? 'N/A',

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Table,
@@ -29,9 +28,10 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
       ? `${window.location.protocol}//${window.location.host}`
       : 'https://vizagup.com';
     
-    // Build the URL parameters
+    // Use bookingId if available, otherwise fallback to id
+    const bookingId = invoice.bookingId || invoice.id;
     let urlParams = new URLSearchParams({
-      id: invoice.id.toString(),
+      id: bookingId.toString(),
       gstEnabled: '1',
       format: 'pdf',
       direct_download: '1'
