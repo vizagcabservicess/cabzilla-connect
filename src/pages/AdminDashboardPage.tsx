@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { FareManagement } from "@/components/admin/FareManagement";
+import FareManagement from "@/components/admin/FareManagement";
 import AirportFareManagement from "@/components/admin/AirportFareManagement";
 import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
 import OutstationFareManagement from "@/components/admin/OutstationFareManagement";

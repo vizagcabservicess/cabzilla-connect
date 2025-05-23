@@ -114,7 +114,7 @@ async function initializeDatabase(forceRecreate = false) {
     params.append('verbose', 'true');
     params.append('_t', Date.now().toString()); // Cache busting
 
-    const response = await axios.get(`${baseUrl}/api/init-database.php?${params.toString()}`, {
+    const response = await axios.get(`${baseUrl}/api/admin/init-database.php?${params.toString()}`, {
       headers: getBypassHeaders()
     });
 

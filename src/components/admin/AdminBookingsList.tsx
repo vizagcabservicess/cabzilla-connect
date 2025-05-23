@@ -710,7 +710,7 @@ export function AdminBookingsList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="grid gap-2 md:w-60">
           <Label htmlFor="search">Search</Label>
@@ -782,7 +782,7 @@ export function AdminBookingsList() {
       {filteredBookings.length > 0 ? (
         <div className="relative">
           <ScrollArea className="h-[calc(70vh-20px)] w-full rounded-md border">
-            <div className="min-w-[2000px]"> {/* Force minimum width to ensure scrolling */}
+            <div className="w-full overflow-x-auto">{/* Table scrolls horizontally if needed */}
               <Table>
                 <TableHeader>
                   <TableRow className="text-xs">
@@ -852,12 +852,12 @@ export function AdminBookingsList() {
                       <TableCell>
                         <Badge
                           className={
-                            (booking.paymentStatus || booking.payment_status || booking.status) === 'paid'
+                            (booking.payment_status || booking.status) === 'paid'
                               ? 'bg-green-100 text-green-800'
                               : 'bg-yellow-100 text-yellow-800'
                           }
                         >
-                          {(booking.paymentStatus || booking.payment_status || booking.status) === 'paid'
+                          {(booking.payment_status || booking.status) === 'paid'
                             ? 'Paid'
                             : 'Pending'}
                         </Badge>
@@ -878,16 +878,12 @@ export function AdminBookingsList() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               {booking.status === 'pending' && (
-                                <DropdownMenuItem 
-                                  onClick={() => handleStatusChange('confirmed')}
-                                >
+                                <DropdownMenuItem onClick={() => handleStatusChange('confirmed')}>
                                   Confirm booking
                                 </DropdownMenuItem>
                               )}
                               {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                                <DropdownMenuItem 
-                                  onClick={() => handleCancelBooking()}
-                                >
+                                <DropdownMenuItem onClick={() => handleCancelBooking()}>
                                   Cancel booking
                                 </DropdownMenuItem>
                               )}

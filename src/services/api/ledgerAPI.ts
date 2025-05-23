@@ -139,6 +139,13 @@ const fetchLedgerEntries = async (filters?: LedgerFilter): Promise<LedgerEntry[]
     const params = buildApiParams(filters);
     const response = await axios.get('/api/admin/ledger.php', { params });
     
+    // Debug: log the full response
+    console.log('Ledger API response:', response);
+    
+    if (!response.data || !Array.isArray(response.data.data)) {
+      console.error('Ledger API: Unexpected response format', response.data);
+      return [];
+    }
     // Map response data to match our interface
     return response.data.data.map((entry: any) => ({
       id: entry.id,
@@ -156,6 +163,10 @@ const fetchLedgerEntries = async (filters?: LedgerFilter): Promise<LedgerEntry[]
     }));
   } catch (error) {
     console.error("Error fetching ledger entries:", error);
+    // Debug: log error details
+    if (error.response) {
+      console.error('Ledger API error response:', error.response.data);
+    }
     // Return empty array on error
     return [];
   }

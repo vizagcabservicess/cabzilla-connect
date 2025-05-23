@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -151,65 +150,30 @@ export default function DashboardPage() {
       const userId = userData.id;
       console.log('Fetching bookings for user ID:', userId);
       
-      let data;
-      try {
-        // Attempt to fetch real booking data from the API
-        data = await bookingAPI.getUserBookings(userId);
-        console.log('Fetched bookings data:', data);
-        
-        if (Array.isArray(data)) {
-          setBookings(data);
-          if (data.length > 0) {
-            setAuthIssue(false);
-            toast.success(`Loaded ${data.length} bookings`);
-          } else {
-            toast.info('No bookings found');
-          }
-        } else if (data && Array.isArray(data.bookings)) {
-          setBookings(data.bookings);
-          if (data.bookings.length > 0) {
-            setAuthIssue(false);
-            toast.success(`Loaded ${data.bookings.length} bookings`);
-          } else {
-            toast.info('No bookings found');
-          }
+      const data = await bookingAPI.getUserBookings(userId);
+      console.log('Fetched bookings data:', data);
+      
+      if (Array.isArray(data)) {
+        setBookings(data);
+        if (data.length > 0) {
+          setAuthIssue(false);
+          toast.success(`Loaded ${data.length} bookings`);
         } else {
-          console.warn('Unexpected bookings data format:', data);
-          toast.error('Received unexpected data format from server');
-          setBookings([]);
-          throw new Error('Invalid booking data format received');
+          toast.info('No bookings found');
         }
-      } catch (apiError) {
-        console.warn('bookingAPI.getUserBookings failed, trying direct fetch:', apiError);
-        
-        // If API call fails, try direct fetch as fallback
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`/api/user/bookings.php?user_id=${userId}`, {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Cache-Control': 'no-cache',
-            'X-Force-Refresh': 'true',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API failed with status: ${response.status}`);
-        }
-        
-        const jsonData = await response.json();
-        if (jsonData && (Array.isArray(jsonData) || Array.isArray(jsonData.bookings))) {
-          const bookingsData = Array.isArray(jsonData) ? jsonData : jsonData.bookings;
-          setBookings(bookingsData);
-          console.log('Fetched bookings via direct API:', bookingsData);
-          if (bookingsData.length > 0) {
-            setAuthIssue(false);
-          } else {
-            toast.info('No bookings found');
-          }
+      } else if (data && Array.isArray(data.bookings)) {
+        setBookings(data.bookings);
+        if (data.bookings.length > 0) {
+          setAuthIssue(false);
+          toast.success(`Loaded ${data.bookings.length} bookings`);
         } else {
-          throw new Error('Invalid response format from direct API call');
+          toast.info('No bookings found');
         }
+      } else {
+        console.warn('Unexpected bookings data format:', data);
+        toast.error('Received unexpected data format from server');
+        setBookings([]);
+        throw new Error('Invalid booking data format received');
       }
       
       setRetryCount(0);
@@ -228,12 +192,17 @@ export default function DashboardPage() {
            error.message.includes('authentication') || 
            error.message.includes('unauthorized'))) {
         setAuthIssue(true);
+        toast.error('Authentication error. Please log in again.');
+        navigate('/login');
+        return;
       }
       
       if (retryCount < MAX_RETRIES - 1) {
         setTimeout(() => {
           fetchBookings();
         }, 3000);
+      } else {
+        toast.error('Failed to load bookings after multiple attempts. Please try again later.');
       }
     } finally {
       setIsLoading(false);
@@ -500,105 +469,80 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
 }) {
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-
   if (isRefreshing) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">Refreshing bookings...</span>
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
       </div>
     );
   }
 
   if (bookings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <Info className="h-10 w-10 text-gray-400 mb-2" />
-        <h3 className="text-lg font-medium">No Bookings</h3>
-        <p className="text-gray-500">You don't have any bookings yet.</p>
+      <div className="text-center py-8">
+        <CircleOff className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings</h3>
+        <p className="mt-1 text-sm text-gray-500">Get started by creating a new booking.</p>
+        <div className="mt-6">
+          <Button onClick={() => window.location.href = '/'}>
+            Create Booking
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <ScrollArea className="h-[calc(100vh-300px)]" scrollHideDelay={0}>
-        <div className="min-w-[1000px]"> {/* Force minimum width to ensure scrolling */}
-          <div className="space-y-4 p-4">
-            {bookings.map((booking) => (
-              <Card key={booking.id} className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">
-                        {booking.pickupLocation} to {booking.dropLocation}
-                      </CardTitle>
-                      <p className="text-sm text-gray-500">
-                        Booking #{booking.bookingNumber}
-                      </p>
-                    </div>
-                    <Badge className={getStatusColor(booking.status)}>
-                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+    <ScrollArea className="h-[calc(100vh-300px)]">
+      <div className="space-y-4">
+        {bookings.map((booking) => (
+          <Card key={booking.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={getStatusColor(booking.status) as any}>
+                      {booking.status}
                     </Badge>
+                    <span className="text-sm text-gray-500">
+                      Booking #{booking.id}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm font-medium flex items-center">
-                        <Calendar className="h-4 w-4 mr-1" /> Pickup Date
-                      </p>
-                      <p className="text-sm">{formatDate(booking.pickupDate)}</p>
-                      
-                      {booking.returnDate && (
-                        <>
-                          <p className="text-sm font-medium mt-2 flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" /> Return Date
-                          </p>
-                          <p className="text-sm">{formatDate(booking.returnDate)}</p>
-                        </>
-                      )}
+                  <h3 className="mt-2 text-lg font-semibold">
+                    {booking.pickup_location} → {booking.dropoff_location}
+                  </h3>
+                  <div className="mt-2 space-y-1 text-sm text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>{formatDate(booking.pickup_time)}</span>
                     </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium flex items-center">
-                        <MapPin className="h-4 w-4 mr-1" /> Trip Details
-                      </p>
-                      <p className="text-sm">
-                        {booking.tripType.charAt(0).toUpperCase() + booking.tripType.slice(1)}, {' '}
-                        {booking.tripMode === 'one-way' ? 'One Way' : 'Round Trip'}
-                      </p>
-                      <p className="text-sm">
-                        Cab: {booking.cabType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                      </p>
-                      <p className="text-sm">Distance: {booking.distance} km</p>
+                    <div className="flex items-center gap-2">
+                      <Car className="h-4 w-4" />
+                      <span>{booking.vehicle_type || 'Standard'}</span>
                     </div>
-                    
-                    <div>
-                      <p className="text-sm font-medium">Fare Details</p>
-                      <p className="text-xl font-bold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
-                      
-                      {booking.driverName && (
-                        <>
-                          <p className="text-sm font-medium mt-2">Driver</p>
-                          <p className="text-sm">{booking.driverName}</p>
-                          {booking.driverPhone && (
-                            <p className="text-sm">{booking.driverPhone}</p>
-                          )}
-                          {booking.vehicleNumber && (
-                            <p className="text-sm">Vehicle: {booking.vehicleNumber}</p>
-                          )}
-                        </>
-                      )}
-                    </div>
+                    {booking.driver_name && (
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="h-4 w-4" />
+                        <span>Driver: {booking.driver_name}</span>
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </ScrollArea>
-    </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-semibold">
+                    ₹{booking.fare?.toFixed(2) || '0.00'}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {booking.payment_status || 'Pending'}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

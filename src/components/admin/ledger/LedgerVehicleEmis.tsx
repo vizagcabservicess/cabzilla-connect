@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,8 +108,12 @@ export function LedgerVehicleEmis({ data, isLoading = false, onUpdate }: LedgerV
       </CardHeader>
       <CardContent>
         {safeData.length === 0 ? (
-          <div className="text-center p-6">
-            <p className="text-muted-foreground">No EMIs found.</p>
+          <div className="flex flex-col items-center justify-center h-40 w-full">
+            <svg className="w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M12 8v4l3 3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <p className="text-gray-500">No EMIs found.</p>
           </div>
         ) : (
           <div className="rounded-md border">

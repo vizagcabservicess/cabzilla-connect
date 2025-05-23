@@ -1,142 +1,62 @@
-import { ReactNode, createContext, useContext, useEffect, useState, useCallback } from "react";
-import { toast } from "sonner";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Loader } from '@googlemaps/js-api-loader';
 
-// Create a comprehensive context
 interface GoogleMapsContextType {
   isLoaded: boolean;
-  loadError: Error | undefined;
-  google: typeof google | null;
-  retryLoading: () => void;
+  error: Error | null;
+  google?: typeof window.google;
 }
 
-// Provider props interface
+const GoogleMapsContext = createContext<GoogleMapsContextType | undefined>(undefined);
+
 interface GoogleMapsProviderProps {
-  children: ReactNode;
-  apiKey?: string;
+  children: React.ReactNode;
+  apiKey: string;
 }
 
-// Context for Google Maps
-const GoogleMapsContext = createContext<GoogleMapsContextType>({
-  isLoaded: false,
-  loadError: undefined,
-  google: null,
-  retryLoading: () => {}
-});
+export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-// Hook to use Google Maps context
-export const useGoogleMaps = () => useContext(GoogleMapsContext);
-
-// Provider component for Google Maps
-export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
-  const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
-  const [loadError, setLoadError] = useState<Error | undefined>(undefined);
-  const [retryCount, setRetryCount] = useState(0);
-  
-  // Dynamically load the Google Maps script if not present
   useEffect(() => {
     if (!apiKey) {
-      setLoadError(new Error("Google Maps API key is missing"));
+      setError(new Error('Google Maps API key is required'));
       return;
     }
-    // Check if script already exists
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        window.dispatchEvent(new Event('google-maps-loaded'));
-      };
-      script.onerror = () => {
-        setLoadError(new Error("Failed to load Google Maps script"));
-      };
-      document.body.appendChild(script);
-    }
-  }, [apiKey, retryCount]);
-  
-  // Initialize Google Maps check
-  useEffect(() => {
-    console.log("GoogleMapsProvider: Initializing Google Maps check");
-    
-    const checkForGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        console.log("GoogleMapsProvider: Google Maps API detected in window object");
-        setGoogleInstance(window.google);
-        setLoadError(undefined);
-        return true;
-      }
-      return false;
-    };
-    
-    // Check immediately (might already be loaded in the page)
-    if (checkForGoogleMaps()) {
-      return;
-    }
-    
-    // Listen for our custom event from the script tag callback
-    const handleGoogleMapsLoaded = () => {
-      console.log("GoogleMapsProvider: Google Maps loaded event detected");
-      setTimeout(() => {
-        if (window.google && window.google.maps) {
-          console.log("GoogleMapsProvider: Setting Google Maps instance after event");
-          setGoogleInstance(window.google);
-          setLoadError(undefined);
-        } else {
-          console.error("GoogleMapsProvider: Event fired but Google Maps not available");
-          setLoadError(new Error("Google Maps API event fired but maps not available"));
-        }
-      }, 100);
-    };
-    
-    // Add event listener for our custom event
-    window.addEventListener('google-maps-loaded', handleGoogleMapsLoaded);
-    
-    // Check periodically for a limited time
-    const maxChecks = 10;
-    let checkCount = 0;
-    
-    const interval = setInterval(() => {
-      checkCount++;
-      if (checkForGoogleMaps()) {
-        clearInterval(interval);
-      } else if (checkCount >= maxChecks) {
-        clearInterval(interval);
-        setLoadError(new Error("Timed out waiting for Google Maps API to load"));
-      }
-    }, 1000);
-    
-    // Clean up
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('google-maps-loaded', handleGoogleMapsLoaded);
-    };
-  }, [retryCount]);
-  
-  // Retry loading function
-  const retryLoading = useCallback(() => {
-    console.log("GoogleMapsProvider: Retrying Google Maps loading...");
-    setRetryCount(prev => prev + 1);
-    setLoadError(undefined);
-    
-    toast.info("Reloading Google Maps API...", {
-      duration: 3000,
+
+    const loader = new Loader({
+      apiKey,
+      version: 'weekly',
+      libraries: ['places']
     });
-  }, []);
-  
-  // Context value
-  const contextValue = {
-    isLoaded: !!googleInstance, 
-    loadError: loadError,
-    google: googleInstance,
-    retryLoading
+
+    loader.load()
+      .then(() => {
+        setIsLoaded(true);
+      })
+      .catch((err) => {
+        setError(err);
+        console.error('Error loading Google Maps:', err);
+      });
+  }, [apiKey]);
+
+  const value = {
+    isLoaded,
+    error,
+    google: (window as any).google
   };
-  
+
   return (
-    <GoogleMapsContext.Provider value={contextValue}>
+    <GoogleMapsContext.Provider value={value}>
       {children}
     </GoogleMapsContext.Provider>
   );
-};
+}
 
-export default GoogleMapsProvider;
+export function useGoogleMaps() {
+  const context = useContext(GoogleMapsContext);
+  if (context === undefined) {
+    throw new Error('useGoogleMaps must be used within a GoogleMapsProvider');
+  }
+  return context;
+}
