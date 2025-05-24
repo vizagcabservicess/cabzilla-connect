@@ -122,9 +122,15 @@ function App() {
                   <Route path={ROUTES.CABS} element={<CabsPage />} />
                   <Route path={ROUTES.TOURS} element={<ToursPage />} />
                   <Route path={ROUTES.POOLING} element={<PoolingPage />} />
-                  <Route path="/pooling/ride/:rideId" element={<PoolingPage />} />
-                  <Route path="/pooling/book/:rideId" element={<PoolingPage />} />
-                  <Route path="/pooling/create" element={<PoolingPage />} />
+                  <Route path="/pooling/ride/:rideId" element={
+                    React.lazy(() => import('./components/pooling/PoolingBookingPage'))
+                  } />
+                  <Route path="/pooling/book/:rideId" element={
+                    React.lazy(() => import('./components/pooling/PoolingBookingPage'))
+                  } />
+                  <Route path="/pooling/create" element={
+                    React.lazy(() => import('./components/pooling/CreateRidePage'))
+                  } />
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
                   <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
                   <Route path="/about" element={<AboutPage />} />

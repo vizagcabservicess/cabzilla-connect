@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { PoolingSearch } from '@/components/pooling/PoolingSearch';
 import { RideCard } from '@/components/pooling/RideCard';
+import { RideDetailsModal } from '@/components/pooling/RideDetailsModal';
 import { Button } from '@/components/ui/button';
 import { Plus, Car, Bus, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +14,8 @@ import { useNavigate } from 'react-router-dom';
 const PoolingPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useState<PoolingSearchRequest | null>(null);
+  const [selectedRide, setSelectedRide] = useState<PoolingRide | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   const { data: rides, isLoading, error } = useQuery({
     queryKey: ['pooling-rides', searchParams],
@@ -29,7 +32,8 @@ const PoolingPage = () => {
   };
 
   const handleViewDetails = (ride: PoolingRide) => {
-    navigate(`/pooling/ride/${ride.id}`);
+    setSelectedRide(ride);
+    setIsDetailsModalOpen(true);
   };
 
   const handleCreateRide = () => {
@@ -141,6 +145,17 @@ const PoolingPage = () => {
           </div>
         )}
       </div>
+
+      {/* Ride Details Modal */}
+      <RideDetailsModal
+        ride={selectedRide}
+        open={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedRide(null);
+        }}
+        onBook={handleBookRide}
+      />
     </div>
   );
 };
