@@ -5,12 +5,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Search, Users, Car, Bus } from 'lucide-react';
+import { CalendarIcon, Search, Car, Bus } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PoolingType, PoolingSearchRequest } from '@/types/pooling';
 import { FixedLocationSelector } from './FixedLocationSelector';
 import { getLocationById } from '@/lib/poolingData';
+import { toast } from 'sonner';
 
 interface PoolingSearchProps {
   onSearch: (searchParams: PoolingSearchRequest) => void;
@@ -25,12 +26,23 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
   const [passengers, setPassengers] = useState(1);
 
   const handleSearch = () => {
-    if (!fromLocationId || !toLocationId || !date) return;
+    if (!fromLocationId || !toLocationId || !date) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
 
     const fromLocation = getLocationById(fromLocationId);
     const toLocation = getLocationById(toLocationId);
 
-    if (!fromLocation || !toLocation) return;
+    if (!fromLocation || !toLocation) {
+      toast.error('Invalid location selection');
+      return;
+    }
+
+    if (fromLocationId === toLocationId) {
+      toast.error('Pickup and drop locations cannot be the same');
+      return;
+    }
 
     const searchParams: PoolingSearchRequest = {
       type: searchType,
@@ -41,6 +53,7 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
       sortBy: 'time'
     };
 
+    toast.success('Searching for rides...');
     onSearch(searchParams);
   };
 
@@ -110,13 +123,13 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
                 {date ? format(date, "PPP") : "Pick a date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
+            <PopoverContent className="w-auto p-0" align="start">
               <Calendar
                 mode="single"
                 selected={date}
                 onSelect={setDate}
+                disabled={(date) => date < new Date()}
                 initialFocus
-                className="p-3 pointer-events-auto"
               />
             </PopoverContent>
           </Popover>

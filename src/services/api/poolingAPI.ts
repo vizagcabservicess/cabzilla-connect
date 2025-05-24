@@ -9,10 +9,17 @@ import {
   CreateRideRequest,
   BusSchedule 
 } from '@/types/pooling';
+import { mockPoolingAPI } from './mockPoolingAPI';
+
+const USE_MOCK_API = true; // Set to false when real API is available
 
 export const poolingAPI = {
   // Search for available rides
   searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.searchRides(searchParams);
+    }
+
     try {
       const response = await axios.get(`${API_BASE_URL}/api/pooling/search`, {
         params: searchParams,
@@ -21,23 +28,33 @@ export const poolingAPI = {
       return response.data.rides || [];
     } catch (error) {
       console.error('Error searching rides:', error);
-      throw error;
+      // Fallback to mock API
+      return mockPoolingAPI.searchRides(searchParams);
     }
   },
 
   // Get ride details
   getRideDetails: async (rideId: number): Promise<PoolingRide> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.getRideDetails(rideId);
+    }
+
     try {
       const response = await axios.get(`${API_BASE_URL}/api/pooling/rides/${rideId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching ride details:', error);
-      throw error;
+      // Fallback to mock API
+      return mockPoolingAPI.getRideDetails(rideId);
     }
   },
 
   // Create a new ride
   createRide: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.createRide(rideData);
+    }
+
     try {
       const response = await axios.post(`${API_BASE_URL}/api/pooling/rides`, rideData, {
         headers: { 'Content-Type': 'application/json' }
@@ -45,12 +62,17 @@ export const poolingAPI = {
       return response.data;
     } catch (error) {
       console.error('Error creating ride:', error);
-      throw error;
+      // Fallback to mock API
+      return mockPoolingAPI.createRide(rideData);
     }
   },
 
   // Book a ride
   bookRide: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.bookRide(bookingData);
+    }
+
     try {
       const response = await axios.post(`${API_BASE_URL}/api/pooling/bookings`, bookingData, {
         headers: { 'Content-Type': 'application/json' }
@@ -58,18 +80,23 @@ export const poolingAPI = {
       return response.data;
     } catch (error) {
       console.error('Error booking ride:', error);
-      throw error;
+      // Fallback to mock API
+      return mockPoolingAPI.bookRide(bookingData);
     }
   },
 
   // Get user's pooling bookings
   getUserBookings: async (userId: number): Promise<PoolingBooking[]> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.getUserBookings(userId);
+    }
+
     try {
       const response = await axios.get(`${API_BASE_URL}/api/pooling/bookings/user/${userId}`);
       return response.data.bookings || [];
     } catch (error) {
       console.error('Error fetching user bookings:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -84,7 +111,7 @@ export const poolingAPI = {
       return response.data.routes || [];
     } catch (error) {
       console.error('Error fetching bus routes:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -97,12 +124,16 @@ export const poolingAPI = {
       return response.data.schedules || [];
     } catch (error) {
       console.error('Error fetching bus schedules:', error);
-      throw error;
+      return [];
     }
   },
 
   // Cancel booking
   cancelBooking: async (bookingId: number): Promise<void> => {
+    if (USE_MOCK_API) {
+      return mockPoolingAPI.cancelBooking(bookingId);
+    }
+
     try {
       await axios.post(`${API_BASE_URL}/api/pooling/bookings/${bookingId}/cancel`);
     } catch (error) {
