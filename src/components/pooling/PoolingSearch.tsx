@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
@@ -10,6 +9,8 @@ import { CalendarIcon, Search, Users, Car, Bus } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { PoolingType, PoolingSearchRequest } from '@/types/pooling';
+import { FixedLocationSelector } from './FixedLocationSelector';
+import { getLocationById } from '@/lib/poolingData';
 
 interface PoolingSearchProps {
   onSearch: (searchParams: PoolingSearchRequest) => void;
@@ -18,18 +19,23 @@ interface PoolingSearchProps {
 
 export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
   const [searchType, setSearchType] = useState<PoolingType>('car');
-  const [fromLocation, setFromLocation] = useState('');
-  const [toLocation, setToLocation] = useState('');
+  const [fromLocationId, setFromLocationId] = useState('');
+  const [toLocationId, setToLocationId] = useState('');
   const [date, setDate] = useState<Date>();
   const [passengers, setPassengers] = useState(1);
 
   const handleSearch = () => {
-    if (!fromLocation || !toLocation || !date) return;
+    if (!fromLocationId || !toLocationId || !date) return;
+
+    const fromLocation = getLocationById(fromLocationId);
+    const toLocation = getLocationById(toLocationId);
+
+    if (!fromLocation || !toLocation) return;
 
     const searchParams: PoolingSearchRequest = {
       type: searchType,
-      from: fromLocation,
-      to: toLocation,
+      from: fromLocation.name,
+      to: toLocation.name,
       date: format(date, 'yyyy-MM-dd'),
       passengers,
       sortBy: 'time'
@@ -41,7 +47,7 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
       {/* Pooling Type Selector */}
-      <div className="flex space-x-4">
+      <div className="flex flex-wrap gap-3">
         <Button
           variant={searchType === 'car' ? 'default' : 'outline'}
           onClick={() => setSearchType('car')}
@@ -71,26 +77,22 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
       {/* Search Form */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* From Location */}
-        <div className="space-y-2">
-          <Label htmlFor="from">From</Label>
-          <Input
-            id="from"
-            placeholder="Enter departure city"
-            value={fromLocation}
-            onChange={(e) => setFromLocation(e.target.value)}
-          />
-        </div>
+        <FixedLocationSelector
+          label="From"
+          placeholder="Select departure city"
+          value={fromLocationId}
+          onChange={setFromLocationId}
+          excludeLocation={toLocationId}
+        />
 
         {/* To Location */}
-        <div className="space-y-2">
-          <Label htmlFor="to">To</Label>
-          <Input
-            id="to"
-            placeholder="Enter destination city"
-            value={toLocation}
-            onChange={(e) => setToLocation(e.target.value)}
-          />
-        </div>
+        <FixedLocationSelector
+          label="To"
+          placeholder="Select destination city"
+          value={toLocationId}
+          onChange={setToLocationId}
+          excludeLocation={fromLocationId}
+        />
 
         {/* Date */}
         <div className="space-y-2">
@@ -114,6 +116,7 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
                 selected={date}
                 onSelect={setDate}
                 initialFocus
+                className="p-3 pointer-events-auto"
               />
             </PopoverContent>
           </Popover>
@@ -140,7 +143,7 @@ export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
         <div className="flex items-end">
           <Button 
             onClick={handleSearch} 
-            disabled={isLoading || !fromLocation || !toLocation || !date}
+            disabled={isLoading || !fromLocationId || !toLocationId || !date}
             className="w-full"
           >
             <Search className="mr-2 h-4 w-4" />

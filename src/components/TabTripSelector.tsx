@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useEffect, useCallback, useState, useRef, useLayoutEffect } from "react";
@@ -9,9 +8,9 @@ import { TabBar } from "@/components/TabBar";
 import { fareService } from "@/services/fareService";
 
 interface TabTripSelectorProps {
-  selectedTab: 'outstation' | 'local' | 'airport' | 'tour' | 'pooling';
+  selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
   tripMode: 'one-way' | 'round-trip';
-  onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour' | 'pooling') => void;
+  onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
   onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
 }
 
@@ -155,16 +154,15 @@ export function TabTripSelector({
     // Use the less aggressive clearing method
     clearFormState();
     clearCacheData();
-    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour' | 'pooling');
+    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
   };
   
-  // Convert trip types to tab format - UPDATED to include pooling
+  // Convert trip types to tab format - REMOVED pooling
   const tabs = [
     { id: 'outstation', label: 'Outstation' },
     { id: 'local', label: 'Local' },
     { id: 'airport', label: 'Airport' },
-    { id: 'tour', label: 'Tour' },
-    { id: 'pooling', label: 'Pooling' }
+    { id: 'tour', label: 'Tour' }
   ];
   
   return (

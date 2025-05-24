@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,8 @@ import {
   Banknote,
   CreditCard,
   CalendarPlus,
-  BadgePercent
+  BadgePercent,
+  Info
 } from 'lucide-react';
 
 interface AdminSidebarProps {

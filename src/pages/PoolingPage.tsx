@@ -4,7 +4,7 @@ import { Navbar } from '@/components/Navbar';
 import { PoolingSearch } from '@/components/pooling/PoolingSearch';
 import { RideCard } from '@/components/pooling/RideCard';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Car, Bus, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { poolingAPI } from '@/services/api/poolingAPI';
 import { PoolingRide, PoolingSearchRequest } from '@/types/pooling';
@@ -48,7 +48,7 @@ const PoolingPage = () => {
               Ride Sharing & Bus Booking
             </h1>
             <p className="text-gray-600">
-              Find affordable car pools and bus rides to your destination
+              Find affordable car pools and bus rides between major cities
             </p>
           </div>
           <Button onClick={handleCreateRide} className="mt-4 md:mt-0">
@@ -128,7 +128,7 @@ const PoolingPage = () => {
                 <p className="text-sm text-gray-600">Share rides with fellow travelers and split costs</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow text-center">
-                <Car className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                <Bus className="h-12 w-12 text-green-600 mx-auto mb-4" />
                 <h4 className="font-semibold mb-2">Bus Travel</h4>
                 <p className="text-sm text-gray-600">Book seats on scheduled bus routes</p>
               </div>
