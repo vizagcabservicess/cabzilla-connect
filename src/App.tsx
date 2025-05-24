@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Index from './pages/Index';
 import CabsPage from './pages/CabsPage';
@@ -48,6 +48,10 @@ import PrivacyPage from './pages/PrivacyPage';
 import RefundsPage from './pages/RefundsPage';
 import BlogPage from './pages/BlogPage';
 import FAQPage from './pages/FAQPage';
+
+// Lazy load pooling components
+const PoolingBookingPage = React.lazy(() => import('./components/pooling/PoolingBookingPage'));
+const CreateRidePage = React.lazy(() => import('./components/pooling/CreateRidePage'));
 
 // Route constants for better maintainability
 export const ROUTES = {
@@ -123,13 +127,19 @@ function App() {
                   <Route path={ROUTES.TOURS} element={<ToursPage />} />
                   <Route path={ROUTES.POOLING} element={<PoolingPage />} />
                   <Route path="/pooling/ride/:rideId" element={
-                    React.lazy(() => import('./components/pooling/PoolingBookingPage'))
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <PoolingBookingPage />
+                    </Suspense>
                   } />
                   <Route path="/pooling/book/:rideId" element={
-                    React.lazy(() => import('./components/pooling/PoolingBookingPage'))
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <PoolingBookingPage />
+                    </Suspense>
                   } />
                   <Route path="/pooling/create" element={
-                    React.lazy(() => import('./components/pooling/CreateRidePage'))
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <CreateRidePage />
+                    </Suspense>
                   } />
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
                   <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
