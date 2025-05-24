@@ -9,95 +9,45 @@ import {
   CreateRideRequest,
   BusSchedule 
 } from '@/types/pooling';
-import { mockPoolingAPI } from './mockPoolingAPI';
+import { realPoolingAPI } from './realPoolingAPI';
 
-const USE_MOCK_API = true; // Set to false when real API is available
+// Set to false to use real APIs
+const USE_MOCK_API = false;
 
 export const poolingAPI = {
   // Search for available rides
   searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.searchRides(searchParams);
-    }
-
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/pooling/search`, {
-        params: searchParams,
-        headers: { 'Content-Type': 'application/json' }
-      });
-      return response.data.rides || [];
-    } catch (error) {
-      console.error('Error searching rides:', error);
-      // Fallback to mock API
-      return mockPoolingAPI.searchRides(searchParams);
-    }
+    return realPoolingAPI.searchRides(searchParams);
   },
 
   // Get ride details
   getRideDetails: async (rideId: number): Promise<PoolingRide> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.getRideDetails(rideId);
-    }
-
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/pooling/rides/${rideId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching ride details:', error);
-      // Fallback to mock API
-      return mockPoolingAPI.getRideDetails(rideId);
-    }
+    return realPoolingAPI.getRideDetails(rideId);
   },
 
   // Create a new ride
   createRide: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.createRide(rideData);
-    }
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/pooling/rides`, rideData, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating ride:', error);
-      // Fallback to mock API
-      return mockPoolingAPI.createRide(rideData);
-    }
+    return realPoolingAPI.createRide(rideData);
   },
 
   // Book a ride
   bookRide: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.bookRide(bookingData);
-    }
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/pooling/bookings`, bookingData, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error booking ride:', error);
-      // Fallback to mock API
-      return mockPoolingAPI.bookRide(bookingData);
-    }
+    return realPoolingAPI.bookRide(bookingData);
   },
 
   // Get user's pooling bookings
   getUserBookings: async (userId: number): Promise<PoolingBooking[]> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.getUserBookings(userId);
-    }
+    return realPoolingAPI.getUserBookings(userId);
+  },
 
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/pooling/bookings/user/${userId}`);
-      return response.data.bookings || [];
-    } catch (error) {
-      console.error('Error fetching user bookings:', error);
-      return [];
-    }
+  // Create payment order
+  createPaymentOrder: async (bookingId: number): Promise<any> => {
+    return realPoolingAPI.createPaymentOrder(bookingId);
+  },
+
+  // Verify payment
+  verifyPayment: async (paymentData: any): Promise<void> => {
+    return realPoolingAPI.verifyPayment(paymentData);
   },
 
   // Get bus routes
@@ -130,15 +80,6 @@ export const poolingAPI = {
 
   // Cancel booking
   cancelBooking: async (bookingId: number): Promise<void> => {
-    if (USE_MOCK_API) {
-      return mockPoolingAPI.cancelBooking(bookingId);
-    }
-
-    try {
-      await axios.post(`${API_BASE_URL}/api/pooling/bookings/${bookingId}/cancel`);
-    } catch (error) {
-      console.error('Error cancelling booking:', error);
-      throw error;
-    }
+    return realPoolingAPI.cancelBooking(bookingId);
   }
 };
