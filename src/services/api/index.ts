@@ -9,6 +9,7 @@ import { ledgerAPI } from './ledgerAPI';
 import { commissionAPI } from './commissionAPI';
 import { apiHealthCheck } from './healthCheck';
 import { tourAPI } from './tourAPI';
+import { poolingAPI } from './poolingAPI';
 
 // Export all API services
 export {
@@ -21,7 +22,8 @@ export {
   ledgerAPI,
   commissionAPI,
   apiHealthCheck,
-  tourAPI
+  tourAPI,
+  poolingAPI
 };
 
 // Default export
@@ -35,5 +37,6 @@ export default {
   ledger: ledgerAPI,
   commission: commissionAPI,
   health: apiHealthCheck,
-  tour: tourAPI
+  tour: tourAPI,
+  pooling: poolingAPI
 };

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Index from './pages/Index';
 import CabsPage from './pages/CabsPage';
 import ToursPage from './pages/ToursPage';
+import PoolingPage from './pages/PoolingPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import PaymentPage from './pages/PaymentPage';
 import LoginPage from './pages/LoginPage';
@@ -52,6 +53,7 @@ export const ROUTES = {
   HOME: '/',
   CABS: '/cabs/:tripType',
   TOURS: '/tours',
+  POOLING: '/pooling',
   LOGIN: '/login',
   SIGNUP: '/signup',
   DASHBOARD: '/dashboard',
@@ -118,6 +120,10 @@ function App() {
                   <Route path={ROUTES.HOME} element={<Index />} />
                   <Route path={ROUTES.CABS} element={<CabsPage />} />
                   <Route path={ROUTES.TOURS} element={<ToursPage />} />
+                  <Route path={ROUTES.POOLING} element={<PoolingPage />} />
+                  <Route path="/pooling/ride/:rideId" element={<PoolingPage />} />
+                  <Route path="/pooling/book/:rideId" element={<PoolingPage />} />
+                  <Route path="/pooling/create" element={<PoolingPage />} />
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
                   <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
                   <Route path="/about" element={<AboutPage />} />
