@@ -1,15 +1,14 @@
 
 import React from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { POOLING_LOCATIONS, PoolingLocation } from '@/lib/poolingData';
-import { MapPin } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { POOLING_LOCATIONS } from '@/lib/poolingData';
 
 interface FixedLocationSelectorProps {
   label: string;
   placeholder: string;
   value: string;
-  onChange: (locationId: string) => void;
+  onChange: (value: string) => void;
   excludeLocation?: string;
 }
 
@@ -24,44 +23,19 @@ export function FixedLocationSelector({
     location => location.id !== excludeLocation
   );
 
-  const majorCities = availableLocations.filter(loc => loc.type === 'major');
-  const minorCities = availableLocations.filter(loc => loc.type === 'minor');
-
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase">
-            Major Cities
-          </div>
-          {majorCities.map((location) => (
+          {availableLocations.map((location) => (
             <SelectItem key={location.id} value={location.id}>
-              <div className="flex items-center space-x-2">
-                <MapPin size={14} className="text-blue-600" />
-                <span>{location.name}</span>
-              </div>
+              {location.name}
             </SelectItem>
           ))}
-          
-          {minorCities.length > 0 && (
-            <>
-              <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase mt-2">
-                Other Cities
-              </div>
-              {minorCities.map((location) => (
-                <SelectItem key={location.id} value={location.id}>
-                  <div className="flex items-center space-x-2">
-                    <MapPin size={14} className="text-gray-600" />
-                    <span>{location.name}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </>
-          )}
         </SelectContent>
       </Select>
     </div>
