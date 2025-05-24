@@ -38,6 +38,14 @@ import PaymentsPage from './pages/PaymentsPage';
 import VehiclesPage from './pages/VehiclesPage';
 import AdminBookingsPage from './pages/AdminBookingsPage';
 import UserManagementPage from './pages/UserManagementPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
+import ServicesPage from './pages/ServicesPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
+import RefundsPage from './pages/RefundsPage';
+import BlogPage from './pages/BlogPage';
+import FAQPage from './pages/FAQPage';
 
 // Route constants for better maintainability
 export const ROUTES = {
@@ -99,22 +107,32 @@ function App() {
   
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
           <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY || ''}>
-            <CabProvider>
-              <Router>
-                <ScrollToTop />
-                <Routes>
+          <CabProvider>
+            <Router>
+              <ScrollToTop />
+              <Routes>
                   {/* Public Routes */}
                   <Route path={ROUTES.HOME} element={<Index />} />
                   <Route path={ROUTES.CABS} element={<CabsPage />} />
                   <Route path={ROUTES.TOURS} element={<ToursPage />} />
                   <Route path={ROUTES.LOGIN} element={<LoginPage />} />
                   <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/services" element={<ServicesPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/refunds" element={<RefundsPage />} />
+                  <Route path="/blog" element={<BlogPage />} />
+                  <Route path="/faq" element={<FAQPage />} />
+                  <Route path={ROUTES.PAYMENT} element={<PaymentPage />} />
                   
+                
                   {/* Protected Customer Routes */}
-                  <Route element={<CustomerProtectedRoute />}>
+                <Route element={<CustomerProtectedRoute />}>
                     <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
                     <Route path={ROUTES.BOOKING_CONFIRMATION} element={<BookingConfirmationPage />} />
                     <Route path={ROUTES.PAYMENT} element={<PaymentPage />} />
@@ -123,10 +141,10 @@ function App() {
                     <Route path={ROUTES.FARES} element={<FaresPage />} />
                     <Route path={ROUTES.PAYMENTS} element={<PaymentsPage />} />
                     <Route path={ROUTES.VEHICLES} element={<VehiclesPage />} />
-                  </Route>
-                  
+                </Route>
+                
                   {/* Protected Admin Routes */}
-                  <Route element={<AdminProtectedRoute />}>
+                <Route element={<AdminProtectedRoute />}>
                     <Route path={ROUTES.ADMIN.ROOT} element={<AdminDashboardPage />} />
                     <Route path={ROUTES.ADMIN.FLEET} element={<FleetManagementPage />} />
                     <Route path={ROUTES.ADMIN.MAINTENANCE} element={<VehicleMaintenancePage />} />
@@ -147,16 +165,16 @@ function App() {
                     <Route path={ROUTES.ADMIN.DRIVERS} element={<DriversPage />} />
                     <Route path={ROUTES.ADMIN.FARES} element={<FaresPage />} />
                     <Route path={ROUTES.ADMIN.VEHICLES} element={<VehiclesPage />} />
-                  </Route>
+                </Route>
 
                   {/* 404 Route */}
                   <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Router>
-            </CabProvider>
-          </GoogleMapsProvider>
-        </AuthProvider>
-      </ToastProvider>
+              </Routes>
+            </Router>
+          </CabProvider>
+        </GoogleMapsProvider>
+      </AuthProvider>
+    </ToastProvider>
     </QueryClientProvider>
   );
 }

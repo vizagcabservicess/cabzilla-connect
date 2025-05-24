@@ -170,42 +170,18 @@ export function TabTripSelector({
       {/* Tab bar with top border/line */}
       <div className="mb-4">
         <div className="relative w-full flex justify-center">
-          <div className="flex w-full bg-white rounded-full shadow p-1 relative border-t border-gray-200" style={{boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)'}}>
-            {/* Shadow indicator above active tab */}
-            <motion.div
-              className="absolute -top-3 z-20 left-0 h-2 w-12 rounded-full bg-black/20 blur-md"
-              style={{
-                left: indicatorStyle.left + (indicatorStyle.width / 2) - 24, // center the shadow
-                width: 48,
-              }}
-              layout
-              initial={false}
-              animate={{
-                left: indicatorStyle.left + (indicatorStyle.width / 2) - 24,
-                width: 48,
-              }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
+          <div className="flex w-full bg-gray-100 rounded-full p-1 border border-gray-200" style={{boxShadow: 'none'}}>
             {tabs.map((tab, idx) => {
               const isActive = selectedTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   ref={el => tabRefs.current[idx] = el}
-                  className={`flex-1 py-2 px-4 rounded-full font-medium transition-colors duration-200 relative z-10 ${isActive ? "text-blue-700 font-semibold" : "text-gray-700"}`}
+                  className={`flex-1 min-w-0 py-1 ${isActive ? "px-5" : "px-3"} flex items-center justify-center rounded-full font-medium transition-colors duration-200 text-sm text-center focus:outline-none ${isActive ? "bg-white text-blue-700 border border-blue-200 shadow-sm z-10" : "bg-transparent text-gray-700"}`}
                   onClick={() => handleTabChange(tab.id)}
-                  style={{ position: 'relative', zIndex: isActive ? 30 : 10 }}
+                  style={{ zIndex: isActive ? 2 : 1 }}
                 >
-                  {/* Active tab pill background */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="active-pill"
-                      className="absolute inset-0 bg-white rounded-full shadow-md z-10"
-                      style={{ zIndex: 10 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-20">{tab.label}</span>
+                  <span className="leading-tight">{tab.label}</span>
                 </button>
               );
             })}
@@ -215,7 +191,7 @@ export function TabTripSelector({
       {/* Trip mode radio group */}
       {selectedTab === 'outstation' && (
         <motion.div 
-          className="flex gap-3 mt-2 justify-center"
+          className="flex gap-2 mt-2 justify-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -225,7 +201,7 @@ export function TabTripSelector({
               key={option.value}
               type="button"
               onClick={() => onTripModeChange(option.value as 'one-way' | 'round-trip')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full border transition-colors duration-200 focus:outline-none text-base font-medium
+              className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors duration-200 focus:outline-none text-xs font-medium
                 ${tripMode === option.value ? 'bg-white border-blue-500 text-blue-700 shadow' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
             >
               <span className="relative flex h-4 w-4">

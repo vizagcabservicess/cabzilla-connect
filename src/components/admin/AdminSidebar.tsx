@@ -49,6 +49,7 @@ export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarP
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
+    { id: 'about', label: 'About', icon: <Info size={20} />, path: '/about' },
   ];
 
   const handleMenuClick = (item: { id: string; path: string }) => {
