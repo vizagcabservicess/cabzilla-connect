@@ -1,3 +1,4 @@
+
 export interface Location {
   id: string;
   name: string;
@@ -113,6 +114,7 @@ export interface User {
   email: string;
   phone: string;
   role?: string; // Added role property
+  imageUrl?: string; // Added imageUrl property for avatar
   created_at: string;
   updated_at: string;
   createdAt?: string; // Added for compatibility
