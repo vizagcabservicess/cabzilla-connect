@@ -49,6 +49,7 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
+  vehicleId?: string;
   adminNotes?: string;
   extraCharges?: Array<{
     description: string;
@@ -56,6 +57,7 @@ export interface Booking {
   }>;
   isPaid?: boolean;
   paymentMethod?: string;
+  paymentStatus?: string;
   payment_method?: string; // Legacy field - will be deprecated
   discountAmount?: number;
   discountType?: string;
@@ -104,6 +106,7 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
+  license_number?: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -177,10 +180,16 @@ export interface VehiclePricing {
   localRate: number;
   outstationRate: number;
   airportTransferRate: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  perKmRate?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
+  vehicleType?: string;
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
@@ -189,6 +198,7 @@ export interface VehiclePricingUpdateRequest {
 export interface FareUpdateRequest {
   id?: number;
   vehicleType: string;
+  tourId?: string;
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
@@ -199,6 +209,13 @@ export interface DashboardMetrics {
   completedBookings: number;
   pendingBookings: number;
   cancelledBookings: number;
+  activeRides?: number;
+  totalRevenue?: number;
+  upcomingRides?: number;
+  availableDrivers?: number;
+  busyDrivers?: number;
+  avgRating?: number;
+  availableStatuses?: BookingStatus[];
   revenue: {
     total: number;
     today: number;
@@ -223,6 +240,12 @@ export interface DashboardMetrics {
 export interface TourFare {
   id: number;
   tourId: string;
+  tourName?: string;
   vehicleType: string;
   rate: number;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }

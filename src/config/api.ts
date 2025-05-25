@@ -4,6 +4,8 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://your-production-domain.com' 
   : 'http://localhost';
 
+export const apiBaseUrl = API_BASE_URL;
+
 export const getApiUrl = (endpoint: string): string => {
   return `${API_BASE_URL}${endpoint}`;
 };

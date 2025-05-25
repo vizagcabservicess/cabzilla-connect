@@ -9,39 +9,46 @@ import { format } from 'date-fns';
 interface DateTimePickerProps {
   date: Date;
   onDateChange: (date: Date) => void;
+  label?: string;
+  minDate?: Date;
 }
 
 export const DateTimePicker: React.FC<DateTimePickerProps> = ({
   date,
-  onDateChange
+  onDateChange,
+  label,
+  minDate
 }) => {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="w-full justify-start text-left font-normal"
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, 'PPP p') : 'Pick a date and time'}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={(newDate) => {
-            if (newDate) {
-              onDateChange(newDate);
-              setOpen(false);
-            }
-          }}
-          disabled={(date) => date < new Date()}
-          initialFocus
-        />
-      </PopoverContent>
-    </Popover>
+    <div className="space-y-2">
+      {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-start text-left font-normal"
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, 'PPP p') : 'Pick a date and time'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(newDate) => {
+              if (newDate) {
+                onDateChange(newDate);
+                setOpen(false);
+              }
+            }}
+            disabled={(date) => minDate ? date < minDate : date < new Date()}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 };

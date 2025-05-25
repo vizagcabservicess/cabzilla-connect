@@ -15,6 +15,27 @@ export interface RazorpayOrderResponse {
   status: string;
 }
 
+export interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  prefill: {
+    name: string;
+    email: string;
+    contact: string;
+  };
+  theme: {
+    color: string;
+  };
+  handler: (response: RazorpayResponse) => void;
+  modal: {
+    ondismiss: () => void;
+  };
+}
+
 // Initialize Razorpay SDK
 export const initRazorpay = async (): Promise<boolean> => {
   return new Promise((resolve) => {
@@ -64,7 +85,7 @@ export const createRazorpayOrder = async (
 
 // Open Razorpay checkout
 export const openRazorpayCheckout = async (
-  orderData: RazorpayOrderResponse,
+  options: RazorpayOptions,
   onSuccess: (response: RazorpayResponse) => void,
   onError: (error: any) => void
 ): Promise<void> => {
@@ -73,32 +94,20 @@ export const openRazorpayCheckout = async (
     throw new Error('Razorpay SDK failed to load');
   }
 
-  const options = {
-    key: process.env.VITE_RAZORPAY_KEY_ID,
-    amount: orderData.amount,
-    currency: orderData.currency,
-    name: 'Your Company Name',
-    description: 'Payment for booking',
-    order_id: orderData.id,
+  const razorpay = new (window as any).Razorpay({
+    ...options,
     handler: onSuccess,
-    prefill: {
-      name: '',
-      email: '',
-      contact: ''
-    },
-    theme: {
-      color: '#3B82F6'
-    }
-  };
-
-  const razorpay = new (window as any).Razorpay(options);
+  });
   razorpay.on('payment.failed', onError);
   razorpay.open();
 };
 
 // Verify Razorpay payment
 export const verifyRazorpayPayment = async (
-  response: RazorpayResponse
+  paymentId: string,
+  orderId: string,
+  signature: string,
+  bookingId?: number
 ): Promise<boolean> => {
   try {
     const verifyResponse = await fetch('/api/verify-razorpay-payment', {
@@ -106,7 +115,12 @@ export const verifyRazorpayPayment = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(response),
+      body: JSON.stringify({
+        razorpay_payment_id: paymentId,
+        razorpay_order_id: orderId,
+        razorpay_signature: signature,
+        booking_id: bookingId
+      }),
     });
 
     const result = await verifyResponse.json();
