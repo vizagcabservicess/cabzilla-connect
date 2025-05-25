@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { CalendarIcon, ArrowLeftIcon, ArrowRightIcon, CheckCircle, Clock, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { commissionAPI } from '@/services/api/commissionAPI';
-import { CommissionPayment } from '@/types/api';
+import { CommissionPayment } from '@/types/cab';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -68,23 +68,18 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
 
   const toCamelCasePayment = (payment: any): CommissionPayment => ({
     id: payment.id,
-    booking_id: payment.booking_id,
-    vehicle_id: payment.vehicle_id,
-    driver_id: payment.driver_id,
-    commission_amount: Number(payment.commission_amount),
-    commission_percentage: Number(payment.commission_percentage),
-    payment_status: payment.payment_status || payment.status,
-    payment_date: payment.payment_date,
-    created_at: payment.created_at,
-    updated_at: payment.updated_at,
-    // Map to camelCase for component usage
     bookingId: payment.booking_id,
+    bookingNumber: payment.booking_number,
     vehicleId: payment.vehicle_id,
-    amount: Number(payment.total_amount || payment.amount),
+    driverId: payment.driver_id,
+    amount: Number(payment.total_amount),
     commissionAmount: Number(payment.commission_amount),
     commissionPercentage: Number(payment.commission_percentage),
-    status: payment.payment_status || payment.status || 'pending',
+    status: payment.status,
+    paymentDate: payment.payment_date,
     notes: payment.notes,
+    createdAt: payment.created_at,
+    updatedAt: payment.updated_at,
   });
 
   const loadPayments = async () => {
@@ -155,7 +150,7 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Badge variant="outline" className="bg-green-500 text-white border-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
+        return <Badge variant="success" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
       case 'pending':
         return <Badge variant="outline" className="border-amber-500 text-amber-500"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
       case 'cancelled':
@@ -293,7 +288,7 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
               ) : (
                 (Array.isArray(filteredPayments) ? filteredPayments : []).map((payment) => (
                   <TableRow key={payment.id}>
-                    <TableCell>{payment.bookingId}</TableCell>
+                    <TableCell>{payment.bookingNumber}</TableCell>
                     <TableCell>{payment.vehicleId}</TableCell>
                     <TableCell>₹{payment.amount?.toFixed(2)}</TableCell>
                     <TableCell>₹{payment.commissionAmount?.toFixed(2)}</TableCell>
@@ -302,16 +297,16 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
                     <TableCell>
                       {payment.status === 'pending' && (
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleStatusChange(String(payment.id), 'paid')}>
+                          <Button size="sm" onClick={() => handleStatusChange(payment.id, 'paid')}>
                             Mark Paid
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(String(payment.id), 'cancelled')}>
+                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(payment.id, 'cancelled')}>
                             Cancel
                           </Button>
                         </div>
                       )}
                       {payment.status === 'paid' && (
-                        <Button size="sm" variant="outline" onClick={() => handleStatusChange(String(payment.id), 'pending')}>
+                        <Button size="sm" variant="outline" onClick={() => handleStatusChange(payment.id, 'pending')}>
                           Mark Pending
                         </Button>
                       )}

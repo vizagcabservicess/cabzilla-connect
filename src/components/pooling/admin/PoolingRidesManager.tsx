@@ -1,12 +1,27 @@
-
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Edit, Trash2, Plus } from 'lucide-react';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Grid,
+  Alert,
+} from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
 
 interface Ride {
@@ -113,158 +128,143 @@ const PoolingRidesManager: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
+  if (loading) return <Typography>Loading...</Typography>;
+  if (error) return <Alert severity="error">{error}</Alert>;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Pooling Rides Management</h1>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="mr-2 h-4 w-4" />
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h5">Pooling Rides Management</Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+        >
           Add New Ride
         </Button>
-      </div>
+      </Box>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Departure</TableHead>
-                <TableHead>Seats</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>Actions</TableHead>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>From</TableCell>
+              <TableCell>To</TableCell>
+              <TableCell>Departure</TableCell>
+              <TableCell>Seats</TableCell>
+              <TableCell>Price</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Provider</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rides.map((ride) => (
+              <TableRow key={ride.id}>
+                <TableCell>{ride.id}</TableCell>
+                <TableCell>{ride.type}</TableCell>
+                <TableCell>{ride.fromLocation}</TableCell>
+                <TableCell>{ride.toLocation}</TableCell>
+                <TableCell>
+                  {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
+                </TableCell>
+                <TableCell>{`${ride.availableSeats}/${ride.totalSeats}`}</TableCell>
+                <TableCell>₹{ride.pricePerSeat}</TableCell>
+                <TableCell>{ride.status}</TableCell>
+                <TableCell>{ride.providerName}</TableCell>
+                <TableCell>
+                  <IconButton onClick={() => handleOpenDialog(ride)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDelete(ride.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rides.map((ride) => (
-                <TableRow key={ride.id}>
-                  <TableCell>{ride.id}</TableCell>
-                  <TableCell>{ride.type}</TableCell>
-                  <TableCell>{ride.fromLocation}</TableCell>
-                  <TableCell>{ride.toLocation}</TableCell>
-                  <TableCell>
-                    {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
-                  </TableCell>
-                  <TableCell>{`${ride.availableSeats}/${ride.totalSeats}`}</TableCell>
-                  <TableCell>₹{ride.pricePerSeat}</TableCell>
-                  <TableCell>{ride.status}</TableCell>
-                  <TableCell>{ride.providerName}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleOpenDialog(ride)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleDelete(ride.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedRide ? 'Edit Ride' : 'Add New Ride'}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedRide ? 'Update ride details' : 'Create a new pooling ride'}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="type">Type</Label>
-                <Input
-                  id="type"
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {selectedRide ? 'Edit Ride' : 'Add New Ride'}
+        </DialogTitle>
+        <form onSubmit={handleSubmit}>
+          <DialogContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Type"
                   value={formData.type || ''}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fromLocation">From Location</Label>
-                <Input
-                  id="fromLocation"
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="From Location"
                   value={formData.fromLocation || ''}
                   onChange={(e) => setFormData({ ...formData, fromLocation: e.target.value })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="toLocation">To Location</Label>
-                <Input
-                  id="toLocation"
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="To Location"
                   value={formData.toLocation || ''}
                   onChange={(e) => setFormData({ ...formData, toLocation: e.target.value })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="departureTime">Departure Time</Label>
-                <Input
-                  id="departureTime"
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Departure Time"
                   type="datetime-local"
                   value={formData.departureTime || ''}
                   onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
                   required
+                  InputLabelProps={{ shrink: true }}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="totalSeats">Total Seats</Label>
-                <Input
-                  id="totalSeats"
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Total Seats"
                   type="number"
                   value={formData.totalSeats || ''}
                   onChange={(e) => setFormData({ ...formData, totalSeats: parseInt(e.target.value) })}
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pricePerSeat">Price per Seat</Label>
-                <Input
-                  id="pricePerSeat"
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Price per Seat"
                   type="number"
                   value={formData.pricePerSeat || ''}
                   onChange={(e) => setFormData({ ...formData, pricePerSeat: parseFloat(e.target.value) })}
                   required
                 />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                {selectedRide ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button type="submit" variant="contained">
+              {selectedRide ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
-    </div>
+    </Box>
   );
 };
 
-export default PoolingRidesManager;
+export default PoolingRidesManager; 

@@ -1,28 +1,93 @@
 
-export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'cancelled';
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+import { Booking } from '@/types/api';
 
+// Payment status types
+export type PaymentStatus = 
+  | 'pending'
+  | 'partial'
+  | 'paid'
+  | 'cancelled';
+
+// Payment method types
+export type PaymentMethod = 
+  | 'cash'
+  | 'card'
+  | 'upi'
+  | 'bank_transfer'
+  | 'wallet'
+  | 'cheque'
+  | 'razorpay'  // Added Razorpay payment method
+  | 'other';
+
+// Payment interface
 export interface Payment {
-  id: string | number;
-  bookingId: string;
+  id: number | string;
+  bookingId: number | string;
+  bookingNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
   amount: number;
-  method: PaymentMethod;
+  paidAmount: number;
+  remainingAmount: number;
+  paymentStatus: PaymentStatus;
   paymentMethod?: PaymentMethod;
-  status: PaymentStatus;
+  paymentDate?: string;
+  dueDate: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  booking?: Booking;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
+// Razorpay payment specific details
+export interface RazorpayPaymentDetails {
+  paymentId: string;
+  orderId: string;
+  signature: string;
+  amount: number;
+  status: string;
+  method?: string;
+  email?: string;
+  contact?: string;
+  createdAt: string;
+}
+
+// Payment filter parameters
+export interface PaymentFilterParams {
+  dateRange?: {
+    from: Date | undefined;
+    to?: Date | undefined;
+  };
   paymentStatus?: PaymentStatus;
-  transactionId?: string;
+  paymentMethod?: PaymentMethod;
+  customerId?: number | string;
+  search?: string;
+}
+
+// Payment reminder
+export interface PaymentReminder {
+  id: number | string;
+  paymentId: number | string;
+  bookingId: number | string;
+  bookingNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  amount: number;
+  reminderType: 'initial' | 'followup' | 'final';
+  reminderDate: string;
+  sentDate?: string;
+  status: 'pending' | 'sent' | 'failed';
+  message: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface PaymentFilterParams {
-  status?: PaymentStatus;
-  method?: PaymentMethod;
-  startDate?: string;
-  endDate?: string;
-  search?: string;
-}
-
+// Payment summary
 export interface PaymentSummary {
   totalAmount: number;
   totalPaid: number;
@@ -34,12 +99,17 @@ export interface PaymentSummary {
     paid: number;
     cancelled: number;
   };
-  countByMethod: Record<PaymentMethod, number>;
+  countByMethod: {
+    [key in PaymentMethod]?: number;
+  };
 }
 
-export interface PaymentReminderDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  payment: Payment;
-  onSendReminder: (paymentId: string | number, reminderType: string, customMessage?: string) => Promise<void>;
+// API response types
+export interface PaymentsResponse {
+  payments: Payment[];
+  summary?: PaymentSummary;
+}
+
+export interface PaymentRemindersResponse {
+  reminders: PaymentReminder[];
 }

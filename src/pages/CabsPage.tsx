@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
 import { TabTripSelector } from "@/components/TabTripSelector";
-import { GoogleMapComponent } from "@/components/GoogleMapComponent";
+import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary"; 
 import { 
@@ -557,7 +556,6 @@ const CabsPage = () => {
                   pickupDate={pickupDate}
                   returnDate={returnDate}
                   hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
-                  isCalculatingFares={false}
                 />
 
                 {showMap && pickup && dropoff && (
@@ -565,8 +563,7 @@ const CabsPage = () => {
                     <h3 className="text-lg font-semibold mb-2">Route Map</h3>
                     <GoogleMapComponent 
                       pickupLocation={pickup} 
-                      dropLocation={dropoff}
-                      tripType={tripType}
+                      dropLocation={dropoff} 
                       onDistanceCalculated={handleMapDistanceCalculated}
                     />
                   </div>

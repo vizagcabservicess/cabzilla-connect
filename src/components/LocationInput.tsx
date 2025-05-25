@@ -1,11 +1,23 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { X, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
-import { Location } from '@/types/api';
+
+// Define proper Location type to fix type errors
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  type?: string;
+  isInVizag?: boolean;
+  city?: string;
+  state?: string;
+  popularityScore?: number;
+}
 
 interface LocationInputProps {
   id?: string;
@@ -71,9 +83,9 @@ export function LocationInput({
   const valueRef = useRef<Location | string | undefined>(value);
   const locationRef = useRef(location);
   const initializedRef = useRef(false);
-  const { isLoaded } = useGoogleMaps();
+  const { isLoaded, google } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const autocompleteRef = useRef<any>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const autocompleteInitializedRef = useRef(false);
   const initializationAttemptsRef = useRef(0);
   
@@ -129,29 +141,29 @@ export function LocationInput({
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
-    if (!isLoaded || !window.google?.maps || !inputRef.current || autocompleteInitializedRef.current) return;
+    if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
     
     try {
       console.log("Initializing Google Maps Autocomplete with restricted bounds");
       
       // Create a circle around Vizag city center
-      const vizagCenter = new window.google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-      const circle = new window.google.maps.Circle({
+      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+      const circle = new google.maps.Circle({
         center: vizagCenter,
         radius: MAX_DISTANCE_KM * 1000, // Convert km to meters
       });
       
-      const strictBounds = circle.getBounds();
+      const strictBounds = circle.getBounds() as google.maps.LatLngBounds;
       
       // Configure Autocomplete options with strict bounds
-      const options = {
+      const options: google.maps.places.AutocompleteOptions = {
         types: ["geocode", "establishment"],
         componentRestrictions: { country: "in" },
         bounds: strictBounds,
         strictBounds: isPickupLocation, // Enforce strict bounds for pickup locations
       };
       
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
+      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
       // Add place_changed listener
       autocompleteRef.current.addListener("place_changed", () => {
@@ -179,9 +191,7 @@ export function LocationInput({
               address: place.formatted_address || "",
               lat: lat,
               lng: lng,
-              city: "Visakhapatnam", // Default city
-              state: "Andhra Pradesh", // Default state
-              type: "other"
+              isInVizag: isWithinVizagRange(lat, lng)
             });
           }
         }
@@ -201,7 +211,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-  }, [isLoaded, inputRef.current, isPickupLocation, isAirportTransfer, onLocationChange, onChange]);
+  }, [isLoaded, google, inputRef.current, isPickupLocation, isAirportTransfer, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -279,16 +289,7 @@ export function LocationInput({
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
-              if (onLocationChange) onLocationChange({ 
-                id: "", 
-                name: "", 
-                address: "", 
-                lat: 0, 
-                lng: 0, 
-                city: "Visakhapatnam",
-                state: "Andhra Pradesh",
-                type: "other"
-              });
+              if (onLocationChange) onLocationChange({ id: "", name: "", address: "", lat: 0, lng: 0 });
               setShowSuggestions(false);
             }}
             tabIndex={-1}

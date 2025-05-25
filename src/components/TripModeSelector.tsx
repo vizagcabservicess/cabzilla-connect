@@ -1,48 +1,49 @@
 
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
+import { TripMode } from "@/lib/tripTypes";
+import { ArrowRight, RotateCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function TripModeSelector() {
-  const [selectedTab, setSelectedTab] = useState('Outstation');
-  const [tripType, setTripType] = useState('oneway');
+interface TripModeSelectorProps {
+  value: TripMode;
+  onChange: (value: TripMode) => void;
+  className?: string;
+}
 
-  const tabs = ['Outstation', 'Local', 'Airport', 'Tour'];
-
+export function TripModeSelector({ value, onChange, className }: TripModeSelectorProps) {
   return (
-    <div className="space-y-4">
-      {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 justify-center">
-        {tabs.map((tab) => (
-          <Button
-            key={tab}
-            variant={selectedTab === tab ? 'default' : 'outline'}
-            onClick={() => setSelectedTab(tab)}
-            className={`px-6 py-2 ${
-              selectedTab === tab 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-white text-gray-700 border-gray-300'
-            }`}
-          >
-            {tab}
-          </Button>
-        ))}
+    <div className={cn("mb-4", className)}>
+      <p className="text-xs font-medium text-gray-700 mb-2">TRIP TYPE</p>
+      <div className="flex space-x-4">
+        <button
+          onClick={() => onChange("one-way")}
+          className={cn(
+            "flex items-center px-4 py-2 rounded-md border border-gray-200 transition-all",
+            value === "one-way" 
+              ? "bg-blue-50 border-blue-200 text-blue-700" 
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          )}
+        >
+          <ArrowRight className="mr-2 h-4 w-4" />
+          <span className="text-sm font-medium">One Way</span>
+          <span className="ml-1 text-xs text-blue-600">
+            First 300km included, then ₹13/km
+          </span>
+        </button>
+        
+        <button
+          onClick={() => onChange("round-trip")}
+          className={cn(
+            "flex items-center px-4 py-2 rounded-md border border-gray-200 transition-all",
+            value === "round-trip" 
+              ? "bg-blue-50 border-blue-200 text-blue-700" 
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          )}
+        >
+          <RotateCw className="mr-2 h-4 w-4" />
+          <span className="text-sm font-medium">Round Trip</span>
+          <span className="ml-1 text-xs text-blue-600">₹14/km</span>
+        </button>
       </div>
-
-      {/* Trip Type Selection for Outstation */}
-      {selectedTab === 'Outstation' && (
-        <RadioGroup value={tripType} onValueChange={setTripType} className="flex justify-center space-x-6">
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="oneway" id="oneway" />
-            <Label htmlFor="oneway" className="text-gray-700 font-medium">One Way</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="roundtrip" id="roundtrip" />
-            <Label htmlFor="roundtrip" className="text-gray-700 font-medium">Round Trip</Label>
-          </div>
-        </RadioGroup>
-      )}
     </div>
   );
 }

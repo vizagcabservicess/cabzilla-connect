@@ -1,196 +1,317 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Booking, BookingStatus } from '@/types/api';
-import { Calendar, MapPin, Users, Clock } from 'lucide-react';
+import {
+  Box,
+  Button,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Grid,
+  Alert,
+  Chip,
+} from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon } from '@mui/icons-material';
+import { format } from 'date-fns';
 
-interface PoolingBookingsManagerProps {
-  bookings: Booking[];
-  onUpdateBooking: (id: number, updates: Partial<Booking>) => void;
-  onCreatePooling: (bookingIds: number[]) => void;
+interface Booking {
+  id: number;
+  rideId: number;
+  userId: number;
+  userName: string;
+  userPhone: string;
+  seats: number;
+  totalAmount: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  paymentStatus: 'pending' | 'paid' | 'refunded';
+  createdAt: string;
+  updatedAt: string;
 }
 
-export function PoolingBookingsManager({ 
-  bookings, 
-  onUpdateBooking, 
-  onCreatePooling 
-}: PoolingBookingsManagerProps) {
-  const [selectedBookings, setSelectedBookings] = useState<number[]>([]);
-  const [filterStatus, setFilterStatus] = useState<BookingStatus | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+const PoolingBookingsManager: React.FC = () => {
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [formData, setFormData] = useState<Partial<Booking>>({});
 
-  const filteredBookings = bookings.filter(booking => {
-    const matchesStatus = filterStatus === 'all' || booking.status === filterStatus;
-    const matchesSearch = !searchTerm || 
-      booking.passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.pickupLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (booking.dropLocation && booking.dropLocation.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    return matchesStatus && matchesSearch;
-  });
+  useEffect(() => {
+    fetchBookings();
+  }, []);
 
-  const handleBookingSelect = (bookingId: string) => {
-    const numericId = Number(bookingId);
-    setSelectedBookings(prev => 
-      prev.includes(numericId) 
-        ? prev.filter(id => id !== numericId)
-        : [...prev, numericId]
-    );
-  };
-
-  const handleCreatePooling = () => {
-    if (selectedBookings.length < 2) {
-      alert('Please select at least 2 bookings to create a pool');
-      return;
+  const fetchBookings = async () => {
+    try {
+      const response = await fetch('/api/pooling/bookings');
+      if (!response.ok) throw new Error('Failed to fetch bookings');
+      const data = await response.json();
+      setBookings(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
     }
-    
-    onCreatePooling(selectedBookings);
-    setSelectedBookings([]);
   };
 
-  const getStatusBadgeColor = (status: BookingStatus) => {
+  const handleOpenDialog = (booking?: Booking) => {
+    if (booking) {
+      setSelectedBooking(booking);
+      setFormData(booking);
+    } else {
+      setSelectedBooking(null);
+      setFormData({});
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setSelectedBooking(null);
+    setFormData({});
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = selectedBooking 
+        ? `/api/pooling/bookings/${selectedBooking.id}`
+        : '/api/pooling/bookings';
+      
+      const method = selectedBooking ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) throw new Error('Failed to save booking');
+      
+      await fetchBookings();
+      handleCloseDialog();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this booking?')) return;
+    
+    try {
+      const response = await fetch(`/api/pooling/bookings/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete booking');
+      
+      await fetchBookings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed': return 'bg-blue-100 text-blue-800';
-      case 'in_progress': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-green-500 text-white';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'confirmed':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'cancelled':
+        return 'error';
+      case 'completed':
+        return 'info';
+      default:
+        return 'default';
     }
   };
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'refunded':
+        return 'info';
+      default:
+        return 'default';
+    }
+  };
+
+  if (loading) return <Typography>Loading...</Typography>;
+  if (error) return <Alert severity="error">{error}</Alert>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Pooling Bookings Manager</h2>
-        <Button 
-          onClick={handleCreatePooling}
-          disabled={selectedBookings.length < 2}
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h5">Pooling Bookings Management</Typography>
+        <Button
+          variant="contained"
+          onClick={() => handleOpenDialog()}
         >
-          Create Pool ({selectedBookings.length})
+          Add New Booking
         </Button>
-      </div>
+      </Box>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="search">Search Bookings</Label>
-              <Input
-                id="search"
-                placeholder="Search by passenger name or location..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Filter by Status</Label>
-              <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as BookingStatus | 'all')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>User</TableCell>
+              <TableCell>Phone</TableCell>
+              <TableCell>Seats</TableCell>
+              <TableCell>Amount</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Payment</TableCell>
+              <TableCell>Created</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {bookings.map((booking) => (
+              <TableRow key={booking.id}>
+                <TableCell>{booking.id}</TableCell>
+                <TableCell>{booking.userName}</TableCell>
+                <TableCell>{booking.userPhone}</TableCell>
+                <TableCell>{booking.seats}</TableCell>
+                <TableCell>₹{booking.totalAmount}</TableCell>
+                <TableCell>
+                  <Chip 
+                    label={booking.status} 
+                    color={getStatusColor(booking.status) as any}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Chip 
+                    label={booking.paymentStatus} 
+                    color={getPaymentStatusColor(booking.paymentStatus) as any}
+                    size="small"
+                  />
+                </TableCell>
+                <TableCell>
+                  {format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}
+                </TableCell>
+                <TableCell>
+                  <IconButton onClick={() => handleOpenDialog(booking)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDelete(booking.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-      {/* Bookings Grid */}
-      <div className="grid gap-4">
-        {filteredBookings.map((booking) => (
-          <Card 
-            key={booking.id} 
-            className={`cursor-pointer transition-all ${
-              selectedBookings.includes(Number(booking.id)) 
-                ? 'ring-2 ring-blue-500 bg-blue-50' 
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => handleBookingSelect(booking.id)}
-          >
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <h3 className="font-semibold text-lg">#{booking.bookingNumber}</h3>
-                  <p className="text-gray-600">{booking.passengerName}</p>
-                </div>
-                <Badge className={getStatusBadgeColor(booking.status)}>
-                  {booking.status}
-                </Badge>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <div className="font-medium">From:</div>
-                    <div className="text-gray-600">{booking.pickupLocation}</div>
-                  </div>
-                </div>
-                
-                {booking.dropLocation && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <div className="font-medium">To:</div>
-                      <div className="text-gray-600">{booking.dropLocation}</div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <div className="font-medium">Date:</div>
-                    <div className="text-gray-600">
-                      {new Date(booking.pickupDate).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <div className="font-medium">Amount:</div>
-                    <div className="text-gray-600">₹{booking.totalAmount}</div>
-                  </div>
-                </div>
-              </div>
-              
-              {booking.cabType && (
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                  <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="font-medium">Vehicle:</span>
-                  <span className="text-gray-600">{booking.cabType}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredBookings.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-gray-500">No bookings found matching your criteria.</p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {selectedBooking ? 'Edit Booking' : 'Add New Booking'}
+        </DialogTitle>
+        <form onSubmit={handleSubmit}>
+          <DialogContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="User ID"
+                  type="number"
+                  value={formData.userId || ''}
+                  onChange={(e) => setFormData({ ...formData, userId: parseInt(e.target.value) })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Ride ID"
+                  type="number"
+                  value={formData.rideId || ''}
+                  onChange={(e) => setFormData({ ...formData, rideId: parseInt(e.target.value) })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Seats"
+                  type="number"
+                  value={formData.seats || ''}
+                  onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Total Amount"
+                  type="number"
+                  value={formData.totalAmount || ''}
+                  onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Status"
+                  value={formData.status || ''}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  required
+                  SelectProps={{
+                    native: true,
+                  }}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="completed">Completed</option>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Payment Status"
+                  value={formData.paymentStatus || ''}
+                  onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
+                  required
+                  SelectProps={{
+                    native: true,
+                  }}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="refunded">Refunded</option>
+                </TextField>
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button type="submit" variant="contained">
+              {selectedBooking ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Box>
   );
-}
+};
 
-export default PoolingBookingsManager;
+export default PoolingBookingsManager; 

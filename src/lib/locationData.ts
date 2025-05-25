@@ -6,7 +6,7 @@ export interface Location {
   state: string;
   lat: number;
   lng: number; 
-  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other' | 'railway' | 'tourist';
+  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
@@ -32,7 +32,7 @@ export const vizagLocations: Location[] = [
     name: 'Visakhapatnam Railway Station',
     city: 'Visakhapatnam',
     state: 'Andhra Pradesh',
-    type: 'railway',
+    type: 'train_station',
     popularityScore: 98,
     isPickupLocation: true,
     lat: 17.7215, 
@@ -56,7 +56,7 @@ export const vizagLocations: Location[] = [
     name: 'RK Beach',
     city: 'Visakhapatnam',
     state: 'Andhra Pradesh',
-    type: 'tourist',
+    type: 'landmark',
     popularityScore: 92,
     isPickupLocation: true,
     lat: 17.7175,
