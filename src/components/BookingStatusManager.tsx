@@ -19,7 +19,11 @@ const statusColors = {
   assigned: 'bg-purple-100 text-purple-800',
   in_progress: 'bg-orange-100 text-orange-800',
   completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800'
+  cancelled: 'bg-red-100 text-red-800',
+  'no-show': 'bg-gray-100 text-gray-800',
+  payment_pending: 'bg-amber-100 text-amber-800',
+  payment_received: 'bg-emerald-100 text-emerald-800',
+  continued: 'bg-indigo-100 text-indigo-800'
 };
 
 const statusLabels = {
@@ -28,7 +32,11 @@ const statusLabels = {
   assigned: 'Assigned',
   in_progress: 'In Progress',
   completed: 'Completed',
-  cancelled: 'Cancelled'
+  cancelled: 'Cancelled',
+  'no-show': 'No Show',
+  payment_pending: 'Payment Pending',
+  payment_received: 'Payment Received',
+  continued: 'Continued'
 };
 
 export const BookingStatusManager: React.FC<BookingStatusManagerProps> = ({
@@ -85,9 +93,13 @@ export const BookingStatusManager: React.FC<BookingStatusManagerProps> = ({
       pending: ['confirmed', 'cancelled'],
       confirmed: ['assigned', 'cancelled'],
       assigned: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'cancelled'],
-      completed: [],
-      cancelled: []
+      in_progress: ['completed', 'cancelled', 'no-show'],
+      completed: ['payment_pending'],
+      cancelled: [],
+      'no-show': ['cancelled'],
+      payment_pending: ['payment_received'],
+      payment_received: ['continued'],
+      continued: []
     };
 
     return validTransitions[from]?.includes(to) || false;
@@ -98,9 +110,13 @@ export const BookingStatusManager: React.FC<BookingStatusManagerProps> = ({
       pending: ['confirmed', 'cancelled'],
       confirmed: ['assigned', 'cancelled'],
       assigned: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'cancelled'],
-      completed: [],
-      cancelled: []
+      in_progress: ['completed', 'cancelled', 'no-show'],
+      completed: ['payment_pending'],
+      cancelled: [],
+      'no-show': ['cancelled'],
+      payment_pending: ['payment_received'],
+      payment_received: ['continued'],
+      continued: []
     };
 
     return transitions[status] || [];
