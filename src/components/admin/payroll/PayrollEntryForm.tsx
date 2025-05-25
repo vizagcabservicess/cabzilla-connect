@@ -16,9 +16,9 @@ interface PayrollEntryFormProps {
 
 export function PayrollEntryForm({ entry, onSave, onCancel }: PayrollEntryFormProps) {
   const [formData, setFormData] = useState({
-    driverId: entry?.driverId || '',
-    baseSalary: entry?.baseSalary || 0,
-    incentives: entry?.incentives || 0,
+    driverId: entry?.driverId || entry?.driver_id || '',
+    baseSalary: entry?.baseSalary || entry?.base_salary || 0,
+    incentives: entry?.incentives || entry?.commission || 0,
     deductions: entry?.deductions || 0,
     payPeriodStart: entry?.payPeriodStart || '',
     payPeriodEnd: entry?.payPeriodEnd || '',
@@ -53,7 +53,7 @@ export function PayrollEntryForm({ entry, onSave, onCancel }: PayrollEntryFormPr
     
     onSave({
       ...formData,
-      driverId: typeof formData.driverId === 'string' ? formData.driverId : String(formData.driverId),
+      driverId: Number(formData.driverId), // Convert to number
       totalAmount
     });
   };

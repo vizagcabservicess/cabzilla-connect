@@ -1,266 +1,340 @@
-
 import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { CancellationPolicy } from '@/types/api';
 import { toast } from 'sonner';
 
-interface CancellationPolicyManagerProps {
-  policies: CancellationPolicy[];
-  onUpdate: (policy: CancellationPolicy) => void;
-  onCreate: (policy: Partial<CancellationPolicy>) => void;
+interface CancellationPolicyFormData {
+  name: string;
+  description: string;
+  timeBeforeDeparture: number;
+  refundPercentage: number;
+  cancellationFee: number;
+  isActive: boolean;
 }
 
-export function CancellationPolicyManager({ policies, onUpdate, onCreate }: CancellationPolicyManagerProps) {
-  const [isCreating, setIsCreating] = useState(false);
+export function CancellationPolicyManager() {
+  const [policies, setPolicies] = useState<CancellationPolicy[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingPolicy, setEditingPolicy] = useState<CancellationPolicy | null>(null);
-  const [formData, setFormData] = useState({
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [formData, setFormData] = useState<CancellationPolicyFormData>({
     name: '',
     description: '',
-    timeBeforeDeparture: 0,
-    refundPercentage: 0,
+    timeBeforeDeparture: 24,
+    refundPercentage: 100,
     cancellationFee: 0,
     isActive: true
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadPolicies();
+  }, []);
+
+  const loadPolicies = async () => {
+    try {
+      setIsLoading(true);
+      // Mock data for now
+      const mockPolicies: CancellationPolicy[] = [
+        {
+          id: 1,
+          name: "Standard Cancellation",
+          description: "Standard cancellation policy for regular bookings",
+          hours_before: 24,
+          refund_percentage: 100,
+          active: true,
+          timeBeforeDeparture: 24,
+          refundPercentage: 100,
+          cancellationFee: 0,
+          isActive: true,
+          updatedAt: new Date().toISOString()
+        }
+      ];
+      setPolicies(mockPolicies);
+    } catch (error) {
+      toast.error('Failed to load cancellation policies');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
-      toast.error('Policy name is required');
-      return;
-    }
-
-    if (formData.timeBeforeDeparture < 0) {
-      toast.error('Time before departure cannot be negative');
-      return;
-    }
-
-    if (formData.refundPercentage < 0 || formData.refundPercentage > 100) {
-      toast.error('Refund percentage must be between 0 and 100');
-      return;
-    }
-
-    if (formData.cancellationFee < 0) {
-      toast.error('Cancellation fee cannot be negative');
-      return;
-    }
-
-    if (editingPolicy) {
-      onUpdate({
-        ...editingPolicy,
+    try {
+      const policyData = {
         ...formData,
-        updatedAt: new Date().toISOString()
-      });
-    } else {
-      onCreate({
-        ...formData,
-        id: `policy_${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
+        hours_before: Number(formData.timeBeforeDeparture), // Convert to number
+        refund_percentage: formData.refundPercentage,
+        active: formData.isActive
+      };
 
-    resetForm();
+      if (editingPolicy) {
+        // Update existing policy
+        const updatedPolicy = {
+          ...editingPolicy,
+          ...policyData,
+          timeBeforeDeparture: Number(formData.timeBeforeDeparture),
+          refundPercentage: formData.refundPercentage,
+          cancellationFee: formData.cancellationFee,
+          isActive: formData.isActive
+        };
+        
+        setPolicies(prev => prev.map(p => p.id === editingPolicy.id ? updatedPolicy : p));
+        toast.success('Policy updated successfully');
+      } else {
+        // Create new policy
+        const newPolicy: CancellationPolicy = {
+          id: Date.now(),
+          ...policyData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          timeBeforeDeparture: Number(formData.timeBeforeDeparture),
+          refundPercentage: formData.refundPercentage,
+          cancellationFee: formData.cancellationFee,
+          isActive: formData.isActive,
+          updatedAt: new Date().toISOString()
+        };
+        
+        setPolicies(prev => [...prev, newPolicy]);
+        toast.success('Policy created successfully');
+      }
+      
+      resetForm();
+    } catch (error) {
+      toast.error('Failed to save policy');
+    }
   };
 
   const resetForm = () => {
     setFormData({
       name: '',
       description: '',
-      timeBeforeDeparture: 0,
-      refundPercentage: 0,
+      timeBeforeDeparture: 24,
+      refundPercentage: 100,
       cancellationFee: 0,
       isActive: true
     });
-    setIsCreating(false);
     setEditingPolicy(null);
+    setShowAddDialog(false);
   };
 
-  const startEdit = (policy: CancellationPolicy) => {
+  const handleEdit = (policy: CancellationPolicy) => {
     setFormData({
       name: policy.name,
       description: policy.description,
-      timeBeforeDeparture: policy.timeBeforeDeparture,
-      refundPercentage: policy.refundPercentage,
-      cancellationFee: policy.cancellationFee,
-      isActive: policy.isActive
+      timeBeforeDeparture: policy.timeBeforeDeparture || policy.hours_before,
+      refundPercentage: policy.refundPercentage || policy.refund_percentage,
+      cancellationFee: policy.cancellationFee || 0,
+      isActive: policy.isActive ?? policy.active
     });
     setEditingPolicy(policy);
-    setIsCreating(true);
+    setShowAddDialog(true);
   };
 
-  const togglePolicyStatus = (policy: CancellationPolicy) => {
-    onUpdate({
-      ...policy,
-      isActive: !policy.isActive,
-      updatedAt: new Date().toISOString()
-    });
+  const handleDelete = async (policyId: number) => {
+    try {
+      setPolicies(prev => prev.filter(p => p.id !== policyId));
+      toast.success('Policy deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete policy');
+    }
+  };
+
+  const handleToggleActive = async (policy: CancellationPolicy) => {
+    try {
+      const updatedPolicy = {
+        ...policy,
+        active: !policy.active,
+        isActive: !policy.isActive
+      };
+      
+      setPolicies(prev => prev.map(p => p.id === policy.id ? updatedPolicy : p));
+      toast.success(`Policy ${updatedPolicy.active ? 'activated' : 'deactivated'}`);
+    } catch (error) {
+      toast.error('Failed to update policy status');
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Cancellation Policies</h2>
-        <Button onClick={() => setIsCreating(true)}>
-          Create New Policy
-        </Button>
-      </div>
-
-      {isCreating && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {editingPolicy ? 'Edit Policy' : 'Create New Policy'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div>
+          <h2 className="text-2xl font-bold">Cancellation Policies</h2>
+          <p className="text-muted-foreground">Manage cancellation policies for pooling rides</p>
+        </div>
+        
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button onClick={() => resetForm()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Policy
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingPolicy ? 'Edit' : 'Add'} Cancellation Policy</DialogTitle>
+              <DialogDescription>
+                {editingPolicy ? 'Update the cancellation policy details' : 'Create a new cancellation policy'}
+              </DialogDescription>
+            </DialogHeader>
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Policy Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Standard Cancellation Policy"
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter policy name"
                   required
                 />
               </div>
-
+              
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe when this policy applies"
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Enter policy description"
                   rows={3}
                 />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="timeBeforeDeparture">Hours Before Departure</Label>
-                  <Input
-                    id="timeBeforeDeparture"
-                    type="number"
-                    min="0"
-                    value={formData.timeBeforeDeparture}
-                    onChange={(e) => setFormData(prev => ({ ...prev, timeBeforeDeparture: Number(e.target.value) }))}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="refundPercentage">Refund Percentage (%)</Label>
-                  <Input
-                    id="refundPercentage"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.refundPercentage}
-                    onChange={(e) => setFormData(prev => ({ ...prev, refundPercentage: Number(e.target.value) }))}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cancellationFee">Cancellation Fee (₹)</Label>
-                  <Input
-                    id="cancellationFee"
-                    type="number"
-                    min="0"
-                    value={formData.cancellationFee}
-                    onChange={(e) => setFormData(prev => ({ ...prev, cancellationFee: Number(e.target.value) }))}
-                    required
-                  />
-                </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="timeBeforeDeparture">Hours Before Departure</Label>
+                <Input
+                  id="timeBeforeDeparture"
+                  type="number"
+                  min="0"
+                  value={formData.timeBeforeDeparture}
+                  onChange={(e) => setFormData({ ...formData, timeBeforeDeparture: Number(e.target.value) })}
+                  required
+                />
               </div>
-
+              
+              <div className="space-y-2">
+                <Label htmlFor="refundPercentage">Refund Percentage (%)</Label>
+                <Input
+                  id="refundPercentage"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.refundPercentage}
+                  onChange={(e) => setFormData({ ...formData, refundPercentage: Number(e.target.value) })}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="cancellationFee">Cancellation Fee (₹)</Label>
+                <Input
+                  id="cancellationFee"
+                  type="number"
+                  min="0"
+                  value={formData.cancellationFee}
+                  onChange={(e) => setFormData({ ...formData, cancellationFee: Number(e.target.value) })}
+                />
+              </div>
+              
               <div className="flex items-center space-x-2">
                 <Switch
                   id="isActive"
                   checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                 />
-                <Label htmlFor="isActive">Active Policy</Label>
+                <Label htmlFor="isActive">Active</Label>
               </div>
-
-              <div className="flex gap-2 justify-end">
-                <Button type="button" variant="outline" onClick={resetForm}>
+              
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={resetForm} className="flex-1">
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingPolicy ? 'Update' : 'Create'} Policy
+                <Button type="submit" className="flex-1">
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingPolicy ? 'Update' : 'Create'}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-4">
-        {policies.map((policy) => (
-          <Card key={policy.id}>
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold">{policy.name}</h3>
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      policy.isActive 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {policy.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  
-                  {policy.description && (
-                    <p className="text-gray-600 mb-3">{policy.description}</p>
-                  )}
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Time Before:</span>
-                      <div>{policy.timeBeforeDeparture} hours</div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Refund:</span>
-                      <div>{policy.refundPercentage}%</div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Fee:</span>
-                      <div>₹{policy.cancellationFee}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => startEdit(policy)}
-                  >
-                    Edit
-                  </Button>
-                  <Button 
-                    variant={policy.isActive ? "destructive" : "default"}
-                    size="sm"
-                    onClick={() => togglePolicyStatus(policy)}
-                  >
-                    {policy.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+          </DialogContent>
+        </Dialog>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Policies</CardTitle>
+          <CardDescription>Current cancellation policies</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-4">Loading...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Hours Before</TableHead>
+                  <TableHead>Refund %</TableHead>
+                  <TableHead>Fee</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {policies.map((policy) => (
+                  <TableRow key={policy.id}>
+                    <TableCell className="font-medium">{policy.name}</TableCell>
+                    <TableCell>{policy.timeBeforeDeparture || policy.hours_before}</TableCell>
+                    <TableCell>{policy.refundPercentage || policy.refund_percentage}%</TableCell>
+                    <TableCell>₹{policy.cancellationFee || 0}</TableCell>
+                    <TableCell>
+                      <Badge variant={policy.isActive ?? policy.active ? "default" : "secondary"}>
+                        {policy.isActive ?? policy.active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(policy)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleActive(policy)}
+                        >
+                          {policy.isActive ?? policy.active ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(policy.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+export default CancellationPolicyManager;

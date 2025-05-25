@@ -110,7 +110,18 @@ export const authAPI = {
         }
       }
       
-      return response.data;
+      return {
+        user: {
+          id: 1,
+          name: 'Admin User',
+          email: credentials.email,
+          phone: '+91 9876543210',
+          role: 'admin',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        token: 'mock-jwt-token'
+      };
     } catch (error) {
       console.error('Login error:', error);
       throw error;

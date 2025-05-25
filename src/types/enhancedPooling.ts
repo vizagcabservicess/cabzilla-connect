@@ -1,3 +1,4 @@
+import { PoolingRide, PoolingBooking } from '@/types/api';
 
 export interface CancellationPolicy {
   id: number;
@@ -112,6 +113,45 @@ export interface EnhancedPoolingBooking extends PoolingBooking {
   disputeId?: number;
   termsAcceptedAt?: string;
   termsVersion?: string;
+}
+
+export interface BookingAnalytics {
+  totalBookings: number;
+  completedRides: number;
+  cancelledBookings: number;
+  totalRevenue: number;
+  averageRating: number;
+  repeatCustomers: number;
+}
+
+export interface PoolingProviderPerformance {
+  providerId: number;
+  providerName: string;
+  totalRides: number;
+  completedRides: number;
+  cancelledRides: number;
+  averageRating: number;
+  totalEarnings: number;
+  onTimePercentage: number;
+}
+
+export interface RideSearchResult extends PoolingRide {
+  matchScore: number;
+  estimatedDuration: string;
+  providerDetails: {
+    name: string;
+    rating: number;
+    totalRides: number;
+  };
+}
+
+export interface BookingSearchResult extends PoolingBooking {
+  rideDetails: PoolingRide;
+  passengerDetails: {
+    name: string;
+    phone: string;
+    rating?: number;
+  };
 }
 
 export interface PoolingAnalytics {

@@ -10,6 +10,7 @@ export interface Location {
   type?: 'airport' | 'hotel' | 'railway' | 'tourist' | 'other' | 'train_station' | 'bus_station' | 'landmark';
   popularityScore?: number;
   isInVizag?: boolean;
+  place_id?: string; // Added for compatibility
 }
 
 export interface BookingRequest {
@@ -26,6 +27,7 @@ export interface BookingRequest {
   passengerPhone: string;
   passengerEmail: string;
   hourlyPackage?: string | null;
+  tourId?: string; // Added for tours
 }
 
 export interface Booking {
@@ -56,8 +58,16 @@ export interface Booking {
   }[];
   payment_status?: string;
   payment_method?: string;
+  razorpay_payment_id?: string; // Added for payment compatibility
   createdAt: string;
   updatedAt: string;
+  // Additional properties for compatibility
+  pickup_location?: string;
+  dropoff_location?: string;
+  pickup_time?: string;
+  vehicle_type?: string;
+  driver_name?: string;
+  fare?: number;
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'assigned' | 'in_progress' | 'payment_received' | 'payment_pending' | 'continued';
@@ -103,6 +113,7 @@ export interface User {
   role?: string; // Added role property
   created_at: string;
   updated_at: string;
+  createdAt?: string; // Added for compatibility
 }
 
 export interface TourFare {
@@ -121,6 +132,23 @@ export interface FareUpdateRequest {
   base_fare: number;
   per_km_rate: number;
   driver_allowance: number;
+  tourId?: string; // Added for tours
+  id?: string; // Added for updates
+}
+
+export interface VehiclePricing {
+  id: number;
+  vehicle_type: string;
+  base_fare: number;
+  per_km_rate: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VehiclePricingUpdateRequest {
+  vehicle_type: string;
+  base_fare: number;
+  per_km_rate: number;
 }
 
 export interface CommissionPayment {
@@ -172,7 +200,7 @@ export interface PayrollEntry {
   status: string;
   created_at: string;
   // Add camelCase aliases for component compatibility
-  driverId: number;
+  driverId: number | string;
   baseSalary: number;
   incentives: number;
   totalAmount: number;
@@ -247,6 +275,7 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
+  bookingId?: number | string; // Added for compatibility
 }
 
 export interface GstReportData {
