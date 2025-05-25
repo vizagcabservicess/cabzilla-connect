@@ -335,6 +335,8 @@ export interface FareBreakdown {
   priceExtraKm?: number;
   priceExtraHour?: number;
   extraKmCharge?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
 }
 
 export interface WalletTransaction {
