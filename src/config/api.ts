@@ -1,4 +1,3 @@
-
 // API configuration
 
 // Base API URL - use www.vizagup.com as the domain
@@ -10,12 +9,21 @@ export const apiBaseUrl = window.location.hostname.includes('localhost')
 export const getApiUrl = (path: string = ''): string => {
   // Ensure path starts with a slash if it doesn't already and isn't empty
   const normalizedPath = path ? (path.startsWith('/') ? path : `/${path}`) : '';
-  
-  // Add .php extension if the path is an API endpoint and doesn't already have an extension
-  if (normalizedPath.includes('/api/') && !normalizedPath.includes('.php') && !normalizedPath.endsWith('/')) {
+
+  // List of known API directories that should not get .php
+  const apiDirectories = ['/api/pooling', '/api/admin', '/api/user'];
+  const isApiDirectory = apiDirectories.some(dir => normalizedPath.startsWith(dir + '/') || normalizedPath === dir);
+
+  // Add .php extension if the path is an API endpoint and doesn't already have an extension, doesn't end with a slash, and is not a known API directory
+  if (
+    normalizedPath.includes('/api/') &&
+    !normalizedPath.includes('.php') &&
+    !normalizedPath.endsWith('/') &&
+    !isApiDirectory
+  ) {
     return `${apiBaseUrl}${normalizedPath}.php`.replace(/([^:]\/)\/+/g, '$1');
   }
-  
+
   // Remove any duplicate slashes that might occur when joining
   const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
   return fullUrl;

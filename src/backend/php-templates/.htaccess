@@ -174,3 +174,7 @@ ErrorDocument 500 "PDF Generation Error. Please check the error logs."
 Header set Access-Control-Allow-Origin "*"
 Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
 Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+
+# Map /api/pooling/search and /api/pooling/search.php to /api/pooling/search.php
+RewriteRule ^api/pooling/search/?$ /api/pooling/search.php [L,QSA]
+RewriteRule ^api/pooling/search.php$ /api/pooling/search.php [L,QSA]

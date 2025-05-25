@@ -1,4 +1,3 @@
-
 import { 
   PoolingRide, 
   PoolingSearchRequest, 
@@ -12,6 +11,10 @@ const API_BASE = getApiUrl('/api/pooling');
 export const realPoolingAPI = {
   // Search for available rides
   searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
+    // Validate required parameters before making the API call
+    if (!searchParams.type || !searchParams.from || !searchParams.to || !searchParams.date || !searchParams.passengers) {
+      throw new Error('Missing required search parameters: type, from, to, date, passengers');
+    }
     try {
       const queryParams = new URLSearchParams({
         type: searchParams.type,
@@ -34,9 +37,32 @@ export const realPoolingAPI = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const rides = await response.json();
-      console.log('✅ Fetched rides from API:', rides.length);
-      return rides;
+      // Read response as text first, then try to parse as JSON
+      const text = await response.text();
+      let rides;
+      try {
+        rides = JSON.parse(text);
+      } catch (jsonErr) {
+        if (text.startsWith('<!DOCTYPE html>')) {
+          throw new Error('Received HTML instead of JSON. The API endpoint may be missing or misconfigured.');
+        }
+        throw new Error('Invalid JSON response from server.');
+      }
+      if (!Array.isArray(rides)) {
+        throw new Error('API did not return a list of rides.');
+      }
+      // Patch: Map vehicle fields into vehicleInfo object for each ride
+      const ridesWithVehicleInfo = rides.map((ride: any) => ({
+        ...ride,
+        vehicleInfo: {
+          make: ride.vehicleMake || '',
+          model: ride.vehicleModel || '',
+          color: ride.vehicleColor || '',
+          plateNumber: ride.plateNumber || ''
+        }
+      }));
+      console.log('✅ Fetched rides from API:', ridesWithVehicleInfo.length);
+      return ridesWithVehicleInfo;
     } catch (error) {
       console.error('❌ Error searching rides:', error);
       throw error;
@@ -57,7 +83,29 @@ export const realPoolingAPI = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const ride = await response.json();
+      // Read as text first to handle empty/invalid JSON
+      const text = await response.text();
+      if (!text) {
+        throw new Error('Empty response from server.');
+      }
+      let ride;
+      try {
+        ride = JSON.parse(text);
+      } catch (jsonErr) {
+        if (text.startsWith('<!DOCTYPE html>')) {
+          throw new Error('Received HTML instead of JSON. The API endpoint may be missing or misconfigured.');
+        }
+        throw new Error('Invalid JSON response from server.');
+      }
+      // Patch: Map vehicle fields into vehicleInfo if not present
+      if (!ride.vehicleInfo) {
+        ride.vehicleInfo = {
+          make: ride.vehicleMake || '',
+          model: ride.vehicleModel || '',
+          color: ride.vehicleColor || '',
+          plateNumber: ride.plateNumber || ''
+        };
+      }
       return ride;
     } catch (error) {
       console.error('❌ Error fetching ride details:', error);

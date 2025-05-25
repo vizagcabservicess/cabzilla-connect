@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { PoolingSearch } from '@/components/pooling/PoolingSearch';
@@ -89,7 +88,9 @@ const PoolingPage = () => {
 
             {error && (
               <div className="text-center py-12">
-                <p className="text-red-600">Error loading rides. Please try again.</p>
+                <p className="text-red-600">
+                  Error loading rides. {error instanceof Error ? error.message : 'Please try again.'}
+                </p>
               </div>
             )}
 

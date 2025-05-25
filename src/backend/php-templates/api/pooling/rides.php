@@ -1,27 +1,4 @@
 <?php
-ob_start();
-set_exception_handler(function($e) {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode(['status' => 'error', 'message' => 'Unhandled exception', 'details' => $e->getMessage()]);
-    exit;
-});
-set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode(['status' => 'error', 'message' => 'Unhandled error', 'details' => "$errstr in $errfile on line $errline"]);
-    exit;
-});
-register_shutdown_function(function() {
-    $error = error_get_last();
-    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        http_response_code(500);
-        header('Content-Type: application/json');
-        echo json_encode(['status' => 'error', 'message' => 'Fatal error', 'details' => $error['message']]);
-        exit;
-    }
-});
-
 require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -190,7 +167,7 @@ function handleCreateRide() {
     } catch (PDOException $e) {
         $pdo->rollBack();
         error_log('Database error in create ride: ' . $e->getMessage());
-        sendError('Failed to create ride', 500);
+        sendError('Failed to create ride: ' . $e->getMessage(), 500);
     }
 }
 
