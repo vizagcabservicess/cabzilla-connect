@@ -335,6 +335,7 @@ export interface FareBreakdown {
   airportFee?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
+  extraKmCharge?: number;
 }
 
 export interface WalletTransaction {
