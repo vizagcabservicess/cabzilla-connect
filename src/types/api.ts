@@ -83,6 +83,7 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
+  license_number: string; // Added for compatibility
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -99,6 +100,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  role?: string; // Added role property
   created_at: string;
   updated_at: string;
 }
@@ -125,10 +127,21 @@ export interface CommissionPayment {
   id: number;
   driver_id: number;
   booking_id: number;
+  vehicle_id: number;
   commission_amount: number;
+  commission_percentage: number;
   payment_status: string;
   payment_date?: string;
   created_at: string;
+  updated_at: string;
+  // Add camelCase aliases for component compatibility
+  bookingId: number;
+  vehicleId: number;
+  amount: number;
+  commissionAmount: number;
+  commissionPercentage: number;
+  status: string;
+  notes?: string;
 }
 
 export interface CommissionSetting {
@@ -138,6 +151,11 @@ export interface CommissionSetting {
   base_commission: number;
   created_at: string;
   updated_at: string;
+  // Add camelCase aliases for component compatibility
+  name: string;
+  description: string;
+  defaultPercentage: number;
+  isActive: boolean;
 }
 
 export interface PayrollEntry {
@@ -153,6 +171,13 @@ export interface PayrollEntry {
   total_amount: number;
   status: string;
   created_at: string;
+  // Add camelCase aliases for component compatibility
+  driverId: number;
+  baseSalary: number;
+  incentives: number;
+  totalAmount: number;
+  payPeriodStart: string;
+  payPeriodEnd: string;
 }
 
 export interface LoginRequest {
@@ -174,6 +199,12 @@ export interface CancellationPolicy {
   hours_before: number;
   refund_percentage: number;
   active: boolean;
+  // Add camelCase aliases for component compatibility
+  timeBeforeDeparture: number;
+  refundPercentage: number;
+  cancellationFee: number;
+  isActive: boolean;
+  updatedAt: string;
 }
 
 export interface PoolingRide {
@@ -200,4 +231,30 @@ export interface PoolingBooking {
   booking_status: string;
   payment_status: string;
   created_at: string;
+  bookingNumber?: string; // Add for compatibility
+}
+
+// GST Report Types
+export interface GstInvoice {
+  id: number | string;
+  invoiceNumber: string;
+  customerName: string;
+  gstNumber?: string;
+  companyName?: string;
+  companyAddress?: string;
+  taxableValue: number;
+  gstRate: string;
+  gstAmount: number;
+  totalAmount: number;
+  invoiceDate: string;
+}
+
+export interface GstReportData {
+  gstInvoices: GstInvoice[];
+  summary: {
+    totalInvoices: number;
+    totalTaxableValue: number;
+    totalGstAmount: number;
+    totalWithGst: number;
+  };
 }

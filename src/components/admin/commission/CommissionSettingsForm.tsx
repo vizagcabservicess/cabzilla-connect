@@ -17,13 +17,17 @@ interface CommissionSettingsFormProps {
 export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsFormProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [setting, setSetting] = useState<CommissionSetting>({
-    id: '',
+    id: 1,
+    vehicle_type: 'default',
+    commission_percentage: 10,
+    base_commission: 0,
+    created_at: '',
+    updated_at: '',
+    // Default camelCase values
     name: 'Default Commission',
     description: 'Default commission percentage for fleet vehicles',
     defaultPercentage: 10,
     isActive: true,
-    createdAt: '',
-    updatedAt: ''
   });
   const { toast } = useToast();
 
@@ -33,15 +37,19 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
       try {
         const settings = await commissionAPI.getCommissionSettings();
         if (settings && settings.length > 0) {
-          const activeSetting = settings.find((s: CommissionSetting) => s.isActive) || settings[0];
+          const activeSetting = settings.find((s: any) => s.isActive || s.is_active) || settings[0];
           setSetting({
             id: activeSetting.id,
+            vehicle_type: activeSetting.vehicle_type || 'default',
+            commission_percentage: activeSetting.commission_percentage || activeSetting.defaultPercentage || 10,
+            base_commission: activeSetting.base_commission || 0,
+            created_at: activeSetting.created_at || activeSetting.createdAt || '',
+            updated_at: activeSetting.updated_at || activeSetting.updatedAt || '',
+            // Map camelCase properties
             name: activeSetting.name || 'Default Commission',
             description: activeSetting.description || '',
-            defaultPercentage: activeSetting.default_percentage || activeSetting.defaultPercentage || 10,
+            defaultPercentage: activeSetting.commission_percentage || activeSetting.defaultPercentage || 10,
             isActive: activeSetting.is_active || activeSetting.isActive || true,
-            createdAt: activeSetting.created_at || activeSetting.createdAt || '',
-            updatedAt: activeSetting.updated_at || activeSetting.updatedAt || ''
           });
         }
       } catch (error) {
@@ -63,9 +71,9 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
     setIsLoading(true);
     
     try {
-      if (setting.id) {
+      if (setting.id && setting.id > 0) {
         // Update existing setting
-        await commissionAPI.updateCommissionSetting(setting.id, {
+        await commissionAPI.updateCommissionSetting(String(setting.id), {
           name: setting.name,
           description: setting.description,
           defaultPercentage: setting.defaultPercentage,
@@ -164,13 +172,16 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
         
         <CardFooter className="flex justify-between">
           <Button variant="outline" type="button" onClick={() => setSetting({
-            id: '',
+            id: 1,
+            vehicle_type: 'default',
+            commission_percentage: 10,
+            base_commission: 0,
+            created_at: '',
+            updated_at: '',
             name: 'Default Commission',
             description: 'Default commission percentage for fleet vehicles',
             defaultPercentage: 10,
             isActive: true,
-            createdAt: '',
-            updatedAt: ''
           })} disabled={isLoading}>
             Reset
           </Button>
@@ -182,4 +193,3 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
     </Card>
   );
 }
-
