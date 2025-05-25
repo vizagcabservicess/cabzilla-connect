@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '@/services/api/authAPI';
 
@@ -6,6 +7,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  imageUrl?: string;
 }
 
 interface AuthContextType {
@@ -33,7 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id: userData.id || 0,
               name: userData.name || '',
               email: userData.email || '',
-              role: userData.role || 'user'
+              role: userData.role || 'user',
+              imageUrl: userData.imageUrl || ''
             });
           }
         }
@@ -55,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: response.user.id || 0,
           name: response.user.name || '',
           email: response.user.email || '',
-          role: response.user.role || 'user'
+          role: response.user.role || 'user',
+          imageUrl: response.user.imageUrl || ''
         });
       }
     } catch (error) {
@@ -91,4 +95,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}
