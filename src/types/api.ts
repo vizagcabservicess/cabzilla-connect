@@ -7,7 +7,7 @@ export interface Location {
   lng: number;
   city: string;
   state: string;
-  type?: 'airport' | 'hotel' | 'railway' | 'tourist' | 'other';
+  type?: 'airport' | 'hotel' | 'railway' | 'tourist' | 'other' | 'train_station' | 'bus_station' | 'landmark';
   popularityScore?: number;
   isInVizag?: boolean;
 }
@@ -43,7 +43,7 @@ export interface Booking {
   passengerPhone: string;
   passengerEmail: string;
   hourlyPackage?: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'assigned' | 'in_progress' | 'payment_received' | 'payment_pending' | 'continued';
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
@@ -51,7 +51,7 @@ export interface Booking {
   updatedAt: string;
 }
 
-export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'assigned' | 'in_progress' | 'payment_received' | 'payment_pending' | 'continued';
 
 export interface DashboardMetrics {
   totalBookings: number;
