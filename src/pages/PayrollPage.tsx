@@ -64,10 +64,7 @@ export default function PayrollPage() {
         incentives: 5000,
         totalAmount: 35500,
         payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
-        incentives: 5000,
-        payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
+        payPeriodEnd: '2024-01-31'
       },
       {
         id: 2,
@@ -87,10 +84,7 @@ export default function PayrollPage() {
         incentives: 6000,
         totalAmount: 38600,
         payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
-        incentives: 6000,
-        payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
+        payPeriodEnd: '2024-01-31'
       },
       {
         id: 3,
@@ -110,10 +104,7 @@ export default function PayrollPage() {
         incentives: 4000,
         totalAmount: 32400,
         payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
-        incentives: 4000,
-        payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
+        payPeriodEnd: '2024-01-31'
       },
       {
         id: 4,
@@ -133,10 +124,7 @@ export default function PayrollPage() {
         incentives: 5500,
         totalAmount: 37050,
         payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
-        incentives: 5500,
-        payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
+        payPeriodEnd: '2024-01-31'
       },
       {
         id: 5,
@@ -156,10 +144,7 @@ export default function PayrollPage() {
         incentives: 4500,
         totalAmount: 33950,
         payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
-        incentives: 4500,
-        payPeriodStart: '2024-01-01',
-        payPeriodEnd: '2024-01-31',
+        payPeriodEnd: '2024-01-31'
       },
     ];
 
