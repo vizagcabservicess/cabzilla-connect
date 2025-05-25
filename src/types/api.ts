@@ -56,12 +56,13 @@ export interface Booking {
   }>;
   isPaid?: boolean;
   paymentMethod?: string;
-  payment_method?: string; // Legacy field - will be deprecated
+  payment_method?: string;
+  paymentStatus?: string;
+  payment_status?: string;
   discountAmount?: number;
   discountType?: string;
   discountValue?: number;
   billingAddress?: string;
-  payment_status?: string; // Legacy field - will be deprecated
   createdAt?: string;
   updatedAt?: string;
 }
@@ -141,11 +142,16 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: number;
+  id: number | string;
   name: string;
-  type: string;
-  latitude: number;
-  longitude: number;
+  type?: string;
+  address: string;
+  lat: number;
+  lng: number;
+  city?: string;
+  state?: string;
+  isInVizag?: boolean;
+  popularityScore?: number;
 }
 
 export interface User {
@@ -154,6 +160,7 @@ export interface User {
   email: string;
   phone?: string;
   role: string;
+  imageUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -199,12 +206,15 @@ export interface DashboardMetrics {
   completedBookings: number;
   pendingBookings: number;
   cancelledBookings: number;
+  activeRides?: number;
+  totalRevenue?: number;
   revenue: {
     total: number;
     today: number;
     thisWeek: number;
     thisMonth: number;
   };
+  availableStatuses?: BookingStatus[];
   topLocations: {
     name: string;
     count: number;

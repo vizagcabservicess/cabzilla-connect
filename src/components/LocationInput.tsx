@@ -4,20 +4,7 @@ import { Label } from "@/components/ui/label";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { X, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
-
-// Define proper Location type to fix type errors
-export interface Location {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  type?: string;
-  isInVizag?: boolean;
-  city?: string;
-  state?: string;
-  popularityScore?: number;
-}
+import { Location } from '@/types/api';
 
 interface LocationInputProps {
   id?: string;

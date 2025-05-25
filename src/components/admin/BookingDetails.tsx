@@ -33,6 +33,8 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
@@ -49,6 +51,28 @@ export function BookingDetails({
       vehicleId: vehicleData.vehicleId,
       status: 'confirmed' as BookingStatus 
     });
+  };
+
+  const handleAssignDriver = async () => {
+    if (!selectedDriver) return;
+    
+    try {
+      setIsUpdating(true);
+      
+      const updateData: Partial<Booking> = {
+        driverName: selectedDriver.name,
+        driverPhone: selectedDriver.phone,
+        vehicleNumber: selectedDriver.vehicle || 'Not specified',
+        status: 'assigned' as BookingStatus
+      };
+      
+      await onEdit(updateData);
+      setActiveTab('details');
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const isCompleted = booking.status === 'completed';
