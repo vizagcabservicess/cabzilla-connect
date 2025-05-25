@@ -131,6 +131,7 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
+  bookingId?: string; // Add missing property
 }
 
 export interface GstReportData {
@@ -193,6 +194,9 @@ export interface VehiclePricingUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 export interface FareUpdateRequest {
@@ -202,6 +206,8 @@ export interface FareUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
 }
 
 export interface DashboardMetrics {
@@ -248,4 +254,84 @@ export interface TourFare {
   innova?: number;
   tempo?: number;
   luxury?: number;
+}
+
+// Commission Types
+export interface CommissionPayment {
+  id: string;
+  bookingId?: string;
+  bookingNumber?: string;
+  vehicleId?: string;
+  driverId?: string;
+  amount?: number;
+  commissionAmount?: number;
+  commissionPercentage?: number;
+  status?: 'pending' | 'paid' | 'cancelled';
+  paymentDate?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CommissionSetting {
+  id: string;
+  name: string;
+  description?: string;
+  defaultPercentage: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Payment Types
+export interface PaymentFilterParams {
+  status?: string;
+  method?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface Payment {
+  id: string | number;
+  amount: number;
+  status: string;
+  method: string;
+  bookingId?: string;
+  createdAt?: string;
+}
+
+export interface PaymentReminderDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  payment: Payment;
+  onSend?: (paymentId: string | number, reminderType: string, customMessage?: string) => Promise<void>;
+}
+
+// Fare Types
+export interface FareBreakdown {
+  basePrice: number;
+  distancePrice: number;
+  totalPrice: number;
+  pricePerKm?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  nightHaltCharges?: number;
+  driverAllowance?: number;
+}
+
+// Pooling Types
+export interface CancellationPolicy {
+  id: string;
+  name: string;
+  description?: string;
+  rules: any[];
+}
+
+// Auth Types
+export interface AuthAPI {
+  login: (credentials: LoginRequest) => Promise<any>;
+  signup: (userData: SignupRequest) => Promise<any>;
+  logout: () => Promise<void>;
+  getCurrentUser: () => Promise<User | null>;
+  getToken: () => string | null;
 }
