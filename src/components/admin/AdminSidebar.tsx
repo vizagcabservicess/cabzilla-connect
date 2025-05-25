@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { 
@@ -23,6 +23,7 @@ import {
   BadgePercent,
   Info
 } from 'lucide-react';
+import { useAuth } from '@/providers/AuthProvider';
 
 interface AdminSidebarProps {
   activeTab: string;
@@ -32,7 +33,9 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
+  const { logout } = useAuth();
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
@@ -51,13 +54,16 @@ export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarP
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },
-    { id: 'about', label: 'About', icon: <Info size={20} />, path: '/about' },
   ];
 
   const handleMenuClick = (item: { id: string; path: string }) => {
     setActiveTab(item.id);
-    navigate(item.path);
     if (isMobile && onClose) onClose();
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   const sidebarWidth = isMobile ? 'w-full h-screen overflow-auto' : 'w-64';
@@ -77,21 +83,24 @@ export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarP
       {/* Main Menu */}
       <div className="flex-1 py-6 px-4 overflow-y-auto">
         <nav className="space-y-1">
-          {menuItems.map((item) => (
-            <Button
-              key={item.id}
-              variant="ghost"
-              className={`w-full justify-start text-left px-3 py-2 ${
-                activeTab === item.id 
-                  ? 'bg-gray-800 text-white' 
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`}
-              onClick={() => handleMenuClick(item)}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.label}
-            </Button>
-          ))}
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.path || activeTab === item.id;
+            return (
+              <Link
+                key={item.id}
+                to={item.path}
+                onClick={() => handleMenuClick(item)}
+                className={`w-full flex items-center justify-start text-left px-3 py-2 rounded-md transition-colors ${
+                  isActive 
+                    ? 'bg-gray-800 text-white' 
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                <span className="mr-3">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
       
@@ -109,6 +118,7 @@ export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarP
         <Button 
           variant="outline" 
           className="w-full justify-start text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-white"
+          onClick={handleLogout}
         >
           <LogOut size={18} className="mr-2" />
           Logout

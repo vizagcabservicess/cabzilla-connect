@@ -6,19 +6,18 @@ import { Toaster } from "@/components/ui/sonner";
 import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
 import { Toaster as ToastToaster } from "@/components/ui/toaster";
 import { AuthProvider } from './providers/AuthProvider';
-import CreateRidePage from './components/pooling/CreateRidePage';
 
 // Pages
 import Index from './pages/Index';
 import CabsPage from './pages/CabsPage';
 import ToursPage from './pages/ToursPage';
 import ContactPage from './pages/ContactPage';
-import AdminDashboard from './pages/AdminDashboardPage';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
-import PoolingPage from './pages/PoolingPage';
-import PoolingBookingPage from './pages/PoolingBookingPage';
-import PoolingDashboard from './pages/admin/PoolingDashboard';
-import PoolingAdminDashboard from './pages/admin/PoolingAdminDashboard';
+import AdminBookingsPage from './pages/AdminBookingsPage';
 
 const queryClient = new QueryClient();
 
@@ -31,17 +30,17 @@ function App() {
             <div className="min-h-screen bg-gray-50">
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/cabs" element={<CabsPage />} />
                 <Route path="/cabs/:tripType" element={<CabsPage />} />
                 <Route path="/tours" element={<ToursPage />} />
                 <Route path="/contact" element={<ContactPage />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/pooling" element={<PoolingDashboard />} />
-                <Route path="/admin/pooling-enhanced" element={<PoolingAdminDashboard />} />
+                <Route path="/admin" element={<AdminDashboardPage />} />
+                <Route path="/admin/bookings" element={<AdminBookingsPage />} />
+                <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                 <Route path="/booking/:bookingId" element={<BookingConfirmationPage />} />
-                <Route path="/pooling" element={<PoolingPage />} />
-                <Route path="/pooling/book/:rideId" element={<PoolingBookingPage />} />
-                <Route path="/pooling/create" element={<CreateRidePage />} />
               </Routes>
               <Toaster />
               <ToastToaster />
