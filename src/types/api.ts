@@ -152,7 +152,7 @@ export interface Location {
   address: string;
   lat: number;
   lng: number;
-  city?: string;
+  city: string;
   state?: string;
   isInVizag?: boolean;
   popularityScore?: number;
@@ -201,6 +201,10 @@ export interface VehiclePricingUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 export interface FareUpdateRequest {
@@ -210,6 +214,11 @@ export interface FareUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 export interface DashboardMetrics {
@@ -393,4 +402,3 @@ export interface PayrollEntry {
   createdAt: string;
   updatedAt: string;
 }
-
