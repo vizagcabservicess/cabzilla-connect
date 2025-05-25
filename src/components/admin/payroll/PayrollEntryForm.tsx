@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,9 +11,14 @@ interface PayrollEntryFormProps {
   entry?: PayrollEntry;
   onSave: (entry: Partial<PayrollEntry>) => void;
   onCancel: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onPayrollAdded?: () => void;
+  payrollToEdit?: PayrollEntry;
+  selectedDriverId?: string | number;
 }
 
-export function PayrollEntryForm({ entry, onSave, onCancel }: PayrollEntryFormProps) {
+export function PayrollEntryForm({ entry, onSave, onCancel, open, onOpenChange, onPayrollAdded, payrollToEdit, selectedDriverId }: PayrollEntryFormProps) {
   const [formData, setFormData] = useState({
     driverId: entry?.driverId || entry?.driver_id || '',
     baseSalary: entry?.baseSalary || entry?.base_salary || 0,

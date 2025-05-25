@@ -1,18 +1,31 @@
+
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import PoolingRidesManager from '@/components/pooling/admin/PoolingRidesManager';
-import PoolingBookingsManager from '@/components/pooling/admin/PoolingBookingsManager';
+import { PoolingBookingsManager } from '@/components/pooling/admin/PoolingBookingsManager';
 import PoolingAnalytics from '@/components/pooling/admin/PoolingAnalytics';
 import PoolingSettings from '@/components/pooling/admin/PoolingSettings';
 import DisputeManager from '@/components/pooling/admin/DisputeManager';
 import ProviderManager from '@/components/pooling/admin/ProviderManager';
-import CancellationPolicyManager from '@/components/pooling/admin/CancellationPolicyManager';
+import { CancellationPolicyManager } from '@/components/pooling/admin/CancellationPolicyManager';
 import { Car, Users, TrendingUp, Settings, AlertTriangle, UserCheck, XCircle } from 'lucide-react';
+import { Booking } from '@/types/api';
 
 const PoolingAdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Mock bookings data for the PoolingBookingsManager
+  const mockBookings: Booking[] = [];
+
+  const handleUpdateBooking = async (id: number, updates: Partial<Booking>) => {
+    console.log('Updating booking:', id, updates);
+  };
+
+  const handleCreatePooling = async (bookingIds: number[]) => {
+    console.log('Creating pooling for bookings:', bookingIds);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -69,7 +82,11 @@ const PoolingAdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="bookings" className="space-y-6">
-            <PoolingBookingsManager />
+            <PoolingBookingsManager 
+              bookings={mockBookings}
+              onUpdateBooking={handleUpdateBooking}
+              onCreatePooling={handleCreatePooling}
+            />
           </TabsContent>
 
           <TabsContent value="providers" className="space-y-6">

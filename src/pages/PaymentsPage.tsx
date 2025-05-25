@@ -1,11 +1,38 @@
+import React from 'react';
+import AdminLayout from '@/components/layouts/AdminLayout';
+import PaymentManagement from '@/components/admin/payments/PaymentManagement';
 
-import { PaymentsList } from "@/components/admin/payment/PaymentsList";
+const PaymentsPage = () => {
+  // ... keep existing code (state and other functions)
 
-export default function PaymentsPage() {
+  const handleUpdatePayment = async (
+    paymentId: string | number, 
+    status: string, 
+    amount?: number, 
+    paymentMethod?: string, 
+    notes?: string
+  ): Promise<void> => {
+    console.log('Updating payment:', { paymentId, status, amount, paymentMethod, notes });
+    // Mock update logic
+  };
+
+  const handleSendReminder = async (
+    paymentId: string | number, 
+    reminderType: string, 
+    customMessage?: string
+  ): Promise<void> => {
+    console.log('Sending reminder:', { paymentId, reminderType, customMessage });
+    // Mock reminder logic
+  };
+
   return (
-    <div className="container mx-auto py-6 px-4 md:px-6">
-      <h1 className="text-2xl md:text-3xl font-bold mb-4">Payments</h1>
-      <PaymentsList payments={[]} onUpdatePaymentStatus={() => {}} onSendReminder={() => {}} isLoading={false} />
-    </div>
+    <AdminLayout>
+      <PaymentManagement
+        onUpdatePayment={handleUpdatePayment}
+        onSendReminder={handleSendReminder}
+      />
+    </AdminLayout>
   );
-} 
+};
+
+export default PaymentsPage;

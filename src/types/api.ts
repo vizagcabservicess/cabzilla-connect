@@ -1,4 +1,3 @@
-
 export interface Location {
   id: string;
   name: string;
@@ -11,6 +10,7 @@ export interface Location {
   popularityScore?: number;
   isInVizag?: boolean;
   place_id?: string; // Added for compatibility
+  description?: string; // Added for BookingEditPage compatibility
 }
 
 export interface BookingRequest {
@@ -59,6 +59,7 @@ export interface Booking {
   payment_status?: string;
   payment_method?: string;
   razorpay_payment_id?: string; // Added for payment compatibility
+  razorpay_order_id?: string; // Added for payment compatibility
   createdAt: string;
   updatedAt: string;
   // Additional properties for compatibility
@@ -227,6 +228,8 @@ export interface CancellationPolicy {
   hours_before: number;
   refund_percentage: number;
   active: boolean;
+  created_at?: string; // Added for compatibility
+  updated_at?: string; // Added for compatibility
   // Add camelCase aliases for component compatibility
   timeBeforeDeparture: number;
   refundPercentage: number;
@@ -261,6 +264,8 @@ export interface PoolingBooking {
   created_at: string;
   bookingNumber?: string; // Add for compatibility
 }
+
+export type PoolingType = 'car' | 'bus' | 'shared-taxi';
 
 // GST Report Types
 export interface GstInvoice {

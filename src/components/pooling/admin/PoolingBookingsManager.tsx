@@ -33,11 +33,12 @@ export function PoolingBookingsManager({
     return matchesStatus && matchesSearch;
   });
 
-  const handleBookingSelect = (bookingId: number) => {
+  const handleBookingSelect = (bookingId: string) => {
+    const numericId = Number(bookingId);
     setSelectedBookings(prev => 
-      prev.includes(bookingId) 
-        ? prev.filter(id => id !== bookingId)
-        : [...prev, bookingId]
+      prev.includes(numericId) 
+        ? prev.filter(id => id !== numericId)
+        : [...prev, numericId]
     );
   };
 
@@ -114,7 +115,7 @@ export function PoolingBookingsManager({
           <Card 
             key={booking.id} 
             className={`cursor-pointer transition-all ${
-              selectedBookings.includes(booking.id) 
+              selectedBookings.includes(Number(booking.id)) 
                 ? 'ring-2 ring-blue-500 bg-blue-50' 
                 : 'hover:shadow-md'
             }`}
