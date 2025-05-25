@@ -467,7 +467,41 @@ export function Hero() {
           </h1>
         </div>
 
-        {!showGuestDetailsForm ? (
+        {showGuestDetailsForm ? (
+          <div className="grid md:grid-cols-2 gap-6 animate-fade-in">
+            <div>
+              <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Complete Your Booking</h3>
+                </div>
+                
+                <GuestDetailsForm 
+                  onSubmit={handleGuestDetailsSubmit}
+                  totalPrice={finalTotal}
+                  onBack={handleBackToSelection}
+                  isLoading={isLoading}
+                  paymentEnabled={true}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <BookingSummary
+                pickupLocation={pickupLocation!}
+                dropLocation={dropLocation}
+                pickupDate={pickupDate}
+                returnDate={returnDate}
+                selectedCab={selectedCab!}
+                distance={distance}
+                totalPrice={totalPrice}
+                tripType={tripType}
+                tripMode={tripMode}
+                hourlyPackage={hourlyPackage}
+                onFinalTotalChange={setFinalTotal}
+              />
+            </div>
+          </div>
+        ) : (
           <>
             {currentStep === 1 && (
               <div className="bg-white rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
@@ -671,40 +705,6 @@ export function Hero() {
               </div>
             )}
           </>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-6 animate-fade-in">
-            <div>
-              <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-semibold">Complete Your Booking</h3>
-                </div>
-                
-                <GuestDetailsForm 
-                  onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={finalTotal}
-                  onBack={handleBackToSelection}
-                  isLoading={isLoading}
-                  paymentEnabled={true}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <BookingSummary
-                pickupLocation={pickupLocation!}
-                dropLocation={dropLocation}
-                pickupDate={pickupDate}
-                returnDate={returnDate}
-                selectedCab={selectedCab!}
-                distance={distance}
-                totalPrice={totalPrice}
-                tripType={tripType}
-                tripMode={tripMode}
-                hourlyPackage={hourlyPackage}
-                onFinalTotalChange={setFinalTotal}
-              />
-            </div>
-          </div>
         )}
       </div>
       

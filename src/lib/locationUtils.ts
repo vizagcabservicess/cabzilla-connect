@@ -39,3 +39,43 @@ export function getLocationFromString(locationString: string): Location {
     type: 'other'
   };
 }
+
+export function convertToApiLocation(location: Location): any {
+  return {
+    place_id: location.id,
+    description: location.name,
+    structured_formatting: {
+      main_text: location.name,
+      secondary_text: location.address
+    }
+  };
+}
+
+export function createLocationChangeHandler(setLocation: (location: Location) => void) {
+  return (location: Location) => {
+    setLocation(location);
+  };
+}
+
+export function isLocationInVizag(location: Location): boolean {
+  if (location.isInVizag !== undefined) {
+    return location.isInVizag;
+  }
+  
+  // Check if location is within Visakhapatnam bounds
+  const vizagBounds = {
+    north: 17.8,
+    south: 17.6,
+    east: 83.4,
+    west: 83.1
+  };
+  
+  return location.lat >= vizagBounds.south && 
+         location.lat <= vizagBounds.north &&
+         location.lng >= vizagBounds.west && 
+         location.lng <= vizagBounds.east;
+}
+
+export function safeIncludes(str: string, searchStr: string): boolean {
+  return str?.toLowerCase().includes(searchStr?.toLowerCase()) || false;
+}

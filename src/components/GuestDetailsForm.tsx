@@ -11,6 +11,14 @@ export interface GuestDetailsFormProps {
   bookingId?: string;
   isEditing?: boolean;
   isSubmitting?: boolean;
+  onBack?: () => void;
+  isLoading?: boolean;
+  paymentEnabled?: boolean;
+  initialData?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 export function GuestDetailsForm({ 
@@ -18,12 +26,16 @@ export function GuestDetailsForm({
   totalPrice, 
   bookingId, 
   isEditing = false, 
-  isSubmitting = false 
+  isSubmitting = false,
+  onBack,
+  isLoading = false,
+  paymentEnabled = false,
+  initialData
 }: GuestDetailsFormProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: ''
+    name: initialData?.name || '',
+    email: initialData?.email || '',
+    phone: initialData?.phone || ''
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,7 +47,10 @@ export function GuestDetailsForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData);
+    await onSubmit({
+      ...formData,
+      totalPrice
+    });
   };
 
   return (
@@ -85,13 +100,27 @@ export function GuestDetailsForm({
               <span className="text-xl font-bold">₹{totalPrice.toLocaleString()}</span>
             </div>
             
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Processing...' : isEditing ? 'Update Booking' : 'Confirm Booking'}
-            </Button>
+            <div className="flex gap-2">
+              {onBack && (
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={onBack}
+                  disabled={isSubmitting || isLoading}
+                  className="flex-1"
+                >
+                  Back
+                </Button>
+              )}
+              
+              <Button 
+                type="submit" 
+                className="flex-1"
+                disabled={isSubmitting || isLoading}
+              >
+                {isSubmitting || isLoading ? 'Processing...' : isEditing ? 'Update Booking' : 'Confirm Booking'}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>

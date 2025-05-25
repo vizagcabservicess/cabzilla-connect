@@ -556,6 +556,7 @@ const CabsPage = () => {
                   pickupDate={pickupDate}
                   returnDate={returnDate}
                   hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
+                  isCalculatingFares={false}
                 />
 
                 {showMap && pickup && dropoff && (
@@ -563,7 +564,8 @@ const CabsPage = () => {
                     <h3 className="text-lg font-semibold mb-2">Route Map</h3>
                     <GoogleMapComponent 
                       pickupLocation={pickup} 
-                      dropLocation={dropoff} 
+                      dropLocation={dropoff}
+                      tripType={tripType}
                       onDistanceCalculated={handleMapDistanceCalculated}
                     />
                   </div>
