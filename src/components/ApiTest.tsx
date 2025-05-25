@@ -1,207 +1,96 @@
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/toast";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MessageCircle, Terminal, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatPhoneNumber } from '@/services/whatsappService';
-import { WhatsAppButton } from '@/components/ui/whatsapp-button';
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
-export default function ApiTest() {
-  const [phone, setPhone] = useState("");
-  const [message, setMessage] = useState("Hello, this is a test message from the WhatsApp integration!");
-  const [responseData, setResponseData] = useState<any>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+const ApiTest = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Allow only digits, plus sign, and spaces
-    const value = e.target.value.replace(/[^\d\s+]/g, '');
-    setPhone(value);
-  };
-
-  const testWhatsAppAPI = async () => {
+  const testApiEndpoint = async (endpoint: string, method: string = 'GET', data?: any) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      setErrorMessage(null);
-      
-      // Format the phone number
-      const formattedPhone = formatPhoneNumber(phone);
-      
-      // Call the backend API
-      const response = await fetch('/api/admin/send-whatsapp.php', {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          phone: formattedPhone,
-          messageType: 'custom',
-          data: {
-            message
-          }
-        }),
+        body: data ? JSON.stringify(data) : undefined,
       });
+
+      const result = await response.json();
+      setResults({ endpoint, method, status: response.status, data: result });
       
-      const data = await response.json();
-      setResponseData(data);
-      
-      if (response.ok) {
-        toast({
-          title: "API Test Successful",
-          description: "WhatsApp API test was successful.",
-        });
-      } else {
-        setErrorMessage(data.message || "Unknown error occurred");
-        toast({
-          variant: "destructive",
-          title: "API Test Failed",
-          description: data.message || "Failed to test WhatsApp API",
-        });
-      }
-    } catch (error) {
-      console.error("WhatsApp API test error:", error);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to connect to WhatsApp API");
       toast({
-        variant: "destructive",
+        title: "API Test Complete",
+        description: `${method} ${endpoint} - Status: ${response.status}`,
+      });
+    } catch (error) {
+      setResults({ endpoint, method, error: error instanceof Error ? error.message : 'Unknown error' });
+      toast({
         title: "API Test Failed",
-        description: "Failed to test WhatsApp API. Check console for details.",
+        description: `Failed to test ${endpoint}`,
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const openWhatsAppDirectly = () => {
-    const formattedPhone = formatPhoneNumber(phone);
-    const encodedMessage = encodeURIComponent(message);
-    const url = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-    window.open(url, '_blank');
-  };
-
   return (
-    <Card className="w-full">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <MessageCircle className="mr-2" />
-          WhatsApp API Test
-        </CardTitle>
-        <CardDescription>
-          Test the WhatsApp integration by sending messages via the API or directly
-        </CardDescription>
+        <CardTitle>API Testing Tool</CardTitle>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="direct">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="direct" className="flex-1">
-              Direct Integration
-            </TabsTrigger>
-            <TabsTrigger value="api" className="flex-1">
-              API Test
-            </TabsTrigger>
-          </TabsList>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Button 
+            onClick={() => testApiEndpoint('/api/pooling/search.php?type=carpool&from=Hyderabad&to=Visakhapatnam&date=2024-12-30&passengers=2')}
+            disabled={isLoading}
+          >
+            Test Search API
+          </Button>
           
-          <TabsContent value="direct" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Phone Number</label>
-                <Input
-                  placeholder="Enter phone number (with country code)"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Include country code or add +91 for India
-                </p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium">Message</label>
-                <Input
-                  placeholder="Enter your message"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-              </div>
-              
-              <div className="pt-2">
-                <WhatsAppButton 
-                  phone={phone} 
-                  message={message}
-                  disabled={!phone || !message} 
-                  variant="whatsapp" 
-                  fullWidth
-                >
-                  Open in WhatsApp
-                </WhatsAppButton>
-              </div>
-            </div>
-          </TabsContent>
+          <Button 
+            onClick={() => testApiEndpoint('/api/pooling/rides.php')}
+            disabled={isLoading}
+          >
+            Test Rides API
+          </Button>
           
-          <TabsContent value="api" className="space-y-4">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Phone Number</label>
-                <Input
-                  placeholder="Enter phone number (with country code)"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Include country code or add +91 for India
-                </p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium">Message</label>
-                <Input
-                  placeholder="Enter your message"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-              </div>
-              
-              <div className="pt-2">
-                <Button 
-                  onClick={testWhatsAppAPI} 
-                  disabled={isLoading || !phone || !message}
-                  className="w-full"
-                >
-                  {isLoading ? "Testing..." : "Test WhatsApp API"}
-                </Button>
-              </div>
-              
-              {errorMessage && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{errorMessage}</AlertDescription>
-                </Alert>
-              )}
-              
-              {responseData && (
-                <div className="mt-4 border rounded-md p-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium">API Response</h3>
-                    <Badge variant={responseData.status === "success" ? "default" : "destructive"}>
-                      {responseData.status}
-                    </Badge>
-                  </div>
-                  <div className="bg-black text-white p-3 rounded-md overflow-auto max-h-40">
-                    <pre className="text-xs">
-                      {JSON.stringify(responseData, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+          <Button 
+            onClick={() => testApiEndpoint('/api/pooling/bookings.php')}
+            disabled={isLoading}
+          >
+            Test Bookings API
+          </Button>
+          
+          <Button 
+            onClick={() => testApiEndpoint('/api/pooling/payments.php?action=create-order', 'POST', { booking_id: 1 })}
+            disabled={isLoading}
+          >
+            Test Payments API
+          </Button>
+        </div>
+
+        <Separator />
+
+        {results && (
+          <div className="space-y-2">
+            <h3 className="font-semibold">Test Results:</h3>
+            <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-96">
+              {JSON.stringify(results, null, 2)}
+            </pre>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
-}
+};
+
+export { ApiTest };

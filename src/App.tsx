@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,6 +18,7 @@ import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import PoolingPage from './pages/PoolingPage';
 import PoolingBookingPage from './pages/PoolingBookingPage';
 import PoolingDashboard from './pages/admin/PoolingDashboard';
+import PoolingAdminDashboard from './pages/admin/PoolingAdminDashboard';
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,7 @@ function App() {
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/pooling" element={<PoolingDashboard />} />
+                <Route path="/admin/pooling-enhanced" element={<PoolingAdminDashboard />} />
                 <Route path="/booking/:bookingId" element={<BookingConfirmationPage />} />
                 <Route path="/pooling" element={<PoolingPage />} />
                 <Route path="/pooling/book/:rideId" element={<PoolingBookingPage />} />
