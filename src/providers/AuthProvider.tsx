@@ -1,17 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '@/services/api/authAPI';
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-}
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authAPI, User } from '@/services/api/authAPI';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isDriver: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -29,16 +24,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (authAPI.isAuthenticated()) {
           const userData = await authAPI.getCurrentUser();
           if (userData) {
-            setUser({
-              id: userData.id || 0,
-              name: userData.name || '',
-              email: userData.email || '',
-              role: userData.role || 'user'
-            });
+            setUser(userData);
           }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
+        // Clear invalid token
+        authAPI.logout();
       } finally {
         setLoading(false);
       }
@@ -51,12 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authAPI.login({ email, password });
       if (response.user) {
-        setUser({
-          id: response.user.id || 0,
-          name: response.user.name || '',
-          email: response.user.email || '',
-          role: response.user.role || 'user'
-        });
+        setUser(response.user);
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -64,15 +51,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    authAPI.logout();
-    setUser(null);
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force logout even if API call fails
+      setUser(null);
+    }
   };
 
   const value = {
     user,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
+    isDriver: user?.role === 'driver',
     login,
     logout,
     loading
@@ -91,4 +85,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}
