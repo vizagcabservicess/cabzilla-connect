@@ -12,8 +12,9 @@ export default function AdminDashboardPage() {
     cancelledBookings: 5,
     revenue: {
       total: 450000,
-      thisMonth: 45000,
-      lastMonth: 38000
+      today: 38000,
+      thisWeek: 45000,
+      thisMonth: 45000
     }
   };
 

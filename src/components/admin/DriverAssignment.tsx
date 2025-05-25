@@ -18,6 +18,7 @@ export interface DriverAssignmentProps {
     vehicleNumber: string; 
   }) => Promise<void>;
   onClose: () => void;
+  onCancel?: () => void;
   isSubmitting: boolean;
 }
 
@@ -25,6 +26,7 @@ export function DriverAssignment({
   booking, 
   onAssign, 
   onClose, 
+  onCancel,
   isSubmitting 
 }: DriverAssignmentProps) {
   const [driverName, setDriverName] = useState('');
@@ -43,6 +45,14 @@ export function DriverAssignment({
       driverPhone,
       vehicleNumber
     });
+  };
+
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      onClose();
+    }
   };
 
   return (
@@ -83,7 +93,7 @@ export function DriverAssignment({
           </div>
           
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>

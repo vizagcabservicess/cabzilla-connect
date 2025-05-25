@@ -40,7 +40,7 @@ export async function calculateDistanceMatrix(
   console.log(`🔍 Calculating distance between: ${safeOrigin.name} → ${safeDestination.name}`);
   
   // Make sure Google Maps API is loaded
-  if (typeof window.google === 'undefined' || !window.google.maps) {
+  if (typeof window === 'undefined' || !window.google?.maps) {
     console.error("❌ Google Maps API not loaded yet");
     return fallbackDistanceCalculation(safeOrigin, safeDestination);
   }
