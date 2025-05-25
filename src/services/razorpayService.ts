@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import { BookingRequest } from "@/types/api";
 
@@ -38,6 +39,21 @@ export interface RazorpayOrderResponse {
   receipt: string;
   status: string;
 }
+
+// Initialize Razorpay
+export const initRazorpay = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => {
+      resolve(true);
+    };
+    script.onerror = () => {
+      resolve(false);
+    };
+    document.body.appendChild(script);
+  });
+};
 
 // Create a Razorpay order
 export const createRazorpayOrder = async (amount: number): Promise<RazorpayOrderResponse | null> => {
@@ -120,3 +136,4 @@ export const verifyRazorpayPayment = async (
     return false;
   }
 };
+

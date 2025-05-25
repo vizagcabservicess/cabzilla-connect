@@ -49,6 +49,7 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
+  vehicleId?: string | number;
   adminNotes?: string;
   extraCharges?: Array<{
     description: string;
@@ -84,6 +85,7 @@ export interface BookingDetails {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
+  vehicleId?: string | number;
   gstEnabled?: boolean;
   gstDetails?: {
     gstNumber: string;
@@ -105,6 +107,7 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
+  license_number?: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -119,6 +122,7 @@ export interface Driver {
 // GST Report Types
 export interface GstInvoice {
   id: number | string;
+  bookingId?: number | string;
   invoiceNumber: string;
   customerName: string;
   gstNumber?: string;
@@ -142,7 +146,7 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: number | string;
+  id: string;
   name: string;
   type?: string;
   address: string;
@@ -184,10 +188,16 @@ export interface VehiclePricing {
   localRate: number;
   outstationRate: number;
   airportTransferRate: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  perKmRate?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
+  vehicleType?: string;
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
@@ -196,6 +206,7 @@ export interface VehiclePricingUpdateRequest {
 export interface FareUpdateRequest {
   id?: number;
   vehicleType: string;
+  tourId?: string;
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
@@ -233,6 +244,153 @@ export interface DashboardMetrics {
 export interface TourFare {
   id: number;
   tourId: string;
+  tourName?: string;
   vehicleType: string;
   rate: number;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
+
+// Enhanced pooling types
+export interface CancellationPolicy {
+  id: string;
+  name: string;
+  description: string;
+  timeBeforeDeparture: number;
+  refundPercentage: number;
+  cancellationFee: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionSetting {
+  id: string;
+  name: string;
+  description?: string;
+  defaultPercentage: number;
+  default_percentage?: number;
+  isActive: boolean;
+  is_active?: boolean;
+  createdAt: string;
+  created_at?: string;
+  updatedAt: string;
+  updated_at?: string;
+}
+
+export interface CommissionPayment {
+  id: string;
+  bookingId: string;
+  bookingNumber?: string;
+  vehicleId: string;
+  driverId?: string;
+  amount: number;
+  commissionAmount: number;
+  commissionPercentage: number;
+  status: 'pending' | 'paid' | 'cancelled';
+  paymentDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentFilterParams {
+  status?: string;
+  method?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface Payment {
+  id: string | number;
+  bookingId: string;
+  amount: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  transactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FareBreakdown {
+  basePrice: number;
+  driverAllowance?: number;
+  nightCharges?: number;
+  extraDistanceFare?: number;
+  extraHourCharge?: number;
+  airportFee?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+}
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  description: string;
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: string;
+}
+
+export interface DisputeCase {
+  id: string;
+  bookingId: string;
+  reportedBy: string;
+  category: string;
+  description: string;
+  status: 'open' | 'investigating' | 'resolved' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KYCDocument {
+  id: string;
+  driverId: string;
+  documentType: 'license' | 'rc' | 'insurance' | 'aadhar' | 'pan';
+  documentNumber: string;
+  documentUrl: string;
+  verificationStatus: 'pending' | 'approved' | 'rejected';
+  verifiedAt?: string;
+  createdAt: string;
+}
+
+export interface RatingReview {
+  id: string;
+  bookingId: string;
+  fromUserId: string;
+  toUserId: string;
+  rating: number;
+  review?: string;
+  createdAt: string;
+}
+
+export interface NotificationTemplate {
+  id: string;
+  name: string;
+  type: 'email' | 'sms' | 'whatsapp' | 'push';
+  subject?: string;
+  content: string;
+  variables: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayrollEntry {
+  id: string;
+  driverId: string | number;
+  baseSalary: number;
+  incentives: number;
+  deductions: number;
+  totalAmount: number;
+  payPeriodStart: string;
+  payPeriodEnd: string;
+  status: 'pending' | 'processed' | 'paid';
+  createdAt: string;
+  updatedAt: string;
+}
+

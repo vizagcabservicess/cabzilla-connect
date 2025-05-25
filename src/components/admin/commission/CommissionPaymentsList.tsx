@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { CalendarIcon, ArrowLeftIcon, ArrowRightIcon, CheckCircle, Clock, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { commissionAPI } from '@/services/api/commissionAPI';
-import { CommissionPayment } from '@/types/cab';
+import { CommissionPayment } from '@/types/api';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
@@ -69,7 +69,6 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
   const toCamelCasePayment = (payment: any): CommissionPayment => ({
     id: payment.id,
     bookingId: payment.booking_id,
-    bookingNumber: payment.booking_number,
     vehicleId: payment.vehicle_id,
     driverId: payment.driver_id,
     amount: Number(payment.total_amount),
@@ -150,7 +149,7 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Badge variant="success" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
+        return <Badge variant="outline" className="bg-green-500 text-white border-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
       case 'pending':
         return <Badge variant="outline" className="border-amber-500 text-amber-500"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
       case 'cancelled':
@@ -288,7 +287,7 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
               ) : (
                 (Array.isArray(filteredPayments) ? filteredPayments : []).map((payment) => (
                   <TableRow key={payment.id}>
-                    <TableCell>{payment.bookingNumber}</TableCell>
+                    <TableCell>{payment.bookingId}</TableCell>
                     <TableCell>{payment.vehicleId}</TableCell>
                     <TableCell>₹{payment.amount?.toFixed(2)}</TableCell>
                     <TableCell>₹{payment.commissionAmount?.toFixed(2)}</TableCell>
