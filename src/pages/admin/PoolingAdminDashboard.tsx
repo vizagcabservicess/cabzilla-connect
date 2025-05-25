@@ -1,15 +1,14 @@
-
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PoolingRidesManager } from '@/components/pooling/admin/PoolingRidesManager';
-import { PoolingBookingsManager } from '@/components/pooling/admin/PoolingBookingsManager';
-import { PoolingAnalytics } from '@/components/pooling/admin/PoolingAnalytics';
-import { PoolingSettings } from '@/components/pooling/admin/PoolingSettings';
-import { DisputeManager } from '@/components/pooling/admin/DisputeManager';
-import { ProviderManager } from '@/components/pooling/admin/ProviderManager';
-import { CancellationPolicyManager } from '@/components/pooling/admin/CancellationPolicyManager';
+import PoolingRidesManager from '@/components/pooling/admin/PoolingRidesManager';
+import PoolingBookingsManager from '@/components/pooling/admin/PoolingBookingsManager';
+import PoolingAnalytics from '@/components/pooling/admin/PoolingAnalytics';
+import PoolingSettings from '@/components/pooling/admin/PoolingSettings';
+import DisputeManager from '@/components/pooling/admin/DisputeManager';
+import ProviderManager from '@/components/pooling/admin/ProviderManager';
+import CancellationPolicyManager from '@/components/pooling/admin/CancellationPolicyManager';
 import { Car, Users, TrendingUp, Settings, AlertTriangle, UserCheck, XCircle } from 'lucide-react';
 
 const PoolingAdminDashboard = () => {

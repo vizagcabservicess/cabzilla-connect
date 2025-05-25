@@ -39,20 +39,6 @@ export interface RazorpayOrderResponse {
   status: string;
 }
 
-// Initialize Razorpay
-export const initRazorpay = (): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => {
-      toast.error("Failed to load Razorpay. Please try again.");
-      resolve(false);
-    };
-    document.body.appendChild(script);
-  });
-};
-
 // Create a Razorpay order
 export const createRazorpayOrder = async (amount: number): Promise<RazorpayOrderResponse | null> => {
   try {
@@ -83,6 +69,10 @@ export const openRazorpayCheckout = (
   onSuccess: (response: RazorpayResponse) => void,
   onError: (error: any) => void
 ) => {
+  if (typeof (window as any).Razorpay !== 'function') {
+    toast.error('Razorpay failed to load. Please refresh and try again.');
+    return;
+  }
   const rzp = new (window as any).Razorpay(options);
   
   // Add event handlers

@@ -1,4 +1,3 @@
-
 <?php
 require_once 'config.php';
 
@@ -34,6 +33,10 @@ function handleCreateOrder() {
     if (!$bookingId) {
         sendError('Booking ID is required');
     }
+
+    // Razorpay API keys (test)
+    $key_id = "rzp_test_41fJeGiVFyU9OQ";
+    $key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH";
     
     try {
         // Get booking details
@@ -45,19 +48,61 @@ function handleCreateOrder() {
             sendError('Booking not found', 404);
         }
         
-        // TODO: Integrate with your existing Razorpay API
-        // For now, return a mock response
-        $orderId = 'order_' . time() . '_' . $bookingId;
-        
+        // Always treat total_amount as rupees, convert to paise for Razorpay
+        $amount_rupees = floatval($booking['total_amount']);
+        $amount = intval(round($amount_rupees * 100)); // paise, integer
+        $display_amount = $amount_rupees; // rupees
+
+        // Generate a unique receipt ID
+        $receipt_id = 'rcpt_' . time() . '_' . substr(md5(mt_rand()), 0, 8);
+
+        // Create Razorpay order via API
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => "https://api.razorpay.com/v1/orders",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => json_encode([
+                'amount' => $amount, // paise, integer
+                'currency' => 'INR',
+                'receipt' => $receipt_id,
+                'payment_capture' => 1
+            ]),
+            CURLOPT_HTTPHEADER => [
+                "Authorization: Basic " . base64_encode($key_id . ":" . $key_secret),
+                "Content-Type: application/json"
+            ],
+        ]);
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        curl_close($curl);
+
+        if ($err) {
+            error_log("Razorpay API Error: " . $err);
+            sendError('Failed to create payment order', 500);
+        }
+
+        $order = json_decode($response, true);
+
+        if (isset($order['error'])) {
+            error_log("Razorpay Error: " . json_encode($order['error']));
+            sendError($order['error']['description'] ?? 'Failed to create order', 400);
+        }
+
         // Update booking with order ID
         $stmt = $pdo->prepare("UPDATE pooling_bookings SET razorpay_order_id = ? WHERE id = ?");
-        $stmt->execute([$orderId, $bookingId]);
-        
+        $stmt->execute([$order['id'], $bookingId]);
+
         sendResponse([
-            'order_id' => $orderId,
-            'amount' => $booking['total_amount'] * 100, // Amount in paise
-            'currency' => 'INR',
-            'key' => 'your_razorpay_key_id' // Use your actual key
+            'order_id' => $order['id'],
+            'amount' => $amount, // paise, integer
+            'display_amount' => $display_amount, // rupees
+            'currency' => $order['currency'],
+            'key' => 'rzp_test_41fJeGiVFyU9OQ'
         ]);
         
     } catch (PDOException $e) {
