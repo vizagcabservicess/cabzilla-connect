@@ -4,6 +4,7 @@ import { debounce } from '@/lib/utils';
 
 interface FareData {
   totalPrice: number;
+  basePrice: number;
   source: string;
   breakdown?: any;
 }
@@ -29,6 +30,7 @@ export function useFare(
       // Mock fare calculation - replace with actual API call
       const mockFare = {
         totalPrice: Math.floor(Math.random() * 2000) + 500,
+        basePrice: Math.floor(Math.random() * 1500) + 400,
         source: 'calculated',
         breakdown: {
           basePrice: Math.floor(Math.random() * 1500) + 400,
