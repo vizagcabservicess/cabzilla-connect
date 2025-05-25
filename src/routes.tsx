@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -31,8 +30,18 @@ import PrivacyPage from './pages/PrivacyPage';
 import RefundsPage from './pages/RefundsPage';
 import BlogPage from './pages/BlogPage';
 import FAQPage from './pages/FAQPage';
+import PoolingPage from './pages/PoolingPage';
+import PoolingBookingPage from './pages/PoolingBookingPage';
+import PoolingDashboard from './pages/admin/PoolingDashboard';
+import PoolingAdminDashboard from './pages/admin/PoolingAdminDashboard';
+import CreateRidePage from './components/pooling/CreateRidePage';
+import BookingsPage from './pages/BookingsPage';
+import FaresPage from './pages/FaresPage';
+import VehiclesPage from './pages/VehiclesPage';
+import DriversPage from './pages/DriversPage';
+import UserManagementPage from './pages/UserManagementPage';
 
-export const router = createBrowserRouter([
+const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
@@ -49,7 +58,7 @@ export const router = createBrowserRouter([
     path: '/dashboard',
     element: <DashboardPage />,
   },
-  // Main admin route
+  // Main admin routes
   {
     path: '/admin',
     element: <AdminDashboardPage />,
@@ -98,11 +107,20 @@ export const router = createBrowserRouter([
     path: '/admin/create-booking',
     element: <AdminBookingCreationPage />,
   },
+  {
+    path: '/admin/pooling',
+    element: <PoolingDashboard />,
+  },
+  {
+    path: '/admin/pooling-enhanced',
+    element: <PoolingAdminDashboard />,
+  },
   // Add catch-all route for admin to prevent 404s on admin routes
   {
     path: '/admin/*',
     element: <AdminDashboardPage />,
   },
+  // Booking routes
   {
     path: '/booking/:bookingId/confirmation',
     element: <BookingConfirmationPage />,
@@ -119,8 +137,13 @@ export const router = createBrowserRouter([
     path: '/receipt/:bookingId',
     element: <ReceiptPage />,
   },
+  // Service routes
   {
     path: '/cabs',
+    element: <CabsPage />,
+  },
+  {
+    path: '/cabs/:tripType',
     element: <CabsPage />,
   },
   {
@@ -131,7 +154,20 @@ export const router = createBrowserRouter([
     path: '/payment',
     element: <PaymentPage />,
   },
-  // New pages
+  // Pooling routes
+  {
+    path: '/pooling',
+    element: <PoolingPage />,
+  },
+  {
+    path: '/pooling/book/:rideId',
+    element: <PoolingBookingPage />,
+  },
+  {
+    path: '/pooling/create',
+    element: <CreateRidePage />,
+  },
+  // Static pages
   {
     path: '/about',
     element: <AboutPage />,
@@ -164,6 +200,17 @@ export const router = createBrowserRouter([
     path: '/faq',
     element: <FAQPage />,
   },
+  { path: '/bookings', element: <BookingsPage /> },
+  { path: '/fares', element: <FaresPage /> },
+  { path: '/vehicles', element: <VehiclesPage /> },
+  { path: '/drivers', element: <DriversPage /> },
+  { path: '/users', element: <UserManagementPage /> },
+  { path: '/admin/bookings', element: <BookingsPage /> },
+  { path: '/admin/fares', element: <FaresPage /> },
+  { path: '/admin/vehicles', element: <VehiclesPage /> },
+  { path: '/admin/drivers', element: <DriversPage /> },
+  { path: '/admin/users', element: <UserManagementPage /> },
+  // Catch-all route for 404s
   {
     path: '*',
     element: <NotFound />,

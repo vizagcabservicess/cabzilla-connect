@@ -39,6 +39,27 @@ export interface RazorpayOrderResponse {
   status: string;
 }
 
+// Initialize Razorpay SDK
+export const initRazorpay = async (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => {
+      resolve(true);
+    };
+    script.onerror = () => {
+      toast.error('Failed to load Razorpay SDK');
+      resolve(false);
+    };
+    document.body.appendChild(script);
+  });
+};
+
 // Create a Razorpay order
 export const createRazorpayOrder = async (amount: number): Promise<RazorpayOrderResponse | null> => {
   try {
