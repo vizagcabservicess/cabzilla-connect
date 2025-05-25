@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/providers/AuthProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { Menu, X, User, LogOut, Settings, Phone } from 'lucide-react';
 
 export function Navbar() {
@@ -30,7 +30,7 @@ export function Navbar() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link to="/" className="flex items-center">
-              <span className="text-2xl font-bold text-blue-600">CabBooking</span>
+              <span className="text-2xl font-bold text-blue-600">Vizag Taxi Hub</span>
             </Link>
           </div>
 
@@ -55,7 +55,7 @@ export function Navbar() {
               {/* Phone Number */}
               <div className="flex items-center text-sm text-gray-600 mr-4">
                 <Phone className="h-4 w-4 mr-1" />
-                <span>+91 98765 43210</span>
+                <span>+91 9966363662</span>
               </div>
 
               {user ? (

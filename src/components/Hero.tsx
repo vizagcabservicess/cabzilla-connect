@@ -14,8 +14,8 @@ interface HeroProps {
 }
 
 export function Hero({ 
-  title = "Book Your Ride", 
-  subtitle = "Comfortable and reliable transportation",
+  title = "Your Journey, Our Priority", 
+  subtitle = "Comfortable and reliable transportation across Visakhapatnam",
   showSearchForm = true 
 }: HeroProps) {
   return (
@@ -31,6 +31,10 @@ export function Hero({
         {showSearchForm && (
           <Card className="max-w-4xl mx-auto mt-8">
             <CardContent className="p-6">
+              <div className="mb-6">
+                <TripModeSelector />
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center">
