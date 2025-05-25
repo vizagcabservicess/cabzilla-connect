@@ -1,7 +1,7 @@
 
 import React from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import PaymentManagement from '@/components/admin/payment/PaymentManagement';
+import { PaymentManagement } from '@/components/admin/payment/PaymentManagement';
 
 const PaymentsPage = () => {
   const handleUpdatePayment = async (
@@ -25,11 +25,8 @@ const PaymentsPage = () => {
   };
 
   return (
-    <AdminLayout>
-      <PaymentManagement
-        onUpdatePayment={handleUpdatePayment}
-        onSendReminder={handleSendReminder}
-      />
+    <AdminLayout activeTab="payments">
+      <PaymentManagement />
     </AdminLayout>
   );
 };

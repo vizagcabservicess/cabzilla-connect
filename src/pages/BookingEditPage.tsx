@@ -44,28 +44,30 @@ export default function BookingEditPage() {
   const handlePickupLocationChange = (location: any) => {
     setPickupLocation({
       id: location.place_id || 'pickup',
-      name: location.description || location.main_text,
-      address: location.description || location.main_text,
+      name: location.description || location.main_text || location.name,
+      address: location.description || location.main_text || location.address,
       lat: 17.6868,
       lng: 83.2185,
       city: 'Visakhapatnam',
       state: 'Andhra Pradesh',
       type: 'other',
-      popularityScore: 50
+      popularityScore: 50,
+      description: location.description || location.main_text
     });
   };
 
   const handleDropLocationChange = (location: any) => {
     setDropLocation({
       id: location.place_id || 'drop',
-      name: location.description || location.main_text,
-      address: location.description || location.main_text,
+      name: location.description || location.main_text || location.name,
+      address: location.description || location.main_text || location.address,
       lat: 17.7,
       lng: 83.3,
       city: 'Visakhapatnam',
       state: 'Andhra Pradesh',
       type: 'other',
-      popularityScore: 50
+      popularityScore: 50,
+      description: location.description || location.main_text
     });
   };
 
@@ -124,10 +126,7 @@ export default function BookingEditPage() {
                 <LocationInput
                   label="Pickup Location"
                   placeholder="Enter pickup location"
-                  value={{
-                    place_id: pickupLocation.id,
-                    description: pickupLocation.name
-                  }}
+                  value={pickupLocation.name}
                   onLocationChange={handlePickupLocationChange}
                   isPickupLocation={true}
                 />
@@ -135,10 +134,7 @@ export default function BookingEditPage() {
                 <LocationInput
                   label="Drop Location"
                   placeholder="Enter drop location"
-                  value={{
-                    place_id: dropLocation.id,
-                    description: dropLocation.name
-                  }}
+                  value={dropLocation.name}
                   onLocationChange={handleDropLocationChange}
                   isPickupLocation={false}
                 />

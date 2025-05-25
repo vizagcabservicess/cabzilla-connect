@@ -1,465 +1,329 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Navbar } from '@/components/Navbar';
+import { Hero } from '@/components/Hero';
+import { LocationInput } from '@/components/LocationInput';
+import { DateTimePicker } from '@/components/DateTimePicker';
+import { GuestDetailsForm } from '@/components/GuestDetailsForm';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { MapPin, Clock, Users, Star, Car, Plane, Train, Camera } from 'lucide-react';
+import { tourPackages, POPULAR_DESTINATIONS } from '@/lib/tourData';
+import { Location, BookingRequest } from '@/types/api';
+import { useToast } from '@/components/ui/use-toast';
+import { getDistance } from '@/lib/distanceService';
 
-import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
-import { LocationInput } from "@/components/LocationInput";
-import { DateTimePicker } from "@/components/DateTimePicker";
-import { CabOptions } from "@/components/CabOptions";
-import { BookingSummary } from "@/components/BookingSummary";
-import { GuestDetailsForm } from "@/components/GuestDetailsForm";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Location, vizagLocations } from "@/lib/locationData";
-import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
-import { cabTypes, formatPrice } from "@/lib/cabData";
-import { defaultTours, loadAvailableTours, getTourFare, loadTourFares } from "@/lib/tourData";
-import { TripType } from "@/lib/tripTypes";
-import { CabType, TourInfo } from "@/types/cab";
-import { MapPin, Calendar, Check, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { bookingAPI } from "@/services/api";
-import { BookingRequest } from "@/types/api";
-import { MobileNavigation } from "@/components/MobileNavigation";
-import { formatDate, formatTime } from "@/lib/dateUtils";
-
-const ToursPage = () => {
+export default function ToursPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const locationState = useLocation().state as { 
-    pickupLocation?: Location, 
-    pickupDate?: Date 
-  } | null;
-  
-  // State variables for search criteria
-  const [pickupLocation, setPickupLocation] = useState<Location | null>(
-    locationState?.pickupLocation || null
-  );
-  const [pickupDate, setPickupDate] = useState<Date | undefined>(
-    locationState?.pickupDate || new Date()
-  );
-  
-  // State variables for tour selection and booking
-  const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [searchInitiated, setSearchInitiated] = useState<boolean>(false);
-  const [availableTours, setAvailableTours] = useState<TourInfo[]>([]);
-  const [isLoadingTours, setIsLoadingTours] = useState<boolean>(false);
-  const [selectedTour, setSelectedTour] = useState<string | null>(null);
-  const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
-  const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  
-  // Load tours on component mount
+  const [selectedTour, setSelectedTour] = useState<any>(null);
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
+  const [pickupDate, setPickupDate] = useState<Date>(new Date());
+  const [returnDate, setReturnDate] = useState<Date>(new Date());
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
+
+  const calculatePrice = async () => {
+    if (!selectedTour || !pickupLocation) {
+      return;
+    }
+
+    setIsCalculatingPrice(true);
+    try {
+      const distance = await getDistance(
+        pickupLocation.lat,
+        pickupLocation.lng,
+        17.6868, // Destination Latitude
+        83.2185  // Destination Longitude
+      );
+
+      const basePrice = selectedTour.price;
+      const distanceFactor = distance > 100 ? 1.2 : 1;
+      const totalPrice = basePrice * distanceFactor;
+
+      setTotalPrice(totalPrice);
+    } catch (error) {
+      console.error("Failed to calculate price:", error);
+      toast({
+        title: "Error",
+        description: "Failed to calculate the total price. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCalculatingPrice(false);
+    }
+  };
+
   useEffect(() => {
-    // If we have location and date from navigation state, trigger search
-    if (locationState?.pickupLocation && locationState?.pickupDate) {
-      handleSearchTours();
-    }
-  }, []);
-  
-  // Function to search for available tours
-  const handleSearchTours = async () => {
-    if (!pickupLocation) {
-      toast({
-        title: "No pickup location",
-        description: "Please enter your pickup location",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const isInVizag = pickupLocation.isInVizag !== undefined ? 
-      pickupLocation.isInVizag : 
-      isLocationInVizag(pickupLocation);
-      
-    if (!isInVizag) {
-      toast({
-        title: "Invalid pickup location",
-        description: "Pickup location must be within Visakhapatnam city limits.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!pickupDate) {
-      toast({
-        title: "No date selected",
-        description: "Please select a date for your tour",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsSearching(true);
-    setIsLoadingTours(true);
-    setSearchInitiated(true);
-    setSelectedTour(null);
-    setSelectedCab(null);
-    
-    try {
-      // Load tours from API
-      const tours = await loadAvailableTours();
-      setAvailableTours(tours);
-      
-      // Pre-load tour fares for faster selection later
-      loadTourFares().catch(err => console.error("Failed to preload tour fares:", err));
-      
-      // If no tours found
-      if (!tours.length) {
-        toast({
-          title: "No tours available",
-          description: "We couldn't find any tours available for your selected date",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error loading tours:", error);
-      setAvailableTours(defaultTours);
-      toast({
-        title: "Error loading tours",
-        description: "We encountered an error while loading tours. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingTours(false);
-    }
+    calculatePrice();
+  }, [selectedTour, pickupLocation]);
+
+  const handleLocationChange = (location: any) => {
+    const formattedLocation: Location = {
+      id: location.place_id || 'selected',
+      name: location.description || location.main_text,
+      address: location.description || location.main_text,
+      lat: 17.6868,
+      lng: 83.2185,
+      city: 'Visakhapatnam',
+      state: 'Andhra Pradesh',
+      type: 'other',
+      popularityScore: 50,
+      description: location.description || location.main_text
+    };
+    setPickupLocation(formattedLocation);
   };
-  
-  // Handle tour selection
-  const handleTourSelect = (tourId: string) => {
-    setSelectedTour(tourId);
-    setSelectedCab(null);
-  };
-  
-  // Handle cab selection for a tour
-  const handleCabSelect = (cab: CabType) => {
-    setSelectedCab(cab);
-    
-    if (selectedTour) {
-      const fare = getTourFare(selectedTour, cab.id);
-      
-      try {
-        localStorage.setItem(`selected_fare_${cab.id}_tour_${selectedTour}`, JSON.stringify({
-          fare,
-          source: 'calculated',
-          timestamp: Date.now(),
-          packageType: 'tour',
-          cabId: cab.id,
-          tourId: selectedTour
-        }));
-        console.log(`Stored selected tour fare for ${cab.name}: ₹${fare}`);
-      } catch (e) {
-        console.error('Error storing selected tour fare:', e);
-      }
-    }
-  };
-  
-  // Handle booking now button click
-  const handleBookNow = () => {
-    if (!selectedTour) {
+
+  const handleBookingSubmit = async (contactDetails: any) => {
+    if (!selectedTour || !pickupLocation) {
       toast({
-        title: "No tour selected",
-        description: "Please select a tour package",
+        title: "Error",
+        description: "Please select a tour and pickup location.",
         variant: "destructive",
       });
       return;
     }
-    
-    if (!pickupLocation) {
-      toast({
-        title: "No pickup location",
-        description: "Please enter your pickup location",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!pickupDate) {
-      toast({
-        title: "No date selected",
-        description: "Please select a date for your tour",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!selectedCab) {
-      toast({
-        title: "No cab selected",
-        description: "Please select a cab type",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setShowGuestDetailsForm(true);
+
+    const bookingRequest: BookingRequest = {
+      pickupLocation: pickupLocation.name,
+      dropLocation: selectedTour.destinations.join(', '),
+      pickupDate: pickupDate.toISOString(),
+      returnDate: returnDate.toISOString(),
+      cabType: 'Sedan',
+      distance: 150,
+      tripType: 'Round Trip',
+      tripMode: 'Tour',
+      totalAmount: totalPrice,
+      passengerName: contactDetails.name,
+      passengerPhone: contactDetails.phone,
+      passengerEmail: contactDetails.email,
+      tourId: selectedTour.id
+    };
+
+    console.log('Booking Request:', bookingRequest);
+
+    toast({
+      title: "Booking Confirmed",
+      description: "Your tour has been booked successfully!",
+    });
+
+    navigate('/bookings');
   };
-  
-  // Handle guest details submission for booking
-  const handleGuestDetailsSubmit = async (guestDetails: any) => {
-    try {
-      setIsSubmitting(true);
-      
-      const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
-      
-      if (!selectedTourDetails || !selectedCab || !pickupLocation || !pickupDate) {
-        toast({
-          title: "Missing information",
-          description: "Please complete all required fields",
-          variant: "destructive",
-          duration: 3000,
-        });
-        return;
-      }
-      
-      const fare = getTourFare(selectedTour!, selectedCab!.id);
-      
-      const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation.name || '',
-        dropLocation: '', // Tours don't have specific drop locations
-        pickupDate: pickupDate.toISOString(),
-        returnDate: null, // Tours are considered one-way
-        cabType: selectedCab.name,
-        distance: selectedTourDetails.distance,
-        tripType: 'tour',
-        tripMode: 'one-way', // Tours are considered one-way
-        totalAmount: fare,
-        passengerName: guestDetails.name,
-        passengerPhone: guestDetails.phone,
-        passengerEmail: guestDetails.email,
-        tourId: selectedTour
-      };
-      
-      console.log('Submitting tour booking:', bookingData);
-      
-      const response = await bookingAPI.createBooking(bookingData);
-      console.log('Tour booking created:', response);
-      
-      const bookingDataForStorage = {
-        tourId: selectedTour,
-        tourName: selectedTourDetails.name,
-        pickupLocation: pickupLocation,
-        tourDistance: selectedTourDetails.distance,
-        pickupDate: pickupDate?.toISOString(),
-        selectedCab,
-        totalPrice: fare,
-        guestDetails,
-        bookingType: 'tour',
-        bookingId: response.id,
-        bookingNumber: response.bookingNumber
-      };
-      
-      sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
-      
-      toast({
-        title: "Tour Booking Confirmed!",
-        description: "Your tour has been booked successfully",
-        variant: "default",
-      });
-      
-      navigate("/booking-confirmation", { state: { newBooking: true } });
-    } catch (error) {
-      console.error('Error creating tour booking:', error);
-      toast({
-        title: "Booking Failed",
-        description: error instanceof Error ? error.message : "Failed to create booking. Please try again.",
-        variant: "destructive",
-        duration: 5000,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
-  // Function to render the search form
-  const renderSearchForm = () => (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Find Available Tours</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <LocationInput
-          label="PICKUP LOCATION"
-          placeholder="Enter your pickup location"
-          value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-          onLocationChange={setPickupLocation}
-          isPickupLocation={true}
-        />
-        
-        <DateTimePicker
-          label="TOUR DATE & TIME"
-          date={pickupDate}
-          onDateChange={setPickupDate}
-          minDate={new Date()}
-        />
-      </div>
-      
-      <Button
-        onClick={handleSearchTours}
-        className="bg-blue-600 text-white px-6 py-2 rounded-md mt-6 w-full md:w-auto"
-        disabled={isLoadingTours}
-      >
-        {isLoadingTours ? (
-          <div className="flex items-center justify-center">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            <span>Searching...</span>
-          </div>
-        ) : 'SEARCH TOURS'}
-      </Button>
-    </div>
-  );
-  
-  // Function to render the tour listings
-  const renderTourListing = () => (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Available Tour Packages</h2>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            setSearchInitiated(false);
-            setSelectedTour(null);
-            setSelectedCab(null);
-          }}
-          className="text-sm"
-        >
-          Modify Search
-        </Button>
-      </div>
-      
-      {isLoadingTours ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-gray-600">Loading available tours...</p>
-        </div>
-      ) : availableTours.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600">No tours available for the selected date.</p>
-          <Button 
-            variant="outline" 
-            onClick={() => setSearchInitiated(false)} 
-            className="mt-4"
-          >
-            Try Another Date
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {availableTours.map((tour) => (
-            <div 
-              key={tour.id}
-              className={cn(
-                "border rounded-lg overflow-hidden cursor-pointer transition-all",
-                selectedTour === tour.id 
-                  ? "border-blue-500 shadow-md ring-2 ring-blue-200" 
-                  : "border-gray-200 hover:border-blue-300"
-              )}
-              onClick={() => handleTourSelect(tour.id)}
-            >
-              <div className="h-40 bg-gray-200 relative">
-                {tour.image ? (
-                  <img 
-                    src={tour.image} 
-                    alt={tour.name} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/tours/default-tour.jpg';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                    <span className="text-gray-400">No image</span>
-                  </div>
-                )}
-                {selectedTour === tour.id && (
-                  <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-                    <Check size={16} />
-                  </div>
-                )}
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-lg">{tour.name}</h3>
-                <div className="flex items-center mt-1 text-sm text-gray-500">
-                  <MapPin size={14} className="mr-1" />
-                  <span>{tour.distance} km journey</span>
-                </div>
-                <div className="mt-2 text-sm text-blue-600">
-                  Starts from ₹{getTourFare(tour.id, 'sedan').toLocaleString('en-IN')}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {selectedTour && (
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <h3 className="font-semibold text-lg mb-4">Select Cab Type for Your Tour</h3>
-          
-          <CabOptions
-            cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
-            selectedCab={selectedCab}
-            onSelectCab={handleCabSelect}
-            distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-            tripType="tour"
-            tripMode="one-way" // Tours are considered one-way
-            pickupDate={pickupDate}
-          />
-          
-          <Button
-            onClick={handleBookNow}
-            disabled={!selectedTour || !selectedCab}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md mt-6 w-full md:w-auto"
-          >
-            BOOK NOW
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-6 pb-20">
-        <div className="max-w-5xl mx-auto">
-          {!searchInitiated ? (
-            renderSearchForm()
-          ) : !showGuestDetailsForm ? (
-            renderTourListing()
-          ) : (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <GuestDetailsForm
-                  onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? 
-                    getTourFare(selectedTour, selectedCab.id) : 0}
-                  isSubmitting={isSubmitting}
-                  onBack={() => setShowGuestDetailsForm(false)}
-                />
-              </div>
-              
-              <div>
-                {selectedTour && selectedCab && pickupLocation && pickupDate && (
-                  <BookingSummary
-                    pickupLocation={pickupLocation}
-                    dropLocation={null} // Tours don't have drop locations
-                    pickupDate={pickupDate}
-                    selectedCab={selectedCab}
-                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-                    totalPrice={getTourFare(selectedTour, selectedCab.id)}
-                    tripType="tour"
-                    hourlyPackage="tour"
-                  />
-                )}
+      {!showBookingForm ? (
+        <div>
+          <Hero 
+            title="Explore Amazing Tours"
+            subtitle="Discover beautiful destinations with our curated tour packages"
+            showSearchForm={false}
+          />
+          
+          {/* Popular Destinations */}
+          <section className="py-12 bg-white">
+            <div className="container mx-auto px-4">
+              <h2 className="text-3xl font-bold text-center mb-8">Popular Destinations</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {POPULAR_DESTINATIONS.map((destination) => (
+                  <Card key={destination.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                    <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative">
+                      <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center">
+                        <Camera className="h-12 w-12 text-white" />
+                      </div>
+                    </div>
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-lg mb-2">{destination.name}</h3>
+                      <p className="text-gray-600 text-sm mb-3">{destination.description}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-gray-500">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          <span className="text-sm">{destination.distance}</span>
+                        </div>
+                        <Badge variant="outline">{destination.type}</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
-          )}
+          </section>
+
+          {/* Tour Packages */}
+          <section className="py-12">
+            <div className="container mx-auto px-4">
+              <h2 className="text-3xl font-bold text-center mb-8">Tour Packages</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                {tourPackages.map((tour) => (
+                  <Card key={tour.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                    <div className="h-48 bg-gradient-to-r from-green-500 to-blue-600 relative">
+                      <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center">
+                        <Camera className="h-12 w-12 text-white" />
+                      </div>
+                      <div className="absolute top-4 right-4">
+                        <Badge className="bg-white text-green-600">{tour.duration}</Badge>
+                      </div>
+                    </div>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-xl">{tour.name}</h3>
+                        <div className="flex items-center">
+                          <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                          <span className="text-sm font-medium">{tour.rating}</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-600 mb-4">{tour.description}</p>
+                      
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <MapPin className="h-4 w-4 mr-2" />
+                          <span>{tour.destinations.join(', ')}</span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <Clock className="h-4 w-4 mr-2" />
+                          <span>{tour.duration}</span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <Users className="h-4 w-4 mr-2" />
+                          <span>Up to {tour.maxGuests} guests</span>
+                        </div>
+                      </div>
+
+                      <Separator className="my-4" />
+                      
+                      <div className="space-y-2 mb-4">
+                        <h4 className="font-semibold text-sm">Includes:</h4>
+                        <ScrollArea className="h-20">
+                          <ul className="text-sm text-gray-600 space-y-1">
+                            {tour.includes.map((item, index) => (
+                              <li key={index} className="flex items-start">
+                                <span className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-2 flex-shrink-0"></span>
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </ScrollArea>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-2xl font-bold text-green-600">₹{tour.price.toLocaleString()}</span>
+                          <span className="text-sm text-gray-500 ml-1">per person</span>
+                        </div>
+                        <Button 
+                          onClick={() => {
+                            setSelectedTour(tour);
+                            setShowBookingForm(true);
+                          }}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Book Now
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
-      
-      <MobileNavigation />
+      ) : (
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="mb-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowBookingForm(false)}
+              className="mb-4"
+            >
+              ← Back to Tours
+            </Button>
+            <h1 className="text-2xl font-bold">Book {selectedTour?.name}</h1>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tour Details</CardTitle>
+                  <CardDescription>Selected tour package information</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold">{selectedTour?.name}</h3>
+                    <p className="text-gray-600">{selectedTour?.description}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold">Duration:</span>
+                    <span>{selectedTour?.duration}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold">Price per person:</span>
+                    <span className="text-green-600 font-bold">₹{selectedTour?.price?.toLocaleString()}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Trip Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <LocationInput
+                    label="Pickup Location"
+                    placeholder="Enter your pickup location"
+                    value={pickupLocation?.name || ''}
+                    onLocationChange={handleLocationChange}
+                    isPickupLocation={true}
+                  />
+                  
+                  <DateTimePicker
+                    label="Tour Start Date"
+                    date={pickupDate}
+                    onDateChange={setPickupDate}
+                    minDate={new Date()}
+                  />
+
+                  {selectedTour?.duration && selectedTour.duration.includes('day') && (
+                    <DateTimePicker
+                      label="Tour End Date"
+                      date={returnDate}
+                      onDateChange={setReturnDate}
+                      minDate={pickupDate}
+                    />
+                  )}
+
+                  {totalPrice > 0 && (
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold">Total Amount:</span>
+                        <span className="text-2xl font-bold text-green-600">
+                          ₹{totalPrice.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div>
+              <GuestDetailsForm
+                onSubmit={handleBookingSubmit}
+                totalPrice={totalPrice}
+                bookingId={`tour-${selectedTour?.id}-${Date.now()}`}
+                isSubmitting={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default ToursPage;
+}

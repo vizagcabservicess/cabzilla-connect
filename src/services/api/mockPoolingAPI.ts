@@ -1,255 +1,215 @@
 import { PoolingRide, PoolingBooking, PoolingType } from '@/types/api';
+import { PoolingAnalytics } from '@/types/enhancedPooling';
 
-// Mock data for pooling rides
-const mockRides: PoolingRide[] = Array.from({ length: 20 }, (_, i) => createMockRide(i + 1));
+// Mock data
+const mockPoolingTypes: PoolingType[] = ['car', 'bus', 'shared-taxi'];
 
-// Mock data for pooling bookings
-const mockBookings: PoolingBooking[] = Array.from({ length: 50 }, (_, i) => createMockBooking(i + 1));
+const mockRides: PoolingRide[] = [
+  {
+    id: 1,
+    route: 'Visakhapatnam to Hyderabad',
+    departure_time: '2024-01-20 08:00:00',
+    arrival_time: '2024-01-20 16:00:00',
+    available_seats: 3,
+    price_per_seat: 800,
+    driver_id: 1,
+    vehicle_id: 1,
+    status: 'active',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 2,
+    route: 'Vizag Airport to City Center',
+    departure_time: '2024-01-20 14:30:00',
+    arrival_time: '2024-01-20 15:30:00',
+    available_seats: 2,
+    price_per_seat: 200,
+    driver_id: 2,
+    vehicle_id: 2,
+    status: 'active',
+    created_at: new Date().toISOString()
+  }
+];
 
-// Function to create a mock pooling ride
-const createMockRide = (id: number): PoolingRide => ({
-  id,
-  route: `Route ${id}`, // Ensure route is always provided
-  departure_time: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-  arrival_time: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(),
-  available_seats: Math.floor(Math.random() * 4) + 1,
-  price_per_seat: Math.floor(Math.random() * 500) + 100,
-  driver_id: Math.floor(Math.random() * 10) + 1,
-  vehicle_id: Math.floor(Math.random() * 20) + 1,
-  status: 'active',
-  created_at: new Date().toISOString()
-});
+const mockBookings: PoolingBooking[] = [
+  {
+    id: 1,
+    ride_id: 1,
+    passenger_name: 'John Doe',
+    passenger_phone: '9876543210',
+    passenger_email: 'john@example.com',
+    seats_booked: 2,
+    total_amount: 1600,
+    booking_status: 'confirmed',
+    payment_status: 'paid',
+    created_at: new Date().toISOString(),
+    bookingNumber: 'PB001'
+  }
+];
 
-// Function to create a mock pooling booking
-const createMockBooking = (id: number): PoolingBooking => ({
-  id,
-  ride_id: Math.floor(Math.random() * 20) + 1,
-  passenger_name: `Passenger ${id}`,
-  passenger_phone: '+91 9876543210',
-  passenger_email: `passenger${id}@example.com`,
-  seats_booked: Math.floor(Math.random() * 3) + 1,
-  total_amount: Math.floor(Math.random() * 1000) + 200,
-  booking_status: 'confirmed',
-  payment_status: 'paid',
-  created_at: new Date().toISOString()
-});
+// Mock analytics data
+const mockAnalytics: PoolingAnalytics = {
+  totalRides: 45,
+  activeRides: 12,
+  completedRides: 28,
+  cancelledRides: 5,
+  totalBookings: 156,
+  pendingBookings: 8,
+  confirmedBookings: 142,
+  totalRevenue: 125000,
+  commissionEarned: 12500,
+  averageRating: 4.3,
+  totalProviders: 25,
+  verifiedProviders: 22,
+  activeDisputes: 2,
+  refundsProcessed: 3,
+  cancellationRate: 3.2,
+  monthlyGrowth: 15.5,
+  revenueByType: {
+    carpool: 45000,
+    bus: 65000,
+    sharedTaxi: 15000
+  },
+  topRoutes: [
+    { route: 'Visakhapatnam to Hyderabad', bookings: 45, revenue: 36000 },
+    { route: 'Vizag Airport to City Center', bookings: 38, revenue: 7600 },
+    { route: 'Visakhapatnam to Vijayawada', bookings: 32, revenue: 25600 }
+  ]
+};
 
-// Mock API for pooling rides and bookings
+// API functions
 export const mockPoolingAPI = {
-  // Get all pooling rides
-  getAllRides: async (): Promise<PoolingRide[]> => {
-    return Promise.resolve(mockRides);
+  // Rides
+  getRides: async (): Promise<PoolingRide[]> => {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(mockRides), 500);
+    });
   },
 
-  // Get pooling ride by ID
-  getRideById: async (id: number): Promise<PoolingRide | undefined> => {
-    const ride = mockRides.find(ride => ride.id === id);
-    return Promise.resolve(ride);
+  createRide: async (rideData: Partial<PoolingRide>): Promise<PoolingRide> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const newRide: PoolingRide = {
+          id: mockRides.length + 1,
+          route: rideData.route || '',
+          departure_time: rideData.departure_time || '',
+          arrival_time: rideData.arrival_time || '',
+          available_seats: rideData.available_seats || 0,
+          price_per_seat: rideData.price_per_seat || 0,
+          driver_id: rideData.driver_id || 1,
+          vehicle_id: rideData.vehicle_id || 1,
+          status: rideData.status || 'active',
+          created_at: new Date().toISOString()
+        };
+        mockRides.push(newRide);
+        resolve(newRide);
+      }, 500);
+    });
   },
 
-  // Create a new pooling ride
-  createRide: async (rideData: Omit<PoolingRide, 'id' | 'created_at'>): Promise<PoolingRide> => {
-    const newRide: PoolingRide = {
-      id: mockRides.length + 1,
-      ...rideData,
-      created_at: new Date().toISOString()
-    };
-    mockRides.push(newRide);
-    return Promise.resolve(newRide);
+  updateRide: async (id: number, updates: Partial<PoolingRide>): Promise<PoolingRide> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const index = mockRides.findIndex(ride => ride.id === id);
+        if (index !== -1) {
+          mockRides[index] = { ...mockRides[index], ...updates };
+          resolve(mockRides[index]);
+        } else {
+          reject(new Error('Ride not found'));
+        }
+      }, 500);
+    });
   },
 
-  // Update an existing pooling ride
-  updateRide: async (id: number, rideData: Partial<PoolingRide>): Promise<PoolingRide | undefined> => {
-    const rideIndex = mockRides.findIndex(ride => ride.id === id);
-    if (rideIndex === -1) {
-      return Promise.resolve(undefined);
-    }
-    const updatedRide = {
-      ...mockRides[rideIndex],
-      ...rideData
-    };
-    mockRides[rideIndex] = updatedRide;
-    return Promise.resolve(updatedRide);
+  deleteRide: async (id: number): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const index = mockRides.findIndex(ride => ride.id === id);
+        if (index !== -1) {
+          mockRides.splice(index, 1);
+          resolve();
+        } else {
+          reject(new Error('Ride not found'));
+        }
+      }, 500);
+    });
   },
 
-  // Delete a pooling ride
-  deleteRide: async (id: number): Promise<boolean> => {
-    const rideIndex = mockRides.findIndex(ride => ride.id === id);
-    if (rideIndex === -1) {
-      return Promise.resolve(false);
-    }
-    mockRides.splice(rideIndex, 1);
-    return Promise.resolve(true);
+  // Bookings
+  getBookings: async (): Promise<PoolingBooking[]> => {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(mockBookings), 500);
+    });
   },
 
-  // Get all pooling bookings
-  getAllBookings: async (): Promise<PoolingBooking[]> => {
-    return Promise.resolve(mockBookings);
+  createBooking: async (bookingData: Partial<PoolingBooking>): Promise<PoolingBooking> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const newBooking: PoolingBooking = {
+          id: mockBookings.length + 1,
+          ride_id: bookingData.ride_id || 1,
+          passenger_name: bookingData.passenger_name || '',
+          passenger_phone: bookingData.passenger_phone || '',
+          passenger_email: bookingData.passenger_email || '',
+          seats_booked: bookingData.seats_booked || 1,
+          total_amount: bookingData.total_amount || 0,
+          booking_status: bookingData.booking_status || 'pending',
+          payment_status: bookingData.payment_status || 'pending',
+          created_at: new Date().toISOString(),
+          bookingNumber: `PB${String(mockBookings.length + 1).padStart(3, '0')}`
+        };
+        mockBookings.push(newBooking);
+        resolve(newBooking);
+      }, 500);
+    });
   },
 
-  // Get pooling booking by ID
-  getBookingById: async (id: number): Promise<PoolingBooking | undefined> => {
-    const booking = mockBookings.find(booking => booking.id === id);
-    return Promise.resolve(booking);
+  // Analytics
+  getAnalytics: async (): Promise<PoolingAnalytics> => {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(mockAnalytics), 500);
+    });
   },
 
-  // Create a new pooling booking
-  createBooking: async (bookingData: Omit<PoolingBooking, 'id' | 'created_at'>): Promise<PoolingBooking> => {
-    const newBooking: PoolingBooking = {
-      id: mockBookings.length + 1,
-      ...bookingData,
-      created_at: new Date().toISOString()
-    };
-    mockBookings.push(newBooking);
-    return Promise.resolve(newBooking);
-  },
-
-  // Update an existing pooling booking
-  updateBooking: async (id: number, bookingData: Partial<PoolingBooking>): Promise<PoolingBooking | undefined> => {
-    const bookingIndex = mockBookings.findIndex(booking => booking.id === id);
-    if (bookingIndex === -1) {
-      return Promise.resolve(undefined);
-    }
-    const updatedBooking = {
-      ...mockBookings[bookingIndex],
-      ...bookingData
-    };
-    mockBookings[bookingIndex] = updatedBooking;
-    return Promise.resolve(updatedBooking);
-  },
-
-  // Delete a pooling booking
-  deleteBooking: async (id: number): Promise<boolean> => {
-    const bookingIndex = mockBookings.findIndex(booking => booking.id === id);
-    if (bookingIndex === -1) {
-      return Promise.resolve(false);
-    }
-    mockBookings.splice(bookingIndex, 1);
-    return Promise.resolve(true);
-  },
-
-  // Mock function to simulate fetching pooling types
+  // Types
   getPoolingTypes: async (): Promise<PoolingType[]> => {
-    const poolingTypes: PoolingType[] = [
-      {
-        id: 1,
-        name: 'Carpool',
-        description: 'Share a ride with others heading in the same direction.',
-        icon: 'carpool',
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        name: 'Bike Pool',
-        description: 'Organize a group bike ride for daily commute.',
-        icon: 'bike',
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 3,
-        name: 'Walk Pool',
-        description: 'Create a walking group for safety and companionship.',
-        icon: 'walk',
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ];
-    return Promise.resolve(poolingTypes);
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(mockPoolingTypes), 300);
+    });
   },
 
-  // Mock function to simulate creating a pooling type
-  createPoolingType: async (typeData: Omit<PoolingType, 'id' | 'createdAt' | 'updatedAt'>): Promise<PoolingType> => {
-    const newType: PoolingType = {
-      id: 4, // Assuming there are 3 existing types
-      ...typeData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    return Promise.resolve(newType);
-  },
-
-  // Mock function to simulate updating a pooling type
-  updatePoolingType: async (id: number, typeData: Partial<PoolingType>): Promise<PoolingType | undefined> => {
-    // In a real implementation, you would update the item in your data store
-    const updatedType: PoolingType = {
-      id,
-      name: 'Carpool',
-      description: 'Share a ride with others heading in the same direction.',
-      icon: 'carpool',
-      active: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...typeData
-    };
-    return Promise.resolve(updatedType);
-  },
-
-  // Mock function to simulate deleting a pooling type
-  deletePoolingType: async (id: number): Promise<boolean> => {
-    // In a real implementation, you would remove the item from your data store
-    return Promise.resolve(true);
-  },
-
-  // Mock function to simulate assigning a driver to a ride
-  assignDriverToRide: async (rideId: number, driverId: number): Promise<boolean> => {
-    // In a real implementation, you would update the ride with the driver information
-    console.log(`Driver ${driverId} assigned to ride ${rideId}`);
-    return Promise.resolve(true);
-  },
-
-  // Mock function to simulate recording a ride completion
-  recordRideCompletion: async (rideId: number): Promise<boolean> => {
-    // In a real implementation, you would update the ride status to completed
-    console.log(`Ride ${rideId} marked as completed`);
-    return Promise.resolve(true);
-  },
-
-  // Mock function to simulate cancelling a ride
-  cancelRide: async (rideId: number): Promise<boolean> => {
-    // In a real implementation, you would update the ride status to cancelled
-    console.log(`Ride ${rideId} cancelled`);
-    return Promise.resolve(true);
-  },
-
-  // Mock function to simulate fetching analytics data
-  getAnalyticsData: async (): Promise<any> => {
-    // Replace with actual analytics data retrieval logic
-    const analyticsData = {
-      totalRides: 500,
-      activeRides: 150,
-      completedRides: 350,
-      averageRating: 4.5,
-      totalRevenue: 50000
-    };
-    return Promise.resolve(analyticsData);
-  },
-
-  // Mock function to simulate fetching provider performance data
-  getProviderPerformance: async (): Promise<any[]> => {
-    // Replace with actual provider performance data retrieval logic
-    const providerPerformance = [
-      {
-        providerId: 1,
-        providerName: 'John Doe',
-        totalRides: 120,
-        completedRides: 115,
-        averageRating: 4.7,
-        totalEarnings: 12000
-      },
-      {
-        providerId: 2,
-        providerName: 'Jane Smith',
-        totalRides: 95,
-        completedRides: 90,
-        averageRating: 4.3,
-        totalEarnings: 9500
-      }
-    ];
-    return Promise.resolve(providerPerformance);
+  // Search rides
+  searchRides: async (params: {
+    from?: string;
+    to?: string;
+    date?: string;
+    seats?: number;
+    type?: PoolingType;
+  }): Promise<PoolingRide[]> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        let filteredRides = [...mockRides];
+        
+        if (params.from) {
+          filteredRides = filteredRides.filter(ride => 
+            ride.route.toLowerCase().includes(params.from!.toLowerCase())
+          );
+        }
+        
+        if (params.to) {
+          filteredRides = filteredRides.filter(ride => 
+            ride.route.toLowerCase().includes(params.to!.toLowerCase())
+          );
+        }
+        
+        if (params.seats) {
+          filteredRides = filteredRides.filter(ride => 
+            ride.available_seats >= params.seats!
+          );
+        }
+        
+        resolve(filteredRides);
+      }, 500);
+    });
   }
 };
