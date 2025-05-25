@@ -2,7 +2,7 @@
 import React from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
-import { DashboardMetrics as MetricsType } from '@/types/api';
+import { DashboardMetrics as MetricsType, BookingStatus } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const mockMetrics: MetricsType = {
@@ -18,6 +18,10 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleFilterChange = (status: BookingStatus | "all") => {
+    console.log('Filter changed to:', status);
+  };
+
   return (
     <AdminLayout activeTab="dashboard">
       <div className="container mx-auto py-6 px-4 md:px-6">
@@ -26,6 +30,8 @@ export default function AdminDashboardPage() {
         <DashboardMetrics 
           metrics={mockMetrics}
           isLoading={false}
+          onFilterChange={handleFilterChange}
+          selectedPeriod="week"
         />
         
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">

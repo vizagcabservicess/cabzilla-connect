@@ -1,10 +1,9 @@
+
 import React from 'react';
-import AdminLayout from '@/components/layouts/AdminLayout';
-import PaymentManagement from '@/components/admin/payments/PaymentManagement';
+import AdminLayout from '@/components/admin/AdminLayout';
+import PaymentManagement from '@/components/admin/payment/PaymentManagement';
 
 const PaymentsPage = () => {
-  // ... keep existing code (state and other functions)
-
   const handleUpdatePayment = async (
     paymentId: string | number, 
     status: string, 

@@ -1,12 +1,13 @@
+
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/MetricCard";
-import { BookingStatus, DashboardMetrics } from '@/types/api';
+import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays } from 'lucide-react';
 
 interface DashboardMetricsProps {
-  metrics: DashboardMetrics;
+  metrics: DashboardMetricsType;
   isLoading: boolean;
   error?: Error;
   onFilterChange: (status: BookingStatus | "all") => void;

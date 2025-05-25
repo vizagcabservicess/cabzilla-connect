@@ -1,13 +1,19 @@
+
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { LoginRequest, SignupRequest, User } from '@/types/api';
 
+interface AuthResponse {
+  user: User;
+  token: string;
+}
+
 export const authAPI = {
-  login: async (credentials: LoginRequest): Promise<User> => {
+  login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     // Mock authentication logic
     console.log('Login attempt:', credentials);
     
-    return {
+    const user: User = {
       id: 1,
       name: 'Admin User',
       email: credentials.email,
@@ -17,13 +23,21 @@ export const authAPI = {
       updated_at: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
+
+    const token = 'mock-jwt-token-' + Date.now();
+    
+    // Store token in localStorage
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('userData', JSON.stringify(user));
+    
+    return { user, token };
   },
 
-  signup: async (userData: SignupRequest): Promise<User> => {
+  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
     // Mock signup logic
     console.log('Signup attempt:', userData);
     
-    return {
+    const user: User = {
       id: 2,
       name: userData.name,
       email: userData.email,
@@ -33,6 +47,14 @@ export const authAPI = {
       updated_at: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
+
+    const token = 'mock-jwt-token-' + Date.now();
+    
+    // Store token in localStorage
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('userData', JSON.stringify(user));
+    
+    return { user, token };
   },
 
   getUsers: async (): Promise<User[]> => {
@@ -83,6 +105,11 @@ export const authAPI = {
   },
   
   getCurrentUser: async (): Promise<User> => {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      return JSON.parse(userData);
+    }
+    
     return {
       id: 1,
       name: 'Current User',
@@ -93,5 +120,23 @@ export const authAPI = {
       updated_at: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
+  },
+
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem('authToken');
+  },
+
+  isAdmin: (): boolean => {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      const user = JSON.parse(userData);
+      return user.role === 'admin';
+    }
+    return false;
+  },
+
+  logout: (): void => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
   }
 };

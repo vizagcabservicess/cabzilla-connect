@@ -58,8 +58,9 @@ export interface Booking {
   }[];
   payment_status?: string;
   payment_method?: string;
-  razorpay_payment_id?: string; // Added for payment compatibility
-  razorpay_order_id?: string; // Added for payment compatibility
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  razorpay_signature?: string;
   createdAt: string;
   updatedAt: string;
   // Additional properties for compatibility
