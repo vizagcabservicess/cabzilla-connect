@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -123,7 +124,6 @@ export default function ToursPage() {
           <Hero 
             title="Explore Amazing Tours"
             subtitle="Discover beautiful destinations with our curated tour packages"
-            showSearchForm={false}
           />
           
           {/* Popular Destinations */}
