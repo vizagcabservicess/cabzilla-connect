@@ -1,49 +1,52 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Booking } from '@/types/api';
-import { WhatsAppButton } from '@/components/ui/whatsapp-button';
-import { generateDriverAssignmentMessage, generateDriverNotificationMessage } from '@/services/whatsappService';
+import { 
+  generateDriverAssignmentMessage, 
+  generateDriverNotificationMessage 
+} from '@/services/whatsappService';
 
-interface DriverAssignmentProps {
+export interface DriverAssignmentProps {
   booking: Booking;
-  onAssign: (driverData: any) => void;
+  onAssign: (driverData: { 
+    driverName: string; 
+    driverPhone: string; 
+    vehicleNumber: string; 
+  }) => Promise<void>;
   onClose: () => void;
+  isSubmitting: boolean;
 }
 
-export function DriverAssignment({ booking, onAssign, onClose }: DriverAssignmentProps) {
-  const [driverName, setDriverName] = useState(booking.driverName || '');
-  const [driverPhone, setDriverPhone] = useState(booking.driverPhone || '');
-  const [vehicleNumber, setVehicleNumber] = useState(booking.vehicleNumber || '');
+export function DriverAssignment({ 
+  booking, 
+  onAssign, 
+  onClose, 
+  isSubmitting 
+}: DriverAssignmentProps) {
+  const [driverName, setDriverName] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAssign({
+    
+    if (!driverName || !driverPhone || !vehicleNumber) {
+      return;
+    }
+
+    await onAssign({
       driverName,
       driverPhone,
       vehicleNumber
     });
   };
 
-  const driverAssignmentMessage = generateDriverAssignmentMessage({
-    ...booking,
-    driverName,
-    driverPhone,
-    vehicleNumber
-  });
-
-  const driverNotificationMessage = generateDriverNotificationMessage({
-    ...booking,
-    driverName,
-    driverPhone,
-    vehicleNumber
-  });
-
   return (
-    <Card className="w-full max-w-md">
+    <Card>
       <CardHeader>
         <CardTitle>Assign Driver</CardTitle>
       </CardHeader>
@@ -79,36 +82,14 @@ export function DriverAssignment({ booking, onAssign, onClose }: DriverAssignmen
             />
           </div>
           
-          <div className="flex space-x-2">
-            <Button type="submit" className="flex-1">
-              Assign Driver
-            </Button>
+          <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Assigning...' : 'Assign Driver'}
+            </Button>
           </div>
-          
-          {driverPhone && (
-            <div className="mt-4 space-y-2">
-              <WhatsAppButton
-                phone={booking.passengerPhone}
-                message={driverAssignmentMessage}
-                variant="outline"
-                fullWidth
-              >
-                Notify Customer
-              </WhatsAppButton>
-              
-              <WhatsAppButton
-                phone={driverPhone}
-                message={driverNotificationMessage}
-                variant="outline"
-                fullWidth
-              >
-                Notify Driver
-              </WhatsAppButton>
-            </div>
-          )}
         </form>
       </CardContent>
     </Card>

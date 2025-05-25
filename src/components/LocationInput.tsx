@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,9 +71,9 @@ export function LocationInput({
   const valueRef = useRef<Location | string | undefined>(value);
   const locationRef = useRef(location);
   const initializedRef = useRef(false);
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = useRef<any>(null);
   const autocompleteInitializedRef = useRef(false);
   const initializationAttemptsRef = useRef(0);
   
@@ -128,29 +129,29 @@ export function LocationInput({
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
-    if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
+    if (!isLoaded || !window.google?.maps || !inputRef.current || autocompleteInitializedRef.current) return;
     
     try {
       console.log("Initializing Google Maps Autocomplete with restricted bounds");
       
       // Create a circle around Vizag city center
-      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-      const circle = new google.maps.Circle({
+      const vizagCenter = new window.google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+      const circle = new window.google.maps.Circle({
         center: vizagCenter,
         radius: MAX_DISTANCE_KM * 1000, // Convert km to meters
       });
       
-      const strictBounds = circle.getBounds() as google.maps.LatLngBounds;
+      const strictBounds = circle.getBounds();
       
       // Configure Autocomplete options with strict bounds
-      const options: google.maps.places.AutocompleteOptions = {
+      const options = {
         types: ["geocode", "establishment"],
         componentRestrictions: { country: "in" },
         bounds: strictBounds,
         strictBounds: isPickupLocation, // Enforce strict bounds for pickup locations
       };
       
-      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
       // Add place_changed listener
       autocompleteRef.current.addListener("place_changed", () => {
@@ -180,8 +181,7 @@ export function LocationInput({
               lng: lng,
               city: "Visakhapatnam", // Default city
               state: "Andhra Pradesh", // Default state
-              type: "other",
-              isInVizag: isWithinVizagRange(lat, lng)
+              type: "other"
             });
           }
         }
@@ -201,7 +201,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-  }, [isLoaded, google, inputRef.current, isPickupLocation, isAirportTransfer, onLocationChange, onChange]);
+  }, [isLoaded, inputRef.current, isPickupLocation, isAirportTransfer, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;

@@ -50,7 +50,7 @@ export async function calculateDistanceMatrix(
     const distanceService = new window.google.maps.DistanceMatrixService();
     
     // Request the distance
-    const response = await new Promise<google.maps.DistanceMatrixResponse>((resolve, reject) => {
+    const response = await new Promise<any>((resolve, reject) => {
       distanceService.getDistanceMatrix(
         {
           origins: [{ lat: safeOrigin.lat, lng: safeOrigin.lng }],
@@ -154,7 +154,7 @@ async function calculateDirectionsDistance(
   try {
     const directionsService = new window.google.maps.DirectionsService();
     
-    const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+    const result = await new Promise<any>((resolve, reject) => {
       directionsService.route(
         {
           origin: { lat: safeOrigin.lat, lng: safeOrigin.lng },

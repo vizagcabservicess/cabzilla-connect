@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -17,7 +18,7 @@ import { ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
-import GoogleMapComponent from './GoogleMapComponent';
+import { GoogleMapComponent } from './GoogleMapComponent';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
