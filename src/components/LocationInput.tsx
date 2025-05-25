@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -180,6 +179,8 @@ export function LocationInput({
               lat: lat,
               lng: lng,
               city: "Visakhapatnam", // Default city
+              state: "Andhra Pradesh", // Default state
+              type: "other",
               isInVizag: isWithinVizagRange(lat, lng)
             });
           }
@@ -284,7 +285,9 @@ export function LocationInput({
                 address: "", 
                 lat: 0, 
                 lng: 0, 
-                city: "Visakhapatnam" 
+                city: "Visakhapatnam",
+                state: "Andhra Pradesh",
+                type: "other"
               });
               setShowSuggestions(false);
             }}

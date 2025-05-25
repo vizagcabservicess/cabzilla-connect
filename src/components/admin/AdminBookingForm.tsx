@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { TabTripSelector } from '@/components/TabTripSelector';
-import { LocationInput } from '@/components/LocationInput';
+import { AdminBookingLocationHandler } from './AdminBookingLocationHandler';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { CabOptions } from '@/components/CabOptions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -334,14 +334,14 @@ export function AdminBookingForm() {
               </div>
               
               <div className="space-y-2">
-                <Label>Pickup Location <span className="text-red-500">*</span></Label>
-                <LocationInput
-                  label=""
+                <AdminBookingLocationHandler
+                  label="Pickup Location"
                   placeholder="Enter pickup location"
-                  value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                  onLocationChange={setPickupLocation}
+                  value={pickupLocation}
+                  onChange={setPickupLocation}
                   isPickupLocation={true}
                   isAirportTransfer={tripType === 'airport'}
+                  required={true}
                 />
                 {errors.pickupLocation && (
                   <p className="text-xs text-red-500">{errors.pickupLocation}</p>
@@ -349,14 +349,14 @@ export function AdminBookingForm() {
               </div>
               
               <div className="space-y-2">
-                <Label>Drop Location <span className="text-red-500">*</span></Label>
-                <LocationInput
-                  label=""
+                <AdminBookingLocationHandler
+                  label="Drop Location"
                   placeholder="Enter drop location"
-                  value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
-                  onLocationChange={setDropLocation}
+                  value={dropLocation}
+                  onChange={setDropLocation}
                   isPickupLocation={false}
                   isAirportTransfer={tripType === 'airport'}
+                  required={true}
                 />
                 {errors.dropLocation && (
                   <p className="text-xs text-red-500">{errors.dropLocation}</p>

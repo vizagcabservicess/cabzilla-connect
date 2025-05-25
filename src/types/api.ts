@@ -148,7 +148,7 @@ export interface GstReportData {
 export interface Location {
   id: string;
   name: string;
-  type?: string;
+  type?: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
   address: string;
   lat: number;
   lng: number;
