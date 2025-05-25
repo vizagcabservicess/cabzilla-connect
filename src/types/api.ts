@@ -203,6 +203,7 @@ export interface VehiclePricingUpdateRequest {
   airportTransferRate?: number;
   basePrice?: number;
   pricePerKm?: number;
+  perKmRate?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
 }
@@ -311,6 +312,7 @@ export interface PaymentFilterParams {
   method?: string;
   startDate?: string;
   endDate?: string;
+  search?: string;
 }
 
 export interface Payment {

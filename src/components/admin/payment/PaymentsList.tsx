@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MoreHorizontal, Send } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Payment } from '@/types/payment';
+import { Payment } from '@/types/api';
 import { PaymentUpdateDialog } from './PaymentUpdateDialog';
 import { PaymentReminderDialog } from './PaymentReminderDialog';
 

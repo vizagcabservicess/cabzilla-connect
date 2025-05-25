@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -178,6 +179,7 @@ export function LocationInput({
               address: place.formatted_address || "",
               lat: lat,
               lng: lng,
+              city: "Visakhapatnam", // Default city
               isInVizag: isWithinVizagRange(lat, lng)
             });
           }
@@ -276,7 +278,14 @@ export function LocationInput({
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
-              if (onLocationChange) onLocationChange({ id: "", name: "", address: "", lat: 0, lng: 0 });
+              if (onLocationChange) onLocationChange({ 
+                id: "", 
+                name: "", 
+                address: "", 
+                lat: 0, 
+                lng: 0, 
+                city: "Visakhapatnam" 
+              });
               setShowSuggestions(false);
             }}
             tabIndex={-1}

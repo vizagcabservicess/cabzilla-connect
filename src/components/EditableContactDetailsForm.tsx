@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,6 +184,15 @@ export function EditableContactDetailsForm({
     onSubmit(contactDetails);
   };
 
+  const handlePaymentSuccess = (paymentId: string) => {
+    handlePaymentComplete();
+  };
+
+  const handlePaymentError = (error: string) => {
+    console.error('Payment error:', error);
+    setShowPaymentGateway(false);
+  };
+
   return (
     <div className="space-y-6">
       {!showPaymentGateway ? (
@@ -281,8 +291,21 @@ export function EditableContactDetailsForm({
         </div>
       ) : (
         <PaymentGateway 
-          totalAmount={totalPrice}
-          onPaymentComplete={handlePaymentComplete}
+          booking={{
+            totalAmount: totalPrice,
+            passengerName: name,
+            passengerEmail: email,
+            passengerPhone: phone,
+            pickupLocation: 'Selected location',
+            dropLocation: '',
+            pickupDate: new Date().toISOString(),
+            cabType: 'Standard',
+            distance: 0,
+            tripType: 'local',
+            tripMode: 'one-way'
+          }}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentError={handlePaymentError}
         />
       )}
     </div>
