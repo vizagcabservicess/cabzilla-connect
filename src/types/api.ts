@@ -153,7 +153,7 @@ export interface Location {
   lat: number;
   lng: number;
   city: string;
-  state?: string;
+  state: string;
   isInVizag?: boolean;
   popularityScore?: number;
 }
@@ -320,7 +320,7 @@ export interface Payment {
   bookingId: string;
   amount: number;
   method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: 'pending' | 'partial' | 'paid' | 'cancelled';
   transactionId?: string;
   createdAt: string;
   updatedAt: string;

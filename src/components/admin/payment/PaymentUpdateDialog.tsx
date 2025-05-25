@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Payment, PaymentMethod, PaymentStatus } from '@/types/payment';
+import { Payment, PaymentStatus, PaymentMethod } from '@/types/payment';
 
 interface PaymentUpdateDialogProps {
   open: boolean;
@@ -28,32 +28,31 @@ export function PaymentUpdateDialog({
   onUpdate 
 }: PaymentUpdateDialogProps) {
   const [status, setStatus] = useState<PaymentStatus>(payment.status);
-  const [amount, setAmount] = useState(payment.amount);
-  const [method, setMethod] = useState<PaymentMethod>(payment.method);
+  const [amount, setAmount] = useState<string>(payment.amount.toString());
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(payment.method);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    setStatus(payment.status);
-    setAmount(payment.amount);
-    setMethod(payment.method);
-    setNotes('');
-  }, [payment]);
-
-  const handleMethodChange = (value: string) => {
-    setMethod(value as PaymentMethod);
-  };
-
-  const handleUpdate = async () => {
+  const handleSave = async () => {
     setIsLoading(true);
     try {
-      await onUpdate(payment.id, status, amount, method, notes);
+      await onUpdate(
+        payment.id,
+        status,
+        parseFloat(amount),
+        paymentMethod,
+        notes
+      );
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to update payment:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMethodChange = (value: string) => {
+    setPaymentMethod(value as PaymentMethod);
   };
 
   return (
@@ -69,7 +68,7 @@ export function PaymentUpdateDialog({
         <div className="space-y-4">
           <div>
             <Label>Status</Label>
-            <Select value={status} onValueChange={(value) => setStatus(value as PaymentStatus)}>
+            <Select value={status} onValueChange={(value: PaymentStatus) => setStatus(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -87,13 +86,14 @@ export function PaymentUpdateDialog({
             <Input
               type="number"
               value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter amount"
             />
           </div>
           
           <div>
             <Label>Payment Method</Label>
-            <Select value={method} onValueChange={handleMethodChange}>
+            <Select value={paymentMethod} onValueChange={handleMethodChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -111,7 +111,7 @@ export function PaymentUpdateDialog({
           </div>
           
           <div>
-            <Label>Notes</Label>
+            <Label>Notes (Optional)</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -125,7 +125,7 @@ export function PaymentUpdateDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleUpdate} disabled={isLoading}>
+          <Button onClick={handleSave} disabled={isLoading}>
             {isLoading ? 'Updating...' : 'Update Payment'}
           </Button>
         </DialogFooter>

@@ -5,8 +5,7 @@ import { PaymentsList } from './PaymentsList';
 import { PaymentSummary } from './PaymentSummary';
 import { PaymentFilters } from './PaymentFilters';
 import { paymentsAPI } from '@/services/api/paymentsAPI';
-import { PaymentSummary as PaymentSummaryType, PaymentMethod, PaymentStatus } from '@/types/payment';
-import { Payment } from '@/types/api';
+import { PaymentSummary as PaymentSummaryType, PaymentMethod, PaymentStatus, Payment } from '@/types/payment';
 import { toast } from "sonner";
 
 export function PaymentManagement() {
