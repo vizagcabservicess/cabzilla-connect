@@ -31,3 +31,33 @@ export const getTravelTime = async (
   // Assuming average speed of 60 km/h
   return Math.round((distance / 60) * 60); // Return time in minutes
 };
+
+// Calculate distance matrix between two locations
+export const calculateDistanceMatrix = async (
+  pickup: any,
+  dropoff: any
+): Promise<{ status: string; distance: number; duration: number }> => {
+  try {
+    // Extract coordinates from location objects
+    const fromLat = pickup.lat || pickup.latitude || 17.6868;
+    const fromLng = pickup.lng || pickup.longitude || 83.2185;
+    const toLat = dropoff.lat || dropoff.latitude || 17.7231;
+    const toLng = dropoff.lng || dropoff.longitude || 83.3012;
+
+    const distance = await getDistance(fromLat, fromLng, toLat, toLng);
+    const duration = await getTravelTime(fromLat, fromLng, toLat, toLng);
+
+    return {
+      status: "OK",
+      distance,
+      duration
+    };
+  } catch (error) {
+    console.error("Error calculating distance matrix:", error);
+    return {
+      status: "ERROR",
+      distance: 0,
+      duration: 0
+    };
+  }
+};
