@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 
@@ -11,6 +10,7 @@ export interface User {
   phone: string;
   role: 'customer' | 'driver' | 'admin';
   is_active: boolean;
+  imageUrl?: string;
 }
 
 export interface LoginRequest {

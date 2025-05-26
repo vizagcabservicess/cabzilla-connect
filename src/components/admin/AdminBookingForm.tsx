@@ -1,554 +1,309 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
-import { TabTripSelector } from '@/components/TabTripSelector';
-import { LocationInput } from '@/components/LocationInput';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import { LocationInput, Location } from '@/components/LocationInput';
 import { DateTimePicker } from '@/components/DateTimePicker';
-import { CabOptions } from '@/components/CabOptions';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Location } from '@/lib/locationData';
-import { CabType } from '@/types/cab';
-import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
-import { hourlyPackages } from '@/lib/packageData';
-import { cabTypes } from '@/lib/cabData';
-import { convertToApiLocation } from '@/lib/locationUtils';
-import { bookingAPI } from '@/services/api';
-import { BookingRequest } from '@/types/api';
-import { useFare } from '@/hooks/useFare';
-import { calculateDistanceMatrix } from '@/lib/distanceService';
-import { formatPrice } from '@/lib/cabData';
+import { BookingRequest, Booking } from '@/types/api';
+import { authAPI } from '@/services/api/authAPI';
 
-const hourlyPackageOptions = [
-  { value: "8hrs-80km", label: "8 Hours / 80 KM" },
-  { value: "10hrs-100km", label: "10 Hours / 100 KM" }
-];
+interface AdminBookingFormProps {
+  onBookingCreated?: (booking: Booking) => void;
+}
 
-export function AdminBookingForm() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  
-  // Customer details
-  const [passengerName, setPassengerName] = useState('');
-  const [passengerPhone, setPassengerPhone] = useState('');
-  const [passengerEmail, setPassengerEmail] = useState('');
-  
-  // Trip details
-  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
-  const [dropLocation, setDropLocation] = useState<Location | null>(null);
-  const [pickupDate, setPickupDate] = useState<Date>(new Date());
-  const [returnDate, setReturnDate] = useState<Date | null>(null);
-  const [tripType, setTripType] = useState<TripType>('outstation');
-  const [tripMode, setTripMode] = useState<TripMode>('one-way');
-  const [hourlyPackage, setHourlyPackage] = useState(hourlyPackageOptions[0].value);
-  
-  // Vehicle selection
-  const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
-  const [distance, setDistance] = useState(0);
-  const [selectedFare, setSelectedFare] = useState<number>(0);
-  const [selectedFareBreakdown, setSelectedFareBreakdown] = useState<any>(null);
-  
-  // Admin-specific fields
-  const [adminNotes, setAdminNotes] = useState('');
-  const [discountType, setDiscountType] = useState<'none' | 'percentage' | 'fixed'>('none');
-  const [discountValue, setDiscountValue] = useState<number>(0);
-  const [markAsPaid, setMarkAsPaid] = useState(false);
-  
-  // Form validation state
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  
-  // Add useFare for unified fare calculation
-  const { fareData, isLoading: isFareLoading, error: fareError } = useFare(
-    selectedCab?.id || '',
-    tripType,
-    distance,
-    tripType === 'local' ? hourlyPackage : undefined,
-    pickupDate
-  );
-  
-  // Replace Haversine formula with Google Maps API distance calculation
-  useEffect(() => {
-    const fetchDistance = async () => {
-      if (tripType === 'local') {
-        // For local trips, use the package distance
-        const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
-        if (selectedPackage) {
-          setDistance(selectedPackage.kilometers);
-        } else {
-          setDistance(0);
-        }
-        return;
-      }
-      if (pickupLocation && dropLocation) {
-        try {
-          const result = await calculateDistanceMatrix(pickupLocation, dropLocation);
-          if (result.status === 'OK') {
-            setDistance(result.distance);
-          } else {
-            setDistance(0);
-          }
-        } catch (error) {
-          setDistance(0);
-        }
-      } else {
-        setDistance(0);
-      }
-    };
-    fetchDistance();
-  }, [pickupLocation, dropLocation, tripType, hourlyPackage]);
-  
-  // Handle distance calculation from map component
-  const handleDistanceCalculated = (calculatedDistance: number, calculatedDuration: number) => {
-    setDistance(calculatedDistance);
+export const AdminBookingForm: React.FC<AdminBookingFormProps> = ({
+  onBookingCreated
+}) => {
+  const [formData, setFormData] = useState({
+    pickupLocation: '',
+    dropLocation: '',
+    pickupDate: new Date(),
+    returnDate: null as Date | null,
+    cabType: '',
+    tripType: 'one-way',
+    tripMode: 'local',
+    passengerName: '',
+    passengerPhone: '',
+    passengerEmail: '',
+    totalAmount: 0,
+    adminNotes: '',
+    discountAmount: 0,
+    discountType: null as string | null,
+    discountValue: 0,
+    isPaid: false,
+    hourlyPackage: null as string | null,
+  });
+
+  const [pickupLocationObj, setPickupLocationObj] = useState<Location | null>(null);
+  const [dropLocationObj, setDropLocationObj] = useState<Location | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cabTypes] = useState(['Sedan', 'SUV', 'Hatchback', 'Premium']);
+
+  const handlePickupLocationChange = (location: Location) => {
+    setPickupLocationObj(location);
+    setFormData(prev => ({ ...prev, pickupLocation: location.address }));
   };
-  
-  // Handle cab selection with fare and breakdown
-  const handleCabSelect = (cab: CabType, fare: number, breakdown?: any) => {
-    setSelectedCab(cab);
-    setSelectedFare(fare);
-    setSelectedFareBreakdown(breakdown || null);
+
+  const handleDropLocationChange = (location: Location) => {
+    setDropLocationObj(location);
+    setFormData(prev => ({ ...prev, dropLocation: location.address }));
   };
-  
-  // Add this helper at the top, after selectedFareBreakdown:
-  const sumBreakdown = (breakdown: any) => {
-    if (!breakdown) return 0;
-    const fields = [
-      'basePrice',
-      'driverAllowance',
-      'nightCharges',
-      'extraDistanceFare',
-      'extraHourCharge',
-      'airportFee',
-    ];
-    let total = 0;
-    for (const key of fields) {
-      const val = breakdown[key];
-      if (typeof val === 'number' && !isNaN(val)) {
-        total += val;
-      }
-    }
-    return total;
-  };
-  
-  // Update calculatePrice to use sumBreakdown:
-  const calculatePrice = () => {
-    return sumBreakdown(selectedFareBreakdown) || selectedFare || 0;
-  };
-  
-  // Update calculateFinalPrice to use the new calculatePrice:
-  const calculateFinalPrice = () => {
-    const basePrice = calculatePrice();
-    if (discountType === 'none' || discountValue <= 0) {
-      return basePrice;
-    }
-    if (discountType === 'percentage') {
-      const discount = basePrice * (discountValue / 100);
-      return Math.max(0, basePrice - discount);
-    }
-    if (discountType === 'fixed') {
-      return Math.max(0, basePrice - discountValue);
-    }
-    return basePrice;
-  };
-  
-  // Validate form fields
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!passengerName.trim()) {
-      newErrors.passengerName = 'Passenger name is required';
-    }
-    
-    if (!passengerPhone.trim()) {
-      newErrors.passengerPhone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(passengerPhone.replace(/\D/g, ''))) {
-      newErrors.passengerPhone = 'Enter a valid 10-digit phone number';
-    }
-    
-    if (!passengerEmail.trim()) {
-      newErrors.passengerEmail = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(passengerEmail)) {
-      newErrors.passengerEmail = 'Enter a valid email address';
-    }
-    
-    if (!pickupLocation) {
-      newErrors.pickupLocation = 'Pickup location is required';
-    }
-    
-    if ((tripType === 'outstation' || tripType === 'airport') && !dropLocation) {
-      newErrors.dropLocation = 'Drop location is required';
-    }
-    
-    if (tripMode === 'round-trip' && !returnDate) {
-      newErrors.returnDate = 'Return date is required for round trips';
-    }
-    
-    if (!selectedCab) {
-      newErrors.selectedCab = 'Please select a vehicle';
-    }
-    
-    if (discountType !== 'none') {
-      if (discountValue < 0) {
-        newErrors.discountValue = 'Discount cannot be negative';
-      }
-      
-      if (discountType === 'percentage' && discountValue > 100) {
-        newErrors.discountValue = 'Percentage discount cannot exceed 100%';
-      }
-      
-      if (discountType === 'fixed' && discountValue > calculatePrice()) {
-        newErrors.discountValue = 'Fixed discount cannot exceed total price';
-      }
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-  
-  // Handle form submission
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      toast({
-        title: "Form Validation Error",
-        description: "Please fix the errors in the form before submitting.",
-        variant: "destructive",
-      });
+    if (!formData.pickupLocation || !formData.passengerName || !formData.passengerPhone) {
+      toast.error('Please fill in all required fields');
       return;
     }
-    
+
+    setIsSubmitting(true);
+
     try {
-      const basePrice = calculatePrice();
-      const finalPrice = calculateFinalPrice();
-      const discountAmount = basePrice - finalPrice;
-      
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
-        dropLocation: dropLocation?.address || dropLocation?.name || '',
-        pickupDate: pickupDate?.toISOString() || '',
-        returnDate: returnDate?.toISOString() || null,
-        cabType: selectedCab?.name || '',
-        distance: distance,
-        tripType: tripType,
-        tripMode: tripMode,
-        totalAmount: finalPrice,
-        passengerName: passengerName,
-        passengerPhone: passengerPhone,
-        passengerEmail: passengerEmail,
-        hourlyPackage: tripType === 'local' ? hourlyPackage : null,
-        // Admin-specific fields
-        adminNotes: adminNotes,
-        discountAmount: discountAmount > 0 ? discountAmount : 0,
-        discountType: discountType !== 'none' ? discountType : null,
-        discountValue: discountValue > 0 ? discountValue : 0,
-        isPaid: markAsPaid,
-        createdBy: 'admin',
+        pickupLocation: formData.pickupLocation,
+        dropLocation: formData.dropLocation,
+        pickupDate: formData.pickupDate.toISOString(),
+        returnDate: formData.returnDate?.toISOString() || null,
+        cabType: formData.cabType,
+        distance: 0,
+        tripType: formData.tripType,
+        tripMode: formData.tripMode,
+        totalAmount: formData.totalAmount,
+        passengerName: formData.passengerName,
+        passengerPhone: formData.passengerPhone,
+        passengerEmail: formData.passengerEmail,
+        hourlyPackage: formData.hourlyPackage,
+        adminNotes: formData.adminNotes,
+        discountAmount: formData.discountAmount,
+        discountType: formData.discountType,
+        discountValue: formData.discountValue,
+        isPaid: formData.isPaid,
+        createdBy: 'admin'
       };
-      
-      // Call API to create booking
-      const response = await bookingAPI.createBooking(bookingData);
-      
-      toast({
-        title: "Booking Created Successfully",
-        description: `Booking #${response.booking_number || response.id} has been created.`,
+
+      const token = authAPI.getToken();
+      const response = await fetch('/api/admin/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(bookingData)
       });
-      
-      // Navigate to booking details or bookings list
-      navigate(`/admin/bookings`);
-      
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        toast.success('Booking created successfully');
+        onBookingCreated?.(result.data);
+        
+        // Reset form
+        setFormData({
+          pickupLocation: '',
+          dropLocation: '',
+          pickupDate: new Date(),
+          returnDate: null,
+          cabType: '',
+          tripType: 'one-way',
+          tripMode: 'local',
+          passengerName: '',
+          passengerPhone: '',
+          passengerEmail: '',
+          totalAmount: 0,
+          adminNotes: '',
+          discountAmount: 0,
+          discountType: null,
+          discountValue: 0,
+          isPaid: false,
+          hourlyPackage: null,
+        });
+      } else {
+        throw new Error(result.message || 'Failed to create booking');
+      }
     } catch (error) {
       console.error('Error creating booking:', error);
-      toast({
-        title: "Error Creating Booking",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
+      toast.error('Failed to create booking. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-50 min-h-screen py-6 px-2 md:px-8">
-      <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-6">
-        {/* Left: Customer & Trip Info */}
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-3">Customer Information</h2>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="passengerName">Full Name <span className="text-red-500">*</span></Label>
-                <Input 
-                  id="passengerName" 
-                  value={passengerName} 
-                  onChange={(e) => setPassengerName(e.target.value)} 
-                  className={errors.passengerName ? "border-red-500" : ""}
-                />
-                {errors.passengerName && (
-                  <p className="text-xs text-red-500">{errors.passengerName}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="passengerPhone">Phone Number <span className="text-red-500">*</span></Label>
-                <Input 
-                  id="passengerPhone" 
-                  value={passengerPhone} 
-                  onChange={(e) => setPassengerPhone(e.target.value)}
-                  className={errors.passengerPhone ? "border-red-500" : ""}
-                />
-                {errors.passengerPhone && (
-                  <p className="text-xs text-red-500">{errors.passengerPhone}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="passengerEmail">Email <span className="text-red-500">*</span></Label>
-                <Input 
-                  id="passengerEmail" 
-                  type="email" 
-                  value={passengerEmail} 
-                  onChange={(e) => setPassengerEmail(e.target.value)}
-                  className={errors.passengerEmail ? "border-red-500" : ""}
-                />
-                {errors.passengerEmail && (
-                  <p className="text-xs text-red-500">{errors.passengerEmail}</p>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-3">Trip Information</h2>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="space-y-2">
-                <TabTripSelector
-                  selectedTab={ensureCustomerTripType(tripType)}
-                  tripMode={tripMode}
-                  onTabChange={(type) => setTripType(type as TripType)}
-                  onTripModeChange={setTripMode}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Pickup Location <span className="text-red-500">*</span></Label>
-                <LocationInput
-                  label=""
-                  placeholder="Enter pickup location"
-                  value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                  onLocationChange={setPickupLocation}
-                  isPickupLocation={true}
-                  isAirportTransfer={tripType === 'airport'}
-                />
-                {errors.pickupLocation && (
-                  <p className="text-xs text-red-500">{errors.pickupLocation}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Drop Location <span className="text-red-500">*</span></Label>
-                <LocationInput
-                  label=""
-                  placeholder="Enter drop location"
-                  value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
-                  onLocationChange={setDropLocation}
-                  isPickupLocation={false}
-                  isAirportTransfer={tripType === 'airport'}
-                />
-                {errors.dropLocation && (
-                  <p className="text-xs text-red-500">{errors.dropLocation}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Hourly Package</Label>
-                <Select
-                  value={hourlyPackage}
-                  onValueChange={setHourlyPackage}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select package" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hourlyPackageOptions.map((pkg) => (
-                      <SelectItem key={pkg.value} value={pkg.value}>
-                        {pkg.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Pickup Date & Time <span className="text-red-500">*</span></Label>
-                <DateTimePicker
-                  label=""
-                  date={pickupDate}
-                  onDateChange={setPickupDate}
-                  minDate={new Date()}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Return Date & Time <span className="text-red-500">*</span></Label>
-                <DateTimePicker
-                  label=""
-                  date={returnDate}
-                  onDateChange={setReturnDate}
-                  minDate={pickupDate}
-                />
-                {errors.returnDate && (
-                  <p className="text-xs text-red-500">{errors.returnDate}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Right: Vehicle, Pricing, Actions */}
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-3">Vehicle Selection</h2>
-            <CabOptions
-              cabTypes={cabTypes}
-              selectedCab={selectedCab}
-              onSelectCab={handleCabSelect}
-              distance={distance}
-              tripType={tripType}
-              tripMode={tripMode}
-              hourlyPackage={hourlyPackage}
-              pickupDate={pickupDate}
-              returnDate={returnDate}
-              isCalculatingFares={false}
-            />
-            {errors.selectedCab && (
-              <p className="text-xs text-red-500 mt-2">{errors.selectedCab}</p>
-            )}
-          </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-3">Pricing & Discount</h2>
-            {selectedFareBreakdown && (
-              <div className="mb-4">
-                <h3 className="text-md font-semibold mb-2">Fare Breakup</h3>
-                <div className="space-y-2">
-                  {selectedFareBreakdown.basePrice !== undefined && (
-                    <div className="flex justify-between text-gray-800">
-                      <span>Base fare</span>
-                      <span>{formatPrice(selectedFareBreakdown.basePrice)}</span>
-                    </div>
-                  )}
-                  {selectedFareBreakdown.driverAllowance !== undefined && (
-                    <div className="flex justify-between text-gray-800">
-                      <span>Driver allowance</span>
-                      <span>{formatPrice(selectedFareBreakdown.driverAllowance)}</span>
-                    </div>
-                  )}
-                  {selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0 && (
-                    <div className="flex justify-between text-gray-800">
-                      <span>Night charges</span>
-                      <span>{formatPrice(selectedFareBreakdown.nightCharges)}</span>
-                    </div>
-                  )}
-                  {selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0 && (
-                    <div className="flex justify-between text-gray-800">
-                      <span>Extra distance charges</span>
-                      <span>{formatPrice(selectedFareBreakdown.extraDistanceFare)}</span>
-                    </div>
-                  )}
-                  {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHourCharge > 0 && (
-                    <div className="flex justify-between text-gray-800">
-                      <span>Extra hour charges</span>
-                      <span>{formatPrice(selectedFareBreakdown.extraHourCharge)}</span>
-                    </div>
-                  )}
-                  {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
-                    <div className="text-gray-500 text-sm">No detailed breakup available.</div>
-                  )}
-                </div>
-                <div className="flex justify-between font-bold border-t pt-2 mt-2 text-lg">
-                  <span>Total Price</span>
-                  <span>{formatPrice(calculatePrice())}</span>
-                </div>
-              </div>
-            )}
-            
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-600">Base Price:</span>
-              <span className="font-medium">{formatPrice(calculatePrice())}</span>
-            </div>
-            
-            <div className="mt-4 space-y-4">
-              <Label>Apply Discount</Label>
-              <RadioGroup
-                value={discountType}
-                onValueChange={(value) => setDiscountType(value as 'none' | 'percentage' | 'fixed')}
-                className="flex flex-col space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="none" id="none" />
-                  <Label htmlFor="none">No Discount</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="percentage" id="percentage" />
-                  <Label htmlFor="percentage">Percentage Discount</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="fixed" id="fixed" />
-                  <Label htmlFor="fixed">Fixed Amount Discount</Label>
-                </div>
-              </RadioGroup>
-              
-              {discountType !== 'none' && (
-                <div className="flex items-center mt-2">
-                  <Input
-                    type="number"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(Number(e.target.value))}
-                    min={0}
-                    max={discountType === 'percentage' ? 100 : calculatePrice()}
-                    className={`w-32 ${errors.discountValue ? "border-red-500" : ""}`}
-                  />
-                  <span className="ml-2">{discountType === 'percentage' ? '%' : '₹'}</span>
-                  
-                  {errors.discountValue && (
-                    <p className="text-xs text-red-500 ml-4">{errors.discountValue}</p>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            {discountType !== 'none' && discountValue > 0 && (
-              <div className="flex justify-between py-2 border-b mt-4">
-                <span className="text-gray-600">Discount:</span>
-                <span className="font-medium text-green-600">
-                  - {formatPrice(calculatePrice() - calculateFinalPrice())}
-                </span>
-              </div>
-            )}
-            
-            <div className="flex justify-between py-3 border-b border-t mt-4 text-lg">
-              <span className="font-semibold">Final Price:</span>
-              <span className="font-bold">{formatPrice(calculateFinalPrice())}</span>
-            </div>
-            
-            <div className="mt-4 flex items-center space-x-2">
-              <Checkbox 
-                id="markAsPaid" 
-                checked={markAsPaid} 
-                onCheckedChange={() => setMarkAsPaid(!markAsPaid)}
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle>Create New Booking</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Location Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Pickup Location *</Label>
+              <LocationInput
+                value={pickupLocationObj?.address || ''}
+                onChange={handlePickupLocationChange}
+                placeholder="Enter pickup location"
               />
-              <Label htmlFor="markAsPaid" className="font-medium">
-                Mark as Paid
-              </Label>
             </div>
-            <div className="flex justify-end mt-4">
-              <Button type="submit" className="px-6 py-2 text-sm rounded-full bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 transition">Create Booking</Button>
+
+            {formData.tripMode !== 'local' && (
+              <div className="space-y-2">
+                <Label>Drop Location</Label>
+                <LocationInput
+                  value={dropLocationObj?.address || ''}
+                  onChange={handleDropLocationChange}
+                  placeholder="Enter drop location"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Date Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <DateTimePicker
+              date={formData.pickupDate}
+              onDateChange={(date) => setFormData(prev => ({ ...prev, pickupDate: date }))}
+              minDate={new Date()}
+            />
+
+            {formData.tripType === 'round-trip' && (
+              <DateTimePicker
+                date={formData.returnDate || new Date()}
+                onDateChange={(date) => setFormData(prev => ({ ...prev, returnDate: date }))}
+                minDate={new Date()}
+              />
+            )}
+          </div>
+
+          {/* Passenger Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="passengerName">Passenger Name *</Label>
+              <Input
+                id="passengerName"
+                value={formData.passengerName}
+                onChange={(e) => setFormData(prev => ({ ...prev, passengerName: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="passengerPhone">Phone Number *</Label>
+              <Input
+                id="passengerPhone"
+                value={formData.passengerPhone}
+                onChange={(e) => setFormData(prev => ({ ...prev, passengerPhone: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="passengerEmail">Email</Label>
+              <Input
+                id="passengerEmail"
+                type="email"
+                value={formData.passengerEmail}
+                onChange={(e) => setFormData(prev => ({ ...prev, passengerEmail: e.target.value }))}
+              />
             </div>
           </div>
-        </div>
-      </div>
-    </form>
+
+          {/* Trip Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Trip Type</Label>
+              <Select value={formData.tripType} onValueChange={(value) => setFormData(prev => ({ ...prev, tripType: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one-way">One Way</SelectItem>
+                  <SelectItem value="round-trip">Round Trip</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Trip Mode</Label>
+              <Select value={formData.tripMode} onValueChange={(value) => setFormData(prev => ({ ...prev, tripMode: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local">Local</SelectItem>
+                  <SelectItem value="outstation">Outstation</SelectItem>
+                  <SelectItem value="airport">Airport</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Vehicle Type</Label>
+              <Select value={formData.cabType} onValueChange={(value) => setFormData(prev => ({ ...prev, cabType: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cabTypes.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Admin Controls */}
+          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium">Admin Controls</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="totalAmount">Total Amount (₹)</Label>
+                <Input
+                  id="totalAmount"
+                  type="number"
+                  value={formData.totalAmount}
+                  onChange={(e) => setFormData(prev => ({ ...prev, totalAmount: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="discountAmount">Discount Amount (₹)</Label>
+                <Input
+                  id="discountAmount"
+                  type="number"
+                  value={formData.discountAmount}
+                  onChange={(e) => setFormData(prev => ({ ...prev, discountAmount: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="adminNotes">Admin Notes</Label>
+              <Textarea
+                id="adminNotes"
+                value={formData.adminNotes}
+                onChange={(e) => setFormData(prev => ({ ...prev, adminNotes: e.target.value }))}
+                placeholder="Add any special instructions or notes..."
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isPaid"
+                checked={formData.isPaid}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isPaid: checked }))}
+              />
+              <Label htmlFor="isPaid">Mark as Paid</Label>
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating Booking...' : 'Create Booking'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
-}
+};

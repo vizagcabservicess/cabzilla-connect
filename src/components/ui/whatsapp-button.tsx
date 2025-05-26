@@ -1,17 +1,21 @@
 
 import React from 'react';
-import { Button, ButtonProps } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPhoneNumber } from '@/services/whatsappService';
 
-interface WhatsAppButtonProps extends ButtonProps {
+interface WhatsAppButtonProps {
   phone: string;
   message: string;
   icon?: boolean;
   fullWidth?: boolean;
-  variant?: "default" | "outline" | "whatsapp";
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive";
   openInNewTab?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+  size?: "default" | "sm" | "lg" | "icon";
+  disabled?: boolean;
 }
 
 export function WhatsAppButton({ 
@@ -19,14 +23,18 @@ export function WhatsAppButton({
   message, 
   icon = true,
   fullWidth = false,
-  variant = "whatsapp",
+  variant = "default",
   openInNewTab = true,
   className, 
-  children, 
+  children,
+  size = "default",
+  disabled = false,
   ...props 
 }: WhatsAppButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    if (disabled) return;
     
     const formattedPhone = formatPhoneNumber(phone);
     const encodedMessage = encodeURIComponent(message);
@@ -41,10 +49,12 @@ export function WhatsAppButton({
   
   return (
     <Button
-      variant={variant === "whatsapp" ? "default" : variant}
+      variant={variant}
+      size={size}
       onClick={handleClick}
+      disabled={disabled}
       className={cn(
-        variant === "whatsapp" && "bg-[#25D366] hover:bg-[#128C7E] text-white",
+        "bg-[#25D366] hover:bg-[#128C7E] text-white",
         fullWidth && "w-full",
         className
       )}
