@@ -1,5 +1,4 @@
 
-
 import { BookingStatus } from './api';
 import { Location } from './api';
 
@@ -74,4 +73,3 @@ export interface PayrollDialogProps {
   payrollToEdit?: any;
   selectedDriverId?: string | number;
 }
-

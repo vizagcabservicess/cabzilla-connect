@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -27,12 +26,18 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ 
     id: 'pickup', 
     name: 'Pickup Location',
-    address: '' 
+    address: '',
+    type: 'other',
+    latitude: 0,
+    longitude: 0
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
     name: 'Drop Location',
-    address: '' 
+    address: '',
+    type: 'other', 
+    latitude: 0,
+    longitude: 0
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
@@ -69,7 +74,10 @@ export default function BookingEditPage() {
           setPickupLocation({ 
             id: 'pickup',
             name: 'Pickup Location',
-            address: response.pickupLocation 
+            address: response.pickupLocation,
+            type: 'other',
+            latitude: 0,
+            longitude: 0
           });
         }
         
@@ -77,7 +85,10 @@ export default function BookingEditPage() {
           setDropLocation({ 
             id: 'drop',
             name: 'Drop Location',
-            address: response.dropLocation 
+            address: response.dropLocation,
+            type: 'other',
+            latitude: 0,
+            longitude: 0
           });
         }
         
