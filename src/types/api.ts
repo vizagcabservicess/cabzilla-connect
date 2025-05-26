@@ -144,7 +144,7 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: number;
+  id: string;
   name: string;
   type: string;
   latitude: number;
@@ -205,6 +205,7 @@ export interface FareUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
+  tourId?: string;
 }
 
 export interface DashboardMetrics {
@@ -245,6 +246,12 @@ export interface TourFare {
   tourId: string;
   vehicleType: string;
   rate: number;
+  tourName?: string;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 export interface FareBreakdown {
@@ -264,4 +271,32 @@ export interface FareBreakdown {
   roundTrip?: boolean;
   priceExtraKm?: number;
   priceExtraHour?: number;
+}
+
+// Commission Types
+export interface CommissionSetting {
+  id: number;
+  vehicleType: string;
+  defaultPercentage: number;
+  default_percentage?: number; // For backwards compatibility
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionPayment {
+  id: number;
+  bookingId: number;
+  bookingNumber?: string;
+  driverId: number;
+  driverName: string;
+  vehicleType: string;
+  totalAmount: number;
+  commissionPercentage: number;
+  commissionAmount: number;
+  payoutAmount: number;
+  status: 'pending' | 'paid' | 'cancelled';
+  paymentDate?: string;
+  createdAt: string;
+  updatedAt: string;
 }
