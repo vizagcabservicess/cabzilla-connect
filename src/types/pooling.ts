@@ -4,6 +4,7 @@
 export type RideType = 'car' | 'bus' | 'shared-taxi';
 export type RideStatus = 'active' | 'pending' | 'full' | 'cancelled' | 'completed';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type PoolingType = 'car' | 'bus' | 'shared-taxi';
 
 export interface VehicleInfo {
   make: string;
@@ -72,4 +73,24 @@ export interface PoolingProvider {
   status: 'active' | 'inactive' | 'suspended';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateRideRequest {
+  type: RideType;
+  fromLocation: string;
+  toLocation: string;
+  departureTime: string;
+  totalSeats: number;
+  pricePerSeat: number;
+  vehicleInfo: VehicleInfo;
+  description?: string;
+  amenities?: string[];
+}
+
+export interface PoolingSearchRequest {
+  fromLocation: string;
+  toLocation: string;
+  departureDate: string;
+  passengers: number;
+  type?: RideType;
 }

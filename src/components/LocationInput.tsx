@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { Location as ApiLocation } from '@/types/api';
 
 export interface Location {
   id: string;
@@ -9,12 +10,13 @@ export interface Location {
   latitude: number;
   longitude: number;
   city?: string;
+  type?: string;
 }
 
 interface LocationInputProps {
   label?: string;
   placeholder?: string;
-  value?: Location;
+  value?: Location | ApiLocation;
   onLocationChange: (location: Location | null) => void;
   isPickupLocation?: boolean;
   isAirportTransfer?: boolean;
@@ -37,7 +39,8 @@ export const LocationInput: React.FC<LocationInputProps> = ({
         address: inputValue,
         latitude: 0,
         longitude: 0,
-        city: inputValue
+        city: inputValue,
+        type: 'city'
       };
       onLocationChange(location);
     } else {

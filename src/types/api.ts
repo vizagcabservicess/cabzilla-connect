@@ -131,6 +131,7 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
+  bookingId?: number;
 }
 
 export interface GstReportData {
@@ -197,6 +198,7 @@ export interface VehiclePricingUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
+  vehicleType?: string;
 }
 
 export interface FareUpdateRequest {
@@ -206,6 +208,7 @@ export interface FareUpdateRequest {
   outstationRate?: number;
   airportRate?: number;
   tourId?: string;
+  sedan?: number;
 }
 
 export interface DashboardMetrics {
@@ -299,4 +302,23 @@ export interface CommissionPayment {
   paymentDate?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Payment Types
+export interface Payment {
+  id: number;
+  bookingId: number;
+  amount: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  transactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentFilterParams {
+  status?: string;
+  method?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }

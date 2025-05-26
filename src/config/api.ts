@@ -6,6 +6,8 @@ export const getApiUrl = (endpoint: string): string => {
   return `${API_BASE_URL}${endpoint}`;
 };
 
+export const apiBaseUrl = API_BASE_URL;
+
 export const API_ENDPOINTS = {
   // Main API endpoints
   auth: '/api/auth',
