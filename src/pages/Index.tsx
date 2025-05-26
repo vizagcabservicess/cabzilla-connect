@@ -1,12 +1,10 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
 
-const Index = () => {
+export default function Index() {
   return (
-    <div className="min-h-screen bg-white">
-      <Navbar />
-      <Hero />
-      
+    <div>
+      <Hero title="Book Your Perfect Cab" subtitle="Reliable, comfortable, and affordable transportation for all your needs" />
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
@@ -82,6 +80,4 @@ const Index = () => {
       </footer>
     </div>
   );
-};
-
-export default Index;
+}

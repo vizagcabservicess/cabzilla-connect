@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -152,14 +151,18 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: number;
+  id: number | string;
   name: string;
   type: string;
   latitude: number;
   longitude: number;
-  address?: string;
+  address: string;
   lat?: number;
   lng?: number;
+  city?: string;
+  state?: string;
+  popularityScore?: number;
+  isInVizag?: boolean;
 }
 
 export interface User {
@@ -311,6 +314,9 @@ export interface FareBreakdown {
   extraHourCharge?: number;
   nightHaltCharges?: number;
   driverAllowance?: number;
+  airportFee?: number;
+  extraDistanceFare?: number;
+  nightCharges?: number;
 }
 
 // Pooling Types
@@ -328,4 +334,6 @@ export interface AuthAPI {
   logout: () => Promise<void>;
   getCurrentUser: () => Promise<User | null>;
   getToken: () => string | null;
+  isAuthenticated: () => boolean;
+  isAdmin: () => boolean;
 }

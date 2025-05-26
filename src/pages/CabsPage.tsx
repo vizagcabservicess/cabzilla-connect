@@ -556,6 +556,7 @@ const CabsPage = () => {
                   pickupDate={pickupDate}
                   returnDate={returnDate}
                   hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
+                  isCalculatingFares={isCalculatingDistance}
                 />
 
                 {showMap && pickup && dropoff && (
@@ -565,6 +566,7 @@ const CabsPage = () => {
                       pickupLocation={pickup} 
                       dropLocation={dropoff} 
                       onDistanceCalculated={handleMapDistanceCalculated}
+                      tripType={tripType}
                     />
                   </div>
                 )}

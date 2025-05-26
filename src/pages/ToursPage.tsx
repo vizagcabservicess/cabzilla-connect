@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -214,14 +213,14 @@ const ToursPage = () => {
       const fare = getTourFare(selectedTour!, selectedCab!.id);
       
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation.name || '',
+        pickupLocation: pickup.address || pickup.name || '',
         dropLocation: '', // Tours don't have specific drop locations
         pickupDate: pickupDate.toISOString(),
         returnDate: null, // Tours are considered one-way
         cabType: selectedCab.name,
         distance: selectedTourDetails.distance,
         tripType: 'tour',
-        tripMode: 'one-way', // Tours are considered one-way
+        tripMode: 'round-trip', // Tours are considered one-way
         totalAmount: fare,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
@@ -395,13 +394,14 @@ const ToursPage = () => {
           <h3 className="font-semibold text-lg mb-4">Select Cab Type for Your Tour</h3>
           
           <CabOptions
-            cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
+            cabTypes={cabTypes}
             selectedCab={selectedCab}
-            onSelectCab={handleCabSelect}
-            distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
+            onSelectCab={(cab: CabType) => setSelectedCab(cab)}
+            distance={selectedTour.distance}
             tripType="tour"
-            tripMode="one-way" // Tours are considered one-way
+            tripMode="round-trip"
             pickupDate={pickupDate}
+            isCalculatingFares={false}
           />
           
           <Button
@@ -429,11 +429,9 @@ const ToursPage = () => {
           ) : (
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <GuestDetailsForm
+                <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? 
-                    getTourFare(selectedTour, selectedCab.id) : 0}
-                  isSubmitting={isSubmitting}
+                  totalPrice={totalPrice}
                   onBack={() => setShowGuestDetailsForm(false)}
                 />
               </div>
@@ -445,7 +443,7 @@ const ToursPage = () => {
                     dropLocation={null} // Tours don't have drop locations
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
-                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
+                    distance={selectedTour.distance}
                     totalPrice={getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
                     hourlyPackage="tour"
