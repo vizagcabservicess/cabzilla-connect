@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -52,33 +51,39 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        const response = await authAPI.signup(values);
+        const response = await authAPI.register(values);
         
-        // Success - update the loading toast
-        toast.success("Account created successfully!", { id: loadingToastId });
-        
-        uiToast({
-          title: "Welcome to our service!",
-          description: "Your account has been created successfully. You'll be redirected to your dashboard.",
-          duration: 5000,
-        });
-        
-        // Short delay before redirecting to ensure toast is seen
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
+        if (response.status === 'success') {
+          // Success - update the loading toast
+          toast.success("Account created successfully!", { id: loadingToastId });
+          
+          uiToast({
+            title: "Welcome to our service!",
+            description: "Your account has been created successfully. You'll be redirected to login.",
+            duration: 5000,
+          });
+          
+          // Short delay before redirecting to ensure toast is seen
+          setTimeout(() => {
+            navigate('/login');
+          }, 1000);
+        } else {
+          throw new Error(response.message || "Registration failed");
+        }
       } catch (signupError) {
         // Update the loading toast to show error
         toast.error("Signup failed", { id: loadingToastId });
         throw signupError;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Signup error:", error);
       setError(error as Error);
       
+      // Try to extract backend error message
+      let backendMessage = error?.response?.data?.message || error?.response?.data?.error;
       uiToast({
         title: "Signup Failed",
-        description: error instanceof Error ? error.message : "Something went wrong during signup",
+        description: backendMessage || (error instanceof Error ? error.message : "Something went wrong during signup"),
         variant: "destructive",
         duration: 5000,
       });

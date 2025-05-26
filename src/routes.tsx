@@ -40,6 +40,7 @@ import FaresPage from './pages/FaresPage';
 import VehiclesPage from './pages/VehiclesPage';
 import DriversPage from './pages/DriversPage';
 import UserManagementPage from './pages/UserManagementPage';
+import PoolingAuthPage from './pages/PoolingAuthPage';
 
 const router = createBrowserRouter([
   {
@@ -166,6 +167,14 @@ const router = createBrowserRouter([
   {
     path: '/pooling/create',
     element: <CreateRidePage />,
+  },
+  {
+    path: '/pooling/login',
+    element: <PoolingAuthPage />,
+  },
+  {
+    path: '/pooling/register',
+    element: <PoolingAuthPage />,
   },
   // Static pages
   {

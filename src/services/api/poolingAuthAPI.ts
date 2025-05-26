@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { 
@@ -8,7 +7,7 @@ import {
   PoolingAuthResponse 
 } from '@/types/poolingAuth';
 
-const POOLING_AUTH_API_URL = getApiUrl('/api/pooling/auth');
+const POOLING_AUTH_API_URL = getApiUrl('/api/pooling');
 
 class PoolingAuthAPI {
   private token: string | null = null;
@@ -21,7 +20,7 @@ class PoolingAuthAPI {
     try {
       const response = await axios.post(`${POOLING_AUTH_API_URL}/login.php`, credentials);
       
-      if (response.data.success) {
+      if (response.data.status === 'success' || response.data.success) {
         this.token = response.data.token;
         localStorage.setItem('pooling_auth_token', this.token);
         localStorage.setItem('pooling_user', JSON.stringify(response.data.user));
@@ -34,7 +33,7 @@ class PoolingAuthAPI {
     }
   }
 
-  async register(userData: PoolingRegisterRequest): Promise<{ success: boolean; message: string }> {
+  async register(userData: PoolingRegisterRequest): Promise<PoolingAuthResponse> {
     try {
       const response = await axios.post(`${POOLING_AUTH_API_URL}/register.php`, userData);
       return response.data;
