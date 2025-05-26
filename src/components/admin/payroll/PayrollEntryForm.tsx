@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -125,7 +124,7 @@ export function PayrollEntryForm({
   }, [payrollToEdit, form, selectedDriverId]);
   
   // Utility to filter valid rows
-  const filterValidRows = (arr: any[]) => (arr || []).filter(a => a && a.type && !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '');
+  const filterValidRows = (arr: any[]) => (arr || []).filter(a => a && a.type && !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '' && a.amount !== undefined);
 
   const getTotalAllowances = () => {
     const allowances = filterValidRows(form.watch('allowances'));
@@ -138,7 +137,7 @@ export function PayrollEntryForm({
   };
 
   const getTotalAdvances = () => {
-    const advances = (form.watch('advances') || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '');
+    const advances = (form.watch('advances') || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '' && a.amount !== undefined);
     return advances.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
   };
 
@@ -208,7 +207,7 @@ export function PayrollEntryForm({
         basicSalary: values.basicSalary,
         allowances: filteredAllowances,
         deductions: filteredDeductions,
-        advances: (values.advances || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '').map(a => ({
+        advances: (values.advances || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '' && a.amount !== undefined).map(a => ({
           ...a,
           date: format(a.date, 'yyyy-MM-dd')
         })),
