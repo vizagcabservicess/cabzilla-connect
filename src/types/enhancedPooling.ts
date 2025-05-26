@@ -1,4 +1,3 @@
-import { PoolingRide, PoolingBooking } from './pooling';
 
 export interface CancellationPolicy {
   id: number;

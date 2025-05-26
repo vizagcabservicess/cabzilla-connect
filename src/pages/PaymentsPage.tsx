@@ -1,21 +1,11 @@
-import React from 'react';
-import { PaymentManager } from '@/components/PaymentManager';
+
+import { PaymentsList } from "@/components/admin/payment/PaymentsList";
 
 export default function PaymentsPage() {
-  const handleUpdatePayment = async (paymentId: string | number, status: string, amount?: number, paymentMethod?: string, notes?: string): Promise<void> => {
-    console.log('Update payment:', { paymentId, status, amount, paymentMethod, notes });
-    // Implement actual update logic here
-  };
-
-  const handleSendReminder = async (paymentId: string | number, reminderType: string, customMessage?: string): Promise<void> => {
-    console.log('Send reminder:', { paymentId, reminderType, customMessage });
-    // Implement actual reminder logic here
-  };
-
   return (
-    <PaymentManager 
-      onUpdatePayment={handleUpdatePayment}
-      onSendReminder={handleSendReminder}
-    />
+    <div className="container mx-auto py-6 px-4 md:px-6">
+      <h1 className="text-2xl md:text-3xl font-bold mb-4">Payments</h1>
+      <PaymentsList payments={[]} onUpdatePaymentStatus={() => {}} onSendReminder={() => {}} isLoading={false} />
+    </div>
   );
-}
+} 

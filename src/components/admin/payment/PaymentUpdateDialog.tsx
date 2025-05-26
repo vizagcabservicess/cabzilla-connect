@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Payment, PaymentMethod } from '@/types/payment';
+import { Payment } from '@/types/payment';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
@@ -13,7 +12,7 @@ const PAYMENT_METHODS = [
   { value: 'cheque', label: 'Cheque' },
   { value: 'razorpay', label: 'Razorpay' },
   { value: 'other', label: 'Other' },
-] as const;
+];
 
 interface PaymentUpdateDialogProps {
   open: boolean;
@@ -24,7 +23,7 @@ interface PaymentUpdateDialogProps {
 
 export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: PaymentUpdateDialogProps) {
   const [amount, setAmount] = useState(payment?.amount || 0);
-  const [method, setMethod] = useState<PaymentMethod>(payment?.paymentMethod || 'cash');
+  const [method, setMethod] = useState(payment?.paymentMethod || 'cash');
   const [notes, setNotes] = useState('');
 
   React.useEffect(() => {
@@ -60,7 +59,7 @@ export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: P
             <label className="block text-sm font-medium mb-1">Payment Method</label>
             <select
               value={method}
-              onChange={e => setMethod(e.target.value as PaymentMethod)}
+              onChange={e => setMethod(e.target.value)}
               className="border rounded px-2 py-1 w-full"
             >
               {PAYMENT_METHODS.map(opt => (
@@ -88,4 +87,4 @@ export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: P
       </DialogContent>
     </Dialog>
   );
-}
+} 

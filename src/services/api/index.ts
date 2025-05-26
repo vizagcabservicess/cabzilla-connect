@@ -1,26 +1,42 @@
 
-export const authAPI = {
-  login: async (credentials: any) => {
-    // Mock implementation
-    return { success: true };
-  },
-  
-  signup: async (userData: any) => {
-    // Mock implementation
-    return { success: true };
-  },
-  
-  logout: async () => {
-    // Mock implementation
-  },
-  
-  getCurrentUser: async () => {
-    // Mock implementation
-    return null;
-  },
-  
-  getToken: () => {
-    // Mock implementation
-    return null;
-  }
+import { authAPI } from './authAPI';
+import { vehicleAPI } from './vehicleAPI';
+import { fleetAPI } from './fleetAPI';
+import { bookingAPI } from './bookingAPI';
+import { fareAPI } from './fareAPI';
+import { userAPI } from './userAPI';
+import { ledgerAPI } from './ledgerAPI';
+import { commissionAPI } from './commissionAPI';
+import { apiHealthCheck } from './healthCheck';
+import { tourAPI } from './tourAPI';
+import { poolingAPI } from './poolingAPI';
+
+// Export all API services
+export {
+  authAPI,
+  vehicleAPI,
+  fleetAPI,
+  bookingAPI,
+  fareAPI,
+  userAPI,
+  ledgerAPI,
+  commissionAPI,
+  apiHealthCheck,
+  tourAPI,
+  poolingAPI
+};
+
+// Default export
+export default {
+  auth: authAPI,
+  vehicle: vehicleAPI,
+  fleet: fleetAPI,
+  booking: bookingAPI,
+  fare: fareAPI,
+  user: userAPI,
+  ledger: ledgerAPI,
+  commission: commissionAPI,
+  health: apiHealthCheck,
+  tour: tourAPI,
+  pooling: poolingAPI
 };

@@ -190,7 +190,7 @@ export function DriverAssignment({
     }
     try {
       await onAssign({
-        bookingId: booking.id.toString(), // Convert to string
+        bookingId: booking.id,
         driverId: selectedDriver,
         driverName,
         driverPhone,
@@ -225,7 +225,7 @@ export function DriverAssignment({
         } catch (commissionError) {
           console.error("Error recording commission:", commissionError);
           toast({
-            variant: "destructive", // Change from "warning" to valid variant
+            variant: "warning",
             title: "Commission Recording Failed",
             description: "Driver assigned successfully, but commission recording failed."
           });

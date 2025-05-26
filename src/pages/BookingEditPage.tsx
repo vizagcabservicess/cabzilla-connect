@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -11,7 +10,6 @@ import { LocationInput } from "@/components/LocationInput";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking, Location, BookingStatus } from '@/types/api';
-import { BookingStatusManagerProps, LocationInputProps, GuestDetailsFormProps } from '@/types/components';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';

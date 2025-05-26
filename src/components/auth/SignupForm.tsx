@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -51,11 +52,7 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        // Mock signup functionality - replace with actual API call
-        console.log('Signup attempt:', values);
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const response = await authAPI.signup(values);
         
         // Success - update the loading toast
         toast.success("Account created successfully!", { id: loadingToastId });
