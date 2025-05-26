@@ -42,6 +42,8 @@ interface Ride {
     color: string;
     plateNumber: string;
   };
+  createdAt: string;
+  updatedAt: string;
 }
 
 const PoolingRidesManager: React.FC = () => {
@@ -58,10 +60,31 @@ const PoolingRidesManager: React.FC = () => {
 
   const fetchRides = async () => {
     try {
-      const response = await fetch('/api/pooling/rides');
+      const response = await fetch('/api/pooling/rides.php');
       if (!response.ok) throw new Error('Failed to fetch rides');
       const data = await response.json();
-      setRides(data);
+      const mapped = data.map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        fromLocation: r.from_location,
+        toLocation: r.to_location,
+        departureTime: r.departure_time,
+        arrivalTime: r.arrival_time,
+        totalSeats: r.total_seats,
+        availableSeats: r.available_seats,
+        pricePerSeat: parseFloat(r.price_per_seat),
+        status: r.status,
+        providerName: r.provider_name,
+        vehicleInfo: {
+          make: r.make,
+          model: r.model,
+          color: r.color,
+          plateNumber: r.plate_number
+        },
+        createdAt: r.created_at || '',
+        updatedAt: r.updated_at || '',
+      }));
+      setRides(mapped);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -90,8 +113,8 @@ const PoolingRidesManager: React.FC = () => {
     e.preventDefault();
     try {
       const url = selectedRide 
-        ? `/api/pooling/rides/${selectedRide.id}`
-        : '/api/pooling/rides';
+        ? `/api/pooling/rides.php/${selectedRide.id}`
+        : '/api/pooling/rides.php';
       
       const method = selectedRide ? 'PUT' : 'POST';
       
@@ -116,8 +139,10 @@ const PoolingRidesManager: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this ride?')) return;
     
     try {
-      const response = await fetch(`/api/pooling/rides/${id}`, {
+      const response = await fetch('/api/pooling/rides.php', {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
       });
 
       if (!response.ok) throw new Error('Failed to delete ride');
@@ -168,7 +193,9 @@ const PoolingRidesManager: React.FC = () => {
                 <TableCell>{ride.fromLocation}</TableCell>
                 <TableCell>{ride.toLocation}</TableCell>
                 <TableCell>
-                  {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
+                  {ride.departureTime && !isNaN(new Date(ride.departureTime).getTime())
+                    ? format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')
+                    : 'N/A'}
                 </TableCell>
                 <TableCell>{`${ride.availableSeats}/${ride.totalSeats}`}</TableCell>
                 <TableCell>₹{ride.pricePerSeat}</TableCell>

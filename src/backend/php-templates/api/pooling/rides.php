@@ -177,7 +177,27 @@ function handleUpdateRide() {
 }
 
 function handleDeleteRide() {
-    // Implementation for deleting rides
-    sendError('Delete ride not implemented yet', 501);
+    global $pdo;
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $rideId = $input['id'] ?? null;
+
+    if (!$rideId) {
+        sendError('Ride ID is required for deletion');
+    }
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM pooling_rides WHERE id = ?");
+        $stmt->execute([$rideId]);
+
+        if ($stmt->rowCount() === 0) {
+            sendError('Ride not found or already deleted', 404);
+        }
+
+        sendResponse(['message' => 'Ride deleted successfully']);
+    } catch (PDOException $e) {
+        error_log('Database error in delete ride: ' . $e->getMessage());
+        sendError('Failed to delete ride', 500);
+    }
 }
 ?>

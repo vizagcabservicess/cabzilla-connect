@@ -13,6 +13,9 @@ switch ($method) {
     case 'PUT':
         handleUpdateBooking();
         break;
+    case 'DELETE':
+        handleDeleteBooking();
+        break;
     default:
         sendError('Method not allowed', 405);
 }
@@ -202,6 +205,31 @@ function handleUpdateBooking() {
     } catch (PDOException $e) {
         error_log('Database error in update booking: ' . $e->getMessage());
         sendError('Failed to update booking', 500);
+    }
+}
+
+function handleDeleteBooking() {
+    global $pdo;
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $bookingId = $input['id'] ?? null;
+
+    if (!$bookingId) {
+        sendError('Booking ID is required for deletion');
+    }
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM pooling_bookings WHERE id = ?");
+        $stmt->execute([$bookingId]);
+
+        if ($stmt->rowCount() === 0) {
+            sendError('Booking not found or already deleted', 404);
+        }
+
+        sendResponse(['message' => 'Booking deleted successfully']);
+    } catch (PDOException $e) {
+        error_log('Database error in delete booking: ' . $e->getMessage());
+        sendError('Failed to delete booking', 500);
     }
 }
 ?>

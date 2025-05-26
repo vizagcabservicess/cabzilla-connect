@@ -51,10 +51,23 @@ const PoolingBookingsManager: React.FC = () => {
 
   const fetchBookings = async () => {
     try {
-      const response = await fetch('/api/pooling/bookings');
+      const response = await fetch('/api/pooling/bookings.php');
       if (!response.ok) throw new Error('Failed to fetch bookings');
       const data = await response.json();
-      setBookings(data);
+      const mapped = data.map((b: any) => ({
+        id: b.id,
+        rideId: b.ride_id,
+        userId: b.user_id,
+        userName: b.passenger_name,
+        userPhone: b.passenger_phone,
+        seats: b.seats_booked,
+        totalAmount: parseFloat(b.total_amount),
+        status: b.booking_status,
+        paymentStatus: b.payment_status,
+        createdAt: b.created_at || '',
+        updatedAt: b.updated_at || '',
+      }));
+      setBookings(mapped);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -83,8 +96,8 @@ const PoolingBookingsManager: React.FC = () => {
     e.preventDefault();
     try {
       const url = selectedBooking 
-        ? `/api/pooling/bookings/${selectedBooking.id}`
-        : '/api/pooling/bookings';
+        ? `/api/pooling/bookings.php/${selectedBooking.id}`
+        : '/api/pooling/bookings.php';
       
       const method = selectedBooking ? 'PUT' : 'POST';
       
@@ -109,8 +122,10 @@ const PoolingBookingsManager: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this booking?')) return;
     
     try {
-      const response = await fetch(`/api/pooling/bookings/${id}`, {
+      const response = await fetch('/api/pooling/bookings.php', {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
       });
 
       if (!response.ok) throw new Error('Failed to delete booking');
@@ -202,7 +217,9 @@ const PoolingBookingsManager: React.FC = () => {
                   />
                 </TableCell>
                 <TableCell>
-                  {format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}
+                  {booking.createdAt && !isNaN(new Date(booking.createdAt).getTime())
+                    ? format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')
+                    : 'N/A'}
                 </TableCell>
                 <TableCell>
                   <IconButton onClick={() => handleOpenDialog(booking)}>
