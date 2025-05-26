@@ -18,6 +18,7 @@ export interface Payment {
   status: PaymentStatus;
   paymentStatus?: PaymentStatus;
   transactionId?: string;
+  razorpayPaymentId?: string;
   dueDate?: string;
   createdAt: string;
   updatedAt: string;

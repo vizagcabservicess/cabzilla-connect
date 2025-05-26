@@ -232,13 +232,13 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
             capacity: 4,
             luggageCapacity: 2,
             price: 2500,
-            pricePerKm: 14,
-            image: '/cars/sedan.png',
-            amenities: ['AC', 'Bottle Water', 'Music System'],
-            description: 'Comfortable sedan suitable for 4 passengers.',
+            pricePerKm: 12,
+            image: '/lovable-uploads/63c26b4c-04c7-432a-ba0a-2195cb7068e5.png',
+            amenities: ['AC', 'Music', 'Comfortable Seats'],
+            description: 'Comfortable sedan for city rides',
             ac: true,
-            nightHaltCharge: 700,
-            driverAllowance: 250,
+            nightHaltCharge: 300,
+            driverAllowance: 500,
             isActive: true
           },
           {
@@ -246,29 +246,29 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
             name: 'Ertiga',
             capacity: 6,
             luggageCapacity: 3,
-            price: 3200,
-            pricePerKm: 18,
-            image: '/cars/ertiga.png',
-            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-            description: 'Spacious SUV suitable for 6 passengers.',
+            price: 3000,
+            pricePerKm: 14,
+            image: '/lovable-uploads/a7c4aa76-7528-425a-8dcc-2168607d3fe2.png',
+            amenities: ['AC', 'Music', '6 Seater', 'Extra Space'],
+            description: 'Spacious 6-seater for family trips',
             ac: true,
-            nightHaltCharge: 1000,
-            driverAllowance: 250,
+            nightHaltCharge: 400,
+            driverAllowance: 600,
             isActive: true
           },
           {
-            id: 'innova_crysta',
-            name: 'Innova Crysta',
+            id: 'innova',
+            name: 'Innova',
             capacity: 7,
             luggageCapacity: 4,
-            price: 3800,
-            pricePerKm: 20,
-            image: '/cars/innova.png',
-            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-            description: 'Premium SUV with ample space for 7 passengers.',
+            price: 4000,
+            pricePerKm: 16,
+            image: '/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png',
+            amenities: ['AC', 'Music', '7 Seater', 'Premium Comfort'],
+            description: 'Premium 7-seater for comfortable journeys',
             ac: true,
-            nightHaltCharge: 1000,
-            driverAllowance: 250,
+            nightHaltCharge: 500,
+            driverAllowance: 700,
             isActive: true
           }
         ];
@@ -327,6 +327,67 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     } else {
       return vehicles.filter(v => v.isActive !== false);
     }
+  };
+
+  const getCabTypeFromId = (id: string): CabType | null => {
+    const cabConfigs = {
+      'sedan': {
+        id: 'sedan',
+        name: 'Sedan',
+        capacity: 4,
+        luggage: 2,
+        luggageCapacity: 2,
+        price: 2500,
+        pricePerKm: 12,
+        basePrice: 200,
+        type: 'economy',
+        image: '/lovable-uploads/63c26b4c-04c7-432a-ba0a-2195cb7068e5.png',
+        amenities: ['AC', 'Music', 'Comfortable Seats'],
+        description: 'Comfortable sedan for city rides',
+        ac: true,
+        nightHaltCharge: 300,
+        driverAllowance: 500,
+        isActive: true,
+      },
+      'ertiga': {
+        id: 'ertiga',
+        name: 'Ertiga',
+        capacity: 6,
+        luggage: 3,
+        luggageCapacity: 3,
+        price: 3000,
+        pricePerKm: 14,
+        basePrice: 250,
+        type: 'premium',
+        image: '/lovable-uploads/a7c4aa76-7528-425a-8dcc-2168607d3fe2.png',
+        amenities: ['AC', 'Music', '6 Seater', 'Extra Space'],
+        description: 'Spacious 6-seater for family trips',
+        ac: true,
+        nightHaltCharge: 400,
+        driverAllowance: 600,
+        isActive: true,
+      },
+      'innova': {
+        id: 'innova',
+        name: 'Innova',
+        capacity: 7,
+        luggage: 4,
+        luggageCapacity: 4,
+        price: 4000,
+        pricePerKm: 16,
+        basePrice: 300,
+        type: 'luxury',
+        image: '/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png',
+        amenities: ['AC', 'Music', '7 Seater', 'Premium Comfort'],
+        description: 'Premium 7-seater for comfortable journeys',
+        ac: true,
+        nightHaltCharge: 500,
+        driverAllowance: 700,
+        isActive: true,
+      }
+    };
+
+    return cabConfigs[id as keyof typeof cabConfigs] || null;
   };
 
   useEffect(() => {

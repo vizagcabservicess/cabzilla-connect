@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Payment, PaymentStatus } from '@/types/payment';
+import { Payment as PaymentType, PaymentStatus } from '@/types/payment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,7 +11,7 @@ import { Check, Clock, Copy, Ban, RefreshCw, Mail, Pencil, Filter } from 'lucide
 import { useToast } from '@/components/ui/use-toast';
 
 interface PaymentsListProps {
-  payments: Payment[];
+  payments: PaymentType[];
   onUpdatePaymentStatus: (paymentId: number | string, status: string, amount?: number, paymentMethod?: string, notes?: string) => Promise<void>;
   onSendReminder: (paymentId: number | string, reminderType: string, customMessage?: string) => Promise<void>;
   isLoading: boolean;
@@ -19,16 +20,16 @@ interface PaymentsListProps {
 export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, isLoading }: PaymentsListProps) {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentType | null>(null);
   const [search, setSearch] = useState('');
   const { toast } = useToast();
 
-  const handleOpenUpdateDialog = (payment: Payment) => {
+  const handleOpenUpdateDialog = (payment: PaymentType) => {
     setSelectedPayment(payment);
     setUpdateDialogOpen(true);
   };
 
-  const handleOpenReminderDialog = (payment: Payment) => {
+  const handleOpenReminderDialog = (payment: PaymentType) => {
     setSelectedPayment(payment);
     setReminderDialogOpen(true);
   };
@@ -82,8 +83,8 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
 
   // Sort payments by creation date (descending), fallback to due date if missing
   const sortedPayments = [...filteredPayments].sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.dueDate).getTime();
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.dueDate).getTime();
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.dueDate || '').getTime();
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.dueDate || '').getTime();
     return dateB - dateA;
   });
 
@@ -142,37 +143,37 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                 <tr key={payment.id} className={
                   `transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`
                 }>
-                  <td className="px-4 py-2 whitespace-nowrap">{formatDate(new Date(payment.dueDate))}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{formatDate(new Date(payment.dueDate || payment.createdAt))}</td>
                   <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{payment.bookingNumber}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{payment.customerName}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{payment.customerPhone}</td>
                   <td className="px-4 py-2 text-right font-mono whitespace-nowrap">₹{payment.amount.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right font-mono whitespace-nowrap">₹{payment.paidAmount.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right font-mono text-amber-600 whitespace-nowrap">₹{payment.remainingAmount.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right font-mono whitespace-nowrap">₹{(payment.paidAmount || 0).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right font-mono text-amber-600 whitespace-nowrap">₹{(payment.remainingAmount || payment.amount).toLocaleString()}</td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-normal ${
-                      payment.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border border-green-100' :
-                      payment.paymentStatus === 'partial' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                      payment.paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
-                      payment.paymentStatus === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-100' :
+                      (payment.paymentStatus || payment.status) === 'paid' ? 'bg-green-50 text-green-700 border border-green-100' :
+                      (payment.paymentStatus || payment.status) === 'partial' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                      (payment.paymentStatus || payment.status) === 'pending' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
+                      (payment.paymentStatus || payment.status) === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-100' :
                       'bg-gray-50 text-gray-700 border border-gray-100'
                     }`}>
-                      {payment.paymentStatus.charAt(0).toUpperCase() + payment.paymentStatus.slice(1)}
+                      {((payment.paymentStatus || payment.status) as string).charAt(0).toUpperCase() + ((payment.paymentStatus || payment.status) as string).slice(1)}
                     </span>
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">
-                    {payment.paymentMethod && (
+                    {(payment.paymentMethod || payment.method) && (
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-normal ${
-                        payment.paymentMethod === 'cash' ? 'bg-green-50 text-green-700 border border-green-100' :
-                        payment.paymentMethod === 'card' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                        payment.paymentMethod === 'upi' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
-                        payment.paymentMethod === 'bank_transfer' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
-                        payment.paymentMethod === 'wallet' ? 'bg-pink-50 text-pink-700 border border-pink-100' :
-                        payment.paymentMethod === 'cheque' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
-                        payment.paymentMethod === 'razorpay' ? 'bg-orange-50 text-orange-700 border border-orange-100' :
+                        (payment.paymentMethod || payment.method) === 'cash' ? 'bg-green-50 text-green-700 border border-green-100' :
+                        (payment.paymentMethod || payment.method) === 'card' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                        (payment.paymentMethod || payment.method) === 'upi' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                        (payment.paymentMethod || payment.method) === 'bank_transfer' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' :
+                        (payment.paymentMethod || payment.method) === 'wallet' ? 'bg-pink-50 text-pink-700 border border-pink-100' :
+                        (payment.paymentMethod || payment.method) === 'cheque' ? 'bg-gray-50 text-gray-700 border border-gray-100' :
+                        (payment.paymentMethod || payment.method) === 'razorpay' ? 'bg-orange-50 text-orange-700 border border-orange-100' :
                         'bg-gray-50 text-gray-700 border border-gray-100'
                       }`}>
-                        {payment.paymentMethod.charAt(0).toUpperCase() + payment.paymentMethod.slice(1)}
+                        {((payment.paymentMethod || payment.method) as string).charAt(0).toUpperCase() + ((payment.paymentMethod || payment.method) as string).slice(1)}
                       </span>
                     )}
                   </td>
@@ -194,7 +195,7 @@ export function PaymentsList({ payments, onUpdatePaymentStatus, onSendReminder, 
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
-                      {payment.paymentMethod === 'razorpay' && payment.razorpayPaymentId && (
+                      {(payment.paymentMethod || payment.method) === 'razorpay' && payment.razorpayPaymentId && (
                         <button
                           onClick={() => copyRazorpayId(payment.razorpayPaymentId!)}
                           className="p-1 rounded hover:bg-orange-100 text-orange-600"

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Dialog,
@@ -53,6 +54,8 @@ const formSchema = z.object({
   luggageCapacity: z.number().min(0).max(5),
   isActive: z.boolean().default(true),
   commissionPercentage: z.number().min(0).max(100).optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 
 const formFields = [
@@ -125,13 +128,13 @@ export function EditFleetVehicleDialog({
           <DialogTitle>{vehicle ? 'Edit Vehicle' : 'Add Vehicle'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(submitForm)} className="grid gap-4 py-4">
-        {formFields.filter(field => field.name !== 'emi').map((field) => (
+        {formFields.map((field) => (
           <div key={field.name} className="space-y-2">
             <Label htmlFor={field.name} className="text-sm font-medium">
               {field.label}
             </Label>
             <Controller
-              name={field.name}
+              name={field.name as keyof FleetVehicle}
               control={control}
               render={({ field: fieldProps }) => {
                 if (field.type === 'select') {
@@ -154,16 +157,22 @@ export function EditFleetVehicleDialog({
                 return (
                   <Input
                     {...fieldProps}
-                    value={String(fieldProps.value || '')}
+                    value={fieldProps.value ? String(fieldProps.value) : ''}
+                    onChange={(e) => {
+                      const value = field.type === 'number' ? 
+                        (e.target.value ? Number(e.target.value) : '') : 
+                        e.target.value;
+                      fieldProps.onChange(value);
+                    }}
                     type={field.type}
                     placeholder={field.placeholder}
                   />
                 );
               }}
             />
-            {errors[field.name] && (
+            {errors[field.name as keyof FleetVehicle] && (
               <p className="text-sm text-destructive">
-                {errors[field.name]?.message}
+                {errors[field.name as keyof FleetVehicle]?.message}
               </p>
             )}
           </div>
