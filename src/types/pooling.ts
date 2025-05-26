@@ -22,6 +22,7 @@ export interface PoolingRide {
     model?: string;
     color?: string;
     plateNumber?: string;
+    busNumber?: string; // Added for bus compatibility
   };
   route: string[];
   amenities?: string[];
@@ -119,8 +120,35 @@ export interface CreateRideRequest {
     model?: string;
     color?: string;
     plateNumber?: string;
+    busNumber?: string;
   };
   route?: string[];
   amenities?: string[];
   rules?: string[];
 }
+
+// Provider types
+export interface PoolingProvider {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  rating: number;
+  totalRides: number;
+  verificationStatus: 'pending' | 'verified' | 'rejected';
+  joinedDate: string;
+  documents: ProviderDocument[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderDocument {
+  id?: number;
+  type: string;
+  status: 'pending' | 'verified' | 'rejected';
+  uploadedAt: string;
+  filePath?: string;
+}
+
+// Vehicle types for pooling
+export type PoolingVehicleType = 'car' | 'bus' | 'van' | 'auto';

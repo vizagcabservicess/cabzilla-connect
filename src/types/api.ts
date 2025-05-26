@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -225,4 +224,24 @@ export interface TourFare {
   tourId: string;
   vehicleType: string;
   rate: number;
+}
+
+export interface FareBreakdown {
+  baseFare: number;
+  perKmRate: number;
+  perMinuteRate: number;
+  waitingCharges: number;
+  tollCharges: number;
+  otherCharges: number;
+  discount: number;
+  subtotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalTax: number;
+  totalFare: number;
+  roundTrip?: boolean;
+  // Add missing properties
+  priceExtraKm?: number;
+  priceExtraHour?: number;
 }
