@@ -1,4 +1,29 @@
 import { toast } from "sonner";
+import { BookingRequest } from "@/types/api";
+
+// Razorpay types
+export interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description?: string;
+  image?: string;
+  order_id?: string;
+  handler: (response: RazorpayResponse) => void;
+  prefill?: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+  notes?: Record<string, string>;
+  theme?: {
+    color?: string;
+  };
+  modal?: {
+    ondismiss?: () => void;
+  };
+}
 
 export interface RazorpayResponse {
   razorpay_payment_id: string;
@@ -36,27 +61,83 @@ export const initRazorpay = async (): Promise<boolean> => {
 };
 
 // Create a Razorpay order
-export const createRazorpayOrder = async (
-  amount: number,
-  currency = 'INR'
-): Promise<RazorpayOrderResponse | null> => {
+export const createRazorpayOrder = async (amount: number): Promise<RazorpayOrderResponse | null> => {
   try {
-    // This would typically call your backend API
-    const response = await fetch('/api/create-razorpay-order', {
-      method: 'POST',
+    const response = await fetch("/api/create-razorpay-order.php", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ amount, currency }),
+      body: JSON.stringify({ amount: amount * 100 }), // Convert to paise
     });
-
+    
     if (!response.ok) {
-      throw new Error('Failed to create order');
+      throw new Error("Failed to create order");
     }
-
-    return await response.json();
+    
+    const data = await response.json();
+    return data.order;
   } catch (error) {
-    console.error('Error creating Razorpay order:', error);
-    throw error;
+    console.error("Error creating Razorpay order:", error);
+    toast.error("Failed to create order. Please try again.");
+    return null;
+  }
+};
+
+// Open Razorpay payment window
+export const openRazorpayCheckout = (
+  options: RazorpayOptions,
+  onSuccess: (response: RazorpayResponse) => void,
+  onError: (error: any) => void
+) => {
+  if (typeof (window as any).Razorpay !== 'function') {
+    toast.error('Razorpay failed to load. Please refresh and try again.');
+    return;
+  }
+  const rzp = new (window as any).Razorpay(options);
+  
+  // Add event handlers
+  rzp.on('payment.success', (response: RazorpayResponse) => {
+    onSuccess(response);
+  });
+  
+  rzp.on('payment.error', (response: any) => {
+    onError(response.error);
+  });
+  
+  // Open checkout modal
+  rzp.open();
+};
+
+// Verify payment on server
+export const verifyRazorpayPayment = async (
+  paymentId: string,
+  orderId: string,
+  signature: string,
+  bookingId?: string
+): Promise<boolean> => {
+  try {
+    const response = await fetch("/api/admin/verify-razorpay-payment.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        razorpay_payment_id: paymentId,
+        razorpay_order_id: orderId,
+        razorpay_signature: signature,
+        booking_id: bookingId
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error("Payment verification failed");
+    }
+    
+    const data = await response.json();
+    return data.success === true;
+  } catch (error) {
+    console.error("Error verifying Razorpay payment:", error);
+    return false;
   }
 };

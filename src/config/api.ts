@@ -1,24 +1,51 @@
+// API configuration
 
-// API Configuration
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-production-domain.com' 
-  : 'http://localhost';
+// Base API URL - use www.vizagup.com as the domain
+export const apiBaseUrl = window.location.hostname.includes('localhost') 
+  ? 'https://www.vizagup.com' 
+  : 'https://www.vizagup.com';
 
-export const getApiUrl = (endpoint: string): string => {
-  return `${API_BASE_URL}${endpoint}`;
+// Helper function to get full API URL
+export const getApiUrl = (path: string = ''): string => {
+  // Ensure path starts with a slash if it doesn't already and isn't empty
+  const normalizedPath = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+
+  // List of known API directories that should not get .php
+  const apiDirectories = ['/api/pooling', '/api/admin', '/api/user'];
+  const isApiDirectory = apiDirectories.some(dir => normalizedPath.startsWith(dir + '/') || normalizedPath === dir);
+
+  // Add .php extension if the path is an API endpoint and doesn't already have an extension, doesn't end with a slash, and is not a known API directory
+  if (
+    normalizedPath.includes('/api/') &&
+    !normalizedPath.includes('.php') &&
+    !normalizedPath.endsWith('/') &&
+    !isApiDirectory
+  ) {
+    return `${apiBaseUrl}${normalizedPath}.php`.replace(/([^:]\/)\/+/g, '$1');
+  }
+
+  // Remove any duplicate slashes that might occur when joining
+  const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)\/+/g, '$1');
+  return fullUrl;
 };
 
-export const API_ENDPOINTS = {
-  AUTH: {
-    LOGIN: '/api/auth/login.php',
-    REGISTER: '/api/auth/register.php',
-    LOGOUT: '/api/auth/logout.php',
-    ME: '/api/auth/me.php',
-  },
-  POOLING: {
-    RIDES: '/api/pooling/rides.php',
-    BOOKINGS: '/api/pooling/bookings.php',
-    SEARCH: '/api/pooling/search.php',
-    WALLET: '/api/pooling/wallet.php',
-  },
+// Force refresh headers for API requests to bypass cache
+export const forceRefreshHeaders = {
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
+// Default headers for API requests
+export const defaultHeaders = {
+  'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
+// Export configuration options
+export default {
+  baseUrl: apiBaseUrl,
+  defaultHeaders,
+  forceRefreshHeaders
 };
