@@ -1,27 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Grid,
-  Alert,
-} from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { Edit, Trash2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Ride {
@@ -44,13 +29,14 @@ interface Ride {
   };
 }
 
-const PoolingRidesManager: React.FC = () => {
+export function PoolingRidesManager() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
   const [formData, setFormData] = useState<Partial<Ride>>({});
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchRides();
@@ -107,8 +93,17 @@ const PoolingRidesManager: React.FC = () => {
       
       await fetchRides();
       handleCloseDialog();
+      toast({
+        title: "Success",
+        description: "Ride saved successfully"
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save ride"
+      });
     }
   };
 
@@ -123,148 +118,172 @@ const PoolingRidesManager: React.FC = () => {
       if (!response.ok) throw new Error('Failed to delete ride');
       
       await fetchRides();
+      toast({
+        title: "Success",
+        description: "Ride deleted successfully"
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete ride"
+      });
     }
   };
 
-  if (loading) return <Typography>Loading...</Typography>;
-  if (error) return <Alert severity="error">{error}</Alert>;
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-600">Error: {error}</div>;
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5">Pooling Rides Management</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add New Ride
-        </Button>
-      </Box>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Pooling Rides Management</CardTitle>
+            <Button onClick={() => handleOpenDialog()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add New Ride
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">ID</th>
+                  <th className="text-left p-2">Type</th>
+                  <th className="text-left p-2">From</th>
+                  <th className="text-left p-2">To</th>
+                  <th className="text-left p-2">Departure</th>
+                  <th className="text-left p-2">Seats</th>
+                  <th className="text-left p-2">Price</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Provider</th>
+                  <th className="text-left p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rides.map((ride) => (
+                  <tr key={ride.id} className="border-b">
+                    <td className="p-2">{ride.id}</td>
+                    <td className="p-2">{ride.type}</td>
+                    <td className="p-2">{ride.fromLocation}</td>
+                    <td className="p-2">{ride.toLocation}</td>
+                    <td className="p-2">
+                      {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
+                    </td>
+                    <td className="p-2">{`${ride.availableSeats}/${ride.totalSeats}`}</td>
+                    <td className="p-2">₹{ride.pricePerSeat}</td>
+                    <td className="p-2">{ride.status}</td>
+                    <td className="p-2">{ride.providerName}</td>
+                    <td className="p-2">
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleOpenDialog(ride)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleDelete(ride.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>From</TableCell>
-              <TableCell>To</TableCell>
-              <TableCell>Departure</TableCell>
-              <TableCell>Seats</TableCell>
-              <TableCell>Price</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Provider</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rides.map((ride) => (
-              <TableRow key={ride.id}>
-                <TableCell>{ride.id}</TableCell>
-                <TableCell>{ride.type}</TableCell>
-                <TableCell>{ride.fromLocation}</TableCell>
-                <TableCell>{ride.toLocation}</TableCell>
-                <TableCell>
-                  {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
-                </TableCell>
-                <TableCell>{`${ride.availableSeats}/${ride.totalSeats}`}</TableCell>
-                <TableCell>₹{ride.pricePerSeat}</TableCell>
-                <TableCell>{ride.status}</TableCell>
-                <TableCell>{ride.providerName}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleOpenDialog(ride)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(ride.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedRide ? 'Edit Ride' : 'Add New Ride'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Type"
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedRide ? 'Edit Ride' : 'Add New Ride'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Input
+                  id="type"
                   value={formData.type || ''}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="From Location"
+              </div>
+              <div>
+                <Label htmlFor="fromLocation">From Location</Label>
+                <Input
+                  id="fromLocation"
                   value={formData.fromLocation || ''}
                   onChange={(e) => setFormData({ ...formData, fromLocation: e.target.value })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="To Location"
+              </div>
+              <div>
+                <Label htmlFor="toLocation">To Location</Label>
+                <Input
+                  id="toLocation"
                   value={formData.toLocation || ''}
                   onChange={(e) => setFormData({ ...formData, toLocation: e.target.value })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Departure Time"
+              </div>
+              <div>
+                <Label htmlFor="departureTime">Departure Time</Label>
+                <Input
+                  id="departureTime"
                   type="datetime-local"
                   value={formData.departureTime || ''}
                   onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
                   required
-                  InputLabelProps={{ shrink: true }}
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Total Seats"
+              </div>
+              <div>
+                <Label htmlFor="totalSeats">Total Seats</Label>
+                <Input
+                  id="totalSeats"
                   type="number"
                   value={formData.totalSeats || ''}
                   onChange={(e) => setFormData({ ...formData, totalSeats: parseInt(e.target.value) })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Price per Seat"
+              </div>
+              <div>
+                <Label htmlFor="pricePerSeat">Price per Seat</Label>
+                <Input
+                  id="pricePerSeat"
                   type="number"
                   value={formData.pricePerSeat || ''}
                   onChange={(e) => setFormData({ ...formData, pricePerSeat: parseFloat(e.target.value) })}
                   required
                 />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {selectedRide ? 'Update' : 'Create'}
-            </Button>
-          </DialogActions>
-        </form>
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {selectedRide ? 'Update' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
-    </Box>
+    </div>
   );
-};
+}
 
-export default PoolingRidesManager; 
+export default PoolingRidesManager;

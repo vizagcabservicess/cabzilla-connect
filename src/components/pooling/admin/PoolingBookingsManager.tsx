@@ -1,26 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Button,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Grid,
-  Alert,
-  Chip,
-} from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon } from '@mui/icons-material';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/use-toast";
+import { Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Booking {
@@ -37,13 +25,14 @@ interface Booking {
   updatedAt: string;
 }
 
-const PoolingBookingsManager: React.FC = () => {
+export function PoolingBookingsManager() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [formData, setFormData] = useState<Partial<Booking>>({});
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchBookings();
@@ -100,8 +89,17 @@ const PoolingBookingsManager: React.FC = () => {
       
       await fetchBookings();
       handleCloseDialog();
+      toast({
+        title: "Success",
+        description: "Booking saved successfully"
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save booking"
+      });
     }
   };
 
@@ -116,202 +114,202 @@ const PoolingBookingsManager: React.FC = () => {
       if (!response.ok) throw new Error('Failed to delete booking');
       
       await fetchBookings();
+      toast({
+        title: "Success",
+        description: "Booking deleted successfully"
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete booking"
+      });
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'cancelled':
-        return 'error';
-      case 'completed':
-        return 'info';
-      default:
-        return 'default';
-    }
+  const getStatusBadge = (status: string) => {
+    const variant = status === 'confirmed' ? 'default' : 
+                   status === 'pending' ? 'secondary' :
+                   status === 'cancelled' ? 'destructive' : 'outline';
+    return <Badge variant={variant}>{status}</Badge>;
   };
 
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'refunded':
-        return 'info';
-      default:
-        return 'default';
-    }
+  const getPaymentStatusBadge = (status: string) => {
+    const variant = status === 'paid' ? 'default' : 
+                   status === 'pending' ? 'secondary' : 'outline';
+    return <Badge variant={variant}>{status}</Badge>;
   };
 
-  if (loading) return <Typography>Loading...</Typography>;
-  if (error) return <Alert severity="error">{error}</Alert>;
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-600">Error: {error}</div>;
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5">Pooling Bookings Management</Typography>
-        <Button
-          variant="contained"
-          onClick={() => handleOpenDialog()}
-        >
-          Add New Booking
-        </Button>
-      </Box>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Pooling Bookings Management</CardTitle>
+            <Button onClick={() => handleOpenDialog()}>
+              Add New Booking
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">ID</th>
+                  <th className="text-left p-2">User</th>
+                  <th className="text-left p-2">Phone</th>
+                  <th className="text-left p-2">Seats</th>
+                  <th className="text-left p-2">Amount</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Payment</th>
+                  <th className="text-left p-2">Created</th>
+                  <th className="text-left p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((booking) => (
+                  <tr key={booking.id} className="border-b">
+                    <td className="p-2">{booking.id}</td>
+                    <td className="p-2">{booking.userName}</td>
+                    <td className="p-2">{booking.userPhone}</td>
+                    <td className="p-2">{booking.seats}</td>
+                    <td className="p-2">₹{booking.totalAmount}</td>
+                    <td className="p-2">{getStatusBadge(booking.status)}</td>
+                    <td className="p-2">{getPaymentStatusBadge(booking.paymentStatus)}</td>
+                    <td className="p-2">
+                      {format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleOpenDialog(booking)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleDelete(booking.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>User</TableCell>
-              <TableCell>Phone</TableCell>
-              <TableCell>Seats</TableCell>
-              <TableCell>Amount</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Payment</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {bookings.map((booking) => (
-              <TableRow key={booking.id}>
-                <TableCell>{booking.id}</TableCell>
-                <TableCell>{booking.userName}</TableCell>
-                <TableCell>{booking.userPhone}</TableCell>
-                <TableCell>{booking.seats}</TableCell>
-                <TableCell>₹{booking.totalAmount}</TableCell>
-                <TableCell>
-                  <Chip 
-                    label={booking.status} 
-                    color={getStatusColor(booking.status) as any}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={booking.paymentStatus} 
-                    color={getPaymentStatusColor(booking.paymentStatus) as any}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  {format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}
-                </TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleOpenDialog(booking)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(booking.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedBooking ? 'Edit Booking' : 'Add New Booking'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="User ID"
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedBooking ? 'Edit Booking' : 'Add New Booking'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="userId">User ID</Label>
+                <Input
+                  id="userId"
                   type="number"
                   value={formData.userId || ''}
                   onChange={(e) => setFormData({ ...formData, userId: parseInt(e.target.value) })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Ride ID"
+              </div>
+              <div>
+                <Label htmlFor="rideId">Ride ID</Label>
+                <Input
+                  id="rideId"
                   type="number"
                   value={formData.rideId || ''}
                   onChange={(e) => setFormData({ ...formData, rideId: parseInt(e.target.value) })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Seats"
+              </div>
+              <div>
+                <Label htmlFor="seats">Seats</Label>
+                <Input
+                  id="seats"
                   type="number"
                   value={formData.seats || ''}
                   onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Total Amount"
+              </div>
+              <div>
+                <Label htmlFor="totalAmount">Total Amount</Label>
+                <Input
+                  id="totalAmount"
                   type="number"
                   value={formData.totalAmount || ''}
                   onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) })}
                   required
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Status"
-                  value={formData.status || ''}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  required
-                  SelectProps={{
-                    native: true,
-                  }}
+              </div>
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select 
+                  value={formData.status || ''} 
+                  onValueChange={(value: 'pending' | 'confirmed' | 'cancelled' | 'completed') => 
+                    setFormData({ ...formData, status: value })
+                  }
                 >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="completed">Completed</option>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Payment Status"
-                  value={formData.paymentStatus || ''}
-                  onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
-                  required
-                  SelectProps={{
-                    native: true,
-                  }}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="paymentStatus">Payment Status</Label>
+                <Select 
+                  value={formData.paymentStatus || ''} 
+                  onValueChange={(value: 'pending' | 'paid' | 'refunded') => 
+                    setFormData({ ...formData, paymentStatus: value })
+                  }
                 >
-                  <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
-                  <option value="refunded">Refunded</option>
-                </TextField>
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {selectedBooking ? 'Update' : 'Create'}
-            </Button>
-          </DialogActions>
-        </form>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="refunded">Refunded</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {selectedBooking ? 'Update' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
-    </Box>
+    </div>
   );
-};
+}
 
-export default PoolingBookingsManager; 
+export default PoolingBookingsManager;
