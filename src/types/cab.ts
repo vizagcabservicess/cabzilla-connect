@@ -1,95 +1,66 @@
-export interface CabType {
+
+// Vehicle and Fleet Types
+
+export interface FleetVehicle {
+  id: string;
+  vehicleNumber: string;
+  name: string;
+  model: string;
+  make: string;
+  year: number;
+  status: 'Active' | 'Maintenance' | 'Inactive';
+  lastService: string;
+  nextServiceDue: string;
+  lastServiceOdometer?: number;
+  nextServiceOdometer?: number;
+  currentOdometer?: number;
+  fuelType: string;
+  vehicleType: string;
+  cabTypeId: string;
+  capacity?: number;
+  luggageCapacity?: number;
+  isActive?: boolean;
+  commissionPercentage?: number;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface Vehicle {
   id: string;
   name: string;
+  type: string;
   capacity: number;
+  pricePerKm: number;
+  basePrice: number;
+  image?: string;
+}
+
+export interface CabType {
+  id: string;
+  vehicleId?: string;
+  name: string;
+  type: string;
+  capacity: number;
+  luggage: number;
   luggageCapacity: number;
+  price: number;
+  basePrice: number;
+  pricePerKm: number;
   image: string;
   amenities: string[];
   description: string;
   ac: boolean;
-  price?: number;
-  pricePerKm?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
-  isActive?: boolean;
-  basePrice?: number;
-  vehicleId?: string;
-  vehicleType?: string;
-  // Fleet management properties
-  year?: number;
-  lastService?: string;
-  vehicleNumber?: string;
-  model?: string;
-  make?: string;
-  status?: 'Active' | 'Maintenance' | 'Inactive';
-  // Fare properties
-  outstationFares?: OutstationFare;
-  localPackageFares?: LocalFare;
-  airportFares?: AirportFare;
-  // Commission properties
-  commissionPercentage?: number;
-  defaultCommission?: boolean;
-}
-
-export interface OutstationFare {
-  basePrice: number;
-  pricePerKm: number;
-  driverAllowance: number;
   nightHaltCharge: number;
-  roundTripBasePrice: number;
-  roundTripPricePerKm: number;
-  // Alias properties for compatibility with different component usages
-  nightHalt?: number;  // Alias for nightHaltCharge
-}
-
-export interface LocalFare {
-  price4hrs40km: number;
-  price8hrs80km: number;
-  price10hrs100km: number; 
-  priceExtraKm: number;
-  priceExtraHour: number;
-  // Alias properties for compatibility with different component usages
-  package4hr40km?: number;  // Alias for price4hrs40km
-  package8hr80km?: number;  // Alias for price8hrs80km
-  package10hr100km?: number;  // Alias for price10hrs100km
-  extraKmRate?: number;  // Alias for priceExtraKm
-  extraHourRate?: number;  // Alias for priceExtraHour
-  // Additional aliases for database column name variations
-  local_package_4hr?: number;  // For vehicle_pricing table
-  local_package_8hr?: number;  // For vehicle_pricing table
-  local_package_10hr?: number; // For vehicle_pricing table
-  extra_km_charge?: number;    // For vehicle_pricing table
-  extra_hour_charge?: number;  // For vehicle_pricing table
-  // Raw database column names from local_package_fares
-  price_4hrs_40km?: number;    // From local_package_fares table
-  price_8hrs_80km?: number;    // From local_package_fares table
-  price_10hrs_100km?: number;  // From local_package_fares table
-  price_extra_km?: number;     // From local_package_fares table
-  price_extra_hour?: number;   // From local_package_fares table
-}
-
-export interface AirportFare {
-  basePrice: number;
-  pricePerKm: number;
-  dropPrice: number;
-  pickupPrice: number;
-  tier1Price: number;   // 0-10 KM
-  tier2Price: number;   // 11-20 KM
-  tier3Price: number;   // 21-30 KM
-  tier4Price: number;   // 31+ KM
-  extraKmCharge: number;
-  airportFee?: number;  // Added airportFee property
-}
-
-export interface FareCalculationParams {
-  cabType: CabType;
-  distance: number;
-  tripType: string;
-  tripMode?: string;
-  hourlyPackage?: string;
-  pickupDate?: Date;
-  returnDate?: Date;
-  forceRefresh?: boolean;  // Added this property
+  driverAllowance: number;
+  isActive: boolean;
+  localPackageFares?: {
+    package4hr40km?: number;
+    package8hr80km?: number;
+    package10hr100km?: number;
+    price8hrs80km?: number;
+    extraKmRate?: number;
+    extraHourRate?: number;
+  };
 }
 
 export interface HourlyPackage {
@@ -97,216 +68,193 @@ export interface HourlyPackage {
   name: string;
   hours: number;
   kilometers: number;
+  basePrice: number;
   description?: string;
-  basePrice?: number;
-  multiplier?: number;
 }
 
 export interface FareCache {
-  timestamp: number;
-  fares: Record<string, any>;
+  [key: string]: {
+    fare: number;
+    timestamp: number;
+    source: string;
+  };
 }
 
 export interface TourInfo {
   id: string;
   name: string;
-  distance: number;
-  days: number;
   description?: string;
+  duration: number;
+  distance: number;
   image?: string;
 }
 
 export interface TourFares {
-  [tourId: string]: {
-    sedan: number;
-    ertiga: number;
-    innova: number;
-    tempo?: number;
-    luxury?: number;
-  };
+  [vehicleType: string]: number;
 }
 
 export interface ExtraCharges {
-  gst?: number;
-  serviceTax?: number;
-  driverAllowance?: number;
-  parkingCharges?: number;
-  stateTax?: number;
   tollCharges?: number;
+  waitingCharges?: number;
+  nightHaltCharges?: number;
+  driverAllowance?: number;
+  otherCharges?: number;
 }
 
 export interface LocalPackagePriceMatrix {
   [packageId: string]: {
-    [cabType: string]: number;
+    [vehicleType: string]: number;
   };
+}
+
+export interface FareCalculationParams {
+  cabType: string;
+  distance: number;
+  tripType: string;
+  tripMode: string;
+  hourlyPackage?: string;
+  pickupDate?: string;
+  returnDate?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  forceRefresh?: boolean;
 }
 
 export interface VehiclePricing {
+  id: number;
+  vehicleId: number;
   vehicleType: string;
-  vehicleId?: string;  // Added to support both column names
-  basePrice: number;
+  localRate: number;
+  outstationRate: number;
+  airportTransferRate: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  perKmRate?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+}
+
+export interface OutstationFare {
+  id: number;
+  vehicleType: string;
+  rate: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
   pricePerKm: number;
-  nightHaltCharge: number;
-  driverAllowance: number;
-  roundtripBasePrice?: number;
-  roundtripPricePerKm?: number;
-  // Local package fare properties in both naming conventions
-  localPackage4hr?: number;
-  localPackage8hr?: number;
-  localPackage10hr?: number;
-  extraKmCharge?: number;
-  extraHourCharge?: number;
-  // Local package fare properties in alternative naming conventions
+  basePrice: number;
+  roundTripPricePerKm?: number;
+  roundTripBasePrice?: number;
+}
+
+export interface LocalFare {
+  id: number;
+  vehicleType: string;
+  packageType: string;
+  rate: number;
+  hours: number;
+  kilometers: number;
+  price8hrs80km: number;
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
   price4hrs40km?: number;
-  price8hrs80km?: number;
   price10hrs100km?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  // Airport fare properties
-  airportBasePrice?: number;
-  airportPricePerKm?: number;
-  airportDropPrice?: number;
-  airportPickupPrice?: number;
-  airportTier1Price?: number;
-  airportTier2Price?: number;
-  airportTier3Price?: number;
-  airportTier4Price?: number;
-  airportExtraKmCharge?: number;
 }
 
-export interface FleetVehicle {
-  id: string;
-  vehicleNumber: string;  // Registration/license plate number
-  name: string;           // Display name
-  model: string;          // Vehicle model
-  make: string;           // Manufacturer
-  year: number;           // Year of manufacture
-  status: 'Active' | 'Maintenance' | 'Inactive';
-  lastService: string;    // Date of last service
-  nextServiceDue: string; // Date when next service is due
-  lastServiceOdometer?: number; // Odometer reading at last service
-  nextServiceOdometer?: number; // Odometer reading for next service due
-  fuelType: string;       // Petrol, Diesel, CNG, Electric
-  vehicleType: string;    // Sedan, SUV, etc.
-  cabTypeId: string;      // Reference to the cab type
-  capacity: number;       // Passenger capacity
-  luggageCapacity: number; // Luggage capacity
-  isActive: boolean;      // Whether the vehicle is active
-  assignedDriverId?: string; // Reference to assigned driver
-  currentOdometer?: number;  // Current odometer reading
-  documents?: VehicleDocument[];
-  createdAt: string;
-  updatedAt: string;
-  vehicle_number?: string;
-  emi?: number; // Vehicle EMI (optional)
-  commissionPercentage?: number; // Commission percentage for this vehicle
-}
-
-export interface VehicleDocument {
-  id: string;
-  vehicleId: string;
-  type: 'registration' | 'insurance' | 'permit' | 'fitness' | 'pollution' | 'other';
-  number: string;
-  issuedDate: string;
-  expiryDate: string;
-  fileUrl?: string;
-  status: 'valid' | 'expired' | 'expiring_soon';
-  notes?: string;
-}
-
-export interface MaintenanceRecord {
-  id: string;
-  vehicleId: string;
-  serviceDate: string;
-  serviceType: string;
-  description: string;
-  cost: number;
-  vendor: string;
-  odometer: number;
-  nextServiceDue: string;
-  nextServiceOdometer: number;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface FuelRecord {
-  id: string | number;
-  vehicleId: string;
-  fillDate: string;
-  quantity: number;
-  pricePerUnit: number;
-  totalCost: number;
-  odometer: number;
-  fuelStation: string;
-  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
-  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
-  paymentDetails?: {
-    bankName?: string;
-    lastFourDigits?: string;
-  };
-  notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  mileage?: number;
-  calculatedMileage?: number | null;
-  
-  // Vehicle join fields
-  vehicleName?: string;
-  vehicleNumber?: string;
-  vehicleModel?: string;
-}
-
-export interface FuelPrice {
-  id: string;
-  fuelType: 'Petrol' | 'Diesel' | 'CNG';
-  price: number;
-  effectiveDate: string;
+export interface AirportFare {
+  id: number;
+  vehicleType: string;
+  rate: number;
   location?: string;
-  createdAt: string;
-  updatedAt: string;
+  basePrice: number;
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
+  extraKmCharge?: number;
 }
 
-// Commission-related interfaces
 export interface CommissionSetting {
-  id: string;
-  name: string;
-  description?: string;
+  id: number | string;
+  vehicleType: string;
   defaultPercentage: number;
+  default_percentage?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  name?: string;
+  description?: string;
 }
 
 export interface CommissionPayment {
-  id: string;
-  bookingId: string;
-  vehicleId: string;
-  driverId?: string;
-  amount: number;
-  commissionAmount: number;
+  id: number;
+  bookingId: number;
+  bookingNumber?: string;
+  driverId: number;
+  driverName: string;
+  vehicleType: string;
+  vehicleId?: string;
+  totalAmount: number;
+  amount?: number;
   commissionPercentage: number;
+  commissionAmount: number;
+  payoutAmount: number;
   status: 'pending' | 'paid' | 'cancelled';
   paymentDate?: string;
-  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CommissionReport {
-  totalBookings: number;
-  totalRevenue: number;
-  totalCommission: number;
-  paidCommission: number;
-  pendingCommission: number;
-  vehicleWiseCommission: {
-    vehicleId: string;
-    vehicleName: string;
-    bookings: number;
-    revenue: number;
-    commission: number;
-    percentage: number;
-  }[];
-  periodStart: string;
-  periodEnd: string;
+  totalCommissions: number;
+  paidCommissions: number;
+  pendingCommissions: number;
+  commissionsByVehicle: { [vehicleType: string]: number };
+  commissionsByDriver: { [driverId: string]: number };
+}
+
+export interface FuelPrice {
+  id: number | string;
+  fuelType: string;
+  pricePerLiter: number;
+  price: number;
+  location?: string;
+  effectiveDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FuelRecord {
+  id: number | string;
+  vehicleId: string;
+  fuelType: string;
+  fillDate: string;
+  quantity: number;
+  pricePerUnit: number;
+  totalCost: number;
+  odometer: number;
+  fuelStation?: string;
+  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
+  paymentDetails?: {
+    bankName?: string;
+    lastFourDigits?: string;
+  };
+  mileage?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FareBreakdown {
+  basePrice: number;
+  pricePerKm: number;
+  extraKmPrice?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  totalDistance: number;
+  totalPrice: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
 }

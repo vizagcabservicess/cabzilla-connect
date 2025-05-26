@@ -72,12 +72,15 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
     bookingNumber: payment.booking_number,
     vehicleId: payment.vehicle_id,
     driverId: payment.driver_id,
+    driverName: payment.driver_name || 'Unknown',
+    vehicleType: payment.vehicle_type || 'Unknown',
+    totalAmount: Number(payment.total_amount),
     amount: Number(payment.total_amount),
     commissionAmount: Number(payment.commission_amount),
     commissionPercentage: Number(payment.commission_percentage),
+    payoutAmount: Number(payment.payout_amount || 0),
     status: payment.status,
     paymentDate: payment.payment_date,
-    notes: payment.notes,
     createdAt: payment.created_at,
     updatedAt: payment.updated_at,
   });
@@ -150,7 +153,7 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Badge variant="success" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
+        return <Badge variant="default" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Paid</Badge>;
       case 'pending':
         return <Badge variant="outline" className="border-amber-500 text-amber-500"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
       case 'cancelled':
@@ -297,16 +300,16 @@ export function CommissionPaymentsList({ vehicleId: propVehicleId, onPaymentUpda
                     <TableCell>
                       {payment.status === 'pending' && (
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleStatusChange(payment.id, 'paid')}>
+                          <Button size="sm" onClick={() => handleStatusChange(String(payment.id), 'paid')}>
                             Mark Paid
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(payment.id, 'cancelled')}>
+                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(String(payment.id), 'cancelled')}>
                             Cancel
                           </Button>
                         </div>
                       )}
                       {payment.status === 'paid' && (
-                        <Button size="sm" variant="outline" onClick={() => handleStatusChange(payment.id, 'pending')}>
+                        <Button size="sm" variant="outline" onClick={() => handleStatusChange(String(payment.id), 'pending')}>
                           Mark Pending
                         </Button>
                       )}

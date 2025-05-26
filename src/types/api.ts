@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -131,6 +130,7 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
+  bookingId?: number;
 }
 
 export interface GstReportData {
@@ -149,7 +149,7 @@ export interface Location {
   type: string;
   latitude: number;
   longitude: number;
-  address?: string;
+  address: string;
   lat?: number;
   lng?: number;
   city?: string;
@@ -194,18 +194,22 @@ export interface VehiclePricing {
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
-  localRate?: number;
-  outstationRate?: number;
-  airportTransferRate?: number;
+  vehicleType: string;
+  basePrice: number;
+  pricePerKm: number;
+  perKmRate: number;
+  driverAllowance: number;
 }
 
 export interface FareUpdateRequest {
-  id?: number;
   vehicleType: string;
-  localRate?: number;
-  outstationRate?: number;
-  airportRate?: number;
   tourId?: string;
+  id?: string | number;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
 }
 
 export interface DashboardMetrics {
@@ -271,6 +275,14 @@ export interface FareBreakdown {
   roundTrip?: boolean;
   priceExtraKm?: number;
   priceExtraHour?: number;
+  basePrice?: number;
+  driverAllowance?: number;
+  nightCharges?: number;
+  extraDistanceFare?: number;
+  extraKmCharge?: number;
+  extraHourCharge?: number;
+  airportFee?: number;
+  packageLabel?: string;
 }
 
 // Commission Types
@@ -299,4 +311,34 @@ export interface CommissionPayment {
   paymentDate?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Payment Types
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+
+export interface Payment {
+  id: number | string;
+  bookingId: number;
+  bookingNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
+  amount: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
+  transactionId?: string;
+  razorpayPaymentId?: string;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentFilterParams {
+  status?: string;
+  method?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }

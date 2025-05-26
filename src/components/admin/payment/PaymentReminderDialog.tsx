@@ -1,17 +1,33 @@
+
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Payment } from '@/types/payment';
+import { Payment } from '@/types/api';
 
 interface PaymentReminderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   payment: Payment | null;
-  onSendReminder: (paymentId: number | string, reminderType: string) => void;
+  onSendReminder?: (paymentId: number | string, reminderType: string) => void;
+  onSend?: (paymentId: string | number, reminderType: string, customMessage?: string) => Promise<void>;
 }
 
-export function PaymentReminderDialog({ open, onOpenChange, payment, onSendReminder }: PaymentReminderDialogProps) {
+export function PaymentReminderDialog({ 
+  open, 
+  onOpenChange, 
+  payment, 
+  onSendReminder,
+  onSend 
+}: PaymentReminderDialogProps) {
   if (!payment) return null;
+
+  const handleSendReminder = async (reminderType: string) => {
+    if (onSend) {
+      await onSend(payment.id, reminderType);
+    } else if (onSendReminder) {
+      onSendReminder(payment.id, reminderType);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -25,10 +41,10 @@ export function PaymentReminderDialog({ open, onOpenChange, payment, onSendRemin
           <p><strong>Amount:</strong> ₹{payment.amount.toLocaleString()}</p>
         </div>
         <DialogFooter>
-          <Button onClick={() => onSendReminder(payment.id, 'email')}>Send Email Reminder</Button>
+          <Button onClick={() => handleSendReminder('email')}>Send Email Reminder</Button>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-} 
+}

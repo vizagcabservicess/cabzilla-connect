@@ -12,6 +12,10 @@ export const POOLING_LOCATIONS = [
   { id: '10', name: 'Lucknow', type: 'city', latitude: 26.8467, longitude: 80.9462 }
 ];
 
+export const getLocationById = (id: string) => {
+  return POOLING_LOCATIONS.find(location => location.id === id);
+};
+
 export const RIDE_TYPES = [
   { id: 'car', label: 'Car Pool', icon: '🚗' },
   { id: 'bus', label: 'Bus', icon: '🚌' },

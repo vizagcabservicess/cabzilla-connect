@@ -1,349 +1,189 @@
-import React, { useEffect, useState } from 'react';
+
+import React from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { 
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { FleetVehicle } from '@/types/cab';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Clock, Timer } from 'lucide-react';
 
 interface EditFleetVehicleDialogProps {
   open: boolean;
-  onClose: () => void;
-  vehicle: FleetVehicle;
-  onSave: (vehicle: FleetVehicle) => void;
-  onDelete: (vehicleId: string) => void;
+  onOpenChange: (open: boolean) => void;
+  vehicle: FleetVehicle | null;
+  onSubmit: (values: FleetVehicle) => void;
 }
+
+const formSchema = z.object({
+  id: z.string().optional(),
+  vehicleNumber: z.string().min(2, {
+    message: 'Vehicle number must be at least 2 characters.',
+  }),
+  name: z.string().min(2, {
+    message: 'Name must be at least 2 characters.',
+  }),
+  model: z.string().min(2, {
+    message: 'Model must be at least 2 characters.',
+  }),
+  make: z.string().min(2, {
+    message: 'Make must be at least 2 characters.',
+  }),
+  year: z.number().min(2000).max(2024),
+  status: z.enum(['Active', 'Maintenance', 'Inactive']),
+  lastService: z.string(),
+  nextServiceDue: z.string(),
+  fuelType: z.string(),
+  vehicleType: z.string(),
+  cabTypeId: z.string(),
+  capacity: z.number().min(1).max(10),
+  luggageCapacity: z.number().min(0).max(5),
+  isActive: z.boolean().default(true),
+  commissionPercentage: z.number().min(0).max(100).optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+const formFields = [
+  { name: 'vehicleNumber', label: 'Vehicle Number', type: 'text', placeholder: 'Enter vehicle number' },
+  { name: 'name', label: 'Name', type: 'text', placeholder: 'Enter name' },
+  { name: 'model', label: 'Model', type: 'text', placeholder: 'Enter model' },
+  { name: 'make', label: 'Make', type: 'text', placeholder: 'Enter make' },
+  { name: 'year', label: 'Year', type: 'number', placeholder: 'Enter year' },
+  {
+    name: 'status', label: 'Status', type: 'select', placeholder: 'Select status', options: [
+      { value: 'Active', label: 'Active' },
+      { value: 'Maintenance', label: 'Maintenance' },
+      { value: 'Inactive', label: 'Inactive' },
+    ]
+  },
+  { name: 'lastService', label: 'Last Service', type: 'date', placeholder: 'Enter last service date' },
+  { name: 'nextServiceDue', label: 'Next Service Due', type: 'date', placeholder: 'Enter next service due date' },
+  { name: 'fuelType', label: 'Fuel Type', type: 'text', placeholder: 'Enter fuel type' },
+  { name: 'vehicleType', label: 'Vehicle Type', type: 'text', placeholder: 'Enter vehicle type' },
+  { name: 'cabTypeId', label: 'Cab Type ID', type: 'text', placeholder: 'Enter cab type ID' },
+  { name: 'capacity', label: 'Capacity', type: 'number', placeholder: 'Enter capacity' },
+  { name: 'luggageCapacity', label: 'Luggage Capacity', type: 'number', placeholder: 'Enter luggage capacity' },
+  { name: 'commissionPercentage', label: 'Commission Percentage', type: 'number', placeholder: 'Enter commission percentage' },
+  { name: 'isActive', label: 'Is Active', type: 'select', placeholder: 'Select active status', options: [
+      { value: 'true', label: 'Active' },
+      { value: 'false', label: 'Inactive' },
+    ]
+  },
+];
 
 export function EditFleetVehicleDialog({
   open,
-  onClose,
+  onOpenChange,
   vehicle,
-  onSave,
-  onDelete
+  onSubmit,
 }: EditFleetVehicleDialogProps) {
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-
   const form = useForm<FleetVehicle>({
-    defaultValues: {
-      ...vehicle,
-      lastServiceOdometer: vehicle.lastServiceOdometer || 0,
-      nextServiceOdometer: vehicle.nextServiceOdometer || 0
-    }
+    resolver: zodResolver(formSchema),
+    defaultValues: vehicle || {
+      vehicleNumber: '',
+      name: '',
+      model: '',
+      make: '',
+      year: 2022,
+      status: 'Active',
+      lastService: '',
+      nextServiceDue: '',
+      fuelType: '',
+      vehicleType: '',
+      cabTypeId: '',
+      capacity: 4,
+      luggageCapacity: 2,
+      isActive: true,
+      commissionPercentage: 10,
+    },
+    mode: 'onChange',
   });
 
-  // Reset form when dialog opens with new vehicle data
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        ...vehicle,
-        lastServiceOdometer: vehicle.lastServiceOdometer || 0,
-        nextServiceOdometer: vehicle.nextServiceOdometer || 0
-      });
-    }
-  }, [open, vehicle, form]);
+  const { handleSubmit, control, formState: { errors } } = form;
 
-  const handleSubmit = (data: FleetVehicle) => {
-    // Preserve ID and other metadata
-    const updatedVehicle: FleetVehicle = {
-      ...vehicle,
-      ...data,
-      id: vehicle.id,
-      updatedAt: new Date().toISOString()
-    };
-    
-    onSave(updatedVehicle);
-  };
-
-  const handleDeleteClick = () => {
-    setIsDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = () => {
-    onDelete(vehicle.id);
-    setIsDeleteDialogOpen(false);
+  const submitForm = (values: FleetVehicle) => {
+    onSubmit(values);
+    onOpenChange(false);
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Edit Vehicle</DialogTitle>
-          </DialogHeader>
-
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="vehicleNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vehicle Number</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{vehicle ? 'Edit Vehicle' : 'Add Vehicle'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(submitForm)} className="grid gap-4 py-4">
+        {formFields.map((field) => (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name} className="text-sm font-medium">
+              {field.label}
+            </Label>
+            <Controller
+              name={field.name as keyof FleetVehicle}
+              control={control}
+              render={({ field: fieldProps }) => {
+                if (field.type === 'select') {
+                  return (
+                    <Select onValueChange={fieldProps.onChange} value={String(fieldProps.value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={field.placeholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {field.options?.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                }
                 
-                <FormField
-                  control={form.control}
-                  name="make"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Make</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-                
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="model"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Model</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="year"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Year</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-                
-              <div className="grid grid-cols-2 gap-4">  
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Active">Active</SelectItem>
-                          <SelectItem value="Maintenance">Maintenance</SelectItem>
-                          <SelectItem value="Inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="fuelType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fuel Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select fuel type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Petrol">Petrol</SelectItem>
-                          <SelectItem value="Diesel">Diesel</SelectItem>
-                          <SelectItem value="CNG">CNG</SelectItem>
-                          <SelectItem value="Electric">Electric</SelectItem>
-                          <SelectItem value="Hybrid">Hybrid</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-                
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="capacity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Capacity (passengers)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="luggageCapacity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Luggage Capacity</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {/* Vehicle EMI Field */}
-                <FormField
-                  control={form.control}
-                  name="emi"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vehicle EMI</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={100}
-                          placeholder="Enter EMI amount"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              {/* Service Information Section */}
-              <div className="border-t pt-4 mt-4">
-                <h3 className="font-medium mb-3">Service Information</h3>
-                
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <FormField
-                    control={form.control}
-                    name="lastService"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Service Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                return (
+                  <Input
+                    {...fieldProps}
+                    value={fieldProps.value ? String(fieldProps.value) : ''}
+                    onChange={(e) => {
+                      const value = field.type === 'number' ? 
+                        (e.target.value ? Number(e.target.value) : '') : 
+                        e.target.value;
+                      fieldProps.onChange(value);
+                    }}
+                    type={field.type}
+                    placeholder={field.placeholder}
                   />
-                  
-                  <FormField
-                    control={form.control}
-                    name="lastServiceOdometer"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Service Odometer (km)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="nextServiceDue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Next Service Due Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="nextServiceOdometer"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Next Service Odometer (km)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-              
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button variant="destructive" type="button" onClick={handleDeleteClick}>
-                  Delete Vehicle
-                </Button>
-                <div className="flex-grow"></div>
-                <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this vehicle?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the vehicle
-              from your fleet database.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+                );
+              }}
+            />
+            {errors[field.name as keyof FleetVehicle] && (
+              <p className="text-sm text-destructive">
+                {errors[field.name as keyof FleetVehicle]?.message}
+              </p>
+            )}
+          </div>
+        ))}
+          <DialogFooter>
+            <Button type="submit">
+              {vehicle ? 'Update Vehicle' : 'Add Vehicle'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
