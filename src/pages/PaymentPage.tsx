@@ -10,7 +10,7 @@ import {
   RazorpayResponse
 } from '@/services/razorpayService';
 import { bookingAPI } from '@/services/api';
-import { Booking } from '@/types/api';
+import { Booking, BookingStatus } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
