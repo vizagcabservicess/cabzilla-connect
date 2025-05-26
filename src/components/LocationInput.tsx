@@ -9,8 +9,8 @@ export interface Location {
   address: string;
   latitude: number;
   longitude: number;
-  city?: string;
-  type?: string;
+  city: string;
+  type: string;
 }
 
 interface LocationInputProps {

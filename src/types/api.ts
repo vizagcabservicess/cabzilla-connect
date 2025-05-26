@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -150,7 +149,7 @@ export interface Location {
   type: string;
   latitude: number;
   longitude: number;
-  address?: string;
+  address: string;
   lat?: number;
   lng?: number;
   city?: string;
@@ -199,6 +198,7 @@ export interface VehiclePricingUpdateRequest {
   outstationRate?: number;
   airportTransferRate?: number;
   vehicleType?: string;
+  basePrice?: number;
 }
 
 export interface FareUpdateRequest {
@@ -209,6 +209,10 @@ export interface FareUpdateRequest {
   airportRate?: number;
   tourId?: string;
   sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 export interface DashboardMetrics {

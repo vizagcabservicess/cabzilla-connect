@@ -18,6 +18,7 @@ export interface PoolingRide {
   id: number;
   providerId: number;
   providerName: string;
+  providerPhone?: string;
   providerRating?: number;
   totalRides?: number;
   type: RideType;
@@ -35,6 +36,7 @@ export interface PoolingRide {
   description?: string;
   pickupPoints?: string[];
   dropPoints?: string[];
+  rules?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +46,7 @@ export interface PoolingBooking {
   rideId: number;
   userId: number;
   userName: string;
+  passengerName?: string;
   userPhone: string;
   userEmail: string;
   seatsBooked: number;
@@ -85,6 +88,7 @@ export interface CreateRideRequest {
   vehicleInfo: VehicleInfo;
   description?: string;
   amenities?: string[];
+  rules?: string[];
 }
 
 export interface PoolingSearchRequest {

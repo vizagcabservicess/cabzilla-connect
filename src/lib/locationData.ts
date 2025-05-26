@@ -6,7 +6,7 @@ export interface Location {
   latitude: number;
   longitude: number;
   city: string;
-  address?: string;
+  address: string;
 }
 
 export const LOCATIONS: Location[] = [
