@@ -14,6 +14,7 @@ import {
   formatTravelTime,
   isVizagLocation
 } from "@/lib/locationData";
+import { Location as ApiLocation } from "@/types/api";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { 
   cabTypes, 
@@ -103,7 +104,7 @@ const CabsPage = () => {
       
       const isPickupInVizag = pickup && pickup.isInVizag !== undefined ? 
                              pickup.isInVizag : 
-                             isLocationInVizag(convertToApiLocation(pickup) as ApiLocation);
+                             isLocationInVizag(convertToApiLocation(pickup));
       
       if (!isPickupInVizag) {
         toast({
@@ -118,7 +119,7 @@ const CabsPage = () => {
       if (tripType === "airport") {
         const isDropoffInVizag = dropoff && dropoff.isInVizag !== undefined ? 
                                 dropoff.isInVizag : 
-                                isLocationInVizag(convertToApiLocation(dropoff) as ApiLocation);
+                                isLocationInVizag(convertToApiLocation(dropoff));
         
         if (!isDropoffInVizag) {
           console.log("Dropoff not in Vizag, switching to outstation");
@@ -161,26 +162,32 @@ const CabsPage = () => {
     }
   };
   
-  const handlePickupLocationChange = (location: LibLocation) => {
-    if (!location) return; // Safety check
+  const handlePickupLocationChange = (location: ApiLocation) => {
+    if (!location) return;
     
-    if (location.isInVizag === undefined) {
-      location.isInVizag = isLocationInVizag(location);
-    }
+    const libLocation: LibLocation = {
+      ...location,
+      lat: location.latitude,
+      lng: location.longitude,
+      isInVizag: location.isInVizag !== undefined ? location.isInVizag : isLocationInVizag(location)
+    };
     
-    console.log("Pickup location changed:", location);
-    setPickup(location);
+    console.log("Pickup location changed:", libLocation);
+    setPickup(libLocation);
   };
   
-  const handleDropoffLocationChange = (location: LibLocation) => {
-    if (!location) return; // Safety check
+  const handleDropoffLocationChange = (location: ApiLocation) => {
+    if (!location) return;
     
-    if (location.isInVizag === undefined) {
-      location.isInVizag = isLocationInVizag(location);
-    }
+    const libLocation: LibLocation = {
+      ...location,
+      lat: location.latitude,
+      lng: location.longitude,
+      isInVizag: location.isInVizag !== undefined ? location.isInVizag : isLocationInVizag(location)
+    };
     
-    console.log("Dropoff location changed:", location);
-    setDropoff(location);
+    console.log("Dropoff location changed:", libLocation);
+    setDropoff(libLocation);
   };
 
   const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
@@ -478,7 +485,7 @@ const CabsPage = () => {
                   label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
                   placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
                   value={pickup ? convertToApiLocation(pickup) : undefined}
-                  onLocationChange={(loc: ApiLocation) => handlePickupLocationChange(loc as LibLocation)}
+                  onLocationChange={handlePickupLocationChange}
                   isPickupLocation={true}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
@@ -488,7 +495,7 @@ const CabsPage = () => {
                   label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
                   placeholder="Enter destination location" 
                   value={dropoff ? convertToApiLocation(dropoff) : undefined}
-                  onLocationChange={(loc: ApiLocation) => handleDropoffLocationChange(loc as LibLocation)}
+                  onLocationChange={handleDropoffLocationChange}
                   isPickupLocation={false}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
@@ -563,8 +570,8 @@ const CabsPage = () => {
                   <div className="mt-6 w-full overflow-hidden rounded-lg shadow-md">
                     <h3 className="text-lg font-semibold mb-2">Route Map</h3>
                     <GoogleMapComponent 
-                      pickupLocation={pickup} 
-                      dropLocation={dropoff} 
+                      pickupLocation={convertToApiLocation(pickup)} 
+                      dropLocation={convertToApiLocation(dropoff)} 
                       onDistanceCalculated={handleMapDistanceCalculated}
                       tripType={tripType}
                     />

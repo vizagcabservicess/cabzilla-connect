@@ -166,6 +166,43 @@ let mockRides: PoolingRide[] = [
   }
 ];
 
+const mockVehicles = [
+  {
+    id: 1,
+    make: 'Tata',
+    model: 'Bus',
+    color: 'Blue',
+    plateNumber: 'AP39AB1234',
+    type: 'bus' as PoolingVehicleType,
+    capacity: 40,
+    status: 'active' as const,
+    lastMaintenance: '2024-01-15',
+    nextMaintenance: '2024-04-15',
+    driverId: 1,
+    currentLocation: 'Visakhapatnam',
+    isActive: true,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-15T00:00:00Z',
+  },
+  {
+    id: 2,
+    make: 'Ashok Leyland',
+    model: 'Viking',
+    color: 'White',
+    plateNumber: 'AP39CD5678',
+    type: 'bus' as PoolingVehicleType,
+    capacity: 35,
+    status: 'active' as const,
+    lastMaintenance: '2024-01-20',
+    nextMaintenance: '2024-04-20',
+    driverId: 2,
+    currentLocation: 'Vizianagaram',
+    isActive: true,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-20T00:00:00Z',
+  }
+];
+
 export const searchRides = async (request: PoolingSearchRequest): Promise<PoolingRide[]> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -235,4 +272,27 @@ export const createRide = async (request: CreateRideRequest): Promise<PoolingRid
 
   mockRides.push(newRide);
   return newRide;
+};
+
+export const createPoolingRide = async (rideData: Omit<PoolingRide, 'id' | 'createdAt' | 'updatedAt'>): Promise<PoolingRide> => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const newRide: PoolingRide = {
+        ...rideData,
+        id: Date.now(),
+        route: rideData.route || `${rideData.origin} to ${rideData.destination}`,
+        providerId: 1,
+        providerName: 'Test Provider',
+        providerPhone: '+91 9876543210',
+        providerRating: 4.5,
+        availableSeats: rideData.availableSeats || 30,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      mockRides.push(newRide);
+      resolve(newRide);
+    }, 500);
+  });
 };

@@ -21,10 +21,17 @@ export function PayrollDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Payroll Management</DialogTitle>
+          <DialogTitle>
+            {payrollToEdit ? 'Edit Payroll Entry' : 'Add Payroll Entry'}
+          </DialogTitle>
         </DialogHeader>
         <div className="p-4">
           <p>Payroll dialog functionality will be implemented here.</p>
+          {selectedDriverId && (
+            <p className="text-sm text-gray-600 mt-2">
+              Selected Driver ID: {selectedDriverId}
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

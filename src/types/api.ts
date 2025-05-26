@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -338,4 +337,3 @@ export interface AuthAPI {
   isAuthenticated: () => boolean;
   isAdmin: () => boolean;
 }
-
