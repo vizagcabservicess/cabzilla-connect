@@ -42,7 +42,8 @@ const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any)
     lng: 0,
     type: 'other',
     popularityScore: 0,
-    isInVizag: false
+    isInVizag: false,
+    address: backendBooking.pickupLocation || backendBooking.pickup_location || ''
   },
   dropLocation: {
     id: '2',
@@ -53,7 +54,8 @@ const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any)
     lng: 0,
     type: 'other',
     popularityScore: 0,
-    isInVizag: false
+    isInVizag: false,
+    address: backendBooking.dropLocation || backendBooking.drop_location || ''
   },
   selectedCab: {
     id: '1',
@@ -65,8 +67,7 @@ const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any)
     image: '',
     amenities: [],
     description: '',
-    ac: true,
-    available: true
+    ac: true
   },
   distance: backendBooking.distance || 0,
   totalPrice: backendBooking.totalAmount || backendBooking.total_amount || fallbackBooking?.totalPrice || 0,

@@ -14,6 +14,8 @@ interface WhatsAppButtonProps {
   openInNewTab?: boolean;
   className?: string;
   children?: React.ReactNode;
+  size?: "default" | "sm" | "lg" | "icon";
+  disabled?: boolean;
 }
 
 export function WhatsAppButton({ 
@@ -24,11 +26,15 @@ export function WhatsAppButton({
   variant = "default",
   openInNewTab = true,
   className, 
-  children, 
+  children,
+  size = "default",
+  disabled = false,
   ...props 
 }: WhatsAppButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    if (disabled) return;
     
     const formattedPhone = formatPhoneNumber(phone);
     const encodedMessage = encodeURIComponent(message);
@@ -44,7 +50,9 @@ export function WhatsAppButton({
   return (
     <Button
       variant={variant}
+      size={size}
       onClick={handleClick}
+      disabled={disabled}
       className={cn(
         "bg-[#25D366] hover:bg-[#128C7E] text-white",
         fullWidth && "w-full",

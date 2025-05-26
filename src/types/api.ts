@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -65,6 +66,13 @@ export interface Booking {
   payment_status?: string; // Legacy field - will be deprecated
   createdAt?: string;
   updatedAt?: string;
+  // Add legacy field mappings for compatibility
+  pickup_location?: string;
+  dropoff_location?: string;
+  pickup_time?: string;
+  vehicle_type?: string;
+  driver_name?: string;
+  fare?: number;
 }
 
 export interface BookingDetails {
