@@ -131,7 +131,7 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
-  bookingId?: string; // Add missing property
+  bookingId?: string;
 }
 
 export interface GstReportData {
@@ -194,6 +194,7 @@ export interface VehiclePricingUpdateRequest {
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
+  basePrice?: number;
   pricePerKm?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
@@ -208,6 +209,11 @@ export interface FareUpdateRequest {
   airportRate?: number;
   pricePerKm?: number;
   nightHaltCharge?: number;
+  sedan?: number;
+  ertiga?: number;
+  innova?: number;
+  tempo?: number;
+  luxury?: number;
 }
 
 export interface DashboardMetrics {
@@ -284,20 +290,31 @@ export interface CommissionSetting {
 }
 
 // Payment Types
+export type PaymentStatus = 'pending' | 'paid' | 'partial' | 'cancelled';
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+
 export interface PaymentFilterParams {
-  status?: string;
-  method?: string;
+  status?: PaymentStatus;
+  method?: PaymentMethod;
   startDate?: string;
   endDate?: string;
+  search?: string;
 }
 
 export interface Payment {
   id: string | number;
   amount: number;
-  status: string;
-  method: string;
+  paidAmount: number;
+  remainingAmount: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
   bookingId?: string;
+  bookingNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
+  dueDate: string;
   createdAt?: string;
+  razorpayPaymentId?: string;
 }
 
 export interface PaymentReminderDialogProps {
@@ -315,6 +332,8 @@ export interface FareBreakdown {
   pricePerKm?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
+  extraKmCharge?: number;
+  extraHourCharge?: number;
   nightHaltCharges?: number;
   driverAllowance?: number;
 }
