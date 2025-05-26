@@ -76,8 +76,6 @@ export function VehicleAssignment() {
             Vehicle
           </Label>
           <Select
-            id="vehicleId"
-            name="vehicleId"
             onValueChange={(value) => handleChange({ target: { name: 'vehicleId', value } } as any)}
             defaultValue={formValues.vehicleId}
           >
@@ -98,8 +96,6 @@ export function VehicleAssignment() {
             Driver
           </Label>
           <Select
-            id="driverId"
-            name="driverId"
             onValueChange={(value) => handleChange({ target: { name: 'driverId', value } } as any)}
             defaultValue={formValues.driverId}
           >

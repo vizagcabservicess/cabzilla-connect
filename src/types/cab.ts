@@ -170,13 +170,15 @@ export interface AirportFare {
 }
 
 export interface CommissionSetting {
-  id: number;
+  id: number | string;
   vehicleType: string;
   defaultPercentage: number;
   default_percentage?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  name?: string;
+  description?: string;
 }
 
 export interface CommissionPayment {
@@ -186,7 +188,9 @@ export interface CommissionPayment {
   driverId: number;
   driverName: string;
   vehicleType: string;
+  vehicleId?: string;
   totalAmount: number;
+  amount?: number;
   commissionPercentage: number;
   commissionAmount: number;
   payoutAmount: number;
@@ -205,23 +209,32 @@ export interface CommissionReport {
 }
 
 export interface FuelPrice {
-  id: number;
+  id: number | string;
   fuelType: string;
   pricePerLiter: number;
+  price: number;
+  location?: string;
   effectiveDate: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface FuelRecord {
-  id: number;
+  id: number | string;
   vehicleId: string;
   fuelType: string;
-  liters: number;
-  pricePerLiter: number;
-  totalAmount: number;
+  fillDate: string;
+  quantity: number;
+  pricePerUnit: number;
+  totalCost: number;
   odometer: number;
-  date: string;
+  fuelStation?: string;
+  paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
+  paymentDetails?: {
+    bankName?: string;
+    lastFourDigits?: string;
+  };
+  mileage?: number;
   notes?: string;
   createdAt: string;
   updatedAt: string;

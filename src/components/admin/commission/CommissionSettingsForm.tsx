@@ -17,7 +17,8 @@ interface CommissionSettingsFormProps {
 export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsFormProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [setting, setSetting] = useState<CommissionSetting>({
-    id: '',
+    id: 1,
+    vehicleType: 'default',
     name: 'Default Commission',
     description: 'Default commission percentage for fleet vehicles',
     defaultPercentage: 10,
@@ -36,12 +37,13 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
           const activeSetting = settings.find((s: CommissionSetting) => s.isActive) || settings[0];
           setSetting({
             id: activeSetting.id,
+            vehicleType: activeSetting.vehicleType || 'default',
             name: activeSetting.name || 'Default Commission',
             description: activeSetting.description || '',
             defaultPercentage: activeSetting.default_percentage || activeSetting.defaultPercentage || 10,
-            isActive: activeSetting.is_active || activeSetting.isActive || true,
-            createdAt: activeSetting.created_at || activeSetting.createdAt || '',
-            updatedAt: activeSetting.updated_at || activeSetting.updatedAt || ''
+            isActive: activeSetting.isActive || true,
+            createdAt: activeSetting.createdAt || '',
+            updatedAt: activeSetting.updatedAt || ''
           });
         }
       } catch (error) {
@@ -65,7 +67,7 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
     try {
       if (setting.id) {
         // Update existing setting
-        await commissionAPI.updateCommissionSetting(setting.id, {
+        await commissionAPI.updateCommissionSetting(String(setting.id), {
           name: setting.name,
           description: setting.description,
           default_percentage: setting.defaultPercentage,
@@ -114,7 +116,7 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
             <Label htmlFor="name">Setting Name</Label>
             <Input
               id="name"
-              value={setting.name}
+              value={setting.name || ''}
               onChange={(e) => setSetting({ ...setting, name: e.target.value })}
               disabled={isLoading}
             />
@@ -164,7 +166,8 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
         
         <CardFooter className="flex justify-between">
           <Button variant="outline" type="button" onClick={() => setSetting({
-            id: '',
+            id: 1,
+            vehicleType: 'default',
             name: 'Default Commission',
             description: 'Default commission percentage for fleet vehicles',
             defaultPercentage: 10,

@@ -25,7 +25,7 @@ export function VehicleCommissionForm({ vehicle, onCommissionUpdated }: VehicleC
   useEffect(() => {
     const fetchDefaultCommission = async () => {
       try {
-        const defaultSetting = await commissionAPI.getDefaultCommission();
+        const defaultSetting = await commissionAPI.getDefaultCommission('default');
         setDefaultCommissionRate(defaultSetting.defaultPercentage || 10);
       } catch (error) {
         console.error("Error fetching default commission rate:", error);
@@ -41,10 +41,12 @@ export function VehicleCommissionForm({ vehicle, onCommissionUpdated }: VehicleC
     
     try {
       // Update vehicle with commission settings
-      const updatedVehicle = await fleetAPI.addVehicle({
+      const updatedVehicleData = {
         ...vehicle,
         commissionPercentage: useDefaultCommission ? null : commissionPercentage
-      });
+      };
+      
+      await fleetAPI.addVehicle(updatedVehicleData);
       
       toast({
         title: "Commission updated",
@@ -52,7 +54,7 @@ export function VehicleCommissionForm({ vehicle, onCommissionUpdated }: VehicleC
       });
       
       if (onCommissionUpdated) {
-        onCommissionUpdated(updatedVehicle);
+        onCommissionUpdated(updatedVehicleData);
       }
     } catch (error) {
       toast({
