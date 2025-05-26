@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
+import { fareAPI } from '@/services/api/fareAPI';
 import { FleetVehicle } from '@/types/cab';
 import { VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 
@@ -40,7 +41,7 @@ export function VehicleFareManagement() {
 
     const fetchTours = async () => {
       try {
-        const response = await vehicleAPI.getTours();
+        const response = await fareAPI.getTourFares();
         setTours(response);
       } catch (error) {
         console.error("Error fetching tours:", error);
@@ -61,11 +62,10 @@ export function VehicleFareManagement() {
         basePrice: Number(basePrice),
         pricePerKm: Number(pricePerKm),
         perKmRate: Number(pricePerKm),
-        nightHaltCharge: Number(nightHaltCharge),
         driverAllowance: Number(driverAllowance),
       };
 
-      await vehicleAPI.updateVehiclePricing(updateData);
+      await fareAPI.updateVehiclePricing(Number(selectedVehicle), updateData);
 
       toast({
         title: "Vehicle fare updated",
@@ -87,7 +87,7 @@ export function VehicleFareManagement() {
       setIsLoading(true);
       
       const updateData: FareUpdateRequest = {
-        vehicleType: 'tour', // Add required vehicleType
+        vehicleType: 'tour',
         tourId: selectedTour,
         sedan: Number(sedan),
         ertiga: Number(ertiga),
@@ -96,7 +96,7 @@ export function VehicleFareManagement() {
         luxury: Number(luxury),
       };
 
-      await vehicleAPI.updateTourFare(updateData);
+      await fareAPI.updateTourFare(selectedTour, updateData);
 
       toast({
         title: "Tour fare updated",

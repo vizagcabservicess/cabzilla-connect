@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -37,6 +38,10 @@ export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: P
     }
   }, [payment]);
 
+  const handleStatusChange = (value: string) => {
+    setStatus(value as PaymentStatus);
+  };
+
   const handleMethodChange = (value: string) => {
     setPaymentMethod(value as PaymentMethod);
   };
@@ -71,8 +76,8 @@ export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: P
             <Label htmlFor="status" className="text-right">
               Status
             </Label>
-            <Select value={status} onValueChange={setStatus} className="col-span-3">
-              <SelectTrigger>
+            <Select value={status} onValueChange={handleStatusChange}>
+              <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
@@ -99,8 +104,8 @@ export function PaymentUpdateDialog({ open, onOpenChange, payment, onUpdate }: P
             <Label htmlFor="paymentMethod" className="text-right">
               Payment Method
             </Label>
-            <Select value={paymentMethod} onValueChange={handleMethodChange} className="col-span-3">
-              <SelectTrigger>
+            <Select value={paymentMethod} onValueChange={handleMethodChange}>
+              <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select method" />
               </SelectTrigger>
               <SelectContent>

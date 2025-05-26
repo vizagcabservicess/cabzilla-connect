@@ -1,4 +1,3 @@
-
 // Vehicle and Fleet Types
 
 export interface FleetVehicle {
@@ -37,24 +36,28 @@ export interface Vehicle {
 
 export interface CabType {
   id: string;
+  vehicleId?: string;
   name: string;
-  description: string;
+  type: string;
   capacity: number;
   luggage: number;
-  image?: string;
-  amenities?: string[];
+  luggageCapacity: number;
+  price: number;
   basePrice: number;
   pricePerKm: number;
-  type: string;
-  luggageCapacity?: number;
-  price?: number;
-  driverAllowance?: number;
-  nightHaltCharge?: number;
-  ac?: boolean;
-  isActive?: boolean;
-  vehicleId?: string;
+  image: string;
+  amenities: string[];
+  description: string;
+  ac: boolean;
+  nightHaltCharge: number;
+  driverAllowance: number;
+  isActive: boolean;
   localPackageFares?: {
-    price8hrs80km: number;
+    package4hr40km?: number;
+    package8hr80km?: number;
+    package10hr100km?: number;
+    extraKmRate?: number;
+    extraHourRate?: number;
   };
 }
 
@@ -238,4 +241,16 @@ export interface FuelRecord {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FareBreakdown {
+  basePrice: number;
+  pricePerKm: number;
+  extraKmPrice?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  totalDistance: number;
+  totalPrice: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
 }

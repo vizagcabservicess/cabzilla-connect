@@ -194,29 +194,22 @@ export interface VehiclePricing {
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
-  localRate?: number;
-  outstationRate?: number;
-  airportTransferRate?: number;
-  vehicleType?: string;
-  basePrice?: number;
-  pricePerKm?: number;
-  perKmRate?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
+  vehicleType: string;
+  basePrice: number;
+  pricePerKm: number;
+  perKmRate: number;
+  driverAllowance: number;
 }
 
 export interface FareUpdateRequest {
-  id?: number;
   vehicleType: string;
-  localRate?: number;
-  outstationRate?: number;
-  airportRate?: number;
   tourId?: string;
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
+  id?: string | number;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
 }
 
 export interface DashboardMetrics {
@@ -324,14 +317,21 @@ export interface CommissionPayment {
 export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
 
 export interface Payment {
-  id: number;
+  id: number | string;
   bookingId: number;
   bookingNumber?: string;
   customerName?: string;
+  customerPhone?: string;
   amount: number;
-  method: PaymentMethod;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  paidAmount?: number;
+  remainingAmount?: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
   transactionId?: string;
+  razorpayPaymentId?: string;
+  dueDate?: string;
   createdAt: string;
   updatedAt: string;
 }
