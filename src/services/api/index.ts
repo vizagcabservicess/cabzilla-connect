@@ -1,42 +1,19 @@
 
-import { authAPI } from './authAPI';
-import { vehicleAPI } from './vehicleAPI';
-import { fleetAPI } from './fleetAPI';
-import { bookingAPI } from './bookingAPI';
-import { fareAPI } from './fareAPI';
-import { userAPI } from './userAPI';
-import { ledgerAPI } from './ledgerAPI';
-import { commissionAPI } from './commissionAPI';
-import { apiHealthCheck } from './healthCheck';
-import { tourAPI } from './tourAPI';
-import { poolingAPI } from './poolingAPI';
-
-// Export all API services
-export {
-  authAPI,
-  vehicleAPI,
-  fleetAPI,
-  bookingAPI,
-  fareAPI,
-  userAPI,
-  ledgerAPI,
-  commissionAPI,
-  apiHealthCheck,
-  tourAPI,
-  poolingAPI
+// API Services
+export const bookingAPI = {
+  updateBookingStatus: async (bookingId: string | number, status: string) => {
+    // Mock implementation for now
+    return Promise.resolve({ success: true });
+  },
+  createBooking: async (bookingData: any) => {
+    // Mock implementation for now
+    return Promise.resolve({ booking_number: 'BOOK123', id: 1 });
+  }
 };
 
-// Default export
-export default {
-  auth: authAPI,
-  vehicle: vehicleAPI,
-  fleet: fleetAPI,
-  booking: bookingAPI,
-  fare: fareAPI,
-  user: userAPI,
-  ledger: ledgerAPI,
-  commission: commissionAPI,
-  health: apiHealthCheck,
-  tour: tourAPI,
-  pooling: poolingAPI
+export const authAPI = {
+  login: async (email: string, password: string) => {
+    // Mock implementation for now
+    return Promise.resolve({ user: { id: 1, name: 'User', email }, token: 'mock-token' });
+  }
 };
