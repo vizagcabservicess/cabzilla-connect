@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -280,6 +281,14 @@ export interface FareBreakdown {
   roundTrip?: boolean;
   priceExtraKm?: number;
   priceExtraHour?: number;
+  basePrice?: number;
+  driverAllowance?: number;
+  nightCharges?: number;
+  extraDistanceFare?: number;
+  extraKmCharge?: number;
+  extraHourCharge?: number;
+  airportFee?: number;
+  packageLabel?: string;
 }
 
 // Commission Types

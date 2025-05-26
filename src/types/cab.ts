@@ -22,6 +22,7 @@ export interface FleetVehicle {
   isActive?: boolean;
   commissionPercentage?: number;
   updatedAt?: string;
+  createdAt?: string;
 }
 
 export interface Vehicle {
@@ -45,6 +46,16 @@ export interface CabType {
   basePrice: number;
   pricePerKm: number;
   type: string;
+  luggageCapacity?: number;
+  price?: number;
+  driverAllowance?: number;
+  nightHaltCharge?: number;
+  ac?: boolean;
+  isActive?: boolean;
+  vehicleId?: string;
+  localPackageFares?: {
+    price8hrs80km: number;
+  };
 }
 
 export interface HourlyPackage {
@@ -70,6 +81,7 @@ export interface TourInfo {
   description?: string;
   duration: number;
   distance: number;
+  image?: string;
 }
 
 export interface TourFares {
@@ -98,6 +110,7 @@ export interface FareCalculationParams {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
+  forceRefresh?: boolean;
 }
 
 export interface VehiclePricing {
@@ -120,6 +133,10 @@ export interface OutstationFare {
   rate: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
+  pricePerKm: number;
+  basePrice: number;
+  roundTripPricePerKm?: number;
+  roundTripBasePrice?: number;
 }
 
 export interface LocalFare {
@@ -129,6 +146,14 @@ export interface LocalFare {
   rate: number;
   hours: number;
   kilometers: number;
+  price8hrs80km: number;
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  price4hrs40km?: number;
+  price10hrs100km?: number;
 }
 
 export interface AirportFare {
@@ -136,6 +161,12 @@ export interface AirportFare {
   vehicleType: string;
   rate: number;
   location?: string;
+  basePrice: number;
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
+  extraKmCharge?: number;
 }
 
 export interface CommissionSetting {
