@@ -211,7 +211,7 @@ export function DriverAssignment({
         try {
           await commissionAPI.createCommissionPayment({
             bookingId: booking.id.toString(),
-            vehicleId: vehicle.id, // Use the correct database ID
+            vehicleId: parseInt(vehicle.id), // Convert to number
             driverId: selectedDriver,
             amount: booking.totalAmount,
             commissionAmount: commissionData.amount,
