@@ -1,93 +1,28 @@
 
-export interface PoolingLocation {
-  id: string;
-  name: string;
-  city: string;
-  coordinates: {
-    lat: number;
-    lng: number;
-  };
-  type: 'major' | 'minor';
-}
-
-export const POOLING_LOCATIONS: PoolingLocation[] = [
-  // Major cities in Andhra Pradesh and Telangana
-  {
-    id: 'vizag',
-    name: 'Visakhapatnam',
-    city: 'Visakhapatnam',
-    coordinates: { lat: 17.6868, lng: 83.2185 },
-    type: 'major'
-  },
-  {
-    id: 'hyderabad',
-    name: 'Hyderabad',
-    city: 'Hyderabad', 
-    coordinates: { lat: 17.3850, lng: 78.4867 },
-    type: 'major'
-  },
-  {
-    id: 'vijayawada',
-    name: 'Vijayawada',
-    city: 'Vijayawada',
-    coordinates: { lat: 16.5062, lng: 80.6480 },
-    type: 'major'
-  },
-  {
-    id: 'guntur',
-    name: 'Guntur',
-    city: 'Guntur',
-    coordinates: { lat: 16.3067, lng: 80.4365 },
-    type: 'major'
-  },
-  {
-    id: 'warangal',
-    name: 'Warangal',
-    city: 'Warangal',
-    coordinates: { lat: 17.9689, lng: 79.5941 },
-    type: 'major'
-  },
-  {
-    id: 'tirupati',
-    name: 'Tirupati',
-    city: 'Tirupati',
-    coordinates: { lat: 13.6288, lng: 79.4192 },
-    type: 'major'
-  },
-  {
-    id: 'rajahmundry',
-    name: 'Rajahmundry',
-    city: 'Rajahmundry',
-    coordinates: { lat: 17.0005, lng: 81.8040 },
-    type: 'minor'
-  },
-  {
-    id: 'kakinada',
-    name: 'Kakinada',
-    city: 'Kakinada',
-    coordinates: { lat: 16.9891, lng: 82.2475 },
-    type: 'minor'
-  },
-  {
-    id: 'nizamabad',
-    name: 'Nizamabad',
-    city: 'Nizamabad',
-    coordinates: { lat: 18.6725, lng: 78.0941 },
-    type: 'minor'
-  },
-  {
-    id: 'karimnagar',
-    name: 'Karimnagar',
-    city: 'Karimnagar',
-    coordinates: { lat: 18.4386, lng: 79.1288 },
-    type: 'minor'
-  }
+export const POOLING_LOCATIONS = [
+  { id: '1', name: 'Mumbai', type: 'city', latitude: 19.0760, longitude: 72.8777 },
+  { id: '2', name: 'Delhi', type: 'city', latitude: 28.7041, longitude: 77.1025 },
+  { id: '3', name: 'Bangalore', type: 'city', latitude: 12.9716, longitude: 77.5946 },
+  { id: '4', name: 'Pune', type: 'city', latitude: 18.5204, longitude: 73.8567 },
+  { id: '5', name: 'Hyderabad', type: 'city', latitude: 17.3850, longitude: 78.4867 },
+  { id: '6', name: 'Chennai', type: 'city', latitude: 13.0827, longitude: 80.2707 },
+  { id: '7', name: 'Kolkata', type: 'city', latitude: 22.5726, longitude: 88.3639 },
+  { id: '8', name: 'Ahmedabad', type: 'city', latitude: 23.0225, longitude: 72.5714 },
+  { id: '9', name: 'Jaipur', type: 'city', latitude: 26.9124, longitude: 75.7873 },
+  { id: '10', name: 'Lucknow', type: 'city', latitude: 26.8467, longitude: 80.9462 }
 ];
 
-export const getLocationById = (id: string): PoolingLocation | undefined => {
-  return POOLING_LOCATIONS.find(loc => loc.id === id);
-};
+export const RIDE_TYPES = [
+  { id: 'car', label: 'Car Pool', icon: '🚗' },
+  { id: 'bus', label: 'Bus', icon: '🚌' },
+  { id: 'shared-taxi', label: 'Shared Taxi', icon: '🚕' }
+];
 
-export const getLocationsByType = (type: 'major' | 'minor'): PoolingLocation[] => {
-  return POOLING_LOCATIONS.filter(loc => loc.type === type);
-};
+export const RIDE_STATUSES = [
+  { id: 'active', label: 'Active', color: 'bg-green-100 text-green-800' },
+  { id: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+  { id: 'approved', label: 'Approved', color: 'bg-blue-100 text-blue-800' },
+  { id: 'confirmed', label: 'Confirmed', color: 'bg-green-100 text-green-800' },
+  { id: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+  { id: 'completed', label: 'Completed', color: 'bg-gray-100 text-gray-800' }
+];

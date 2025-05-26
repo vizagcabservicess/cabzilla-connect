@@ -1,116 +1,106 @@
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
-import { 
-  PoolingUser, 
-  PoolingLoginRequest, 
-  PoolingRegisterRequest, 
-  PoolingAuthResponse 
-} from '@/types/poolingAuth';
+import { PoolingUser, PoolingLoginRequest, PoolingRegisterRequest, PoolingAuthResponse } from '@/types/poolingAuth';
 
 const POOLING_AUTH_API_URL = getApiUrl('/api/pooling');
+const TOKEN_KEY = 'pooling_auth_token';
+const USER_KEY = 'pooling_user';
 
-class PoolingAuthAPI {
-  private token: string | null = null;
-
-  constructor() {
-    this.token = localStorage.getItem('pooling_auth_token');
-  }
-
-  async login(credentials: PoolingLoginRequest): Promise<PoolingAuthResponse> {
+export const poolingAuthAPI = {
+  // Login
+  login: async (loginData: PoolingLoginRequest): Promise<PoolingAuthResponse> => {
     try {
-      const response = await axios.post(`${POOLING_AUTH_API_URL}/login.php`, credentials);
-      
-      if (response.data.status === 'success' || response.data.success) {
-        this.token = response.data.token;
-        localStorage.setItem('pooling_auth_token', this.token);
-        localStorage.setItem('pooling_user', JSON.stringify(response.data.user));
+      const response = await axios.post(`${POOLING_AUTH_API_URL}/login.php`, loginData);
+      if ((response.data.status === 'success' || response.data.success) && response.data.token) {
+        localStorage.setItem(TOKEN_KEY, response.data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
       }
-      
       return response.data;
     } catch (error) {
       console.error('Pooling login error:', error);
       throw error;
     }
-  }
+  },
 
-  async register(userData: PoolingRegisterRequest): Promise<PoolingAuthResponse> {
+  // Register
+  register: async (registerData: PoolingRegisterRequest): Promise<PoolingAuthResponse> => {
     try {
-      const response = await axios.post(`${POOLING_AUTH_API_URL}/register.php`, userData);
+      const response = await axios.post(`${POOLING_AUTH_API_URL}/register.php`, registerData);
+      if ((response.data.status === 'success' || response.data.success) && response.data.token) {
+        localStorage.setItem(TOKEN_KEY, response.data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      }
       return response.data;
     } catch (error) {
-      console.error('Pooling registration error:', error);
+      console.error('Pooling register error:', error);
       throw error;
     }
-  }
+  },
 
-  async logout(): Promise<void> {
+  // Logout
+  logout: async (): Promise<void> => {
     try {
-      if (this.token) {
-        await axios.post(`${POOLING_AUTH_API_URL}/logout.php`, {}, {
-          headers: { Authorization: `Bearer ${this.token}` }
-        });
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) {
+        await axios.post(`${POOLING_AUTH_API_URL}/logout.php`);
       }
     } catch (error) {
       console.error('Pooling logout error:', error);
     } finally {
-      this.token = null;
-      localStorage.removeItem('pooling_auth_token');
-      localStorage.removeItem('pooling_user');
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      delete axios.defaults.headers.common['Authorization'];
     }
-  }
+  },
 
-  async getCurrentUser(): Promise<PoolingUser | null> {
+  // Get current user
+  getCurrentUser: async (): Promise<PoolingUser | null> => {
     try {
-      if (!this.token) return null;
-      
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) return null;
       const response = await axios.get(`${POOLING_AUTH_API_URL}/me.php`, {
-        headers: { Authorization: `Bearer ${this.token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (response.data.success) {
-        localStorage.setItem('pooling_user', JSON.stringify(response.data.user));
+      if (response.data.user) {
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
         return response.data.user;
       }
-      
       return null;
     } catch (error) {
-      console.error('Get current pooling user error:', error);
-      this.logout();
+      console.error('Get current user error:', error);
+      poolingAuthAPI.logout();
       return null;
     }
-  }
+  },
 
-  isAuthenticated(): boolean {
-    return !!this.token;
-  }
+  // Check if authenticated
+  isAuthenticated: (): boolean => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const user = localStorage.getItem(USER_KEY);
+    return !!(token && user);
+  },
 
-  isGuest(): boolean {
-    const user = this.getStoredUser();
-    return user?.role === 'guest';
-  }
-
-  isProvider(): boolean {
-    const user = this.getStoredUser();
-    return user?.role === 'provider';
-  }
-
-  isAdmin(): boolean {
-    const user = this.getStoredUser();
-    return user?.role === 'admin';
-  }
-
-  getStoredUser(): PoolingUser | null {
+  // Get stored user
+  getStoredUser: (): PoolingUser | null => {
     try {
-      const userData = localStorage.getItem('pooling_user');
+      const userData = localStorage.getItem(USER_KEY);
       return userData ? JSON.parse(userData) : null;
-    } catch {
+    } catch (error) {
+      console.error('Error parsing stored user:', error);
       return null;
     }
-  }
+  },
 
-  getToken(): string | null {
-    return this.token;
+  // Initialize auth headers
+  initializeAuth: (): void => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
   }
-}
+};
 
-export const poolingAuthAPI = new PoolingAuthAPI();
+// Initialize auth headers on module load
+poolingAuthAPI.initializeAuth();
