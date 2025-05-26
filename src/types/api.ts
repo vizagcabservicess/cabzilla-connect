@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -48,7 +49,6 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
-  vehicleId?: string;
   adminNotes?: string;
   extraCharges?: Array<{
     description: string;
@@ -56,7 +56,6 @@ export interface Booking {
   }>;
   isPaid?: boolean;
   paymentMethod?: string;
-  paymentStatus?: string;
   payment_method?: string; // Legacy field - will be deprecated
   discountAmount?: number;
   discountType?: string;
@@ -65,13 +64,6 @@ export interface Booking {
   payment_status?: string; // Legacy field - will be deprecated
   createdAt?: string;
   updatedAt?: string;
-  // Add legacy field mappings for compatibility
-  pickup_location?: string;
-  dropoff_location?: string;
-  pickup_time?: string;
-  vehicle_type?: string;
-  driver_name?: string;
-  fare?: number;
 }
 
 export interface BookingDetails {
@@ -112,7 +104,6 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
-  license_number?: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -137,7 +128,6 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
-  bookingId?: string;
 }
 
 export interface GstReportData {
@@ -151,18 +141,11 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: number | string;
+  id: number;
   name: string;
   type: string;
   latitude: number;
   longitude: number;
-  address: string;
-  lat?: number;
-  lng?: number;
-  city?: string;
-  state?: string;
-  popularityScore?: number;
-  isInVizag?: boolean;
 }
 
 export interface User {
@@ -194,39 +177,21 @@ export interface VehiclePricing {
   localRate: number;
   outstationRate: number;
   airportTransferRate: number;
-  basePrice?: number;
-  pricePerKm?: number;
-  perKmRate?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
 }
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
-  vehicleType?: string;
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
-  basePrice?: number;
-  pricePerKm?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
 }
 
 export interface FareUpdateRequest {
   id?: number;
   vehicleType: string;
-  tourId?: string;
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
-  pricePerKm?: number;
-  nightHaltCharge?: number;
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
 }
 
 export interface DashboardMetrics {
@@ -234,13 +199,6 @@ export interface DashboardMetrics {
   completedBookings: number;
   pendingBookings: number;
   cancelledBookings: number;
-  activeRides?: number;
-  totalRevenue?: number;
-  upcomingRides?: number;
-  availableDrivers?: number;
-  busyDrivers?: number;
-  avgRating?: number;
-  availableStatuses?: BookingStatus[];
   revenue: {
     total: number;
     today: number;
@@ -265,75 +223,6 @@ export interface DashboardMetrics {
 export interface TourFare {
   id: number;
   tourId: string;
-  tourName?: string;
   vehicleType: string;
   rate: number;
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
-}
-
-// Commission Types
-export interface CommissionPayment {
-  id: string;
-  bookingId?: string;
-  bookingNumber?: string;
-  vehicleId?: string;
-  driverId?: string;
-  amount?: number;
-  commissionAmount?: number;
-  commissionPercentage?: number;
-  status?: 'pending' | 'paid' | 'cancelled';
-  paymentDate?: string;
-  notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CommissionSetting {
-  id: string;
-  name: string;
-  description?: string;
-  defaultPercentage: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Fare Types
-export interface FareBreakdown {
-  basePrice: number;
-  distancePrice: number;
-  totalPrice: number;
-  pricePerKm?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  extraKmCharge?: number;
-  extraHourCharge?: number;
-  nightHaltCharges?: number;
-  driverAllowance?: number;
-  airportFee?: number;
-  extraDistanceFare?: number;
-  nightCharges?: number;
-}
-
-// Pooling Types
-export interface CancellationPolicy {
-  id: string;
-  name: string;
-  description?: string;
-  rules: any[];
-}
-
-// Auth Types
-export interface AuthAPI {
-  login: (credentials: LoginRequest) => Promise<any>;
-  signup: (userData: SignupRequest) => Promise<any>;
-  logout: () => Promise<void>;
-  getCurrentUser: () => Promise<User | null>;
-  getToken: () => string | null;
-  isAuthenticated: () => boolean;
-  isAdmin: () => boolean;
 }

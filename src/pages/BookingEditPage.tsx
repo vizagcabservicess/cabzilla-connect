@@ -10,7 +10,6 @@ import { LocationInput } from "@/components/LocationInput";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking, Location, BookingStatus } from '@/types/api';
-import { BookingStatusManagerProps, LocationInputProps, GuestDetailsFormProps } from '@/types/components';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
@@ -26,18 +25,12 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ 
     id: 'pickup', 
     name: 'Pickup Location',
-    address: '',
-    type: 'other',
-    latitude: 0,
-    longitude: 0
+    address: '' 
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
     name: 'Drop Location',
-    address: '',
-    type: 'other', 
-    latitude: 0,
-    longitude: 0
+    address: '' 
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
@@ -74,10 +67,7 @@ export default function BookingEditPage() {
           setPickupLocation({ 
             id: 'pickup',
             name: 'Pickup Location',
-            address: response.pickupLocation,
-            type: 'other',
-            latitude: 0,
-            longitude: 0
+            address: response.pickupLocation 
           });
         }
         
@@ -85,10 +75,7 @@ export default function BookingEditPage() {
           setDropLocation({ 
             id: 'drop',
             name: 'Drop Location',
-            address: response.dropLocation,
-            type: 'other',
-            latitude: 0,
-            longitude: 0
+            address: response.dropLocation 
           });
         }
         

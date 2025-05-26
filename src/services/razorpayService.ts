@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 
 export interface RazorpayResponse {
@@ -13,27 +12,6 @@ export interface RazorpayOrderResponse {
   currency: string;
   receipt: string;
   status: string;
-}
-
-export interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  prefill: {
-    name: string;
-    email: string;
-    contact: string;
-  };
-  theme: {
-    color: string;
-  };
-  handler: (response: RazorpayResponse) => void;
-  modal: {
-    ondismiss: () => void;
-  };
 }
 
 // Initialize Razorpay SDK
@@ -80,53 +58,5 @@ export const createRazorpayOrder = async (
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
     throw error;
-  }
-};
-
-// Open Razorpay checkout
-export const openRazorpayCheckout = async (
-  options: RazorpayOptions,
-  onSuccess: (response: RazorpayResponse) => void,
-  onError: (error: any) => void
-): Promise<void> => {
-  const isLoaded = await initRazorpay();
-  if (!isLoaded) {
-    throw new Error('Razorpay SDK failed to load');
-  }
-
-  const razorpay = new (window as any).Razorpay({
-    ...options,
-    handler: onSuccess,
-  });
-  razorpay.on('payment.failed', onError);
-  razorpay.open();
-};
-
-// Verify Razorpay payment
-export const verifyRazorpayPayment = async (
-  paymentId: string,
-  orderId: string,
-  signature: string,
-  bookingId?: number
-): Promise<boolean> => {
-  try {
-    const verifyResponse = await fetch('/api/verify-razorpay-payment', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        razorpay_payment_id: paymentId,
-        razorpay_order_id: orderId,
-        razorpay_signature: signature,
-        booking_id: bookingId
-      }),
-    });
-
-    const result = await verifyResponse.json();
-    return result.success;
-  } catch (error) {
-    console.error('Error verifying payment:', error);
-    return false;
   }
 };

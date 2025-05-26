@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
@@ -10,7 +9,6 @@ import { Location } from '@/lib/locationData';
 import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Separator } from '@/components/ui/separator';
-import { formatPrice } from '@/lib/formatUtils';
 
 interface BookingDetails {
   pickupLocation: Location;
@@ -34,40 +32,22 @@ interface BookingDetails {
 
 const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any): BookingDetails => ({
   pickupLocation: {
-    id: '1',
     name: backendBooking.pickupLocation || backendBooking.pickup_location || 'N/A',
     city: '',
     state: '',
-    lat: 0,
-    lng: 0,
-    type: 'other',
-    popularityScore: 0,
-    isInVizag: false,
-    address: backendBooking.pickupLocation || backendBooking.pickup_location || ''
   },
   dropLocation: {
-    id: '2',
     name: backendBooking.dropLocation || backendBooking.drop_location || 'N/A',
     city: '',
     state: '',
-    lat: 0,
-    lng: 0,
-    type: 'other',
-    popularityScore: 0,
-    isInVizag: false,
-    address: backendBooking.dropLocation || backendBooking.drop_location || ''
   },
+  pickupDate: backendBooking.pickupDate || backendBooking.pickup_date || '',
   selectedCab: {
-    id: '1',
     name: backendBooking.cabType || backendBooking.cab_type || 'N/A',
     capacity: 4,
     luggageCapacity: 2,
     price: 0,
     pricePerKm: 0,
-    image: '',
-    amenities: [],
-    description: '',
-    ac: true
   },
   distance: backendBooking.distance || 0,
   totalPrice: backendBooking.totalAmount || backendBooking.total_amount || fallbackBooking?.totalPrice || 0,
@@ -82,7 +62,6 @@ const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any)
   passengerPhone: backendBooking.passengerPhone || backendBooking.passenger_phone,
   passengerEmail: backendBooking.passengerEmail || backendBooking.passenger_email,
   status: backendBooking.status || backendBooking.status_code,
-  pickupDate: backendBooking.pickupDate || backendBooking.pickup_date || '',
 });
 
 const BookingConfirmation = () => {

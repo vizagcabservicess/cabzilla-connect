@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { commissionAPI } from '@/services/api/commissionAPI';
-import { CommissionSetting } from '@/types/api';
+import { CommissionSetting } from '@/types/cab';
 
 interface CommissionSettingsFormProps {
   onSettingUpdated?: () => void;
@@ -67,16 +68,16 @@ export function CommissionSettingsForm({ onSettingUpdated }: CommissionSettingsF
         await commissionAPI.updateCommissionSetting(setting.id, {
           name: setting.name,
           description: setting.description,
-          defaultPercentage: setting.defaultPercentage, // Use camelCase
-          isActive: setting.isActive // Use camelCase
+          default_percentage: setting.defaultPercentage,
+          is_active: setting.isActive
         });
       } else {
         // Create new setting
         await commissionAPI.createCommissionSetting({
           name: setting.name,
           description: setting.description,
-          defaultPercentage: setting.defaultPercentage, // Use camelCase
-          isActive: setting.isActive // Use camelCase
+          default_percentage: setting.defaultPercentage,
+          is_active: setting.isActive
         });
       }
       

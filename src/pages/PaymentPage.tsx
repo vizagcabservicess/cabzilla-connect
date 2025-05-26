@@ -10,7 +10,7 @@ import {
   RazorpayResponse
 } from '@/services/razorpayService';
 import { bookingAPI } from '@/services/api';
-import { Booking, BookingStatus } from '@/types/api';
+import { Booking } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
@@ -135,13 +135,12 @@ const PaymentPage = () => {
 
       if (verified) {
         // Update booking with payment information
-        const updateData: Partial<Booking> = {
-          status: 'payment_received' as BookingStatus,
-          paymentMethod: 'razorpay',
-          // Remove razorpay_payment_id as it's not in the Booking interface
-        };
-
-        await bookingAPI.updateBooking(bookingDetails.bookingId, updateData);
+        await bookingAPI.updateBooking(bookingDetails.bookingId, {
+          payment_status: 'paid',
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_signature: response.razorpay_signature
+        });
 
         setPaymentStatus('success');
         toast.success('Payment successful!');

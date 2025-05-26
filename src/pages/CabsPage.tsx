@@ -8,13 +8,12 @@ import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary"; 
 import { 
-  Location as LibLocation, 
+  Location, 
   vizagLocations, 
   apDestinations,
   formatTravelTime,
   isVizagLocation
 } from "@/lib/locationData";
-import { Location as ApiLocation } from "@/types/api";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { 
   cabTypes, 
@@ -53,8 +52,8 @@ const CabsPage = () => {
   const [tripMode, setTripMode] = useState<TripMode>(getInitialFromSession('tripMode', "one-way"));
   const [hourlyPackage, setHourlyPackage] = useState(getInitialFromSession('hourlyPackage', hourlyPackages[0].id));
   
-  const [pickup, setPickup] = useState<LibLocation | null>(getInitialFromSession('pickupLocation', null));
-  const [dropoff, setDropoff] = useState<LibLocation | null>(getInitialFromSession('dropLocation', null));
+  const [pickup, setPickup] = useState<Location | null>(getInitialFromSession('pickupLocation', null));
+  const [dropoff, setDropoff] = useState<Location | null>(getInitialFromSession('dropLocation', null));
   const [pickupDate, setPickupDate] = useState<Date | undefined>(
     getInitialFromSession('pickupDate', new Date())
   );
@@ -104,7 +103,7 @@ const CabsPage = () => {
       
       const isPickupInVizag = pickup && pickup.isInVizag !== undefined ? 
                              pickup.isInVizag : 
-                             isLocationInVizag(convertToApiLocation(pickup));
+                             isLocationInVizag(pickup);
       
       if (!isPickupInVizag) {
         toast({
@@ -119,7 +118,7 @@ const CabsPage = () => {
       if (tripType === "airport") {
         const isDropoffInVizag = dropoff && dropoff.isInVizag !== undefined ? 
                                 dropoff.isInVizag : 
-                                isLocationInVizag(convertToApiLocation(dropoff));
+                                isLocationInVizag(dropoff);
         
         if (!isDropoffInVizag) {
           console.log("Dropoff not in Vizag, switching to outstation");
@@ -162,32 +161,26 @@ const CabsPage = () => {
     }
   };
   
-  const handlePickupLocationChange = (location: ApiLocation) => {
-    if (!location) return;
+  const handlePickupLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
     
-    const libLocation: LibLocation = {
-      ...location,
-      lat: location.latitude,
-      lng: location.longitude,
-      isInVizag: location.isInVizag !== undefined ? location.isInVizag : isLocationInVizag(location)
-    };
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
     
-    console.log("Pickup location changed:", libLocation);
-    setPickup(libLocation);
+    console.log("Pickup location changed:", location);
+    setPickup(location);
   };
   
-  const handleDropoffLocationChange = (location: ApiLocation) => {
-    if (!location) return;
+  const handleDropoffLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
     
-    const libLocation: LibLocation = {
-      ...location,
-      lat: location.latitude,
-      lng: location.longitude,
-      isInVizag: location.isInVizag !== undefined ? location.isInVizag : isLocationInVizag(location)
-    };
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
     
-    console.log("Dropoff location changed:", libLocation);
-    setDropoff(libLocation);
+    console.log("Dropoff location changed:", location);
+    setDropoff(location);
   };
 
   const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
@@ -563,17 +556,15 @@ const CabsPage = () => {
                   pickupDate={pickupDate}
                   returnDate={returnDate}
                   hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
-                  isCalculatingFares={isCalculatingDistance}
                 />
 
                 {showMap && pickup && dropoff && (
                   <div className="mt-6 w-full overflow-hidden rounded-lg shadow-md">
                     <h3 className="text-lg font-semibold mb-2">Route Map</h3>
                     <GoogleMapComponent 
-                      pickupLocation={convertToApiLocation(pickup)} 
-                      dropLocation={convertToApiLocation(dropoff)} 
+                      pickupLocation={pickup} 
+                      dropLocation={dropoff} 
                       onDistanceCalculated={handleMapDistanceCalculated}
-                      tripType={tripType}
                     />
                   </div>
                 )}

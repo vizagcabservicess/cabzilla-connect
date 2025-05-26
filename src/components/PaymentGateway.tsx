@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,7 +14,7 @@ import {
   ArrowRight,
   AlertCircle
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
@@ -21,8 +22,7 @@ import {
   createRazorpayOrder, 
   openRazorpayCheckout, 
   verifyRazorpayPayment, 
-  RazorpayResponse,
-  RazorpayOptions 
+  RazorpayResponse 
 } from '@/services/razorpayService';
 
 interface PaymentGatewayProps {
@@ -72,7 +72,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
       }
       
       // Configure Razorpay options
-      const options: RazorpayOptions = {
+      const options = {
         key: "rzp_test_41fJeGiVFyU9OQ", // Your Key ID
         amount: order.amount,
         currency: order.currency,
@@ -100,7 +100,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
       };
       
       // Open Razorpay checkout
-      await openRazorpayCheckout(
+      openRazorpayCheckout(
         options,
         handlePaymentSuccess,
         (error) => {

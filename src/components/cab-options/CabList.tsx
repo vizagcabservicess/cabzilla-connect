@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
@@ -48,7 +47,7 @@ export const CabList: React.FC<CabListProps> = ({
   tripMode = 'one-way',
   distance = 0,
   packageType,
-  pickupDate
+  pickupDate // Add pickupDate to destructuring
 }) => {
   console.log(`CabList: Rendering with package ${packageType}`);
   
@@ -125,7 +124,7 @@ export const CabList: React.FC<CabListProps> = ({
             tripType,
             distance,
             packageType,
-            pickupDate
+            pickupDate // Pass pickupDate to useFare hook
           );
 
           let fare = 0;

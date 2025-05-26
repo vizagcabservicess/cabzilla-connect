@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,11 +13,9 @@ export interface HeroProps {
   subtitle: string;
 }
 
-type HeroTripMode = 'local' | 'outstation' | 'airport';
-
 export const Hero: React.FC<HeroProps> = ({ title, subtitle }) => {
   const navigate = useNavigate();
-  const [tripMode, setTripMode] = useState<HeroTripMode>('local');
+  const [tripMode, setTripMode] = useState<'local' | 'outstation' | 'airport'>('local');
   const [fromLocation, setFromLocation] = useState<Location | null>(null);
   const [toLocation, setToLocation] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date>(new Date());
@@ -32,10 +29,6 @@ export const Hero: React.FC<HeroProps> = ({ title, subtitle }) => {
 
   const handleToLocationSelect = useCallback((location: Location) => {
     setToLocation(location);
-  }, []);
-
-  const handleTripModeChange = useCallback((mode: string) => {
-    setTripMode(mode as HeroTripMode);
   }, []);
 
   const handleSearch = async () => {
@@ -91,15 +84,7 @@ export const Hero: React.FC<HeroProps> = ({ title, subtitle }) => {
           <Card className="bg-white/95 backdrop-blur-sm text-gray-900 p-6 lg:p-8 rounded-2xl shadow-2xl">
             <div className="space-y-6">
               {/* Trip Mode Selector */}
-              <TripModeSelector 
-                value={tripMode} 
-                onChange={handleTripModeChange}
-                options={[
-                  { value: 'local', label: 'Local' },
-                  { value: 'outstation', label: 'Outstation' },
-                  { value: 'airport', label: 'Airport' }
-                ]}
-              />
+              <TripModeSelector value={tripMode} onChange={setTripMode} />
 
               {/* Location Inputs */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -133,8 +118,8 @@ export const Hero: React.FC<HeroProps> = ({ title, subtitle }) => {
               {/* Local Trip Options */}
               {tripMode === 'local' && (
                 <LocalTripSelector
-                  selectedType={localTripType}
-                  onTypeChange={setLocalTripType}
+                  value={localTripType}
+                  onChange={setLocalTripType}
                 />
               )}
 
@@ -146,8 +131,8 @@ export const Hero: React.FC<HeroProps> = ({ title, subtitle }) => {
                     Pickup Date & Time
                   </label>
                   <DateTimePicker
-                    date={pickupDate}
-                    onDateChange={setPickupDate}
+                    value={pickupDate}
+                    onChange={setPickupDate}
                   />
                 </div>
 
