@@ -13,9 +13,16 @@ export const commissionAPI = {
     return Promise.resolve({ success: true });
   },
   
-  getCommissionPayments: async () => {
+  getCommissionPayments: async (filters?: any) => {
     // Mock implementation
-    return Promise.resolve([]);
+    return Promise.resolve({
+      payments: [],
+      pagination: {
+        total: 0,
+        page: 1,
+        limit: 10
+      }
+    });
   },
   
   updateCommissionPayment: async (id: string, data: any) => {
@@ -40,6 +47,9 @@ export const commissionAPI = {
   
   getDefaultCommission: async (vehicleType: string) => {
     // Mock implementation
-    return Promise.resolve({ percentage: 10 });
+    return Promise.resolve({ 
+      percentage: 10,
+      defaultPercentage: 10 
+    });
   }
 };

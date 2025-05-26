@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -199,6 +200,7 @@ export interface VehiclePricingUpdateRequest {
   airportTransferRate?: number;
   vehicleType?: string;
   basePrice?: number;
+  pricePerKm?: number;
 }
 
 export interface FareUpdateRequest {
@@ -309,11 +311,15 @@ export interface CommissionPayment {
 }
 
 // Payment Types
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+
 export interface Payment {
   id: number;
   bookingId: number;
+  bookingNumber?: string;
+  customerName?: string;
   amount: number;
-  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
+  method: PaymentMethod;
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
   transactionId?: string;
   createdAt: string;

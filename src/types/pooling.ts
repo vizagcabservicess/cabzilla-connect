@@ -47,6 +47,7 @@ export interface PoolingBooking {
   userId: number;
   userName: string;
   passengerName?: string;
+  passengerPhone?: string;
   userPhone: string;
   userEmail: string;
   seatsBooked: number;
@@ -97,4 +98,13 @@ export interface PoolingSearchRequest {
   departureDate: string;
   passengers: number;
   type?: RideType;
+  from?: string; // Alternative field name
+}
+
+export interface CancellationPolicy {
+  id: number;
+  name: string;
+  description: string;
+  rules: string[];
+  isActive: boolean;
 }
