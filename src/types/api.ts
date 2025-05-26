@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -48,6 +49,7 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
+  vehicleId?: string;
   adminNotes?: string;
   extraCharges?: Array<{
     description: string;
@@ -55,12 +57,13 @@ export interface Booking {
   }>;
   isPaid?: boolean;
   paymentMethod?: string;
-  payment_method?: string; // Legacy field - will be deprecated
+  payment_method?: string;
+  paymentStatus?: string;
   discountAmount?: number;
   discountType?: string;
   discountValue?: number;
   billingAddress?: string;
-  payment_status?: string; // Legacy field - will be deprecated
+  payment_status?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -103,6 +106,7 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
+  license_number?: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -145,6 +149,10 @@ export interface Location {
   type: string;
   latitude: number;
   longitude: number;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  city?: string;
 }
 
 export interface User {
@@ -155,6 +163,7 @@ export interface User {
   role: string;
   createdAt?: string;
   updatedAt?: string;
+  imageUrl?: string;
 }
 
 export interface LoginRequest {
@@ -176,6 +185,11 @@ export interface VehiclePricing {
   localRate: number;
   outstationRate: number;
   airportTransferRate: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  perKmRate?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 export interface VehiclePricingUpdateRequest {
@@ -198,6 +212,13 @@ export interface DashboardMetrics {
   completedBookings: number;
   pendingBookings: number;
   cancelledBookings: number;
+  activeRides?: number;
+  totalRevenue?: number;
+  upcomingRides?: number;
+  availableDrivers?: number;
+  busyDrivers?: number;
+  avgRating?: number;
+  availableStatuses?: BookingStatus[];
   revenue: {
     total: number;
     today: number;
@@ -241,7 +262,6 @@ export interface FareBreakdown {
   totalTax: number;
   totalFare: number;
   roundTrip?: boolean;
-  // Add missing properties
   priceExtraKm?: number;
   priceExtraHour?: number;
 }
