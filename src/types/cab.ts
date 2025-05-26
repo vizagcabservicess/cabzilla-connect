@@ -1,3 +1,4 @@
+
 // Vehicle and Fleet Types
 
 export interface FleetVehicle {
@@ -56,6 +57,7 @@ export interface CabType {
     package4hr40km?: number;
     package8hr80km?: number;
     package10hr100km?: number;
+    price8hrs80km?: number;
     extraKmRate?: number;
     extraHourRate?: number;
   };
@@ -106,13 +108,15 @@ export interface LocalPackagePriceMatrix {
 }
 
 export interface FareCalculationParams {
-  cabType: CabType;
+  cabType: string;
   distance: number;
   tripType: string;
   tripMode: string;
   hourlyPackage?: string;
-  pickupDate?: Date;
-  returnDate?: Date;
+  pickupDate?: string;
+  returnDate?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
   forceRefresh?: boolean;
 }
 

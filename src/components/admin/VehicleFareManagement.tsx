@@ -33,7 +33,7 @@ export function VehicleFareManagement() {
     const fetchVehicles = async () => {
       try {
         const response = await fleetAPI.getVehicles();
-        setVehicles(response);
+        setVehicles(response || []);
       } catch (error) {
         console.error("Error fetching vehicles:", error);
       }
@@ -42,7 +42,7 @@ export function VehicleFareManagement() {
     const fetchTours = async () => {
       try {
         const response = await fareAPI.getTourFares();
-        setTours(response);
+        setTours(response || []);
       } catch (error) {
         console.error("Error fetching tours:", error);
       }

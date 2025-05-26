@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -124,7 +125,7 @@ export function PayrollEntryForm({
   }, [payrollToEdit, form, selectedDriverId]);
   
   // Utility to filter valid rows
-  const filterValidRows = (arr: any[]) => (arr || []).filter(a => a && a.type && !isNaN(a.amount) && a.amount !== null && a.amount !== '');
+  const filterValidRows = (arr: any[]) => (arr || []).filter(a => a && a.type && !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '');
 
   const getTotalAllowances = () => {
     const allowances = filterValidRows(form.watch('allowances'));
@@ -137,7 +138,7 @@ export function PayrollEntryForm({
   };
 
   const getTotalAdvances = () => {
-    const advances = (form.watch('advances') || []).filter(a => !isNaN(a.amount) && a.amount !== null && a.amount !== '');
+    const advances = (form.watch('advances') || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '');
     return advances.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
   };
 
@@ -185,8 +186,8 @@ export function PayrollEntryForm({
     const allowances = form.watch('allowances') || [];
     const deductions = form.watch('deductions') || [];
     return (
-      allowances.some(a => !a.type || isNaN(a.amount)) ||
-      deductions.some(d => !d.type || isNaN(d.amount))
+      allowances.some(a => !a.type || isNaN(Number(a.amount))) ||
+      deductions.some(d => !d.type || isNaN(Number(d.amount)))
     );
   };
   
@@ -207,7 +208,7 @@ export function PayrollEntryForm({
         basicSalary: values.basicSalary,
         allowances: filteredAllowances,
         deductions: filteredDeductions,
-        advances: (values.advances || []).filter(a => !isNaN(a.amount) && a.amount !== null && a.amount !== '').map(a => ({
+        advances: (values.advances || []).filter(a => !isNaN(Number(a.amount)) && a.amount !== null && a.amount !== '').map(a => ({
           ...a,
           date: format(a.date, 'yyyy-MM-dd')
         })),

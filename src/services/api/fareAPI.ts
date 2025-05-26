@@ -1,171 +1,43 @@
 
-import axios from 'axios';
-import { API_BASE_URL } from '@/config';
-import { TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest } from '@/types/api';
-
-// Generate cache busting parameters
-const generateCacheBuster = () => {
-  return `_t=${Date.now()}&_cb=${Math.random().toString(36).substring(2, 15)}`;
-};
+import { VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 
 export const fareAPI = {
-  /**
-   * Get all vehicle pricing
-   */
-  getVehiclePricing: async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/vehicle-pricing.php?${generateCacheBuster()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data.data || response.data;
-      }
-      
-      throw new Error(`Failed to fetch vehicle pricing: ${response.statusText}`);
-    } catch (error) {
-      console.error('Error in getVehiclePricing:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Update vehicle pricing
-   */
-  updateVehiclePricing: async (id: number | string, data: VehiclePricingUpdateRequest) => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/admin/update-vehicle-pricing.php`, {
-        id,
-        ...data
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data;
-      }
-      
-      throw new Error(`Failed to update vehicle pricing: ${response.statusText}`);
-    } catch (error) {
-      console.error('Error in updateVehiclePricing:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Get all tour fares
-   */
-  getTourFares: async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/tour-fares.php?${generateCacheBuster()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data.data || response.data;
-      }
-      
-      throw new Error(`Failed to fetch tour fares: ${response.statusText}`);
-    } catch (error) {
-      console.error('Error in getTourFares:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Update tour fare
-   */
-  updateTourFare: async (id: number | string, data: FareUpdateRequest) => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/admin/update-tour-fare.php`, {
-        id,
-        ...data
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data;
-      }
-      
-      throw new Error(`Failed to update tour fare: ${response.statusText}`);
-    } catch (error) {
-      console.error('Error in updateTourFare:', error);
-      throw error;
+  async updateVehiclePricing(vehicleId: number, data: VehiclePricingUpdateRequest): Promise<void> {
+    const response = await fetch(`/api/admin/vehicle-pricing.php`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ...data, vehicleId }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update vehicle pricing');
     }
   },
 
-  /**
-   * Update tour fares (wrapper method for backward compatibility)
-   */
-  updateTourFares: async (data: FareUpdateRequest) => {
-    const id = data.tourId || data.id || 0;
-    return await fareAPI.updateTourFare(id, data);
-  },
+  async updateTourFare(tourId: string, data: FareUpdateRequest): Promise<void> {
+    const response = await fetch(`/api/admin/tour-fares.php`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ...data, tourId }),
+    });
 
-  /**
-   * Add a new tour fare
-   */
-  addTourFare: async (data: TourFare) => {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/admin/add-tour-fare.php`, data, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data;
-      }
-      
-      throw new Error(`Failed to add tour fare: ${response.statusText}`);
-    } catch (error) {
-      console.error('Error in addTourFare:', error);
-      throw error;
+    if (!response.ok) {
+      throw new Error('Failed to update tour fare');
     }
   },
 
-  /**
-   * Delete a tour fare
-   */
-  deleteTourFare: async (tourId: string) => {
+  async getTourFares(): Promise<any[]> {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/admin/delete-tour-fare.php`, {
-        tourId
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (response.status === 200) {
-        return response.data;
-      }
-      
-      throw new Error(`Failed to delete tour fare: ${response.statusText}`);
+      const response = await fetch('/api/admin/tour-fares.php');
+      const data = await response.json();
+      return data.tours || [];
     } catch (error) {
-      console.error('Error in deleteTourFare:', error);
-      throw error;
+      console.error('Error fetching tours:', error);
+      return [];
     }
   }
 };

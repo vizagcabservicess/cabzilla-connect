@@ -1,7 +1,7 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib';
-import { useSearchParams } from 'next/navigation';
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
@@ -79,47 +79,45 @@ export const useCabOptions = (): CabOptionsHookResult => {
   const [fare, setFare] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-	const searchParams = useSearchParams();
 
-  const pickupLocation = searchParams.get('pickupLocation') || '';
-  const dropLocation = searchParams.get('dropLocation') || '';
-  const pickupDate = searchParams.get('pickupDate') || '';
-  const tripType = searchParams.get('tripType') || 'local';
-  const tripMode = searchParams.get('tripMode') || 'regular';
-  const distance = parseFloat(searchParams.get('distance') || '0');
+  // Get URL parameters manually
+  const urlParams = new URLSearchParams(window.location.search);
+  const pickupLocation = urlParams.get('pickupLocation') || '';
+  const dropLocation = urlParams.get('dropLocation') || '';
+  const pickupDate = urlParams.get('pickupDate') || '';
+  const tripType = urlParams.get('tripType') || 'local';
+  const tripMode = urlParams.get('tripMode') || 'regular';
+  const distance = parseFloat(urlParams.get('distance') || '0');
 
   const fetchCabTypes = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // const response = await fetch('/api/cab-types');
-			const response = await directVehicleOperation(
-				`api/admin/cab-types.php?_t=${Date.now()}`,
-				'GET',
-				{
-					headers: {
-						'X-Admin-Mode': 'true',
-						'X-Force-Refresh': 'true',
-						'Cache-Control': 'no-cache, no-store, must-revalidate'
-					}
-				}
-			);
-      // const data = await response.json();
-			const data = response;
+      const response = await directVehicleOperation(
+        `api/admin/cab-types.php?_t=${Date.now()}`,
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+      
+      const data = response;
 
       if (data && data.cabTypes) {
         setCabTypes(data.cabTypes);
       } else {
-        // Fallback to mock data if API call fails or returns empty data
         setCabTypes(mockCabData);
         console.warn('Failed to fetch cab types from API, falling back to mock data.');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch cab types');
-      // Fallback to mock data in case of an error
       setCabTypes(mockCabData);
       console.error('Error fetching cab types:', err);
-			toast.error('Error fetching cab types');
+      toast.error('Error fetching cab types');
     } finally {
       setIsLoading(false);
     }
@@ -149,11 +147,11 @@ export const useCabOptions = (): CabOptionsHookResult => {
       };
 
       const calculatedFare = await calculateFare(fareCalculationParams);
-      setFare(calculatedFare?.totalPrice || null);
+      setFare(calculatedFare || null);
     } catch (err: any) {
       setError(err.message || 'Failed to calculate fare');
       setFare(null);
-			toast.error('Could not calculate fare');
+      toast.error('Could not calculate fare');
     } finally {
       setIsLoading(false);
     }
