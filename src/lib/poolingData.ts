@@ -1,4 +1,3 @@
-
 export const POOLING_LOCATIONS = [
   { id: '1', name: 'Mumbai', type: 'city', latitude: 19.0760, longitude: 72.8777 },
   { id: '2', name: 'Delhi', type: 'city', latitude: 28.7041, longitude: 77.1025 },
@@ -30,3 +29,7 @@ export const RIDE_STATUSES = [
   { id: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
   { id: 'completed', label: 'Completed', color: 'bg-gray-100 text-gray-800' }
 ];
+
+export function getLocationById(id: string) {
+  return POOLING_LOCATIONS.find(loc => loc.id === id);
+}

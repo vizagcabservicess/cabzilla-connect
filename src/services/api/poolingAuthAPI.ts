@@ -2,7 +2,11 @@ import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import { PoolingUser, PoolingLoginRequest, PoolingRegisterRequest, PoolingAuthResponse } from '@/types/poolingAuth';
 
+<<<<<<< HEAD
 const POOLING_AUTH_API_URL = getApiUrl('/api/pooling');
+=======
+const POOLING_AUTH_API_URL = getApiUrl('/api/auth');
+>>>>>>> 5b221e5e (fixed pooling and home, admin pages)
 const TOKEN_KEY = 'pooling_auth_token';
 const USER_KEY = 'pooling_user';
 
@@ -11,9 +15,18 @@ export const poolingAuthAPI = {
   login: async (loginData: PoolingLoginRequest): Promise<PoolingAuthResponse> => {
     try {
       const response = await axios.post(`${POOLING_AUTH_API_URL}/login.php`, loginData);
+<<<<<<< HEAD
       if ((response.data.status === 'success' || response.data.success) && response.data.token) {
         localStorage.setItem(TOKEN_KEY, response.data.token);
         localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+=======
+      
+      if (response.data.success && response.data.token) {
+        localStorage.setItem(TOKEN_KEY, response.data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+        
+        // Set default Authorization header
+>>>>>>> 5b221e5e (fixed pooling and home, admin pages)
         axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
       }
       return response.data;
@@ -27,11 +40,23 @@ export const poolingAuthAPI = {
   register: async (registerData: PoolingRegisterRequest): Promise<PoolingAuthResponse> => {
     try {
       const response = await axios.post(`${POOLING_AUTH_API_URL}/register.php`, registerData);
+<<<<<<< HEAD
       if ((response.data.status === 'success' || response.data.success) && response.data.token) {
         localStorage.setItem(TOKEN_KEY, response.data.token);
         localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
         axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
       }
+=======
+      
+      if (response.data.success && response.data.token) {
+        localStorage.setItem(TOKEN_KEY, response.data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+        
+        // Set default Authorization header
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      }
+      
+>>>>>>> 5b221e5e (fixed pooling and home, admin pages)
       return response.data;
     } catch (error) {
       console.error('Pooling register error:', error);
@@ -60,17 +85,33 @@ export const poolingAuthAPI = {
     try {
       const token = localStorage.getItem(TOKEN_KEY);
       if (!token) return null;
+<<<<<<< HEAD
       const response = await axios.get(`${POOLING_AUTH_API_URL}/me.php`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+=======
+
+      const response = await axios.get(`${POOLING_AUTH_API_URL}/me.php`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+>>>>>>> 5b221e5e (fixed pooling and home, admin pages)
       if (response.data.user) {
         localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
         return response.data.user;
       }
+<<<<<<< HEAD
       return null;
     } catch (error) {
       console.error('Get current user error:', error);
       poolingAuthAPI.logout();
+=======
+
+      return null;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      this.logout();
+>>>>>>> 5b221e5e (fixed pooling and home, admin pages)
       return null;
     }
   },

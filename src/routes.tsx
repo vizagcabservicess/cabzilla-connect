@@ -40,6 +40,8 @@ import FaresPage from './pages/FaresPage';
 import VehiclesPage from './pages/VehiclesPage';
 import DriversPage from './pages/DriversPage';
 import UserManagementPage from './pages/UserManagementPage';
+import { PoolingAuthProvider } from './providers/PoolingAuthProvider';
+import PoolingGuestPage from './pages/PoolingGuestPage';
 import PoolingAuthPage from './pages/PoolingAuthPage';
 
 const router = createBrowserRouter([
@@ -158,15 +160,35 @@ const router = createBrowserRouter([
   // Pooling routes
   {
     path: '/pooling',
-    element: <PoolingPage />,
+    element: (
+      <PoolingAuthProvider>
+        <PoolingGuestPage />
+      </PoolingAuthProvider>
+    ),
   },
   {
     path: '/pooling/book/:rideId',
-    element: <PoolingBookingPage />,
+    element: (
+      <PoolingAuthProvider>
+        <PoolingBookingPage />
+      </PoolingAuthProvider>
+    ),
   },
   {
     path: '/pooling/create',
-    element: <CreateRidePage />,
+    element: (
+      <PoolingAuthProvider>
+        <CreateRidePage />
+      </PoolingAuthProvider>
+    ),
+  },
+  {
+    path: '/pooling/auth',
+    element: (
+      <PoolingAuthProvider>
+        <PoolingAuthPage />
+      </PoolingAuthProvider>
+    ),
   },
   {
     path: '/pooling/login',

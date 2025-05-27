@@ -16,12 +16,14 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Grid,
   Alert,
   Chip,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
+
+type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+type PaymentStatus = 'pending' | 'paid' | 'refunded';
 
 interface Booking {
   id: number;
@@ -31,8 +33,8 @@ interface Booking {
   userPhone: string;
   seats: number;
   totalAmount: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  paymentStatus: 'pending' | 'paid' | 'refunded';
+  status: BookingStatus;
+  paymentStatus: PaymentStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,9 +100,9 @@ const PoolingBookingsManager: React.FC = () => {
       const url = selectedBooking 
         ? `/api/pooling/bookings.php/${selectedBooking.id}`
         : '/api/pooling/bookings.php';
-      
+
       const method = selectedBooking ? 'PUT' : 'POST';
-      
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -110,7 +112,7 @@ const PoolingBookingsManager: React.FC = () => {
       });
 
       if (!response.ok) throw new Error('Failed to save booking');
-      
+
       await fetchBookings();
       handleCloseDialog();
     } catch (err) {
@@ -120,7 +122,7 @@ const PoolingBookingsManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this booking?')) return;
-    
+
     try {
       const response = await fetch('/api/pooling/bookings.php', {
         method: 'DELETE',
@@ -129,7 +131,7 @@ const PoolingBookingsManager: React.FC = () => {
       });
 
       if (!response.ok) throw new Error('Failed to delete booking');
-      
+
       await fetchBookings();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -241,88 +243,59 @@ const PoolingBookingsManager: React.FC = () => {
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="User ID"
-                  type="number"
-                  value={formData.userId || ''}
-                  onChange={(e) => setFormData({ ...formData, userId: parseInt(e.target.value) })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Ride ID"
-                  type="number"
-                  value={formData.rideId || ''}
-                  onChange={(e) => setFormData({ ...formData, rideId: parseInt(e.target.value) })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Seats"
-                  type="number"
-                  value={formData.seats || ''}
-                  onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Total Amount"
-                  type="number"
-                  value={formData.totalAmount || ''}
-                  onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Status"
-                  value={formData.status || ''}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  required
-                  SelectProps={{
-                    native: true,
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="completed">Completed</option>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Payment Status"
-                  value={formData.paymentStatus || ''}
-                  onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
-                  required
-                  SelectProps={{
-                    native: true,
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
-                  <option value="refunded">Refunded</option>
-                </TextField>
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="User ID"
+                type="number"
+                value={formData.userId || ''}
+                onChange={(e) => setFormData({ ...formData, userId: parseInt(e.target.value) })}
+                required
+              />
+              <TextField
+                fullWidth
+                label="Ride ID"
+                type="number"
+                value={formData.rideId || ''}
+                onChange={(e) => setFormData({ ...formData, rideId: parseInt(e.target.value) })}
+                required
+              />
+              <TextField
+                fullWidth
+                label="User Name"
+                value={formData.userName || ''}
+                onChange={(e) => setFormData({ ...formData, userName: e.target.value })}
+                required
+              />
+              <TextField
+                fullWidth
+                label="User Phone"
+                value={formData.userPhone || ''}
+                onChange={(e) => setFormData({ ...formData, userPhone: e.target.value })}
+                required
+              />
+              <TextField
+                fullWidth
+                label="Seats"
+                type="number"
+                value={formData.seats || ''}
+                onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })}
+                required
+              />
+              <TextField
+                fullWidth
+                label="Total Amount"
+                type="number"
+                value={formData.totalAmount || ''}
+                onChange={(e) => setFormData({ ...formData, totalAmount: parseFloat(e.target.value) })}
+                required
+              />
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
-              {selectedBooking ? 'Update' : 'Create'}
+            <Button type="submit" variant="contained" color="primary">
+              {selectedBooking ? 'Update' : 'Add'} Booking
             </Button>
           </DialogActions>
         </form>
@@ -331,4 +304,4 @@ const PoolingBookingsManager: React.FC = () => {
   );
 };
 
-export default PoolingBookingsManager; 
+export default PoolingBookingsManager;
