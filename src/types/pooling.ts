@@ -2,6 +2,7 @@
 // Pooling System Types
 
 export type RideType = 'car' | 'bus' | 'shared-taxi';
+export type PoolingType = RideType; // Add this export
 export type RideStatus = 'active' | 'pending' | 'full' | 'cancelled' | 'completed';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
@@ -17,6 +18,7 @@ export interface PoolingRide {
   id: number;
   providerId: number;
   providerName: string;
+  providerPhone?: string; // Add this property
   providerRating?: number;
   totalRides?: number;
   type: RideType;
@@ -30,6 +32,7 @@ export interface PoolingRide {
   vehicleInfo: VehicleInfo;
   route?: string[];
   amenities?: string[];
+  rules?: string[]; // Add this property
   status: RideStatus;
   description?: string;
   pickupPoints?: string[];
@@ -84,6 +87,7 @@ export interface CreateRideRequest {
   vehicleInfo: VehicleInfo;
   description?: string;
   amenities?: string[];
+  rules?: string[]; // Add this property
 }
 
 export interface PoolingSearchRequest {

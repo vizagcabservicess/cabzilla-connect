@@ -1,3 +1,4 @@
+
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -175,7 +176,7 @@ export interface SignupRequest {
   name: string;
   email: string;
   password: string;
-  phone?: string;
+  phone: string; // Make phone required here
 }
 
 export interface VehiclePricing {
@@ -271,8 +272,8 @@ export interface FareBreakdown {
   package10hr100km?: number;
   extraKmRate?: number;
   extraHourRate?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
+  priceExtraKm?: number; // Add this property
+  priceExtraHour?: number; // Add this property
   price8hrs80km?: number;
 }
 
@@ -310,11 +311,19 @@ export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet'
 export interface Payment {
   id: string;
   bookingId: string;
+  bookingNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
   amount: number;
+  paidAmount?: number;
+  remainingAmount?: number;
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  paymentStatus?: 'pending' | 'paid' | 'partial' | 'cancelled' | 'failed' | 'refunded';
   method: 'cash' | 'online' | 'card';
+  paymentMethod?: PaymentMethod;
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
+  dueDate?: string;
   createdAt: string;
   updatedAt: string;
 }
