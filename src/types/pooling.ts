@@ -4,10 +4,6 @@
 export type RideType = 'car' | 'bus' | 'shared-taxi';
 export type RideStatus = 'active' | 'pending' | 'full' | 'cancelled' | 'completed';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
-<<<<<<< HEAD
-export type PoolingType = 'car' | 'bus' | 'shared-taxi';
-=======
->>>>>>> 5b221e5e (fixed pooling and home, admin pages)
 
 export interface VehicleInfo {
   make: string;
@@ -21,10 +17,6 @@ export interface PoolingRide {
   id: number;
   providerId: number;
   providerName: string;
-<<<<<<< HEAD
-  providerPhone?: string;
-=======
->>>>>>> 5b221e5e (fixed pooling and home, admin pages)
   providerRating?: number;
   totalRides?: number;
   type: RideType;
@@ -42,10 +34,6 @@ export interface PoolingRide {
   description?: string;
   pickupPoints?: string[];
   dropPoints?: string[];
-<<<<<<< HEAD
-  rules?: string[];
-=======
->>>>>>> 5b221e5e (fixed pooling and home, admin pages)
   createdAt: string;
   updatedAt: string;
 }
@@ -55,11 +43,6 @@ export interface PoolingBooking {
   rideId: number;
   userId: number;
   userName: string;
-<<<<<<< HEAD
-  passengerName?: string;
-  passengerPhone?: string;
-=======
->>>>>>> 5b221e5e (fixed pooling and home, admin pages)
   userPhone: string;
   userEmail: string;
   seatsBooked: number;
@@ -73,7 +56,6 @@ export interface PoolingBooking {
   specialRequests?: string;
   createdAt: string;
   updatedAt: string;
-<<<<<<< HEAD
 }
 
 export interface PoolingProvider {
@@ -102,7 +84,6 @@ export interface CreateRideRequest {
   vehicleInfo: VehicleInfo;
   description?: string;
   amenities?: string[];
-  rules?: string[];
 }
 
 export interface PoolingSearchRequest {
@@ -111,7 +92,29 @@ export interface PoolingSearchRequest {
   departureDate: string;
   passengers: number;
   type?: RideType;
-  from?: string; // Alternative field name
+}
+
+export interface BusRoute {
+  id: number;
+  name: string;
+  fromLocation: string;
+  toLocation: string;
+  distance: number;
+  duration: string;
+  stops: string[];
+  isActive: boolean;
+}
+
+export interface BusSchedule {
+  id: number;
+  routeId: number;
+  departureTime: string;
+  arrivalTime: string;
+  availableSeats: number;
+  totalSeats: number;
+  pricePerSeat: number;
+  vehicleInfo: VehicleInfo;
+  status: RideStatus;
 }
 
 export interface CancellationPolicy {
@@ -121,22 +124,3 @@ export interface CancellationPolicy {
   rules: string[];
   isActive: boolean;
 }
-=======
-}
-
-export interface PoolingProvider {
-  id: number;
-  userId: number;
-  name: string;
-  email: string;
-  phone: string;
-  rating: number;
-  totalRides: number;
-  vehicleInfo: VehicleInfo;
-  documentsVerified: boolean;
-  walletBalance: number;
-  status: 'active' | 'inactive' | 'suspended';
-  createdAt: string;
-  updatedAt: string;
-}
->>>>>>> 5b221e5e (fixed pooling and home, admin pages)

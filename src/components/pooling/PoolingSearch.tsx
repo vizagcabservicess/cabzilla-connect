@@ -1,169 +1,164 @@
 
 import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Search, Car, Bus } from 'lucide-react';
+import { CalendarIcon, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { PoolingType, PoolingSearchRequest } from '@/types/pooling';
-import { FixedLocationSelector } from './FixedLocationSelector';
-import { getLocationById } from '@/lib/poolingData';
-import { toast } from 'sonner';
+import { PoolingSearchRequest, RideType } from '@/types/pooling';
 
 interface PoolingSearchProps {
   onSearch: (searchParams: PoolingSearchRequest) => void;
   isLoading?: boolean;
 }
 
-export function PoolingSearch({ onSearch, isLoading }: PoolingSearchProps) {
-  const [searchType, setSearchType] = useState<PoolingType>('car');
-  const [fromLocationId, setFromLocationId] = useState('');
-  const [toLocationId, setToLocationId] = useState('');
-  const [date, setDate] = useState<Date>();
-  const [passengers, setPassengers] = useState(1);
+export const PoolingSearch: React.FC<PoolingSearchProps> = ({ onSearch, isLoading }) => {
+  const [formData, setFormData] = useState({
+    fromLocation: '',
+    toLocation: '',
+    departureDate: '',
+    passengers: 1,
+    type: undefined as RideType | undefined
+  });
+  const [selectedDate, setSelectedDate] = useState<Date>();
 
-  const handleSearch = () => {
-    if (!fromLocationId || !toLocationId || !date) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const fromLocation = getLocationById(fromLocationId);
-    const toLocation = getLocationById(toLocationId);
-
-    if (!fromLocation || !toLocation) {
-      toast.error('Invalid location selection');
-      return;
-    }
-
-    if (fromLocationId === toLocationId) {
-      toast.error('Pickup and drop locations cannot be the same');
-      return;
-    }
-
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
     const searchParams: PoolingSearchRequest = {
-      type: searchType,
-      from: fromLocation.name,
-      to: toLocation.name,
-      date: format(date, 'yyyy-MM-dd'),
-      passengers,
-      sortBy: 'time'
+      fromLocation: formData.fromLocation,
+      toLocation: formData.toLocation,
+      departureDate: formData.departureDate,
+      passengers: formData.passengers,
+      type: formData.type
     };
 
-    toast.success('Searching for rides...');
     onSearch(searchParams);
   };
 
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+    if (date) {
+      setFormData(prev => ({
+        ...prev,
+        departureDate: format(date, 'yyyy-MM-dd')
+      }));
+    }
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
-      {/* Pooling Type Selector */}
-      <div className="flex flex-wrap gap-3">
-        <Button
-          variant={searchType === 'car' ? 'default' : 'outline'}
-          onClick={() => setSearchType('car')}
-          className="flex items-center space-x-2"
-        >
-          <Car size={16} />
-          <span>Car Pool</span>
-        </Button>
-        <Button
-          variant={searchType === 'bus' ? 'default' : 'outline'}
-          onClick={() => setSearchType('bus')}
-          className="flex items-center space-x-2"
-        >
-          <Bus size={16} />
-          <span>Bus</span>
-        </Button>
-        <Button
-          variant={searchType === 'shared-taxi' ? 'default' : 'outline'}
-          onClick={() => setSearchType('shared-taxi')}
-          className="flex items-center space-x-2"
-        >
-          <Car size={16} />
-          <span>Shared Taxi</span>
-        </Button>
-      </div>
-
-      {/* Search Form */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* From Location */}
-        <FixedLocationSelector
-          label="From"
-          placeholder="Select departure city"
-          value={fromLocationId}
-          onChange={setFromLocationId}
-          excludeLocation={toLocationId}
-        />
-
-        {/* To Location */}
-        <FixedLocationSelector
-          label="To"
-          placeholder="Select destination city"
-          value={toLocationId}
-          onChange={setToLocationId}
-          excludeLocation={fromLocationId}
-        />
-
-        {/* Date */}
-        <div className="space-y-2">
-          <Label>Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !date && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date ? format(date, "PPP") : "Pick a date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                disabled={(date) => date < new Date()}
-                initialFocus
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Find Your Ride
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="fromLocation">From</Label>
+              <Input
+                id="fromLocation"
+                placeholder="Departure city"
+                value={formData.fromLocation}
+                onChange={(e) => setFormData(prev => ({ ...prev, fromLocation: e.target.value }))}
+                required
               />
-            </PopoverContent>
-          </Popover>
-        </div>
+            </div>
 
-        {/* Passengers */}
-        <div className="space-y-2">
-          <Label htmlFor="passengers">Passengers</Label>
-          <Select value={passengers.toString()} onValueChange={(value) => setPassengers(parseInt(value))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select passengers" />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3, 4, 5, 6].map((num) => (
-                <SelectItem key={num} value={num.toString()}>
-                  {num} {num === 1 ? 'passenger' : 'passengers'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="toLocation">To</Label>
+              <Input
+                id="toLocation"
+                placeholder="Destination city"
+                value={formData.toLocation}
+                onChange={(e) => setFormData(prev => ({ ...prev, toLocation: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
 
-        {/* Search Button */}
-        <div className="flex items-end">
-          <Button 
-            onClick={handleSearch} 
-            disabled={isLoading || !fromLocationId || !toLocationId || !date}
-            className="w-full"
-          >
-            <Search className="mr-2 h-4 w-4" />
-            {isLoading ? 'Searching...' : 'Search'}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Departure Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    initialFocus
+                    disabled={(date) => date < new Date()}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="passengers">Passengers</Label>
+              <Input
+                id="passengers"
+                type="number"
+                min="1"
+                max="8"
+                value={formData.passengers}
+                onChange={(e) => setFormData(prev => ({ ...prev, passengers: parseInt(e.target.value) }))}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vehicle Type</Label>
+              <Select 
+                value={formData.type} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, type: value as RideType }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Any type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="car">Car Pool</SelectItem>
+                  <SelectItem value="bus">Bus</SelectItem>
+                  <SelectItem value="shared-taxi">Shared Taxi</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Search className="mr-2 h-4 w-4 animate-spin" />
+                Searching...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                Search Rides
+              </>
+            )}
           </Button>
-        </div>
-      </div>
-    </div>
+        </form>
+      </CardContent>
+    </Card>
   );
-}
+};

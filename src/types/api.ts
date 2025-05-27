@@ -259,30 +259,21 @@ export interface TourFare {
 }
 
 export interface FareBreakdown {
-  baseFare: number;
+  basePrice: number;
   perKmRate: number;
-  perMinuteRate: number;
-  waitingCharges: number;
-  tollCharges: number;
-  otherCharges: number;
-  discount: number;
-  subtotal: number;
-  cgst: number;
-  sgst: number;
-  igst: number;
-  totalTax: number;
-  totalFare: number;
-  roundTrip?: boolean;
+  perHourRate?: number;
+  nightCharges?: number;
+  tolls?: number;
+  taxes?: number;
+  total: number;
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
-  basePrice?: number;
-  driverAllowance?: number;
-  nightCharges?: number;
-  extraDistanceFare?: number;
-  extraKmCharge?: number;
-  extraHourCharge?: number;
-  airportFee?: number;
-  packageLabel?: string;
+  price8hrs80km?: number;
 }
 
 // Commission Types
@@ -317,21 +308,13 @@ export interface CommissionPayment {
 export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
 
 export interface Payment {
-  id: number | string;
-  bookingId: number;
-  bookingNumber?: string;
-  customerName?: string;
-  customerPhone?: string;
+  id: string;
+  bookingId: string;
   amount: number;
-  paidAmount?: number;
-  remainingAmount?: number;
-  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
-  paymentMethod?: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
-  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
-  paymentStatus?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'paid' | 'partial';
-  transactionId?: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  method: 'cash' | 'online' | 'card';
   razorpayPaymentId?: string;
-  dueDate?: string;
+  razorpayOrderId?: string;
   createdAt: string;
   updatedAt: string;
 }

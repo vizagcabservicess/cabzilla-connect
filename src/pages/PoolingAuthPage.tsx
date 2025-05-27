@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function PoolingAuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
