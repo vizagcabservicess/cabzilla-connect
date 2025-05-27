@@ -6,14 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
-import { PoolingUserRole } from '@/types/poolingAuth';
 import { toast } from 'sonner';
-import { Loader2, UserPlus } from 'lucide-react';
+import { poolingAuthAPI } from '@/services/api/poolingAuthAPI';
+import { Loader2 } from 'lucide-react';
+import { PoolingUserRole } from '@/types/poolingAuth';
 
 export const PoolingRegisterForm: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = usePoolingAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -28,25 +27,9 @@ export const PoolingRegisterForm: React.FC = () => {
     setLoading(true);
 
     try {
-      // For now, simulate registration by calling login
-      // In a real implementation, you'd call a register API first
-      await login(formData.email, formData.password, formData.role);
-      toast.success('Registration successful!');
-      
-      // Redirect based on role
-      switch (formData.role) {
-        case 'guest':
-          navigate('/pooling/guest/dashboard');
-          break;
-        case 'provider':
-          navigate('/pooling/provider/dashboard');
-          break;
-        case 'admin':
-          navigate('/pooling/admin/dashboard');
-          break;
-        default:
-          navigate('/pooling');
-      }
+      await poolingAuthAPI.register(formData);
+      toast.success('Registration successful! Please login.');
+      navigate('/pooling/auth');
     } catch (error) {
       toast.error('Registration failed. Please try again.');
     } finally {
@@ -57,31 +40,14 @@ export const PoolingRegisterForm: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <UserPlus className="h-5 w-5" />
-          Register for Pooling
-        </CardTitle>
+        <CardTitle>Register for Pooling</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="role">Register As</Label>
-            <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as PoolingUserRole }))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="guest">Guest (Book Rides)</SelectItem>
-                <SelectItem value="provider">Provider (Offer Rides)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input
               id="name"
-              type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               required
@@ -100,7 +66,7 @@ export const PoolingRegisterForm: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number</Label>
+            <Label htmlFor="phone">Phone</Label>
             <Input
               id="phone"
               type="tel"
@@ -119,6 +85,22 @@ export const PoolingRegisterForm: React.FC = () => {
               onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Register as</Label>
+            <Select 
+              value={formData.role} 
+              onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as PoolingUserRole }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="guest">Guest</SelectItem>
+                <SelectItem value="provider">Provider</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

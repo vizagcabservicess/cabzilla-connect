@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
-import { PoolingUserRole } from '@/types/poolingAuth';
 import { toast } from 'sonner';
-import { Loader2, LogIn } from 'lucide-react';
+import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
+import { Loader2 } from 'lucide-react';
+import { PoolingUserRole } from '@/types/poolingAuth';
 
 export const PoolingLoginForm: React.FC = () => {
   const navigate = useNavigate();
@@ -30,18 +30,12 @@ export const PoolingLoginForm: React.FC = () => {
       toast.success('Login successful!');
       
       // Redirect based on role
-      switch (formData.role) {
-        case 'guest':
-          navigate('/pooling/guest/dashboard');
-          break;
-        case 'provider':
-          navigate('/pooling/provider/dashboard');
-          break;
-        case 'admin':
-          navigate('/pooling/admin/dashboard');
-          break;
-        default:
-          navigate('/pooling');
+      if (formData.role === 'admin') {
+        navigate('/pooling/admin');
+      } else if (formData.role === 'provider') {
+        navigate('/pooling/provider');
+      } else {
+        navigate('/pooling');
       }
     } catch (error) {
       toast.error('Login failed. Please check your credentials.');
@@ -53,27 +47,10 @@ export const PoolingLoginForm: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <LogIn className="h-5 w-5" />
-          Login to Pooling
-        </CardTitle>
+        <CardTitle>Login to Pooling</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="role">Login As</Label>
-            <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as PoolingUserRole }))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="guest">Guest (Book Rides)</SelectItem>
-                <SelectItem value="provider">Provider (Offer Rides)</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -94,6 +71,23 @@ export const PoolingLoginForm: React.FC = () => {
               onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Login as</Label>
+            <Select 
+              value={formData.role} 
+              onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as PoolingUserRole }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="guest">Guest</SelectItem>
+                <SelectItem value="provider">Provider</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
