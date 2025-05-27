@@ -10,7 +10,7 @@ interface WhatsAppButtonProps extends Omit<ButtonProps, 'variant'> {
   message: string;
   icon?: boolean;
   fullWidth?: boolean;
-  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link" | "whatsapp";
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
   openInNewTab?: boolean;
 }
 
@@ -19,7 +19,7 @@ export function WhatsAppButton({
   message, 
   icon = true,
   fullWidth = false,
-  variant = "whatsapp",
+  variant = "default",
   openInNewTab = true,
   className, 
   children, 
@@ -39,14 +39,12 @@ export function WhatsAppButton({
     }
   };
   
-  const buttonVariant = variant === "whatsapp" ? "default" : variant;
-  
   return (
     <Button
-      variant={buttonVariant}
+      variant={variant}
       onClick={handleClick}
       className={cn(
-        variant === "whatsapp" && "bg-[#25D366] hover:bg-[#128C7E] text-white",
+        "bg-[#25D366] hover:bg-[#128C7E] text-white",
         fullWidth && "w-full",
         className
       )}

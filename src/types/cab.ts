@@ -29,6 +29,7 @@ export interface HourlyPackage {
   hours: number;
   kilometers: number;
   price: number;
+  basePrice: number;
 }
 
 export interface FleetVehicle {
@@ -114,6 +115,7 @@ export interface LocalPackagePriceMatrix {
   package10hr100km: number;
   extraKmRate: number;
   extraHourRate: number;
+  price8hrs80km: number;
 }
 
 export interface FareCalculationParams {
