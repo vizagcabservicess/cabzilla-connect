@@ -40,6 +40,11 @@ import FaresPage from './pages/FaresPage';
 import VehiclesPage from './pages/VehiclesPage';
 import DriversPage from './pages/DriversPage';
 import UserManagementPage from './pages/UserManagementPage';
+import CustomerDashboard from './pages/DashboardPage';
+import DriverDashboard from './pages/DriverDashboard';
+import PoolingLoginPage from './pages/PoolingLoginPage';
+import PoolingProviderPage from './pages/PoolingProviderPage';
+import PoolingAdminPage from './pages/PoolingAdminPage';
 
 const router = createBrowserRouter([
   {
@@ -210,6 +215,26 @@ const router = createBrowserRouter([
   { path: '/admin/vehicles', element: <VehiclesPage /> },
   { path: '/admin/drivers', element: <DriversPage /> },
   { path: '/admin/users', element: <UserManagementPage /> },
+  {
+    path: '/customer',
+    element: <CustomerDashboard />,
+  },
+  {
+    path: '/driver',
+    element: <DriverDashboard />,
+  },
+  {
+    path: '/pooling/login',
+    element: <PoolingLoginPage />,
+  },
+  {
+    path: '/pooling/provider',
+    element: <PoolingProviderPage />,
+  },
+  {
+    path: '/pooling/admin',
+    element: <PoolingAdminPage />,
+  },
   // Catch-all route for 404s
   {
     path: '*',
