@@ -1,17 +1,22 @@
+
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
-import { PoolingSearch } from '@/components/pooling/PoolingSearch';
-import { RideCard } from '@/components/pooling/RideCard';
+import { EnhancedPoolingSearch } from '@/components/pooling/EnhancedPoolingSearch';
+import { EnhancedRideCard } from '@/components/pooling/EnhancedRideCard';
 import { RideDetailsModal } from '@/components/pooling/RideDetailsModal';
 import { Button } from '@/components/ui/button';
-import { Plus, Car, Bus, Users } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Car, Bus, Users, Info } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { poolingAPI } from '@/services/api/poolingAPI';
-import { PoolingRide, PoolingSearchRequest } from '@/types/pooling';
+import { PoolingRide, PoolingSearchRequest, RideRequest } from '@/types/pooling';
 import { useNavigate } from 'react-router-dom';
+import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
+import { toast } from 'sonner';
 
 const PoolingPage = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated, canCreateRide } = usePoolingAuth();
   const [searchParams, setSearchParams] = useState<PoolingSearchRequest | null>(null);
   const [selectedRide, setSelectedRide] = useState<PoolingRide | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -26,8 +31,19 @@ const PoolingPage = () => {
     setSearchParams(params);
   };
 
-  const handleBookRide = (ride: PoolingRide) => {
-    navigate(`/pooling/book/${ride.id}`);
+  const handleRideRequest = async (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => {
+    try {
+      // In a real app, this would call an API to send the request
+      console.log('Sending ride request:', { rideId, request });
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      toast.success('Ride request sent successfully!');
+    } catch (error) {
+      console.error('Failed to send ride request:', error);
+      toast.error('Failed to send ride request. Please try again.');
+    }
   };
 
   const handleViewDetails = (ride: PoolingRide) => {
@@ -36,7 +52,22 @@ const PoolingPage = () => {
   };
 
   const handleCreateRide = () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to create a ride');
+      navigate('/login');
+      return;
+    }
+
+    if (!canCreateRide()) {
+      toast.error('Providers need minimum ₹500 wallet balance to create rides');
+      return;
+    }
+
     navigate('/pooling/create');
+  };
+
+  const handleAuth = () => {
+    navigate('/login');
   };
 
   return (
@@ -54,15 +85,43 @@ const PoolingPage = () => {
               Find affordable car pools and bus rides between major cities
             </p>
           </div>
-          <Button onClick={handleCreateRide} className="mt-4 md:mt-0">
-            <Plus className="mr-2 h-4 w-4" />
-            Offer a Ride
-          </Button>
+          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+            {!isAuthenticated ? (
+              <Button onClick={handleAuth} variant="outline">
+                Login / Signup
+              </Button>
+            ) : (
+              <>
+                {user?.role === 'provider' && (
+                  <Button onClick={handleCreateRide} disabled={!canCreateRide()}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Offer a Ride
+                  </Button>
+                )}
+                {user?.role === 'guest' && (
+                  <div className="text-sm text-gray-600">
+                    Welcome, {user.name}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Wallet Balance Alert for Providers */}
+        {isAuthenticated && user?.role === 'provider' && !canCreateRide() && (
+          <Alert className="mb-6 border-orange-200 bg-orange-50">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              You need a minimum wallet balance of ₹500 to create rides. 
+              Current balance: ₹{user.walletBalance || 0}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Search Component */}
         <div className="mb-8">
-          <PoolingSearch onSearch={handleSearch} isLoading={isLoading} />
+          <EnhancedPoolingSearch onSearch={handleSearch} isLoading={isLoading} />
         </div>
 
         {/* Results Section */}
@@ -70,7 +129,7 @@ const PoolingPage = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">
-                Available Rides from {searchParams.from} to {searchParams.to}
+                Available {searchParams.type} rides from {searchParams.from} to {searchParams.to}
               </h2>
               {rides && (
                 <span className="text-gray-600">
@@ -97,20 +156,22 @@ const PoolingPage = () => {
             {rides && rides.length === 0 && !isLoading && (
               <div className="text-center py-12">
                 <p className="text-gray-600 mb-4">No rides found for your search criteria.</p>
-                <Button onClick={handleCreateRide} variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Be the first to offer a ride
-                </Button>
+                {isAuthenticated && user?.role === 'provider' && canCreateRide() && (
+                  <Button onClick={handleCreateRide} variant="outline">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Be the first to offer a ride
+                  </Button>
+                )}
               </div>
             )}
 
             {rides && rides.length > 0 && (
               <div className="space-y-4">
                 {rides.map((ride) => (
-                  <RideCard
+                  <EnhancedRideCard
                     key={ride.id}
                     ride={ride}
-                    onBook={handleBookRide}
+                    onRequestSent={handleRideRequest}
                     onViewDetails={handleViewDetails}
                   />
                 ))}
@@ -124,7 +185,7 @@ const PoolingPage = () => {
           <div className="text-center py-16">
             <h3 className="text-xl font-semibold mb-4">Ready to start your journey?</h3>
             <p className="text-gray-600 mb-8">
-              Search for available rides or offer your own to start sharing rides with others.
+              Search for available rides or {isAuthenticated && user?.role === 'provider' ? 'offer your own' : 'join as a provider'} to start sharing rides with others.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
               <div className="bg-white p-6 rounded-lg shadow text-center">
@@ -143,6 +204,14 @@ const PoolingPage = () => {
                 <p className="text-sm text-gray-600">Join others for door-to-door taxi rides</p>
               </div>
             </div>
+
+            {!isAuthenticated && (
+              <div className="mt-8">
+                <Button onClick={handleAuth} size="lg">
+                  Join Pooling Platform
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -155,7 +224,7 @@ const PoolingPage = () => {
           setIsDetailsModalOpen(false);
           setSelectedRide(null);
         }}
-        onBook={handleBookRide}
+        onBook={() => {}} // Will be handled by request system
       />
     </div>
   );
