@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -132,27 +133,28 @@ export function LoginForm() {
       // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
+      // Use HTTP-only cookies to store authentication token
       const response = await authAPI.login(values);
       
-      if (response.status === 'success' && response.token && response.user) {
+      if (response.token) {
         // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
-          description: `Welcome back, ${response.user.name}!` 
+          description: `Welcome back, ${response.user?.name || 'User'}!` 
         });
         
-        console.log("Login successful", { 
+        console.log("Login successful, token saved", { 
           tokenLength: response.token.length,
-          user: response.user.id
+          tokenParts: response.token.split('.').length,
+          user: response.user?.id
         });
         
-        // Redirect based on role
-        const redirectPath = response.user.role === 'admin' ? '/admin' : '/dashboard';
+        // Force a page reload to ensure fresh state
         setTimeout(() => {
-          window.location.href = redirectPath;
+          window.location.href = '/dashboard';
         }, 500);
       } else {
-        throw new Error(response.message || "Authentication failed");
+        throw new Error("Authentication failed: No token received");
       }
     } catch (error) {
       console.error("Login error details:", error);

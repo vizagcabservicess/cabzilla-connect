@@ -43,12 +43,10 @@ export function BookingDetails({
   };
   
   // Handle vehicle assignment (will update booking.vehicleNumber and vehicleId)
-  const handleAssignVehicle = async (vehicleId: string, driverId?: string) => {
-    // Find the vehicle to get its number
-    const vehicleNumber = `Vehicle-${vehicleId}`; // In real app, this would come from vehicle data
+  const handleAssignVehicle = async (vehicleData: { vehicleNumber: string; vehicleId: string }) => {
     await onEdit({ 
-      vehicleNumber,
-      vehicleId,
+      vehicleNumber: vehicleData.vehicleNumber,
+      vehicleId: vehicleData.vehicleId,
       status: 'confirmed' as BookingStatus 
     });
   };
@@ -187,8 +185,9 @@ export function BookingDetails({
 
         <TabsContent value="vehicle" className="py-4">
           <FleetVehicleAssignment
-            bookingId={booking.id.toString()}
+            booking={booking}
             onAssign={handleAssignVehicle}
+            isSubmitting={isSubmitting}
           />
         </TabsContent>
 

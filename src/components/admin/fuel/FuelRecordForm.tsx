@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,10 +70,10 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
         // Populate form with editing record data
         setVehicleId(editingRecord.vehicleId);
         setFillDate(editingRecord.fillDate ? format(new Date(editingRecord.fillDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
-        setQuantity(editingRecord.quantity?.toString() || '');
-        setPricePerUnit(editingRecord.pricePerUnit?.toString() || '');
-        setTotalCost(editingRecord.totalCost?.toString() || '');
-        setOdometer(editingRecord.odometer?.toString() || '');
+        setQuantity(editingRecord.quantity.toString());
+        setPricePerUnit(editingRecord.pricePerUnit.toString());
+        setTotalCost(editingRecord.totalCost.toString());
+        setOdometer(editingRecord.odometer.toString());
         setFuelStation(editingRecord.fuelStation || '');
         // Cast the string to the specific type to avoid TypeScript errors
         setFuelType(editingRecord.fuelType as 'Petrol' | 'Diesel' | 'CNG' | 'Electric');
@@ -103,7 +104,7 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
   useEffect(() => {
     const selectedPrice = fuelPrices.find(p => p.fuelType === fuelType);
     if (selectedPrice) {
-      setPricePerUnit((selectedPrice.price || selectedPrice.pricePerLiter).toString());
+      setPricePerUnit(selectedPrice.price.toString());
     }
   }, [fuelType, fuelPrices]);
 

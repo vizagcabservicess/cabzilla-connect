@@ -3,179 +3,263 @@ import {
   PoolingRide, 
   PoolingSearchRequest, 
   CreateRideRequest,
-  PoolingBooking,
-  PoolingVehicleType
+  PoolingBooking 
 } from '@/types/pooling';
 
-// Mock data for pooling rides
-const mockRides: PoolingRide[] = [
-  {
-    id: 1,
-    type: 'car',
-    providerId: 1,
-    providerName: 'Rajesh Kumar',
-    providerPhone: '+91 9876543210',
-    providerRating: 4.8,
-    fromLocation: 'Vizag',
-    toLocation: 'Hyderabad',
-    departureTime: '2024-12-25T08:00:00',
-    arrivalTime: '2024-12-25T14:00:00',
-    totalSeats: 4,
-    availableSeats: 2,
-    pricePerSeat: 800,
-    vehicleInfo: {
-      make: 'Maruti',
-      model: 'Swift',
-      color: 'White',
-      plateNumber: 'AP39XX1234'
-    },
-    route: ['Vizag', 'Rajahmundry', 'Vijayawada', 'Hyderabad'],
-    amenities: ['AC', 'Music', 'Charging Port'],
-    rules: ['No Smoking', 'No Loud Music'],
-    status: 'active',
-    createdAt: '2024-12-20T10:00:00',
-    updatedAt: '2024-12-20T10:00:00'
-  },
-  {
-    id: 2,
-    type: 'bus',
-    providerId: 2,
-    providerName: 'Coastal Travels',
-    providerPhone: '+91 9876543211',
-    providerRating: 4.5,
-    fromLocation: 'Vizag',
-    toLocation: 'Bangalore',
-    departureTime: '2024-12-25T20:00:00',
-    arrivalTime: '2024-12-26T08:00:00',
-    totalSeats: 40,
-    availableSeats: 15,
-    pricePerSeat: 1200,
-    vehicleInfo: {
-      make: 'Volvo',
-      model: 'B9R',
-      color: 'Blue',
-      plateNumber: 'AP39XX5678',
-      busNumber: 'CT001'
-    },
-    route: ['Vizag', 'Rajahmundry', 'Vijayawada', 'Bangalore'],
-    amenities: ['AC', 'Wi-Fi', 'Entertainment', 'Blanket'],
-    rules: ['No Smoking', 'No Alcohol'],
-    status: 'active',
-    createdAt: '2024-12-18T15:00:00',
-    updatedAt: '2024-12-18T15:00:00'
-  }
-];
+// Enhanced mock data generator with more variety and realistic scenarios
+const generateDynamicMockRides = (): PoolingRide[] => {
+  const providers = [
+    { name: 'Ravi Kumar', phone: '+91 9876543210', rating: 4.5 },
+    { name: 'Prasad Taxi Service', phone: '+91 9988776655', rating: 4.2 },
+    { name: 'Suresh Reddy', phone: '+91 9123456789', rating: 4.8 },
+    { name: 'APSRTC', phone: '+91 9999888777', rating: 4.0 },
+    { name: 'Venkat Travels', phone: '+91 9876512345', rating: 4.3 },
+    { name: 'Krishna Cabs', phone: '+91 9543216789', rating: 4.6 },
+    { name: 'Godavari Express', phone: '+91 9321654987', rating: 4.1 },
+    { name: 'Coastal Rides', phone: '+91 9654123789', rating: 4.4 }
+  ];
 
-const mockBookings: PoolingBooking[] = [
-  {
-    id: 1,
-    userId: 1,
-    rideId: 1,
-    passengerName: 'John Doe',
-    passengerPhone: '+91 9876543210',
-    passengerEmail: 'john@example.com',
-    seatsBooked: 2,
-    totalAmount: 1600,
-    status: 'confirmed',
-    bookingDate: '2024-12-20T12:00:00',
-    paymentStatus: 'paid'
+  const vehicles = [
+    { make: 'Maruti', model: 'Swift', color: 'White', plate: 'AP 05 AB 1234' },
+    { make: 'Hyundai', model: 'i20', color: 'Silver', plate: 'AP 33 CD 5678' },
+    { make: 'Honda', model: 'City', color: 'Blue', plate: 'TS 09 EF 9012' },
+    { make: 'Toyota', model: 'Innova', color: 'Grey', plate: 'AP 39 GH 3456' },
+    { make: 'Mahindra', model: 'Bolero', color: 'Black', plate: 'AP 28 IJ 7890' },
+    { make: 'Tata', model: 'Nexon', color: 'Red', plate: 'TS 12 KL 2345' },
+    { make: 'Ashok Leyland', model: 'Luxury Bus', color: 'Red', plate: 'AP 39 GH 3456' }
+  ];
+
+  const routes = [
+    { from: 'Visakhapatnam', to: 'Hyderabad', stops: ['Vizianagaram', 'Rajam', 'Srikakulam'] },
+    { from: 'Hyderabad', to: 'Visakhapatnam', stops: ['Warangal', 'Khammam', 'Rajahmundry'] },
+    { from: 'Vijayawada', to: 'Guntur', stops: ['Tenali', 'Mangalagiri'] },
+    { from: 'Guntur', to: 'Vijayawada', stops: ['Tenali'] },
+    { from: 'Visakhapatnam', to: 'Vijayawada', stops: ['Rajahmundry', 'Eluru'] },
+    { from: 'Vijayawada', to: 'Hyderabad', stops: ['Guntur', 'Ongole'] },
+    { from: 'Hyderabad', to: 'Warangal', stops: ['Jangaon'] },
+    { from: 'Tirupati', to: 'Chennai', stops: ['Chittoor', 'Vellore'] }
+  ];
+
+  const amenities = [
+    ['AC', 'Music'],
+    ['AC', 'WiFi', 'Phone Charger'],
+    ['AC', 'Reclining Seats', 'WiFi', 'Entertainment'],
+    ['AC', 'Music', 'Phone Charger'],
+    ['AC'],
+    ['Music', 'Phone Charger'],
+    ['AC', 'WiFi'],
+    ['Entertainment', 'Reclining Seats']
+  ];
+
+  const rules = [
+    ['No smoking', 'Be punctual'],
+    ['No smoking', 'Cash payment only'],
+    ['No smoking', 'No loud music', 'Be punctual'],
+    ['No smoking', 'Keep tickets ready', 'Board 15 mins early'],
+    ['No smoking', 'No pets'],
+    ['Be punctual', 'No eating in vehicle'],
+    ['No smoking', 'Wear seat belts']
+  ];
+
+  const rides: PoolingRide[] = [];
+
+  // Generate rides for the next 7 days
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + dayOffset);
+    
+    routes.forEach((route, routeIndex) => {
+      // Generate 2-4 rides per route per day
+      const ridesPerRoute = Math.floor(Math.random() * 3) + 2;
+      
+      for (let i = 0; i < ridesPerRoute; i++) {
+        const provider = providers[Math.floor(Math.random() * providers.length)];
+        const vehicle = vehicles[Math.floor(Math.random() * vehicles.length)];
+        const amenitySet = amenities[Math.floor(Math.random() * amenities.length)];
+        const ruleSet = rules[Math.floor(Math.random() * rules.length)];
+        
+        // Random departure time between 6 AM and 10 PM
+        const departureHour = Math.floor(Math.random() * 16) + 6;
+        const departureMinute = Math.floor(Math.random() * 4) * 15; // 0, 15, 30, 45
+        
+        const departureTime = new Date(baseDate);
+        departureTime.setHours(departureHour, departureMinute, 0, 0);
+        
+        // Calculate arrival time (2-6 hours later)
+        const travelHours = Math.floor(Math.random() * 4) + 2;
+        const arrivalTime = new Date(departureTime);
+        arrivalTime.setHours(arrivalTime.getHours() + travelHours);
+        
+        // Determine ride type and pricing
+        let rideType: 'car' | 'bus' | 'shared-taxi';
+        let totalSeats: number;
+        let priceRange: [number, number];
+        
+        if (provider.name === 'APSRTC' || vehicle.model === 'Luxury Bus') {
+          rideType = 'bus';
+          totalSeats = Math.floor(Math.random() * 20) + 35; // 35-54 seats
+          priceRange = [250, 450];
+        } else if (provider.name.includes('Taxi') || Math.random() < 0.3) {
+          rideType = 'shared-taxi';
+          totalSeats = Math.floor(Math.random() * 3) + 4; // 4-6 seats
+          priceRange = [120, 300];
+        } else {
+          rideType = 'car';
+          totalSeats = Math.floor(Math.random() * 2) + 3; // 3-4 seats
+          priceRange = [400, 900];
+        }
+        
+        const pricePerSeat = Math.floor(Math.random() * (priceRange[1] - priceRange[0]) + priceRange[0]);
+        const availableSeats = Math.floor(Math.random() * totalSeats) + 1;
+        
+        const ride: PoolingRide = {
+          id: rides.length + 1,
+          type: rideType,
+          providerId: routeIndex + i + 1,
+          providerName: provider.name,
+          providerPhone: provider.phone,
+          providerRating: provider.rating,
+          fromLocation: route.from,
+          toLocation: route.to,
+          departureTime: departureTime.toISOString(),
+          arrivalTime: arrivalTime.toISOString(),
+          totalSeats,
+          availableSeats,
+          pricePerSeat,
+          vehicleInfo: {
+            make: vehicle.make,
+            model: vehicle.model,
+            color: vehicle.color,
+            plateNumber: vehicle.plate
+          },
+          route: route.stops,
+          amenities: amenitySet,
+          rules: ruleSet,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        rides.push(ride);
+      }
+    });
   }
-];
+  
+  return rides;
+};
+
+let mockRides = generateDynamicMockRides();
 
 export const mockPoolingAPI = {
   searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
     // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 800));
     
-    return mockRides.filter(ride => {
-      const matchesType = ride.type === searchParams.type;
-      const matchesFrom = ride.fromLocation.toLowerCase().includes(searchParams.from.toLowerCase());
-      const matchesTo = ride.toLocation.toLowerCase().includes(searchParams.to.toLowerCase());
-      const hasEnoughSeats = ride.availableSeats >= searchParams.passengers;
-      const matchesPrice = !searchParams.maxPrice || ride.pricePerSeat <= searchParams.maxPrice;
+    console.log('🔍 Searching with params:', searchParams);
+    
+    // Filter rides based on search criteria
+    const filteredRides = mockRides.filter(ride => {
+      // Check type match
+      const typeMatch = ride.type === searchParams.type;
       
-      return matchesType && matchesFrom && matchesTo && hasEnoughSeats && matchesPrice;
+      // Check location match (flexible matching)
+      const fromMatch = ride.fromLocation.toLowerCase().includes(searchParams.from.toLowerCase()) ||
+                       searchParams.from.toLowerCase().includes(ride.fromLocation.toLowerCase());
+      const toMatch = ride.toLocation.toLowerCase().includes(searchParams.to.toLowerCase()) ||
+                     searchParams.to.toLowerCase().includes(ride.toLocation.toLowerCase());
+      
+      // Check if ride has enough available seats
+      const seatsMatch = ride.availableSeats >= searchParams.passengers;
+      
+      // Check date
+      const rideDate = new Date(ride.departureTime);
+      const searchDate = new Date(searchParams.date);
+      const dateMatch = rideDate.toDateString() === searchDate.toDateString();
+      
+      // Price filter (if specified)
+      const priceMatch = !searchParams.maxPrice || ride.pricePerSeat <= searchParams.maxPrice;
+      
+      return typeMatch && fromMatch && toMatch && seatsMatch && dateMatch && priceMatch;
     });
+    
+    // Sort results based on sortBy parameter
+    if (searchParams.sortBy === 'price') {
+      filteredRides.sort((a, b) => a.pricePerSeat - b.pricePerSeat);
+    } else if (searchParams.sortBy === 'time') {
+      filteredRides.sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
+    } else if (searchParams.sortBy === 'rating') {
+      filteredRides.sort((a, b) => (b.providerRating || 0) - (a.providerRating || 0));
+    }
+    
+    console.log(`✅ Found ${filteredRides.length} rides matching criteria`);
+    return filteredRides.slice(0, 20); // Limit to 20 results
   },
 
-  getRideDetails: async (rideId: number): Promise<PoolingRide | null> => {
+  getRideDetails: async (rideId: number): Promise<PoolingRide> => {
     await new Promise(resolve => setTimeout(resolve, 300));
-    return mockRides.find(ride => ride.id === rideId) || null;
+    
+    const ride = mockRides.find(r => r.id === rideId);
+    if (!ride) {
+      throw new Error('Ride not found');
+    }
+    return ride;
   },
 
   createRide: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const newRide: PoolingRide = {
       id: mockRides.length + 1,
       ...rideData,
-      providerId: 1, // Mock provider ID
+      providerId: 999,
       providerName: 'Current User',
       providerPhone: '+91 9999999999',
-      providerRating: 4.0,
+      providerRating: 4.5,
       availableSeats: rideData.totalSeats,
-      route: rideData.route || [],
-      amenities: rideData.amenities || [],
-      rules: rideData.rules || [],
       status: 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     
     mockRides.push(newRide);
+    console.log('✅ Created new ride:', newRide);
     return newRide;
   },
 
   bookRide: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    const newBooking: PoolingBooking = {
-      ...bookingData,
-      id: mockBookings.length + 1,
-      bookingDate: new Date().toISOString()
-    };
-    
-    mockBookings.push(newBooking);
+    await new Promise(resolve => setTimeout(resolve, 1200));
     
     // Update available seats
     const ride = mockRides.find(r => r.id === bookingData.rideId);
     if (ride) {
-      ride.availableSeats -= bookingData.seatsBooked;
-      if (ride.availableSeats <= 0) {
-        ride.status = 'full';
-      }
+      ride.availableSeats = Math.max(0, ride.availableSeats - bookingData.seatsBooked);
+      console.log(`📝 Updated ride ${ride.id}: ${ride.availableSeats} seats remaining`);
     }
     
-    return newBooking;
+    const booking: PoolingBooking = {
+      id: Date.now(),
+      ...bookingData,
+      bookingDate: new Date().toISOString()
+    };
+    
+    console.log('✅ Created booking:', booking);
+    return booking;
   },
 
   getUserBookings: async (userId: number): Promise<PoolingBooking[]> => {
-    await new Promise(resolve => setTimeout(resolve, 400));
-    return mockBookings.filter(booking => booking.userId === userId);
-  },
-
-  createPaymentOrder: async (bookingId: number): Promise<any> => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return {
-      id: `order_${Date.now()}`,
-      amount: 1600,
-      currency: 'INR',
-      receipt: `receipt_${bookingId}`,
-      status: 'created'
-    };
-  },
-
-  verifyPayment: async (paymentData: any): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    console.log('Payment verified:', paymentData);
+    // Return empty array for now - would be populated from actual bookings
+    return [];
   },
 
   cancelBooking: async (bookingId: number): Promise<void> => {
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const booking = mockBookings.find(b => b.id === bookingId);
-    if (booking) {
-      booking.status = 'cancelled';
-      booking.paymentStatus = 'refunded';
-    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log(`❌ Cancelled booking ${bookingId}`);
+  },
+
+  // Helper method to regenerate mock data
+  regenerateData: () => {
+    mockRides = generateDynamicMockRides();
+    console.log('🔄 Regenerated mock ride data');
   }
 };

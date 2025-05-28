@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/AuthProvider';
@@ -29,6 +30,11 @@ import {
   Info,
   UserPlus
 } from 'lucide-react';
+
+interface NavLink {
+  to: string;
+  label: string;
+}
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -63,14 +69,6 @@ export function Navbar() {
             >
               Pooling
             </Link>
-            <Link to="/pooling" className="text-gray-600 hover:text-gray-900">
-              Find Rides
-            </Link>
-            {user?.role === 'provider' && (
-              <Link to="/pooling/create" className="text-gray-600 hover:text-gray-900">
-                Create Ride
-              </Link>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors">
                 About
@@ -88,6 +86,7 @@ export function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            
             {/* Contact Information */}
             <div className="flex items-center space-x-4 text-sm">
               <a 
@@ -98,6 +97,7 @@ export function Navbar() {
                 9966363662
               </a>
             </div>
+
             {/* Auth Section */}
             {user ? (
               <DropdownMenu>
@@ -135,6 +135,7 @@ export function Navbar() {
               </div>
             )}
           </div>
+
           {/* Mobile menu button */}
           <div className="md:hidden">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>

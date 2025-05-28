@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -191,7 +190,7 @@ export function DriverAssignment({
     }
     try {
       await onAssign({
-        bookingId: booking.id.toString(),
+        bookingId: booking.id,
         driverId: selectedDriver,
         driverName,
         driverPhone,
@@ -211,7 +210,7 @@ export function DriverAssignment({
         try {
           await commissionAPI.createCommissionPayment({
             bookingId: booking.id.toString(),
-            vehicleId: parseInt(vehicle.id), // Convert to number
+            vehicleId: vehicle.id, // Use the correct database ID
             driverId: selectedDriver,
             amount: booking.totalAmount,
             commissionAmount: commissionData.amount,
@@ -226,7 +225,7 @@ export function DriverAssignment({
         } catch (commissionError) {
           console.error("Error recording commission:", commissionError);
           toast({
-            variant: "destructive",
+            variant: "warning",
             title: "Commission Recording Failed",
             description: "Driver assigned successfully, but commission recording failed."
           });

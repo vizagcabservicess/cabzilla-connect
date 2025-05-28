@@ -4,12 +4,21 @@ import { getApiUrl } from '@/config/api';
 
 const AUTH_API_URL = getApiUrl('/api/auth');
 
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'customer' | 'driver' | 'admin';
+  is_active: boolean;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
 }
 
-export interface SignupRequest {
+export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
@@ -17,36 +26,108 @@ export interface SignupRequest {
 }
 
 export interface AuthResponse {
-  status: string;
-  user: {
-    id: number;
-    name: string;
-    email: string;
-    phone: string;
-    role: string;
-    is_active: boolean;
-  };
+  success: boolean;
+  user: User;
   token: string;
-  message?: string;
 }
 
-export const authAPI = {
-  login: async (credentials: LoginRequest): Promise<AuthResponse> => {
-    const response = await axios.post(`${AUTH_API_URL}/login.php`, credentials);
-    return response.data;
-  },
+class AuthAPI {
+  private token: string | null = null;
 
-  register: async (userData: SignupRequest): Promise<{ status: string; message?: string; user_id?: number }> => {
-    const response = await axios.post(`${AUTH_API_URL}/register.php`, userData);
-    return response.data;
-  },
-
-  logout: async (): Promise<void> => {
-    await axios.post(`${AUTH_API_URL}/logout.php`);
-  },
-
-  getCurrentUser: async (): Promise<any> => {
-    const response = await axios.get(`${AUTH_API_URL}/me.php`);
-    return response.data;
+  constructor() {
+    this.token = localStorage.getItem('auth_token');
   }
-};
+
+  async login(credentials: LoginRequest): Promise<AuthResponse> {
+    try {
+      const response = await axios.post(`${AUTH_API_URL}/login.php`, credentials);
+      
+      if (response.data.success) {
+        this.token = response.data.token;
+        localStorage.setItem('auth_token', this.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  }
+
+  async register(userData: RegisterRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await axios.post(`${AUTH_API_URL}/register.php`, userData);
+      return response.data;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      if (this.token) {
+        await axios.post(`${AUTH_API_URL}/logout.php`, {}, {
+          headers: { Authorization: `Bearer ${this.token}` }
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      this.token = null;
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+    }
+  }
+
+  async getCurrentUser(): Promise<User | null> {
+    try {
+      if (!this.token) return null;
+      
+      const response = await axios.get(`${AUTH_API_URL}/me.php`, {
+        headers: { Authorization: `Bearer ${this.token}` }
+      });
+      
+      if (response.data.success) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return response.data.user;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      this.logout();
+      return null;
+    }
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.token;
+  }
+
+  isAdmin(): boolean {
+    const user = this.getStoredUser();
+    return user?.role === 'admin';
+  }
+
+  isDriver(): boolean {
+    const user = this.getStoredUser();
+    return user?.role === 'driver';
+  }
+
+  getStoredUser(): User | null {
+    try {
+      const userData = localStorage.getItem('user');
+      return userData ? JSON.parse(userData) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  getToken(): string | null {
+    return this.token;
+  }
+}
+
+export const authAPI = new AuthAPI();

@@ -76,9 +76,11 @@ export function FleetVehicleAssignmentDialog({
   // Fetch available vehicles when dialog opens
   const fetchVehicles = async () => {
     try {
-      const response = await fleetAPI.getVehicles();
-      setVehicles(response || []);
-      console.log("FleetVehicleAssignmentDialog: Fetched vehicles:", response.length);
+      const response = await fleetAPI.getVehicles(true);
+      if (response && response.vehicles && Array.isArray(response.vehicles)) {
+        setVehicles(response.vehicles);
+        console.log("FleetVehicleAssignmentDialog: Fetched vehicles:", response.vehicles.length);
+      }
     } catch (error) {
       console.error("Error fetching vehicles:", error);
       // Keep the passed availableVehicles as fallback

@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Grid,
   Alert,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
@@ -114,9 +115,9 @@ const PoolingRidesManager: React.FC = () => {
       const url = selectedRide 
         ? `/api/pooling/rides.php/${selectedRide.id}`
         : '/api/pooling/rides.php';
-
+      
       const method = selectedRide ? 'PUT' : 'POST';
-
+      
       const response = await fetch(url, {
         method,
         headers: {
@@ -126,7 +127,7 @@ const PoolingRidesManager: React.FC = () => {
       });
 
       if (!response.ok) throw new Error('Failed to save ride');
-
+      
       await fetchRides();
       handleCloseDialog();
     } catch (err) {
@@ -136,7 +137,7 @@ const PoolingRidesManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this ride?')) return;
-
+    
     try {
       const response = await fetch('/api/pooling/rides.php', {
         method: 'DELETE',
@@ -145,7 +146,7 @@ const PoolingRidesManager: React.FC = () => {
       });
 
       if (!response.ok) throw new Error('Failed to delete ride');
-
+      
       await fetchRides();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -220,59 +221,71 @@ const PoolingRidesManager: React.FC = () => {
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-              <TextField
-                fullWidth
-                label="Type"
-                value={formData.type || ''}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                required
-              />
-              <TextField
-                fullWidth
-                label="From Location"
-                value={formData.fromLocation || ''}
-                onChange={(e) => setFormData({ ...formData, fromLocation: e.target.value })}
-                required
-              />
-              <TextField
-                fullWidth
-                label="To Location"
-                value={formData.toLocation || ''}
-                onChange={(e) => setFormData({ ...formData, toLocation: e.target.value })}
-                required
-              />
-              <TextField
-                fullWidth
-                label="Departure Time"
-                type="datetime-local"
-                value={formData.departureTime || ''}
-                onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
-                required
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                fullWidth
-                label="Total Seats"
-                type="number"
-                value={formData.totalSeats || ''}
-                onChange={(e) => setFormData({ ...formData, totalSeats: parseInt(e.target.value) })}
-                required
-              />
-              <TextField
-                fullWidth
-                label="Price per Seat"
-                type="number"
-                value={formData.pricePerSeat || ''}
-                onChange={(e) => setFormData({ ...formData, pricePerSeat: parseFloat(e.target.value) })}
-                required
-              />
-            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Type"
+                  value={formData.type || ''}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="From Location"
+                  value={formData.fromLocation || ''}
+                  onChange={(e) => setFormData({ ...formData, fromLocation: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="To Location"
+                  value={formData.toLocation || ''}
+                  onChange={(e) => setFormData({ ...formData, toLocation: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Departure Time"
+                  type="datetime-local"
+                  value={formData.departureTime || ''}
+                  onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
+                  required
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Total Seats"
+                  type="number"
+                  value={formData.totalSeats || ''}
+                  onChange={(e) => setFormData({ ...formData, totalSeats: parseInt(e.target.value) })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Price per Seat"
+                  type="number"
+                  value={formData.pricePerSeat || ''}
+                  onChange={(e) => setFormData({ ...formData, pricePerSeat: parseFloat(e.target.value) })}
+                  required
+                />
+              </Grid>
+            </Grid>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained" color="primary">
-              {selectedRide ? 'Update' : 'Add'} Ride
+            <Button type="submit" variant="contained">
+              {selectedRide ? 'Update' : 'Create'}
             </Button>
           </DialogActions>
         </form>
@@ -281,4 +294,4 @@ const PoolingRidesManager: React.FC = () => {
   );
 };
 
-export default PoolingRidesManager;
+export default PoolingRidesManager; 

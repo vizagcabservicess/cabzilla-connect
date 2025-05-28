@@ -1,10 +1,6 @@
-<?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
+<?php
+require_once '../common/db_helper.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -64,14 +60,8 @@ try {
     // Remove password from response
     unset($user['password']);
     
-    // Ensure role is set
-    if (empty($user['role'])) {
-        $user['role'] = 'customer';
-    }
-
     echo json_encode([
-        'status' => 'success',
-        'message' => 'Login successful',
+        'success' => true,
         'user' => $user,
         'token' => $token
     ]);

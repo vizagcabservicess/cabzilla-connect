@@ -12,13 +12,13 @@ interface FixedLocationSelectorProps {
   excludeLocation?: string;
 }
 
-export const FixedLocationSelector: React.FC<FixedLocationSelectorProps> = ({
-  label,
-  placeholder,
-  value,
-  onChange,
-  excludeLocation
-}) => {
+export function FixedLocationSelector({ 
+  label, 
+  placeholder, 
+  value, 
+  onChange, 
+  excludeLocation 
+}: FixedLocationSelectorProps) {
   const availableLocations = POOLING_LOCATIONS.filter(
     location => location.id !== excludeLocation
   );
@@ -40,4 +40,4 @@ export const FixedLocationSelector: React.FC<FixedLocationSelectorProps> = ({
       </Select>
     </div>
   );
-};
+}

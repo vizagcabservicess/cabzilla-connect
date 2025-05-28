@@ -1,12 +1,6 @@
+
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
-//require_once '../common/db_helper.php';
-
+require_once '../common/db_helper.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -46,7 +40,7 @@ try {
     
     if ($result->num_rows > 0) {
         http_response_code(409);
-        echo json_encode(['status' => 'error', 'message' => 'User already exists with this email or phone']);
+        echo json_encode(['error' => 'User already exists with this email or phone']);
         exit();
     }
     
@@ -69,7 +63,7 @@ try {
     $stmt->execute();
     
     echo json_encode([
-        'status' => 'success',
+        'success' => true,
         'message' => 'Registration successful',
         'user_id' => $userId
     ]);
@@ -77,6 +71,6 @@ try {
 } catch (Exception $e) {
     error_log('Registration error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Registration failed: ' . $e->getMessage()]);
+    echo json_encode(['error' => 'Registration failed']);
 }
 ?>

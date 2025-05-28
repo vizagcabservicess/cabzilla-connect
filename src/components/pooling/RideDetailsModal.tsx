@@ -1,11 +1,17 @@
 
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { MapPin, Clock, Users, Star, Car, Phone, Shield, CheckCircle } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Star, Clock, Users, MapPin, Phone, Car, Shield } from 'lucide-react';
 import { PoolingRide } from '@/types/pooling';
+import { format } from 'date-fns';
 
 interface RideDetailsModalProps {
   ride: PoolingRide | null;
@@ -14,128 +20,155 @@ interface RideDetailsModalProps {
   onBook: (ride: PoolingRide) => void;
 }
 
-export const RideDetailsModal: React.FC<RideDetailsModalProps> = ({
-  ride,
-  open,
-  onClose,
-  onBook
-}) => {
+export function RideDetailsModal({ ride, open, onClose, onBook }: RideDetailsModalProps) {
   if (!ride) return null;
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'bus': return '🚌';
-      case 'shared-taxi': return '🚕';
-      default: return '🚗';
+  const departureTime = new Date(ride.departureTime);
+  const arrivalTime = ride.arrivalTime ? new Date(ride.arrivalTime) : null;
+
+  const getRideTypeColor = () => {
+    switch (ride.type) {
+      case 'car':
+        return 'bg-blue-100 text-blue-800';
+      case 'bus':
+        return 'bg-green-100 text-green-800';
+      case 'shared-taxi':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Ride Details</DialogTitle>
+          <DialogTitle className="flex items-center space-x-2">
+            <span>Ride Details</span>
+            <Badge className={getRideTypeColor()}>
+              {ride.type === 'shared-taxi' ? 'Shared Taxi' : ride.type === 'car' ? 'Car Pool' : 'Bus'}
+            </Badge>
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Provider Info */}
-          <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-            <Avatar className="h-16 w-16">
-              <AvatarFallback>
-                <Car className="h-8 w-8" />
-              </AvatarFallback>
-            </Avatar>
-            
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">{getTypeIcon(ride.type)}</span>
-                <h3 className="text-xl font-semibold">{ride.providerName}</h3>
-                {ride.providerRating && (
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    {ride.providerRating.toFixed(1)}
-                  </Badge>
-                )}
+          {/* Route and Time */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold">{format(departureTime, 'HH:mm')}</p>
+                <p className="text-sm text-gray-600">{format(departureTime, 'MMM dd, yyyy')}</p>
+                <p className="font-medium">{ride.fromLocation}</p>
               </div>
-              
-              <p className="text-gray-600 capitalize mb-2">{ride.type.replace('-', ' ')}</p>
-              
-              {ride.totalRides && (
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <CheckCircle className="h-4 w-4" />
-                  {ride.totalRides} completed rides
-                </div>
-              )}
-            </div>
-
-            <div className="text-right">
-              <p className="text-3xl font-bold text-green-600">₹{ride.pricePerSeat}</p>
-              <p className="text-sm text-gray-600">per seat</p>
+              <div className="flex items-center space-x-2">
+                <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                <div className="h-0.5 w-20 bg-gray-300"></div>
+                <Clock className="h-5 w-5 text-gray-400" />
+                <div className="h-0.5 w-20 bg-gray-300"></div>
+                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold">
+                  {arrivalTime ? format(arrivalTime, 'HH:mm') : '--:--'}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {arrivalTime ? format(arrivalTime, 'MMM dd, yyyy') : 'TBA'}
+                </p>
+                <p className="font-medium">{ride.toLocation}</p>
+              </div>
             </div>
           </div>
 
-          {/* Route Details */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-lg">Route Details</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-green-600" />
-                  <span className="font-medium">From: {ride.fromLocation}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-red-600" />
-                  <span className="font-medium">To: {ride.toLocation}</span>
-                </div>
+          {/* Pricing and Availability */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-3xl font-bold text-green-600">₹{ride.pricePerSeat}</p>
+              <p className="text-gray-600">per seat</p>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center space-x-1 mb-1">
+                <Users className="h-4 w-4 text-gray-500" />
+                <span className="font-medium">{ride.availableSeats} seats available</span>
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-600" />
-                  <span>Departure: {new Date(ride.departureTime).toLocaleString()}</span>
-                </div>
-                {ride.arrivalTime && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-purple-600" />
-                    <span>Arrival: {new Date(ride.arrivalTime).toLocaleString()}</span>
+              <p className="text-sm text-gray-600">out of {ride.totalSeats} total</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Provider Info */}
+          <div className="space-y-3">
+            <h3 className="font-semibold flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Provider Information</span>
+            </h3>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium">{ride.providerName}</p>
+                {ride.providerRating && (
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                    <span className="font-medium">{ride.providerRating}</span>
                   </div>
                 )}
+              </div>
+              <div className="flex items-center space-x-1 text-sm text-gray-600">
+                <Phone className="h-4 w-4" />
+                <span>{ride.providerPhone}</span>
               </div>
             </div>
           </div>
 
           {/* Vehicle Info */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-lg">Vehicle Information</h4>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Make & Model:</span>
-                <p className="font-medium">{ride.vehicleInfo.make} {ride.vehicleInfo.model}</p>
-              </div>
-              <div>
-                <span className="text-gray-600">Color:</span>
-                <p className="font-medium">{ride.vehicleInfo.color}</p>
-              </div>
-              <div>
-                <span className="text-gray-600">Plate Number:</span>
-                <p className="font-medium">{ride.vehicleInfo.plateNumber}</p>
-              </div>
-              <div>
-                <span className="text-gray-600">Seats:</span>
-                <p className="font-medium">{ride.availableSeats} of {ride.totalSeats} available</p>
+          <div className="space-y-3">
+            <h3 className="font-semibold flex items-center space-x-2">
+              <Car className="h-5 w-5" />
+              <span>Vehicle Information</span>
+            </h3>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Make & Model</p>
+                  <p className="font-medium">
+                    {ride.vehicleInfo.make} {ride.vehicleInfo.model}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Color</p>
+                  <p className="font-medium">{ride.vehicleInfo.color}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-gray-600">Plate Number</p>
+                  <p className="font-medium">{ride.vehicleInfo.plateNumber}</p>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Route Stops */}
+          {ride.route && ride.route.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold flex items-center space-x-2">
+                <MapPin className="h-5 w-5" />
+                <span>Route Stops</span>
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {ride.route.map((stop, index) => (
+                  <Badge key={index} variant="outline">
+                    {stop}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Amenities */}
           {ride.amenities && ride.amenities.length > 0 && (
             <div className="space-y-3">
-              <h4 className="font-semibold text-lg">Amenities</h4>
+              <h3 className="font-semibold">Amenities</h3>
               <div className="flex flex-wrap gap-2">
                 {ride.amenities.map((amenity, index) => (
-                  <Badge key={index} variant="outline">
+                  <Badge key={index} variant="secondary">
                     {amenity}
                   </Badge>
                 ))}
@@ -146,48 +179,39 @@ export const RideDetailsModal: React.FC<RideDetailsModalProps> = ({
           {/* Rules */}
           {ride.rules && ride.rules.length > 0 && (
             <div className="space-y-3">
-              <h4 className="font-semibold text-lg flex items-center gap-2">
+              <h3 className="font-semibold flex items-center space-x-2">
                 <Shield className="h-5 w-5" />
-                Rules & Guidelines
-              </h4>
-              <ul className="list-disc list-inside space-y-1 text-sm">
+                <span>Rules & Guidelines</span>
+              </h3>
+              <ul className="space-y-1">
                 {ride.rules.map((rule, index) => (
-                  <li key={index} className="text-gray-600">{rule}</li>
+                  <li key={index} className="text-sm text-gray-600 flex items-start space-x-2">
+                    <span className="text-blue-500 mt-1">•</span>
+                    <span>{rule}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Route Stops */}
-          {ride.route && ride.route.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-semibold text-lg">Route Stops</h4>
-              <div className="space-y-2">
-                {ride.route.map((stop, index) => (
-                  <div key={index} className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                    <span>{stop}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
+          <div className="flex space-x-3 pt-4">
             <Button variant="outline" onClick={onClose} className="flex-1">
               Close
             </Button>
             <Button 
-              onClick={() => onBook(ride)} 
+              onClick={() => {
+                onBook(ride);
+                onClose();
+              }} 
+              disabled={ride.availableSeats === 0}
               className="flex-1"
-              disabled={ride.availableSeats === 0 || ride.status !== 'active'}
             >
-              Book This Ride
+              {ride.availableSeats === 0 ? 'Fully Booked' : 'Book This Ride'}
             </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
-};
+}

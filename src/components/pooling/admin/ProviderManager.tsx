@@ -1,10 +1,9 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
   User, 
@@ -16,11 +15,8 @@ import {
   XCircle,
   Clock,
   FileText,
-  Download,
-  Loader2,
-  RefreshCw
+  Download
 } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface Provider {
   id: number;
@@ -41,41 +37,65 @@ interface Provider {
 const ProviderManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchProviders();
-  }, [selectedStatus, searchTerm]);
-
-  const fetchProviders = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const params = new URLSearchParams();
-      if (selectedStatus !== 'all') {
-        params.append('status', selectedStatus);
-      }
-      if (searchTerm) {
-        params.append('search', searchTerm);
-      }
-      
-      const response = await fetch(`/api/pooling/providers.php?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch providers');
-      }
-      
-      const data = await response.json();
-      setProviders(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load providers');
-      console.error('Error fetching providers:', err);
-    } finally {
-      setLoading(false);
+  // Mock data
+  const [providers] = useState<Provider[]>([
+    {
+      id: 1,
+      name: 'Rajesh Kumar',
+      phone: '+91 9876543210',
+      email: 'rajesh@example.com',
+      rating: 4.8,
+      totalRides: 156,
+      verificationStatus: 'verified',
+      joinedDate: '2024-01-15',
+      documents: [
+        { type: 'Driving License', status: 'verified', uploadedAt: '2024-01-16' },
+        { type: 'Vehicle Registration', status: 'verified', uploadedAt: '2024-01-16' },
+        { type: 'Insurance', status: 'verified', uploadedAt: '2024-01-16' }
+      ]
+    },
+    {
+      id: 2,
+      name: 'Suresh Reddy',
+      phone: '+91 9876543211',
+      email: 'suresh@example.com',
+      rating: 4.5,
+      totalRides: 89,
+      verificationStatus: 'pending',
+      joinedDate: '2024-02-20',
+      documents: [
+        { type: 'Driving License', status: 'pending', uploadedAt: '2024-02-21' },
+        { type: 'Vehicle Registration', status: 'verified', uploadedAt: '2024-02-21' },
+        { type: 'Insurance', status: 'pending', uploadedAt: '2024-02-21' }
+      ]
+    },
+    {
+      id: 3,
+      name: 'Ramesh Varma',
+      phone: '+91 9876543212',
+      email: 'ramesh@example.com',
+      rating: 3.9,
+      totalRides: 45,
+      verificationStatus: 'rejected',
+      joinedDate: '2024-03-10',
+      documents: [
+        { type: 'Driving License', status: 'rejected', uploadedAt: '2024-03-11' },
+        { type: 'Vehicle Registration', status: 'verified', uploadedAt: '2024-03-11' },
+        { type: 'Insurance', status: 'pending', uploadedAt: '2024-03-11' }
+      ]
     }
-  };
+  ]);
+
+  const filteredProviders = providers.filter(provider => {
+    const matchesSearch = provider.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         provider.phone.includes(searchTerm) ||
+                         provider.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = selectedStatus === 'all' || provider.verificationStatus === selectedStatus;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -99,73 +119,10 @@ const ProviderManager = () => {
     }
   };
 
-  const handleVerifyDocument = async (providerId: number, documentType: string, action: 'approve' | 'reject') => {
-    try {
-      const status = action === 'approve' ? 'verified' : 'rejected';
-      
-      const response = await fetch('/api/pooling/documents.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          provider_id: providerId,
-          type: documentType,
-          status: status
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update document status');
-      }
-
-      toast.success(`Document ${action}d successfully`);
-      fetchProviders(); // Refresh the data
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update document');
-      console.error('Error updating document:', err);
-    }
+  const handleVerifyDocument = (providerId: number, documentType: string, action: 'approve' | 'reject') => {
+    console.log(`${action} document ${documentType} for provider ${providerId}`);
+    // Implementation would update the document status
   };
-
-  const handleUpdateProviderStatus = async (providerId: number, newStatus: string) => {
-    try {
-      const response = await fetch('/api/pooling/providers.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: providerId,
-          verification_status: newStatus
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update provider status');
-      }
-
-      toast.success('Provider status updated successfully');
-      fetchProviders(); // Refresh the data
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update provider');
-      console.error('Error updating provider:', err);
-    }
-  };
-
-  const totalProviders = providers.length;
-  const verifiedProviders = providers.filter(p => p.verificationStatus === 'verified').length;
-  const pendingProviders = providers.filter(p => p.verificationStatus === 'pending').length;
-  const averageRating = totalProviders > 0 
-    ? (providers.reduce((acc, p) => acc + p.rating, 0) / totalProviders).toFixed(1)
-    : '0.0';
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +134,7 @@ const ProviderManager = () => {
             <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalProviders}</div>
+            <div className="text-2xl font-bold">{providers.length}</div>
           </CardContent>
         </Card>
 
@@ -187,7 +144,9 @@ const ProviderManager = () => {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{verifiedProviders}</div>
+            <div className="text-2xl font-bold">
+              {providers.filter(p => p.verificationStatus === 'verified').length}
+            </div>
           </CardContent>
         </Card>
 
@@ -197,7 +156,9 @@ const ProviderManager = () => {
             <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{pendingProviders}</div>
+            <div className="text-2xl font-bold">
+              {providers.filter(p => p.verificationStatus === 'pending').length}
+            </div>
           </CardContent>
         </Card>
 
@@ -207,7 +168,9 @@ const ProviderManager = () => {
             <Star className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{averageRating}</div>
+            <div className="text-2xl font-bold">
+              {(providers.reduce((acc, p) => acc + p.rating, 0) / providers.length).toFixed(1)}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -215,29 +178,10 @@ const ProviderManager = () => {
       {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Provider Management</CardTitle>
-              <CardDescription>Manage driver and vehicle owner registrations</CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchProviders}
-              disabled={loading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+          <CardTitle>Provider Management</CardTitle>
+          <CardDescription>Manage driver and vehicle owner registrations</CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
-            <Alert className="mb-4" variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
           <div className="flex gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -262,7 +206,7 @@ const ProviderManager = () => {
 
           {/* Providers List */}
           <div className="space-y-4">
-            {providers.map((provider) => (
+            {filteredProviders.map((provider) => (
               <Card key={provider.id}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
@@ -334,26 +278,6 @@ const ProviderManager = () => {
                     <div className="flex flex-col items-end gap-2">
                       {getStatusBadge(provider.verificationStatus)}
                       <div className="flex gap-2">
-                        {provider.verificationStatus === 'pending' && (
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleUpdateProviderStatus(provider.id, 'verified')}
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Verify
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleUpdateProviderStatus(provider.id, 'rejected')}
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Reject
-                            </Button>
-                          </div>
-                        )}
                         <Button variant="outline" size="sm">
                           <FileText className="h-4 w-4 mr-2" />
                           View Profile
@@ -370,7 +294,7 @@ const ProviderManager = () => {
             ))}
           </div>
 
-          {providers.length === 0 && !loading && (
+          {filteredProviders.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No providers found matching your criteria.
             </div>

@@ -5,12 +5,12 @@ import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPhoneNumber } from '@/services/whatsappService';
 
-interface WhatsAppButtonProps extends Omit<ButtonProps, 'variant'> {
+interface WhatsAppButtonProps extends ButtonProps {
   phone: string;
   message: string;
   icon?: boolean;
   fullWidth?: boolean;
-  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  variant?: "default" | "outline" | "whatsapp";
   openInNewTab?: boolean;
 }
 
@@ -19,7 +19,7 @@ export function WhatsAppButton({
   message, 
   icon = true,
   fullWidth = false,
-  variant = "default",
+  variant = "whatsapp",
   openInNewTab = true,
   className, 
   children, 
@@ -41,10 +41,10 @@ export function WhatsAppButton({
   
   return (
     <Button
-      variant={variant}
+      variant={variant === "whatsapp" ? "default" : variant}
       onClick={handleClick}
       className={cn(
-        "bg-[#25D366] hover:bg-[#128C7E] text-white",
+        variant === "whatsapp" && "bg-[#25D366] hover:bg-[#128C7E] text-white",
         fullWidth && "w-full",
         className
       )}

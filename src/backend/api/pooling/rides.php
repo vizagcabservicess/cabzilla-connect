@@ -116,37 +116,7 @@ function handleGetRides() {
         $stmt->execute();
         $rides = $stmt->fetchAll();
         
-        $formatted_rides = array_map(function($ride) {
-            return [
-                'id' => (int)$ride['id'],
-                'type' => $ride['type'],
-                'providerId' => (int)$ride['provider_id'],
-                'providerName' => $ride['provider_name'],
-                'providerPhone' => $ride['provider_phone'],
-                'providerRating' => $ride['provider_rating'] ? (float)$ride['provider_rating'] : null,
-                'fromLocation' => $ride['from_location'],
-                'toLocation' => $ride['to_location'],
-                'departureTime' => $ride['departure_time'],
-                'arrivalTime' => $ride['arrival_time'],
-                'totalSeats' => (int)$ride['total_seats'],
-                'availableSeats' => (int)$ride['available_seats'],
-                'pricePerSeat' => (float)$ride['price_per_seat'],
-                'vehicleInfo' => [
-                    'make' => $ride['make'],
-                    'model' => $ride['model'],
-                    'color' => $ride['color'],
-                    'plateNumber' => $ride['plate_number']
-                ],
-                'route' => $ride['route_stops'] ? json_decode($ride['route_stops']) : [],
-                'amenities' => $ride['amenities'] ? json_decode($ride['amenities']) : [],
-                'rules' => $ride['rules'] ? json_decode($ride['rules']) : [],
-                'status' => $ride['status'],
-                'createdAt' => $ride['created_at'],
-                'updatedAt' => $ride['updated_at']
-            ];
-        }, $rides);
-        
-        sendResponse($formatted_rides);
+        sendResponse($rides);
     }
 }
 

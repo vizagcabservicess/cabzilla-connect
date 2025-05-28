@@ -22,9 +22,9 @@ switch ($method) {
 
 function handleGetBookings() {
     global $pdo;
-
+    
     $userId = $_GET['user_id'] ?? null;
-
+    
     if ($userId) {
         $stmt = $pdo->prepare("
             SELECT 
@@ -59,47 +59,47 @@ function handleGetBookings() {
         ");
         $stmt->execute();
     }
-
+    
     $bookings = $stmt->fetchAll();
     sendResponse($bookings);
 }
 
 function handleCreateBooking() {
     global $pdo;
-
+    
     $input = json_decode(file_get_contents('php://input'), true);
     $input = sanitizeInput($input);
-
+    
     $required_fields = ['rideId', 'passengerName', 'passengerPhone', 'passengerEmail', 'seatsBooked', 'totalAmount'];
     $errors = validateInput($input, $required_fields);
-
+    
     if (!empty($errors)) {
         sendError(implode(', ', $errors));
     }
-
+    
     try {
         $pdo->beginTransaction();
-
+        
         // Check ride availability and log status
         $stmt = $pdo->prepare("SELECT available_seats, status FROM pooling_rides WHERE id = ?");
         $stmt->execute([$input['rideId']]);
         $ride = $stmt->fetch();
-
+        
         if (!$ride) {
             error_log('Booking error: Ride not found for rideId ' . $input['rideId']);
             sendError('Ride not found', 404);
         }
-
+        
         if ($ride['status'] !== 'active') {
             error_log('Booking error: Ride not active for rideId ' . $input['rideId'] . '. Current status: ' . $ride['status']);
             sendError('Ride is not active. Current status: ' . $ride['status'], 400);
         }
-
+        
         if ($ride['available_seats'] < $input['seatsBooked']) {
             error_log('Booking error: Not enough seats for rideId ' . $input['rideId'] . '. Requested: ' . $input['seatsBooked'] . ', Available: ' . $ride['available_seats']);
             sendError('Not enough seats available', 400);
         }
-
+        
         // Create booking
         $stmt = $pdo->prepare("
             INSERT INTO pooling_bookings 
@@ -117,9 +117,9 @@ function handleCreateBooking() {
             $input['totalAmount'],
             $input['specialRequests'] ?? null
         ]);
-
+        
         $bookingId = $pdo->lastInsertId();
-
+        
         // Update available seats
         $stmt = $pdo->prepare("
             UPDATE pooling_rides 
@@ -128,16 +128,16 @@ function handleCreateBooking() {
             WHERE id = ?
         ");
         $stmt->execute([$input['seatsBooked'], $input['seatsBooked'], $input['rideId']]);
-
+        
         // Create payment record
         $stmt = $pdo->prepare("
             INSERT INTO pooling_payments (booking_id, amount)
             VALUES (?, ?)
         ");
         $stmt->execute([$bookingId, $input['totalAmount']]);
-
+        
         $pdo->commit();
-
+        
         $response = [
             'id' => $bookingId,
             'userId' => $input['userId'] ?? null,
@@ -151,9 +151,9 @@ function handleCreateBooking() {
             'paymentStatus' => 'pending',
             'bookingDate' => date('Y-m-d H:i:s')
         ];
-
+        
         sendResponse($response, 201);
-
+        
     } catch (PDOException $e) {
         $pdo->rollBack();
         error_log('Database error in create booking: ' . $e->getMessage());
@@ -163,45 +163,45 @@ function handleCreateBooking() {
 
 function handleUpdateBooking() {
     global $pdo;
-
+    
     $input = json_decode(file_get_contents('php://input'), true);
     $bookingId = $input['id'] ?? null;
-
+    
     if (!$bookingId) {
         sendError('Booking ID is required');
     }
-
+    
     try {
         $updates = [];
         $params = [];
-
+        
         if (isset($input['booking_status'])) {
             $updates[] = "booking_status = ?";
             $params[] = $input['booking_status'];
         }
-
+        
         if (isset($input['payment_status'])) {
             $updates[] = "payment_status = ?";
             $params[] = $input['payment_status'];
         }
-
+        
         if (isset($input['razorpay_payment_id'])) {
             $updates[] = "razorpay_payment_id = ?";
             $params[] = $input['razorpay_payment_id'];
         }
-
+        
         if (empty($updates)) {
             sendError('No fields to update');
         }
-
+        
         $params[] = $bookingId;
         $sql = "UPDATE pooling_bookings SET " . implode(', ', $updates) . " WHERE id = ?";
-
+        
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-
+        
         sendResponse(['message' => 'Booking updated successfully']);
-
+        
     } catch (PDOException $e) {
         error_log('Database error in update booking: ' . $e->getMessage());
         sendError('Failed to update booking', 500);

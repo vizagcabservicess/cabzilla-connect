@@ -49,7 +49,6 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   vehicleNumber?: string;
-  vehicleId?: string;
   adminNotes?: string;
   extraCharges?: Array<{
     description: string;
@@ -57,13 +56,12 @@ export interface Booking {
   }>;
   isPaid?: boolean;
   paymentMethod?: string;
-  payment_method?: string;
-  paymentStatus?: string;
+  payment_method?: string; // Legacy field - will be deprecated
   discountAmount?: number;
   discountType?: string;
   discountValue?: number;
   billingAddress?: string;
-  payment_status?: string;
+  payment_status?: string; // Legacy field - will be deprecated
   createdAt?: string;
   updatedAt?: string;
 }
@@ -106,7 +104,6 @@ export interface Driver {
   phone: string;
   email: string;
   license_no: string;
-  license_number?: string;
   status: DriverStatus;
   total_rides?: number;
   earnings?: number;
@@ -131,7 +128,6 @@ export interface GstInvoice {
   gstAmount: number;
   totalAmount: number;
   invoiceDate: string;
-  bookingId?: number;
 }
 
 export interface GstReportData {
@@ -145,15 +141,11 @@ export interface GstReportData {
 }
 
 export interface Location {
-  id: string;
+  id: number;
   name: string;
   type: string;
   latitude: number;
   longitude: number;
-  address: string;
-  lat?: number;
-  lng?: number;
-  city?: string;
 }
 
 export interface User {
@@ -164,7 +156,6 @@ export interface User {
   role: string;
   createdAt?: string;
   updatedAt?: string;
-  imageUrl?: string;
 }
 
 export interface LoginRequest {
@@ -176,7 +167,7 @@ export interface SignupRequest {
   name: string;
   email: string;
   password: string;
-  phone: string; // Make phone required here
+  phone?: string;
 }
 
 export interface VehiclePricing {
@@ -186,31 +177,21 @@ export interface VehiclePricing {
   localRate: number;
   outstationRate: number;
   airportTransferRate: number;
-  basePrice?: number;
-  pricePerKm?: number;
-  perKmRate?: number;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
 }
 
 export interface VehiclePricingUpdateRequest {
   vehicleId: number;
-  vehicleType: string;
-  basePrice: number;
-  pricePerKm: number;
-  perKmRate: number;
-  driverAllowance: number;
+  localRate?: number;
+  outstationRate?: number;
+  airportTransferRate?: number;
 }
 
 export interface FareUpdateRequest {
+  id?: number;
   vehicleType: string;
-  tourId?: string;
-  id?: string | number;
-  sedan: number;
-  ertiga: number;
-  innova: number;
-  tempo: number;
-  luxury: number;
+  localRate?: number;
+  outstationRate?: number;
+  airportRate?: number;
 }
 
 export interface DashboardMetrics {
@@ -218,13 +199,6 @@ export interface DashboardMetrics {
   completedBookings: number;
   pendingBookings: number;
   cancelledBookings: number;
-  activeRides?: number;
-  totalRevenue?: number;
-  upcomingRides?: number;
-  availableDrivers?: number;
-  busyDrivers?: number;
-  avgRating?: number;
-  availableStatuses?: BookingStatus[];
   revenue: {
     total: number;
     today: number;
@@ -251,86 +225,4 @@ export interface TourFare {
   tourId: string;
   vehicleType: string;
   rate: number;
-  tourName?: string;
-  sedan?: number;
-  ertiga?: number;
-  innova?: number;
-  tempo?: number;
-  luxury?: number;
-}
-
-export interface FareBreakdown {
-  basePrice: number;
-  perKmRate: number;
-  perHourRate?: number;
-  nightCharges?: number;
-  tolls?: number;
-  taxes?: number;
-  total: number;
-  package4hr40km?: number;
-  package8hr80km?: number;
-  package10hr100km?: number;
-  extraKmRate?: number;
-  extraHourRate?: number;
-  priceExtraKm?: number; // Add this property
-  priceExtraHour?: number; // Add this property
-  price8hrs80km?: number;
-}
-
-// Commission Types
-export interface CommissionSetting {
-  id: number;
-  vehicleType: string;
-  defaultPercentage: number;
-  default_percentage?: number; // For backwards compatibility
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CommissionPayment {
-  id: number;
-  bookingId: number;
-  bookingNumber?: string;
-  driverId: number;
-  driverName: string;
-  vehicleType: string;
-  totalAmount: number;
-  commissionPercentage: number;
-  commissionAmount: number;
-  payoutAmount: number;
-  status: 'pending' | 'paid' | 'cancelled';
-  paymentDate?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Payment Types
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'bank_transfer' | 'wallet' | 'cheque' | 'razorpay' | 'other';
-
-export interface Payment {
-  id: string;
-  bookingId: string;
-  bookingNumber?: string;
-  customerName?: string;
-  customerPhone?: string;
-  amount: number;
-  paidAmount?: number;
-  remainingAmount?: number;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
-  paymentStatus?: 'pending' | 'paid' | 'partial' | 'cancelled' | 'failed' | 'refunded';
-  method: 'cash' | 'online' | 'card';
-  paymentMethod?: PaymentMethod;
-  razorpayPaymentId?: string;
-  razorpayOrderId?: string;
-  dueDate?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaymentFilterParams {
-  status?: string;
-  method?: string;
-  dateFrom?: string;
-  dateTo?: string;
 }

@@ -81,12 +81,11 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
       const payload = {
         fuelType,
         price: parseFloat(price),
-        pricePerLiter: parseFloat(price),
         location,
         effectiveDate: new Date().toISOString()
       };
 
-      const updatedPrice: FuelPrice = editingPrice
+      const updatedPrice = editingPrice
         ? { ...editingPrice, ...payload, updatedAt: new Date().toISOString() }
         : {
             id: `temp-${Date.now()}`,
@@ -117,11 +116,11 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
     }
   };
 
-  const handleEditPrice = (priceItem: FuelPrice) => {
-    setEditingPrice(priceItem);
-    setFuelType(priceItem.fuelType as 'Petrol' | 'Diesel' | 'CNG');
-    setPrice((priceItem.price || priceItem.pricePerLiter).toString());
-    setLocation(priceItem.location || 'Visakhapatnam');
+  const handleEditPrice = (price: FuelPrice) => {
+    setEditingPrice(price);
+    setFuelType(price.fuelType);
+    setPrice(price.price.toString());
+    setLocation(price.location || 'Visakhapatnam');
     setIsDialogOpen(true);
   };
 
@@ -164,21 +163,21 @@ export function FuelPriceManager({ onPriceUpdate }: FuelPriceManagerProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {fuelPrices.map((priceItem) => (
+              {fuelPrices.map((price) => (
                 <div 
-                  key={priceItem.id} 
+                  key={price.id} 
                   className="bg-white p-6 rounded-lg shadow border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleEditPrice(priceItem)}
+                  onClick={() => handleEditPrice(price)}
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-lg font-semibold mb-1">{priceItem.fuelType}</h3>
-                      <p className="text-gray-500 text-sm">Last updated: {formatDate(priceItem.updatedAt)}</p>
+                      <h3 className="text-lg font-semibold mb-1">{price.fuelType}</h3>
+                      <p className="text-gray-500 text-sm">Last updated: {formatDate(price.updatedAt)}</p>
                     </div>
-                    <div className="text-2xl font-bold">₹{(priceItem.price || priceItem.pricePerLiter).toFixed(2)}</div>
+                    <div className="text-2xl font-bold">₹{price.price.toFixed(2)}</div>
                   </div>
-                  {priceItem.location && (
-                    <p className="text-sm text-gray-500 mt-2">Location: {priceItem.location}</p>
+                  {price.location && (
+                    <p className="text-sm text-gray-500 mt-2">Location: {price.location}</p>
                   )}
                 </div>
               ))}
