@@ -6,7 +6,7 @@ import { EnhancedRideCard } from '@/components/pooling/EnhancedRideCard';
 import { RideDetailsModal } from '@/components/pooling/RideDetailsModal';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Car, Bus, Users, Info } from 'lucide-react';
+import { Plus, Car, Bus, Users, Info, LogIn, UserPlus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { poolingAPI } from '@/services/api/poolingAPI';
 import { PoolingRide, PoolingSearchRequest, RideRequest } from '@/types/pooling';
@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 
 const PoolingPage = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, canCreateRide } = usePoolingAuth();
+  const { user, isAuthenticated, canCreateRide, logout } = usePoolingAuth();
   const [searchParams, setSearchParams] = useState<PoolingSearchRequest | null>(null);
   const [selectedRide, setSelectedRide] = useState<PoolingRide | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -32,6 +32,12 @@ const PoolingPage = () => {
   };
 
   const handleRideRequest = async (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to request a ride');
+      navigate('/pooling/login');
+      return;
+    }
+
     try {
       // In a real app, this would call an API to send the request
       console.log('Sending ride request:', { rideId, request });
@@ -54,7 +60,12 @@ const PoolingPage = () => {
   const handleCreateRide = () => {
     if (!isAuthenticated) {
       toast.error('Please login to create a ride');
-      navigate('/login');
+      navigate('/pooling/login');
+      return;
+    }
+
+    if (user?.role !== 'provider') {
+      toast.error('Only providers can create rides');
       return;
     }
 
@@ -63,16 +74,67 @@ const PoolingPage = () => {
       return;
     }
 
-    navigate('/pooling/create');
+    navigate('/pooling/provider');
   };
 
-  const handleAuth = () => {
-    navigate('/login');
+  const handleLogin = () => {
+    navigate('/pooling/login');
+  };
+
+  const handleDashboard = () => {
+    switch (user?.role) {
+      case 'admin':
+        navigate('/pooling/admin');
+        break;
+      case 'provider':
+        navigate('/pooling/provider');
+        break;
+      default:
+        // Guest users stay on main pooling page
+        break;
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
+      {/* Navigation */}
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold text-blue-600">Pooling Platform</h1>
+            </div>
+            <div className="flex items-center space-x-3">
+              {!isAuthenticated ? (
+                <>
+                  <Button variant="outline" onClick={handleLogin}>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Login
+                  </Button>
+                  <Button onClick={handleLogin}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Sign Up
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm text-gray-600">
+                    Welcome, {user.name} ({user.role})
+                  </div>
+                  {user.role !== 'guest' && (
+                    <Button variant="outline" onClick={handleDashboard}>
+                      Dashboard
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={logout}>
+                    Logout
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
       
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -86,24 +148,11 @@ const PoolingPage = () => {
             </p>
           </div>
           <div className="flex items-center space-x-3 mt-4 md:mt-0">
-            {!isAuthenticated ? (
-              <Button onClick={handleAuth} variant="outline">
-                Login / Signup
+            {isAuthenticated && user?.role === 'provider' && (
+              <Button onClick={handleCreateRide} disabled={!canCreateRide()}>
+                <Plus className="mr-2 h-4 w-4" />
+                Offer a Ride
               </Button>
-            ) : (
-              <>
-                {user?.role === 'provider' && (
-                  <Button onClick={handleCreateRide} disabled={!canCreateRide()}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Offer a Ride
-                  </Button>
-                )}
-                {user?.role === 'guest' && (
-                  <div className="text-sm text-gray-600">
-                    Welcome, {user.name}
-                  </div>
-                )}
-              </>
             )}
           </div>
         </div>
@@ -207,7 +256,7 @@ const PoolingPage = () => {
 
             {!isAuthenticated && (
               <div className="mt-8">
-                <Button onClick={handleAuth} size="lg">
+                <Button onClick={handleLogin} size="lg">
                   Join Pooling Platform
                 </Button>
               </div>
