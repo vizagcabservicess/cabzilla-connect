@@ -1,55 +1,33 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Car, 
-  Bus, 
-  Users, 
-  Clock, 
-  MapPin, 
-  Star, 
-  Wifi, 
-  Music, 
-  Car as CarIcon,
-  User,
-  MessageSquare,
-  IndianRupee
-} from 'lucide-react';
-import { format } from 'date-fns';
+import { Star, Clock, Users, MapPin, Car, Bus, User } from 'lucide-react';
 import { PoolingRide, RideRequest } from '@/types/pooling';
+import { format } from 'date-fns';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { toast } from 'sonner';
 
 interface EnhancedRideCardProps {
   ride: PoolingRide;
-  onRequestSent?: (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => void;
-  onViewDetails?: (ride: PoolingRide) => void;
+  onRequestSent: (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => Promise<void>;
+  onViewDetails: (ride: PoolingRide) => void;
 }
 
 export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: EnhancedRideCardProps) {
   const { user, isAuthenticated } = usePoolingAuth();
-  const [showRequestDialog, setShowRequestDialog] = useState(false);
-  const [requestData, setRequestData] = useState({
-    seatsRequested: 1,
-    requestMessage: ''
-  });
+  const [isRequesting, setIsRequesting] = React.useState(false);
 
-  const getTypeIcon = () => {
+  const getRideTypeIcon = () => {
     switch (ride.type) {
-      case 'car': return <Car className="h-4 w-4" />;
-      case 'bus': return <Bus className="h-4 w-4" />;
-      case 'shared-taxi': return <Users className="h-4 w-4" />;
+      case 'car': return <Car className="h-5 w-5" />;
+      case 'bus': return <Bus className="h-5 w-5" />;
+      case 'shared-taxi': return <User className="h-5 w-5" />;
     }
   };
 
-  const getTypeColor = () => {
+  const getRideTypeColor = () => {
     switch (ride.type) {
       case 'car': return 'bg-blue-100 text-blue-800';
       case 'bus': return 'bg-green-100 text-green-800';
@@ -57,242 +35,189 @@ export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: Enhance
     }
   };
 
-  const getAmenityIcon = (amenity: string) => {
-    switch (amenity.toLowerCase()) {
-      case 'wifi': return <Wifi className="h-3 w-3" />;
-      case 'music': return <Music className="h-3 w-3" />;
-      case 'ac': return <CarIcon className="h-3 w-3" />;
-      default: return <User className="h-3 w-3" />;
+  const getRideTypeName = () => {
+    switch (ride.type) {
+      case 'car': return 'Car Pool';
+      case 'bus': return 'Bus';
+      case 'shared-taxi': return 'Shared Taxi';
     }
   };
 
-  const handleSendRequest = () => {
-    if (!isAuthenticated) {
-      toast.error('Please login to send ride requests');
+  const handleRequestRide = async () => {
+    if (!isAuthenticated || !user) {
+      toast.error('Please login to request a ride');
       return;
     }
 
-    if (!user) {
-      toast.error('User information not available');
-      return;
+    try {
+      setIsRequesting(true);
+      
+      const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
+        rideId: ride.id,
+        guestId: user.id,
+        guestName: user.name,
+        guestPhone: user.phone,
+        guestEmail: user.email,
+        seatsRequested: 1, // Default to 1 seat
+        status: 'pending',
+        requestMessage: 'I would like to join this ride'
+      };
+
+      await onRequestSent(ride.id, request);
+    } catch (error) {
+      console.error('Failed to send ride request:', error);
+    } finally {
+      setIsRequesting(false);
     }
-
-    if (requestData.seatsRequested > ride.availableSeats) {
-      toast.error(`Only ${ride.availableSeats} seats available`);
-      return;
-    }
-
-    const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
-      rideId: ride.id,
-      guestId: user.id,
-      guestName: user.name,
-      guestPhone: user.phone,
-      guestEmail: user.email,
-      seatsRequested: requestData.seatsRequested,
-      status: 'pending',
-      requestMessage: requestData.requestMessage
-    };
-
-    onRequestSent?.(ride.id, request);
-    setShowRequestDialog(false);
-    setRequestData({ seatsRequested: 1, requestMessage: '' });
-    toast.success('Ride request sent! Wait for provider approval.');
   };
 
   const canRequestRide = () => {
-    return isAuthenticated && user?.role === 'guest' && ride.availableSeats > 0;
+    return isAuthenticated && 
+           user?.role === 'guest' && 
+           ride.availableSeats > 0 && 
+           ride.status === 'active' &&
+           user.id !== ride.providerId;
   };
 
   return (
-    <>
-      <Card className="hover:shadow-lg transition-shadow">
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-3">
-                <Badge className={getTypeColor()}>
-                  {getTypeIcon()}
-                  <span className="ml-1 capitalize">{ride.type}</span>
-                </Badge>
-                <div className="flex items-center space-x-1">
-                  <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                  <span className="text-sm font-medium">
-                    {ride.providerRating?.toFixed(1) || 'New'}
-                  </span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-green-600">
-                  ₹{ride.pricePerSeat}
-                </div>
-                <div className="text-sm text-gray-600">per seat</div>
-              </div>
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardContent className="p-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
+              {getRideTypeIcon()}
             </div>
-
-            {/* Route */}
-            <div className="flex items-center space-x-4">
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-1">
-                  <MapPin className="h-4 w-4 text-green-600" />
-                  <span className="font-medium">{ride.fromLocation}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="h-4 w-4 text-red-600" />
-                  <span className="font-medium">{ride.toLocation}</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Clock className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm">
-                    {format(new Date(ride.departureTime), 'HH:mm')}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {format(new Date(ride.departureTime), 'MMM dd')}
-                </div>
-              </div>
+            <div>
+              <Badge className={getRideTypeColor()}>
+                {getRideTypeName()}
+              </Badge>
+              <p className="text-sm text-gray-600 mt-1">
+                {ride.vehicleInfo.make} {ride.vehicleInfo.model}
+              </p>
             </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-green-600">₹{ride.pricePerSeat}</p>
+            <p className="text-sm text-gray-600">per seat</p>
+          </div>
+        </div>
 
-            {/* Vehicle & Provider Info */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {ride.providerName.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="font-medium text-sm">{ride.providerName}</div>
-                  <div className="text-xs text-gray-600">
-                    {ride.vehicleInfo.make} {ride.vehicleInfo.model}
-                    {ride.vehicleInfo.color && ` • ${ride.vehicleInfo.color}`}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-medium">
-                  {ride.availableSeats}/{ride.totalSeats} seats
-                </div>
-                <div className="text-xs text-gray-600">available</div>
-              </div>
+        {/* Route and Time */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="text-center">
+              <p className="text-lg font-semibold">
+                {format(new Date(ride.departureTime), 'HH:mm')}
+              </p>
+              <p className="text-sm text-gray-600">{ride.fromLocation}</p>
             </div>
-
-            {/* Amenities */}
-            {ride.amenities && ride.amenities.length > 0 && (
+            <div className="flex-1 flex items-center justify-center">
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">Amenities:</span>
-                {ride.amenities.slice(0, 3).map((amenity, index) => (
-                  <div key={index} className="flex items-center space-x-1 text-xs text-gray-600">
-                    {getAmenityIcon(amenity)}
-                    <span>{amenity}</span>
-                  </div>
-                ))}
-                {ride.amenities.length > 3 && (
-                  <span className="text-xs text-gray-500">+{ride.amenities.length - 3} more</span>
-                )}
+                <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                <div className="h-0.5 w-16 bg-gray-300"></div>
+                <Clock className="h-4 w-4 text-gray-400" />
+                <div className="h-0.5 w-16 bg-gray-300"></div>
+                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold">
+                {ride.arrivalTime ? format(new Date(ride.arrivalTime), 'HH:mm') : '--:--'}
+              </p>
+              <p className="text-sm text-gray-600">{ride.toLocation}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Provider and Seats Info */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1">
+              <Users className="h-4 w-4 text-gray-500" />
+              <span className="text-sm text-gray-600">
+                {ride.availableSeats} of {ride.totalSeats} seats available
+              </span>
+            </div>
+            {ride.providerRating && (
+              <div className="flex items-center space-x-1">
+                <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                <span className="text-sm font-medium">{ride.providerRating.toFixed(1)}</span>
               </div>
             )}
+          </div>
+          <div className="text-sm text-gray-600">
+            by {ride.providerName}
+          </div>
+        </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between pt-2 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onViewDetails?.(ride)}
-              >
-                View Details
-              </Button>
-              
-              {canRequestRide() ? (
-                <Button
-                  onClick={() => setShowRequestDialog(true)}
-                  disabled={ride.availableSeats === 0}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <MessageSquare className="mr-1 h-4 w-4" />
-                  Request Ride
-                </Button>
-              ) : (
-                <Button disabled variant="outline">
-                  {!isAuthenticated ? 'Login to Request' : 'Not Available'}
-                </Button>
+        {/* Route Stops */}
+        {ride.route && ride.route.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center space-x-1 mb-2">
+              <MapPin className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Route:</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {ride.route.slice(0, 3).map((stop, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {stop}
+                </Badge>
+              ))}
+              {ride.route.length > 3 && (
+                <Badge variant="outline" className="text-xs">
+                  +{ride.route.length - 3} more
+                </Badge>
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Request Dialog */}
-      <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request Ride</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-medium mb-2">Ride Details</h4>
-              <p className="text-sm text-gray-600">
-                {ride.fromLocation} → {ride.toLocation}
-              </p>
-              <p className="text-sm text-gray-600">
-                {format(new Date(ride.departureTime), 'MMM dd, yyyy • HH:mm')}
-              </p>
-              <p className="text-sm text-gray-600">
-                ₹{ride.pricePerSeat} per seat • Provider: {ride.providerName}
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Number of Seats</Label>
-              <Input
-                type="number"
-                min="1"
-                max={ride.availableSeats}
-                value={requestData.seatsRequested}
-                onChange={(e) => setRequestData(prev => ({
-                  ...prev,
-                  seatsRequested: parseInt(e.target.value) || 1
-                }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Message to Provider (Optional)</Label>
-              <Textarea
-                placeholder="Add any special requests or information..."
-                value={requestData.requestMessage}
-                onChange={(e) => setRequestData(prev => ({
-                  ...prev,
-                  requestMessage: e.target.value
-                }))}
-                rows={3}
-              />
-            </div>
-
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <div className="flex items-center justify-between text-sm">
-                <span>Total Amount:</span>
-                <span className="font-medium">
-                  ₹{ride.pricePerSeat * requestData.seatsRequested}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Payment will be enabled after provider approval
-              </p>
+        {/* Amenities */}
+        {ride.amenities && ride.amenities.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-1">Amenities:</p>
+            <div className="flex flex-wrap gap-1">
+              {ride.amenities.slice(0, 3).map((amenity, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {amenity}
+                </Badge>
+              ))}
+              {ride.amenities.length > 3 && (
+                <Badge variant="secondary" className="text-xs">
+                  +{ride.amenities.length - 3} more
+                </Badge>
+              )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRequestDialog(false)}>
-              Cancel
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex space-x-3">
+          <Button variant="outline" onClick={() => onViewDetails(ride)} className="flex-1">
+            View Details
+          </Button>
+          {canRequestRide() ? (
+            <Button 
+              onClick={handleRequestRide} 
+              disabled={isRequesting}
+              className="flex-1"
+            >
+              {isRequesting ? 'Requesting...' : 'Request Ride'}
             </Button>
-            <Button onClick={handleSendRequest}>
-              Send Request
+          ) : (
+            <Button 
+              disabled 
+              className="flex-1"
+            >
+              {ride.availableSeats === 0 ? 'Fully Booked' : 
+               !isAuthenticated ? 'Login to Request' :
+               user?.role !== 'guest' ? 'Guests Only' :
+               user?.id === ride.providerId ? 'Your Ride' : 'Unavailable'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Car, Bus, Users, Plus, X, MapPin } from 'lucide-react';
+import { ArrowLeft, Plus, X } from 'lucide-react';
+import { FixedLocationSelector } from './FixedLocationSelector';
 import { CreateRideRequest, PoolingType } from '@/types/pooling';
-import { POOLING_LOCATIONS } from '@/lib/poolingData';
+import { getLocationById } from '@/lib/poolingData';
 import { toast } from 'sonner';
 
 interface CreateRideFormProps {
@@ -18,8 +19,7 @@ interface CreateRideFormProps {
 }
 
 export function CreateRideForm({ onSubmit, onCancel }: CreateRideFormProps) {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CreateRideRequest>({
+  const [rideData, setRideData] = useState<CreateRideRequest>({
     type: 'car',
     fromLocation: '',
     toLocation: '',
@@ -38,376 +38,391 @@ export function CreateRideForm({ onSubmit, onCancel }: CreateRideFormProps) {
     rules: []
   });
 
+  const [newRouteStop, setNewRouteStop] = useState('');
   const [newAmenity, setNewAmenity] = useState('');
   const [newRule, setNewRule] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const rideTypes = [
-    { value: 'car', label: 'Car Pool', icon: Car, description: 'Share your car with passengers' },
-    { value: 'bus', label: 'Bus', icon: Bus, description: 'Scheduled bus service' },
-    { value: 'shared-taxi', label: 'Shared Taxi', icon: Users, description: 'Door-to-door taxi sharing' }
-  ];
-
-  const popularAmenities = [
-    'AC', 'Music System', 'WiFi', 'Phone Charger', 'Water Bottle', 'Snacks', 'First Aid Kit'
-  ];
-
-  const commonRules = [
-    'No Smoking', 'No Loud Music', 'Be on Time', 'Respect Fellow Passengers', 'No Heavy Luggage'
-  ];
+  // Get tomorrow's date as minimum
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDateTime = tomorrow.toISOString().slice(0, 16);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.fromLocation || !formData.toLocation) {
-      toast.error('Please select from and to locations');
+    if (!rideData.fromLocation || !rideData.toLocation || !rideData.departureTime) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
-    if (!formData.departureTime) {
-      toast.error('Please select departure time');
+    if (rideData.fromLocation === rideData.toLocation) {
+      toast.error('Pickup and drop locations cannot be the same');
       return;
     }
 
-    if (formData.pricePerSeat <= 0) {
-      toast.error('Please enter a valid price per seat');
+    if (rideData.pricePerSeat <= 0) {
+      toast.error('Price per seat must be greater than 0');
       return;
     }
 
     try {
-      setLoading(true);
-      await onSubmit(formData);
+      setIsSubmitting(true);
+      
+      // Convert location IDs to names
+      const fromLocationName = getLocationById(rideData.fromLocation)?.name || rideData.fromLocation;
+      const toLocationName = getLocationById(rideData.toLocation)?.name || rideData.toLocation;
+      
+      const submitData: CreateRideRequest = {
+        ...rideData,
+        fromLocation: fromLocationName,
+        toLocation: toLocationName
+      };
+
+      await onSubmit(submitData);
     } catch (error) {
       toast.error('Failed to create ride');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const addAmenity = (amenity: string) => {
-    if (amenity && !formData.amenities?.includes(amenity)) {
-      setFormData(prev => ({
+  const addRouteStop = () => {
+    if (newRouteStop.trim()) {
+      setRideData(prev => ({
         ...prev,
-        amenities: [...(prev.amenities || []), amenity]
+        route: [...(prev.route || []), newRouteStop.trim()]
+      }));
+      setNewRouteStop('');
+    }
+  };
+
+  const removeRouteStop = (index: number) => {
+    setRideData(prev => ({
+      ...prev,
+      route: prev.route?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+  const addAmenity = () => {
+    if (newAmenity.trim()) {
+      setRideData(prev => ({
+        ...prev,
+        amenities: [...(prev.amenities || []), newAmenity.trim()]
       }));
       setNewAmenity('');
     }
   };
 
-  const removeAmenity = (amenity: string) => {
-    setFormData(prev => ({
+  const removeAmenity = (index: number) => {
+    setRideData(prev => ({
       ...prev,
-      amenities: prev.amenities?.filter(a => a !== amenity) || []
+      amenities: prev.amenities?.filter((_, i) => i !== index) || []
     }));
   };
 
-  const addRule = (rule: string) => {
-    if (rule && !formData.rules?.includes(rule)) {
-      setFormData(prev => ({
+  const addRule = () => {
+    if (newRule.trim()) {
+      setRideData(prev => ({
         ...prev,
-        rules: [...(prev.rules || []), rule]
+        rules: [...(prev.rules || []), newRule.trim()]
       }));
       setNewRule('');
     }
   };
 
-  const removeRule = (rule: string) => {
-    setFormData(prev => ({
+  const removeRule = (index: number) => {
+    setRideData(prev => ({
       ...prev,
-      rules: prev.rules?.filter(r => r !== rule) || []
+      rules: prev.rules?.filter((_, i) => i !== index) || []
     }));
   };
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Car className="h-6 w-6" />
-            <span>Create New Ride</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Ride Type Selection */}
-            <div>
-              <Label className="text-base font-medium mb-3 block">Ride Type</Label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {rideTypes.map((type) => (
-                  <div
-                    key={type.value}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      formData.type === type.value
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => setFormData(prev => ({ ...prev, type: type.value as PoolingType }))}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <type.icon className="h-6 w-6 text-blue-600" />
-                      <div>
-                        <p className="font-medium">{type.label}</p>
-                        <p className="text-sm text-gray-600">{type.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div className="flex items-center mb-6">
+        <Button variant="ghost" onClick={onCancel} className="mr-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold">Create New Ride</h1>
+      </div>
 
-            {/* Route Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Basic Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="from">From Location</Label>
-                <Select value={formData.fromLocation} onValueChange={(value) => setFormData(prev => ({ ...prev, fromLocation: value }))}>
+                <Label>Ride Type</Label>
+                <Select 
+                  value={rideData.type} 
+                  onValueChange={(value: PoolingType) => setRideData(prev => ({ ...prev, type: value }))}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select departure city" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {POOLING_LOCATIONS.map(location => (
-                      <SelectItem key={location.id} value={location.name}>
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{location.name}</span>
-                        </div>
-                      </SelectItem>
+                    <SelectItem value="car">Car Pool</SelectItem>
+                    <SelectItem value="shared-taxi">Shared Taxi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>Total Seats</Label>
+                <Select 
+                  value={rideData.totalSeats.toString()} 
+                  onValueChange={(value) => setRideData(prev => ({ ...prev, totalSeats: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                      <SelectItem key={num} value={num.toString()}>{num} seats</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label htmlFor="to">To Location</Label>
-                <Select value={formData.toLocation} onValueChange={(value) => setFormData(prev => ({ ...prev, toLocation: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select destination city" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POOLING_LOCATIONS.map(location => (
-                      <SelectItem key={location.id} value={location.name}>
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{location.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Timing */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="departure">Departure Time</Label>
+                <Label>Price per Seat (₹)</Label>
                 <Input
-                  id="departure"
-                  type="datetime-local"
-                  value={formData.departureTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, departureTime: e.target.value }))}
-                  min={new Date().toISOString().slice(0, 16)}
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="arrival">Arrival Time (Optional)</Label>
-                <Input
-                  id="arrival"
-                  type="datetime-local"
-                  value={formData.arrivalTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, arrivalTime: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            {/* Capacity and Pricing */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="seats">Total Seats Available</Label>
-                <Input
-                  id="seats"
                   type="number"
+                  value={rideData.pricePerSeat}
+                  onChange={(e) => setRideData(prev => ({ ...prev, pricePerSeat: parseInt(e.target.value) || 0 }))}
+                  placeholder="Enter price"
                   min="1"
-                  max="8"
-                  value={formData.totalSeats}
-                  onChange={(e) => setFormData(prev => ({ ...prev, totalSeats: parseInt(e.target.value) || 1 }))}
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="price">Price per Seat (₹)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  min="1"
-                  value={formData.pricePerSeat}
-                  onChange={(e) => setFormData(prev => ({ ...prev, pricePerSeat: parseInt(e.target.value) || 0 }))}
                   required
                 />
               </div>
             </div>
 
-            {/* Vehicle Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FixedLocationSelector
+                label="From Location"
+                placeholder="Select departure city"
+                value={rideData.fromLocation}
+                onChange={(value) => setRideData(prev => ({ ...prev, fromLocation: value }))}
+                excludeLocation={rideData.toLocation}
+              />
+
+              <FixedLocationSelector
+                label="To Location"
+                placeholder="Select destination city"
+                value={rideData.toLocation}
+                onChange={(value) => setRideData(prev => ({ ...prev, toLocation: value }))}
+                excludeLocation={rideData.fromLocation}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Departure Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={rideData.departureTime}
+                  onChange={(e) => setRideData(prev => ({ ...prev, departureTime: e.target.value }))}
+                  min={minDateTime}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Arrival Time (Optional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={rideData.arrivalTime}
+                  onChange={(e) => setRideData(prev => ({ ...prev, arrivalTime: e.target.value }))}
+                  min={rideData.departureTime}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Vehicle Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Vehicle Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Vehicle Make</Label>
+                <Input
+                  value={rideData.vehicleInfo.make}
+                  onChange={(e) => setRideData(prev => ({
+                    ...prev,
+                    vehicleInfo: { ...prev.vehicleInfo, make: e.target.value }
+                  }))}
+                  placeholder="e.g., Honda, Toyota"
+                />
+              </div>
+
+              <div>
+                <Label>Vehicle Model</Label>
+                <Input
+                  value={rideData.vehicleInfo.model}
+                  onChange={(e) => setRideData(prev => ({
+                    ...prev,
+                    vehicleInfo: { ...prev.vehicleInfo, model: e.target.value }
+                  }))}
+                  placeholder="e.g., City, Innova"
+                />
+              </div>
+
+              <div>
+                <Label>Vehicle Color</Label>
+                <Input
+                  value={rideData.vehicleInfo.color}
+                  onChange={(e) => setRideData(prev => ({
+                    ...prev,
+                    vehicleInfo: { ...prev.vehicleInfo, color: e.target.value }
+                  }))}
+                  placeholder="e.g., White, Silver"
+                />
+              </div>
+
+              <div>
+                <Label>Plate Number</Label>
+                <Input
+                  value={rideData.vehicleInfo.plateNumber}
+                  onChange={(e) => setRideData(prev => ({
+                    ...prev,
+                    vehicleInfo: { ...prev.vehicleInfo, plateNumber: e.target.value }
+                  }))}
+                  placeholder="e.g., TS09ABC1234"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Optional Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional Information (Optional)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Route Stops */}
             <div>
-              <Label className="text-base font-medium mb-3 block">Vehicle Information</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="make">Make</Label>
-                  <Input
-                    id="make"
-                    placeholder="e.g., Honda"
-                    value={formData.vehicleInfo.make}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleInfo: { ...prev.vehicleInfo, make: e.target.value }
-                    }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="model">Model</Label>
-                  <Input
-                    id="model"
-                    placeholder="e.g., City"
-                    value={formData.vehicleInfo.model}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleInfo: { ...prev.vehicleInfo, model: e.target.value }
-                    }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="color">Color</Label>
-                  <Input
-                    id="color"
-                    placeholder="e.g., White"
-                    value={formData.vehicleInfo.color}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleInfo: { ...prev.vehicleInfo, color: e.target.value }
-                    }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="plate">Plate Number</Label>
-                  <Input
-                    id="plate"
-                    placeholder="e.g., TS09AB1234"
-                    value={formData.vehicleInfo.plateNumber}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleInfo: { ...prev.vehicleInfo, plateNumber: e.target.value }
-                    }))}
-                  />
-                </div>
+              <Label>Route Stops</Label>
+              <div className="flex space-x-2 mt-2">
+                <Input
+                  value={newRouteStop}
+                  onChange={(e) => setNewRouteStop(e.target.value)}
+                  placeholder="Add a stop along the way"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRouteStop())}
+                />
+                <Button type="button" onClick={addRouteStop} size="icon">
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
+              {rideData.route && rideData.route.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {rideData.route.map((stop, index) => (
+                    <Badge key={index} variant="outline" className="flex items-center gap-1">
+                      {stop}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRouteStop(index)}
+                        className="h-4 w-4 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Amenities */}
             <div>
-              <Label className="text-base font-medium mb-3 block">Amenities</Label>
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {popularAmenities.map(amenity => (
-                    <Button
-                      key={amenity}
-                      type="button"
-                      variant={formData.amenities?.includes(amenity) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => 
-                        formData.amenities?.includes(amenity) 
-                          ? removeAmenity(amenity)
-                          : addAmenity(amenity)
-                      }
-                    >
+              <Label>Amenities</Label>
+              <div className="flex space-x-2 mt-2">
+                <Input
+                  value={newAmenity}
+                  onChange={(e) => setNewAmenity(e.target.value)}
+                  placeholder="Add amenities (AC, Music, etc.)"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAmenity())}
+                />
+                <Button type="button" onClick={addAmenity} size="icon">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {rideData.amenities && rideData.amenities.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {rideData.amenities.map((amenity, index) => (
+                    <Badge key={index} variant="outline" className="flex items-center gap-1">
                       {amenity}
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAmenity(index)}
+                        className="h-4 w-4 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
                   ))}
                 </div>
-                <div className="flex space-x-2">
-                  <Input
-                    placeholder="Add custom amenity"
-                    value={newAmenity}
-                    onChange={(e) => setNewAmenity(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAmenity(newAmenity))}
-                  />
-                  <Button type="button" onClick={() => addAmenity(newAmenity)}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                {formData.amenities && formData.amenities.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.amenities.map(amenity => (
-                      <Badge key={amenity} variant="secondary" className="flex items-center space-x-1">
-                        <span>{amenity}</span>
-                        <X className="h-3 w-3 cursor-pointer" onClick={() => removeAmenity(amenity)} />
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Rules */}
             <div>
-              <Label className="text-base font-medium mb-3 block">Rules</Label>
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {commonRules.map(rule => (
-                    <Button
-                      key={rule}
-                      type="button"
-                      variant={formData.rules?.includes(rule) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => 
-                        formData.rules?.includes(rule) 
-                          ? removeRule(rule)
-                          : addRule(rule)
-                      }
-                    >
+              <Label>Ride Rules</Label>
+              <div className="flex space-x-2 mt-2">
+                <Input
+                  value={newRule}
+                  onChange={(e) => setNewRule(e.target.value)}
+                  placeholder="Add rules (No smoking, etc.)"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRule())}
+                />
+                <Button type="button" onClick={addRule} size="icon">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {rideData.rules && rideData.rules.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {rideData.rules.map((rule, index) => (
+                    <Badge key={index} variant="outline" className="flex items-center gap-1">
                       {rule}
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRule(index)}
+                        className="h-4 w-4 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
                   ))}
                 </div>
-                <div className="flex space-x-2">
-                  <Input
-                    placeholder="Add custom rule"
-                    value={newRule}
-                    onChange={(e) => setNewRule(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRule(newRule))}
-                  />
-                  <Button type="button" onClick={() => addRule(newRule)}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                {formData.rules && formData.rules.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.rules.map(rule => (
-                      <Badge key={rule} variant="secondary" className="flex items-center space-x-1">
-                        <span>{rule}</span>
-                        <X className="h-3 w-3 cursor-pointer" onClick={() => removeRule(rule)} />
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Form Actions */}
-            <div className="flex space-x-4 pt-6">
-              <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? 'Creating...' : 'Create Ride'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+        {/* Submit Buttons */}
+        <div className="flex space-x-4">
+          <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="flex-1">
+            {isSubmitting ? 'Creating Ride...' : 'Create Ride'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

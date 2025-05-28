@@ -1,256 +1,201 @@
+
 import { 
   PoolingRide, 
+  PoolingBooking, 
   PoolingSearchRequest, 
-  CreateRideRequest,
-  PoolingBooking 
+  CreateRideRequest 
 } from '@/types/pooling';
-import { getApiUrl } from '@/config/api';
+import { POOLING_LOCATIONS } from '@/lib/poolingData';
 
-const API_BASE = getApiUrl('/api/pooling');
+// Mock data for development
+const mockRides: PoolingRide[] = [
+  {
+    id: 1,
+    type: 'car',
+    providerId: 1,
+    providerName: 'Ravi Kumar',
+    providerPhone: '+91 9876543210',
+    providerRating: 4.5,
+    fromLocation: 'Hyderabad',
+    toLocation: 'Vijayawada',
+    departureTime: '2024-01-15T10:00:00Z',
+    arrivalTime: '2024-01-15T13:30:00Z',
+    totalSeats: 4,
+    availableSeats: 2,
+    pricePerSeat: 300,
+    vehicleInfo: {
+      make: 'Honda',
+      model: 'City',
+      color: 'White',
+      plateNumber: 'TS09ABC1234'
+    },
+    route: ['Shamshabad', 'Kurnool'],
+    amenities: ['AC', 'Music', 'Phone Charging'],
+    rules: ['No smoking', 'No loud music'],
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 2,
+    type: 'shared-taxi',
+    providerId: 2,
+    providerName: 'Priya Sharma',
+    providerPhone: '+91 9876543211',
+    providerRating: 4.8,
+    fromLocation: 'Visakhapatnam',
+    toLocation: 'Hyderabad',
+    departureTime: '2024-01-15T08:00:00Z',
+    arrivalTime: '2024-01-15T14:00:00Z',
+    totalSeats: 6,
+    availableSeats: 3,
+    pricePerSeat: 450,
+    vehicleInfo: {
+      make: 'Toyota',
+      model: 'Innova',
+      color: 'Silver',
+      plateNumber: 'AP39XYZ5678'
+    },
+    route: ['Rajahmundry', 'Eluru', 'Vijayawada'],
+    amenities: ['AC', 'WiFi', 'Refreshments'],
+    rules: ['No pets', 'Punctuality required'],
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+// Simulate API delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const realPoolingAPI = {
   // Search for available rides
   searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
-    // Validate required parameters before making the API call
-    if (!searchParams.type || !searchParams.from || !searchParams.to || !searchParams.date || !searchParams.passengers) {
-      throw new Error('Missing required search parameters: type, from, to, date, passengers');
+    await delay(1000); // Simulate network delay
+    
+    console.log('Searching rides with params:', searchParams);
+    
+    // Filter rides based on search parameters
+    let filteredRides = mockRides.filter(ride => {
+      const matchesType = ride.type === searchParams.type;
+      const matchesFrom = ride.fromLocation.toLowerCase().includes(searchParams.from.toLowerCase());
+      const matchesTo = ride.toLocation.toLowerCase().includes(searchParams.to.toLowerCase());
+      const hasAvailableSeats = ride.availableSeats >= searchParams.passengers;
+      const isActive = ride.status === 'active';
+      
+      return matchesType && matchesFrom && matchesTo && hasAvailableSeats && isActive;
+    });
+
+    // Apply price filter if specified
+    if (searchParams.maxPrice) {
+      filteredRides = filteredRides.filter(ride => ride.pricePerSeat <= searchParams.maxPrice!);
     }
-    try {
-      const queryParams = new URLSearchParams({
-        type: searchParams.type,
-        from: searchParams.from,
-        to: searchParams.to,
-        date: searchParams.date,
-        passengers: searchParams.passengers.toString(),
-        ...(searchParams.maxPrice && { maxPrice: searchParams.maxPrice.toString() }),
-        ...(searchParams.sortBy && { sortBy: searchParams.sortBy })
-      });
 
-      const response = await fetch(`${API_BASE}/search.php?${queryParams}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Read response as text first, then try to parse as JSON
-      const text = await response.text();
-      let rides;
-      try {
-        rides = JSON.parse(text);
-      } catch (jsonErr) {
-        if (text.startsWith('<!DOCTYPE html>')) {
-          throw new Error('Received HTML instead of JSON. The API endpoint may be missing or misconfigured.');
-        }
-        throw new Error('Invalid JSON response from server.');
-      }
-      if (!Array.isArray(rides)) {
-        throw new Error('API did not return a list of rides.');
-      }
-      // Patch: Map vehicle fields into vehicleInfo object for each ride
-      const ridesWithVehicleInfo = rides.map((ride: any) => ({
-        ...ride,
-        vehicleInfo: {
-          make: ride.vehicleMake || '',
-          model: ride.vehicleModel || '',
-          color: ride.vehicleColor || '',
-          plateNumber: ride.plateNumber || ''
-        }
-      }));
-      console.log('✅ Fetched rides from API:', ridesWithVehicleInfo.length);
-      return ridesWithVehicleInfo;
-    } catch (error) {
-      console.error('❌ Error searching rides:', error);
-      throw error;
+    // Sort results
+    switch (searchParams.sortBy) {
+      case 'price':
+        filteredRides.sort((a, b) => a.pricePerSeat - b.pricePerSeat);
+        break;
+      case 'rating':
+        filteredRides.sort((a, b) => (b.providerRating || 0) - (a.providerRating || 0));
+        break;
+      case 'time':
+      default:
+        filteredRides.sort((a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime());
+        break;
     }
+
+    return filteredRides;
   },
 
   // Get ride details
   getRideDetails: async (rideId: number): Promise<PoolingRide> => {
-    try {
-      const response = await fetch(`${API_BASE}/rides.php?id=${rideId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Read as text first to handle empty/invalid JSON
-      const text = await response.text();
-      if (!text) {
-        throw new Error('Empty response from server.');
-      }
-      let ride;
-      try {
-        ride = JSON.parse(text);
-      } catch (jsonErr) {
-        if (text.startsWith('<!DOCTYPE html>')) {
-          throw new Error('Received HTML instead of JSON. The API endpoint may be missing or misconfigured.');
-        }
-        throw new Error('Invalid JSON response from server.');
-      }
-      // Patch: Map vehicle fields into vehicleInfo if not present
-      if (!ride.vehicleInfo) {
-        ride.vehicleInfo = {
-          make: ride.vehicleMake || '',
-          model: ride.vehicleModel || '',
-          color: ride.vehicleColor || '',
-          plateNumber: ride.plateNumber || ''
-        };
-      }
-      return ride;
-    } catch (error) {
-      console.error('❌ Error fetching ride details:', error);
-      throw error;
+    await delay(500);
+    
+    const ride = mockRides.find(r => r.id === rideId);
+    if (!ride) {
+      throw new Error('Ride not found');
     }
+    
+    return ride;
   },
 
   // Create a new ride
   createRide: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
-    try {
-      const response = await fetch(`${API_BASE}/rides.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(rideData)
-      });
+    await delay(1000);
+    
+    console.log('Creating ride:', rideData);
+    
+    const newRide: PoolingRide = {
+      id: Date.now(), // Generate unique ID
+      ...rideData,
+      providerId: 1, // Current user ID (mock)
+      providerName: 'Current User',
+      providerPhone: '+91 9876543210',
+      availableSeats: rideData.totalSeats,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Created ride:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ Error creating ride:', error);
-      throw error;
-    }
+    mockRides.push(newRide);
+    return newRide;
   },
 
   // Book a ride
   bookRide: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
-    try {
-      const response = await fetch(`${API_BASE}/bookings.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bookingData)
-      });
+    await delay(1000);
+    
+    console.log('Booking ride:', bookingData);
+    
+    const booking: PoolingBooking = {
+      id: Date.now(),
+      ...bookingData,
+      bookingDate: new Date().toISOString()
+    };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const booking = await response.json();
-      console.log('✅ Created booking:', booking);
-      return booking;
-    } catch (error) {
-      console.error('❌ Error booking ride:', error);
-      throw error;
+    // Update available seats
+    const ride = mockRides.find(r => r.id === bookingData.rideId);
+    if (ride) {
+      ride.availableSeats = Math.max(0, ride.availableSeats - bookingData.seatsBooked);
     }
+
+    return booking;
   },
 
   // Get user's pooling bookings
   getUserBookings: async (userId: number): Promise<PoolingBooking[]> => {
-    try {
-      const response = await fetch(`${API_BASE}/bookings.php?user_id=${userId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const bookings = await response.json();
-      return bookings;
-    } catch (error) {
-      console.error('❌ Error fetching user bookings:', error);
-      return [];
-    }
+    await delay(500);
+    
+    // Return mock bookings for the user
+    return [];
   },
 
-  // Create Razorpay order
+  // Create payment order
   createPaymentOrder: async (bookingId: number): Promise<any> => {
-    try {
-      const response = await fetch(`${API_BASE}/payments.php?action=create-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ booking_id: bookingId })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const order = await response.json();
-      return order;
-    } catch (error) {
-      console.error('❌ Error creating payment order:', error);
-      throw error;
-    }
+    await delay(500);
+    
+    return {
+      id: `order_${Date.now()}`,
+      amount: 300, // Mock amount
+      currency: 'INR',
+      status: 'created'
+    };
   },
 
-  // Verify Razorpay payment
+  // Verify payment
   verifyPayment: async (paymentData: any): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE}/payments.php?action=verify-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(paymentData)
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Payment verified:', result);
-    } catch (error) {
-      console.error('❌ Error verifying payment:', error);
-      throw error;
-    }
+    await delay(500);
+    
+    console.log('Verifying payment:', paymentData);
+    // Mock payment verification
   },
 
   // Cancel booking
   cancelBooking: async (bookingId: number): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE}/bookings.php`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          id: bookingId, 
-          booking_status: 'cancelled' 
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      console.log(`✅ Cancelled booking ${bookingId}`);
-    } catch (error) {
-      console.error('❌ Error cancelling booking:', error);
-      throw error;
-    }
+    await delay(500);
+    
+    console.log('Cancelling booking:', bookingId);
+    // Mock cancellation logic
   }
 };
