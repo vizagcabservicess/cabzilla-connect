@@ -115,6 +115,7 @@ export interface PoolingBooking {
   orderId?: string;
   canCancelFree: boolean;
   cancellationDeadline?: string;
+  requestStatus?: RequestStatus;
 }
 
 export interface RideRating {
@@ -209,4 +210,84 @@ export interface Seat {
   type: 'regular' | 'premium' | 'sleeper';
   status: SeatStatus;
   price: number;
+}
+
+export interface PoolingAnalytics {
+  totalRides: number;
+  activeRides: number;
+  completedRides: number;
+  cancelledRides: number;
+  totalBookings: number;
+  pendingBookings: number;
+  confirmedBookings: number;
+  totalRevenue: number;
+  commissionEarned: number;
+  averageRating: number;
+  totalProviders: number;
+  verifiedProviders: number;
+  activeDisputes: number;
+  refundsProcessed: number;
+  cancellationRate: number;
+  monthlyGrowth: number;
+  revenueByType: {
+    carpool: number;
+    bus: number;
+    sharedTaxi: number;
+  };
+  topRoutes: Array<{
+    route: string;
+    bookings: number;
+    revenue: number;
+  }>;
+}
+
+// Payment and wallet interfaces
+export interface PaymentOrder {
+  id: string;
+  bookingId: number;
+  amount: number;
+  currency: string;
+  status: 'created' | 'paid' | 'failed';
+  paymentMethod?: string;
+  createdAt: string;
+}
+
+export interface ProviderEarnings {
+  id: number;
+  providerId: number;
+  bookingId: number;
+  grossAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  netAmount: number;
+  status: 'pending' | 'released' | 'paid';
+  holdUntil: string;
+  releasedAt?: string;
+  paidAt?: string;
+}
+
+export interface CancellationPolicy {
+  id: number;
+  rideType: PoolingType;
+  cancelledBy: 'guest' | 'provider';
+  hoursBeforeDeparture: number;
+  penaltyType: 'percentage' | 'fixed';
+  penaltyAmount: number;
+  refundPercentage: number;
+}
+
+export interface Dispute {
+  id: number;
+  bookingId: number;
+  raisedBy: number;
+  raisedAgainst: number;
+  type: 'payment' | 'service' | 'behavior' | 'safety' | 'other';
+  subject: string;
+  description: string;
+  status: 'open' | 'investigating' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high';
+  resolution?: string;
+  resolvedBy?: number;
+  createdAt: string;
+  resolvedAt?: string;
 }
