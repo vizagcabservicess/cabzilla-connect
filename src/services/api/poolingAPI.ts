@@ -1,85 +1,241 @@
 
 import axios from 'axios';
-import { API_BASE_URL } from '@/config';
 import { 
   PoolingRide, 
-  BusRoute, 
   PoolingBooking, 
   PoolingSearchRequest, 
   CreateRideRequest,
-  BusSchedule 
+  PoolingUser,
+  UserRole,
+  RideRequest,
+  PoolingWallet,
+  WalletTransaction
 } from '@/types/pooling';
-import { realPoolingAPI } from './realPoolingAPI';
 
-// Set to false to use real APIs
-const USE_MOCK_API = false;
+// API base URL - adjust based on your backend setup
+const API_BASE_URL = 'http://localhost/pooling/api';
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('pooling_auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    console.error('API Error:', error);
+    throw error.response?.data || error;
+  }
+);
 
 export const poolingAPI = {
-  // Search for available rides
-  searchRides: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
-    return realPoolingAPI.searchRides(searchParams);
-  },
+  // Authentication APIs
+  auth: {
+    login: async (credentials: { email: string; password: string }): Promise<{ user: PoolingUser; token: string }> => {
+      const response = await api.post('/auth/login.php', credentials);
+      if (response.data?.token) {
+        localStorage.setItem('pooling_auth_token', response.data.token);
+      }
+      return response.data;
+    },
 
-  // Get ride details
-  getRideDetails: async (rideId: number): Promise<PoolingRide> => {
-    return realPoolingAPI.getRideDetails(rideId);
-  },
+    register: async (userData: { name: string; email: string; phone: string; password: string; role: UserRole }): Promise<{ user: PoolingUser; token: string }> => {
+      const response = await api.post('/auth/register.php', userData);
+      if (response.data?.token) {
+        localStorage.setItem('pooling_auth_token', response.data.token);
+      }
+      return response.data;
+    },
 
-  // Create a new ride
-  createRide: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
-    return realPoolingAPI.createRide(rideData);
-  },
+    logout: async (): Promise<void> => {
+      await api.post('/auth/logout.php');
+      localStorage.removeItem('pooling_auth_token');
+    },
 
-  // Book a ride
-  bookRide: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
-    return realPoolingAPI.bookRide(bookingData);
-  },
+    getProfile: async (): Promise<PoolingUser> => {
+      const response = await api.get('/auth/profile.php');
+      return response.data;
+    },
 
-  // Get user's pooling bookings
-  getUserBookings: async (userId: number): Promise<PoolingBooking[]> => {
-    return realPoolingAPI.getUserBookings(userId);
-  },
-
-  // Create payment order
-  createPaymentOrder: async (bookingId: number): Promise<any> => {
-    return realPoolingAPI.createPaymentOrder(bookingId);
-  },
-
-  // Verify payment
-  verifyPayment: async (paymentData: any): Promise<void> => {
-    return realPoolingAPI.verifyPayment(paymentData);
-  },
-
-  // Get bus routes
-  getBusRoutes: async (from?: string, to?: string): Promise<BusRoute[]> => {
-    try {
-      const params = new URLSearchParams();
-      if (from) params.append('from', from);
-      if (to) params.append('to', to);
-      
-      const response = await axios.get(`${API_BASE_URL}/api/pooling/bus-routes?${params}`);
-      return response.data.routes || [];
-    } catch (error) {
-      console.error('Error fetching bus routes:', error);
-      return [];
+    updateProfile: async (userData: Partial<PoolingUser>): Promise<PoolingUser> => {
+      const response = await api.put('/auth/profile.php', userData);
+      return response.data;
     }
   },
 
-  // Get bus schedules for a route
-  getBusSchedules: async (routeId: number, date: string): Promise<BusSchedule[]> => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/pooling/bus-routes/${routeId}/schedules`, {
-        params: { date }
-      });
-      return response.data.schedules || [];
-    } catch (error) {
-      console.error('Error fetching bus schedules:', error);
-      return [];
+  // Ride management APIs
+  rides: {
+    search: async (searchParams: PoolingSearchRequest): Promise<PoolingRide[]> => {
+      const response = await api.get('/rides/search.php', { params: searchParams });
+      return response.data;
+    },
+
+    getById: async (rideId: number): Promise<PoolingRide> => {
+      const response = await api.get(`/rides/details.php?id=${rideId}`);
+      return response.data;
+    },
+
+    create: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
+      const response = await api.post('/rides/create.php', rideData);
+      return response.data;
+    },
+
+    update: async (rideId: number, rideData: Partial<CreateRideRequest>): Promise<PoolingRide> => {
+      const response = await api.put('/rides/update.php', { id: rideId, ...rideData });
+      return response.data;
+    },
+
+    delete: async (rideId: number): Promise<void> => {
+      await api.delete('/rides/delete.php', { data: { id: rideId } });
+    },
+
+    getByProvider: async (providerId: number): Promise<PoolingRide[]> => {
+      const response = await api.get(`/rides/provider.php?provider_id=${providerId}`);
+      return response.data;
     }
   },
 
-  // Cancel booking
-  cancelBooking: async (bookingId: number): Promise<void> => {
-    return realPoolingAPI.cancelBooking(bookingId);
+  // Request management APIs
+  requests: {
+    create: async (requestData: Omit<RideRequest, 'id' | 'requestedAt'>): Promise<RideRequest> => {
+      const response = await api.post('/requests/create.php', requestData);
+      return response.data;
+    },
+
+    getByRide: async (rideId: number): Promise<RideRequest[]> => {
+      const response = await api.get(`/requests/by-ride.php?ride_id=${rideId}`);
+      return response.data;
+    },
+
+    getByUser: async (userId: number): Promise<RideRequest[]> => {
+      const response = await api.get(`/requests/by-user.php?user_id=${userId}`);
+      return response.data;
+    },
+
+    approve: async (requestId: number, responseMessage?: string): Promise<void> => {
+      await api.put('/requests/approve.php', { id: requestId, responseMessage });
+    },
+
+    reject: async (requestId: number, responseMessage?: string): Promise<void> => {
+      await api.put('/requests/reject.php', { id: requestId, responseMessage });
+    }
+  },
+
+  // Booking management APIs
+  bookings: {
+    create: async (bookingData: Omit<PoolingBooking, 'id' | 'bookingDate'>): Promise<PoolingBooking> => {
+      const response = await api.post('/bookings/create.php', bookingData);
+      return response.data;
+    },
+
+    getById: async (bookingId: number): Promise<PoolingBooking> => {
+      const response = await api.get(`/bookings/details.php?id=${bookingId}`);
+      return response.data;
+    },
+
+    getByUser: async (userId: number): Promise<PoolingBooking[]> => {
+      const response = await api.get(`/bookings/by-user.php?user_id=${userId}`);
+      return response.data;
+    },
+
+    cancel: async (bookingId: number, reason?: string): Promise<void> => {
+      await api.put('/bookings/cancel.php', { id: bookingId, reason });
+    },
+
+    updateStatus: async (bookingId: number, status: string): Promise<void> => {
+      await api.put('/bookings/status.php', { id: bookingId, status });
+    }
+  },
+
+  // Payment APIs
+  payments: {
+    createOrder: async (bookingId: number): Promise<{ orderId: string; amount: number; currency: string; key: string }> => {
+      const response = await api.post('/payments/create-order.php', { booking_id: bookingId });
+      return response.data;
+    },
+
+    verifyPayment: async (paymentData: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<void> => {
+      await api.post('/payments/verify.php', paymentData);
+    },
+
+    getHistory: async (userId: number): Promise<any[]> => {
+      const response = await api.get(`/payments/history.php?user_id=${userId}`);
+      return response.data;
+    }
+  },
+
+  // Wallet APIs
+  wallet: {
+    get: async (userId: number): Promise<PoolingWallet> => {
+      const response = await api.get(`/wallet/details.php?user_id=${userId}`);
+      return response.data;
+    },
+
+    deposit: async (userId: number, amount: number): Promise<WalletTransaction> => {
+      const response = await api.post('/wallet/deposit.php', { user_id: userId, amount });
+      return response.data;
+    },
+
+    withdraw: async (userId: number, amount: number): Promise<WalletTransaction> => {
+      const response = await api.post('/wallet/withdraw.php', { user_id: userId, amount });
+      return response.data;
+    },
+
+    getTransactions: async (userId: number): Promise<WalletTransaction[]> => {
+      const response = await api.get(`/wallet/transactions.php?user_id=${userId}`);
+      return response.data;
+    }
+  },
+
+  // Rating APIs
+  ratings: {
+    create: async (ratingData: any): Promise<void> => {
+      await api.post('/ratings/create.php', ratingData);
+    },
+
+    getByUser: async (userId: number): Promise<any[]> => {
+      const response = await api.get(`/ratings/by-user.php?user_id=${userId}`);
+      return response.data;
+    }
+  },
+
+  // Admin APIs
+  admin: {
+    getAnalytics: async (): Promise<any> => {
+      const response = await api.get('/admin/analytics.php');
+      return response.data;
+    },
+
+    getUsers: async (): Promise<PoolingUser[]> => {
+      const response = await api.get('/admin/users.php');
+      return response.data;
+    },
+
+    getRides: async (): Promise<PoolingRide[]> => {
+      const response = await api.get('/admin/rides.php');
+      return response.data;
+    },
+
+    getBookings: async (): Promise<PoolingBooking[]> => {
+      const response = await api.get('/admin/bookings.php');
+      return response.data;
+    }
   }
 };
+
+// Export individual API modules for convenience
+export const { auth, rides, requests, bookings, payments, wallet, ratings, admin } = poolingAPI;
