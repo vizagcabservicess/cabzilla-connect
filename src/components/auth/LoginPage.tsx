@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -34,9 +33,13 @@ export function LoginPage() {
       if (response.user.role === 'admin') {
         navigate('/admin');
       } else if (response.user.role === 'driver') {
-        navigate('/driver/dashboard');
+        navigate('/driver');
+      } else if (response.user.role === 'provider') {
+        navigate('/pooling/provider');
+      } else if (response.user.role === 'guest') {
+        navigate('/pooling/guest');
       } else {
-        navigate('/pooling');
+        navigate('/dashboard');
       }
     } catch (error: any) {
       toast({

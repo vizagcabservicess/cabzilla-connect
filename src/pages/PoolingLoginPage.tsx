@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PoolingAuthForm } from '@/components/pooling/PoolingAuthForm';
@@ -17,6 +16,9 @@ export default function PoolingLoginPage() {
           break;
         case 'provider':
           navigate('/pooling/provider');
+          break;
+        case 'guest':
+          navigate('/pooling/guest');
           break;
         default:
           navigate('/pooling');

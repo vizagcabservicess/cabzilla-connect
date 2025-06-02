@@ -31,15 +31,20 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
     try {
       console.log('Login formData:', formData);
       const user = await login({ email: formData.email, password: formData.password });
+      console.log('User after login:', user);
       toast.success('Login successful!');
-      // Role-based navigation
+      // Immediate role-based navigation with debug logs
       if (user?.role === 'admin') {
+        console.log('Navigating to /pooling/admin');
         navigate('/pooling/admin');
       } else if (user?.role === 'provider') {
+        console.log('Navigating to /pooling/provider');
         navigate('/pooling/provider');
       } else if (user?.role === 'guest') {
+        console.log('Navigating to /pooling/guest');
         navigate('/pooling/guest');
       } else {
+        console.log('Navigating to /pooling');
         navigate('/pooling');
       }
       if (onSuccess) onSuccess();

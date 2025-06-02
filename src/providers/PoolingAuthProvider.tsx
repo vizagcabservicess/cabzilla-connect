@@ -19,12 +19,48 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user
+    // Check for stored user and token
     const storedUser = localStorage.getItem('pooling_user');
-    if (storedUser) {
+    const token = localStorage.getItem('pooling_auth_token');
+    if (token) {
+      // Always fetch user profile from backend if token exists
+      poolingAPI.auth.getProfile().then(profile => {
+        setUser(profile);
+        localStorage.setItem('pooling_user', JSON.stringify(profile));
+        setIsLoading(false);
+      }).catch(() => {
+        setUser(null);
+        localStorage.removeItem('pooling_user');
+        setIsLoading(false);
+      });
+    } else if (storedUser) {
       setUser(JSON.parse(storedUser));
+      setIsLoading(false);
+    } else {
+      setUser(null);
+      setIsLoading(false);
     }
-    setIsLoading(false);
+  }, []);
+
+  // Listen for token changes in localStorage (e.g., after login)
+  useEffect(() => {
+    const onStorage = () => {
+      const token = localStorage.getItem('pooling_auth_token');
+      if (token) {
+        poolingAPI.auth.getProfile().then(profile => {
+          setUser(profile);
+          localStorage.setItem('pooling_user', JSON.stringify(profile));
+        }).catch(() => {
+          setUser(null);
+          localStorage.removeItem('pooling_user');
+        });
+      } else {
+        setUser(null);
+        localStorage.removeItem('pooling_user');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const login = async (credentials: { email: string; password: string; role?: UserRole }): Promise<PoolingUser> => {
