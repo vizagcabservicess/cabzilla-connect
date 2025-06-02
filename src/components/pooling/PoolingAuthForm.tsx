@@ -30,20 +30,20 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      console.log('Login attempt with:', { email: formData.email, role: formData.role });
-      const user = await login({ email: formData.email, password: formData.password });
-      console.log('Login successful, user:', user);
+      console.log('Login attempt with:', { email: formData.email });
+      const response = await login({ email: formData.email, password: formData.password });
+      console.log('Login successful, response:', response);
       
       toast.success('Login successful!');
       
       // Role-based navigation
-      if (user?.role === 'admin') {
+      if (response?.role === 'admin') {
         console.log('Redirecting admin to /pooling/admin');
         navigate('/pooling/admin');
-      } else if (user?.role === 'provider') {
+      } else if (response?.role === 'provider') {
         console.log('Redirecting provider to /pooling/provider');
         navigate('/pooling/provider');
-      } else if (user?.role === 'guest') {
+      } else if (response?.role === 'guest') {
         console.log('Redirecting guest to /pooling/guest');
         navigate('/pooling/guest');
       } else {
@@ -62,16 +62,16 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
     e.preventDefault();
     try {
       console.log('Registration attempt with:', formData);
-      const user = await register(formData);
-      console.log('Registration successful, user:', user);
+      const response = await register(formData);
+      console.log('Registration successful, response:', response);
       
       toast.success('Registration successful!');
       
       // Role-based navigation after registration
-      if (user?.role === 'provider') {
+      if (response?.role === 'provider') {
         console.log('Redirecting new provider to /pooling/provider');
         navigate('/pooling/provider');
-      } else if (user?.role === 'guest') {
+      } else if (response?.role === 'guest') {
         console.log('Redirecting new guest to /pooling/guest');
         navigate('/pooling/guest');
       } else {

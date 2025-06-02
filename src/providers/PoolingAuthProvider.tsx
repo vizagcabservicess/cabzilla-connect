@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { PoolingUser, UserRole } from '@/types/pooling';
 import { poolingAPI } from '@/services/api/poolingAPI';
@@ -22,55 +23,38 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
     // Check for stored user and token
     const storedUser = localStorage.getItem('pooling_user');
     const token = localStorage.getItem('pooling_auth_token');
-    if (token) {
-      // Always fetch user profile from backend if token exists
-      poolingAPI.auth.getProfile().then(profile => {
-        setUser(profile);
-        localStorage.setItem('pooling_user', JSON.stringify(profile));
-        setIsLoading(false);
-      }).catch(() => {
-        setUser(null);
+    
+    console.log('PoolingAuthProvider initialization:', { storedUser: !!storedUser, token: !!token });
+    
+    if (token && storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log('Setting user from localStorage:', parsedUser);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
         localStorage.removeItem('pooling_user');
-        setIsLoading(false);
-      });
-    } else if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      setIsLoading(false);
-    } else {
-      setUser(null);
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Listen for token changes in localStorage (e.g., after login)
-  useEffect(() => {
-    const onStorage = () => {
-      const token = localStorage.getItem('pooling_auth_token');
-      if (token) {
-        poolingAPI.auth.getProfile().then(profile => {
-          setUser(profile);
-          localStorage.setItem('pooling_user', JSON.stringify(profile));
-        }).catch(() => {
-          setUser(null);
-          localStorage.removeItem('pooling_user');
-        });
-      } else {
-        setUser(null);
-        localStorage.removeItem('pooling_user');
+        localStorage.removeItem('pooling_auth_token');
       }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    }
+    setIsLoading(false);
   }, []);
 
   const login = async (credentials: { email: string; password: string; role?: UserRole }): Promise<PoolingUser> => {
     setIsLoading(true);
     try {
+      console.log('Login attempt in provider:', credentials);
       const response = await poolingAPI.auth.login(credentials);
-      const userWithProviderId = response.user.provider_id ? { ...response.user, providerId: response.user.provider_id } : response.user;
-      setUser(userWithProviderId);
-      localStorage.setItem('pooling_user', JSON.stringify(userWithProviderId));
-      return userWithProviderId;
+      console.log('API login response:', response);
+      
+      const userData = response.user;
+      console.log('Setting user data:', userData);
+      
+      setUser(userData);
+      localStorage.setItem('pooling_user', JSON.stringify(userData));
+      localStorage.setItem('pooling_auth_token', response.token);
+      
+      return userData;
     } finally {
       setIsLoading(false);
     }
@@ -79,35 +63,48 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   const register = async (userData: { name: string; email: string; phone: string; password: string; role: UserRole }): Promise<PoolingUser> => {
     setIsLoading(true);
     try {
+      console.log('Register attempt in provider:', userData);
       const response = await poolingAPI.auth.register(userData);
-      const userWithProviderId = response.user.provider_id ? { ...response.user, providerId: response.user.provider_id } : response.user;
-      setUser(userWithProviderId);
-      localStorage.setItem('pooling_user', JSON.stringify(userWithProviderId));
-      return userWithProviderId;
+      console.log('API register response:', response);
+      
+      const user = response.user;
+      console.log('Setting registered user data:', user);
+      
+      setUser(user);
+      localStorage.setItem('pooling_user', JSON.stringify(user));
+      localStorage.setItem('pooling_auth_token', response.token);
+      
+      return user;
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = () => {
+    console.log('Logging out user');
     setUser(null);
     localStorage.removeItem('pooling_user');
+    localStorage.removeItem('pooling_auth_token');
   };
 
   const canCreateRide = () => {
     return user?.role === 'provider' && (user?.walletBalance ?? 0) >= 500;
   };
 
+  const value = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    register,
+    logout,
+    canCreateRide
+  };
+
+  console.log('PoolingAuthProvider current state:', value);
+
   return (
-    <PoolingAuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      register,
-      logout,
-      canCreateRide
-    }}>
+    <PoolingAuthContext.Provider value={value}>
       {children}
     </PoolingAuthContext.Provider>
   );
