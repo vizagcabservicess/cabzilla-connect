@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { 
   PoolingRide, 
@@ -12,10 +11,20 @@ import {
   WalletTransaction
 } from '@/types/pooling';
 
-// API base URL - adjust based on your backend setup
-const API_BASE_URL = 'http://localhost/pooling/api';
+// Set API base URL based on environment
+const API_BASE_URL =
+  import.meta.env.VITE_POOLING_API_URL ||
+  (window.location.hostname === 'localhost'
+    ? 'http://localhost/api/pooling'
+    : 'https://vizagup.com/api/pooling');
 
-// Create axios instance with default config
+const AUTH_BASE_URL =
+  import.meta.env.VITE_AUTH_API_URL ||
+  (window.location.hostname === 'localhost'
+    ? 'http://localhost/api/auth'
+    : 'https://vizagup.com/api/auth');
+
+// Create axios instances
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -24,8 +33,23 @@ const api = axios.create({
   },
 });
 
+const authApi = axios.create({
+  baseURL: AUTH_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('pooling_auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+authApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('pooling_auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -41,12 +65,20 @@ api.interceptors.response.use(
     throw error.response?.data || error;
   }
 );
+authApi.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    console.error('Auth API Error:', error);
+    throw error.response?.data || error;
+  }
+);
 
 export const poolingAPI = {
   // Authentication APIs
   auth: {
     login: async (credentials: { email: string; password: string }): Promise<{ user: PoolingUser; token: string }> => {
-      const response = await api.post('/auth/login.php', credentials);
+      const payload = { email: credentials.email, password: credentials.password };
+      const response = await authApi.post('/login.php', payload);
       if (response.data?.token) {
         localStorage.setItem('pooling_auth_token', response.data.token);
       }
@@ -54,7 +86,14 @@ export const poolingAPI = {
     },
 
     register: async (userData: { name: string; email: string; phone: string; password: string; role: UserRole }): Promise<{ user: PoolingUser; token: string }> => {
-      const response = await api.post('/auth/register.php', userData);
+      const payload = {
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        password: userData.password,
+        role: userData.role
+      };
+      const response = await authApi.post('/register.php', payload);
       if (response.data?.token) {
         localStorage.setItem('pooling_auth_token', response.data.token);
       }
@@ -62,17 +101,17 @@ export const poolingAPI = {
     },
 
     logout: async (): Promise<void> => {
-      await api.post('/auth/logout.php');
+      await authApi.post('/logout.php');
       localStorage.removeItem('pooling_auth_token');
     },
 
     getProfile: async (): Promise<PoolingUser> => {
-      const response = await api.get('/auth/profile.php');
+      const response = await authApi.get('/me.php');
       return response.data;
     },
 
     updateProfile: async (userData: Partial<PoolingUser>): Promise<PoolingUser> => {
-      const response = await api.put('/auth/profile.php', userData);
+      const response = await authApi.put('/me.php', userData);
       return response.data;
     }
   },
@@ -89,8 +128,9 @@ export const poolingAPI = {
       return response.data;
     },
 
-    create: async (rideData: CreateRideRequest): Promise<PoolingRide> => {
-      const response = await api.post('/rides/create.php', rideData);
+    create: async (rideData: CreateRideRequest, providerId?: number): Promise<PoolingRide> => {
+      const payload = providerId ? { ...rideData, providerId } : rideData;
+      const response = await api.post('/rides.php', payload);
       return response.data;
     },
 
@@ -104,7 +144,7 @@ export const poolingAPI = {
     },
 
     getByProvider: async (providerId: number): Promise<PoolingRide[]> => {
-      const response = await api.get(`/rides/provider.php?provider_id=${providerId}`);
+      const response = await api.get(`/rides.php?provider_id=${providerId}`);
       return response.data;
     }
   },
@@ -196,7 +236,7 @@ export const poolingAPI = {
     },
 
     getTransactions: async (userId: number): Promise<WalletTransaction[]> => {
-      const response = await api.get(`/wallet/transactions.php?user_id=${userId}`);
+      const response = await api.get(`/wallet.php?action=transactions&user_id=${userId}`);
       return response.data;
     }
   },

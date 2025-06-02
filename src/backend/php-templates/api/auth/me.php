@@ -1,4 +1,3 @@
-
 <?php
 require_once '../common/db_helper.php';
 
@@ -47,7 +46,17 @@ try {
         echo json_encode(['error' => 'Invalid or expired token']);
         exit();
     }
-    
+
+    // If user is a provider, fetch provider_id from pooling_providers
+    if ($user['role'] === 'provider') {
+        $stmt2 = $conn->prepare("SELECT id FROM pooling_providers WHERE user_id = ? LIMIT 1");
+        $stmt2->bind_param("i", $user['id']);
+        $stmt2->execute();
+        $result2 = $stmt2->get_result();
+        $provider = $result2->fetch_assoc();
+        $user['provider_id'] = $provider ? $provider['id'] : null;
+    }
+
     echo json_encode(['success' => true, 'user' => $user]);
     
 } catch (Exception $e) {

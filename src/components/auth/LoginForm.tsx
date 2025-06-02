@@ -1,31 +1,14 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { authAPI } from '@/services/api';
-import { LoginRequest } from '@/types/api';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { poolingAPI } from '@/services/api/poolingAPI';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
 
 export function LoginForm() {
   const { toast: uiToast } = useToast();
@@ -35,6 +18,8 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     // Display API URL for debugging
@@ -52,14 +37,6 @@ export function LoginForm() {
       testApiConnection();
     }
   }, []);
-
-  const form = useForm<LoginRequest>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
 
   const testApiConnection = async () => {
     try {
@@ -116,56 +93,41 @@ export function LoginForm() {
     }
   };
 
-  const onSubmit = async (values: LoginRequest) => {
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
-    
     try {
-      // Display a toast to show login is in progress
       toast.loading('Logging in...', { id: 'login-toast' });
-      
-      // Clear any existing tokens first
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
       localStorage.removeItem('user');
-      
-      // Log form values for debugging
-      console.log("Login attempt with email:", values.email);
-      
-      // Use HTTP-only cookies to store authentication token
-      const response = await authAPI.login(values);
-      
-      if (response.token) {
-        // Login succeeded, update toast
+      // Debug log
+      console.log('Login payload:', { email, password });
+      const response = await fetch('https://vizagup.com/api/auth/login.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (response.ok && data.token) {
         toast.success('Login successful', { 
           id: 'login-toast', 
-          description: `Welcome back, ${response.user?.name || 'User'}!` 
+          description: `Welcome back, ${data.user?.name || 'User'}!` 
         });
-        
-        console.log("Login successful, token saved", { 
-          tokenLength: response.token.length,
-          tokenParts: response.token.split('.').length,
-          user: response.user?.id
-        });
-        
-        // Force a page reload to ensure fresh state
         setTimeout(() => {
           window.location.href = '/dashboard';
         }, 500);
       } else {
-        throw new Error("Authentication failed: No token received");
+        throw new Error(data.error || 'Authentication failed');
       }
     } catch (error) {
-      console.error("Login error details:", error);
-      
-      // Update toast to show error
+      console.error('Login error details:', error);
       toast.error('Login Failed', {
         id: 'login-toast',
-        description: error instanceof Error ? error.message : "Authentication failed"
+        description: error instanceof Error ? error.message : 'Authentication failed'
       });
-      
-      // Set error state for UI display
       setError(error as Error);
     } finally {
       setIsLoading(false);
@@ -238,52 +200,37 @@ export function LoginForm() {
         </Alert>
       )}
       
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="your@email.com" 
-                    {...field} 
-                    autoComplete="email"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block mb-1 font-medium">Email</label>
+          <Input
+            type="email"
+            placeholder="your@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
+            required
           />
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••" 
-                    {...field} 
-                    autoComplete="current-password"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        </div>
+        <div>
+          <label className="block mb-1 font-medium">Password</label>
+          <Input
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
           />
-          <Button 
-            type="submit" 
-            className="w-full" 
-            disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
-          >
-            {isLoading ? "Logging in..." : "Login"}
-          </Button>
-        </form>
-      </Form>
+        </div>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
+        >
+          {isLoading ? "Logging in..." : "Login"}
+        </Button>
+      </form>
     </>
   );
 }

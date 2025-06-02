@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -16,9 +15,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
+import { poolingAPI } from '@/services/api/poolingAPI';
 import { SignupRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { toast } from 'sonner';
+import { UserRole } from '@/types/pooling';
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -52,21 +53,31 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        const response = await authAPI.signup(values);
-        
-        // Success - update the loading toast
-        toast.success("Account created successfully!", { id: loadingToastId });
-        
-        uiToast({
-          title: "Welcome to our service!",
-          description: "Your account has been created successfully. You'll be redirected to your dashboard.",
-          duration: 5000,
-        });
-        
-        // Short delay before redirecting to ensure toast is seen
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
+        console.log('DEBUG poolingAPI:', poolingAPI);
+        console.log('DEBUG poolingAPI.auth:', poolingAPI.auth);
+        console.log('DEBUG poolingAPI.auth.register:', poolingAPI.auth && poolingAPI.auth.register);
+        if (typeof poolingAPI.auth.register !== 'function') {
+          throw new Error('poolingAPI.auth.register is not a function');
+        }
+        const response = await poolingAPI.auth.register({ ...values, role: 'customer' as UserRole });
+        console.log('Registration API response:', response);
+        if (response && response.success) {
+          // Success - update the loading toast
+          toast.success("Account created successfully!", { id: loadingToastId });
+          uiToast({
+            title: "Welcome to our service!",
+            description: "Your account has been created successfully. You'll be redirected to your dashboard.",
+            duration: 5000,
+          });
+          // Short delay before redirecting to ensure toast is seen
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1000);
+        } else {
+          // Show backend error message if available
+          toast.error("Signup failed", { id: loadingToastId });
+          throw new Error(response?.error || response?.message || 'Registration failed');
+        }
       } catch (signupError) {
         // Update the loading toast to show error
         toast.error("Signup failed", { id: loadingToastId });

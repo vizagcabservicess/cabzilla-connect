@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,109 +28,81 @@ export function ProviderDashboard() {
   const { user, wallet, canCreateRide, refreshWallet } = usePoolingAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateRide, setShowCreateRide] = useState(false);
+  const [rides, setRides] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - replace with real API calls
-  const mockRides: PoolingRide[] = [
-    {
-      id: 1,
-      type: 'car',
-      providerId: user?.id || 1,
-      providerName: user?.name || 'Provider',
-      providerPhone: user?.phone || '',
-      fromLocation: 'Hyderabad',
-      toLocation: 'Vijayawada',
-      departureTime: '2024-01-15T10:00:00Z',
-      totalSeats: 4,
-      availableSeats: 2,
-      pricePerSeat: 300,
-      vehicleInfo: {
-        make: 'Honda',
-        model: 'City',
-        color: 'White',
-        plateNumber: 'TS09ABC1234'
-      },
-      route: [],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      requests: [
-        {
-          id: 1,
-          rideId: 1,
-          guestId: 2,
-          guestName: 'John Doe',
-          guestPhone: '+91 9876543210',
-          guestEmail: 'john@example.com',
-          seatsRequested: 2,
-          status: 'pending',
-          requestMessage: 'Need 2 seats for family trip',
-          requestedAt: new Date().toISOString()
-        }
-      ]
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      poolingAPI.rides.getByProvider(user.id)
+        .then(data => setRides(Array.isArray(data) ? data : []))
+        .finally(() => setLoading(false));
+      poolingAPI.wallet.getTransactions(user.id)
+        .then(data => setTransactions(Array.isArray(data) ? data : []));
     }
-  ];
+  }, [user]);
 
-  const mockTransactions: WalletTransaction[] = [
-    {
-      id: 1,
-      walletId: 1,
-      type: 'credit',
-      amount: 500,
-      purpose: 'Ride earnings',
-      description: 'Payment from Hyderabad to Vijayawada ride',
-      balanceAfter: 1000,
-      status: 'completed',
-      createdAt: new Date().toISOString()
-    }
-  ];
-
-  const handleCreateRide = async (rideData: any) => {
+  const handleCreateRide = async (rideData) => {
     try {
-      await poolingAPI.createRide(rideData);
+      await poolingAPI.rides.create(rideData, user?.providerId);
       toast.success('Ride created successfully!');
       setShowCreateRide(false);
+      // Refresh rides
+      if (user) {
+        const updatedRides = await poolingAPI.rides.getByProvider(user.providerId);
+        setRides(Array.isArray(updatedRides) ? updatedRides : []);
+      }
     } catch (error) {
       toast.error('Failed to create ride');
     }
   };
 
-  const handleApproveRequest = async (requestId: number, responseMessage?: string) => {
+  const handleApproveRequest = async (requestId, responseMessage) => {
     try {
-      // API call to approve request
-      console.log('Approving request:', requestId, responseMessage);
+      await poolingAPI.requests.approve(requestId, responseMessage);
       toast.success('Request approved!');
+      // Optionally refresh rides/requests
     } catch (error) {
       toast.error('Failed to approve request');
     }
   };
 
-  const handleRejectRequest = async (requestId: number, responseMessage?: string) => {
+  const handleRejectRequest = async (requestId, responseMessage) => {
     try {
-      // API call to reject request
-      console.log('Rejecting request:', requestId, responseMessage);
+      await poolingAPI.requests.reject(requestId, responseMessage);
       toast.success('Request rejected');
+      // Optionally refresh rides/requests
     } catch (error) {
       toast.error('Failed to reject request');
     }
   };
 
-  const handleWalletDeposit = async (amount: number) => {
+  const handleWalletDeposit = async (amount) => {
     try {
-      // API call to add money to wallet
-      console.log('Adding to wallet:', amount);
-      await refreshWallet();
-      toast.success('Money added to wallet!');
+      if (user) {
+        await poolingAPI.wallet.deposit(user.id, amount);
+        await refreshWallet();
+        toast.success('Money added to wallet!');
+        // Refresh transactions
+        const updatedTransactions = await poolingAPI.wallet.getTransactions(user.id);
+        setTransactions(updatedTransactions);
+      }
     } catch (error) {
       toast.error('Failed to add money');
     }
   };
 
-  const handleWalletWithdraw = async (amount: number) => {
+  const handleWalletWithdraw = async (amount) => {
     try {
-      // API call to withdraw money
-      console.log('Withdrawing from wallet:', amount);
-      await refreshWallet();
-      toast.success('Withdrawal request submitted!');
+      if (user) {
+        await poolingAPI.wallet.withdraw(user.id, amount);
+        await refreshWallet();
+        toast.success('Withdrawal request submitted!');
+        // Refresh transactions
+        const updatedTransactions = await poolingAPI.wallet.getTransactions(user.id);
+        setTransactions(updatedTransactions);
+      }
     } catch (error) {
       toast.error('Failed to process withdrawal');
     }
@@ -191,7 +162,7 @@ export function ProviderDashboard() {
               <Car className="h-8 w-8 text-blue-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Active Rides</p>
-                <p className="text-2xl font-bold">{mockRides.filter(r => r.status === 'active').length}</p>
+                <p className="text-2xl font-bold">{rides.filter(r => r.status === 'active').length}</p>
               </div>
             </div>
           </CardContent>
@@ -203,7 +174,7 @@ export function ProviderDashboard() {
               <Users className="h-8 w-8 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Bookings</p>
-                <p className="text-2xl font-bold">{mockRides.reduce((acc, ride) => acc + (ride.totalSeats - ride.availableSeats), 0)}</p>
+                <p className="text-2xl font-bold">{rides.reduce((acc, ride) => acc + (ride.totalSeats - ride.availableSeats), 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -250,11 +221,11 @@ export function ProviderDashboard() {
                 <CardTitle>Recent Rides</CardTitle>
               </CardHeader>
               <CardContent>
-                {mockRides.length === 0 ? (
+                {rides.length === 0 ? (
                   <p className="text-gray-600 text-center py-4">No rides created yet</p>
                 ) : (
                   <div className="space-y-3">
-                    {mockRides.slice(0, 3).map(ride => (
+                    {rides.slice(0, 3).map(ride => (
                       <div key={ride.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
                           <p className="font-medium">{ride.fromLocation} → {ride.toLocation}</p>
@@ -277,11 +248,11 @@ export function ProviderDashboard() {
                 <CardTitle>Pending Requests</CardTitle>
               </CardHeader>
               <CardContent>
-                {mockRides.flatMap(r => r.requests?.filter(req => req.status === 'pending') || []).length === 0 ? (
+                {rides.flatMap(r => r.requests?.filter(req => req.status === 'pending') || []).length === 0 ? (
                   <p className="text-gray-600 text-center py-4">No pending requests</p>
                 ) : (
                   <div className="space-y-3">
-                    {mockRides.flatMap(r => r.requests?.filter(req => req.status === 'pending') || []).slice(0, 3).map(request => (
+                    {rides.flatMap(r => r.requests?.filter(req => req.status === 'pending') || []).slice(0, 3).map(request => (
                       <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
                           <p className="font-medium">{request.guestName}</p>
@@ -306,7 +277,7 @@ export function ProviderDashboard() {
               <CardTitle>My Rides</CardTitle>
             </CardHeader>
             <CardContent>
-              {mockRides.length === 0 ? (
+              {rides.length === 0 ? (
                 <div className="text-center py-12">
                   <Car className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No rides yet</h3>
@@ -318,7 +289,7 @@ export function ProviderDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {mockRides.map(ride => (
+                  {rides.map(ride => (
                     <div key={ride.id} className="border rounded-lg p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div>
@@ -362,7 +333,7 @@ export function ProviderDashboard() {
 
         <TabsContent value="requests">
           <RequestManagement
-            requests={mockRides.flatMap(r => r.requests || [])}
+            requests={rides.flatMap(r => r.requests || [])}
             onApprove={handleApproveRequest}
             onReject={handleRejectRequest}
             showProviderActions={true}
@@ -372,7 +343,7 @@ export function ProviderDashboard() {
         <TabsContent value="wallet">
           <WalletManager
             wallet={wallet}
-            transactions={mockTransactions}
+            transactions={transactions}
             userRole="provider"
             onDeposit={handleWalletDeposit}
             onWithdraw={handleWalletWithdraw}

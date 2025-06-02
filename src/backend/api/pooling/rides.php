@@ -26,6 +26,8 @@ require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+file_put_contents(__DIR__ . '/debug.log', "Request received at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+
 switch ($method) {
     case 'GET':
         handleGetRides();
@@ -122,8 +124,9 @@ function handleGetRides() {
 
 function handleCreateRide() {
     global $pdo;
-    
+    file_put_contents(__DIR__ . '/debug.log', "handleCreateRide called\n", FILE_APPEND);
     $input = json_decode(file_get_contents('php://input'), true);
+    file_put_contents(__DIR__ . '/debug.log', "Payload: " . print_r($input, true) . "\n", FILE_APPEND);
     $input = sanitizeInput($input);
     
     $required_fields = ['type', 'fromLocation', 'toLocation', 'departureTime', 'totalSeats', 'pricePerSeat', 'vehicleInfo'];
@@ -141,23 +144,32 @@ function handleCreateRide() {
         $stmt->execute(['Current User', '+919999999999']);
         $providerId = $pdo->lastInsertId();
         
-        // Create vehicle
+        // Check if vehicle already exists for this provider and plate number
         $vehicleInfo = $input['vehicleInfo'];
-        $stmt = $pdo->prepare("
-            INSERT INTO pooling_vehicles (provider_id, make, model, color, plate_number, vehicle_type, total_seats, amenities)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $providerId,
-            $vehicleInfo['make'] ?? '',
-            $vehicleInfo['model'] ?? '',
-            $vehicleInfo['color'] ?? '',
-            $vehicleInfo['plateNumber'] ?? 'TEMP' . time(),
-            $input['type'],
-            $input['totalSeats'],
-            json_encode($input['amenities'] ?? [])
-        ]);
-        $vehicleId = $pdo->lastInsertId();
+        $stmt = $pdo->prepare("SELECT id FROM pooling_vehicles WHERE plate_number = ?");
+        $stmt->execute([$vehicleInfo['plateNumber']]);
+        $vehicle = $stmt->fetch();
+
+        if ($vehicle) {
+            $vehicleId = $vehicle['id'];
+        } else {
+            // Create vehicle
+            $stmt = $pdo->prepare("
+                INSERT INTO pooling_vehicles (provider_id, make, model, color, plate_number, vehicle_type, total_seats, amenities)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $providerId,
+                $vehicleInfo['make'] ?? '',
+                $vehicleInfo['model'] ?? '',
+                $vehicleInfo['color'] ?? '',
+                $vehicleInfo['plateNumber'] ?? 'TEMP' . time(),
+                $input['type'],
+                $input['totalSeats'],
+                json_encode($input['amenities'] ?? [])
+            ]);
+            $vehicleId = $pdo->lastInsertId();
+        }
         
         // Create ride
         $stmt = $pdo->prepare("
@@ -189,6 +201,7 @@ function handleCreateRide() {
         
     } catch (PDOException $e) {
         $pdo->rollBack();
+        file_put_contents(__DIR__ . '/debug.log', "DB Error: " . $e->getMessage() . "\n", FILE_APPEND);
         error_log('Database error in create ride: ' . $e->getMessage());
         sendError('Failed to create ride', 500);
     }

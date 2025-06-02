@@ -1,10 +1,9 @@
-
 <?php
 // Database configuration
 $host = 'localhost';
-$dbname = 'pooling_system';
-$username = 'root';
-$password = '';
+$dbname = 'u644605165_db_be';
+$username = 'u644605165_usr_be';
+$password = 'Vizag@1213';
 
 // CORS headers
 header('Access-Control-Allow-Origin: *');

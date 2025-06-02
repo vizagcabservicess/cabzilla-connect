@@ -1,7 +1,32 @@
 <?php
+ob_start();
+set_exception_handler(function($e) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'error', 'message' => 'Unhandled exception', 'details' => $e->getMessage()]);
+    exit;
+});
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'error', 'message' => 'Unhandled error', 'details' => "$errstr in $errfile on line $errline"]);
+    exit;
+});
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => 'Fatal error', 'details' => $error['message']]);
+        exit;
+    }
+});
+
 require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
+
+file_put_contents(__DIR__ . '/debug.log', "Request received at " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
 switch ($method) {
     case 'GET':
@@ -24,6 +49,8 @@ function handleGetRides() {
     global $pdo;
     
     $rideId = $_GET['id'] ?? null;
+    $providerId = $_GET['provider_id'] ?? null;
+    file_put_contents(__DIR__ . '/debug.log', "handleGetRides provider_id: " . print_r($providerId, true) . "\n", FILE_APPEND);
     
     if ($rideId) {
         // Get specific ride
@@ -75,6 +102,24 @@ function handleGetRides() {
         ];
         
         sendResponse($formatted_ride);
+    } else if ($providerId) {
+        // Get rides for a specific provider
+        $stmt = $pdo->prepare("
+            SELECT 
+                r.*,
+                p.name as provider_name,
+                p.phone as provider_phone,
+                p.rating as provider_rating,
+                v.make, v.model, v.color, v.plate_number
+            FROM pooling_rides r
+            JOIN pooling_providers p ON r.provider_id = p.id
+            JOIN pooling_vehicles v ON r.vehicle_id = v.id
+            WHERE r.provider_id = ?
+            ORDER BY r.departure_time ASC
+        ");
+        $stmt->execute([$providerId]);
+        $rides = $stmt->fetchAll();
+        sendResponse(['status' => 'success', 'rides' => $rides]);
     } else {
         // Get all active rides
         $stmt = $pdo->prepare("
@@ -99,43 +144,46 @@ function handleGetRides() {
 
 function handleCreateRide() {
     global $pdo;
-    
+    file_put_contents(__DIR__ . '/debug.log', "handleCreateRide called\n", FILE_APPEND);
     $input = json_decode(file_get_contents('php://input'), true);
+    file_put_contents(__DIR__ . '/debug.log', "Payload: " . print_r($input, true) . "\n", FILE_APPEND);
     $input = sanitizeInput($input);
     
-    $required_fields = ['type', 'fromLocation', 'toLocation', 'departureTime', 'totalSeats', 'pricePerSeat', 'vehicleInfo'];
+    $required_fields = ['type', 'fromLocation', 'toLocation', 'departureTime', 'totalSeats', 'pricePerSeat', 'vehicleInfo', 'providerId'];
     $errors = validateInput($input, $required_fields);
     
     if (!empty($errors)) {
         sendError(implode(', ', $errors));
     }
     
+    $providerId = $input['providerId'];
+    file_put_contents(__DIR__ . '/debug.log', "handleCreateRide using providerId: " . print_r($providerId, true) . "\n", FILE_APPEND);
     try {
         $pdo->beginTransaction();
-        
-        // Create or get provider (simplified for demo)
-        $stmt = $pdo->prepare("INSERT INTO pooling_providers (name, phone) VALUES (?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
-        $stmt->execute(['Current User', '+919999999999']);
-        $providerId = $pdo->lastInsertId();
-        
-        // Create vehicle
+        // Create vehicle (or get existing)
         $vehicleInfo = $input['vehicleInfo'];
-        $stmt = $pdo->prepare("
-            INSERT INTO pooling_vehicles (provider_id, make, model, color, plate_number, vehicle_type, total_seats, amenities)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $providerId,
-            $vehicleInfo['make'] ?? '',
-            $vehicleInfo['model'] ?? '',
-            $vehicleInfo['color'] ?? '',
-            $vehicleInfo['plateNumber'] ?? 'TEMP' . time(),
-            $input['type'],
-            $input['totalSeats'],
-            json_encode($input['amenities'] ?? [])
-        ]);
-        $vehicleId = $pdo->lastInsertId();
-        
+        $stmt = $pdo->prepare("SELECT id FROM pooling_vehicles WHERE plate_number = ? AND provider_id = ?");
+        $stmt->execute([$vehicleInfo['plateNumber'], $providerId]);
+        $vehicle = $stmt->fetch();
+        if ($vehicle) {
+            $vehicleId = $vehicle['id'];
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO pooling_vehicles (provider_id, make, model, color, plate_number, vehicle_type, total_seats, amenities)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $providerId,
+                $vehicleInfo['make'] ?? '',
+                $vehicleInfo['model'] ?? '',
+                $vehicleInfo['color'] ?? '',
+                $vehicleInfo['plateNumber'] ?? 'TEMP' . time(),
+                $input['type'],
+                $input['totalSeats'],
+                json_encode($input['amenities'] ?? [])
+            ]);
+            $vehicleId = $pdo->lastInsertId();
+        }
         // Create ride
         $stmt = $pdo->prepare("
             INSERT INTO pooling_rides 
@@ -152,22 +200,20 @@ function handleCreateRide() {
             $input['departureTime'],
             $input['arrivalTime'] ?? null,
             $input['totalSeats'],
-            $input['totalSeats'], // available_seats starts as total_seats
+            $input['totalSeats'],
             $input['pricePerSeat'],
             json_encode($input['route'] ?? []),
             json_encode($input['amenities'] ?? []),
             json_encode($input['rules'] ?? [])
         ]);
-        
         $rideId = $pdo->lastInsertId();
         $pdo->commit();
-        
         sendResponse(['id' => $rideId, 'message' => 'Ride created successfully'], 201);
-        
     } catch (PDOException $e) {
         $pdo->rollBack();
+        file_put_contents(__DIR__ . '/debug.log', "DB Error: " . $e->getMessage() . "\n", FILE_APPEND);
         error_log('Database error in create ride: ' . $e->getMessage());
-        sendError('Failed to create ride: ' . $e->getMessage(), 500);
+        sendError('Failed to create ride', 500);
     }
 }
 

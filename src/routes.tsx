@@ -45,6 +45,7 @@ import DriverDashboard from './pages/DriverDashboard';
 import PoolingLoginPage from './pages/PoolingLoginPage';
 import PoolingProviderPage from './pages/PoolingProviderPage';
 import PoolingAdminPage from './pages/PoolingAdminPage';
+import GuestDashboardPage from './pages/GuestDashboardPage';
 
 const router = createBrowserRouter([
   {
@@ -171,6 +172,10 @@ const router = createBrowserRouter([
   {
     path: '/pooling/create',
     element: <CreateRidePage />,
+  },
+  {
+    path: '/pooling/guest',
+    element: <GuestDashboardPage />,
   },
   // Static pages
   {

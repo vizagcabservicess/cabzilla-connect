@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Eye, EyeOff, Car, Users } from 'lucide-react';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface PoolingAuthFormProps {
   onSuccess?: () => void;
@@ -16,6 +16,7 @@ interface PoolingAuthFormProps {
 
 export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
   const { login, register, isLoading } = usePoolingAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -28,9 +29,20 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login(formData.email, formData.password);
+      console.log('Login formData:', formData);
+      const user = await login({ email: formData.email, password: formData.password });
       toast.success('Login successful!');
-      onSuccess?.();
+      // Role-based navigation
+      if (user?.role === 'admin') {
+        navigate('/pooling/admin');
+      } else if (user?.role === 'provider') {
+        navigate('/pooling/provider');
+      } else if (user?.role === 'guest') {
+        navigate('/pooling/guest');
+      } else {
+        navigate('/pooling');
+      }
+      if (onSuccess) onSuccess();
     } catch (error) {
       toast.error('Login failed. Please check your credentials.');
     }

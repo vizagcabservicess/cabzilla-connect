@@ -1,6 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { PoolingUser, UserRole } from '@/types/pooling';
+import { poolingAPI } from '@/services/api/poolingAPI';
 
 interface PoolingAuthContextType {
   user: PoolingUser | null;
@@ -9,6 +9,7 @@ interface PoolingAuthContextType {
   login: (credentials: { email: string; password: string; role?: UserRole }) => Promise<PoolingUser>;
   register: (userData: { name: string; email: string; phone: string; password: string; role: UserRole }) => Promise<PoolingUser>;
   logout: () => void;
+  canCreateRide: () => boolean;
 }
 
 const PoolingAuthContext = createContext<PoolingAuthContextType | undefined>(undefined);
@@ -29,26 +30,11 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   const login = async (credentials: { email: string; password: string; role?: UserRole }): Promise<PoolingUser> => {
     setIsLoading(true);
     try {
-      // Mock login - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockUser: PoolingUser = {
-        id: 1,
-        name: 'Test User',
-        email: credentials.email,
-        phone: '+91 9999999999',
-        role: credentials.role || 'guest',
-        isActive: true,
-        rating: 4.5,
-        totalRides: 10,
-        walletBalance: 1000,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      setUser(mockUser);
-      localStorage.setItem('pooling_user', JSON.stringify(mockUser));
-      return mockUser;
+      const response = await poolingAPI.auth.login(credentials);
+      const userWithProviderId = response.user.provider_id ? { ...response.user, providerId: response.user.provider_id } : response.user;
+      setUser(userWithProviderId);
+      localStorage.setItem('pooling_user', JSON.stringify(userWithProviderId));
+      return userWithProviderId;
     } finally {
       setIsLoading(false);
     }
@@ -57,26 +43,11 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   const register = async (userData: { name: string; email: string; phone: string; password: string; role: UserRole }): Promise<PoolingUser> => {
     setIsLoading(true);
     try {
-      // Mock registration - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newUser: PoolingUser = {
-        id: Date.now(),
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        role: userData.role,
-        isActive: true,
-        rating: 0,
-        totalRides: 0,
-        walletBalance: userData.role === 'provider' ? 500 : 0, // Initial balance for providers
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      setUser(newUser);
-      localStorage.setItem('pooling_user', JSON.stringify(newUser));
-      return newUser;
+      const response = await poolingAPI.auth.register(userData);
+      const userWithProviderId = response.user.provider_id ? { ...response.user, providerId: response.user.provider_id } : response.user;
+      setUser(userWithProviderId);
+      localStorage.setItem('pooling_user', JSON.stringify(userWithProviderId));
+      return userWithProviderId;
     } finally {
       setIsLoading(false);
     }
@@ -87,6 +58,10 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
     localStorage.removeItem('pooling_user');
   };
 
+  const canCreateRide = () => {
+    return user?.role === 'provider' && (user?.walletBalance ?? 0) >= 500;
+  };
+
   return (
     <PoolingAuthContext.Provider value={{
       user,
@@ -94,7 +69,8 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
       isLoading,
       login,
       register,
-      logout
+      logout,
+      canCreateRide
     }}>
       {children}
     </PoolingAuthContext.Provider>
