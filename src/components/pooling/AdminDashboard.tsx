@@ -1,404 +1,357 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Users, 
   Car, 
-  DollarSign, 
+  Wallet, 
   TrendingUp, 
-  Activity,
-  Calendar,
+  AlertCircle, 
+  CheckCircle,
   Clock,
+  IndianRupee,
   MapPin,
-  Star,
-  Wallet
+  Star
 } from 'lucide-react';
-import { poolingAPI } from '@/services/api/poolingAPI';
-import { PoolingUser, PoolingRide, PoolingBooking, PoolingAnalytics } from '@/types/pooling';
-import { format } from 'date-fns';
+import { PoolingAnalytics, PoolingUser, PoolingRide, PoolingBooking, Dispute } from '@/types/pooling';
 
 export function AdminDashboard() {
-  const [analytics, setAnalytics] = useState<PoolingAnalytics | null>(null);
-  const [users, setUsers] = useState<PoolingUser[]>([]);
-  const [rides, setRides] = useState<PoolingRide[]>([]);
-  const [bookings, setBookings] = useState<PoolingBooking[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
-    loadAdminData();
-  }, []);
+  // Mock data - replace with real API calls
+  const mockAnalytics: PoolingAnalytics = {
+    totalRides: 156,
+    activeRides: 23,
+    completedRides: 120,
+    cancelledRides: 13,
+    totalBookings: 445,
+    pendingBookings: 12,
+    confirmedBookings: 380,
+    totalRevenue: 125000,
+    commissionEarned: 12500,
+    averageRating: 4.3,
+    totalProviders: 89,
+    verifiedProviders: 76,
+    activeDisputes: 3,
+    refundsProcessed: 8,
+    cancellationRate: 8.3,
+    monthlyGrowth: 15.4,
+    revenueByType: {
+      carpool: 75000,
+      bus: 35000,
+      sharedTaxi: 15000
+    },
+    topRoutes: [
+      { route: 'Hyderabad → Vijayawada', bookings: 45, revenue: 13500 },
+      { route: 'Visakhapatnam → Hyderabad', bookings: 38, revenue: 11400 },
+      { route: 'Guntur → Tirupati', bookings: 32, revenue: 9600 }
+    ]
+  };
 
-  const loadAdminData = async () => {
-    setIsLoading(true);
+  const mockUsers: PoolingUser[] = [
+    {
+      id: 1,
+      name: 'John Doe',
+      email: 'john@example.com',
+      phone: '+91 9876543210',
+      role: 'provider',
+      isActive: true,
+      rating: 4.5,
+      totalRides: 25,
+      walletBalance: 2500,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-15T00:00:00Z'
+    },
+    {
+      id: 2,
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      phone: '+91 9876543211',
+      role: 'guest',
+      isActive: true,
+      rating: 4.8,
+      totalRides: 12,
+      walletBalance: 750,
+      createdAt: '2024-01-02T00:00:00Z',
+      updatedAt: '2024-01-14T00:00:00Z'
+    }
+  ];
+
+  const mockDisputes: Dispute[] = [
+    {
+      id: 1,
+      bookingId: 123,
+      raisedBy: 2,
+      raisedAgainst: 1,
+      type: 'payment',
+      subject: 'Payment not received',
+      description: 'Payment was deducted but ride was cancelled',
+      status: 'investigating',
+      priority: 'high',
+      createdAt: '2024-01-15T10:00:00Z'
+    }
+  ];
+
+  const handleTriggerPayout = async (userId: number) => {
     try {
-      const [analyticsData, usersData, ridesData, bookingsData] = await Promise.all([
-        poolingAPI.admin.getAnalytics(),
-        poolingAPI.admin.getUsers(),
-        poolingAPI.admin.getRides(),
-        poolingAPI.admin.getBookings()
-      ]);
-
-      setAnalytics(analyticsData);
-      setUsers(usersData);
-      setRides(ridesData);
-      setBookings(bookingsData);
+      // API call to trigger manual payout
+      console.log('Triggering payout for user:', userId);
     } catch (error) {
-      console.error('Failed to load admin data:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to trigger payout:', error);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-500';
-      case 'pending': return 'bg-yellow-500';
-      case 'completed': return 'bg-blue-500';
-      case 'cancelled': return 'bg-red-500';
-      case 'confirmed': return 'bg-green-600';
-      default: return 'bg-gray-400';
+  const handleResolveDispute = async (disputeId: number, resolution: string) => {
+    try {
+      // API call to resolve dispute
+      console.log('Resolving dispute:', disputeId, resolution);
+    } catch (error) {
+      console.error('Failed to resolve dispute:', error);
     }
   };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin': return 'bg-purple-500';
-      case 'provider': return 'bg-blue-500';
-      case 'guest': return 'bg-green-500';
-      default: return 'bg-gray-400';
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Pooling System Administration</p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+          <p className="text-gray-600">Platform overview and management</p>
         </div>
+      </div>
 
-        {/* Analytics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <Users className="w-8 h-8 text-blue-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Total Users</p>
-                  <p className="text-2xl font-bold">{users.length}</p>
-                </div>
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Car className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Rides</p>
+                <p className="text-2xl font-bold">{mockAnalytics.totalRides}</p>
+                <p className="text-xs text-green-600">+{mockAnalytics.monthlyGrowth}% this month</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <Car className="w-8 h-8 text-green-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Active Rides</p>
-                  <p className="text-2xl font-bold">{rides.filter(r => r.status === 'active').length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-8 h-8 text-orange-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Total Bookings</p>
-                  <p className="text-2xl font-bold">{bookings.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="w-8 h-8 text-purple-600" />
-                <div>
-                  <p className="text-sm text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold">₹{bookings.reduce((sum, b) => sum + b.totalAmount, 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
-            <TabsTrigger value="rides">Rides ({rides.length})</TabsTrigger>
-            <TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Activity className="w-5 h-5" />
-                    <span>Recent Activity</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {bookings.slice(0, 5).map((booking) => (
-                      <div key={booking.id} className="flex items-center justify-between p-3 border rounded">
-                        <div>
-                          <p className="font-medium">New Booking #{booking.id}</p>
-                          <p className="text-sm text-gray-600">{booking.passengerName}</p>
-                        </div>
-                        <Badge className={`${getStatusColor(booking.bookingStatus)} text-white`}>
-                          {booking.bookingStatus}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Platform Stats */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Platform Statistics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between">
-                      <span>Total Providers</span>
-                      <span className="font-bold">{users.filter(u => u.role === 'provider').length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Total Guests</span>
-                      <span className="font-bold">{users.filter(u => u.role === 'guest').length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Completed Rides</span>
-                      <span className="font-bold">{rides.filter(r => r.status === 'completed').length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Success Rate</span>
-                      <span className="font-bold">
-                        {rides.length > 0 ? Math.round((rides.filter(r => r.status === 'completed').length / rides.length) * 100) : 0}%
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
-          </TabsContent>
+          </CardContent>
+        </Card>
 
-          {/* Users Tab */}
-          <TabsContent value="users">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Users className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Users</p>
+                <p className="text-2xl font-bold">{mockUsers.length}</p>
+                <p className="text-xs text-gray-600">{mockAnalytics.totalProviders} providers</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <IndianRupee className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                <p className="text-2xl font-bold">₹{mockAnalytics.totalRevenue.toLocaleString()}</p>
+                <p className="text-xs text-gray-600">₹{mockAnalytics.commissionEarned.toLocaleString()} commission</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-8 w-8 text-red-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Disputes</p>
+                <p className="text-2xl font-bold">{mockAnalytics.activeDisputes}</p>
+                <p className="text-xs text-gray-600">{mockAnalytics.refundsProcessed} refunds processed</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="rides">Rides</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="disputes">Disputes</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>User Management</CardTitle>
+                <CardTitle>Revenue by Type</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {users.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-4 border rounded">
+                  <div className="flex items-center justify-between">
+                    <span>Car Pool</span>
+                    <span className="font-bold">₹{mockAnalytics.revenueByType.carpool.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Bus</span>
+                    <span className="font-bold">₹{mockAnalytics.revenueByType.bus.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Shared Taxi</span>
+                    <span className="font-bold">₹{mockAnalytics.revenueByType.sharedTaxi.toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Routes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockAnalytics.topRoutes.map((route, index) => (
+                    <div key={index} className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold">{user.name}</h3>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <span>{user.email}</span>
-                          <span>{user.phone}</span>
-                          <span>Joined: {format(new Date(user.createdAt), 'PP')}</span>
-                        </div>
+                        <p className="font-medium">{route.route}</p>
+                        <p className="text-sm text-gray-600">{route.bookings} bookings</p>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={`${getRoleColor(user.role)} text-white`}>
+                      <span className="font-bold">₹{route.revenue.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle>User Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {mockUsers.map(user => (
+                  <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{user.name}</p>
+                      <p className="text-sm text-gray-600">{user.email}</p>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <Badge variant={user.role === 'provider' ? 'default' : 'secondary'}>
                           {user.role}
                         </Badge>
-                        <Badge variant={user.isActive ? "default" : "destructive"}>
+                        <Badge variant={user.isActive ? 'default' : 'destructive'}>
                           {user.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    <div className="text-right">
+                      <p className="font-medium">₹{user.walletBalance}</p>
+                      <p className="text-sm text-gray-600">{user.totalRides} rides</p>
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                        <span className="text-sm">{user.rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Rides Tab */}
-          <TabsContent value="rides">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ride Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {rides.map((ride) => (
-                    <div key={ride.id} className="p-4 border rounded">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <div className="flex items-center space-x-2 mb-2">
-                            <MapPin className="w-4 h-4 text-gray-500" />
-                            <span className="font-semibold">{ride.fromLocation} → {ride.toLocation}</span>
-                            <Badge>{ride.type}</Badge>
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            Provider: {ride.providerName} | Departure: {format(new Date(ride.departureTime), 'PPP p')}
-                          </div>
-                        </div>
-                        <Badge className={`${getStatusColor(ride.status)} text-white`}>
-                          {ride.status}
+        <TabsContent value="rides">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ride Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-12">
+                <Car className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Ride Management</h3>
+                <p className="text-gray-600">Monitor all platform rides and bookings</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payments">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Provider Payouts</p>
+                    <p className="text-sm text-gray-600">Pending: ₹25,000</p>
+                  </div>
+                  <Button onClick={() => handleTriggerPayout(1)}>
+                    Trigger Payout
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Refund Requests</p>
+                    <p className="text-sm text-gray-600">Pending: 3 requests</p>
+                  </div>
+                  <Button variant="outline">
+                    Process Refunds
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="disputes">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dispute Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {mockDisputes.map(dispute => (
+                  <div key={dispute.id} className="border rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-medium">{dispute.subject}</h3>
+                        <p className="text-sm text-gray-600">Booking #{dispute.bookingId}</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Badge variant={dispute.priority === 'high' ? 'destructive' : 'default'}>
+                          {dispute.priority}
+                        </Badge>
+                        <Badge variant="outline">
+                          {dispute.status}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Available Seats:</span>
-                          <p className="font-medium">{ride.availableSeats}/{ride.totalSeats}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Price per Seat:</span>
-                          <p className="font-medium">₹{ride.pricePerSeat}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Provider Rating:</span>
-                          <p className="font-medium flex items-center">
-                            <Star className="w-3 h-3 text-yellow-500 mr-1" />
-                            {ride.providerRating?.toFixed(1) || 'New'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Revenue:</span>
-                          <p className="font-medium">₹{(ride.totalSeats - ride.availableSeats) * ride.pricePerSeat}</p>
-                        </div>
-                      </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Bookings Tab */}
-          <TabsContent value="bookings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Booking Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {bookings.map((booking) => (
-                    <div key={booking.id} className="p-4 border rounded">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className="font-semibold">Booking #{booking.id}</h3>
-                          <div className="text-sm text-gray-600">
-                            {booking.passengerName} | {booking.passengerPhone} | {booking.passengerEmail}
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Badge className={`${getStatusColor(booking.bookingStatus)} text-white`}>
-                            {booking.bookingStatus}
-                          </Badge>
-                          <Badge variant="outline">{booking.paymentStatus}</Badge>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Seats Booked:</span>
-                          <p className="font-medium">{booking.seatsBooked}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Total Amount:</span>
-                          <p className="font-medium">₹{booking.totalAmount}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Booking Date:</span>
-                          <p className="font-medium">{format(new Date(booking.bookingDate), 'PP')}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Can Cancel:</span>
-                          <p className="font-medium">{booking.canCancelFree ? 'Yes' : 'No'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Analytics Tab */}
-          <TabsContent value="analytics">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Revenue by Vehicle Type</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {['car', 'bus', 'shared-taxi'].map((type) => {
-                      const typeRevenue = bookings
-                        .filter(b => rides.find(r => r.id === b.rideId)?.type === type)
-                        .reduce((sum, b) => sum + b.totalAmount, 0);
-                      return (
-                        <div key={type} className="flex justify-between items-center">
-                          <span className="capitalize">{type.replace('-', ' ')}</span>
-                          <span className="font-bold">₹{typeRevenue}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Health</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between">
-                      <span>Active Users</span>
-                      <span className="font-bold">{users.filter(u => u.isActive).length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Pending Bookings</span>
-                      <span className="font-bold">{bookings.filter(b => b.bookingStatus === 'pending').length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Payment Success Rate</span>
-                      <span className="font-bold">
-                        {bookings.length > 0 ? Math.round((bookings.filter(b => b.paymentStatus === 'paid').length / bookings.length) * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Average Rating</span>
-                      <span className="font-bold">
-                        {rides.length > 0 ? (rides.reduce((sum, r) => sum + (r.providerRating || 0), 0) / rides.filter(r => r.providerRating).length).toFixed(1) : 'N/A'}
-                      </span>
+                    <p className="text-sm mb-3">{dispute.description}</p>
+                    <div className="flex space-x-2">
+                      <Button size="sm" onClick={() => handleResolveDispute(dispute.id, 'Resolved in favor of customer')}>
+                        Resolve
+                      </Button>
+                      <Button size="sm" variant="outline">
+                        Investigate
+                      </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

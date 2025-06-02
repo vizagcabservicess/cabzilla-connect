@@ -1,38 +1,58 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, RouterProvider } from "react-router-dom";
+import { AuthProvider } from "@/providers/AuthProvider";
+import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
+import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
+import router from './routes'; // Only for original approach
+import Index from "./pages/Index";
+import AdminDashboard from "./pages/AdminDashboardPage";
+import CustomerDashboard from "./pages/DashboardPage";
+import DriverDashboard from "./pages/DriverDashboard";
+import PoolingPage from "./pages/PoolingPage";
+import PoolingLoginPage from "./pages/PoolingLoginPage";
+import PoolingProviderPage from "./pages/PoolingProviderPage";
+import PoolingAdminPage from "./pages/PoolingAdminPage";
 
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'sonner';
-import { PoolingAuthProvider } from '@/providers/PoolingAuthProvider';
+const queryClient = new QueryClient();
+const USE_ORIGINAL_APP = true; // Toggle this to switch approaches
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
-// Pooling Pages
-import PoolingLoginPage from '@/pages/PoolingLoginPage';
-import PoolingGuestPage from '@/pages/PoolingGuestPage';
-import PoolingProviderPage from '@/pages/PoolingProviderPage';
-import PoolingAdminPage from '@/pages/PoolingAdminPage';
-import GuestDashboardPage from '@/pages/GuestDashboardPage';
-
-function App() {
-  return (
-    <Router>
-      <PoolingAuthProvider>
-        <div className="min-h-screen bg-gray-50">
-          <Routes>
-            {/* Pooling Routes */}
-            <Route path="/pooling/login" element={<PoolingLoginPage />} />
-            <Route path="/pooling/dashboard" element={<PoolingGuestPage />} />
-            <Route path="/pooling/provider" element={<PoolingProviderPage />} />
-            <Route path="/pooling/admin" element={<PoolingAdminPage />} />
-            <Route path="/pooling" element={<GuestDashboardPage />} />
-            
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/pooling/login" replace />} />
-          </Routes>
-          
-          <Toaster position="top-right" />
-        </div>
-      </PoolingAuthProvider>
-    </Router>
-  );
-}
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      {USE_ORIGINAL_APP ? (
+        <AuthProvider>
+          <PoolingAuthProvider>
+            <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
+              <RouterProvider router={router} />
+            </GoogleMapsProvider>
+          </PoolingAuthProvider>
+        </AuthProvider>
+      ) : (
+        <BrowserRouter>
+          <AuthProvider>
+            <PoolingAuthProvider>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/customer" element={<CustomerDashboard />} />
+                <Route path="/driver" element={<DriverDashboard />} />
+                <Route path="/pooling" element={<PoolingPage />} />
+                <Route path="/pooling/login" element={<PoolingLoginPage />} />
+                <Route path="/pooling/provider" element={<PoolingProviderPage />} />
+                <Route path="/pooling/admin" element={<PoolingAdminPage />} />
+              </Routes>
+            </PoolingAuthProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      )}
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;
