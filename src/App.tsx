@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +16,7 @@ import PoolingPage from "./pages/PoolingPage";
 import PoolingLoginPage from "./pages/PoolingLoginPage";
 import PoolingProviderPage from "./pages/PoolingProviderPage";
 import PoolingAdminPage from "./pages/PoolingAdminPage";
+import GuestDashboardPage from "./pages/GuestDashboardPage";
 
 const queryClient = new QueryClient();
 const USE_ORIGINAL_APP = true; // Toggle this to switch approaches
@@ -46,6 +48,7 @@ const App = () => (
                 <Route path="/pooling/login" element={<PoolingLoginPage />} />
                 <Route path="/pooling/provider" element={<PoolingProviderPage />} />
                 <Route path="/pooling/admin" element={<PoolingAdminPage />} />
+                <Route path="/pooling/guest" element={<GuestDashboardPage />} />
               </Routes>
             </PoolingAuthProvider>
           </AuthProvider>

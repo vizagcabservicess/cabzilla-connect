@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,26 +30,30 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      console.log('Login formData:', formData);
+      console.log('Login attempt with:', { email: formData.email, role: formData.role });
       const user = await login({ email: formData.email, password: formData.password });
-      console.log('User after login:', user);
+      console.log('Login successful, user:', user);
+      
       toast.success('Login successful!');
-      // Immediate role-based navigation with debug logs
+      
+      // Role-based navigation
       if (user?.role === 'admin') {
-        console.log('Navigating to /pooling/admin');
+        console.log('Redirecting admin to /pooling/admin');
         navigate('/pooling/admin');
       } else if (user?.role === 'provider') {
-        console.log('Navigating to /pooling/provider');
+        console.log('Redirecting provider to /pooling/provider');
         navigate('/pooling/provider');
       } else if (user?.role === 'guest') {
-        console.log('Navigating to /pooling/guest');
+        console.log('Redirecting guest to /pooling/guest');
         navigate('/pooling/guest');
       } else {
-        console.log('Navigating to /pooling');
+        console.log('Unknown role, redirecting to /pooling');
         navigate('/pooling');
       }
+      
       if (onSuccess) onSuccess();
     } catch (error) {
+      console.error('Login error:', error);
       toast.error('Login failed. Please check your credentials.');
     }
   };
@@ -56,10 +61,27 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await register(formData);
+      console.log('Registration attempt with:', formData);
+      const user = await register(formData);
+      console.log('Registration successful, user:', user);
+      
       toast.success('Registration successful!');
-      onSuccess?.();
+      
+      // Role-based navigation after registration
+      if (user?.role === 'provider') {
+        console.log('Redirecting new provider to /pooling/provider');
+        navigate('/pooling/provider');
+      } else if (user?.role === 'guest') {
+        console.log('Redirecting new guest to /pooling/guest');
+        navigate('/pooling/guest');
+      } else {
+        console.log('Redirecting to /pooling');
+        navigate('/pooling');
+      }
+      
+      if (onSuccess) onSuccess();
     } catch (error) {
+      console.error('Registration error:', error);
       toast.error('Registration failed. Please try again.');
     }
   };
