@@ -42,7 +42,7 @@ function sendError($message, $status = 400) {
     http_response_code($status);
     echo json_encode([
         'status' => 'error',
-        'message' => $message,
+        'message' => '[DEBUG_MARKER] ' . $message,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
     exit;
@@ -50,11 +50,13 @@ function sendError($message, $status = 400) {
 
 function validateInput($input, $required_fields) {
     $errors = [];
+    file_put_contents(__DIR__ . '/debug_login.log', "validateInput called with: " . print_r($input, true) . " and required: " . print_r($required_fields, true) . "\n", FILE_APPEND);
     foreach ($required_fields as $field) {
-        if (!isset($input[$field]) || empty($input[$field])) {
+        if (!isset($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
             $errors[] = "$field is required";
         }
     }
+    file_put_contents(__DIR__ . '/debug_login.log', "validateInput errors: " . print_r($errors, true) . "\n", FILE_APPEND);
     return $errors;
 }
 

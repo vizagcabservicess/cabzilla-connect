@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import {
@@ -93,7 +92,15 @@ class PoolingAPI {
     login: async (credentials: LoginRequest): Promise<AuthResponse> => {
       console.log('API: Attempting login with:', credentials);
       try {
-        const response = await axios.post(`${POOLING_API_URL}/auth.php?action=login`, credentials);
+        const formData = new URLSearchParams();
+        formData.append('email', credentials.email);
+        formData.append('password', credentials.password);
+        if (credentials.role) formData.append('role', credentials.role);
+        const response = await axios.post(
+          `${POOLING_API_URL}/auth.php?action=login`,
+          formData,
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
         console.log('API: Login response:', response.data);
         return response.data;
       } catch (error) {
@@ -105,7 +112,17 @@ class PoolingAPI {
     register: async (userData: RegisterRequest): Promise<AuthResponse> => {
       console.log('API: Attempting register with:', userData);
       try {
-        const response = await axios.post(`${POOLING_API_URL}/auth.php?action=register`, userData);
+        const formData = new URLSearchParams();
+        formData.append('name', userData.name);
+        formData.append('email', userData.email);
+        formData.append('phone', userData.phone);
+        formData.append('password', userData.password);
+        formData.append('role', userData.role);
+        const response = await axios.post(
+          `${POOLING_API_URL}/auth.php?action=register`,
+          formData,
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
         console.log('API: Register response:', response.data);
         return response.data;
       } catch (error) {

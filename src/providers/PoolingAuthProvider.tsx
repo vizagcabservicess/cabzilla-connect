@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { PoolingUser, UserRole } from '@/types/pooling';
 import { poolingAPI } from '@/services/api/poolingAPI';
@@ -47,12 +46,13 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
       const response = await poolingAPI.auth.login(credentials);
       console.log('API login response:', response);
       
-      const userData = response.user;
+      const userData = response.data?.user || response.user;
+      const token = response.data?.token || response.token;
       console.log('Setting user data:', userData);
       
       setUser(userData);
       localStorage.setItem('pooling_user', JSON.stringify(userData));
-      localStorage.setItem('pooling_auth_token', response.token);
+      localStorage.setItem('pooling_auth_token', token);
       
       return userData;
     } finally {
@@ -67,12 +67,13 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
       const response = await poolingAPI.auth.register(userData);
       console.log('API register response:', response);
       
-      const user = response.user;
+      const user = response.data?.user || response.user;
+      const token = response.data?.token || response.token;
       console.log('Setting registered user data:', user);
       
       setUser(user);
       localStorage.setItem('pooling_user', JSON.stringify(user));
-      localStorage.setItem('pooling_auth_token', response.token);
+      localStorage.setItem('pooling_auth_token', token);
       
       return user;
     } finally {

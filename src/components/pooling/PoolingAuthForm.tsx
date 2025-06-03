@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,14 +35,15 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
       
       toast.success('Login successful!');
       
-      // Role-based navigation
-      if (response?.role === 'admin') {
+      // Role-based navigation (use response.data.user.role)
+      const user = response?.data?.user || response?.user;
+      if (user?.role === 'admin') {
         console.log('Redirecting admin to /pooling/admin');
         navigate('/pooling/admin');
-      } else if (response?.role === 'provider') {
+      } else if (user?.role === 'provider') {
         console.log('Redirecting provider to /pooling/provider');
         navigate('/pooling/provider');
-      } else if (response?.role === 'guest') {
+      } else if (user?.role === 'guest') {
         console.log('Redirecting guest to /pooling/guest');
         navigate('/pooling/guest');
       } else {
@@ -67,11 +67,12 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
       
       toast.success('Registration successful!');
       
-      // Role-based navigation after registration
-      if (response?.role === 'provider') {
+      // Role-based navigation after registration (use response.data.user.role)
+      const user = response?.data?.user || response?.user;
+      if (user?.role === 'provider') {
         console.log('Redirecting new provider to /pooling/provider');
         navigate('/pooling/provider');
-      } else if (response?.role === 'guest') {
+      } else if (user?.role === 'guest') {
         console.log('Redirecting new guest to /pooling/guest');
         navigate('/pooling/guest');
       } else {
