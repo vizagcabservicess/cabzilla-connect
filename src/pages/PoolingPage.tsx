@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { EnhancedPoolingSearch } from '@/components/pooling/EnhancedPoolingSearch';
@@ -23,7 +22,7 @@ const PoolingPage = () => {
 
   const { data: rides, isLoading, error } = useQuery({
     queryKey: ['pooling-rides', searchParams],
-    queryFn: () => searchParams ? poolingAPI.searchRides(searchParams) : Promise.resolve([]),
+    queryFn: () => searchParams ? poolingAPI.rides.search(searchParams) : Promise.resolve([]),
     enabled: !!searchParams,
   });
 
@@ -39,13 +38,12 @@ const PoolingPage = () => {
     }
 
     try {
-      // In a real app, this would call an API to send the request
-      console.log('Sending ride request:', { rideId, request });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      toast.info('Sending ride request...');
+      console.log('Sending ride request to backend:', { rideId, request });
+      // Call the real backend API
+      await poolingAPI.requests.create(request);
       toast.success('Ride request sent successfully!');
+      console.log('Ride request sent successfully!');
     } catch (error) {
       console.error('Failed to send ride request:', error);
       toast.error('Failed to send ride request. Please try again.');
@@ -273,7 +271,26 @@ const PoolingPage = () => {
           setIsDetailsModalOpen(false);
           setSelectedRide(null);
         }}
-        onBook={() => {}} // Will be handled by request system
+        onBook={(ride) => {
+          if (!ride) return;
+          // Compose the request object for the selected ride
+          if (!user) {
+            toast.error('Please login to request a ride');
+            navigate('/pooling/login');
+            return;
+          }
+          const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
+            rideId: ride.id,
+            guestId: user.id,
+            guestName: user.name,
+            guestPhone: user.phone,
+            guestEmail: user.email,
+            seatsRequested: 1, // Default to 1 seat
+            status: 'pending',
+            requestMessage: 'I would like to join this ride',
+          };
+          handleRideRequest(ride.id, request);
+        }}
       />
     </div>
   );

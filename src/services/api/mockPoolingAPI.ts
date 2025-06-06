@@ -1,4 +1,3 @@
-
 import { 
   PoolingRide, 
   PoolingSearchRequest, 
@@ -261,5 +260,10 @@ export const mockPoolingAPI = {
   regenerateData: () => {
     mockRides = generateDynamicMockRides();
     console.log('🔄 Regenerated mock ride data');
+  },
+
+  createRequest: async (requestData) => {
+    console.log('[mockPoolingAPI.ts] createRequest called with', requestData);
+    // ... mock implementation ...
   }
 };

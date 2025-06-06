@@ -12,7 +12,8 @@ import {
   CheckCircle,
   TrendingUp,
   Star,
-  AlertTriangle
+  AlertTriangle,
+  LogOut
 } from 'lucide-react';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { WalletManager } from './WalletManager';
@@ -23,34 +24,137 @@ import { PoolingRide, RideRequest, WalletTransaction } from '@/types/pooling';
 import { useQuery } from '@tanstack/react-query';
 import { poolingAPI } from '@/services/api/poolingAPI';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+
+function safeToFixed(value, digits = 2, fallback = '0.00') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
+}
 
 export function ProviderDashboard() {
-  const { user, wallet, canCreateRide, refreshWallet } = usePoolingAuth();
+  const { user, walletData, canCreateRide, setWalletData, logout } = usePoolingAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateRide, setShowCreateRide] = useState(false);
   const [rides, setRides] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [providerRequests, setProviderRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [_, forceUpdate] = useState(0);
 
   useEffect(() => {
     if (user) {
+      const providerId = (user as any).providerId || user.id;
       setLoading(true);
-      poolingAPI.rides.getByProvider(user.id)
-        .then(data => setRides(Array.isArray(data) ? data : []))
+      poolingAPI.rides.getByProvider(providerId)
+        .then(data => {
+          console.log('Fetched rides (raw):', data);
+          function toCamelCaseRide(r: any) {
+            return {
+              ...r,
+              id: r.id,
+              type: r.type,
+              providerId: r.provider_id,
+              providerName: r.provider_name,
+              providerPhone: r.provider_phone,
+              providerRating: r.provider_rating,
+              fromLocation: r.from_location,
+              toLocation: r.to_location,
+              departureTime: r.departure_time,
+              arrivalTime: r.arrival_time,
+              totalSeats: r.total_seats,
+              availableSeats: r.available_seats,
+              pricePerSeat: r.price_per_seat,
+              vehicleInfo: r.vehicleInfo || {
+                make: r.make,
+                model: r.model,
+                color: r.color,
+                plateNumber: r.plate_number,
+      },
+              route: r.route || r.route_stops || [],
+              amenities: r.amenities,
+              rules: r.rules,
+              status: r.status,
+              createdAt: r.created_at,
+              updatedAt: r.updated_at,
+              requests: r.requests || [],
+              ratings: r.ratings || [],
+            };
+          }
+          let ridesArr: any[] = [];
+          if (Array.isArray(data)) {
+            ridesArr = data;
+          } else if (data && Array.isArray((data as any).data)) {
+            ridesArr = (data as any).data;
+          }
+          const mappedRides = ridesArr.map(toCamelCaseRide);
+          console.log('Mapped rides:', mappedRides);
+          setRides(mappedRides);
+        })
         .finally(() => setLoading(false));
-      poolingAPI.wallet.getTransactions(user.id)
+      poolingAPI.wallet.getTransactions(providerId, 'provider')
         .then(data => setTransactions(Array.isArray(data) ? data : []));
+      poolingAPI.wallet.getBalance(providerId, 'provider')
+        .then(data => setWalletData(data));
+      // Fetch all requests for this provider
+      poolingAPI.requests.getByProvider(providerId)
+        .then(async (data) => {
+          console.log('Fetched requests (raw):', data);
+          let requestsArr: any[] = [];
+          if (Array.isArray(data)) {
+            requestsArr = data;
+          } else if (data && Array.isArray((data as any).data)) {
+            requestsArr = (data as any).data;
+          }
+          // Map snake_case to camelCase for all requests
+          function toCamelCaseRequest(r: any) {
+            return {
+              ...r,
+              id: r.id,
+              rideId: r.ride_id,
+              guestId: r.guest_id,
+              seatsRequested: r.seats_requested,
+              requestMessage: r.request_message,
+              responseMessage: r.response_message,
+              status: r.status,
+              requestedAt: r.requested_at,
+              respondedAt: r.responded_at,
+            };
+          }
+          let requests = requestsArr.map(toCamelCaseRequest);
+          console.log('Mapped requests:', requests);
+          // Fetch guest info for each request
+          const uniqueGuestIds = [...new Set(requests.map(r => Number(r.guestId)).filter(id => !isNaN(id)))];
+          const guestInfoMap: Record<number, any> = {};
+          for (const guestId of uniqueGuestIds) {
+            if (!guestId) continue;
+            try {
+              const guest = await poolingAPI.auth.getUserById(guestId);
+              guestInfoMap[guestId] = guest;
+            } catch (e) {
+              guestInfoMap[guestId] = { name: 'Unknown', email: '', phone: '' };
+            }
+          }
+          // Merge guest info into requests
+          requests = requests.map(r => ({
+            ...r,
+            guestName: r.guestName || guestInfoMap[Number(r.guestId)]?.name || '',
+            guestEmail: r.guestEmail || guestInfoMap[Number(r.guestId)]?.email || '',
+            guestPhone: r.guestPhone || guestInfoMap[Number(r.guestId)]?.phone || '',
+          }));
+          setProviderRequests(requests);
+        });
     }
   }, [user]);
 
   const handleCreateRide = async (rideData) => {
     try {
-      await poolingAPI.rides.create(rideData, user?.providerId);
+      await poolingAPI.rides.create({ ...rideData, providerId: user?.id || user?.id });
       toast.success('Ride created successfully!');
       setShowCreateRide(false);
       // Refresh rides
       if (user) {
-        const updatedRides = await poolingAPI.rides.getByProvider(user.providerId);
+        const updatedRides = await poolingAPI.rides.getByProvider(user.id);
         setRides(Array.isArray(updatedRides) ? updatedRides : []);
       }
     } catch (error) {
@@ -78,34 +182,48 @@ export function ProviderDashboard() {
     }
   };
 
+  console.log('walletData in dashboard:', walletData);
+
   const handleWalletDeposit = async (amount) => {
-    try {
-      if (user) {
-        await poolingAPI.wallet.deposit(user.id, amount);
-        await refreshWallet();
-        toast.success('Money added to wallet!');
-        // Refresh transactions
-        const updatedTransactions = await poolingAPI.wallet.getTransactions(user.id);
-        setTransactions(updatedTransactions);
-      }
-    } catch (error) {
-      toast.error('Failed to add money');
+    if (!user) return;
+    // Call backend to credit wallet
+    const res = await fetch('/api/pooling/wallet/add-funds.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, amount })
+    });
+    if (!res.ok) {
+      toast.error('Failed to add money to wallet');
+      return;
     }
+    // Refresh wallet balance
+    const updatedWallet = await poolingAPI.wallet.getBalance(user.id);
+    if (typeof setWalletData === 'function') setWalletData(updatedWallet);
+    forceUpdate(n => n + 1); // force re-render
+    toast.success('Money added to wallet!');
   };
 
   const handleWalletWithdraw = async (amount) => {
     try {
       if (user) {
         await poolingAPI.wallet.withdraw(user.id, amount);
-        await refreshWallet();
-        toast.success('Withdrawal request submitted!');
+        // Refresh wallet balance
+        const updatedWallet = await poolingAPI.wallet.getBalance(user.id);
+        if (typeof setWalletData === 'function') setWalletData(updatedWallet);
         // Refresh transactions
         const updatedTransactions = await poolingAPI.wallet.getTransactions(user.id);
         setTransactions(updatedTransactions);
+        forceUpdate(n => n + 1); // force re-render
+        toast.success('Withdrawal successful!');
       }
     } catch (error) {
       toast.error('Failed to process withdrawal');
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/pooling/login');
   };
 
   if (showCreateRide) {
@@ -127,6 +245,15 @@ export function ProviderDashboard() {
           <h1 className="text-2xl font-bold">Provider Dashboard</h1>
           <p className="text-gray-600">Welcome back, {user?.name}</p>
         </div>
+        <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         <Button 
           onClick={() => setShowCreateRide(true)}
           disabled={!canCreateRide()}
@@ -135,6 +262,7 @@ export function ProviderDashboard() {
           <Plus className="h-4 w-4" />
           <span>Create Ride</span>
         </Button>
+        </div>
       </div>
 
       {/* Wallet Alert */}
@@ -146,7 +274,7 @@ export function ProviderDashboard() {
               <div>
                 <p className="font-medium text-orange-800">Minimum Balance Required</p>
                 <p className="text-sm text-orange-700">
-                  Add ₹{500 - (wallet?.balance || 0)} to your wallet to create rides
+                  Add ₹{500 - (Number(walletData?.balance) || 0)} to your wallet to create rides
                 </p>
               </div>
             </div>
@@ -186,7 +314,7 @@ export function ProviderDashboard() {
               <Wallet className="h-8 w-8 text-purple-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Wallet Balance</p>
-                <p className="text-2xl font-bold">₹{wallet?.balance || 0}</p>
+                <p className="text-2xl font-bold">₹{walletData?.balance || 0}</p>
               </div>
             </div>
           </CardContent>
@@ -198,7 +326,7 @@ export function ProviderDashboard() {
               <Star className="h-8 w-8 text-yellow-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Rating</p>
-                <p className="text-2xl font-bold">{user?.rating?.toFixed(1) || '0.0'}</p>
+                <p className="text-2xl font-bold">{safeToFixed(user?.rating, 1, '0.0')}</p>
               </div>
             </div>
           </CardContent>
@@ -333,7 +461,7 @@ export function ProviderDashboard() {
 
         <TabsContent value="requests">
           <RequestManagement
-            requests={rides.flatMap(r => r.requests || [])}
+            requests={providerRequests}
             onApprove={handleApproveRequest}
             onReject={handleRejectRequest}
             showProviderActions={true}
@@ -342,7 +470,7 @@ export function ProviderDashboard() {
 
         <TabsContent value="wallet">
           <WalletManager
-            wallet={wallet}
+            wallet={walletData}
             transactions={transactions}
             userRole="provider"
             onDeposit={handleWalletDeposit}

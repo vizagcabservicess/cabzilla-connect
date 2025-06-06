@@ -1,5 +1,5 @@
-
 <?php
+file_put_contents(__DIR__ . '/order_debug.log', 'SCRIPT CALLED' . PHP_EOL, FILE_APPEND);
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Check if it's a POST request
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    file_put_contents(__DIR__ . '/order_debug.log', 'ERROR: Not a POST request' . PHP_EOL, FILE_APPEND);
     echo json_encode(['error' => 'Only POST requests are allowed']);
     http_response_code(405);
     exit;
@@ -20,8 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // Get the request body
 $data = json_decode(file_get_contents('php://input'), true);
+file_put_contents(__DIR__ . '/order_debug.log', 'INPUT: ' . json_encode($data) . PHP_EOL, FILE_APPEND);
 
 if (!isset($data['amount']) || !is_numeric($data['amount'])) {
+    file_put_contents(__DIR__ . '/order_debug.log', 'ERROR: Invalid amount' . PHP_EOL, FILE_APPEND);
     echo json_encode(['error' => 'Invalid amount']);
     http_response_code(400);
     exit;
@@ -31,8 +34,8 @@ if (!isset($data['amount']) || !is_numeric($data['amount'])) {
 require_once __DIR__ . '/utils/database.php';
 
 // Load Razorpay API keys
-$key_id = "rzp_test_41fJeGiVFyU9OQ"; // Test key
-$key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH"; // Test secret
+$key_id = "rzp_test_41fJeGiVFyU9OQ"; // Test key (fixed to match working modules)
+$key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH"; // Test secret (fixed to match working modules)
 
 // Generate a unique receipt ID
 $receipt_id = 'rcpt_' . time() . '_' . substr(md5(mt_rand()), 0, 8);
@@ -65,12 +68,12 @@ try {
     // Execute the call and get the response
     $response = curl_exec($curl);
     $err = curl_error($curl);
-    
     curl_close($curl);
+    file_put_contents(__DIR__ . '/order_debug.log', 'CURL RESPONSE: ' . $response . PHP_EOL, FILE_APPEND);
+    file_put_contents(__DIR__ . '/order_debug.log', 'CURL ERROR: ' . $err . PHP_EOL, FILE_APPEND);
     
     if ($err) {
-        // Log the error
-        error_log("Razorpay API Error: " . $err);
+        file_put_contents(__DIR__ . '/order_debug.log', 'RAZORPAY API ERROR: ' . $err . PHP_EOL, FILE_APPEND);
         echo json_encode(['error' => 'Failed to create order']);
         http_response_code(500);
         exit;
@@ -80,7 +83,7 @@ try {
     $order = json_decode($response, true);
     
     if (isset($order['error'])) {
-        error_log("Razorpay Error: " . json_encode($order['error']));
+        file_put_contents(__DIR__ . '/order_debug.log', 'RAZORPAY ORDER ERROR: ' . json_encode($order['error']) . PHP_EOL, FILE_APPEND);
         echo json_encode(['error' => $order['error']['description'] ?? 'Failed to create order']);
         http_response_code(400);
         exit;
@@ -92,11 +95,12 @@ try {
     // Use prepared statements to prevent SQL injection
     $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) 
                            VALUES (?, ?, ?, NOW(), ?)");
-                           
+                            
     $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
     $stmt->execute();
     
     if ($stmt->error) {
+        file_put_contents(__DIR__ . '/order_debug.log', 'DB ERROR: ' . $stmt->error . PHP_EOL, FILE_APPEND);
         error_log("Database Error: " . $stmt->error);
     }
     
@@ -110,6 +114,7 @@ try {
     ]);
     
 } catch (Exception $e) {
+    file_put_contents(__DIR__ . '/order_debug.log', 'EXCEPTION: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
     error_log("Exception: " . $e->getMessage());
     echo json_encode(['error' => 'Internal server error']);
     http_response_code(500);

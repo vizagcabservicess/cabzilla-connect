@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,9 +12,17 @@ interface RideCardProps {
   onViewDetails: (ride: PoolingRide) => void;
 }
 
+function isValidDateString(dateStr: string | undefined | null): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  return !isNaN(d.getTime());
+}
+
 export function RideCard({ ride, onBook, onViewDetails }: RideCardProps) {
-  const departureTime = new Date(ride.departureTime);
-  const arrivalTime = ride.arrivalTime ? new Date(ride.arrivalTime) : null;
+  const departureTimeValid = isValidDateString(ride.departureTime);
+  const arrivalTimeValid = isValidDateString(ride.arrivalTime);
+  const departureTime = departureTimeValid ? new Date(ride.departureTime) : null;
+  const arrivalTime = arrivalTimeValid ? new Date(ride.arrivalTime) : null;
 
   const getRideTypeIcon = () => {
     switch (ride.type) {
@@ -67,7 +74,7 @@ export function RideCard({ ride, onBook, onViewDetails }: RideCardProps) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <div className="text-center">
-              <p className="text-lg font-semibold">{format(departureTime, 'HH:mm')}</p>
+              <p className="text-lg font-semibold">{departureTime ? format(departureTime, 'HH:mm') : '--:--'}</p>
               <p className="text-sm text-gray-600">{ride.fromLocation}</p>
             </div>
             <div className="flex-1 flex items-center justify-center">

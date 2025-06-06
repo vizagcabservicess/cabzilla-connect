@@ -152,6 +152,18 @@ class PoolingAPI {
         console.error('API: Logout error:', error);
         throw error;
       }
+    },
+
+    getUserById: async (userId: number): Promise<PoolingUser> => {
+      try {
+        const response = await axios.get(`${POOLING_API_URL}/users.php?id=${userId}`, {
+          headers: this.getAuthHeaders()
+        });
+        return response.data;
+      } catch (error) {
+        console.error('API: Get user by ID error:', error);
+        throw error;
+      }
     }
   };
 
@@ -160,7 +172,7 @@ class PoolingAPI {
     search: async (params: SearchRideRequest): Promise<PoolingRide[]> => {
       try {
         const response = await axios.get(`${POOLING_API_URL}/search.php`, { params });
-        return response.data;
+        return response.data.data || [];
       } catch (error) {
         console.error('API: Search rides error:', error);
         throw error;
@@ -257,10 +269,13 @@ class PoolingAPI {
   // Requests endpoints
   requests = {
     create: async (requestData: CreateRequestRequest): Promise<PoolingRequest> => {
+      console.log('[poolingAPI.ts] requests.create called with', requestData);
       try {
-        const response = await axios.post(`${POOLING_API_URL}/requests.php`, requestData, {
-          headers: this.getAuthHeaders()
-        });
+        const response = await axios.post(
+          'https://vizagup.com/api/pooling/requests.php',
+          requestData,
+          { headers: this.getAuthHeaders() }
+        );
         return response.data;
       } catch (error) {
         console.error('API: Create request error:', error);
@@ -270,7 +285,7 @@ class PoolingAPI {
 
     getByProvider: async (providerId: number): Promise<PoolingRequest[]> => {
       try {
-        const response = await axios.get(`${POOLING_API_URL}/requests.php?provider_id=${providerId}`, {
+        const response = await axios.get(`${POOLING_API_URL}/requests.php?action=by-provider&provider_id=${providerId}`, {
           headers: this.getAuthHeaders()
         });
         return response.data || [];
@@ -290,16 +305,32 @@ class PoolingAPI {
         console.error('API: Update request error:', error);
         throw error;
       }
+    },
+
+    approve: async (requestId: number, responseMessage?: string) => {
+      return axios.put(
+        `${POOLING_API_URL}/requests.php?action=approve`,
+        { id: requestId, responseMessage },
+        { headers: this.getAuthHeaders() }
+      );
+    },
+
+    reject: async (requestId: number, responseMessage?: string) => {
+      return axios.put(
+        `${POOLING_API_URL}/requests.php?action=reject`,
+        { id: requestId, responseMessage },
+        { headers: this.getAuthHeaders() }
+      );
     }
   };
 
   // Wallet endpoints
   wallet = {
-    getBalance: async (userId: number): Promise<{ balance: number }> => {
+    getBalance: async (userId: number, userType: string = 'provider'): Promise<{ balance: number }> => {
       try {
-        const response = await axios.get(`${POOLING_API_URL}/wallet.php?user_id=${userId}`, {
-          headers: this.getAuthHeaders()
-        });
+        const response = await axios.get(`${POOLING_API_URL}/wallet.php?user_id=${userId}&user_type=${userType}`,
+          { headers: this.getAuthHeaders() }
+        );
         return response.data;
       } catch (error) {
         console.error('API: Get wallet balance error:', error);
@@ -317,6 +348,43 @@ class PoolingAPI {
       } catch (error) {
         console.error('API: Add funds error:', error);
         throw error;
+      }
+    },
+
+    getTransactions: async (userId: number, userType: string = 'provider'): Promise<any[]> => {
+      try {
+        const response = await axios.get(`${POOLING_API_URL}/wallet.php?user_id=${userId}&user_type=${userType}&action=transactions`, {
+          headers: this.getAuthHeaders()
+        });
+        return response.data || [];
+      } catch (error) {
+        console.error('API: Get wallet transactions error:', error);
+        return [];
+      }
+    },
+
+    withdraw: async (userId: number, amount: number): Promise<{ balance: number }> => {
+      try {
+        const response = await axios.post(`${POOLING_API_URL}/wallet/withdraw.php`, 
+          { user_id: userId, amount },
+          { headers: this.getAuthHeaders() }
+        );
+        return response.data;
+      } catch (error) {
+        console.error('API: Withdraw error:', error);
+        throw error;
+      }
+    },
+
+    getAllWallets: async (): Promise<any[]> => {
+      try {
+        const response = await axios.get(`${POOLING_API_URL}/wallet.php?action=all`, {
+          headers: this.getAuthHeaders()
+        });
+        return response.data || [];
+      } catch (error) {
+        console.error('API: Get all wallets error:', error);
+        return [];
       }
     }
   };

@@ -10,6 +10,13 @@ interface PoolingAuthContextType {
   register: (userData: { name: string; email: string; phone: string; password: string; role: UserRole }) => Promise<PoolingUser>;
   logout: () => void;
   canCreateRide: () => boolean;
+  wallet: {
+    getTransactions: (userId: number) => Promise<any>;
+    deposit: (userId: number, amount: number) => Promise<any>;
+    withdraw: (userId: number, amount: number) => Promise<any>;
+  };
+  walletData: any;
+  setWalletData: (wallet: any) => void;
 }
 
 const PoolingAuthContext = createContext<PoolingAuthContextType | undefined>(undefined);
@@ -17,6 +24,7 @@ const PoolingAuthContext = createContext<PoolingAuthContextType | undefined>(und
 export function PoolingAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PoolingUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [walletData, setWalletData] = useState<any>(null);
 
   useEffect(() => {
     // Check for stored user and token
@@ -38,6 +46,12 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
     }
     setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      poolingAPI.wallet.getBalance(user.id).then(setWalletData);
+    }
+  }, [user]);
 
   const login = async (credentials: { email: string; password: string; role?: UserRole }): Promise<PoolingUser> => {
     setIsLoading(true);
@@ -89,7 +103,13 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   };
 
   const canCreateRide = () => {
-    return user?.role === 'provider' && (user?.walletBalance ?? 0) >= 500;
+    return user?.role === 'provider' && (Number(walletData?.balance) || 0) >= 500;
+  };
+
+  const wallet = {
+    getTransactions: (userId: number) => poolingAPI.wallet.getTransactions(userId),
+    deposit: (userId: number, amount: number) => poolingAPI.wallet.deposit(userId, amount),
+    withdraw: (userId: number, amount: number) => poolingAPI.wallet.withdraw(userId, amount),
   };
 
   const value = {
@@ -99,7 +119,10 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
     login,
     register,
     logout,
-    canCreateRide
+    canCreateRide,
+    wallet,
+    walletData,
+    setWalletData,
   };
 
   console.log('PoolingAuthProvider current state:', value);

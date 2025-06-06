@@ -119,7 +119,7 @@ function handleGetRides() {
         ");
         $stmt->execute([$providerId]);
         $rides = $stmt->fetchAll();
-        sendResponse(['status' => 'success', 'rides' => $rides]);
+        sendResponse($rides);
     } else {
         // Get all active rides
         $stmt = $pdo->prepare("
@@ -162,8 +162,8 @@ function handleCreateRide() {
         $pdo->beginTransaction();
         // Create vehicle (or get existing)
         $vehicleInfo = $input['vehicleInfo'];
-        $stmt = $pdo->prepare("SELECT id FROM pooling_vehicles WHERE plate_number = ? AND provider_id = ?");
-        $stmt->execute([$vehicleInfo['plateNumber'], $providerId]);
+        $stmt = $pdo->prepare("SELECT id FROM pooling_vehicles WHERE plate_number = ?");
+        $stmt->execute([$vehicleInfo['plateNumber']]);
         $vehicle = $stmt->fetch();
         if ($vehicle) {
             $vehicleId = $vehicle['id'];
@@ -207,8 +207,28 @@ function handleCreateRide() {
             json_encode($input['rules'] ?? [])
         ]);
         $rideId = $pdo->lastInsertId();
+        // Fetch the full ride row with joins
+        $stmt = $pdo->prepare("
+            SELECT 
+                r.*,
+                p.name as provider_name,
+                p.phone as provider_phone,
+                p.rating as provider_rating,
+                v.make, v.model, v.color, v.plate_number
+            FROM pooling_rides r
+            JOIN pooling_providers p ON r.provider_id = p.id
+            JOIN pooling_vehicles v ON r.vehicle_id = v.id
+            WHERE r.id = ?
+        ");
+        $stmt->execute([$rideId]);
+        $ride = $stmt->fetch();
         $pdo->commit();
-        sendResponse(['id' => $rideId, 'message' => 'Ride created successfully'], 201);
+        if ($ride) {
+            sendResponse(['status' => 'success', 'ride' => $ride], 201);
+        } else {
+            file_put_contents(__DIR__ . '/debug.log', "Ride insert succeeded but fetch failed for rideId: $rideId\n", FILE_APPEND);
+            sendError('Ride created but could not fetch details', 500);
+        }
     } catch (PDOException $e) {
         $pdo->rollBack();
         file_put_contents(__DIR__ . '/debug.log', "DB Error: " . $e->getMessage() . "\n", FILE_APPEND);

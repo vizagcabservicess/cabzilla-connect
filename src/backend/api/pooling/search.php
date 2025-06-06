@@ -1,4 +1,3 @@
-
 <?php
 require_once 'config.php';
 
@@ -53,12 +52,12 @@ try {
         AND r.available_seats >= :passengers
         AND DATE(r.departure_time) = :date
         AND (
-            LOWER(r.from_location) LIKE LOWER(:from) 
-            OR LOWER(:from) LIKE LOWER(r.from_location)
+            LOWER(r.from_location) LIKE LOWER(:from1) 
+            OR LOWER(:from2) LIKE LOWER(r.from_location)
         )
         AND (
-            LOWER(r.to_location) LIKE LOWER(:to)
-            OR LOWER(:to) LIKE LOWER(r.to_location)
+            LOWER(r.to_location) LIKE LOWER(:to1)
+            OR LOWER(:to2) LIKE LOWER(r.to_location)
         )
     ";
     
@@ -85,8 +84,10 @@ try {
     
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':type', $type);
-    $stmt->bindParam(':from', $from);
-    $stmt->bindParam(':to', $to);
+    $stmt->bindParam(':from1', $from);
+    $stmt->bindParam(':from2', $from);
+    $stmt->bindParam(':to1', $to);
+    $stmt->bindParam(':to2', $to);
     $stmt->bindParam(':date', $date);
     $stmt->bindParam(':passengers', $passengers, PDO::PARAM_INT);
     

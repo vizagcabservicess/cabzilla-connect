@@ -1,4 +1,3 @@
-
 import { 
   PoolingRide, 
   PoolingBooking, 
@@ -197,5 +196,10 @@ export const realPoolingAPI = {
     
     console.log('Cancelling booking:', bookingId);
     // Mock cancellation logic
+  },
+
+  createRequest: async (requestData) => {
+    console.log('[realPoolingAPI.ts] createRequest called with', requestData);
+    // ... real implementation ...
   }
 };

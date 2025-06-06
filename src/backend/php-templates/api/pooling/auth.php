@@ -110,7 +110,9 @@ function handleLogin() {
         
         unset($user['password_hash'], $user['api_token']);
         $user['walletBalance'] = $wallet ? (float)$wallet['balance'] : 0.00;
-        $user['providerId'] = $providerId;
+        if ($user['role'] === 'provider') {
+            $user['providerId'] = $providerId;
+        }
         
         file_put_contents(__DIR__ . '/debug_login.log', "READY TO SEND RESPONSE\n", FILE_APPEND);
 
@@ -130,7 +132,17 @@ function handleLogin() {
 function handleRegister() {
     global $pdo;
     
-    $input = json_decode(file_get_contents('php://input'), true);
+    // Accept both form data and JSON, and parse raw input as fallback
+    $input = $_POST;
+    if (empty($input)) {
+        $raw = file_get_contents('php://input');
+        $json = json_decode($raw, true);
+        if (is_array($json)) {
+            $input = $json;
+        } else {
+            parse_str($raw, $input);
+        }
+    }
     $input = sanitizeInput($input);
     
     $required_fields = ['name', 'email', 'phone', 'password', 'role'];
@@ -175,16 +187,18 @@ function handleRegister() {
         
         // Create wallet
         $initialBalance = $input['role'] === 'provider' ? 1000.00 : 0.00;
-        $stmt = $pdo->prepare("INSERT INTO pooling_wallets (user_id, balance) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT IGNORE INTO pooling_wallets (user_id, balance) VALUES (?, ?)");
         $stmt->execute([$userId, $initialBalance]);
         
-        // If provider, create provider profile
+        // If provider, create provider profile and get providerId
+        $providerId = null;
         if ($input['role'] === 'provider') {
             $stmt = $pdo->prepare("
                 INSERT INTO pooling_providers (user_id, name, phone, email, is_active)
                 VALUES (?, ?, ?, ?, 1)
             ");
             $stmt->execute([$userId, $input['name'], $input['phone'], $input['email']]);
+            $providerId = $pdo->lastInsertId();
         }
         
         $pdo->commit();
@@ -196,6 +210,9 @@ function handleRegister() {
         
         unset($user['password_hash'], $user['api_token']);
         $user['walletBalance'] = $initialBalance;
+        if ($input['role'] === 'provider') {
+            $user['providerId'] = $providerId;
+        }
         
         sendResponse([
             'user' => $user,
@@ -205,6 +222,7 @@ function handleRegister() {
     } catch (PDOException $e) {
         $pdo->rollBack();
         error_log('Registration error: ' . $e->getMessage());
+        file_put_contents(__DIR__ . '/debug_register.log', "PDOException: " . $e->getMessage() . "\n", FILE_APPEND);
         sendError('Registration failed', 500);
     }
 }

@@ -1,4 +1,3 @@
-
 <?php
 require_once 'config.php';
 
@@ -13,6 +12,9 @@ switch ($method) {
                 break;
             case 'by-user':
                 handleGetByUser();
+                break;
+            case 'by-provider':
+                handleGetByProvider();
                 break;
             default:
                 handleGetRequests();
@@ -44,9 +46,9 @@ function handleGetRequests() {
     try {
         $stmt = $pdo->prepare("
             SELECT r.*, pr.from_location, pr.to_location, pr.departure_time
-            FROM pooling_requests r
+            FROM pooling_ride_requests r
             JOIN pooling_rides pr ON r.ride_id = pr.id
-            ORDER BY r.created_at DESC
+            ORDER BY r.requested_at DESC
         ");
         $stmt->execute();
         $requests = $stmt->fetchAll();
@@ -69,9 +71,9 @@ function handleGetByRide() {
     
     try {
         $stmt = $pdo->prepare("
-            SELECT * FROM pooling_requests 
+            SELECT * FROM pooling_ride_requests 
             WHERE ride_id = ? 
-            ORDER BY created_at DESC
+            ORDER BY requested_at DESC
         ");
         $stmt->execute([$rideId]);
         $requests = $stmt->fetchAll();
@@ -95,10 +97,10 @@ function handleGetByUser() {
     try {
         $stmt = $pdo->prepare("
             SELECT r.*, pr.from_location, pr.to_location, pr.departure_time
-            FROM pooling_requests r
+            FROM pooling_ride_requests r
             JOIN pooling_rides pr ON r.ride_id = pr.id
             WHERE r.guest_id = ?
-            ORDER BY r.created_at DESC
+            ORDER BY r.requested_at DESC
         ");
         $stmt->execute([$userId]);
         $requests = $stmt->fetchAll();
@@ -111,69 +113,90 @@ function handleGetByUser() {
     }
 }
 
+function handleGetByProvider() {
+    global $pdo;
+    $providerId = $_GET['provider_id'] ?? null;
+    file_put_contents(__DIR__ . '/debug_requests.log', "handleGetByProvider called with providerId: " . $providerId . "\n", FILE_APPEND);
+    if (!$providerId) {
+        sendError('Provider ID is required');
+    }
+    try {
+        $stmt = $pdo->prepare("
+            SELECT r.*, pr.from_location, pr.to_location, pr.departure_time
+            FROM pooling_ride_requests r
+            JOIN pooling_rides pr ON r.ride_id = pr.id
+            WHERE pr.provider_id = ?
+            ORDER BY r.requested_at DESC
+        ");
+        $stmt->execute([$providerId]);
+        $requests = $stmt->fetchAll();
+        file_put_contents(__DIR__ . '/debug_requests.log', "Fetched " . count($requests) . " requests for providerId: " . $providerId . "\n", FILE_APPEND);
+        sendResponse($requests);
+    } catch (PDOException $e) {
+        file_put_contents(__DIR__ . '/debug_requests.log', "PDOException in handleGetByProvider: " . $e->getMessage() . "\n", FILE_APPEND);
+        error_log('Get requests by provider error: ' . $e->getMessage());
+        sendError('Failed to get requests', 500);
+    }
+}
+
 function handleCreateRequest() {
     global $pdo;
     
+    file_put_contents(__DIR__ . '/debug_requests.log', "handleCreateRequest called\n", FILE_APPEND);
+    file_put_contents(__DIR__ . '/debug_requests.log', "RAW: " . file_get_contents('php://input') . "\n", FILE_APPEND);
     $input = json_decode(file_get_contents('php://input'), true);
+    file_put_contents(__DIR__ . '/debug_requests.log', "Parsed input: " . print_r($input, true) . "\n", FILE_APPEND);
     $input = sanitizeInput($input);
-    
-    $required_fields = ['rideId', 'guestId', 'guestName', 'guestPhone', 'guestEmail', 'seatsRequested'];
+    $required_fields = ['rideId', 'guestId', 'seatsRequested'];
     $errors = validateInput($input, $required_fields);
-    
     if (!empty($errors)) {
+        file_put_contents(__DIR__ . '/debug_requests.log', "Validation errors: " . print_r($errors, true) . "\n", FILE_APPEND);
         sendError(implode(', ', $errors));
     }
-    
     try {
         // Check if ride exists and has available seats
         $stmt = $pdo->prepare("SELECT available_seats FROM pooling_rides WHERE id = ? AND status = 'active'");
         $stmt->execute([$input['rideId']]);
         $ride = $stmt->fetch();
-        
         if (!$ride) {
+            file_put_contents(__DIR__ . '/debug_requests.log', "Ride not found or not active for rideId: " . $input['rideId'] . "\n", FILE_APPEND);
             sendError('Ride not found or not active', 404);
         }
-        
         if ($ride['available_seats'] < $input['seatsRequested']) {
+            file_put_contents(__DIR__ . '/debug_requests.log', "Not enough seats for rideId: " . $input['rideId'] . ", requested: " . $input['seatsRequested'] . ", available: " . $ride['available_seats'] . "\n", FILE_APPEND);
             sendError('Not enough seats available', 400);
         }
-        
         // Check if user already has a pending request for this ride
         $stmt = $pdo->prepare("
-            SELECT id FROM pooling_requests 
+            SELECT id FROM pooling_ride_requests 
             WHERE ride_id = ? AND guest_id = ? AND status = 'pending'
         ");
         $stmt->execute([$input['rideId'], $input['guestId']]);
         if ($stmt->fetch()) {
+            file_put_contents(__DIR__ . '/debug_requests.log', "Duplicate pending request for rideId: " . $input['rideId'] . ", guestId: " . $input['guestId'] . "\n", FILE_APPEND);
             sendError('You already have a pending request for this ride', 409);
         }
-        
         // Create request
         $stmt = $pdo->prepare("
-            INSERT INTO pooling_requests 
-            (ride_id, guest_id, guest_name, guest_phone, guest_email, seats_requested, request_message, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+            INSERT INTO pooling_ride_requests 
+            (ride_id, guest_id, seats_requested, request_message, status)
+            VALUES (?, ?, ?, ?, 'pending')
         ");
         $stmt->execute([
             $input['rideId'],
             $input['guestId'],
-            $input['guestName'],
-            $input['guestPhone'],
-            $input['guestEmail'],
             $input['seatsRequested'],
             $input['requestMessage'] ?? ''
         ]);
-        
+        file_put_contents(__DIR__ . '/debug_requests.log', "Executed INSERT, lastInsertId: " . $pdo->lastInsertId() . "\n", FILE_APPEND);
         $requestId = $pdo->lastInsertId();
-        
         // Get the created request
-        $stmt = $pdo->prepare("SELECT * FROM pooling_requests WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT * FROM pooling_ride_requests WHERE id = ?");
         $stmt->execute([$requestId]);
         $request = $stmt->fetch();
-        
         sendResponse($request, 201);
-        
     } catch (PDOException $e) {
+        file_put_contents(__DIR__ . '/debug_requests.log', "PDOException: " . $e->getMessage() . "\n", FILE_APPEND);
         error_log('Create request error: ' . $e->getMessage());
         sendError('Failed to create request', 500);
     }
@@ -194,7 +217,7 @@ function handleApproveRequest() {
         $pdo->beginTransaction();
         
         // Get request details
-        $stmt = $pdo->prepare("SELECT * FROM pooling_requests WHERE id = ? AND status = 'pending'");
+        $stmt = $pdo->prepare("SELECT * FROM pooling_ride_requests WHERE id = ? AND status = 'pending'");
         $stmt->execute([$requestId]);
         $request = $stmt->fetch();
         
@@ -204,7 +227,7 @@ function handleApproveRequest() {
         
         // Update request status
         $stmt = $pdo->prepare("
-            UPDATE pooling_requests 
+            UPDATE pooling_ride_requests 
             SET status = 'approved', response_message = ?, responded_at = NOW()
             WHERE id = ?
         ");
@@ -235,7 +258,7 @@ function handleRejectRequest() {
     try {
         // Update request status
         $stmt = $pdo->prepare("
-            UPDATE pooling_requests 
+            UPDATE pooling_ride_requests 
             SET status = 'rejected', response_message = ?, responded_at = NOW()
             WHERE id = ? AND status = 'pending'
         ");

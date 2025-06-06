@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/providers/AuthProvider';
+import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,9 +36,16 @@ interface NavLink {
 }
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout } = usePoolingAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleDashboard = () => {
+    if (user?.role === 'guest') navigate('/pooling/guest');
+    else if (user?.role === 'provider') navigate('/pooling/provider');
+    else if (user?.role === 'admin') navigate('/pooling/admin');
+    else navigate('/dashboard');
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -100,30 +106,37 @@ export function Navbar() {
 
             {/* Auth Section */}
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 px-2 rounded-full">
-                    <Avatar className="mr-2 h-8 w-8">
-                      <AvatarImage src={user.imageUrl || ''} alt={user.name} />
-                      <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <span>{user.name}</span>
-                    <ChevronDown className="ml-1 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard">
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 px-2 rounded-full">
+                      <Avatar className="mr-2 h-8 w-8">
+                        <AvatarImage src={user.imageUrl || ''} alt={user.name} />
+                        <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span>{user.name}</span>
+                      <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleDashboard}>
                       <User className="mr-2 h-4 w-4" />
                       <span>Dashboard</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Logout</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  onClick={handleDashboard}
+                  className="ml-4"
+                  variant="outline"
+                >
+                  Dashboard
+                </Button>
+              </>
             ) : (
               <div className="flex items-center space-x-4">
                 <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors">
@@ -170,10 +183,10 @@ export function Navbar() {
                   </Link>
                   {user ? (
                     <>
-                      <Link to="/dashboard" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                      <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={handleDashboard}>
                         <User className="h-5 w-5" />
                         <span>Dashboard</span>
-                      </Link>
+                      </Button>
                       <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={handleLogout}>
                         <LogOut className="h-5 w-5" />
                         <span>Logout</span>

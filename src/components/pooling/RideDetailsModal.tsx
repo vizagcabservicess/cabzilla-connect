@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,6 +15,17 @@ interface RideDetailsModalProps {
   open: boolean;
   onClose: () => void;
   onBook: (ride: PoolingRide) => void;
+}
+
+function safeToFixed(value, digits = 2, fallback = '0.00') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
+}
+
+function isValidDateString(dateStr: string | undefined | null): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  return !isNaN(d.getTime());
 }
 
 export function RideDetailsModal({ ride, open, onClose, onBook }: RideDetailsModalProps) {
@@ -53,14 +63,14 @@ export function RideDetailsModal({ ride, open, onClose, onBook }: RideDetailsMod
             <div>
               <p className="text-sm font-medium text-gray-600">Departure</p>
               <p className="text-lg font-semibold">
-                {format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm')}
+                {isValidDateString(ride.departureTime) ? format(new Date(ride.departureTime), 'MMM dd, yyyy HH:mm') : 'Time not specified'}
               </p>
               <p className="text-gray-600">{ride.fromLocation}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-600">Arrival</p>
               <p className="text-lg font-semibold">
-                {ride.arrivalTime 
+                {isValidDateString(ride.arrivalTime)
                   ? format(new Date(ride.arrivalTime), 'MMM dd, yyyy HH:mm')
                   : 'Time not specified'
                 }
@@ -84,7 +94,7 @@ export function RideDetailsModal({ ride, open, onClose, onBook }: RideDetailsMod
                 {ride.providerRating && (
                   <div className="flex items-center space-x-1 mt-1">
                     <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                    <span className="text-sm font-medium">{ride.providerRating.toFixed(1)}</span>
+                    <span className="text-sm font-medium">{safeToFixed(ride.providerRating, 1, '0.0')}</span>
                     <span className="text-sm text-gray-600">rating</span>
                   </div>
                 )}

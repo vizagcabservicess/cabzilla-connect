@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,17 @@ interface EnhancedRideCardProps {
   ride: PoolingRide;
   onRequestSent: (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => Promise<void>;
   onViewDetails: (ride: PoolingRide) => void;
+}
+
+function safeToFixed(value, digits = 2, fallback = '0.00') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
+}
+
+function isValidDateString(dateStr: string | undefined | null): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  return !isNaN(d.getTime());
 }
 
 export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: EnhancedRideCardProps) {
@@ -108,7 +118,7 @@ export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: Enhance
           <div className="flex items-center space-x-4">
             <div className="text-center">
               <p className="text-lg font-semibold">
-                {format(new Date(ride.departureTime), 'HH:mm')}
+                {isValidDateString(ride.departureTime) ? format(new Date(ride.departureTime), 'HH:mm') : '--:--'}
               </p>
               <p className="text-sm text-gray-600">{ride.fromLocation}</p>
             </div>
@@ -123,7 +133,7 @@ export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: Enhance
             </div>
             <div className="text-center">
               <p className="text-lg font-semibold">
-                {ride.arrivalTime ? format(new Date(ride.arrivalTime), 'HH:mm') : '--:--'}
+                {isValidDateString(ride.arrivalTime) ? format(new Date(ride.arrivalTime), 'HH:mm') : '--:--'}
               </p>
               <p className="text-sm text-gray-600">{ride.toLocation}</p>
             </div>
@@ -142,7 +152,7 @@ export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: Enhance
             {ride.providerRating && (
               <div className="flex items-center space-x-1">
                 <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                <span className="text-sm font-medium">{ride.providerRating.toFixed(1)}</span>
+                <span className="text-sm font-medium">{safeToFixed(ride.providerRating, 1, '0.0')}</span>
               </div>
             )}
           </div>

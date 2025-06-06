@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +9,18 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { poolingAPI } from '@/services/api/poolingAPI';
-import { PoolingRide, PoolingBooking, PoolingType } from '@/types/pooling';
+import { PoolingRide, PoolingBooking, PoolingType, RequestStatus } from '@/types/pooling';
 import { toast } from 'sonner';
-import { Search, MapPin, Clock, Users, Star, LogOut } from 'lucide-react';
+import { Search, MapPin, Clock, Users, Star, LogOut, Wallet, Minus, CreditCard, IndianRupee } from 'lucide-react';
+
+function safeToFixed(value, digits = 2, fallback = '0.00') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
+}
 
 export default function GuestDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = usePoolingAuth();
+  const { user, logout, walletData, setWalletData } = usePoolingAuth();
   const [rides, setRides] = useState<PoolingRide[]>([]);
   const [bookings, setBookings] = useState<PoolingBooking[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,10 +31,13 @@ export default function GuestDashboard() {
     date: '',
     passengers: 1
   });
+  const [transactions, setTransactions] = useState([]);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   useEffect(() => {
     if (user) {
       loadUserBookings();
+      poolingAPI.wallet.getTransactions(user.id).then(setTransactions);
     }
   }, [user]);
 
@@ -69,22 +76,33 @@ export default function GuestDashboard() {
   };
 
   const handleBookRide = async (ride: PoolingRide) => {
-    if (!user) return;
-
     try {
-      await poolingAPI.requests.create({
+      toast.info('handleBookRide triggered for ride: ' + ride.id);
+      if (!user) return;
+
+      const requestPayload = {
         rideId: ride.id,
         guestId: user.id,
         guestName: user.name,
         guestPhone: user.phone || '',
         guestEmail: user.email,
         seatsRequested: searchForm.passengers,
-        status: 'pending'
-      });
+        status: 'pending' as RequestStatus
+      };
+      console.log('Sending ride request:', { rideId: ride.id, request: requestPayload });
+      toast.info('About to call poolingAPI.requests.create');
+      alert('About to call poolingAPI.requests.create');
+      debugger;
+      console.log('poolingAPI.requests:', poolingAPI.requests);
+      console.log('poolingAPI.requests.create:', poolingAPI.requests.create);
+      console.log('About to call poolingAPI.requests.create');
+      const response = await poolingAPI.requests.create(requestPayload);
+      console.log('API call response:', response);
       toast.success('Ride request sent! Wait for provider approval.');
       loadUserBookings();
     } catch (error) {
-      toast.error('Failed to send ride request');
+      console.error('handleBookRide: unexpected error', error);
+      toast.error('Unexpected error in handleBookRide');
     }
   };
 
@@ -102,6 +120,24 @@ export default function GuestDashboard() {
     }
   };
 
+  const handleWalletWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    if (!user || !amount || amount <= 0) return;
+    try {
+      await poolingAPI.wallet.withdraw(user.id, amount);
+      // Refresh wallet balance
+      const updatedWallet = await poolingAPI.wallet.getBalance(user.id);
+      if (typeof setWalletData === 'function') setWalletData(updatedWallet);
+      // Refresh transactions
+      const updatedTransactions = await poolingAPI.wallet.getTransactions(user.id);
+      setTransactions(updatedTransactions);
+      setWithdrawAmount('');
+      toast.success('Withdrawal successful!');
+    } catch (error) {
+      toast.error('Failed to process withdrawal');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -114,7 +150,7 @@ export default function GuestDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <Badge variant="outline">
-                Wallet: ₹{user?.walletBalance?.toFixed(2) || '0.00'}
+                Wallet: ₹{safeToFixed(user?.walletBalance, 2, '0.00')}
               </Badge>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
@@ -127,6 +163,71 @@ export default function GuestDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Wallet Section */}
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Wallet className="h-5 w-5" />
+                  <span>Wallet</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">Available Balance</p>
+                  <p className="text-2xl font-bold text-green-600">₹{walletData?.data?.balance || 0}</p>
+                </div>
+                <div className="mb-4">
+                  <Label htmlFor="withdraw-amount">Withdraw Amount (₹)</Label>
+                  <Input
+                    id="withdraw-amount"
+                    type="number"
+                    placeholder="Enter amount"
+                    value={withdrawAmount}
+                    onChange={e => setWithdrawAmount(e.target.value)}
+                    max={walletData?.data?.balance || 0}
+                  />
+                  <Button
+                    onClick={handleWalletWithdraw}
+                    className="w-full mt-2"
+                    variant="outline"
+                    disabled={
+                      !withdrawAmount ||
+                      isNaN(Number(withdrawAmount)) ||
+                      Number(withdrawAmount) <= 0 ||
+                      Number(withdrawAmount) > (walletData?.data?.balance || 0)
+                    }
+                  >
+                    <IndianRupee className="mr-2 h-4 w-4" />
+                    Withdraw
+                  </Button>
+                </div>
+                <div>
+                  <CardTitle className="text-base mb-2">Transaction History</CardTitle>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {!Array.isArray(transactions) || transactions.length === 0 ? (
+                      <p className="text-gray-600 text-center py-2">No transactions yet</p>
+                    ) : (
+                      Array.isArray(transactions) && transactions.map(transaction => (
+                        <div key={transaction.id} className="flex items-center justify-between p-2 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{transaction.description}</p>
+                            <p className="text-xs text-gray-600">{new Date(transaction.createdAt).toLocaleString()}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                              {transaction.type === 'credit' ? '+' : '-'}₹{transaction.amount}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Search Form */}
           <div className="lg:col-span-2">
             <Card>
@@ -204,14 +305,14 @@ export default function GuestDashboard() {
             </Card>
 
             {/* Search Results */}
-            {rides.length > 0 && (
+            {Array.isArray(rides) && rides.length > 0 && (
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle>Available Rides ({rides.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {rides.map((ride) => (
+                    {Array.isArray(rides) && rides.map((ride) => (
                       <div key={ride.id} className="border rounded-lg p-4">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
@@ -261,11 +362,11 @@ export default function GuestDashboard() {
                 <CardTitle>My Bookings</CardTitle>
               </CardHeader>
               <CardContent>
-                {bookings.length === 0 ? (
+                {!Array.isArray(bookings) || bookings.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">No bookings yet</p>
                 ) : (
                   <div className="space-y-3">
-                    {bookings.slice(0, 5).map((booking) => (
+                    {Array.isArray(bookings) && bookings.slice(0, 5).map((booking) => (
                       <div key={booking.id} className="border rounded p-3">
                         <div className="flex justify-between items-start mb-2">
                           <div className="text-sm font-medium">
@@ -282,7 +383,7 @@ export default function GuestDashboard() {
                         </div>
                       </div>
                     ))}
-                    {bookings.length > 5 && (
+                    {Array.isArray(bookings) && bookings.length > 5 && (
                       <Button variant="outline" size="sm" className="w-full">
                         View All Bookings
                       </Button>

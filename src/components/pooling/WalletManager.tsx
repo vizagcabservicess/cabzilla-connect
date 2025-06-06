@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Wallet, Plus, Minus, CreditCard, IndianRupee } from 'lucide-react';
 import { PoolingWallet, WalletTransaction } from '@/types/pooling';
 import { format } from 'date-fns';
+import { initRazorpay, createRazorpayOrder, openRazorpayCheckout, verifyRazorpayPayment } from '@/services/razorpayService';
+import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
+import { toast } from 'sonner';
 
 interface WalletManagerProps {
   wallet: PoolingWallet | null;
@@ -21,18 +23,60 @@ export function WalletManager({ wallet, transactions, userRole, onDeposit, onWit
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'deposit' | 'withdraw' | 'history'>('overview');
+  const { user } = usePoolingAuth();
+  const walletBalance = wallet?.data?.balance ?? wallet?.balance ?? 0;
 
   const handleDeposit = async () => {
+    console.log('handleDeposit called');
     const amount = parseFloat(depositAmount);
-    if (amount > 0) {
-      await onDeposit(amount);
-      setDepositAmount('');
+    if (amount > 0 && user) {
+      console.log('initRazorpay...');
+      await initRazorpay();
+      console.log('calling createRazorpayOrder...');
+      const order = await createRazorpayOrder(amount);
+      console.log('order:', order);
+      if (!order) {
+        toast.error('Failed to create order. Please try again.');
+        return;
+      }
+      console.log('calling openRazorpayCheckout...');
+      openRazorpayCheckout({
+        key: 'rzp_test_41fJeGiVFyU9OQ', // Razorpay test key to match backend
+        amount: order.amount,
+        currency: order.currency,
+        name: 'CabZilla Wallet Top-up',
+        description: 'Add money to your wallet',
+        order_id: order.id,
+        handler: async (response) => {
+          console.log('Razorpay handler response:', response);
+          // Verify payment on backend before crediting wallet
+          const verified = await verifyRazorpayPayment(
+            response.razorpay_payment_id,
+            response.razorpay_order_id,
+            response.razorpay_signature
+          );
+          if (verified) {
+            await onDeposit(amount);
+            setDepositAmount('');
+          } else {
+            toast.error('Payment verification failed.');
+          }
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+          contact: user.phone,
+        },
+        theme: { color: '#1976d2' },
+      }, () => {}, () => {});
+    } else {
+      console.log('Invalid amount or user');
     }
   };
 
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
-    if (amount > 0 && wallet && amount <= wallet.balance) {
+    if (amount > 0 && wallet && amount <= walletBalance) {
       await onWithdraw(amount);
       setWithdrawAmount('');
     }
@@ -52,15 +96,15 @@ export function WalletManager({ wallet, transactions, userRole, onDeposit, onWit
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-sm text-gray-600">Available Balance</p>
-              <p className="text-2xl font-bold text-green-600">₹{wallet?.balance || 0}</p>
+              <p className="text-2xl font-bold text-green-600">₹{walletBalance}</p>
             </div>
             <div className="text-center">
               <p className="text-sm text-gray-600">Locked Amount</p>
-              <p className="text-2xl font-bold text-orange-600">₹{wallet?.lockedAmount || 0}</p>
+              <p className="text-2xl font-bold text-orange-600">₹{wallet?.locked_amount ?? 0}</p>
             </div>
             <div className="text-center">
               <p className="text-sm text-gray-600">Total Earnings</p>
-              <p className="text-2xl font-bold text-blue-600">₹{wallet?.totalEarnings || 0}</p>
+              <p className="text-2xl font-bold text-blue-600">₹{wallet?.total_earnings ?? 0}</p>
             </div>
           </div>
         </CardContent>
@@ -110,14 +154,19 @@ export function WalletManager({ wallet, transactions, userRole, onDeposit, onWit
                   placeholder="Enter amount"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  max={wallet?.balance || 0}
+                  max={walletBalance}
                 />
               </div>
               <Button 
                 onClick={handleWithdraw} 
                 variant="outline" 
                 className="w-full"
-                disabled={!wallet?.canWithdraw}
+                disabled={
+                  !withdrawAmount ||
+                  isNaN(Number(withdrawAmount)) ||
+                  Number(withdrawAmount) <= 0 ||
+                  Number(withdrawAmount) > walletBalance
+                }
               >
                 <IndianRupee className="mr-2 h-4 w-4" />
                 Withdraw Money

@@ -1,4 +1,3 @@
-
 // Configuration constants for the application
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.vizagup.com';
 
@@ -12,7 +11,7 @@ export const APP_CONFIG = {
   },
   
   // Mock API settings
-  useMockAPI: true, // Set to false when real API is available
+  useMockAPI: false, // Use real API
   
   // Default fare settings
   defaultFares: {

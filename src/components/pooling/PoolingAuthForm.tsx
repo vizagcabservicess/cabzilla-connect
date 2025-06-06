@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ interface PoolingAuthFormProps {
 }
 
 export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
-  const { login, register, isLoading } = usePoolingAuth();
+  const { login, register, isLoading, user } = usePoolingAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -25,6 +25,16 @@ export function PoolingAuthForm({ onSuccess }: PoolingAuthFormProps) {
     phone: '',
     role: 'guest' as 'guest' | 'provider'
   });
+
+  useEffect(() => {
+    if (user?.role === 'guest') {
+      navigate('/pooling/guest');
+    } else if (user?.role === 'provider') {
+      navigate('/pooling/provider');
+    } else if (user?.role === 'admin') {
+      navigate('/pooling/admin');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

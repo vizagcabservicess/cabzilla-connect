@@ -280,6 +280,11 @@ export default function DashboardPage() {
     }
   };
 
+  function safeToFixed(value, digits = 2, fallback = '0.00') {
+    const num = Number(value);
+    return isNaN(num) ? fallback : num.toFixed(digits);
+  }
+
   if (authIssue) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -305,6 +310,7 @@ export default function DashboardPage() {
               isRefreshing={false}
               formatDate={formatDate}
               getStatusColor={getStatusColor}
+              safeToFixed={safeToFixed}
             />
           </div>
         )}
@@ -429,6 +435,7 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing} 
             formatDate={formatDate}
             getStatusColor={getStatusColor}
+            safeToFixed={safeToFixed}
           />
         </TabsContent>
         
@@ -438,6 +445,7 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
+            safeToFixed={safeToFixed}
           />
         </TabsContent>
         
@@ -447,6 +455,7 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
+            safeToFixed={safeToFixed}
           />
         </TabsContent>
         
@@ -456,6 +465,7 @@ export default function DashboardPage() {
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
+            safeToFixed={safeToFixed}
           />
         </TabsContent>
       </Tabs>
@@ -463,11 +473,12 @@ export default function DashboardPage() {
   );
 }
 
-function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: { 
+function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, safeToFixed }: { 
   bookings: Booking[]; 
   isRefreshing: boolean;
   formatDate: (date: string) => string;
   getStatusColor: (status: string) => string;
+  safeToFixed: (value: any, digits?: number, fallback?: string) => string;
 }) {
   if (isRefreshing) {
     return (
@@ -511,28 +522,28 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor }: {
                     </span>
                   </div>
                   <h3 className="mt-2 text-lg font-semibold">
-                    {booking.pickup_location} → {booking.dropoff_location}
+                    {booking.pickupLocation} → {booking.dropLocation}
                   </h3>
                   <div className="mt-2 space-y-1 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      <span>{formatDate(booking.pickup_time)}</span>
+                      <span>{formatDate(booking.pickupDate)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Car className="h-4 w-4" />
-                      <span>{booking.vehicle_type || 'Standard'}</span>
+                      <span>{booking.cabType || 'Standard'}</span>
                     </div>
-                    {booking.driver_name && (
+                    {booking.driverName && (
                       <div className="flex items-center gap-2">
                         <ShieldAlert className="h-4 w-4" />
-                        <span>Driver: {booking.driver_name}</span>
+                        <span>Driver: {booking.driverName}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-semibold">
-                    ₹{booking.fare?.toFixed(2) || '0.00'}
+                    ₹{safeToFixed(booking.totalAmount, 2, '0.00')}
                   </div>
                   <div className="text-sm text-gray-500">
                     {booking.payment_status || 'Pending'}
