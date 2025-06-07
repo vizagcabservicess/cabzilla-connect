@@ -2,14 +2,20 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { LogOut, Wallet, User } from 'lucide-react';
+import { LogOut, Wallet, User, Bell } from 'lucide-react';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 
 interface GuestDashboardHeaderProps {
   onLogout: () => void;
+  onNotificationClick?: () => void;
+  unreadNotifications?: number;
 }
 
-export function GuestDashboardHeader({ onLogout }: GuestDashboardHeaderProps) {
+export function GuestDashboardHeader({ 
+  onLogout, 
+  onNotificationClick,
+  unreadNotifications = 0 
+}: GuestDashboardHeaderProps) {
   const { user, walletData } = usePoolingAuth();
 
   return (
@@ -33,6 +39,26 @@ export function GuestDashboardHeader({ onLogout }: GuestDashboardHeaderProps) {
               <Wallet className="h-4 w-4 mr-1" />
               ₹{walletData?.data?.balance || 0}
             </Badge>
+            
+            {onNotificationClick && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onNotificationClick}
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 relative"
+                aria-label={`Notifications ${unreadNotifications > 0 ? `(${unreadNotifications} unread)` : ''}`}
+              >
+                <Bell className="h-4 w-4" />
+                {unreadNotifications > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-2 -right-2 h-5 w-5 text-xs p-0 flex items-center justify-center"
+                  >
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </Badge>
+                )}
+              </Button>
+            )}
             
             <Button 
               variant="outline" 

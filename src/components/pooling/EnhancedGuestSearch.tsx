@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Car, Bus, Users, Search, MapPin, Calendar, UserCheck } from 'lucide-react';
+import { Car, Bus, Users, Search, MapPin, Calendar, UserCheck, IndianRupee, SlidersHorizontal } from 'lucide-react';
 import { PoolingType } from '@/types/pooling';
+import { LocationInput } from '@/components/LocationInput';
+import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 interface SearchFormData {
   type: PoolingType;
@@ -25,6 +27,7 @@ interface EnhancedGuestSearchProps {
 }
 
 export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearchProps) {
+  const { isLoaded } = useGoogleMaps();
   const [searchForm, setSearchForm] = useState<SearchFormData>({
     type: 'car',
     from: '',
@@ -33,6 +36,9 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
     passengers: 1,
     sortBy: 'time'
   });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [fromLocation, setFromLocation] = useState<any>(null);
+  const [toLocation, setToLocation] = useState<any>(null);
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -40,6 +46,10 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
 
   const handleSearch = () => {
     if (!searchForm.from || !searchForm.to || !searchForm.date) return;
+    
+    // Track search analytics
+    console.log('Search performed:', searchForm);
+    
     onSearch(searchForm);
   };
 
@@ -47,6 +57,13 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
     { type: 'car' as PoolingType, icon: Car, title: 'Car Pool', desc: 'Share rides with passengers' },
     { type: 'bus' as PoolingType, icon: Bus, title: 'Bus Travel', desc: 'Scheduled bus routes' },
     { type: 'shared-taxi' as PoolingType, icon: Users, title: 'Shared Taxi', desc: 'Door-to-door taxi rides' }
+  ];
+
+  const passengerOptions = [1, 2, 3, 4, 5, 6, 7, 8];
+  const sortOptions = [
+    { value: 'time', label: 'Departure Time' },
+    { value: 'price', label: 'Price (Low to High)' },
+    { value: 'rating', label: 'Provider Rating' }
   ];
 
   return (
@@ -75,11 +92,21 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                     <MapPin className="h-3 w-3" />
                     From
                   </Label>
-                  <Input
-                    placeholder="Departure city"
-                    value={searchForm.from}
-                    onChange={(e) => setSearchForm({...searchForm, from: e.target.value})}
-                  />
+                  {isLoaded ? (
+                    <LocationInput
+                      placeholder="Departure city"
+                      value={searchForm.from}
+                      onChange={(value) => setSearchForm({...searchForm, from: value})}
+                      onLocationChange={setFromLocation}
+                      isPickupLocation={true}
+                    />
+                  ) : (
+                    <Input
+                      placeholder="Departure city"
+                      value={searchForm.from}
+                      onChange={(e) => setSearchForm({...searchForm, from: e.target.value})}
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -87,11 +114,20 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                     <MapPin className="h-3 w-3" />
                     To
                   </Label>
-                  <Input
-                    placeholder="Destination city"
-                    value={searchForm.to}
-                    onChange={(e) => setSearchForm({...searchForm, to: e.target.value})}
-                  />
+                  {isLoaded ? (
+                    <LocationInput
+                      placeholder="Destination city"
+                      value={searchForm.to}
+                      onChange={(value) => setSearchForm({...searchForm, to: value})}
+                      onLocationChange={setToLocation}
+                    />
+                  ) : (
+                    <Input
+                      placeholder="Destination city"
+                      value={searchForm.to}
+                      onChange={(e) => setSearchForm({...searchForm, to: e.target.value})}
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -112,12 +148,15 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                     <UserCheck className="h-3 w-3" />
                     Passengers
                   </Label>
-                  <Select value={searchForm.passengers.toString()} onValueChange={(value) => setSearchForm({...searchForm, passengers: parseInt(value)})}>
+                  <Select 
+                    value={searchForm.passengers.toString()} 
+                    onValueChange={(value) => setSearchForm({...searchForm, passengers: parseInt(value)})}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[1, 2, 3, 4, 5, 6].map(num => (
+                      {passengerOptions.map(num => (
                         <SelectItem key={num} value={num.toString()}>
                           {num} {num === 1 ? 'Passenger' : 'Passengers'}
                         </SelectItem>
@@ -126,46 +165,78 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                   </Select>
                 </div>
 
-                <div className="flex items-end">
+                <div className="space-y-2">
+                  <Label>&nbsp;</Label>
                   <Button 
                     onClick={handleSearch} 
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     disabled={isLoading || !searchForm.from || !searchForm.to || !searchForm.date}
+                    aria-label="Search for rides"
                   >
                     {isLoading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     ) : (
-                      <Search className="mr-2 h-4 w-4" />
+                      <>
+                        <Search className="h-4 w-4 mr-2" />
+                        Search Rides
+                      </>
                     )}
-                    Search Rides
                   </Button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-                <div className="space-y-2">
-                  <Label>Max Price (₹)</Label>
-                  <Input
-                    type="number"
-                    placeholder="Maximum price per seat"
-                    value={searchForm.maxPrice || ''}
-                    onChange={(e) => setSearchForm({...searchForm, maxPrice: e.target.value ? parseInt(e.target.value) : undefined})}
-                  />
-                </div>
+              {/* Advanced Filters */}
+              <div className="border-t pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className="mb-4"
+                >
+                  <SlidersHorizontal className="h-4 w-4 mr-2" />
+                  Advanced Filters
+                </Button>
 
-                <div className="space-y-2">
-                  <Label>Sort By</Label>
-                  <Select value={searchForm.sortBy} onValueChange={(value) => setSearchForm({...searchForm, sortBy: value as 'time' | 'price' | 'rating'})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="time">Departure Time</SelectItem>
-                      <SelectItem value="price">Price (Low to High)</SelectItem>
-                      <SelectItem value="rating">Provider Rating</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {showAdvancedFilters && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1">
+                        <IndianRupee className="h-3 w-3" />
+                        Max Price per Seat
+                      </Label>
+                      <Input
+                        type="number"
+                        placeholder="Enter maximum price"
+                        value={searchForm.maxPrice || ''}
+                        onChange={(e) => setSearchForm({
+                          ...searchForm, 
+                          maxPrice: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Sort By</Label>
+                      <Select 
+                        value={searchForm.sortBy} 
+                        onValueChange={(value: 'time' | 'price' | 'rating') => 
+                          setSearchForm({...searchForm, sortBy: value})
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sortOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
           ))}

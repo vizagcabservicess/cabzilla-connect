@@ -2,7 +2,10 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
+import { GoogleMapsProvider } from '@/providers/GoogleMapsProvider';
 import GuestDashboard from '@/components/pooling/GuestDashboard';
+
+const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY'; // Replace with actual API key
 
 export default function GuestDashboardPage() {
   const { user, isAuthenticated, isLoading } = usePoolingAuth();
@@ -30,5 +33,9 @@ export default function GuestDashboardPage() {
     return <Navigate to="/pooling" replace />;
   }
 
-  return <GuestDashboard />;
+  return (
+    <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
+      <GuestDashboard />
+    </GoogleMapsProvider>
+  );
 }

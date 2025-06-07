@@ -2,254 +2,230 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { User, Phone, Mail, CreditCard, Calendar, MapPin } from 'lucide-react';
-import { PoolingRide, PoolingBooking } from '@/types/pooling';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
+import { CheckCircle, Clock, CreditCard, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
+import { PoolingRide } from '@/types/pooling';
 
 interface BookingFlowProps {
   ride: PoolingRide;
-  onBookingComplete: (booking: PoolingBooking) => void;
+  requestedSeats: number;
+  onSendRequest: (message?: string) => void;
+  onPayment: () => void;
   onCancel: () => void;
+  currentStatus: 'none' | 'pending' | 'approved' | 'rejected' | 'paid' | 'completed';
+  canCancel?: boolean;
 }
 
-export function BookingFlow({ ride, onBookingComplete, onCancel }: BookingFlowProps) {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    passengerName: '',
-    passengerPhone: '',
-    passengerEmail: '',
-    seatsBooked: 1,
-    specialRequests: ''
-  });
-  const [isProcessing, setIsProcessing] = useState(false);
+export function BookingFlow({ 
+  ride, 
+  requestedSeats, 
+  onSendRequest, 
+  onPayment, 
+  onCancel, 
+  currentStatus,
+  canCancel = true 
+}: BookingFlowProps) {
+  const [requestMessage, setRequestMessage] = useState('');
+  const [showMessageBox, setShowMessageBox] = useState(false);
 
-  const totalAmount = formData.seatsBooked * ride.pricePerSeat;
+  const statusSteps = [
+    { id: 'pending', label: 'Request Sent', icon: Clock, color: 'yellow' },
+    { id: 'approved', label: 'Approved', icon: CheckCircle, color: 'green' },
+    { id: 'paid', label: 'Payment Complete', icon: CreditCard, color: 'blue' },
+    { id: 'completed', label: 'Trip Completed', icon: CheckCircle, color: 'purple' }
+  ];
 
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleBookingSubmit = async () => {
-    try {
-      setIsProcessing(true);
-
-      const booking: PoolingBooking = {
-        id: Date.now(),
-        userId: 1, // Mock user ID
-        rideId: ride.id,
-        passengerName: formData.passengerName,
-        passengerPhone: formData.passengerPhone,
-        passengerEmail: formData.passengerEmail,
-        seatsBooked: formData.seatsBooked,
-        totalAmount,
-        bookingStatus: 'pending',
-        paymentStatus: 'pending',
-        bookingDate: new Date().toISOString(),
-        canCancelFree: true
-      };
-
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
-      toast.success('Booking completed successfully!');
-      onBookingComplete(booking);
-    } catch (error) {
-      toast.error('Failed to complete booking');
-    } finally {
-      setIsProcessing(false);
+  const getCurrentStepIndex = () => {
+    switch (currentStatus) {
+      case 'pending': return 0;
+      case 'approved': return 1;
+      case 'paid': return 2;
+      case 'completed': return 3;
+      default: return -1;
     }
   };
 
-  const isFormValid = formData.passengerName && formData.passengerPhone && formData.passengerEmail;
+  const totalAmount = ride.pricePerSeat * requestedSeats;
+  const cancellationDeadline = new Date(ride.departureTime);
+  cancellationDeadline.setHours(cancellationDeadline.getHours() - 2); // 2 hours before departure
+  const canCancelFree = new Date() < cancellationDeadline;
 
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Progress Steps */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className={`flex items-center space-x-2 ${step >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>1</div>
-              <span className="text-sm font-medium">Details</span>
-            </div>
-            <div className={`flex items-center space-x-2 ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>2</div>
-              <span className="text-sm font-medium">Confirm</span>
-            </div>
-            <div className={`flex items-center space-x-2 ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>3</div>
-              <span className="text-sm font-medium">Payment</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+  const handleSendRequest = () => {
+    onSendRequest(requestMessage);
+    setShowMessageBox(false);
+    setRequestMessage('');
+  };
 
-      {/* Ride Summary */}
+  if (currentStatus === 'rejected') {
+    return (
+      <Alert className="border-red-200 bg-red-50">
+        <XCircle className="h-4 w-4 text-red-600" />
+        <AlertDescription className="text-red-800">
+          Your ride request was declined by the provider. Please try searching for other available rides.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (currentStatus === 'none') {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Ride Summary</CardTitle>
+          <CardTitle className="text-lg">Request This Ride</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <MapPin className="h-4 w-4 text-gray-500" />
-                <span className="text-sm">{ride.fromLocation} → {ride.toLocation}</span>
-              </div>
-              <Badge>{ride.type === 'car' ? 'Car Pool' : ride.type === 'bus' ? 'Bus' : 'Shared Taxi'}</Badge>
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-medium">Total Amount:</span>
+              <span className="text-xl font-bold text-blue-600">₹{totalAmount}</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <span className="text-sm">{format(new Date(ride.departureTime), 'PPP p')}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Price per seat</span>
-              <span className="font-medium">₹{ride.pricePerSeat}</span>
+            <div className="text-sm text-gray-600">
+              ₹{ride.pricePerSeat} × {requestedSeats} seat(s)
             </div>
           </div>
+
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Payment will only be required after the provider approves your request.
+            </AlertDescription>
+          </Alert>
+
+          {!showMessageBox ? (
+            <div className="flex gap-2">
+              <Button onClick={() => onSendRequest()} className="flex-1">
+                Send Request
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowMessageBox(true)}
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Add Message
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Textarea
+                placeholder="Add a message for the provider (optional)"
+                value={requestMessage}
+                onChange={(e) => setRequestMessage(e.target.value)}
+                maxLength={200}
+              />
+              <div className="flex gap-2">
+                <Button onClick={handleSendRequest} className="flex-1">
+                  Send Request
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowMessageBox(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Step 1: Passenger Details */}
-      {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Passenger Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="passengerName">Full Name *</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="passengerName"
-                  placeholder="Enter your full name"
-                  value={formData.passengerName}
-                  onChange={(e) => handleInputChange('passengerName', e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Booking Status</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Status Progress */}
+        <div className="space-y-4">
+          {statusSteps.map((step, index) => {
+            const Icon = step.icon;
+            const isActive = index <= getCurrentStepIndex();
+            const isCurrent = index === getCurrentStepIndex();
             
-            <div>
-              <Label htmlFor="passengerPhone">Phone Number *</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="passengerPhone"
-                  placeholder="+91 9999999999"
-                  value={formData.passengerPhone}
-                  onChange={(e) => handleInputChange('passengerPhone', e.target.value)}
-                  className="pl-10"
-                />
+            return (
+              <div key={step.id} className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  isActive 
+                    ? `bg-${step.color}-100 text-${step.color}-600` 
+                    : 'bg-gray-100 text-gray-400'
+                }`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <div className={`font-medium ${
+                    isActive ? 'text-gray-900' : 'text-gray-400'
+                  }`}>
+                    {step.label}
+                  </div>
+                  {isCurrent && (
+                    <div className="text-sm text-gray-500">
+                      {step.id === 'pending' && 'Waiting for provider approval...'}
+                      {step.id === 'approved' && 'Ready for payment'}
+                    </div>
+                  )}
+                </div>
+                {isActive && (
+                  <Badge variant={step.color === 'green' ? 'default' : 'secondary'}>
+                    {isCurrent ? 'Current' : 'Complete'}
+                  </Badge>
+                )}
               </div>
-            </div>
+            );
+          })}
+        </div>
 
-            <div>
-              <Label htmlFor="passengerEmail">Email Address *</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="passengerEmail"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={formData.passengerEmail}
-                  onChange={(e) => handleInputChange('passengerEmail', e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+        {/* Action Buttons */}
+        <div className="space-y-3">
+          {currentStatus === 'approved' && (
+            <Button onClick={onPayment} className="w-full" size="lg">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Pay ₹{totalAmount}
+            </Button>
+          )}
 
-            <div>
-              <Label htmlFor="seatsBooked">Number of Seats</Label>
-              <Input
-                id="seatsBooked"
-                type="number"
-                min="1"
-                max={ride.availableSeats}
-                value={formData.seatsBooked}
-                onChange={(e) => handleInputChange('seatsBooked', parseInt(e.target.value) || 1)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="specialRequests">Special Requests (Optional)</Label>
-              <Textarea
-                id="specialRequests"
-                placeholder="Any special requirements..."
-                value={formData.specialRequests}
-                onChange={(e) => handleInputChange('specialRequests', e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={onCancel} className="flex-1">
-                Cancel
-              </Button>
+          {(currentStatus === 'pending' || currentStatus === 'approved') && canCancel && (
+            <div className="space-y-2">
               <Button 
-                onClick={() => setStep(2)} 
-                disabled={!isFormValid}
-                className="flex-1"
+                variant="outline" 
+                onClick={onCancel} 
+                className="w-full"
+                disabled={!canCancelFree}
               >
-                Continue
+                Cancel Booking
+                {canCancelFree ? ' (Free)' : ' (Charges Apply)'}
               </Button>
+              
+              {!canCancelFree && (
+                <Alert className="border-yellow-200 bg-yellow-50">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800 text-sm">
+                    Cancellation charges may apply as the departure time is less than 2 hours away.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </div>
 
-      {/* Step 2: Confirmation */}
-      {step === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Booking Confirmation</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span>Passenger:</span>
-                <span className="font-medium">{formData.passengerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Phone:</span>
-                <span className="font-medium">{formData.passengerPhone}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Email:</span>
-                <span className="font-medium">{formData.passengerEmail}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Seats:</span>
-                <span className="font-medium">{formData.seatsBooked}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-lg font-bold">
-                <span>Total Amount:</span>
-                <span>₹{totalAmount}</span>
-              </div>
-            </div>
-
-            <div className="flex space-x-3">
-              <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                Back
-              </Button>
-              <Button 
-                onClick={handleBookingSubmit}
-                disabled={isProcessing}
-                className="flex-1"
-              >
-                {isProcessing ? 'Processing...' : 'Confirm Booking'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {/* Booking Details */}
+        <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+          <div className="flex justify-between">
+            <span className="text-sm text-gray-600">Seats:</span>
+            <span className="font-medium">{requestedSeats}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-gray-600">Total Amount:</span>
+            <span className="font-medium">₹{totalAmount}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-gray-600">Provider:</span>
+            <span className="font-medium">{ride.providerName}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
