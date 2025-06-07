@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -227,14 +228,18 @@ export default function GuestDashboard() {
                         name: searchParams.from, 
                         address: searchParams.from, 
                         lat: 17.6868, 
-                        lng: 83.2185 
+                        lng: 83.2185,
+                        city: 'Visakhapatnam',
+                        state: 'Andhra Pradesh'
                       }}
                       dropLocation={{ 
                         id: '2', 
                         name: searchParams.to, 
                         address: searchParams.to, 
                         lat: 16.5062, 
-                        lng: 80.6480 
+                        lng: 80.6480,
+                        city: 'Vijayawada',
+                        state: 'Andhra Pradesh'
                       }}
                       tripType="pooling"
                     />

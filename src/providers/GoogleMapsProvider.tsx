@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Loader } from '@googlemaps/js-api-loader';
 
@@ -14,30 +15,59 @@ interface GoogleMapsProviderProps {
   apiKey: string;
 }
 
+// Global loader instance to prevent multiple loaders
+let globalLoader: Loader | null = null;
+let isLoading = false;
+let isLoadedGlobal = false;
+
 export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(isLoadedGlobal);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!apiKey) {
+    if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY') {
       setError(new Error('Google Maps API key is required'));
       return;
     }
 
-    const loader = new Loader({
-      apiKey,
-      version: 'weekly',
-      libraries: ['places']
-    });
+    // If already loaded globally, just update local state
+    if (isLoadedGlobal) {
+      setIsLoaded(true);
+      return;
+    }
 
-    loader.load()
-      .then(() => {
-        setIsLoaded(true);
-      })
-      .catch((err) => {
-        setError(err);
-        console.error('Error loading Google Maps:', err);
+    // If currently loading, wait for it to complete
+    if (isLoading) {
+      const checkLoading = setInterval(() => {
+        if (isLoadedGlobal) {
+          setIsLoaded(true);
+          clearInterval(checkLoading);
+        }
+      }, 100);
+      return () => clearInterval(checkLoading);
+    }
+
+    // Create loader only if it doesn't exist
+    if (!globalLoader) {
+      isLoading = true;
+      globalLoader = new Loader({
+        apiKey,
+        version: 'weekly',
+        libraries: ['places']
       });
+
+      globalLoader.load()
+        .then(() => {
+          isLoadedGlobal = true;
+          isLoading = false;
+          setIsLoaded(true);
+        })
+        .catch((err) => {
+          isLoading = false;
+          setError(err);
+          console.error('Error loading Google Maps:', err);
+        });
+    }
   }, [apiKey]);
 
   const value = {
