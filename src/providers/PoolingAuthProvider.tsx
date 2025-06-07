@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { PoolingUser, UserRole } from '@/types/pooling';
 import { poolingAPI } from '@/services/api/poolingAPI';
@@ -49,7 +50,18 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (user) {
-      poolingAPI.wallet.getBalance(user.id).then(setWalletData);
+      // Load wallet data with proper user type
+      const userType = user.role === 'guest' ? 'guest' : user.role === 'provider' ? 'provider' : 'admin';
+      poolingAPI.wallet.getBalance(user.id, userType)
+        .then(response => {
+          console.log('Wallet data loaded:', response);
+          setWalletData(response);
+        })
+        .catch(error => {
+          console.error('Failed to load wallet data:', error);
+          // Set default wallet data
+          setWalletData({ balance: 0, data: { balance: 0 } });
+        });
     }
   }, [user]);
 
@@ -98,17 +110,21 @@ export function PoolingAuthProvider({ children }: { children: React.ReactNode })
   const logout = () => {
     console.log('Logging out user');
     setUser(null);
+    setWalletData(null);
     localStorage.removeItem('pooling_user');
     localStorage.removeItem('pooling_auth_token');
   };
 
   const canCreateRide = () => {
-    return user?.role === 'provider' && (Number(walletData?.balance) || 0) >= 500;
+    return user?.role === 'provider' && (Number(walletData?.balance || walletData?.data?.balance) || 0) >= 500;
   };
 
   const wallet = {
-    getTransactions: (userId: number) => poolingAPI.wallet.getTransactions(userId),
-    deposit: (userId: number, amount: number) => poolingAPI.wallet.deposit(userId, amount),
+    getTransactions: (userId: number) => {
+      const userType = user?.role === 'guest' ? 'guest' : user?.role === 'provider' ? 'provider' : 'admin';
+      return poolingAPI.wallet.getTransactions(userId, userType);
+    },
+    deposit: (userId: number, amount: number) => poolingAPI.wallet.addFunds(userId, amount),
     withdraw: (userId: number, amount: number) => poolingAPI.wallet.withdraw(userId, amount),
   };
 

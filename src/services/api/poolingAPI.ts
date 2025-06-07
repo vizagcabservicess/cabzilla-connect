@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import {
@@ -54,6 +55,7 @@ interface SearchRideRequest {
   type?: PoolingType;
   passengers?: number;
   sortBy?: 'time' | 'price' | 'rating';
+  maxPrice?: number;
 }
 
 // Bookings API
@@ -79,6 +81,7 @@ interface CreateRequestRequest {
   guestEmail: string;
   seatsRequested: number;
   status: RequestStatus;
+  requestMessage?: string;
 }
 
 class PoolingAPI {
@@ -171,11 +174,23 @@ class PoolingAPI {
   rides = {
     search: async (params: SearchRideRequest): Promise<PoolingRide[]> => {
       try {
-        const response = await axios.get(`${POOLING_API_URL}/search.php`, { params });
-        return response.data.data || [];
+        console.log('Searching rides with params:', params);
+        const response = await axios.get(`${POOLING_API_URL}/search.php`, { 
+          params: {
+            type: params.type,
+            from: params.from,
+            to: params.to,
+            date: params.date,
+            passengers: params.passengers,
+            maxPrice: params.maxPrice,
+            sortBy: params.sortBy
+          }
+        });
+        console.log('Search response:', response.data);
+        return Array.isArray(response.data) ? response.data : response.data.data || [];
       } catch (error) {
         console.error('API: Search rides error:', error);
-        throw error;
+        return [];
       }
     },
 
@@ -246,7 +261,7 @@ class PoolingAPI {
         const response = await axios.get(`${POOLING_API_URL}/bookings.php?user_id=${userId}`, {
           headers: this.getAuthHeaders()
         });
-        return response.data || [];
+        return Array.isArray(response.data) ? response.data : [];
       } catch (error) {
         console.error('API: Get user bookings error:', error);
         return [];
@@ -272,10 +287,11 @@ class PoolingAPI {
       console.log('[poolingAPI.ts] requests.create called with', requestData);
       try {
         const response = await axios.post(
-          'https://vizagup.com/api/pooling/requests.php',
+          `${POOLING_API_URL}/requests.php`,
           requestData,
           { headers: this.getAuthHeaders() }
         );
+        console.log('[poolingAPI.ts] Request created successfully:', response.data);
         return response.data;
       } catch (error) {
         console.error('API: Create request error:', error);
@@ -326,15 +342,21 @@ class PoolingAPI {
 
   // Wallet endpoints
   wallet = {
-    getBalance: async (userId: number, userType: string = 'provider'): Promise<{ balance: number }> => {
+    getBalance: async (userId: number, userType: string = 'guest'): Promise<{ balance: number; data?: { balance: number } }> => {
       try {
         const response = await axios.get(`${POOLING_API_URL}/wallet.php?user_id=${userId}&user_type=${userType}`,
           { headers: this.getAuthHeaders() }
         );
-        return response.data;
+        console.log('Wallet balance response:', response.data);
+        // Normalize the response format
+        const balance = response.data?.balance || response.data?.data?.balance || 0;
+        return { 
+          balance, 
+          data: { balance }
+        };
       } catch (error) {
         console.error('API: Get wallet balance error:', error);
-        throw error;
+        return { balance: 0, data: { balance: 0 } };
       }
     },
 
@@ -351,12 +373,13 @@ class PoolingAPI {
       }
     },
 
-    getTransactions: async (userId: number, userType: string = 'provider'): Promise<any[]> => {
+    getTransactions: async (userId: number, userType: string = 'guest'): Promise<any[]> => {
       try {
         const response = await axios.get(`${POOLING_API_URL}/wallet.php?user_id=${userId}&user_type=${userType}&action=transactions`, {
           headers: this.getAuthHeaders()
         });
-        return response.data || [];
+        console.log('Wallet transactions response:', response.data);
+        return Array.isArray(response.data) ? response.data : response.data?.data || [];
       } catch (error) {
         console.error('API: Get wallet transactions error:', error);
         return [];
