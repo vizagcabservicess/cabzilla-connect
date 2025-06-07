@@ -1,231 +1,159 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, Clock, Users, MapPin, Car, Bus, User } from 'lucide-react';
-import { PoolingRide, RideRequest } from '@/types/pooling';
-import { format } from 'date-fns';
-import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
-import { toast } from 'sonner';
+import { MapPin, Clock, Users, Star, Car, Bus, UserCheck, IndianRupee } from 'lucide-react';
+import { PoolingRide } from '@/types/pooling';
 
 interface EnhancedRideCardProps {
   ride: PoolingRide;
-  onRequestSent: (rideId: number, request: Omit<RideRequest, 'id' | 'requestedAt'>) => Promise<void>;
-  onViewDetails: (ride: PoolingRide) => void;
+  onRequestRide: (ride: PoolingRide) => void;
+  requestedSeats: number;
 }
 
-function safeToFixed(value, digits = 2, fallback = '0.00') {
-  const num = Number(value);
-  return isNaN(num) ? fallback : num.toFixed(digits);
-}
-
-function isValidDateString(dateStr: string | undefined | null): boolean {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  return !isNaN(d.getTime());
-}
-
-export function EnhancedRideCard({ ride, onRequestSent, onViewDetails }: EnhancedRideCardProps) {
-  const { user, isAuthenticated } = usePoolingAuth();
-  const [isRequesting, setIsRequesting] = React.useState(false);
-
-  const getRideTypeIcon = () => {
+export function EnhancedRideCard({ ride, onRequestRide, requestedSeats }: EnhancedRideCardProps) {
+  const getVehicleIcon = () => {
     switch (ride.type) {
-      case 'car': return <Car className="h-5 w-5" />;
-      case 'bus': return <Bus className="h-5 w-5" />;
-      case 'shared-taxi': return <User className="h-5 w-5" />;
+      case 'car': return <Car className="h-4 w-4" />;
+      case 'bus': return <Bus className="h-4 w-4" />;
+      case 'shared-taxi': return <Users className="h-4 w-4" />;
+      default: return <Car className="h-4 w-4" />;
     }
   };
 
-  const getRideTypeColor = () => {
-    switch (ride.type) {
-      case 'car': return 'bg-blue-100 text-blue-800';
-      case 'bus': return 'bg-green-100 text-green-800';
-      case 'shared-taxi': return 'bg-purple-100 text-purple-800';
-    }
-  };
-
-  const getRideTypeName = () => {
+  const getVehicleTypeLabel = () => {
     switch (ride.type) {
       case 'car': return 'Car Pool';
       case 'bus': return 'Bus';
       case 'shared-taxi': return 'Shared Taxi';
+      default: return 'Vehicle';
     }
   };
 
-  const handleRequestRide = async () => {
-    if (!isAuthenticated || !user) {
-      toast.error('Please login to request a ride');
-      return;
-    }
-
-    try {
-      setIsRequesting(true);
-      
-      const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
-        rideId: ride.id,
-        guestId: user.id,
-        guestName: user.name,
-        guestPhone: user.phone,
-        guestEmail: user.email,
-        seatsRequested: 1, // Default to 1 seat
-        status: 'pending',
-        requestMessage: 'I would like to join this ride'
-      };
-
-      await onRequestSent(ride.id, request);
-    } catch (error) {
-      console.error('Failed to send ride request:', error);
-    } finally {
-      setIsRequesting(false);
-    }
+  const formatTime = (dateTime: string) => {
+    return new Date(dateTime).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  const canRequestRide = () => {
-    return isAuthenticated && 
-           user?.role === 'guest' && 
-           ride.availableSeats > 0 && 
-           ride.status === 'active' &&
-           user.id !== ride.providerId;
+  const formatDate = (dateTime: string) => {
+    return new Date(dateTime).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short'
+    });
   };
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="w-full hover:shadow-lg transition-shadow duration-200 border-l-4 border-l-blue-500">
       <CardContent className="p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
-              {getRideTypeIcon()}
-            </div>
-            <div>
-              <Badge className={getRideTypeColor()}>
-                {getRideTypeName()}
-              </Badge>
-              <p className="text-sm text-gray-600 mt-1">
-                {ride.vehicleInfo.make} {ride.vehicleInfo.model}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-green-600">₹{ride.pricePerSeat}</p>
-            <p className="text-sm text-gray-600">per seat</p>
-          </div>
-        </div>
-
-        {/* Route and Time */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="text-center">
-              <p className="text-lg font-semibold">
-                {isValidDateString(ride.departureTime) ? format(new Date(ride.departureTime), 'HH:mm') : '--:--'}
-              </p>
-              <p className="text-sm text-gray-600">{ride.fromLocation}</p>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              <div className="flex items-center space-x-2">
-                <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                <div className="h-0.5 w-16 bg-gray-300"></div>
-                <Clock className="h-4 w-4 text-gray-400" />
-                <div className="h-0.5 w-16 bg-gray-300"></div>
-                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-semibold">
-                {isValidDateString(ride.arrivalTime) ? format(new Date(ride.arrivalTime), 'HH:mm') : '--:--'}
-              </p>
-              <p className="text-sm text-gray-600">{ride.toLocation}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Provider and Seats Info */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1">
-              <Users className="h-4 w-4 text-gray-500" />
-              <span className="text-sm text-gray-600">
-                {ride.availableSeats} of {ride.totalSeats} seats available
-              </span>
-            </div>
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className="flex items-center gap-1">
+              {getVehicleIcon()}
+              {getVehicleTypeLabel()}
+            </Badge>
             {ride.providerRating && (
-              <div className="flex items-center space-x-1">
-                <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                <span className="text-sm font-medium">{safeToFixed(ride.providerRating, 1, '0.0')}</span>
-              </div>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                {ride.providerRating.toFixed(1)}
+              </Badge>
             )}
           </div>
-          <div className="text-sm text-gray-600">
-            by {ride.providerName}
+          <div className="text-right">
+            <div className="text-2xl font-bold text-green-600 flex items-center">
+              <IndianRupee className="h-5 w-5" />
+              {ride.pricePerSeat}
+            </div>
+            <div className="text-sm text-gray-500">per seat</div>
           </div>
         </div>
 
-        {/* Route Stops */}
-        {ride.route && ride.route.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center space-x-1 mb-2">
-              <MapPin className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Route:</span>
+        <div className="flex items-center space-x-4 mb-4">
+          <div className="flex items-center space-x-2 flex-1">
+            <MapPin className="h-4 w-4 text-blue-600" />
+            <div>
+              <div className="font-semibold text-gray-900">{ride.fromLocation}</div>
+              <div className="text-sm text-gray-500">{formatDate(ride.departureTime)}</div>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {ride.route.slice(0, 3).map((stop, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
-                  {stop}
-                </Badge>
-              ))}
-              {ride.route.length > 3 && (
-                <Badge variant="outline" className="text-xs">
-                  +{ride.route.length - 3} more
-                </Badge>
-              )}
+          </div>
+          
+          <div className="flex-shrink-0 px-3 py-1 bg-gray-100 rounded-full">
+            <div className="w-8 h-0.5 bg-gray-400"></div>
+          </div>
+          
+          <div className="flex items-center space-x-2 flex-1">
+            <MapPin className="h-4 w-4 text-red-600" />
+            <div>
+              <div className="font-semibold text-gray-900">{ride.toLocation}</div>
+              <div className="text-sm text-gray-500">
+                {ride.arrivalTime ? formatDate(ride.arrivalTime) : 'Same day'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 mb-4 py-3 bg-gray-50 rounded-lg px-4">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-4 w-4 text-gray-600" />
+            <div>
+              <div className="text-sm font-medium">Departure</div>
+              <div className="text-sm text-gray-600">{formatTime(ride.departureTime)}</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <UserCheck className="h-4 w-4 text-gray-600" />
+            <div>
+              <div className="text-sm font-medium">Available</div>
+              <div className="text-sm text-gray-600">{ride.availableSeats} seats</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Users className="h-4 w-4 text-gray-600" />
+            <div>
+              <div className="text-sm font-medium">Provider</div>
+              <div className="text-sm text-gray-600">{ride.providerName}</div>
+            </div>
+          </div>
+        </div>
+
+        {ride.vehicleInfo && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+            <div className="text-sm font-medium text-blue-900 mb-1">Vehicle Details</div>
+            <div className="text-sm text-blue-700">
+              {ride.vehicleInfo.make} {ride.vehicleInfo.model} • {ride.vehicleInfo.color} • {ride.vehicleInfo.plateNumber}
             </div>
           </div>
         )}
 
-        {/* Amenities */}
         {ride.amenities && ride.amenities.length > 0 && (
           <div className="mb-4">
-            <p className="text-sm font-medium text-gray-700 mb-1">Amenities:</p>
+            <div className="text-sm font-medium text-gray-700 mb-2">Amenities</div>
             <div className="flex flex-wrap gap-1">
-              {ride.amenities.slice(0, 3).map((amenity, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
+              {ride.amenities.map((amenity, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
                   {amenity}
                 </Badge>
               ))}
-              {ride.amenities.length > 3 && (
-                <Badge variant="secondary" className="text-xs">
-                  +{ride.amenities.length - 3} more
-                </Badge>
-              )}
             </div>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex space-x-3">
-          <Button variant="outline" onClick={() => onViewDetails(ride)} className="flex-1">
-            View Details
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            Total: <span className="font-semibold text-gray-900">₹{ride.pricePerSeat * requestedSeats}</span> for {requestedSeats} seat(s)
+          </div>
+          <Button 
+            onClick={() => onRequestRide(ride)}
+            disabled={ride.availableSeats < requestedSeats}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {ride.availableSeats < requestedSeats ? 'Not Available' : 'Request Booking'}
           </Button>
-          {canRequestRide() ? (
-            <Button 
-              onClick={handleRequestRide} 
-              disabled={isRequesting}
-              className="flex-1"
-            >
-              {isRequesting ? 'Requesting...' : 'Request Ride'}
-            </Button>
-          ) : (
-            <Button 
-              disabled 
-              className="flex-1"
-            >
-              {ride.availableSeats === 0 ? 'Fully Booked' : 
-               !isAuthenticated ? 'Login to Request' :
-               user?.role !== 'guest' ? 'Guests Only' :
-               user?.id === ride.providerId ? 'Your Ride' : 'Unavailable'}
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>
