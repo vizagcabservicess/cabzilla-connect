@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,11 @@ interface EnhancedRideCardProps {
   ride: PoolingRide;
   onRequestRide: (ride: PoolingRide) => void;
   requestedSeats: number;
+}
+
+function safeToFixed(value: any, digits = 1, fallback = '0.0') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
 }
 
 export function EnhancedRideCard({ ride, onRequestRide, requestedSeats }: EnhancedRideCardProps) {
@@ -55,12 +59,12 @@ export function EnhancedRideCard({ ride, onRequestRide, requestedSeats }: Enhanc
               {getVehicleIcon()}
               {getVehicleTypeLabel()}
             </Badge>
-            {ride.providerRating && (
+            {ride.providerRating !== undefined && ride.providerRating !== null ? (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                {ride.providerRating.toFixed(1)}
+                {safeToFixed(ride.providerRating, 1, '0.0')}
               </Badge>
-            )}
+            ) : null}
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-green-600 flex items-center">

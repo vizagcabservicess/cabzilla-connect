@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +21,11 @@ interface Transaction {
 interface EnhancedWalletProps {
   transactions: Transaction[];
   onTransactionUpdate: () => void;
+}
+
+function safeToFixed(value: any, digits = 2, fallback = '0.00') {
+  const num = Number(value);
+  return isNaN(num) ? fallback : num.toFixed(digits);
 }
 
 export function EnhancedWallet({ transactions, onTransactionUpdate }: EnhancedWalletProps) {
@@ -74,7 +78,7 @@ export function EnhancedWallet({ transactions, onTransactionUpdate }: EnhancedWa
           <div className="text-sm text-blue-600 mb-1">Available Balance</div>
           <div className="text-3xl font-bold text-blue-900 flex items-center justify-center">
             <IndianRupee className="h-7 w-7" />
-            {currentBalance.toFixed(2)}
+            {safeToFixed(currentBalance, 2, '0.00')}
           </div>
         </div>
 
