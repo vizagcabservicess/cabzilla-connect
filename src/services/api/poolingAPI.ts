@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl } from '@/config/api';
 import {
@@ -239,6 +238,18 @@ class PoolingAPI {
         console.error('API: Delete ride error:', error);
         throw error;
       }
+    },
+
+    getRideDetails: async (rideId: number): Promise<PoolingRide> => {
+      try {
+        const response = await axios.get(`${POOLING_API_URL}/rides.php?id=${rideId}`, {
+          headers: this.getAuthHeaders()
+        });
+        return response.data;
+      } catch (error) {
+        console.error('API: Get ride details error:', error);
+        throw error;
+      }
     }
   };
 
@@ -307,6 +318,18 @@ class PoolingAPI {
         return response.data || [];
       } catch (error) {
         console.error('API: Get provider requests error:', error);
+        return [];
+      }
+    },
+
+    getByUser: async (userId: number): Promise<PoolingRequest[]> => {
+      try {
+        const response = await axios.get(`${POOLING_API_URL}/requests.php?action=by-user&user_id=${userId}`, {
+          headers: this.getAuthHeaders()
+        });
+        return Array.isArray(response.data) ? response.data : response.data?.data || [];
+      } catch (error) {
+        console.error('API: Get user requests error:', error);
         return [];
       }
     },

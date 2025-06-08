@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +11,9 @@ import { FixedLocationSelector } from './FixedLocationSelector';
 import { CreateRideRequest, PoolingType } from '@/types/pooling';
 import { getLocationById } from '@/lib/poolingData';
 import { toast } from 'sonner';
+import { LocationInput } from '@/components/LocationInput';
+import GoogleMapComponent from '@/components/GoogleMapComponent';
+import type { Location } from '@/lib/locationData';
 
 interface CreateRideFormProps {
   onSubmit: (rideData: CreateRideRequest) => Promise<void>;
@@ -42,6 +44,9 @@ export function CreateRideForm({ onSubmit, onCancel }: CreateRideFormProps) {
   const [newAmenity, setNewAmenity] = useState('');
   const [newRule, setNewRule] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [fromLocationObj, setFromLocationObj] = useState<Location | null>(null);
+  const [toLocationObj, setToLocationObj] = useState<Location | null>(null);
 
   // Get tomorrow's date as minimum
   const tomorrow = new Date();
@@ -203,22 +208,38 @@ export function CreateRideForm({ onSubmit, onCancel }: CreateRideFormProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FixedLocationSelector
+              <LocationInput
                 label="From Location"
                 placeholder="Select departure city"
                 value={rideData.fromLocation}
                 onChange={(value) => setRideData(prev => ({ ...prev, fromLocation: value }))}
-                excludeLocation={rideData.toLocation}
+                onLocationChange={(loc) => {
+                  setFromLocationObj(loc);
+                  setRideData(prev => ({ ...prev, fromLocation: loc.name || loc.address || '' }));
+                }}
+                isPickupLocation={false}
               />
-
-              <FixedLocationSelector
+              <LocationInput
                 label="To Location"
                 placeholder="Select destination city"
                 value={rideData.toLocation}
                 onChange={(value) => setRideData(prev => ({ ...prev, toLocation: value }))}
-                excludeLocation={rideData.fromLocation}
+                onLocationChange={(loc) => {
+                  setToLocationObj(loc);
+                  setRideData(prev => ({ ...prev, toLocation: loc.name || loc.address || '' }));
+                }}
+                isPickupLocation={false}
               />
             </div>
+            {(fromLocationObj && toLocationObj) && (
+              <div className="my-4">
+                <GoogleMapComponent
+                  pickupLocation={fromLocationObj}
+                  dropLocation={toLocationObj}
+                  tripType="pooling"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

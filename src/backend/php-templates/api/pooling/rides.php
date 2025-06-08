@@ -98,11 +98,19 @@ function handleGetRides() {
             'rules' => $ride['rules'] ? json_decode($ride['rules']) : [],
             'status' => $ride['status'],
             'createdAt' => $ride['created_at'],
-            'updatedAt' => $ride['updated_at']
+            'updatedAt' => $ride['updated_at'] ?? $ride['created_at'] ?? null
         ];
         
         sendResponse($formatted_ride);
     } else if ($providerId) {
+        // Patch: If providerId is a pooling_users.id, map it to pooling_providers.id
+        $stmt = $pdo->prepare("SELECT id FROM pooling_providers WHERE id = ? OR user_id = ? LIMIT 1");
+        $stmt->execute([$providerId, $providerId]);
+        $providerRow = $stmt->fetch();
+        if (!$providerRow) {
+            sendResponse([]); // No rides if provider not found
+        }
+        $realProviderId = $providerRow['id'];
         // Get rides for a specific provider
         $stmt = $pdo->prepare("
             SELECT 
@@ -117,8 +125,13 @@ function handleGetRides() {
             WHERE r.provider_id = ?
             ORDER BY r.departure_time ASC
         ");
-        $stmt->execute([$providerId]);
+        $stmt->execute([$realProviderId]);
         $rides = $stmt->fetchAll();
+        // Patch: Ensure updated_at is always set safely
+        $rides = array_map(function($ride) {
+            $ride['updated_at'] = isset($ride['updated_at']) ? $ride['updated_at'] : (isset($ride['created_at']) ? $ride['created_at'] : null);
+            return $ride;
+        }, $rides);
         sendResponse($rides);
     } else {
         // Get all active rides
@@ -137,7 +150,11 @@ function handleGetRides() {
         ");
         $stmt->execute();
         $rides = $stmt->fetchAll();
-        
+        // Patch: Ensure updated_at is always set safely
+        $rides = array_map(function($ride) {
+            $ride['updated_at'] = isset($ride['updated_at']) ? $ride['updated_at'] : (isset($ride['created_at']) ? $ride['created_at'] : null);
+            return $ride;
+        }, $rides);
         sendResponse($rides);
     }
 }
@@ -156,7 +173,15 @@ function handleCreateRide() {
         sendError(implode(', ', $errors));
     }
     
-    $providerId = $input['providerId'];
+    // Map providerId (from pooling_users) to provider_id (from pooling_providers)
+    $userProviderId = $input['providerId']; // This is the pooling_users.id
+    $stmt = $pdo->prepare("SELECT id FROM pooling_providers WHERE user_id = ?");
+    $stmt->execute([$userProviderId]);
+    $providerRow = $stmt->fetch();
+    if (!$providerRow) {
+        sendError('Provider profile not found for this user.', 400);
+    }
+    $providerId = $providerRow['id']; // This is the correct provider_id for pooling_vehicles and pooling_rides
     file_put_contents(__DIR__ . '/debug.log', "handleCreateRide using providerId: " . print_r($providerId, true) . "\n", FILE_APPEND);
     try {
         $pdo->beginTransaction();
@@ -222,6 +247,9 @@ function handleCreateRide() {
         ");
         $stmt->execute([$rideId]);
         $ride = $stmt->fetch();
+        if ($ride && !isset($ride['updated_at'])) {
+            $ride['updated_at'] = isset($ride['created_at']) ? $ride['created_at'] : null;
+        }
         $pdo->commit();
         if ($ride) {
             sendResponse(['status' => 'success', 'ride' => $ride], 201);

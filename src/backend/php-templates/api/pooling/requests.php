@@ -96,9 +96,10 @@ function handleGetByUser() {
     
     try {
         $stmt = $pdo->prepare("
-            SELECT r.*, pr.from_location, pr.to_location, pr.departure_time
+            SELECT r.*, pr.from_location, pr.to_location, pr.departure_time, b.payment_status
             FROM pooling_ride_requests r
             JOIN pooling_rides pr ON r.ride_id = pr.id
+            LEFT JOIN pooling_bookings b ON r.ride_id = b.ride_id AND r.guest_id = b.user_id
             WHERE r.guest_id = ?
             ORDER BY r.requested_at DESC
         ");
@@ -179,14 +180,17 @@ function handleCreateRequest() {
         // Create request
         $stmt = $pdo->prepare("
             INSERT INTO pooling_ride_requests 
-            (ride_id, guest_id, seats_requested, request_message, status)
-            VALUES (?, ?, ?, ?, 'pending')
+            (ride_id, guest_id, seats_requested, request_message, status, requested_at, guest_name, guest_phone, guest_email)
+            VALUES (?, ?, ?, ?, 'pending', NOW(), ?, ?, ?)
         ");
         $stmt->execute([
             $input['rideId'],
             $input['guestId'],
             $input['seatsRequested'],
-            $input['requestMessage'] ?? ''
+            $input['requestMessage'] ?? '',
+            $input['guestName'] ?? '',
+            $input['guestPhone'] ?? '',
+            $input['guestEmail'] ?? ''
         ]);
         file_put_contents(__DIR__ . '/debug_requests.log', "Executed INSERT, lastInsertId: " . $pdo->lastInsertId() . "\n", FILE_APPEND);
         $requestId = $pdo->lastInsertId();
@@ -232,12 +236,22 @@ function handleApproveRequest() {
             WHERE id = ?
         ");
         $stmt->execute([$responseMessage, $requestId]);
+
+        // Fetch guest_id for notification
+        $guestId = $request['guest_id'];
+        // Create payment notification for guest
+        $actionUrl = "/pay?requestId=" . $requestId;
+        $title = "Payment Pending";
+        $message = "Your ride request has been approved. Please complete your payment.";
+        $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, title, message, action_url, created_at) VALUES (?, 'payment_reminder', ?, ?, ?, NOW())");
+        $stmt->execute([$guestId, $title, $message, $actionUrl]);
         
         $pdo->commit();
         
         sendResponse(['message' => 'Request approved successfully']);
         
     } catch (PDOException $e) {
+        file_put_contents(__DIR__ . '/debug_requests.log', "PDOException in handleApproveRequest: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
         $pdo->rollBack();
         error_log('Approve request error: ' . $e->getMessage());
         sendError('Failed to approve request', 500);

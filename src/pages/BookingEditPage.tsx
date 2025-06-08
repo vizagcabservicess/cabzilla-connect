@@ -9,10 +9,11 @@ import { DateTimePicker } from "@/components/DateTimePicker";
 import { LocationInput } from "@/components/LocationInput";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking, Location, BookingStatus } from '@/types/api';
+import { Booking, BookingStatus } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
+import type { Location } from '@/lib/locationData';
 
 export default function BookingEditPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -25,12 +26,24 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ 
     id: 'pickup', 
     name: 'Pickup Location',
-    address: '' 
+    address: '',
+    type: 'other',
+    popularityScore: 50,
+    city: '',
+    state: '',
+    lat: 0,
+    lng: 0
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
     name: 'Drop Location',
-    address: '' 
+    address: '',
+    type: 'other',
+    popularityScore: 50,
+    city: '',
+    state: '',
+    lat: 0,
+    lng: 0
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
@@ -67,7 +80,13 @@ export default function BookingEditPage() {
           setPickupLocation({ 
             id: 'pickup',
             name: 'Pickup Location',
-            address: response.pickupLocation 
+            address: response.pickupLocation,
+            type: response.pickupLocationType || 'other',
+            popularityScore: response.pickupLocationPopularityScore || 50,
+            city: response.pickupLocationCity || '',
+            state: response.pickupLocationState || '',
+            lat: response.pickupLocationLat || 0,
+            lng: response.pickupLocationLng || 0
           });
         }
         
@@ -75,7 +94,13 @@ export default function BookingEditPage() {
           setDropLocation({ 
             id: 'drop',
             name: 'Drop Location',
-            address: response.dropLocation 
+            address: response.dropLocation,
+            type: response.dropLocationType || 'other',
+            popularityScore: response.dropLocationPopularityScore || 50,
+            city: response.dropLocationCity || '',
+            state: response.dropLocationState || '',
+            lat: response.dropLocationLat || 0,
+            lng: response.dropLocationLng || 0
           });
         }
         
@@ -377,14 +402,6 @@ export default function BookingEditPage() {
               <GuestDetailsForm
                 onSubmit={handleSubmit}
                 totalPrice={totalAmount}
-                initialData={{
-                  name: booking.passengerName || '',
-                  email: booking.passengerEmail || '',
-                  phone: booking.passengerPhone || ''
-                }}
-                bookingId={bookingId}
-                isEditing={true}
-                isSubmitting={isSubmitting}
               />
             </CardContent>
           </Card>

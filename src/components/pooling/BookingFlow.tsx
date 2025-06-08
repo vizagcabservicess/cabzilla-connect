@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -179,6 +178,7 @@ export function BookingFlow({
 
         {/* Action Buttons */}
         <div className="space-y-3">
+          {/* Show payment button when approved */}
           {currentStatus === 'approved' && (
             <Button onClick={onPayment} className="w-full" size="lg">
               <CreditCard className="h-4 w-4 mr-2" />

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,12 +9,14 @@ import { Car, Bus, Users, Search, MapPin, Calendar, UserCheck, IndianRupee, Slid
 import { PoolingType } from '@/types/pooling';
 import { LocationInput } from '@/components/LocationInput';
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { Location } from '@/types/location';
 
 interface SearchFormData {
   type: PoolingType;
   from: string;
   to: string;
   date: string;
+  time: string;
   passengers: number;
   maxPrice?: number;
   sortBy: 'time' | 'price' | 'rating';
@@ -24,33 +25,48 @@ interface SearchFormData {
 interface EnhancedGuestSearchProps {
   onSearch: (params: SearchFormData) => void;
   isLoading?: boolean;
+  onFromLocationChange?: (location: Location) => void;
+  onToLocationChange?: (location: Location) => void;
 }
 
-export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearchProps) {
+export function EnhancedGuestSearch({ onSearch, isLoading, onFromLocationChange, onToLocationChange }: EnhancedGuestSearchProps) {
   const { isLoaded } = useGoogleMaps();
   const [searchForm, setSearchForm] = useState<SearchFormData>({
     type: 'car',
     from: '',
     to: '',
     date: '',
+    time: '',
     passengers: 1,
     sortBy: 'time'
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [fromLocation, setFromLocation] = useState<any>(null);
-  const [toLocation, setToLocation] = useState<any>(null);
+  const [fromLocation, setFromLocation] = useState<Location | null>(null);
+  const [toLocation, setToLocation] = useState<Location | null>(null);
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
 
   const handleSearch = () => {
-    if (!searchForm.from || !searchForm.to || !searchForm.date) return;
+    if (!searchForm.from || !searchForm.to || !searchForm.date || !searchForm.time) return;
     
     // Track search analytics
     console.log('Search performed:', searchForm);
     
     onSearch(searchForm);
+  };
+
+  const handleFromLocationChange = (location: Location) => {
+    setFromLocation(location);
+    setSearchForm((prev) => ({ ...prev, from: location.name || location.address || "" }));
+    if (onFromLocationChange) onFromLocationChange(location);
+  };
+
+  const handleToLocationChange = (location: Location) => {
+    setToLocation(location);
+    setSearchForm((prev) => ({ ...prev, to: location.name || location.address || "" }));
+    if (onToLocationChange) onToLocationChange(location);
   };
 
   const vehicleTypes = [
@@ -95,10 +111,12 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                   {isLoaded ? (
                     <LocationInput
                       placeholder="Departure city"
-                      value={searchForm.from}
-                      onChange={(value) => setSearchForm({...searchForm, from: value})}
-                      onLocationChange={setFromLocation}
-                      isPickupLocation={true}
+                      value={fromLocation && typeof fromLocation === 'object' ? fromLocation.name : searchForm.from}
+                      onChange={(value) => {
+                        setSearchForm((prev) => ({ ...prev, from: value }));
+                      }}
+                      onLocationChange={handleFromLocationChange}
+                      isPickupLocation={false}
                     />
                   ) : (
                     <Input
@@ -117,9 +135,11 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                   {isLoaded ? (
                     <LocationInput
                       placeholder="Destination city"
-                      value={searchForm.to}
-                      onChange={(value) => setSearchForm({...searchForm, to: value})}
-                      onLocationChange={setToLocation}
+                      value={toLocation && typeof toLocation === 'object' ? toLocation.name : searchForm.to}
+                      onChange={(value) => {
+                        setSearchForm((prev) => ({ ...prev, to: value }));
+                      }}
+                      onLocationChange={handleToLocationChange}
                     />
                   ) : (
                     <Input
@@ -140,6 +160,17 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                     value={searchForm.date}
                     onChange={(e) => setSearchForm({...searchForm, date: e.target.value})}
                     min={minDate}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={searchForm.time}
+                    onChange={(e) => setSearchForm({...searchForm, time: e.target.value})}
                   />
                 </div>
 
@@ -170,7 +201,13 @@ export function EnhancedGuestSearch({ onSearch, isLoading }: EnhancedGuestSearch
                   <Button 
                     onClick={handleSearch} 
                     className="w-full bg-blue-600 hover:bg-blue-700"
-                    disabled={isLoading || !searchForm.from || !searchForm.to || !searchForm.date}
+                    disabled={
+                      isLoading ||
+                      !searchForm.from?.trim() ||
+                      !searchForm.to?.trim() ||
+                      !searchForm.date?.trim() ||
+                      !searchForm.time?.trim()
+                    }
                     aria-label="Search for rides"
                   >
                     {isLoading ? (

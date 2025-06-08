@@ -4,37 +4,7 @@ import { Label } from "@/components/ui/label";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { X, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
-
-// Define proper Location type to fix type errors
-export interface Location {
-  id: string;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  type?: string;
-  isInVizag?: boolean;
-  city?: string;
-  state?: string;
-  popularityScore?: number;
-}
-
-interface LocationInputProps {
-  id?: string;
-  label?: string;
-  value?: Location | string;
-  onChange?: (value: string) => void;
-  required?: boolean;
-  placeholder?: string;
-  suggestions?: Location[];
-  disabled?: boolean;
-  className?: string;
-  location?: Location;
-  onLocationChange?: (location: Location) => void;
-  isPickupLocation?: boolean;
-  isAirportTransfer?: boolean;
-  readOnly?: boolean;
-}
+import type { Location } from '@/lib/locationData';
 
 // Vizag coordinates
 const VIZAG_LAT = 17.6868;
@@ -59,6 +29,23 @@ function getDistanceFromLatLng(lat1: number, lng1: number, lat2: number, lng2: n
 // Helper to check if a location is within distance from Vizag
 function isWithinVizagRange(lat: number, lng: number, maxDistance: number = MAX_DISTANCE_KM): boolean {
   return getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng) <= maxDistance;
+}
+
+interface LocationInputProps {
+  id?: string;
+  label?: string;
+  value?: Location | string;
+  onChange?: (value: string) => void;
+  required?: boolean;
+  placeholder?: string;
+  suggestions?: Location[];
+  disabled?: boolean;
+  className?: string;
+  location?: Location;
+  onLocationChange?: (location: Location) => void;
+  isPickupLocation?: boolean;
+  isAirportTransfer?: boolean;
+  readOnly?: boolean;
 }
 
 export function LocationInput({
@@ -121,23 +108,11 @@ export function LocationInput({
         (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase())
       );
       
-      // For pickup locations, strictly filter to within 30km of Vizag
-      if (isPickupLocation) {
-        filtered = filtered.filter(suggestion => {
-          if (suggestion.lat && suggestion.lng) {
-            const lat = typeof suggestion.lat === 'string' ? parseFloat(suggestion.lat) : suggestion.lat;
-            const lng = typeof suggestion.lng === 'string' ? parseFloat(suggestion.lng) : suggestion.lng;
-            return isWithinVizagRange(lat, lng);
-          }
-          return false;
-        });
-      }
-      
       setFilteredSuggestions(filtered);
     } else {
       setFilteredSuggestions([]);
     }
-  }, [inputValue, suggestions, isPickupLocation]);
+  }, [inputValue, suggestions]);
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
@@ -191,7 +166,11 @@ export function LocationInput({
               address: place.formatted_address || "",
               lat: lat,
               lng: lng,
-              isInVizag: isWithinVizagRange(lat, lng)
+              isInVizag: isWithinVizagRange(lat, lng),
+              city: '',
+              state: '',
+              type: 'other',
+              popularityScore: 50
             });
           }
         }
@@ -289,7 +268,7 @@ export function LocationInput({
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
-              if (onLocationChange) onLocationChange({ id: "", name: "", address: "", lat: 0, lng: 0 });
+              if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
               setShowSuggestions(false);
             }}
             tabIndex={-1}

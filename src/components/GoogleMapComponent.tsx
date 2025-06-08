@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Location } from "@/lib/locationData";
+import type { Location } from '@/lib/locationData';
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { toast } from "sonner";
 

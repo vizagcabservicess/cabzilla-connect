@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bell, CheckCircle, Clock, XCircle, MessageSquare, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
+import { poolingAPI } from '@/services/api/poolingAPI';
 
 interface Notification {
   id: string;
@@ -39,38 +39,13 @@ export function NotificationCenter({ userId, isOpen, onClose }: NotificationCent
   }, [notifications]);
 
   const loadNotifications = async () => {
-    // Mock notifications - in real implementation, fetch from API
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'request_approved',
-        title: 'Ride Request Approved!',
-        message: 'Your ride request from Hyderabad to Vijayawada has been approved by Ravi Kumar.',
-        timestamp: new Date().toISOString(),
-        isRead: false,
-        priority: 'high'
-      },
-      {
-        id: '2',
-        type: 'payment_reminder',
-        title: 'Payment Pending',
-        message: 'Complete your payment for the approved ride within 30 minutes.',
-        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        isRead: false,
-        priority: 'high'
-      },
-      {
-        id: '3',
-        type: 'trip_reminder',
-        title: 'Trip Tomorrow',
-        message: 'Your ride from Hyderabad to Vijayawada is scheduled for tomorrow at 10:00 AM.',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        isRead: true,
-        priority: 'medium'
-      }
-    ];
-
-    setNotifications(mockNotifications);
+    // Fetch real notifications from backend
+    try {
+      const data = await poolingAPI.notifications.getByUser(userId);
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setNotifications([]);
+    }
   };
 
   const markAsRead = (notificationId: string) => {
@@ -213,6 +188,12 @@ export function NotificationCenter({ userId, isOpen, onClose }: NotificationCent
                       <p className="text-sm text-gray-600 mt-1">
                         {notification.message}
                       </p>
+                      {/* Payment link/button for payment-related notifications */}
+                      {(notification.type === 'payment_reminder' || notification.type === 'request_approved') && notification.actionUrl && (
+                        <a href={notification.actionUrl} className="inline-block mt-2 text-blue-600 underline font-medium">
+                          Pay Now
+                        </a>
+                      )}
                       <p className="text-xs text-gray-500 mt-2">
                         {formatTime(notification.timestamp)}
                       </p>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,8 @@ interface EnhancedRideCardProps {
 
 export function EnhancedRideCard({ ride, onRequestRide, requestedSeats }: EnhancedRideCardProps) {
   const totalAmount = ride.pricePerSeat * requestedSeats;
-  const availableSeats = ride.totalSeats - ride.bookedSeats;
+  const availableSeats = typeof ride.availableSeats === 'number' ? ride.availableSeats : 0;
+  const totalSeats = typeof ride.totalSeats === 'number' ? ride.totalSeats : 0;
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -46,7 +46,7 @@ export function EnhancedRideCard({ ride, onRequestRide, requestedSeats }: Enhanc
                 
                 <div className="flex items-center gap-1">
                   <Users className="h-3 w-3" />
-                  <span>{availableSeats} seats available</span>
+                  <span>{availableSeats}/{totalSeats} seats available</span>
                 </div>
               </div>
             </div>

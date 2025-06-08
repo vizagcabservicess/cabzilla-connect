@@ -25,6 +25,8 @@ import { useQuery } from '@tanstack/react-query';
 import { poolingAPI } from '@/services/api/poolingAPI';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import GoogleMapComponent from '@/components/GoogleMapComponent';
+import { popularLocations, Location } from '@/lib/locationData';
 
 function safeToFixed(value, digits = 2, fallback = '0.00') {
   const num = Number(value);
@@ -333,6 +335,54 @@ export function ProviderDashboard() {
         </Card>
       </div>
 
+      {/* Map Integration for Most Recent Ride */}
+      {rides.length > 0 && (
+        (() => {
+          // Get the most recent ride (first in array)
+          const ride = rides[0];
+          // Try to resolve locations from popularLocations
+          const pickup = popularLocations.find(loc => loc.name === ride.fromLocation || loc.address === ride.fromLocation);
+          const drop = popularLocations.find(loc => loc.name === ride.toLocation || loc.address === ride.toLocation);
+          // Fallback to string locations if not found
+          return (
+            <div className="my-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                Route Overview
+              </h3>
+              <Card>
+                <CardContent className="p-0">
+                  <GoogleMapComponent
+                    pickupLocation={pickup || (ride.fromLocation ? {
+                      id: 'from',
+                      name: ride.fromLocation,
+                      address: ride.fromLocation,
+                      lat: 17.6868,
+                      lng: 83.2185,
+                      city: '',
+                      state: '',
+                      type: 'other',
+                      popularityScore: 50
+                    } : undefined)}
+                    dropLocation={drop || (ride.toLocation ? {
+                      id: 'to',
+                      name: ride.toLocation,
+                      address: ride.toLocation,
+                      lat: 16.5062,
+                      lng: 80.6480,
+                      city: '',
+                      state: '',
+                      type: 'other',
+                      popularityScore: 50
+                    } : undefined)}
+                    tripType="pooling"
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()
+      )}
+
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
@@ -448,7 +498,11 @@ export function ProviderDashboard() {
                         </div>
                         <div>
                           <span className="text-gray-600">Requests:</span>
-                          <p className="font-medium">{ride.requests?.length || 0}</p>
+                          <p className="font-medium">{
+                            providerRequests.filter(
+                              req => req.rideId === ride.id && ['pending', 'approved', 'paid'].includes(String(req.status))
+                            ).length
+                          }</p>
                         </div>
                       </div>
                     </div>
