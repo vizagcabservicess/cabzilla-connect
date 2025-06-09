@@ -135,6 +135,15 @@ function handleVerifyPayment() {
         ");
         $stmt->execute([$input['razorpay_payment_id'], $input['razorpay_order_id']]);
         
+        // Also update the corresponding ride request to 'paid'
+        $stmt = $pdo->prepare("
+            UPDATE pooling_ride_requests r
+            JOIN pooling_bookings b ON r.ride_id = b.ride_id AND r.guest_id = b.user_id
+            SET r.status = 'paid'
+            WHERE b.razorpay_order_id = ? AND b.payment_status = 'paid'
+        ");
+        $stmt->execute([$input['razorpay_order_id']]);
+        
         // Update payment record
         $stmt = $pdo->prepare("
             UPDATE pooling_payments 

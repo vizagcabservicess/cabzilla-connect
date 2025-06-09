@@ -51,8 +51,8 @@ function getMappedRideFromRequest(req: any) {
     toLocation: (req as any).to_location || (req as any).toLocation || '',
     departureTime: (req as any).departure_time || (req as any).departureTime || '',
     arrivalTime: (req as any).arrival_time || (req as any).arrivalTime || '',
-    totalSeats: (req as any).total_seats || (req as any).totalSeats || 1,
-    availableSeats: (req as any).available_seats || (req as any).availableSeats || 1,
+    totalSeats: Number((req as any).total_seats || (req as any).totalSeats || 1),
+    availableSeats: Number((req as any).available_seats || (req as any).availableSeats || 1),
     pricePerSeat: Number((req as any).price_per_seat || (req as any).pricePerSeat || 0),
     vehicleInfo: { make: '', model: '', color: '', plateNumber: '' },
     route: [],
@@ -122,10 +122,13 @@ export default function GuestDashboard() {
         if (!rideId) {
           console.warn('Ride request missing rideId:', r);
         }
-        // Only set status/paymentStatus to 'paid' if payment_status or paymentStatus is 'paid'
+        // Find a booking for this ride and guest
+        const booking = userBookings.find(
+          (b) => (b.rideId === rideId || b.ride_id === rideId) && (b.userId === user.id || b.user_id === user.id)
+        );
         let status = r.status || 'pending';
-        let paymentStatus = r.payment_status || r.paymentStatus || '';
-        if (r.payment_status === 'paid' || r.paymentStatus === 'paid') {
+        let paymentStatus = (booking && (booking.payment_status || booking.paymentStatus)) || '';
+        if (paymentStatus === 'paid') {
           status = 'paid';
           paymentStatus = 'paid';
         }
@@ -469,8 +472,8 @@ export default function GuestDashboard() {
                 <div className="space-y-2">
                   {requests.map((req) => {
                     const isApproved = String(req.status) === 'approved';
-                    // Only show Paid if status or payment_status is exactly 'paid'
-                    const isPaid = String(req.status) === 'paid' || String((req as any).paymentStatus) === 'paid' || String((req as any).payment_status) === 'paid';
+                    // Only show Paid if status is exactly 'paid'
+                    const isPaid = String(req.status) === 'paid';
                     return (
                       <div 
                         key={req.id} 
