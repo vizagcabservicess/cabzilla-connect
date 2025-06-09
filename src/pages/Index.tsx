@@ -1,6 +1,8 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
 import { ServicesShowcase } from "@/components/ServicesShowcase";
+import { FleetShowcase } from "@/components/FleetShowcase";
+import { TourPackages } from "@/components/TourPackages";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
@@ -11,6 +13,8 @@ const Index = () => {
       <Navbar />
       <Hero />
       <ServicesShowcase />
+      <FleetShowcase />
+      <TourPackages />
       <WhyChooseUs />
       <PopularRoutes />
       <TestimonialsSection />

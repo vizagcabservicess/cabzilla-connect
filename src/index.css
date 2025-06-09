@@ -280,3 +280,30 @@ button:not([disabled]) {
 .btn-secondary {
   @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-6 py-3 rounded-lg transition-colors duration-200;
 }
+
+/* Line clamp utility for text truncation */
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* Enhanced grid and card layouts */
+.fleet-card {
+  @apply bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 group;
+}
+
+.tour-card {
+  @apply bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300;
+}
+
+/* Gradient overlays */
+.gradient-overlay {
+  background: linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(16, 185, 129, 0.8));
+}
+
+/* Social media button styling */
+.social-btn {
+  @apply w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded flex items-center justify-center transition-colors;
+}
