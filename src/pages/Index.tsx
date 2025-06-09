@@ -7,6 +7,9 @@ import { TourPackages } from "@/components/TourPackages";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
+import { VideoTestimonials } from "@/components/VideoTestimonials";
+import { SocialMediaSection } from "@/components/SocialMediaSection";
+import { FloatingButtons } from "@/components/FloatingButtons";
 
 const Index = () => {
   return (
@@ -14,17 +17,19 @@ const Index = () => {
       <Navbar />
       <Hero />
       
-      {/* Main Content with App-like Spacing */}
-      <div className="space-y-4 md:space-y-8 pb-20">
+      {/* Main Content with Better Spacing */}
+      <div className="space-y-6 md:space-y-8 pb-16">
         <ServicesShowcase />
         <FleetShowcase />
         <TourPackages />
         <WhyChooseUs />
         <PopularRoutes />
         <TestimonialsSection />
+        <VideoTestimonials />
+        <SocialMediaSection />
       </div>
       
-      {/* Modern Footer */}
+      {/* Enhanced Footer */}
       <footer className="bg-white border-t border-gray-100 py-8 md:py-12 mt-8">
         <div className="container mx-auto px-4 space-y-8">
           {/* Company Info */}
@@ -36,7 +41,7 @@ const Index = () => {
               Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam. We place a high priority on customer satisfaction.
             </p>
             <div className="inline-flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium text-green-700">Available 24/7</span>
             </div>
           </div>
@@ -80,17 +85,37 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Bottom Section */}
-          <div className="border-t border-gray-100 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-gray-500 text-center md:text-left">
-              © Vizag Taxi Hub {new Date().getFullYear()}. All rights reserved.
-            </p>
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-gray-400">Made with ❤️ in Vizag</span>
+          {/* Social Media Links */}
+          <div className="border-t border-gray-100 pt-6">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <p className="text-sm text-gray-500 text-center md:text-left">
+                © Vizag Taxi Hub {new Date().getFullYear()}. All rights reserved.
+              </p>
+              
+              {/* Social Icons */}
+              <div className="flex items-center gap-4">
+                <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
+                  <span className="text-xl">📘</span>
+                </a>
+                <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
+                  <span className="text-xl">📷</span>
+                </a>
+                <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-600 transition-colors">
+                  <span className="text-xl">📹</span>
+                </a>
+                <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors">
+                  <span className="text-xl">🐦</span>
+                </a>
+              </div>
+              
+              <div className="text-xs text-gray-400">Made with ❤️ in Vizag</div>
             </div>
           </div>
         </div>
       </footer>
+      
+      {/* Floating Action Buttons */}
+      <FloatingButtons />
     </div>
   );
 };
