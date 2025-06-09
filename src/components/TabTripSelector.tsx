@@ -177,7 +177,7 @@ export function TabTripSelector({
                 <button
                   key={tab.id}
                   ref={el => tabRefs.current[idx] = el}
-                  className={`flex-1 min-w-0 py-1 ${isActive ? "px-5" : "px-3"} flex items-center justify-center rounded-full font-medium transition-colors duration-200 text-sm text-center focus:outline-none ${isActive ? "bg-white text-blue-700 border border-blue-200 shadow-sm z-10" : "bg-transparent text-gray-700"}`}
+                  className={`flex-1 min-w-0 py-1 ${isActive ? "px-5 md:px-8 md:py-3" : "px-3 md:px-6 md:py-2"} flex items-center justify-center rounded-full font-medium transition-colors duration-200 text-sm text-center focus:outline-none ${isActive ? "bg-white text-blue-700 border border-blue-200 shadow-sm z-10" : "bg-transparent text-gray-700"}`}
                   onClick={() => handleTabChange(tab.id)}
                   style={{ zIndex: isActive ? 2 : 1 }}
                 >

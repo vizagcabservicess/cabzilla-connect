@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Star, Play, ExternalLink } from 'lucide-react';
@@ -46,34 +45,33 @@ export function VideoTestimonials() {
         </div>
 
         {/* Video Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {videoTestimonials.map((video, index) => (
-            <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer">
+            <div key={index} className="bg-white rounded-3xl shadow-md overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-xl">
               <div className="relative">
                 <img 
                   src={video.thumbnail} 
                   alt={video.title}
-                  className="w-full h-48 object-cover"
+                  className="w-full h-64 object-cover"
                 />
-                <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition-colors">
-                  <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Play className="h-6 w-6 text-white fill-current ml-1" />
-                  </div>
-                </div>
-                <div className="absolute top-4 right-4">
-                  <div className="flex items-center gap-1 bg-white/90 px-2 py-1 rounded-full">
-                    {[...Array(video.rating)].map((_, i) => (
-                      <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
+                {/* Gradient overlay for subtitle readability */}
+                <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-black/30 to-transparent rounded-t-3xl"></div>
+                {/* Subtitle overlay */}
+                <div className="absolute top-4 left-4">
+                  <div className="text-xs font-semibold text-white/90 uppercase tracking-wide">Watch and Learn</div>
                 </div>
               </div>
-              
-              <CardContent className="p-4">
-                <h3 className="font-semibold text-gray-900 mb-1">{video.title}</h3>
-                <p className="text-sm text-gray-600">{video.customer}</p>
-              </CardContent>
-            </Card>
+              {/* Customer and description below image */}
+              <div className="bg-white p-5 rounded-b-3xl flex items-center justify-between">
+                <div>
+                  <div className="text-gray-900 font-semibold text-base mb-1">{video.title}</div>
+                  <div className="text-gray-600 text-sm">{video.customer}</div>
+                </div>
+                <button className="bg-gray-100 hover:bg-gray-200 rounded-full p-3 shadow transition-all ml-4">
+                  <Play className="h-6 w-6 text-red-600" />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
 

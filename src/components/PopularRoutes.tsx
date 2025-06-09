@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, Clock, TrendingUp, Star } from 'lucide-react';
@@ -91,7 +90,7 @@ export function PopularRoutes() {
             <Card key={index} className="group hover:shadow-2xl transition-all duration-300 cursor-pointer border-0 bg-white rounded-3xl overflow-hidden">
               {/* Route Header */}
               <div className={`relative h-20 md:h-24 bg-gradient-to-r ${route.gradient} p-4 md:p-5`}>
-                <div className="flex items-center justify-between h-full">
+                <div className="flex items-center justify-between h-full pr-10 md:pr-14">
                   <div>
                     <h3 className="text-lg md:text-xl font-bold text-white">{route.destination}</h3>
                     <p className="text-white/80 text-sm">{route.description}</p>
@@ -103,7 +102,7 @@ export function PopularRoutes() {
                 </div>
                 
                 {/* Popularity Badge */}
-                <div className="absolute top-2 right-2">
+                <div className="absolute top-2 right-2 z-10">
                   <div className="bg-white/20 backdrop-blur-sm px-2 py-1 rounded-full">
                     <span className="text-white text-xs font-medium">{route.popularity}</span>
                   </div>

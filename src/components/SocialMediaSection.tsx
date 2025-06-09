@@ -1,7 +1,8 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExternalLink, Star, Users, Heart } from 'lucide-react';
+import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { SiX } from 'react-icons/si';
 
 export function SocialMediaSection() {
   const socialLinks = [
@@ -10,28 +11,28 @@ export function SocialMediaSection() {
       url: 'https://www.facebook.com/vizagtaxihub',
       color: 'from-blue-600 to-blue-700',
       followers: '2.5K+',
-      icon: '📘'
+      icon: FaFacebook
     },
     {
       name: 'Instagram', 
       url: 'https://www.instagram.com/vizagtaxihub/',
       color: 'from-pink-500 to-purple-600',
       followers: '1.8K+',
-      icon: '📷'
+      icon: FaInstagram
     },
     {
       name: 'YouTube',
       url: 'https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg',
       color: 'from-red-600 to-red-700', 
       followers: '850+',
-      icon: '📹'
+      icon: FaYoutube
     },
     {
-      name: 'Twitter',
+      name: 'X (formerly Twitter)',
       url: 'https://twitter.com/vizagtaxihub',
-      color: 'from-blue-400 to-blue-500',
+      color: 'from-gray-900 to-black',
       followers: '1.2K+',
-      icon: '🐦'
+      icon: SiX
     }
   ];
 
@@ -58,7 +59,7 @@ export function SocialMediaSection() {
             <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden">
               <CardContent className="p-6 text-center">
                 <div className={`w-16 h-16 bg-gradient-to-r ${social.color} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
-                  <span className="text-2xl">{social.icon}</span>
+                  <social.icon className="text-3xl text-white" />
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1">{social.name}</h3>
                 <p className="text-sm text-gray-600 mb-3">{social.followers} followers</p>

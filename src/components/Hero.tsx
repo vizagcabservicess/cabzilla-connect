@@ -447,9 +447,9 @@ export function Hero() {
   };
 
   return (
-    <section className="relative min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
+    <section className="relative min-h-[80vh] bg-gradient-to-b from-gray-50 to-white py-4 mt-6">
       <div className="container mx-auto px-4">
-        <div className={`text-center mb-8 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
+        <div className={`text-center mb-4 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
           {currentStep > 1 && (
             <button 
               onClick={() => setCurrentStep(1)} 
@@ -462,7 +462,7 @@ export function Hero() {
           <h5 className={`text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
             Book a Cab in Minutes
           </h5>
-          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-4 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
+          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-2 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
             {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
           </h1>
         </div>

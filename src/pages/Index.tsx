@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
 import { ServicesShowcase } from "@/components/ServicesShowcase";
@@ -10,6 +9,8 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { FloatingButtons } from "@/components/FloatingButtons";
+import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { SiX } from 'react-icons/si';
 
 const Index = () => {
   return (
@@ -18,7 +19,7 @@ const Index = () => {
       <Hero />
       
       {/* Main Content with Better Spacing */}
-      <div className="space-y-6 md:space-y-8 pb-16">
+      <div className="space-y-2 md:space-y-4 pb-16">
         <ServicesShowcase />
         <FleetShowcase />
         <TourPackages />
@@ -95,16 +96,16 @@ const Index = () => {
               {/* Social Icons */}
               <div className="flex items-center gap-4">
                 <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
-                  <span className="text-xl">📘</span>
+                  <FaFacebook className="text-2xl" />
                 </a>
                 <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
-                  <span className="text-xl">📷</span>
+                  <FaInstagram className="text-2xl" />
                 </a>
                 <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-600 transition-colors">
-                  <span className="text-xl">📹</span>
+                  <FaYoutube className="text-2xl" />
                 </a>
-                <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors">
-                  <span className="text-xl">🐦</span>
+                <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-black transition-colors">
+                  <SiX className="text-2xl" />
                 </a>
               </div>
               

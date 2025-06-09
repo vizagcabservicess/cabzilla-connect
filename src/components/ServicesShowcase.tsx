@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard } from 'lucide-react';
@@ -10,32 +9,32 @@ export function ServicesShowcase() {
       title: "Local Trips",
       description: "Hourly packages perfect for city exploration",
       features: ["8hrs/80km - ₹2,400", "10hrs/100km - ₹3,000", "Professional drivers"],
-      color: "from-blue-500 to-blue-600",
-      bgColor: "bg-blue-50"
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-600"
     },
     {
       icon: MapPin,
       title: "Outstation Travel",
       description: "Comfortable long-distance journeys",
       features: ["Hyderabad - 620km", "Chennai - 780km", "Bangalore - 860km"],
-      color: "from-green-500 to-green-600",
-      bgColor: "bg-green-50"
+      bgColor: "bg-green-100",
+      iconColor: "text-green-600"
     },
     {
       icon: Car,
       title: "Airport Transfers",
       description: "Reliable airport connectivity",
       features: ["On-time guarantee", "Flight tracking", "Fixed rates"],
-      color: "from-purple-500 to-purple-600",
-      bgColor: "bg-purple-50"
+      bgColor: "bg-purple-100",
+      iconColor: "text-purple-600"
     },
     {
       icon: Users,
       title: "Car Pooling",
       description: "Share rides, save money",
       features: ["Eco-friendly travel", "Meet new people", "Affordable rates"],
-      color: "from-orange-500 to-orange-600",
-      bgColor: "bg-orange-50"
+      bgColor: "bg-orange-100",
+      iconColor: "text-orange-600"
     }
   ];
 
@@ -49,15 +48,15 @@ export function ServicesShowcase() {
   ];
 
   return (
-    <section className="px-4 py-6 md:py-12 bg-white">
+    <section className="px-4 py-2 md:py-4 bg-white">
       <div className="container mx-auto max-w-6xl">
         {/* Header */}
-        <div className="text-center mb-6 md:mb-10">
+        <div className="text-center mb-2 md:mb-4">
           <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
             <Car className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-medium text-blue-600">OUR SERVICES</span>
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 leading-tight">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 leading-tight">
             Your Journey, Our Priority
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
@@ -70,8 +69,8 @@ export function ServicesShowcase() {
           {services.map((service, index) => (
             <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden">
               <CardContent className="p-5 md:p-6 text-center">
-                <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-r ${service.color} flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                  <service.icon className="h-7 w-7 md:h-8 md:w-8 text-white" />
+                <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ${service.bgColor}`}>
+                  <service.icon className={`h-7 w-7 md:h-8 md:w-8 ${service.iconColor}`} />
                 </div>
                 <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
                 <p className="text-gray-600 text-sm md:text-base mb-4 leading-relaxed">{service.description}</p>

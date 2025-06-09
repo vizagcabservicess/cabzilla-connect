@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle } from 'lucide-react';
+import { Phone } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 export function FloatingButtons() {
   const handleCall = () => {
@@ -21,7 +21,7 @@ export function FloatingButtons() {
         className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all duration-300 group"
         size="icon"
       >
-        <MessageCircle className="h-6 w-6 group-hover:scale-110 transition-transform" />
+        <FaWhatsapp className="h-7 w-7 group-hover:scale-110 transition-transform" />
       </Button>
       
       {/* Call Button */}
