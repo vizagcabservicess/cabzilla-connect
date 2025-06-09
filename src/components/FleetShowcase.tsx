@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Users, MapPin, CheckCircle, Fuel, Star } from 'lucide-react';
+import { Car, Users, MapPin, CheckCircle, Fuel, Star, Shield } from 'lucide-react';
 
 export function FleetShowcase() {
   const vehicles = [
