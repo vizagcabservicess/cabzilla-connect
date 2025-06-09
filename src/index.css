@@ -1,4 +1,3 @@
-
 html, body {
   overflow-x: hidden !important;
 }
@@ -291,7 +290,7 @@ button:not([disabled]) {
 
 /* Enhanced grid and card layouts */
 .fleet-card {
-  @apply bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 group;
+  @apply bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300;
 }
 
 .tour-card {
