@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Star, Shield, MapPin, Clock } from 'lucide-react';
+import { Star, Shield, MapPin, Clock, Users } from 'lucide-react';
 
 export function WhyChooseUs() {
   const stats = [
