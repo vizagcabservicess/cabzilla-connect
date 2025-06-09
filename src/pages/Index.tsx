@@ -1,11 +1,19 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
+import { ServicesShowcase } from "@/components/ServicesShowcase";
+import { WhyChooseUs } from "@/components/WhyChooseUs";
+import { PopularRoutes } from "@/components/PopularRoutes";
+import { TestimonialsSection } from "@/components/TestimonialsSection";
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
       <Hero />
+      <ServicesShowcase />
+      <WhyChooseUs />
+      <PopularRoutes />
+      <TestimonialsSection />
       
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
