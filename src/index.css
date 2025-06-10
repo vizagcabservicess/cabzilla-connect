@@ -1,4 +1,6 @@
 
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
 html, body {
   overflow-x: hidden !important;
 }
@@ -6,8 +8,6 @@ html, body {
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 @layer base {
   :root {
@@ -39,7 +39,7 @@ html, body {
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
  
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
  
   .dark {
@@ -79,84 +79,126 @@ html, body {
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     font-variation-settings: 'opsz' 32;
     scroll-behavior: smooth;
+    line-height: 1.6;
   }
 }
 
-/* Mobile-First Typography - Reduced sizes for better mobile experience */
+/* Enhanced Typography System */
 @layer base {
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold tracking-tight;
+    @apply font-bold tracking-tight;
     line-height: 1.2;
   }
   
   h1 {
-    @apply text-xl md:text-3xl lg:text-4xl font-bold;
+    @apply text-3xl md:text-5xl lg:text-6xl;
+    font-weight: 800;
   }
   
   h2 {
-    @apply text-lg md:text-2xl lg:text-3xl font-bold;
+    @apply text-2xl md:text-3xl lg:text-4xl;
+    font-weight: 700;
   }
   
   h3 {
-    @apply text-base md:text-xl lg:text-2xl font-semibold;
+    @apply text-xl md:text-2xl lg:text-3xl;
+    font-weight: 600;
   }
   
   h4 {
-    @apply text-sm md:text-lg lg:text-xl font-semibold;
+    @apply text-lg md:text-xl lg:text-2xl;
+    font-weight: 600;
   }
   
   p {
-    @apply text-sm md:text-base leading-relaxed;
+    @apply text-base md:text-lg;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+  
+  .text-lead {
+    @apply text-lg md:text-xl;
+    line-height: 1.6;
+    font-weight: 500;
   }
 }
 
-/* Optimized Mobile Spacing */
+/* Enhanced Mobile-First Design */
 .mobile-section {
-  @apply py-6 md:py-10 lg:py-12;
+  @apply py-8 md:py-12 lg:py-16;
 }
 
 .mobile-container {
-  @apply px-3 md:px-6 lg:px-8;
+  @apply px-4 md:px-6 lg:px-8;
 }
 
 .mobile-gap {
-  @apply gap-3 md:gap-4 lg:gap-6;
+  @apply gap-4 md:gap-6 lg:gap-8;
 }
 
 .mobile-padding {
-  @apply p-3 md:p-5 lg:p-6;
+  @apply p-4 md:p-6 lg:p-8;
 }
 
-/* Enhanced Button Styling */
-.btn-mobile {
-  @apply h-11 md:h-12 px-5 md:px-6 rounded-xl font-medium text-sm md:text-base;
-  transition: all 0.2s ease;
+/* Enhanced Button System */
+.btn-primary {
+  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105;
 }
 
-.btn-primary-mobile {
-  @apply btn-mobile bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg;
+.btn-secondary {
+  @apply bg-white text-blue-700 border-2 border-blue-600 hover:bg-blue-50 px-8 py-4 rounded-2xl font-semibold text-lg shadow-md hover:shadow-lg transition-all duration-300;
 }
 
-/* Card Animations */
-.app-card {
-  @apply rounded-xl md:rounded-2xl overflow-hidden shadow-sm border border-gray-100 bg-white;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.btn-outline {
+  @apply border-2 border-current bg-transparent hover:bg-current hover:text-white px-6 py-3 rounded-xl font-medium transition-all duration-300;
 }
 
-.app-card:hover {
-  @apply shadow-lg;
-  transform: translateY(-2px);
+/* Enhanced Card System */
+.card-enhanced {
+  @apply bg-white rounded-3xl shadow-lg hover:shadow-2xl border-0 overflow-hidden transition-all duration-300 transform hover:-translate-y-2;
 }
 
-/* Smooth Animations */
-@keyframes fadeInUp {
+.card-gradient {
+  @apply bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-lg hover:shadow-2xl border border-gray-100 overflow-hidden transition-all duration-300;
+}
+
+/* Swiper Customizations */
+.tour-slider .swiper-pagination-bullet {
+  @apply bg-blue-600 opacity-50;
+}
+
+.tour-slider .swiper-pagination-bullet-active {
+  @apply bg-blue-700 opacity-100;
+}
+
+.tour-slider .swiper-button-next,
+.tour-slider .swiper-button-prev {
+  @apply text-blue-600;
+}
+
+/* Accessibility Improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus States */
+.focus-ring {
+  @apply focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500;
+}
+
+/* Enhanced Animations */
+@keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(15px);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -167,7 +209,7 @@ html, body {
 @keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateX(15px);
+    transform: translateX(30px);
   }
   to {
     opacity: 1;
@@ -178,7 +220,7 @@ html, body {
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.98);
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
@@ -191,56 +233,50 @@ html, body {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-3px);
+    transform: translateY(-8px);
   }
 }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.5s ease-out;
+.animate-slide-in-up {
+  animation: slideInUp 0.6s ease-out;
 }
 
 .animate-slide-in-right {
-  animation: slideInRight 0.5s ease-out;
+  animation: slideInRight 0.6s ease-out;
 }
 
 .animate-scale-in {
-  animation: scaleIn 0.4s ease-out;
+  animation: scaleIn 0.5s ease-out;
 }
 
 .animate-float {
-  animation: float 3s ease-in-out infinite;
+  animation: float 4s ease-in-out infinite;
 }
 
-/* Mobile Touch Improvements */
+/* Responsive Typography */
 @media (max-width: 768px) {
+  .mobile-text-responsive {
+    @apply text-sm;
+  }
+  
+  .mobile-heading-responsive {
+    @apply text-xl;
+  }
+  
+  /* Better touch targets */
   .touch-target {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 48px;
+    min-width: 48px;
   }
   
-  /* Reduce spacing on mobile */
-  .space-y-6 > * + * {
-    margin-top: 1rem;
-  }
-  
+  /* Optimized spacing for mobile */
   .space-y-8 > * + * {
     margin-top: 1.5rem;
   }
   
-  /* Better mobile text sizing */
-  .mobile-text-responsive {
-    @apply text-xs sm:text-sm md:text-base;
+  .space-y-12 > * + * {
+    margin-top: 2rem;
   }
-  
-  /* Mobile-optimized containers */
-  .mobile-container-tight {
-    @apply px-3;
-  }
-}
-
-/* Floating Buttons */
-.floating-btn {
-  @apply fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300;
 }
 
 /* Loading States */
@@ -259,33 +295,17 @@ html, body {
   }
 }
 
-/* Better Focus States */
-.focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
-}
-
 /* Enhanced Shadows */
-.shadow-soft { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
-.shadow-medium { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
-.shadow-strong { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14); }
+.shadow-soft { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+.shadow-medium { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); }
+.shadow-strong { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15); }
 
 /* Status Indicators */
-.status-dot {
-  @apply w-2 h-2 rounded-full;
-}
-
-.status-online { @apply bg-green-500; }
+.status-online { @apply bg-green-500 animate-pulse; }
 .status-busy { @apply bg-yellow-500; }
 .status-offline { @apply bg-gray-400; }
 
-/* Responsive Typography Scale */
-.text-mobile-xs { @apply text-xs md:text-sm; }
-.text-mobile-sm { @apply text-sm md:text-base; }
-.text-mobile-base { @apply text-base md:text-lg; }
-.text-mobile-lg { @apply text-lg md:text-xl; }
-.text-mobile-xl { @apply text-xl md:text-2xl; }
-
-/* Mobile Safe Areas */
+/* Safe Areas for Mobile */
 .safe-top { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-left { padding-left: env(safe-area-inset-left); }

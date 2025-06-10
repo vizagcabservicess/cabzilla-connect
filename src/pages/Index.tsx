@@ -1,115 +1,118 @@
+
 import { Navbar } from "@/components/Navbar";
-import { Hero } from "@/components/Hero";
+import { EnhancedHero } from "@/components/EnhancedHero";
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
-import { TourPackages } from "@/components/TourPackages";
+import { TourSlider } from "@/components/TourSlider";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
+import { EnhancedCTA } from "@/components/EnhancedCTA";
 import { FloatingButtons } from "@/components/FloatingButtons";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero />
+      <EnhancedHero />
       
-      {/* Main Content with Better Spacing */}
-      <div className="space-y-2 md:space-y-4 pb-16">
+      {/* Main Content with Optimized Spacing */}
+      <div className="space-y-8 md:space-y-12">
         <ServicesShowcase />
         <FleetShowcase />
-        <TourPackages />
+        <TourSlider />
         <WhyChooseUs />
         <PopularRoutes />
+        <EnhancedCTA />
         <TestimonialsSection />
         <VideoTestimonials />
         <SocialMediaSection />
       </div>
       
       {/* Enhanced Footer */}
-      <footer className="bg-white border-t border-gray-100 py-8 md:py-12 mt-8">
-        <div className="container mx-auto px-4 space-y-8">
+      <footer className="bg-gray-900 text-white py-12 md:py-16 mt-16">
+        <div className="container mx-auto px-4 space-y-12">
           {/* Company Info */}
           <div className="text-center md:text-left">
-            <div className="flex justify-center md:justify-start mb-4">
-              <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-10 md:h-12" />
+            <div className="flex justify-center md:justify-start mb-6">
+              <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-12 md:h-14" />
             </div>
-            <p className="text-sm md:text-base text-gray-600 leading-relaxed max-w-2xl mx-auto md:mx-0 mb-4">
-              Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam. We place a high priority on customer satisfaction.
+            <p className="text-base md:text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto md:mx-0 mb-6">
+              Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam. We place a high priority on customer satisfaction and safety.
             </p>
-            <div className="inline-flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-green-700">Available 24/7</span>
+            <div className="inline-flex items-center gap-3 bg-green-600/20 px-6 py-3 rounded-2xl border border-green-500/30">
+              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-lg font-semibold text-green-400">Available 24/7</span>
             </div>
           </div>
 
           {/* Quick Links Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm md:text-base">Services</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>Local Trips</li>
-                <li>Outstation</li>
-                <li>Airport Transfer</li>
-                <li>Car Pooling</li>
+              <h3 className="font-bold text-white mb-4 text-lg">Services</h3>
+              <ul className="space-y-3 text-gray-300">
+                <li className="hover:text-white transition-colors cursor-pointer">Local Trips</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Outstation</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Airport Transfer</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Tour Packages</li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm md:text-base">Popular Routes</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>Hyderabad</li>
-                <li>Chennai</li>
-                <li>Bangalore</li>
-                <li>Araku Valley</li>
+              <h3 className="font-bold text-white mb-4 text-lg">Popular Routes</h3>
+              <ul className="space-y-3 text-gray-300">
+                <li className="hover:text-white transition-colors cursor-pointer">Hyderabad</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Chennai</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Bangalore</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Araku Valley</li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm md:text-base">Support</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>Help Center</li>
-                <li>Contact Us</li>
-                <li>Terms & Conditions</li>
-                <li>Privacy Policy</li>
+              <h3 className="font-bold text-white mb-4 text-lg">Support</h3>
+              <ul className="space-y-3 text-gray-300">
+                <li className="hover:text-white transition-colors cursor-pointer">Help Center</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Contact Us</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Terms & Conditions</li>
+                <li className="hover:text-white transition-colors cursor-pointer">Privacy Policy</li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm md:text-base">Contact</h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>+91 9966363662</p>
+              <h3 className="font-bold text-white mb-4 text-lg">Contact</h3>
+              <div className="space-y-3 text-gray-300">
+                <p className="text-lg font-semibold text-white">+91 9966363662</p>
                 <p>info@vizagtaxihub.com</p>
-                <p className="text-xs">Visakhapatnam, AP</p>
+                <p>Visakhapatnam, Andhra Pradesh</p>
               </div>
             </div>
           </div>
 
           {/* Social Media Links */}
-          <div className="border-t border-gray-100 pt-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-sm text-gray-500 text-center md:text-left">
+          <div className="border-t border-gray-700 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+              <p className="text-gray-400 text-center md:text-left">
                 © Vizag Taxi Hub {new Date().getFullYear()}. All rights reserved.
               </p>
               
               {/* Social Icons */}
-              <div className="flex items-center gap-4">
-                <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors">
-                  <FaFacebook className="text-2xl" />
+              <div className="flex items-center gap-6">
+                <a href="https://www.facebook.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500 transition-colors transform hover:scale-110">
+                  <FaFacebook className="text-3xl" />
                 </a>
-                <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-600 transition-colors">
-                  <FaInstagram className="text-2xl" />
+                <a href="https://www.instagram.com/vizagtaxihub/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-500 transition-colors transform hover:scale-110">
+                  <FaInstagram className="text-3xl" />
                 </a>
-                <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-600 transition-colors">
-                  <FaYoutube className="text-2xl" />
+                <a href="https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-red-500 transition-colors transform hover:scale-110">
+                  <FaYoutube className="text-3xl" />
                 </a>
-                <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-black transition-colors">
-                  <SiX className="text-2xl" />
+                <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-200 transition-colors transform hover:scale-110">
+                  <SiX className="text-3xl" />
                 </a>
               </div>
               
-              <div className="text-xs text-gray-400">Made with ❤️ in Vizag</div>
+              <div className="text-sm text-gray-400">Made with ❤️ in Vizag</div>
             </div>
           </div>
         </div>
