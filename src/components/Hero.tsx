@@ -447,7 +447,7 @@ export function Hero() {
   };
 
   return (
-    <section className="relative min-h-[80vh] bg-gradient-to-b from-gray-50 to-white py-4 mt-6">
+    <section className="relative min-h-[60vh] bg-gradient-to-b from-gray-50 to-white py-2 mt-2">
       <div className="container mx-auto px-4">
         <div className={`text-center mb-4 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
           {currentStep > 1 && (
@@ -482,7 +482,7 @@ export function Hero() {
                   <LocationInput
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
-                    value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                    value={pickupLocation || undefined}
                     onLocationChange={handlePickupLocationChange}
                     isPickupLocation={true}
                     isAirportTransfer={tripType === 'airport'}
@@ -492,7 +492,7 @@ export function Hero() {
                     <LocationInput
                       label="DROP LOCATION"
                       placeholder="Enter drop location"
-                      value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
+                      value={dropLocation || undefined}
                       onLocationChange={handleDropLocationChange}
                       isPickupLocation={false}
                       isAirportTransfer={tripType === 'airport'}

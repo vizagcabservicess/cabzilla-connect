@@ -1,5 +1,5 @@
 import { Navbar } from "@/components/Navbar";
-import { EnhancedHero } from "@/components/EnhancedHero";
+import { Hero } from '@/components/Hero';
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
 import { TourSlider } from "@/components/TourSlider";
@@ -18,7 +18,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <EnhancedHero />
+      <Hero />
       
       {/* Main Content with Optimized Spacing */}
       <div className="space-y-8 md:space-y-12">

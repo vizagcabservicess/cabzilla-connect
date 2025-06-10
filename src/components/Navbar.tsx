@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { Logo } from './Logo';
@@ -20,6 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   ChevronDown,
+  ChevronUp,
   Menu,
   Home,
   LogOut,
@@ -38,10 +39,71 @@ interface NavLink {
   label: string;
 }
 
+const megaMenuData = {
+  Services: {
+    left: [
+      { label: 'Local Trips', to: '/local-trips' },
+      { label: 'Outstation', to: '/outstation' },
+      { label: 'Airport Transfer', to: '/airport-transfer' },
+      { label: 'Tour Packages', to: '/tour-packages' },
+    ],
+    right: [
+      { label: 'Hourly Packages', items: ['8hrs/80km', '10hrs/100km', 'Professional drivers'] },
+      { label: 'Long Distance', items: ['Hyderabad', 'Chennai', 'Bangalore'] },
+      { label: 'Airport Info', items: ['On-time guarantee', 'Flight tracking', 'Fixed rates'] },
+      { label: 'Tour Options', items: ['Vizag-Araku', 'Vizag-Lambasingi', 'Vizag-Borra Caves'] },
+    ],
+  },
+  Destinations: {
+    left: [
+      { label: 'Popular', to: '#' },
+      { label: 'Other', to: '#' },
+    ],
+    right: [
+      { label: 'Popular Destinations', items: ['Hyderabad', 'Chennai', 'Bangalore', 'Araku Valley'] },
+      { label: 'Other Destinations', items: ['Tirupati', 'Vijayawada'] },
+    ],
+  },
+  Company: {
+    left: [
+      { label: 'About Us', to: '/about' },
+      { label: 'Contact', to: '/contact' },
+      { label: 'Fleet', to: '/fleet' },
+      { label: 'Careers', to: '/careers' },
+    ],
+    right: [
+      { label: 'Company Info', items: ['Our Story', 'Leadership', 'Vision & Mission'] },
+      { label: 'Contact', items: ['Email: info@vizagtaxihub.com', 'Phone: 9966363662'] },
+    ],
+  },
+  Support: {
+    left: [
+      { label: 'Help Center', to: '/help' },
+      { label: 'Terms & Conditions', to: '/terms' },
+      { label: 'Privacy Policy', to: '/privacy' },
+      { label: 'Refund Policy', to: '/refund' },
+    ],
+    right: [
+      { label: 'Support', items: ['FAQs', 'Customer Care', 'Live Chat'] },
+      { label: 'Policies', items: ['Terms & Conditions', 'Privacy Policy', 'Refund Policy'] },
+    ],
+  },
+};
+
 export function Navbar() {
   const { user, logout } = usePoolingAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [megaMenuOpen, setMegaMenuOpen] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('Services');
+  const [activeLeftIndex, setActiveLeftIndex] = useState(0);
+  const megaMenuRef = useRef(null);
+  const buttonRefs = {
+    Services: useRef(null),
+    Destinations: useRef(null),
+    Company: useRef(null),
+    Support: useRef(null),
+  };
 
   const handleDashboard = () => {
     if (user?.role === 'guest') navigate('/pooling/guest');
@@ -55,6 +117,77 @@ export function Navbar() {
     navigate('/login');
   };
 
+  // Close mega menu on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        megaMenuRef.current &&
+        !megaMenuRef.current.contains(event.target) &&
+        !Object.values(buttonRefs).some(ref => ref.current && ref.current.contains(event.target))
+      ) {
+        setMegaMenuOpen(null);
+      }
+    }
+    if (megaMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [megaMenuOpen]);
+
+  // Helper to render a mega menu for a given category
+  function renderMegaMenu(category) {
+    const left = megaMenuData[category].left;
+    const right = megaMenuData[category].right;
+    // Get button position for arrow
+    // const buttonRect = buttonRefs[category].current?.getBoundingClientRect();
+    // const menuRect = megaMenuRef.current?.getBoundingClientRect();
+    // let arrowLeft = 40;
+    // if (buttonRect && menuRect) {
+    //   arrowLeft = buttonRect.left - menuRect.left + buttonRect.width / 2 - 10;
+    // }
+    return (
+      <div
+        ref={megaMenuRef}
+        className="absolute left-1/2 -translate-x-1/2 top-full w-[700px] bg-white text-gray-900 shadow-2xl rounded-xl mt-4 p-0 flex z-50 border border-gray-200"
+        tabIndex={-1}
+        style={{ minHeight: 260 }}
+      >
+        {/* Up arrow removed */}
+        {/* Left column: Categories */}
+        <div className="w-1/3 py-8 px-6 border-r border-gray-100 bg-gray-50 rounded-l-xl">
+          {left.map((item, idx) => (
+            <button
+              key={item.label}
+              className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
+              onMouseEnter={() => setActiveLeftIndex(idx)}
+              onClick={e => e.preventDefault()}
+            >
+              {item.label}
+              <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
+            </button>
+          ))}
+        </div>
+        {/* Right column: Submenu for selected category */}
+        <div className="flex-1 py-8 px-8">
+          {right[activeLeftIndex] && (
+            <div>
+              <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
+              <div className="grid grid-cols-1 gap-2">
+                {right[activeLeftIndex].items.map((sub, i) => (
+                  <Link key={i} to="#" className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors">
+                    {sub}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <nav className="bg-white shadow-lg sticky top-0 z-50">
       <div className="container mx-auto px-4">
@@ -66,76 +199,29 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-8">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                Services
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuItem className="flex items-center space-x-2">
-                  <Car className="h-4 w-4" />
-                  <span>Local Trips</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center space-x-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>Outstation</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center space-x-2">
-                  <Plane className="h-4 w-4" />
-                  <span>Airport Transfer</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>Tour Packages</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Mega Menu Triggers */}
+            {['Services', 'Destinations', 'Company', 'Support'].map((cat) => (
+              <div key={cat} className="relative">
+                <button
+                  ref={buttonRefs[cat]}
+                  className={`flex items-center transition-colors font-medium focus:outline-none ${megaMenuOpen === cat ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
+                  onClick={() => {
+                    setMegaMenuOpen(megaMenuOpen === cat ? null : cat);
+                    setActiveCategory(cat);
+                    setActiveLeftIndex(0);
+                  }}
+                >
+                  {cat}
+                  {megaMenuOpen === cat ? (
+                    <ChevronUp className="ml-1 h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  )}
+                </button>
+                {megaMenuOpen === cat && renderMegaMenu(cat)}
+              </div>
+            ))}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                Destinations
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuItem>Hyderabad</DropdownMenuItem>
-                <DropdownMenuItem>Chennai</DropdownMenuItem>
-                <DropdownMenuItem>Bangalore</DropdownMenuItem>
-                <DropdownMenuItem>Araku Valley</DropdownMenuItem>
-                <DropdownMenuItem>Tirupati</DropdownMenuItem>
-                <DropdownMenuItem>Vijayawada</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                Company
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuItem asChild>
-                  <Link to="/about">About Us</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/contact">Contact</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>Fleet</DropdownMenuItem>
-                <DropdownMenuItem>Careers</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
-                Support
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuItem>Help Center</DropdownMenuItem>
-                <DropdownMenuItem>Terms & Conditions</DropdownMenuItem>
-                <DropdownMenuItem>Privacy Policy</DropdownMenuItem>
-                <DropdownMenuItem>Refund Policy</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
             {/* Contact Information */}
             <div className="flex items-center space-x-4 text-sm">
               <a 
