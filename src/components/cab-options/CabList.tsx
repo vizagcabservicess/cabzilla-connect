@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
-import { CabOptionCard } from '@/components/CabOptionCard';
 import { TripType } from '@/lib/tripTypes';
+import { CabOptionCard } from '@/components/CabOptionCard';
+import { MobileCabCard } from './MobileCabCard';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -14,7 +17,7 @@ interface CabListProps {
   tripMode?: string;
   distance?: number;
   packageType?: string;
-  pickupDate?: Date; // Add pickupDate prop
+  pickupDate?: Date;
 }
 
 const sumBreakdown = (breakdown: any) => {
@@ -47,12 +50,13 @@ export const CabList: React.FC<CabListProps> = ({
   tripMode = 'one-way',
   distance = 0,
   packageType,
-  pickupDate // Add pickupDate to destructuring
+  pickupDate
 }) => {
   console.log(`CabList: Rendering with package ${packageType}`);
   
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
+  const isMobile = useIsMobile();
   
   const normalizeVehicleId = (id: string): string => {
     return id.trim()
@@ -103,7 +107,7 @@ export const CabList: React.FC<CabListProps> = ({
   };
 
   return (
-    <div className="space-y-3">
+    <div className={cn("space-y-3", isMobile ? "space-y-2" : "space-y-3")}>
       {isCalculatingFares && (
         <div className="bg-blue-50 p-3 rounded-md flex items-center justify-center mb-3">
           <div className="animate-spin mr-2 h-4 w-4 border-b-2 border-blue-600"></div>
@@ -124,7 +128,7 @@ export const CabList: React.FC<CabListProps> = ({
             tripType,
             distance,
             packageType,
-            pickupDate // Pass pickupDate to useFare hook
+            pickupDate
           );
 
           let fare = 0;
@@ -137,13 +141,10 @@ export const CabList: React.FC<CabListProps> = ({
             console.error(`Fare error for ${cab.name}:`, error);
             fareText = 'Error fetching price';
           } else if (fareData) {
-            // Always use sumBreakdown for all trip types
             fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
             fareSource = fareData.source || 'unknown';
 
-            // --- PATCH: For local trips, add extra km/hour charges to fare ---
             if (tripType === 'local') {
-              // Local package limits
               const localPackageLimits: Record<string, { km: number; hours: number }> = {
                 '4hrs-40km': { km: 40, hours: 4 },
                 '8hrs-80km': { km: 80, hours: 8 },
@@ -151,7 +152,7 @@ export const CabList: React.FC<CabListProps> = ({
               };
               const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
               const extraKm = Math.max(0, distance - selectedPackage.km);
-              const extraHours = 0; // Default, update if you have trip duration
+              const extraHours = 0;
               const breakdown = fareData.breakdown || {};
               const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
               const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
@@ -159,9 +160,7 @@ export const CabList: React.FC<CabListProps> = ({
               const extraHourFare = extraHours * extraHourCharge;
               fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
             }
-            // --- END PATCH ---
 
-            // --- PATCH: For airport trips, sum base fare + airport fee + extra distance charges ---
             if (tripType === 'airport') {
               const breakdown = fareData.breakdown || {};
               const base = breakdown.basePrice || 0;
@@ -169,7 +168,6 @@ export const CabList: React.FC<CabListProps> = ({
               const extra = breakdown.extraDistanceFare || 0;
               fare = base + airportFee + extra;
             }
-            // --- END PATCH ---
 
             if (fareSource === 'database') {
               fareText = `₹${fare.toLocaleString()} (verified)`;
@@ -180,6 +178,21 @@ export const CabList: React.FC<CabListProps> = ({
             } else {
               fareText = `₹${fare.toLocaleString()}`;
             }
+          }
+
+          // Render mobile or desktop version based on screen size
+          if (isMobile) {
+            return (
+              <MobileCabCard
+                key={cab.id}
+                cab={cab}
+                fare={fare}
+                isSelected={selectedCabId === cab.id}
+                onSelect={() => enhancedSelectCab(cab, fare, fareSource, fareData?.breakdown)}
+                isCalculating={isLoading}
+                fareSource={fareSource}
+              />
+            );
           }
 
           return (
