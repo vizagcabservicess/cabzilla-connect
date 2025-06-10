@@ -27,7 +27,10 @@ import {
   Phone,
   Car,
   Info,
-  UserPlus
+  UserPlus,
+  MapPin,
+  Plane,
+  Calendar
 } from 'lucide-react';
 
 interface NavLink {
@@ -62,34 +65,74 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link 
-              to="/" 
-              className="text-gray-700 hover:text-blue-600 transition-colors"
-            >
-              Home
-            </Link>
-            <Link 
-              to="/pooling" 
-              className="text-gray-700 hover:text-blue-600 transition-colors"
-            >
-              Pooling
-            </Link>
+          <div className="hidden lg:flex items-center space-x-8">
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors">
-                About
+              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                Services
                 <ChevronDown className="ml-1 h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent>
+              <DropdownMenuContent className="w-56">
+                <DropdownMenuItem className="flex items-center space-x-2">
+                  <Car className="h-4 w-4" />
+                  <span>Local Trips</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex items-center space-x-2">
+                  <MapPin className="h-4 w-4" />
+                  <span>Outstation</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex items-center space-x-2">
+                  <Plane className="h-4 w-4" />
+                  <span>Airport Transfer</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4" />
+                  <span>Tour Packages</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                Destinations
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
+                <DropdownMenuItem>Hyderabad</DropdownMenuItem>
+                <DropdownMenuItem>Chennai</DropdownMenuItem>
+                <DropdownMenuItem>Bangalore</DropdownMenuItem>
+                <DropdownMenuItem>Araku Valley</DropdownMenuItem>
+                <DropdownMenuItem>Tirupati</DropdownMenuItem>
+                <DropdownMenuItem>Vijayawada</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                Company
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
                 <DropdownMenuItem asChild>
                   <Link to="/about">About Us</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to="/services">Services</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
                   <Link to="/contact">Contact</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem>Fleet</DropdownMenuItem>
+                <DropdownMenuItem>Careers</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                Support
+                <ChevronDown className="ml-1 h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
+                <DropdownMenuItem>Help Center</DropdownMenuItem>
+                <DropdownMenuItem>Terms & Conditions</DropdownMenuItem>
+                <DropdownMenuItem>Privacy Policy</DropdownMenuItem>
+                <DropdownMenuItem>Refund Policy</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             
@@ -97,7 +140,7 @@ export function Navbar() {
             <div className="flex items-center space-x-4 text-sm">
               <a 
                 href="tel:+919966363662" 
-                className="flex items-center text-blue-600 hover:text-blue-700 transition-colors"
+                className="flex items-center text-blue-600 hover:text-blue-700 transition-colors font-medium"
               >
                 <Phone className="h-4 w-4 mr-1" />
                 9966363662
@@ -129,20 +172,13 @@ export function Navbar() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  onClick={handleDashboard}
-                  className="ml-4"
-                  variant="outline"
-                >
-                  Dashboard
-                </Button>
               </>
             ) : (
               <div className="flex items-center space-x-4">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors">
+                <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">
                   Login
                 </Link>
-                <Link to="/signup" className="bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors">
+                <Link to="/signup" className="bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors font-medium">
                   Sign Up
                 </Link>
               </div>
@@ -150,7 +186,7 @@ export function Navbar() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" className="p-2">
@@ -168,10 +204,6 @@ export function Navbar() {
                   <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Home className="h-5 w-5" />
                     <span>Home</span>
-                  </Link>
-                  <Link to="/pooling" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Car className="h-5 w-5" />
-                    <span>Pooling</span>
                   </Link>
                   <Link to="/about" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Info className="h-5 w-5" />

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Car, MapPin, Clock, Star, Phone, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { TripModeSelector } from './TripModeSelector';
 
 export function EnhancedHero() {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
@@ -67,7 +68,7 @@ export function EnhancedHero() {
             comfortable vehicles, and transparent pricing.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
             <Button 
               size="lg" 
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
@@ -95,6 +96,11 @@ export function EnhancedHero() {
                 WhatsApp
               </Button>
             </div>
+          </div>
+
+          {/* Search Widget */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 max-w-4xl mx-auto">
+            <TripModeSelector />
           </div>
           
           {/* Stats */}

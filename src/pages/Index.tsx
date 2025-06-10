@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/Navbar";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ServicesShowcase } from "@/components/ServicesShowcase";
@@ -11,6 +10,7 @@ import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
 import { FloatingButtons } from "@/components/FloatingButtons";
+import { LiveChatbot } from "@/components/LiveChatbot";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 
@@ -120,6 +120,9 @@ const Index = () => {
       
       {/* Floating Action Buttons */}
       <FloatingButtons />
+      
+      {/* Live Chatbot */}
+      <LiveChatbot />
     </div>
   );
 };
