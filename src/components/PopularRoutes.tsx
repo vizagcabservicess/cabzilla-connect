@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, Clock, TrendingUp, Star } from 'lucide-react';
@@ -99,13 +98,12 @@ export function PopularRoutes() {
                   <div className="text-right flex-shrink-0">
                     <div className="text-2xl md:text-3xl font-bold text-white leading-none">{route.startingPrice}</div>
                     <div className="text-white/80 text-xs mt-1">starting from</div>
-                  </div>
-                </div>
-                
-                {/* Popularity Badge - Fixed positioning */}
-                <div className="absolute top-4 right-4">
-                  <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full">
-                    <span className="text-white text-xs font-medium whitespace-nowrap">{route.popularity}</span>
+                    {/* Popularity Badge - now under 'starting from' */}
+                    <div className="mt-2 flex justify-end">
+                      <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full inline-block">
+                        <span className="text-white text-xs font-medium whitespace-nowrap">{route.popularity}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
