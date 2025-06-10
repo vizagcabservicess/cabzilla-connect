@@ -160,7 +160,7 @@ const ReceiptPage = () => {
         <Card className="max-w-3xl mx-auto">
           <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
             <div>
-              <h1 className="text-xl font-bold">Booking Receipt</h1>
+              <h1 className="text-xl font-medium">Booking Receipt</h1>
               <p className="text-sm mt-1">#{booking?.bookingNumber}</p>
             </div>
             <div className="flex gap-2">
@@ -184,7 +184,7 @@ const ReceiptPage = () => {
           <div className="p-6">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">
+                <h2 className="text-2xl font-medium text-gray-800">
                   Booking #{booking?.bookingNumber}
                 </h2>
                 <p className="text-gray-500">ID: {booking?.id}</p>
@@ -289,7 +289,7 @@ const ReceiptPage = () => {
                     </div>
                   )}
                   <Separator className="my-2" />
-                  <div className="flex justify-between font-bold">
+                  <div className="flex justify-between font-medium">
                     <span>Total Amount</span>
                     <span>{formatCurrency(totalAmount)}</span>
                   </div>

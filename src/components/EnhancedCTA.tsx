@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Car, Phone, MessageCircle, Calendar, MapPin, Shield } from 'lucide-react';
@@ -28,7 +27,7 @@ export function EnhancedCTA() {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-4xl md:text-5xl font-bold mb-4">
+          <h2 className="text-4xl md:text-5xl font-medium mb-4">
             Ready to Book Your Ride?
           </h2>
           <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">

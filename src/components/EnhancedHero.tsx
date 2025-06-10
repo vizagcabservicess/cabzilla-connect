@@ -55,7 +55,7 @@ export function EnhancedHero() {
             <span className="text-sm font-medium">Available 24/7</span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-medium mb-6 leading-tight">
             Your Journey,
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
               Our Priority
@@ -119,7 +119,7 @@ export function EnhancedHero() {
                 <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 mb-2 inline-flex items-center justify-center">
                   <stat.icon className="h-6 w-6 text-blue-400" />
                 </div>
-                <div className="text-2xl md:text-3xl font-bold mb-1">{stat.value}</div>
+                <div className="text-2xl md:text-3xl font-medium mb-1">{stat.value}</div>
                 <div className="text-sm text-gray-300">{stat.label}</div>
               </motion.div>
             ))}

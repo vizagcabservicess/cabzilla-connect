@@ -1,4 +1,3 @@
-
 import { Link } from 'react-router-dom';
 import { SignupForm } from '@/components/auth/SignupForm';
 import { SocialLogin } from '@/components/SocialLogin';
@@ -10,7 +9,7 @@ export default function SignupPage() {
       <div className="flex flex-col items-center justify-center">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">Create an account</h1>
+            <h1 className="text-3xl font-medium">Create an account</h1>
             <p className="mt-2 text-gray-600">
               Sign up to manage your bookings and get special offers
             </p>

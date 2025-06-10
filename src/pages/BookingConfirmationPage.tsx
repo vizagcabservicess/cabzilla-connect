@@ -153,7 +153,7 @@ function BookingConfirmationPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-lg mx-auto bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+            <h1 className="text-2xl font-medium text-red-600 mb-4">Error</h1>
             <p className="text-gray-700 mb-6">{error}</p>
             <div className="flex justify-between">
               <Button onClick={() => navigate('/')} variant="outline">
@@ -197,7 +197,7 @@ function BookingConfirmationPage() {
                   <Check className="h-12 w-12 text-green-600" />
                 </div>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h1>
+              <h1 className="text-2xl font-medium text-gray-900 mb-2">Booking Confirmed!</h1>
               {booking?.bookingNumber && (
                 <div className="flex items-center justify-center gap-2">
                   <p className="text-gray-500">Booking ID: <span className="font-medium">{booking.bookingNumber}</span></p>

@@ -535,7 +535,7 @@ const CabsPage = () => {
                   </div>
                 )}
 
-                <div className="text-xl font-bold text-gray-900 mt-4 mb-2">
+                <div className="text-xl font-medium text-gray-900 mt-4 mb-2">
                   {isCalculatingDistance ? (
                     <div className="flex items-center">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>

@@ -195,7 +195,7 @@ function FleetManagementPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold">Fleet Management</h1>
+              <h1 className="text-3xl font-medium">Fleet Management</h1>
               <p className="text-gray-500">Manage and monitor your vehicle fleet</p>
             </div>
             <div className="flex gap-2 mt-4 md:mt-0">
@@ -221,7 +221,7 @@ function FleetManagementPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-500">Total Vehicles</p>
-                  <h2 className="text-3xl font-bold">{totalVehicles}</h2>
+                  <h2 className="text-3xl font-medium">{totalVehicles}</h2>
                 </div>
                 <Car className="h-10 w-10 text-gray-300" />
               </div>
@@ -231,7 +231,7 @@ function FleetManagementPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-500">Active Vehicles</p>
-                  <h2 className="text-3xl font-bold">{activeVehicles}</h2>
+                  <h2 className="text-3xl font-medium">{activeVehicles}</h2>
                 </div>
                 <div className="h-10 w-10 flex items-center justify-center bg-green-100 text-green-600 rounded-full">A</div>
               </div>
@@ -241,7 +241,7 @@ function FleetManagementPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-500">In Maintenance</p>
-                  <h2 className="text-3xl font-bold">{inMaintenanceVehicles}</h2>
+                  <h2 className="text-3xl font-medium">{inMaintenanceVehicles}</h2>
                 </div>
                 <div className="h-10 w-10 flex items-center justify-center bg-yellow-100 text-yellow-600 rounded-full">M</div>
               </div>
@@ -251,7 +251,7 @@ function FleetManagementPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-500">Inactive Vehicles</p>
-                  <h2 className="text-3xl font-bold">{inactiveVehicles}</h2>
+                  <h2 className="text-3xl font-medium">{inactiveVehicles}</h2>
                 </div>
                 <div className="h-10 w-10 flex items-center justify-center bg-gray-100 text-gray-600 rounded-full">I</div>
               </div>
@@ -261,7 +261,7 @@ function FleetManagementPage() {
           {/* Fleet Inventory Section */}
           <div className="bg-white rounded-lg shadow p-6 mb-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-              <h2 className="text-xl font-bold">Fleet Inventory</h2>
+              <h2 className="text-xl font-medium">Fleet Inventory</h2>
               <div className="flex gap-2 mt-4 md:mt-0">
                 <Button 
                   variant={viewMode === 'grid' ? 'default' : 'outline'} 

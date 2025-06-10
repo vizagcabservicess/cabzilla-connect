@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Star, Quote, User } from 'lucide-react';
@@ -52,7 +51,7 @@ export function TestimonialsSection() {
             <Star className="h-4 w-4 text-yellow-600 fill-current" />
             <span className="text-sm font-medium text-yellow-600">TESTIMONIALS</span>
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 leading-tight">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">
             What Our Customers Say
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
@@ -105,21 +104,21 @@ export function TestimonialsSection() {
         {/* CTA Section */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 mt-8 md:mt-12 text-center">
           <div className="max-w-2xl mx-auto">
-            <h3 className="text-xl md:text-2xl font-bold mb-2">Ready to Join Our Happy Customers?</h3>
+            <h3 className="text-xl md:text-2xl font-medium mb-2">Ready to Join Our Happy Customers?</h3>
             <p className="mb-4 opacity-90 text-sm md:text-base">Experience the best taxi service in Visakhapatnam. Book now and see why thousands choose us!</p>
             
             {/* Quick Stats */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold">4.8★</div>
+                <div className="text-2xl md:text-3xl font-medium">4.8★</div>
                 <div className="text-sm opacity-80">Average Rating</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold">10K+</div>
+                <div className="text-2xl md:text-3xl font-medium">10K+</div>
                 <div className="text-sm opacity-80">Happy Customers</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold">24/7</div>
+                <div className="text-2xl md:text-3xl font-medium">24/7</div>
                 <div className="text-sm opacity-80">Support</div>
               </div>
             </div>

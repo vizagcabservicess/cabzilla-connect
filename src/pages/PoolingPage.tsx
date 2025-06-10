@@ -100,7 +100,7 @@ const PoolingPage = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold text-blue-600">Pooling Platform</h1>
+              <h1 className="text-xl font-medium text-blue-600">Pooling Platform</h1>
             </div>
             <div className="flex items-center space-x-3">
               {!isAuthenticated ? (
@@ -138,7 +138,7 @@ const PoolingPage = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-3xl font-medium text-gray-900 mb-2">
               Ride Sharing & Bus Booking
             </h1>
             <p className="text-gray-600">

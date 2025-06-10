@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from "@/components/Navbar";
 import { Car, Clock, MapPin, Plane, Calendar, Shield, Award, Users } from 'lucide-react';
@@ -128,7 +127,7 @@ const ServicesPage = () => {
       
       <div className="bg-blue-600 text-white">
         <div className="container mx-auto px-4 py-16">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">Our Services</h1>
+          <h1 className="text-3xl md:text-4xl font-medium mb-4">Our Services</h1>
           <p className="text-xl opacity-90 max-w-2xl">
             Comprehensive transportation solutions for every need - from airport transfers to multi-day tours
           </p>
@@ -141,7 +140,7 @@ const ServicesPage = () => {
             <div key={index} className="bg-white shadow-md rounded-lg p-6 flex items-start space-x-4">
               <div className="bg-gray-100 rounded-full p-3">{benefit.icon}</div>
               <div>
-                <h3 className="font-bold text-lg mb-1">{benefit.title}</h3>
+                <h3 className="font-medium text-lg mb-1">{benefit.title}</h3>
                 <p className="text-gray-600">{benefit.description}</p>
               </div>
             </div>
@@ -151,7 +150,7 @@ const ServicesPage = () => {
       
       <div className="container mx-auto px-4 py-12">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Transportation Services We Offer</h2>
+          <h2 className="text-3xl font-medium mb-4">Transportation Services We Offer</h2>
           <p className="text-gray-600 max-w-2xl mx-auto">
             Whether you're traveling for business or leisure, our comprehensive range of transportation services ensures a comfortable and convenient journey.
           </p>
@@ -164,7 +163,7 @@ const ServicesPage = () => {
                 <div className="bg-white p-3 rounded-full inline-block mb-4">
                   {service.icon}
                 </div>
-                <h3 className="text-xl font-bold mb-3">{service.title}</h3>
+                <h3 className="text-xl font-medium mb-3">{service.title}</h3>
                 <p className="text-gray-600 mb-4">{service.description}</p>
                 <ul className="space-y-2 mb-6">
                   {service.features.map((feature, index) => (
@@ -188,7 +187,7 @@ const ServicesPage = () => {
       <div className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-2">Need a Custom Solution?</h2>
+            <h2 className="text-2xl font-medium mb-2">Need a Custom Solution?</h2>
             <p className="text-gray-600">Contact us for tailored transportation services designed for your specific requirements.</p>
           </div>
           

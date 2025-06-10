@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -273,7 +272,7 @@ const ToursPage = () => {
   // Function to render the search form
   const renderSearchForm = () => (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Find Available Tours</h2>
+      <h2 className="text-2xl font-medium text-gray-800 mb-6">Find Available Tours</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <LocationInput
@@ -311,7 +310,7 @@ const ToursPage = () => {
   const renderTourListing = () => (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Available Tour Packages</h2>
+        <h2 className="text-2xl font-medium text-gray-800">Available Tour Packages</h2>
         <Button 
           variant="outline" 
           onClick={() => {

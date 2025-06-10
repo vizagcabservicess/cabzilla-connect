@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Navbar } from "@/components/Navbar";
 import { Button } from '@/components/ui/button';
@@ -178,7 +177,7 @@ const FAQPage = () => {
       
       <div className="bg-blue-50">
         <div className="container mx-auto px-4 py-16">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4 text-center text-gray-800">Frequently Asked Questions</h1>
+          <h1 className="text-3xl md:text-4xl font-medium mb-4 text-center text-gray-800">Frequently Asked Questions</h1>
           <p className="text-xl text-center text-gray-600 max-w-2xl mx-auto mb-8">
             Find answers to common questions about our services, bookings, and policies
           </p>
@@ -230,7 +229,7 @@ const FAQPage = () => {
             filteredFAQs.map(category => (
               <div key={category.id} className="border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-gray-50 p-4 border-b border-gray-200">
-                  <h2 className="text-xl font-bold text-gray-800">{category.name}</h2>
+                  <h2 className="text-xl font-medium text-gray-800">{category.name}</h2>
                 </div>
                 <div className="p-4">
                   <Accordion type="single" collapsible className="space-y-2">
@@ -252,7 +251,7 @@ const FAQPage = () => {
         {/* Ask a Question */}
         <div className="mt-16 max-w-2xl mx-auto">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Didn't Find Your Answer?</h2>
+            <h2 className="text-2xl font-medium text-gray-800 mb-2">Didn't Find Your Answer?</h2>
             <p className="text-gray-600">
               Send us your question and we'll get back to you as soon as possible.
             </p>

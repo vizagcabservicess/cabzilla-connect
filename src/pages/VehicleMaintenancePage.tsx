@@ -282,7 +282,7 @@ export default function VehicleMaintenancePage() {
       <div className="flex-1 overflow-y-auto p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Vehicle Maintenance</h1>
+            <h1 className="text-2xl font-medium text-gray-900">Vehicle Maintenance</h1>
             <p className="text-gray-500">Track vehicle maintenance history and schedule</p>
           </div>
           <Button onClick={handleAddMaintenanceRecord}>
@@ -296,15 +296,15 @@ export default function VehicleMaintenancePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Total Maintenance Cost</p>
-                <h3 className="text-2xl font-bold">₹{Number(totalMaintenanceCost).toFixed(2)}</h3>
+                <h3 className="text-2xl font-medium">₹{Number(totalMaintenanceCost).toFixed(2)}</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Maintenance Records</p>
-                <h3 className="text-2xl font-bold">{maintenanceData.length}</h3>
+                <h3 className="text-2xl font-medium">{maintenanceData.length}</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Upcoming Services (30 days)</p>
-                <h3 className="text-2xl font-bold">{upcomingServices}</h3>
+                <h3 className="text-2xl font-medium">{upcomingServices}</h3>
               </div>
             </div>
           </CardContent>

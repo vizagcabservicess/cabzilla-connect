@@ -172,7 +172,7 @@ export function FleetShowcase() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg md:text-xl font-bold text-gray-900">{vehicle.name}</h3>
+                      <div className="text-base font-medium text-gray-900">{vehicle.name}</div>
                       <CheckCircle className="h-4 w-4 text-green-500" />
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{vehicle.description}</p>
@@ -191,7 +191,7 @@ export function FleetShowcase() {
                 {/* Pricing */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="bg-blue-50 px-4 py-2 rounded-xl">
-                    <span className="text-2xl md:text-3xl font-bold text-blue-600">{vehicle.price}</span>
+                    <span className="text-base font-medium text-blue-600">{vehicle.price}</span>
                     <span className="text-sm text-blue-500 ml-1">/ {vehicle.unit}</span>
                   </div>
                   <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">

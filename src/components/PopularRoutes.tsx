@@ -75,7 +75,7 @@ export function PopularRoutes() {
             <TrendingUp className="h-4 w-4 text-green-600" />
             <span className="text-sm font-medium text-green-600">POPULAR ROUTES</span>
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+          <h2 className="text-3xl md:text-4xl font-medium text-gray-900 mb-4 leading-tight">
             Top Destinations from Vizag
           </h2>
           <p className="text-gray-600 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
@@ -96,7 +96,7 @@ export function PopularRoutes() {
                     <p className="text-white/90 text-sm leading-relaxed">{route.description}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-2xl md:text-3xl font-bold text-white leading-none">{route.startingPrice}</div>
+                    <div className="text-2xl md:text-3xl font-medium text-white leading-none">{route.startingPrice}</div>
                     <div className="text-white/80 text-xs mt-1">starting from</div>
                     {/* Popularity Badge - now under 'starting from' */}
                     <div className="mt-2 flex justify-end">

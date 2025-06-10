@@ -126,17 +126,17 @@ const BookingConfirmation = () => {
                   <CheckCircle size={32} />
                 </div>
               </div>
-              <h2 className="text-2xl font-bold mb-2">Booking Confirmed!</h2>
+              <h2 className="text-2xl font-medium mb-2">Booking Confirmed!</h2>
               <p className="text-white/80">Your cab has been booked successfully</p>
               <div className="mt-4 text-sm bg-white/10 rounded-md py-2 px-4 inline-block">
-                Booking ID: <span className="font-mono font-bold">{bookingToShow.bookingId}</span>
+                Booking ID: <span className="font-mono font-medium">{bookingToShow.bookingId}</span>
               </div>
             </div>
             
             <div className="p-8">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-cabGray-800">
+                  <h2 className="text-2xl font-medium text-cabGray-800">
                     Booking #{bookingToShow.bookingId}
                   </h2>
                 </div>

@@ -1,4 +1,3 @@
-
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -41,7 +40,7 @@ const NotFound = () => {
         <div className="flex justify-center mb-6">
           <AlertCircle size={60} className="text-red-500" />
         </div>
-        <h1 className="text-4xl font-bold mb-4">404</h1>
+        <h1 className="text-4xl font-medium mb-4">404</h1>
         <p className="text-xl text-gray-600 mb-4">
           {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
         </p>

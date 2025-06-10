@@ -130,7 +130,7 @@ export default function PayrollPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-medium text-gray-900">
               {showDriverView ? 'Driver Payroll Management' : 'Payroll Management'}
             </h1>
             <p className="text-gray-500">
@@ -186,15 +186,15 @@ export default function PayrollPage() {
               <CardContent className="p-6 flex flex-col md:flex-row gap-6">
                 <div>
                   <div className="text-gray-500">Driver</div>
-                  <div className="font-bold">{selectedDriverSummary.driverName}</div>
+                  <div className="font-medium">{selectedDriverSummary.driverName}</div>
                 </div>
                 <div>
                   <div className="text-gray-500">Total Paid</div>
-                  <div className="font-bold">₹{selectedDriverSummary.amount.toLocaleString('en-IN')}</div>
+                  <div className="font-medium">₹{selectedDriverSummary.amount.toLocaleString('en-IN')}</div>
                 </div>
                 <div>
                   <div className="text-gray-500">Status</div>
-                  <div className="font-bold">{selectedDriverSummary.status}</div>
+                  <div className="font-medium">{selectedDriverSummary.status}</div>
                 </div>
               </CardContent>
             </Card>

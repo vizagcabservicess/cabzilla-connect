@@ -198,7 +198,7 @@ export default function LedgerPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Financial Ledger</h1>
+            <h1 className="text-2xl font-medium text-gray-900">Financial Ledger</h1>
             <p className="text-gray-500">Track income, expenses and financial transactions</p>
           </div>
           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">

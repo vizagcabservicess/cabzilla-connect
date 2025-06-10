@@ -53,7 +53,7 @@ const Index = () => {
           {/* Quick Links Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="font-bold text-white mb-4 text-lg">Services</h3>
+              <h3 className="font-medium text-white mb-4 text-lg">Services</h3>
               <ul className="space-y-3 text-gray-300">
                 <li className="hover:text-white transition-colors cursor-pointer">Local Trips</li>
                 <li className="hover:text-white transition-colors cursor-pointer">Outstation</li>
@@ -62,7 +62,7 @@ const Index = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-bold text-white mb-4 text-lg">Popular Routes</h3>
+              <h3 className="font-medium text-white mb-4 text-lg">Popular Routes</h3>
               <ul className="space-y-3 text-gray-300">
                 <li className="hover:text-white transition-colors cursor-pointer">Hyderabad</li>
                 <li className="hover:text-white transition-colors cursor-pointer">Chennai</li>
@@ -71,7 +71,7 @@ const Index = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-bold text-white mb-4 text-lg">Support</h3>
+              <h3 className="font-medium text-white mb-4 text-lg">Support</h3>
               <ul className="space-y-3 text-gray-300">
                 <li className="hover:text-white transition-colors cursor-pointer">Help Center</li>
                 <li className="hover:text-white transition-colors cursor-pointer">Contact Us</li>
@@ -80,7 +80,7 @@ const Index = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-bold text-white mb-4 text-lg">Contact</h3>
+              <h3 className="font-medium text-white mb-4 text-lg">Contact</h3>
               <div className="space-y-3 text-gray-300">
                 <p className="text-lg font-semibold text-white">+91 9966363662</p>
                 <p>info@vizagtaxihub.com</p>

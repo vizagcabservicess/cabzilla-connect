@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Star, Shield, MapPin, Clock, Users, Award, Headphones, CreditCard } from 'lucide-react';
@@ -51,7 +50,7 @@ export function WhyChooseUs() {
             <Star className="h-4 w-4 text-yellow-600" />
             <span className="text-sm font-medium text-yellow-600">WHY CHOOSE US</span>
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 leading-tight">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">
             Your Trusted Travel Partner
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
@@ -66,7 +65,7 @@ export function WhyChooseUs() {
               <div className={`w-12 h-12 md:w-16 md:h-16 bg-gradient-to-r ${stat.color} rounded-2xl flex items-center justify-center mx-auto mb-3`}>
                 <stat.icon className="h-6 w-6 md:h-8 md:w-8 text-white" />
               </div>
-              <div className="text-xl md:text-3xl font-bold text-gray-900 mb-1">{stat.number}</div>
+              <div className="text-xl md:text-3xl font-medium text-gray-900 mb-1">{stat.number}</div>
               <div className="text-xs md:text-sm text-gray-600 font-medium">{stat.label}</div>
             </div>
           ))}
@@ -82,7 +81,7 @@ export function WhyChooseUs() {
                     <reason.icon className={`h-6 w-6 md:h-7 md:w-7 ${reason.iconColor}`} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">{reason.title}</h3>
+                    <h3 className="text-lg md:text-xl font-medium text-gray-900 mb-2">{reason.title}</h3>
                     <p className="text-gray-600 text-sm md:text-base leading-relaxed">{reason.description}</p>
                   </div>
                 </div>
@@ -94,7 +93,7 @@ export function WhyChooseUs() {
         {/* CTA Section */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 mt-8 md:mt-12 text-center">
           <div className="max-w-2xl mx-auto">
-            <h3 className="text-xl md:text-2xl font-bold mb-2">Ready to Experience the Difference?</h3>
+            <h3 className="text-xl md:text-2xl font-medium mb-2">Ready to Experience the Difference?</h3>
             <p className="mb-4 opacity-90 text-sm md:text-base">Join thousands of satisfied customers who trust Vizag Taxi Hub for their transportation needs.</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">

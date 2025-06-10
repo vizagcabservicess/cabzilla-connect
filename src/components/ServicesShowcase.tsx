@@ -56,7 +56,7 @@ export function ServicesShowcase() {
             <Car className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-medium text-blue-600">OUR SERVICES</span>
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 leading-tight">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-1 leading-tight">
             Your Journey, Our Priority
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
@@ -90,7 +90,7 @@ export function ServicesShowcase() {
         {/* Why Choose Us Features */}
         <div className="bg-gray-50 rounded-3xl p-6 md:p-8">
           <div className="text-center mb-6 md:mb-8">
-            <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Why Choose Vizag Taxi Hub?</h3>
+            <h3 className="text-xl md:text-2xl font-medium text-gray-900 mb-2">Why Choose Vizag Taxi Hub?</h3>
             <p className="text-gray-600 text-sm md:text-base">Experience the difference with our premium features</p>
           </div>
           

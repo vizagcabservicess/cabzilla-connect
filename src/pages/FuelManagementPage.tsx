@@ -348,7 +348,7 @@ export default function FuelManagementPage() {
       <div className="flex-1 overflow-y-auto p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Fuel Management</h1>
+            <h1 className="text-2xl font-medium text-gray-900">Fuel Management</h1>
             <p className="text-gray-500">Track and manage fuel consumption, expenses, and prices</p>
           </div>
           <Button onClick={handleAddFuelRecord}>
@@ -368,19 +368,19 @@ export default function FuelManagementPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Total Fuel Cost</p>
-                <h3 className="text-2xl font-bold">₹{totalFuelCost.toFixed(2)}</h3>
+                <h3 className="text-2xl font-medium">₹{totalFuelCost.toFixed(2)}</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Total Liters/Units</p>
-                <h3 className="text-2xl font-bold">{totalLiters.toFixed(1)} L</h3>
+                <h3 className="text-2xl font-medium">{totalLiters.toFixed(1)} L</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Average Price Per Liter</p>
-                <h3 className="text-2xl font-bold">₹{averageCostPerLiter.toFixed(2)}</h3>
+                <h3 className="text-2xl font-medium">₹{averageCostPerLiter.toFixed(2)}</h3>
               </div>
               <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
                 <p className="text-sm text-gray-500">Average Mileage</p>
-                <h3 className="text-2xl font-bold">{averageMileage.toFixed(1)} km/L</h3>
+                <h3 className="text-2xl font-medium">{averageMileage.toFixed(1)} km/L</h3>
               </div>
             </div>
           </CardContent>

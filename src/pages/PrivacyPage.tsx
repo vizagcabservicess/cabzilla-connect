@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from "@/components/Navbar";
 
@@ -8,14 +7,14 @@ const PrivacyPage = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl md:text-4xl font-bold mb-8 text-gray-800">Privacy Policy</h1>
+        <h1 className="text-3xl md:text-4xl font-medium mb-8 text-gray-800">Privacy Policy</h1>
         
         <div className="prose max-w-none">
           <p className="text-gray-600 mb-6">
             At Vizag Taxi Hub, we take your privacy seriously. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our service.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">1. Information We Collect</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">1. Information We Collect</h2>
           <p className="text-gray-600 mb-4">
             We collect information that you provide directly to us when using our services:
           </p>
@@ -36,7 +35,7 @@ const PrivacyPage = () => {
             <li>Cookie and similar technologies data</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">2. How We Use Your Information</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">2. How We Use Your Information</h2>
           <p className="text-gray-600 mb-4">
             We use the information we collect for various purposes, including:
           </p>
@@ -50,7 +49,7 @@ const PrivacyPage = () => {
             <li>Detecting, preventing, and addressing technical issues and fraudulent activities</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">3. Disclosure of Your Information</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">3. Disclosure of Your Information</h2>
           <p className="text-gray-600 mb-4">
             We may share your information with:
           </p>
@@ -65,12 +64,12 @@ const PrivacyPage = () => {
             We do not sell your personal information to third parties.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">4. Data Security</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">4. Data Security</h2>
           <p className="text-gray-600 mb-4">
             We implement appropriate security measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. However, please be aware that no method of transmission over the internet or electronic storage is 100% secure.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">5. Your Data Protection Rights</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">5. Your Data Protection Rights</h2>
           <p className="text-gray-600 mb-4">
             You have the following rights regarding your personal information:
           </p>
@@ -84,17 +83,17 @@ const PrivacyPage = () => {
             <li>Right to withdraw consent at any time</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">6. Children's Privacy</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">6. Children's Privacy</h2>
           <p className="text-gray-600 mb-4">
             Our services are not intended for individuals under the age of 18. We do not knowingly collect personal information from children under 18. If we learn that we have collected personal information from a child under 18, we will take steps to delete that information as soon as possible.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">7. Changes to This Privacy Policy</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">7. Changes to This Privacy Policy</h2>
           <p className="text-gray-600 mb-4">
             We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date. You are advised to review this Privacy Policy periodically for any changes.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">8. Contact Us</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">8. Contact Us</h2>
           <p className="text-gray-600 mb-4">
             If you have any questions about this Privacy Policy, please contact us at:
           </p>

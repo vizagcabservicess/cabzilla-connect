@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from "@/components/Navbar";
 
@@ -8,14 +7,14 @@ const RefundsPage = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl md:text-4xl font-bold mb-8 text-gray-800">Refund Policy</h1>
+        <h1 className="text-3xl md:text-4xl font-medium mb-8 text-gray-800">Refund Policy</h1>
         
         <div className="prose max-w-none">
           <p className="text-gray-600 mb-6">
             This Refund Policy outlines the guidelines and procedures for refunds of payments made to Vizag Taxi Hub for our taxi services. We strive to provide excellent service, but we understand that sometimes refunds may be necessary.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">1. Booking Cancellations</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">1. Booking Cancellations</h2>
           <p className="text-gray-600 mb-4">
             If you need to cancel your booking, the following refund policy applies:
           </p>
@@ -41,7 +40,7 @@ const RefundsPage = () => {
             <li>Death in the family (with supporting documentation)</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">2. Service Issues</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">2. Service Issues</h2>
           <h3 className="text-xl font-semibold mt-6 mb-3 text-gray-800">2.1 Late Arrival</h3>
           <ul className="list-disc list-inside space-y-2 text-gray-600 mb-4">
             <li>If our driver is late by 15-30 minutes: 10% discount on your next booking</li>
@@ -63,7 +62,7 @@ const RefundsPage = () => {
             We will investigate each reported issue and may offer a partial or full refund based on the severity of the issue and its impact on your experience.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">3. Refund Process</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">3. Refund Process</h2>
           <h3 className="text-xl font-semibold mt-6 mb-3 text-gray-800">3.1 How to Request a Refund</h3>
           <p className="text-gray-600 mb-4">
             To request a refund, please follow these steps:
@@ -85,7 +84,7 @@ const RefundsPage = () => {
             <li>Cash refunds: Can be collected from our office or arranged via bank transfer</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">4. Non-Refundable Items</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">4. Non-Refundable Items</h2>
           <p className="text-gray-600 mb-4">
             The following charges are non-refundable under any circumstances:
           </p>
@@ -95,12 +94,12 @@ const RefundsPage = () => {
             <li>Toll fees or parking charges already incurred</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">5. Special Packages and Promotions</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">5. Special Packages and Promotions</h2>
           <p className="text-gray-600 mb-4">
             Special packages, promotional offers, or discounted rates may have different refund policies. These will be clearly communicated at the time of booking.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">6. Contact Information</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">6. Contact Information</h2>
           <p className="text-gray-600 mb-4">
             If you have any questions about this Refund Policy, please contact us:
           </p>

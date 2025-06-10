@@ -36,7 +36,7 @@ export function VideoTestimonials() {
             <Play className="h-4 w-4 text-red-600 fill-current" />
             <span className="text-sm font-medium text-red-600">VIDEO TESTIMONIALS</span>
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+          <h2 className="text-2xl md:text-3xl font-medium text-gray-900 mb-3">
             Real Customer Stories
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto">

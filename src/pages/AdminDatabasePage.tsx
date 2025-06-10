@@ -116,7 +116,7 @@ export default function AdminDatabasePage() {
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Database Management</h1>
+      <h1 className="text-3xl font-medium mb-6">Database Management</h1>
       
       <Tabs defaultValue="diagnostics">
         <TabsList className="mb-4">

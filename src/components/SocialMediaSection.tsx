@@ -45,7 +45,7 @@ export function SocialMediaSection() {
             <Heart className="h-4 w-4 text-purple-600" />
             <span className="text-sm font-medium text-purple-600">CONNECT WITH US</span>
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
+          <h2 className="text-2xl md:text-3xl font-medium text-gray-900 mb-3">
             Follow Our Journey
           </h2>
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto">
@@ -61,7 +61,7 @@ export function SocialMediaSection() {
                 <div className={`w-16 h-16 bg-gradient-to-r ${social.color} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
                   <social.icon className="text-3xl text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{social.name}</h3>
+                <h3 className="font-medium text-gray-900 mb-1">{social.name}</h3>
                 <p className="text-sm text-gray-600 mb-3">{social.followers} followers</p>
                 <a
                   href={social.url}

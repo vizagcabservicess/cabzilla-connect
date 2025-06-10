@@ -127,7 +127,7 @@ export default function ExpensesPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Expense Management</h1>
+            <h1 className="text-2xl font-medium text-gray-900">Expense Management</h1>
             <p className="text-gray-500">Track and manage your business expenses</p>
           </div>
           <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto items-end">

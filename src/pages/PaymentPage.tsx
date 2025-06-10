@@ -190,7 +190,7 @@ const PaymentPage = () => {
           </button>
           
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-2xl font-bold mb-6">Complete Your Payment</h1>
+            <h1 className="text-2xl font-medium mb-6">Complete Your Payment</h1>
             
             {!bookingDetails ? (
               <div className="flex justify-center items-center py-12">
@@ -255,7 +255,7 @@ const PaymentPage = () => {
             {paymentStatus === 'success' && (
               <div className="flex flex-col items-center py-8">
                 <CheckCircle size={64} className="text-green-500 mb-4" />
-                <h2 className="text-2xl font-bold text-green-700 mb-2">Payment Successful!</h2>
+                <h2 className="text-2xl font-medium text-green-700 mb-2">Payment Successful!</h2>
                 <p className="text-gray-600 mb-4 text-center">Your booking has been confirmed. You will be redirected to the confirmation page.</p>
                 <p className="text-sm text-gray-500 mb-4">Transaction ID: {paymentResponse?.razorpay_payment_id}</p>
               </div>
@@ -264,7 +264,7 @@ const PaymentPage = () => {
             {paymentStatus === 'failed' && (
               <div className="flex flex-col items-center py-8">
                 <XCircle size={64} className="text-red-500 mb-4" />
-                <h2 className="text-2xl font-bold text-red-700 mb-2">Payment Failed</h2>
+                <h2 className="text-2xl font-medium text-red-700 mb-2">Payment Failed</h2>
                 <p className="text-gray-600 mb-4 text-center">We couldn't process your payment. Please try again or use a different payment method.</p>
                 <Button onClick={handleTryAgain} variant="outline" className="mt-2">
                   Try Again

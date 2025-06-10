@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from "@/components/Navbar";
 
@@ -8,24 +7,24 @@ const TermsPage = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl md:text-4xl font-bold mb-8 text-gray-800">Terms & Conditions</h1>
+        <h1 className="text-3xl md:text-4xl font-medium mb-8 text-gray-800">Terms & Conditions</h1>
         
         <div className="prose max-w-none">
           <p className="text-gray-600 mb-6">
             Welcome to Vizag Taxi Hub. Please read these terms and conditions carefully before using our service.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">1. Acceptance of Terms</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">1. Acceptance of Terms</h2>
           <p className="text-gray-600 mb-4">
             By accessing and using our services, whether through our website, mobile application, or by making a booking via phone, you agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, please do not use our services.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">2. Service Description</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">2. Service Description</h2>
           <p className="text-gray-600 mb-4">
             Vizag Taxi Hub provides taxi and car rental services in and around Visakhapatnam. Our services include but are not limited to airport transfers, local taxi services, outstation trips, and tour packages.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">3. Booking and Cancellation</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">3. Booking and Cancellation</h2>
           <h3 className="text-xl font-semibold mt-6 mb-3 text-gray-800">3.1 Booking</h3>
           <ul className="list-disc list-inside space-y-2 text-gray-600 mb-4">
             <li>Bookings can be made through our website, mobile application, or by calling our customer service.</li>
@@ -41,7 +40,7 @@ const TermsPage = () => {
             <li>100% cancellation fee if canceled less than 4 hours before pickup or in case of no-show.</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">4. Pricing and Payment</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">4. Pricing and Payment</h2>
           <h3 className="text-xl font-semibold mt-6 mb-3 text-gray-800">4.1 Pricing</h3>
           <ul className="list-disc list-inside space-y-2 text-gray-600 mb-4">
             <li>All prices are indicated in Indian Rupees (INR) and include all applicable taxes unless otherwise stated.</li>
@@ -56,7 +55,7 @@ const TermsPage = () => {
             <li>For post-paid services, payment is due at the end of the trip.</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">5. User Responsibilities</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">5. User Responsibilities</h2>
           <ul className="list-disc list-inside space-y-2 text-gray-600 mb-4">
             <li>Provide accurate information during booking.</li>
             <li>Be ready at the designated pickup location at the scheduled time.</li>
@@ -65,27 +64,27 @@ const TermsPage = () => {
             <li>Pay for any damage caused to the vehicle due to your negligence or misconduct.</li>
           </ul>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">6. Limitation of Liability</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">6. Limitation of Liability</h2>
           <p className="text-gray-600 mb-4">
             Vizag Taxi Hub shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from the use of our services. Our liability is limited to the amount paid for the specific service in question.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">7. Force Majeure</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">7. Force Majeure</h2>
           <p className="text-gray-600 mb-4">
             We shall not be liable for any failure or delay in performing our obligations where such failure or delay results from events beyond our reasonable control, including but not limited to natural disasters, governmental actions, strikes, riots, or civil unrest.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">8. Privacy Policy</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">8. Privacy Policy</h2>
           <p className="text-gray-600 mb-4">
             We collect and use personal information in accordance with our Privacy Policy. By using our services, you consent to our collection and use of personal information as described in our Privacy Policy.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">9. Changes to Terms</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">9. Changes to Terms</h2>
           <p className="text-gray-600 mb-4">
             We reserve the right to modify these Terms and Conditions at any time. Changes will be effective immediately upon posting on our website. It is your responsibility to review these Terms periodically.
           </p>
           
-          <h2 className="text-2xl font-bold mt-8 mb-4 text-gray-800">10. Contact Information</h2>
+          <h2 className="text-2xl font-medium mt-8 mb-4 text-gray-800">10. Contact Information</h2>
           <p className="text-gray-600 mb-4">
             If you have any questions or concerns about these Terms and Conditions, please contact us at:
           </p>

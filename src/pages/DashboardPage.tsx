@@ -302,7 +302,7 @@ export default function DashboardPage() {
         
         {bookings.length > 0 && (
           <div className="mt-8">
-            <h2 className="text-2xl font-bold mb-4">Cached Bookings</h2>
+            <h2 className="text-2xl font-medium mb-4">Cached Bookings</h2>
             <p className="text-gray-500 mb-4">These bookings were previously loaded and may not be up to date.</p>
             
             <BookingsList 
@@ -323,7 +323,7 @@ export default function DashboardPage() {
       <div className="container mx-auto py-10 px-4">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <h1 className="text-3xl font-medium">Dashboard</h1>
             <p className="text-gray-500">Loading your bookings...</p>
           </div>
         </div>
@@ -371,6 +371,7 @@ export default function DashboardPage() {
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
+          <h1 className="text-3xl font-medium">Dashboard</h1>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
         </div>

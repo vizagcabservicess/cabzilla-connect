@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -48,14 +47,14 @@ const ContactPage = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl md:text-4xl font-bold mb-2 text-gray-800">Contact Us</h1>
+        <h1 className="text-3xl md:text-4xl font-medium mb-2 text-gray-800">Contact Us</h1>
         <p className="text-gray-600 mb-8">We'd love to hear from you. Please fill out the form below or reach out directly.</p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           {/* Contact Information */}
           <div>
             <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Get in Touch</h2>
+              <h2 className="text-2xl font-medium mb-4 text-gray-800">Get in Touch</h2>
               <p className="text-gray-600 mb-6">
                 Have questions about our services? Need a custom quote? Our team is ready to assist you 24/7.
               </p>
@@ -116,7 +115,7 @@ const ContactPage = () => {
 
           {/* Contact Form */}
           <div className="bg-white rounded-lg p-6 shadow-md border border-gray-200">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">Send a Message</h2>
+            <h2 className="text-2xl font-medium mb-6 text-gray-800">Send a Message</h2>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
