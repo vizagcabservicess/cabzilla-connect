@@ -3,7 +3,6 @@ import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { CabOptionCard } from '@/components/CabOptionCard';
-import { MobileCabCard } from './MobileCabCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
@@ -178,21 +177,6 @@ export const CabList: React.FC<CabListProps> = ({
             } else {
               fareText = `₹${fare.toLocaleString()}`;
             }
-          }
-
-          // Render mobile or desktop version based on screen size
-          if (isMobile) {
-            return (
-              <MobileCabCard
-                key={cab.id}
-                cab={cab}
-                fare={fare}
-                isSelected={selectedCabId === cab.id}
-                onSelect={() => enhancedSelectCab(cab, fare, fareSource, fareData?.breakdown)}
-                isCalculating={isLoading}
-                fareSource={fareSource}
-              />
-            );
           }
 
           return (

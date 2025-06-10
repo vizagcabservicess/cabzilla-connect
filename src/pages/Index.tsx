@@ -9,29 +9,34 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
-import { FloatingButtons } from "@/components/FloatingButtons";
-import { LiveChatbot } from "@/components/LiveChatbot";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
+import { useSearchParams } from 'react-router-dom';
+import { QuickActionBar } from '@/components/QuickActionBar';
 
 const Index = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isSearch = searchParams.get('search') === '1';
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero />
+      <Hero onSearch={() => setSearchParams({ search: '1' })} />
       
       {/* Main Content with Optimized Spacing */}
-      <div className="space-y-8 md:space-y-12">
-        <ServicesShowcase />
-        <FleetShowcase />
-        <TourSlider />
-        <WhyChooseUs />
-        <PopularRoutes />
-        <EnhancedCTA />
-        <TestimonialsSection />
-        <VideoTestimonials />
-        <SocialMediaSection />
-      </div>
+      {!isSearch && (
+        <div className="space-y-8 md:space-y-12">
+          <ServicesShowcase />
+          <FleetShowcase />
+          <TourSlider />
+          <WhyChooseUs />
+          <PopularRoutes />
+          <EnhancedCTA />
+          <TestimonialsSection />
+          <VideoTestimonials />
+          <SocialMediaSection />
+        </div>
+      )}
       
       {/* Enhanced Footer */}
       <footer className="bg-gray-900 text-white py-12 md:py-16 mt-16">
@@ -119,10 +124,7 @@ const Index = () => {
       </footer>
       
       {/* Floating Action Buttons */}
-      <FloatingButtons />
-      
-      {/* Live Chatbot */}
-      <LiveChatbot />
+      <QuickActionBar />
     </div>
   );
 };

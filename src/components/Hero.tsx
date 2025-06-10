@@ -40,7 +40,7 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero() {
+export function Hero({ onSearch }: { onSearch?: () => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
@@ -179,16 +179,12 @@ export function Hero() {
     }
     
     if (tripType === 'local') {
-      if (!pickupLocation) {
-        const defaultLocation = vizagLocations.find(loc => loc.id.includes('vizag'));
-        if (defaultLocation) {
-          setPickupLocation(defaultLocation);
-          sessionStorage.setItem('pickupLocation', JSON.stringify(defaultLocation));
-        }
-      }
       // For local trips, we don't need drop location
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
+      // Do NOT auto-set pickup location for local trips
+      setPickupLocation(null);
+      sessionStorage.removeItem('pickupLocation');
     }
   }, [tripType, tripMode]);
 
@@ -239,7 +235,7 @@ export function Hero() {
       });
       return;
     }
-    
+    if (onSearch) onSearch();
     setIsLoading(true);
     
     // If trip type is tour, navigate to the tour page with location and date params
@@ -547,9 +543,9 @@ export function Hero() {
                 <div className="mt-8 flex justify-end">
                   <Button
                     onClick={handleContinue}
-                    disabled={!isFormValid || isCalculatingDistance || !pickupLocation || !(pickupLocation.name || pickupLocation.address) || isLoading}
+                    disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
                     className={`px-10 py-6 rounded-md mobile-button ${
-                      isFormValid && !isCalculatingDistance && pickupLocation && (pickupLocation.name || pickupLocation.address) && !isLoading
+                      isFormValid && !isCalculatingDistance && pickupLocation && pickupLocation.name && !isLoading
                         ? ""
                         : "opacity-70 cursor-not-allowed"
                     }`}

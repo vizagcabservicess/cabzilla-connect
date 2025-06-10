@@ -28,7 +28,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
-import { Check, MapPin, Edit3, Calendar, Users, Fuel, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, MapPin, Edit3, Calendar, Users, Fuel, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 
@@ -659,12 +659,12 @@ const CabsPage = () => {
                 />
                 
                 {selectedCab && (
-                  <Button 
-                    onClick={handleSearch} 
-                    className="w-full mt-4"
-                    size="lg"
+                  <Button
+                    onClick={handleSearch}
+                    className="w-full md:w-auto mobile-button order-1 md:order-2"
+                    disabled={!pickup}
                   >
-                    Book Now
+                    SEARCH <ChevronRight className="ml-1" />
                   </Button>
                 )}
               </div>
@@ -703,5 +703,3 @@ const CabsPage = () => {
 };
 
 export default CabsPage;
-
-}

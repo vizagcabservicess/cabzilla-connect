@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Car, Clock, User } from 'lucide-react';
@@ -21,6 +20,11 @@ export const MobileNavigation = () => {
       href: '/'
     },
     {
+      icon: <User size={20} />,
+      label: 'Profile',
+      href: '/login'
+    },
+    {
       icon: <Car size={20} />,
       label: 'Book',
       href: '/cabs'
@@ -29,11 +33,6 @@ export const MobileNavigation = () => {
       icon: <Clock size={20} />,
       label: 'History',
       href: '/dashboard'
-    },
-    {
-      icon: <User size={20} />,
-      label: 'Profile',
-      href: '/login'
     }
   ];
   

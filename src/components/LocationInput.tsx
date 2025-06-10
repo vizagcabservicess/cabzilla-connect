@@ -105,14 +105,15 @@ export function LocationInput({
   useEffect(() => {
     if (inputValue && suggestions.length > 0) {
       let filtered = suggestions.filter(suggestion => 
-        (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase())
+        (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase()) &&
+        (!isPickupLocation || isWithinVizagRange(suggestion.lat, suggestion.lng))
       );
       
       setFilteredSuggestions(filtered);
     } else {
       setFilteredSuggestions([]);
     }
-  }, [inputValue, suggestions]);
+  }, [inputValue, suggestions, isPickupLocation]);
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
@@ -156,6 +157,9 @@ export function LocationInput({
           // Check if within range for pickup locations
           if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
             toast("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+            setInputValue("");
+            if (onChange) onChange("");
+            if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
             return;
           }
           
@@ -241,7 +245,7 @@ export function LocationInput({
     <div className={`relative ${className}`}>
       {label && (
         <div className="mb-2">
-          <Label htmlFor={id} className="block font-medium text-gray-700 text-left mobile-label">
+          <Label htmlFor={id} className="block font-medium text-gray-700 text-left mobile-label text-xs">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </Label>
@@ -257,7 +261,7 @@ export function LocationInput({
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input"
+          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input text-sm"
           onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
           onBlur={handleInputBlur}
         />
