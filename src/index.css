@@ -127,9 +127,9 @@ html, body {
   }
 }
 
-/* Enhanced Mobile-First Design */
+/* Mobile-First Design with Better Spacing */
 .mobile-section {
-  @apply py-8 md:py-12 lg:py-16;
+  @apply py-6 md:py-10 lg:py-12;
 }
 
 .mobile-container {
@@ -137,33 +137,25 @@ html, body {
 }
 
 .mobile-gap {
-  @apply gap-4 md:gap-6 lg:gap-8;
+  @apply gap-3 md:gap-4 lg:gap-6;
 }
 
 .mobile-padding {
-  @apply p-4 md:p-6 lg:p-8;
+  @apply p-3 md:p-4 lg:p-6;
 }
 
 /* Enhanced Button System */
 .btn-primary {
-  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105;
+  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-semibold text-base md:text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105;
 }
 
 .btn-secondary {
-  @apply bg-white text-blue-700 border-2 border-blue-600 hover:bg-blue-50 px-8 py-4 rounded-2xl font-semibold text-lg shadow-md hover:shadow-lg transition-all duration-300;
-}
-
-.btn-outline {
-  @apply border-2 border-current bg-transparent hover:bg-current hover:text-white px-6 py-3 rounded-xl font-medium transition-all duration-300;
+  @apply bg-white text-blue-700 border-2 border-blue-600 hover:bg-blue-50 px-6 py-3 md:px-8 md:py-4 rounded-xl font-semibold text-base md:text-lg shadow-md hover:shadow-lg transition-all duration-300;
 }
 
 /* Enhanced Card System */
 .card-enhanced {
-  @apply bg-white rounded-3xl shadow-lg hover:shadow-2xl border-0 overflow-hidden transition-all duration-300 transform hover:-translate-y-2;
-}
-
-.card-gradient {
-  @apply bg-gradient-to-br from-white to-gray-50 rounded-3xl shadow-lg hover:shadow-2xl border border-gray-100 overflow-hidden transition-all duration-300;
+  @apply bg-white rounded-2xl md:rounded-3xl shadow-lg hover:shadow-2xl border-0 overflow-hidden transition-all duration-300 transform hover:-translate-y-1 md:hover:-translate-y-2;
 }
 
 /* Swiper Customizations */
@@ -180,102 +172,37 @@ html, body {
   @apply text-blue-600;
 }
 
-/* Accessibility Improvements */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+/* Fix Text Overlap Issues */
+.no-overlap {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
 }
 
-/* Focus States */
-.focus-ring {
-  @apply focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500;
-}
-
-/* Enhanced Animations */
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-.animate-slide-in-up {
-  animation: slideInUp 0.6s ease-out;
-}
-
-.animate-slide-in-right {
-  animation: slideInRight 0.6s ease-out;
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.5s ease-out;
-}
-
-.animate-float {
-  animation: float 4s ease-in-out infinite;
-}
-
-/* Responsive Typography */
+/* Better Mobile Spacing */
 @media (max-width: 768px) {
-  .mobile-text-responsive {
-    @apply text-sm;
+  .space-y-8 > * + * {
+    margin-top: 1.5rem !important;
   }
   
-  .mobile-heading-responsive {
-    @apply text-xl;
+  .space-y-12 > * + * {
+    margin-top: 2rem !important;
+  }
+  
+  /* Prevent text overflow on mobile */
+  h1, h2, h3, h4, h5, h6 {
+    word-break: break-word;
   }
   
   /* Better touch targets */
   .touch-target {
-    min-height: 48px;
-    min-width: 48px;
+    min-height: 44px;
+    min-width: 44px;
   }
   
-  /* Optimized spacing for mobile */
-  .space-y-8 > * + * {
-    margin-top: 1.5rem;
-  }
-  
-  .space-y-12 > * + * {
-    margin-top: 2rem;
+  /* Optimized card spacing */
+  .mobile-card {
+    @apply p-4 m-2;
   }
 }
 
@@ -299,14 +226,3 @@ html, body {
 .shadow-soft { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
 .shadow-medium { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); }
 .shadow-strong { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15); }
-
-/* Status Indicators */
-.status-online { @apply bg-green-500 animate-pulse; }
-.status-busy { @apply bg-yellow-500; }
-.status-offline { @apply bg-gray-400; }
-
-/* Safe Areas for Mobile */
-.safe-top { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-.safe-left { padding-left: env(safe-area-inset-left); }
-.safe-right { padding-right: env(safe-area-inset-right); }
