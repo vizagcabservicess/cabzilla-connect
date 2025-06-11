@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from '@/components/ui/use-toast';
 
 export interface DateTimePickerProps {
   date?: Date;
@@ -26,24 +27,18 @@ export function DateTimePicker({
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const now = new Date();
-    const currentTime = format(now, "HH:mm");
-    
+    // Always set to current date/time if no date is provided (even after refresh)
     if (!date) {
-      setSelectedTime(currentTime);
+      const now = new Date();
+      setSelectedTime(format(now, "HH:mm"));
       onDateChange(now);
     } else {
       setSelectedTime(format(date, "HH:mm"));
     }
-  }, []);
-
-  useEffect(() => {
-    if (date) {
-      setSelectedTime(format(date, "HH:mm"));
-    }
-  }, [date]);
+  }, [date, onDateChange]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
@@ -57,13 +52,40 @@ export function DateTimePicker({
 
     const [hours, minutes] = selectedTime.split(":").map(Number);
     if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-      alert("Invalid time format. Please use HH:mm (24-hour format).");
+      toast({
+        title: "Invalid time format",
+        description: "Please use HH:mm (24-hour format).",
+        variant: "destructive"
+      });
       return;
     }
 
     const newDate = date ? new Date(date) : new Date();
     newDate.setHours(hours);
     newDate.setMinutes(minutes);
+
+    // Prevent selecting a past date/time
+    const now = new Date();
+    if (minDate) {
+      if (newDate < minDate) {
+        toast({
+          title: "Invalid selection",
+          description: "You cannot select a past date or time.",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else {
+      if (newDate < now) {
+        toast({
+          title: "Invalid selection",
+          description: "You cannot select a past date or time.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     onDateChange(newDate);
     
     setOpen(false);

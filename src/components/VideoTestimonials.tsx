@@ -5,25 +5,28 @@ import { Star, Play, ExternalLink } from 'lucide-react';
 export function VideoTestimonials() {
   const videoTestimonials = [
     {
-      id: "dQw4w9WgXcQ", // Replace with actual video IDs from your YouTube channel
-      title: "Hyderabad Trip Experience",
-      customer: "Rajesh Kumar",
+      id: "wrgfamvCkns",
+      title: "Customer Video Testimonial",
+      customer: "YouTube Shorts",
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+      thumbnail: "https://img.youtube.com/vi/wrgfamvCkns/maxresdefault.jpg",
+      url: "https://www.youtube.com/shorts/wrgfamvCkns"
     },
     {
-      id: "dQw4w9WgXcQ", // Replace with actual video IDs
-      title: "Airport Transfer Review",
-      customer: "Priya Sharma", 
+      id: "ROa7qu67ECA",
+      title: "Customer Video Testimonial",
+      customer: "YouTube Shorts",
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+      thumbnail: "https://img.youtube.com/vi/ROa7qu67ECA/maxresdefault.jpg",
+      url: "https://www.youtube.com/shorts/ROa7qu67ECA"
     },
     {
-      id: "dQw4w9WgXcQ", // Replace with actual video IDs
-      title: "Local Sightseeing Tour",
-      customer: "Venkat Reddy",
+      id: "QUUuoF04zfk",
+      title: "Customer Video Testimonial",
+      customer: "YouTube Shorts",
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+      thumbnail: "https://img.youtube.com/vi/QUUuoF04zfk/maxresdefault.jpg",
+      url: "https://www.youtube.com/shorts/QUUuoF04zfk"
     }
   ];
 
@@ -57,9 +60,7 @@ export function VideoTestimonials() {
                 {/* Gradient overlay for subtitle readability */}
                 <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-black/30 to-transparent rounded-t-3xl"></div>
                 {/* Subtitle overlay */}
-                <div className="absolute top-4 left-4">
-                  <div className="text-xs font-semibold text-white/90 uppercase tracking-wide">Watch and Learn</div>
-                </div>
+              
               </div>
               {/* Customer and description below image */}
               <div className="bg-white p-5 rounded-b-3xl flex items-center justify-between">
@@ -67,9 +68,9 @@ export function VideoTestimonials() {
                   <div className="text-gray-900 font-semibold text-base mb-1">{video.title}</div>
                   <div className="text-gray-600 text-sm">{video.customer}</div>
                 </div>
-                <button className="bg-gray-100 hover:bg-gray-200 rounded-full p-3 shadow transition-all ml-4">
+                <a href={video.url} target="_blank" rel="noopener noreferrer" className="bg-gray-100 hover:bg-gray-200 rounded-full p-3 shadow transition-all ml-4">
                   <Play className="h-6 w-6 text-red-600" />
-                </button>
+                </a>
               </div>
             </div>
           ))}

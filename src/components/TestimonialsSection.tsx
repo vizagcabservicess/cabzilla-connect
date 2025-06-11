@@ -5,41 +5,38 @@ import { Star, Quote, User } from 'lucide-react';
 export function TestimonialsSection() {
   const testimonials = [
     {
-      name: "Rajesh Kumar",
-      location: "Vizag Local",
+      name: "Sai Supraj",
+      location: "Google Review",
       rating: 5,
-      comment: "Excellent service! The driver was punctual and the car was spotless. Used for airport transfer and it was completely hassle-free. Highly recommended!",
-      service: "Airport Transfer",
-      avatar: "RK",
-      color: "from-blue-500 to-blue-600"
-    },
-    {
-      name: "Priya Sharma",
-      location: "Business Traveler",
-      rating: 5,
-      comment: "Booked for outstation trip to Hyderabad. Professional driver, comfortable journey, and transparent pricing. Will definitely use again!",
-      service: "Outstation Travel",
-      avatar: "PS",
-      color: "from-green-500 to-green-600"
-    },
-    {
-      name: "Venkat Reddy",
-      location: "Regular Customer",
-      rating: 5,
-      comment: "Regular customer for local trips. Always reliable, clean vehicles, and courteous drivers. Best taxi service in Vizag without a doubt!",
-      service: "Local Trips",
-      avatar: "VR",
+      comment: `We recently went for a one-week vacation to Vizag. Exceptional service by Vizag Taxi Hub. Our driver Nagaraj was fantastic—knowledgeable, friendly, and attentive. He showed us hidden gems and made our trip memorable. Highly recommended!`,
+      avatar: "S",
       color: "from-purple-500 to-purple-600"
     },
     {
-      name: "Anjali Patel",
-      location: "Tourist",
+      name: "munta sanju",
+      location: "Google Review",
       rating: 5,
-      comment: "Visited Vizag for vacation. The 8-hour package was perfect for sightseeing. Driver was knowledgeable about local attractions. Fantastic experience!",
-      service: "Hourly Package",
-      avatar: "AP",
+      comment: `Great experience with Verma car ride. The driver was professional, polite, and drove safely. The car was clean and comfortable. Highly recommend for a stress-free journey!`,
+      avatar: "M",
+      color: "from-blue-500 to-blue-600"
+    },
+    {
+      name: "Ayyalasomayajula phani babu",
+      location: "Google Review",
+      rating: 5,
+      comment: `Tempo Traveller was fully conditioned. Staff Nagesh drove very nicely and politely. We are very happy with the trip. Thanks to Vizag Taxi Hub!`,
+      avatar: "A",
       color: "from-orange-500 to-orange-600"
-    }
+    },
+    {
+      name: "Karri Reddy",
+      location: "Google Review",
+      rating: 5,
+      comment: `Second time using Vizag Taxi Hub. Customer care is excellent. Outstanding service and highly recommended to all future customers!`,
+      avatar: "K",
+      color: "from-green-500 to-green-600"
+    },
+ 
   ];
 
   return (
@@ -63,8 +60,8 @@ export function TestimonialsSection() {
         {/* Testimonials Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {testimonials.map((testimonial, index) => (
-            <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-3xl overflow-hidden">
-              <CardContent className="p-5 md:p-6 relative">
+            <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-3xl overflow-hidden min-h-[260px] flex flex-col justify-between">
+              <CardContent className="p-5 md:p-6 relative flex flex-col h-full">
                 {/* Quote Icon */}
                 <div className="absolute top-4 right-4 opacity-10">
                   <Quote className="h-8 w-8 text-gray-400" />
@@ -78,7 +75,7 @@ export function TestimonialsSection() {
                 </div>
                 
                 {/* Comment */}
-                <p className="text-gray-600 text-sm leading-relaxed mb-4 relative z-10">
+                <p className="text-gray-600 text-sm leading-relaxed mb-4 relative z-10 line-clamp-4">
                   "{testimonial.comment}"
                 </p>
                 
@@ -92,9 +89,6 @@ export function TestimonialsSection() {
                       <div className="font-semibold text-gray-900 text-sm">{testimonial.name}</div>
                       <div className="text-xs text-gray-500">{testimonial.location}</div>
                     </div>
-                  </div>
-                  <div className="bg-blue-50 px-3 py-1 rounded-full inline-block">
-                    <span className="text-xs text-blue-600 font-medium">{testimonial.service}</span>
                   </div>
                 </div>
               </CardContent>
