@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
-import { cabTypes, formatPrice } from "@/lib/cabData";
+import { formatPrice } from "@/lib/cabData";
 import { loadAvailableTours, getTourFare, loadTourFares } from "@/lib/tourData";
 import { TripType } from "@/lib/tripTypes";
 import { CabType, TourInfo } from "@/types/cab";
@@ -20,6 +20,18 @@ import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { formatDate, formatTime } from "@/lib/dateUtils";
+import { tourAPI } from "@/services/api/tourAPI";
+import { vehicleAPI } from "@/services/api/vehicleAPI";
+
+interface TourFareResponse {
+  tourId: string;
+  tourName: string;
+  distance?: number;
+  days?: number;
+  description?: string;
+  imageUrl?: string;
+  pricing: { [vehicleId: string]: number };
+}
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -40,25 +52,38 @@ const ToursPage = () => {
   // State variables for tour selection and booking
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchInitiated, setSearchInitiated] = useState<boolean>(false);
-  const [availableTours, setAvailableTours] = useState<TourInfo[]>([]);
+  const [availableTours, setAvailableTours] = useState<TourFareResponse[]>([]);
+  const [availableVehicles, setAvailableVehicles] = useState<CabType[]>([]);
   const [isLoadingTours, setIsLoadingTours] = useState<boolean>(false);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState<boolean>(false);
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isLoadingFares, setIsLoadingFares] = useState(true);
   
   // Load tours on component mount
   useEffect(() => {
-    // If we have location and date from navigation state, trigger search
     if (locationState?.pickupLocation && locationState?.pickupDate) {
       handleSearchTours();
     }
   }, []);
   
+  // Load available vehicles
+  const loadVehicles = async () => {
+    try {
+      setIsLoadingVehicles(true);
+      const response = await vehicleAPI.getVehicles();
+      setAvailableVehicles(response.vehicles);
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+      setAvailableVehicles([]);
+    } finally {
+      setIsLoadingVehicles(false);
+    }
+  };
+
   useEffect(() => {
-    setIsLoadingFares(true);
-    loadTourFares().finally(() => setIsLoadingFares(false));
+    loadVehicles();
   }, []);
   
   // Function to search for available tours
@@ -101,14 +126,10 @@ const ToursPage = () => {
     setSelectedCab(null);
     
     try {
-      // Load tours from API
-      const tours = await loadAvailableTours();
+      // Load tours from API with dynamic pricing
+      const tours = await tourAPI.getTourFares();
       setAvailableTours(tours);
       
-      // Pre-load tour fares for faster selection later
-      loadTourFares().catch(err => console.error("Failed to preload tour fares:", err));
-      
-      // If no tours found
       if (!tours.length) {
         toast({
           title: "No tours available",
@@ -136,16 +157,14 @@ const ToursPage = () => {
   };
   
   // Handle cab selection for a tour
-  const handleCabSelect = (cab: CabType) => {
+  const handleCabSelect = (cab: CabType, fare: number, breakdown?: any) => {
     setSelectedCab(cab);
     
     if (selectedTour) {
-      const fare = getTourFare(selectedTour, cab.id);
-      
       try {
         localStorage.setItem(`selected_fare_${cab.id}_tour_${selectedTour}`, JSON.stringify({
           fare,
-          source: 'calculated',
+          source: 'tour_api',
           timestamp: Date.now(),
           packageType: 'tour',
           cabId: cab.id,
@@ -158,7 +177,24 @@ const ToursPage = () => {
     }
   };
   
-  // Handle booking now button click
+  // Function to get vehicles with pricing for selected tour
+  const getVehiclesWithPricing = (): CabType[] => {
+    if (!selectedTour) return [];
+    
+    const tour = availableTours.find(t => t.tourId === selectedTour);
+    if (!tour || !tour.pricing) return [];
+    
+    return availableVehicles
+      .map(vehicle => {
+        const price = tour.pricing[vehicle.id] || 0;
+        return {
+          ...vehicle,
+          price: price
+        };
+      })
+      .filter(vehicle => vehicle.price > 0); // Only show vehicles with pricing
+  };
+
   const handleBookNow = () => {
     if (!selectedTour) {
       toast({
@@ -199,12 +235,11 @@ const ToursPage = () => {
     setShowGuestDetailsForm(true);
   };
   
-  // Handle guest details submission for booking
   const handleGuestDetailsSubmit = async (guestDetails: any) => {
     try {
       setIsSubmitting(true);
       
-      const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
+      const selectedTourDetails = availableTours.find(tour => tour.tourId === selectedTour);
       
       if (!selectedTourDetails || !selectedCab || !pickupLocation || !pickupDate) {
         toast({
@@ -216,17 +251,17 @@ const ToursPage = () => {
         return;
       }
       
-      const fare = getTourFare(selectedTour!, selectedCab!.id);
+      const fare = selectedCab.price || 0;
       
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name || '',
-        dropLocation: '', // Tours don't have specific drop locations
+        dropLocation: '',
         pickupDate: pickupDate.toISOString(),
-        returnDate: null, // Tours are considered one-way
+        returnDate: null,
         cabType: selectedCab.name,
-        distance: selectedTourDetails.distance,
+        distance: selectedTourDetails.distance || 120,
         tripType: 'tour',
-        tripMode: 'one-way', // Tours are considered one-way
+        tripMode: 'one-way',
         totalAmount: fare,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
@@ -241,9 +276,9 @@ const ToursPage = () => {
       
       const bookingDataForStorage = {
         tourId: selectedTour,
-        tourName: selectedTourDetails.name,
+        tourName: selectedTourDetails.tourName,
         pickupLocation: pickupLocation,
-        tourDistance: selectedTourDetails.distance,
+        tourDistance: selectedTourDetails.distance || 120,
         pickupDate: pickupDate?.toISOString(),
         selectedCab,
         totalPrice: fare,
@@ -275,7 +310,6 @@ const ToursPage = () => {
     }
   };
   
-  // Function to render the search form
   const renderSearchForm = () => (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-medium text-gray-800 mb-6">Find Available Tours</h2>
@@ -347,104 +381,81 @@ const ToursPage = () => {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          {availableTours.map((tour) => (
-            <div 
-              key={tour.id}
-              className={cn(
-                "border rounded-lg overflow-hidden cursor-pointer transition-all",
-                selectedTour === tour.id 
-                  ? "border-blue-500 shadow-md ring-2 ring-blue-200" 
-                  : "border-gray-200 hover:border-blue-300"
-              )}
-              onClick={() => handleTourSelect(tour.id)}
-            >
-              <div className="h-40 bg-gray-200 relative">
-                <img
-                  src={tour.image && tour.image.trim() !== '' ? tour.image : 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg'}
-                  alt={tour.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    if (!target.src.includes('pixabay.com')) {
-                      target.src = 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg';
-                    }
-                  }}
-                />
-                {selectedTour === tour.id && (
-                  <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-                    <Check size={16} />
-                  </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {availableTours.map((tour) => (
+              <div 
+                key={tour.tourId}
+                className={cn(
+                  "border rounded-lg overflow-hidden cursor-pointer transition-all",
+                  selectedTour === tour.tourId 
+                    ? "border-blue-500 shadow-md ring-2 ring-blue-200" 
+                    : "border-gray-200 hover:border-blue-300"
                 )}
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-lg">{tour.name}</h3>
-                <div className="flex items-center mt-1 text-sm text-gray-500">
-                  <MapPin size={14} className="mr-1" />
-                  <span>{tour.distance} km journey</span>
+                onClick={() => handleTourSelect(tour.tourId)}
+              >
+                <div className="h-40 bg-gray-200 relative">
+                  <img
+                    src={tour.imageUrl && tour.imageUrl.trim() !== '' ? tour.imageUrl : 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg'}
+                    alt={tour.tourName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (!target.src.includes('pixabay.com')) {
+                        target.src = 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg';
+                      }
+                    }}
+                  />
+                  {selectedTour === tour.tourId && (
+                    <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+                      <Check size={16} />
+                    </div>
+                  )}
                 </div>
-                <div className="mt-2 text-sm text-blue-600">
-                  {(() => {
-                    const fares = tour.pricing ? Object.values(tour.pricing).filter(f => f > 0) : [];
-                    const minFare = fares.length ? Math.min(...fares) : 0;
-                    return `Starts from ₹${minFare.toLocaleString('en-IN')}`;
-                  })()}
+                <div className="p-4">
+                  <h3 className="font-semibold text-lg">{tour.tourName}</h3>
+                  <div className="flex items-center mt-1 text-sm text-gray-500">
+                    <MapPin size={14} className="mr-1" />
+                    <span>{tour.distance || 120} km journey</span>
+                  </div>
+                  <div className="mt-2 text-sm text-blue-600">
+                    {(() => {
+                      const fares = tour.pricing ? Object.values(tour.pricing).filter(f => f > 0) : [];
+                      const minFare = fares.length ? Math.min(...fares) : 0;
+                      return `Starts from ₹${minFare.toLocaleString('en-IN')}`;
+                    })()}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* Vehicle selection section */}
+          {selectedTour && (
+            <div className="mt-8 border-t pt-6">
+              <h3 className="text-xl font-medium text-gray-800 mb-4">Select Your Vehicle</h3>
+              
+              {isLoadingVehicles ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                  <span className="ml-2 text-gray-600">Loading vehicles...</span>
+                </div>
+              ) : (
+                <CabOptions
+                  cabTypes={getVehiclesWithPricing()}
+                  selectedCab={selectedCab}
+                  onSelectCab={handleCabSelect}
+                  distance={availableTours.find(t => t.tourId === selectedTour)?.distance || 120}
+                  tripType="tour"
+                  tripMode="one-way"
+                  pickupDate={pickupDate}
+                  isCalculatingFares={false}
+                />
+              )}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
-      
-      {selectedTour && (() => {
-        const tour = availableTours.find(t => t.id === selectedTour);
-        if (!tour || !tour.pricing) return null;
-        const dynamicCabTypes = Object.keys(tour.pricing)
-          .map(vehicleId => {
-            const cab = cabTypes.find(c => c.id === vehicleId);
-            const fare = tour.pricing[vehicleId];
-            if (cab) return { ...cab, price: fare };
-            // Fallback for unknown vehicles
-            return {
-              id: vehicleId,
-              name: vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              capacity: 4,
-              luggageCapacity: 2,
-              image: 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg',
-              amenities: ['AC'],
-              description: 'Tour vehicle',
-              ac: true,
-              fuelType: 'CNG',
-              price: fare,
-            };
-          });
-        console.log('tour.pricing keys:', Object.keys(tour.pricing));
-        console.log('dynamicCabTypes:', dynamicCabTypes.map(c => c.id));
-        console.log('dynamicCabTypes full:', dynamicCabTypes);
-        // PATCH: Show all vehicles, even if price is 0 or missing
-        const cabTypesWithFare = dynamicCabTypes;
-        console.log('cabTypesWithFare:', cabTypesWithFare);
-        if (cabTypesWithFare.length === 0) {
-          return <div className="text-gray-500">No vehicles available for this tour.</div>;
-        }
-        return (
-          <>
-            {cabTypesWithFare.some(cab => !cab.price || cab.price === 0) && (
-              <div className="text-amber-600 text-sm mb-2">Some vehicles have no price set. Please update fares in the admin panel.</div>
-            )}
-            <CabOptions
-              cabTypes={cabTypesWithFare}
-              selectedCab={selectedCab}
-              onSelectCab={handleCabSelect}
-              distance={tour.distance || 0}
-              tripType="tour"
-              tripMode="one-way"
-              pickupDate={pickupDate}
-              isCalculatingFares={false}
-            />
-          </>
-        );
-      })()}
       
       <Button
         onClick={handleBookNow}
@@ -455,14 +466,6 @@ const ToursPage = () => {
       </Button>
     </div>
   );
-  
-  if (isLoadingFares) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <span className="text-lg text-gray-500">Loading fares...</span>
-      </div>
-    );
-  }
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -479,7 +482,7 @@ const ToursPage = () => {
               <div>
                 <GuestDetailsForm
                   onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? getTourFare(selectedTour, selectedCab.id) : 0}
+                  totalPrice={selectedCab?.price || 0}
                   isLoading={isSubmitting}
                   onBack={() => setShowGuestDetailsForm(false)}
                 />
@@ -489,11 +492,11 @@ const ToursPage = () => {
                 {selectedTour && selectedCab && pickupLocation && pickupDate && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
-                    dropLocation={null} // Tours don't have drop locations
+                    dropLocation={null}
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
-                    distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-                    totalPrice={getTourFare(selectedTour, selectedCab.id)}
+                    distance={availableTours.find(t => t.tourId === selectedTour)?.distance || 120}
+                    totalPrice={selectedCab.price || 0}
                     tripType="tour"
                     hourlyPackage="tour"
                   />
