@@ -1,6 +1,10 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard } from 'lucide-react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
 
 export function ServicesShowcase() {
   const services = [
@@ -48,8 +52,8 @@ export function ServicesShowcase() {
   ];
 
   return (
-    <section className="px-4 py-2 md:py-4 bg-white">
-      <div className="container mx-auto max-w-6xl">
+    <section className="px-0 py-2 pb-2 mb-6 md:px-4 md:py-4 md:mb-0 bg-white">
+      <div className="mx-auto md:container md:max-w-6xl px-0 md:px-4">
         {/* Header */}
         <div className="text-center mb-2 md:mb-4">
           <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
@@ -63,20 +67,66 @@ export function ServicesShowcase() {
             From local city trips to outstation travel, we provide reliable and comfortable transportation solutions for all your needs.
           </p>
         </div>
-        
-        {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 md:mb-12">
+
+        {/* Mobile Slider */}
+        <div className="block md:hidden">
+          <div className="relative">
+            <Swiper
+              slidesPerView={1.1}
+              spaceBetween={16}
+              navigation={{
+                nextEl: '.service-swiper-next',
+                prevEl: '.service-swiper-prev',
+              }}
+              modules={[Navigation]}
+              className="w-full"
+            >
+              {services.map((service, index) => (
+                <SwiperSlide key={index}>
+                  <div className="rounded-2xl shadow-lg bg-gradient-to-b from-blue-50 to-white p-6 flex flex-col items-center text-center min-h-[340px] relative">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${service.bgColor}`}>
+                      <service.icon className={`h-7 w-7 ${service.iconColor}`} />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
+                    <p className="text-gray-600 text-base mb-4 leading-relaxed">{service.description}</p>
+                    <ul className="text-gray-500 text-sm space-y-1 mb-2">
+                      {service.features.map((feature, idx) => (
+                        <li key={idx} className="flex items-center justify-center gap-2">
+                          <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="absolute bottom-4 left-0 w-full flex justify-center">
+                      <button className="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold shadow-md text-sm">Book Now</button>
+                    </div>
+                  </div>
+                </SwiperSlide>
+              ))}
+              {/* Arrows */}
+              <div className="service-swiper-prev absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full shadow p-2 cursor-pointer">
+                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </div>
+              <div className="service-swiper-next absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full shadow p-2 cursor-pointer">
+                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </Swiper>
+          </div>
+          <div className="mb-2"></div>
+        </div>
+        {/* Desktop Grid */}
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           {services.map((service, index) => (
             <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden">
-              <CardContent className="p-5 md:p-6 text-center">
-                <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ${service.bgColor}`}>
-                  <service.icon className={`h-7 w-7 md:h-8 md:w-8 ${service.iconColor}`} />
+              <CardContent className="p-6 text-center">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ${service.bgColor}`}>
+                  <service.icon className={`h-8 w-8 ${service.iconColor}`} />
                 </div>
-                <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
-                <p className="text-gray-600 text-sm md:text-base mb-4 leading-relaxed">{service.description}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
+                <p className="text-gray-600 text-base mb-4 leading-relaxed">{service.description}</p>
                 <div className="space-y-1">
                   {service.features.map((feature, idx) => (
-                    <div key={idx} className="text-xs md:text-sm text-gray-500 flex items-center justify-center gap-1">
+                    <div key={idx} className="text-sm text-gray-500 flex items-center justify-center gap-1">
                       <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
                       {feature}
                     </div>
@@ -93,7 +143,6 @@ export function ServicesShowcase() {
             <h3 className="text-xl md:text-2xl font-medium text-gray-900 mb-2">Why Choose Vizag Taxi Hub?</h3>
             <p className="text-gray-600 text-sm md:text-base">Experience the difference with our premium features</p>
           </div>
-          
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
             {features.map((feature, index) => (
               <div key={index} className="text-center group">

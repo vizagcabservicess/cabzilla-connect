@@ -43,10 +43,11 @@ export function TestimonialsSection() {
   ];
 
   return (
-    <section className="px-4 py-6 md:py-12 bg-gray-50">
+      <section className="px-4 py-4 pb-2 md:py-12 bg-white">
       <div className="container mx-auto max-w-6xl">
+
         {/* Header */}
-        <div className="text-center mb-6 md:mb-10">
+        <div className="text-center mb-4 md:mb-8">
           <div className="inline-flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-full mb-4">
             <Star className="h-4 w-4 text-yellow-600 fill-current" />
             <span className="text-sm font-medium text-yellow-600">TESTIMONIALS</span>

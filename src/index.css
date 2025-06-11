@@ -1,4 +1,3 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
 
 html, body {
@@ -226,3 +225,27 @@ html, body {
 .shadow-soft { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
 .shadow-medium { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1); }
 .shadow-strong { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15); }
+
+@media (max-width: 767px) {
+  /* Only remove container padding for these sections */
+  section[data-component-file*="FleetShowcase"],
+  section[data-component-file*="PopularRoutes"],
+  section[data-component-file*="SocialMediaSection"],
+  section[data-component-file*="TestimonialsSection"],
+  section[data-component-file*="VideoTestimonials"],
+  section[data-component-file*="ConnectWithUsSection"] {
+    /* Target their direct .container child */
+  }
+  section[data-component-file*="FleetShowcase"] .container,
+  section[data-component-file*="PopularRoutes"] .container,
+  section[data-component-file*="SocialMediaSection"] .container,
+  section[data-component-file*="TestimonialsSection"] .container,
+  section[data-component-file*="VideoTestimonials"] .container,
+  section[data-component-file*="ConnectWithUsSection"] .container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .swiper-slide {
+    margin-bottom: 1.5rem !important;
+  }
+}

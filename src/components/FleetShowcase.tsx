@@ -96,10 +96,11 @@ export function FleetShowcase() {
   const categories = ["All Categories", "Sedan", "SUV", "Tempo Travellers"];
 
   return (
-    <section className="px-4 py-6 md:py-12 bg-gray-50">
+      <section className="px-4 py-4 pb-2 md:py-12 bg-gray-50">
       <div className="container mx-auto max-w-6xl">
+
         {/* Header */}
-        <div className="text-center mb-6 md:mb-10">
+        <div className="text-center mb-4 md:mb-10">
           <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
             <Car className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-medium text-blue-600">OUR FLEET</span>
@@ -112,7 +113,7 @@ export function FleetShowcase() {
           </p>
           
           {/* Category Filter */}
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
+          <div className="flex flex-wrap justify-center gap-2 mb-4 md:mb-8">
             {categories.map((category, index) => (
               <Button
                 key={index}
