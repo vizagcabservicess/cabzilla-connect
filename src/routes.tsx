@@ -46,6 +46,10 @@ import PoolingLoginPage from './pages/PoolingLoginPage';
 import PoolingProviderPage from './pages/PoolingProviderPage';
 import PoolingAdminPage from './pages/PoolingAdminPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
+import LocalTaxiPage from './pages/LocalTaxiPage';
+import OutstationTaxiPage from './pages/OutstationTaxiPage';
+import AirportTaxiPage from './pages/AirportTaxiPage';
+import RentalsPage from './pages/RentalsPage';
 
 const router = createBrowserRouter([
   {
@@ -159,6 +163,23 @@ const router = createBrowserRouter([
   {
     path: '/payment',
     element: <PaymentPage />,
+  },
+  // New service pages
+  {
+    path: '/local-taxi',
+    element: <LocalTaxiPage />,
+  },
+  {
+    path: '/outstation-taxi',
+    element: <OutstationTaxiPage />,
+  },
+  {
+    path: '/airport-taxi',
+    element: <AirportTaxiPage />,
+  },
+  {
+    path: '/rentals',
+    element: <RentalsPage />,
   },
   // Pooling routes
   {

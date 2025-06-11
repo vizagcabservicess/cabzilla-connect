@@ -90,6 +90,15 @@ const megaMenuData = {
   },
 };
 
+const serviceLinks = [
+  { name: 'Local Taxi', href: '/local-taxi', description: 'City tours and local trips' },
+  { name: 'Outstation', href: '/outstation-taxi', description: 'Inter-city travel' },
+  { name: 'Airport Transfer', href: '/airport-taxi', description: 'Airport pickup & drop' },
+  { name: 'Car Rentals', href: '/rentals', description: 'Daily, weekly & monthly rentals' },
+  { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' },
+  { name: 'Cab Booking', href: '/cabs', description: 'Quick cab booking' }
+];
+
 export function Navbar() {
   const { user, logout } = usePoolingAuth();
   const navigate = useNavigate();
