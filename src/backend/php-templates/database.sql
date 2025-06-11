@@ -1,4 +1,3 @@
-
 -- Database schema for Cab Booking System
 
 -- Users Table
@@ -300,3 +299,25 @@ VALUES
 (NULL, 'BK12347', 'The Park Hotel', 'City Tour', '2023-04-25 10:00:00', '2023-04-25 18:00:00', 
  'ertiga', 80, 'local', 'one-way', 3500.00, 'pending', 
  'Guest User', '9876543212', 'guest@example.com');
+
+-- Update tour_fares table to support dynamic vehicle pricing
+ALTER TABLE `tour_fares` DROP INDEX IF EXISTS `tour_id`;
+ALTER TABLE `tour_fares` ADD UNIQUE KEY `unique_tour_id` (`tour_id`);
+
+-- Add columns for all vehicle types that might exist
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `mpv` decimal(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `toyota` decimal(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `innova_crysta` decimal(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `tempo_traveller` decimal(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `amaze` decimal(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE `tour_fares` ADD COLUMN IF NOT EXISTS `bus` decimal(10,2) NOT NULL DEFAULT 0.00;
+
+-- Update existing tour data with new vehicle types
+UPDATE `tour_fares` SET 
+  `mpv` = `innova`,
+  `toyota` = `sedan`,
+  `innova_crysta` = `innova`,
+  `tempo_traveller` = `tempo`,
+  `amaze` = `sedan`,
+  `bus` = `luxury`
+WHERE `id` > 0;

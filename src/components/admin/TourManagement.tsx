@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -49,55 +48,115 @@ import {
   Clock,
   Car
 } from "lucide-react";
-import { tourManagementAPI, TourData } from '@/services/api/tourManagementAPI';
+import { tourManagementAPI } from '@/services/api/tourManagementAPI';
 
-const tourFormSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour ID is required" }),
-  tourName: z.string().min(1, { message: "Tour name is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  distance: z.coerce.number().min(1, { message: "Distance must be at least 1 km" }),
-  days: z.coerce.number().min(1, { message: "Duration must be at least 1 day" }),
-  description: z.string().min(10, { message: "Description must be at least 10 characters" }),
-  imageUrl: z.string().optional(),
-});
+interface Vehicle {
+  id: string;
+  name: string;
+}
+
+interface TourData {
+  id?: number;
+  tourId: string;
+  tourName: string;
+  distance: number;
+  days: number;
+  description: string;
+  imageUrl?: string;
+  isActive?: boolean;
+  pricing: Record<string, number>;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export default function TourManagement() {
   const [tours, setTours] = useState<TourData[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTour, setEditingTour] = useState<TourData | null>(null);
 
-  const addForm = useForm<z.infer<typeof tourFormSchema>>({
-    resolver: zodResolver(tourFormSchema),
-    defaultValues: {
+  // Create dynamic schema based on available vehicles
+  const createTourFormSchema = (availableVehicles: Vehicle[]) => {
+    const pricingSchema: Record<string, z.ZodNumber> = {};
+    availableVehicles.forEach(vehicle => {
+      pricingSchema[vehicle.id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
+    });
+
+    return z.object({
+      tourId: z.string().min(1, { message: "Tour ID is required" }),
+      tourName: z.string().min(1, { message: "Tour name is required" }),
+      distance: z.coerce.number().min(1, { message: "Distance must be at least 1 km" }),
+      days: z.coerce.number().min(1, { message: "Duration must be at least 1 day" }),
+      description: z.string().min(10, { message: "Description must be at least 10 characters" }),
+      imageUrl: z.string().optional(),
+      pricing: z.object(pricingSchema)
+    });
+  };
+
+  const getDefaultValues = (availableVehicles: Vehicle[]) => {
+    const defaultPricing: Record<string, number> = {};
+    availableVehicles.forEach(vehicle => {
+      defaultPricing[vehicle.id] = 0;
+    });
+
+    return {
       tourId: "",
       tourName: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
       distance: 0,
       days: 1,
       description: "",
       imageUrl: "",
-    },
+      pricing: defaultPricing
+    };
+  };
+
+  const addForm = useForm({
+    resolver: vehicles.length > 0 ? zodResolver(createTourFormSchema(vehicles)) : undefined,
+    defaultValues: getDefaultValues(vehicles),
   });
 
-  const editForm = useForm<z.infer<typeof tourFormSchema>>({
-    resolver: zodResolver(tourFormSchema),
+  const editForm = useForm({
+    resolver: vehicles.length > 0 ? zodResolver(createTourFormSchema(vehicles)) : undefined,
   });
+
+  const loadVehicles = async () => {
+    try {
+      const response = await fetch('/api/admin/tours-management.php?action=vehicles', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        setVehicles(data.data);
+      }
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+      // Fallback to default vehicles
+      setVehicles([
+        { id: 'sedan', name: 'Sedan' },
+        { id: 'ertiga', name: 'Ertiga' },
+        { id: 'innova', name: 'Innova' },
+        { id: 'tempo', name: 'Tempo' },
+        { id: 'luxury', name: 'Luxury' }
+      ]);
+    }
+  };
 
   const loadTours = async () => {
     try {
       setLoading(true);
-      const toursData = await tourManagementAPI.getAllTours();
-      setTours(toursData);
+      const response = await fetch('/api/admin/tours-management.php', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        setTours(data.data);
+      }
     } catch (error) {
       console.error('Error loading tours:', error);
       toast.error('Failed to load tours');
@@ -107,29 +166,63 @@ export default function TourManagement() {
   };
 
   useEffect(() => {
-    loadTours();
+    loadVehicles().then(() => {
+      loadTours();
+    });
   }, []);
 
-  const onAddSubmit = async (values: z.infer<typeof tourFormSchema>) => {
+  // Reset forms when vehicles change
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      addForm.reset(getDefaultValues(vehicles));
+    }
+  }, [vehicles]);
+
+  const onAddSubmit = async (values: any) => {
     try {
-      await tourManagementAPI.addTour(values);
-      toast.success('Tour added successfully');
-      setIsAddDialogOpen(false);
-      addForm.reset();
-      loadTours();
+      const response = await fetch('/api/admin/tours-management.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify(values)
+      });
+      
+      const data = await response.json();
+      if (data.status === 'success') {
+        toast.success('Tour added successfully');
+        setIsAddDialogOpen(false);
+        addForm.reset(getDefaultValues(vehicles));
+        loadTours();
+      } else {
+        toast.error(data.message || 'Failed to add tour');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to add tour');
     }
   };
 
-  const onEditSubmit = async (values: z.infer<typeof tourFormSchema>) => {
+  const onEditSubmit = async (values: any) => {
     try {
-      await tourManagementAPI.updateTour(values);
-      toast.success('Tour updated successfully');
-      setIsEditDialogOpen(false);
-      setEditingTour(null);
-      editForm.reset();
-      loadTours();
+      const response = await fetch('/api/admin/tours-management.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify(values)
+      });
+      
+      const data = await response.json();
+      if (data.status === 'success') {
+        toast.success('Tour updated successfully');
+        setIsEditDialogOpen(false);
+        setEditingTour(null);
+        loadTours();
+      } else {
+        toast.error(data.message || 'Failed to update tour');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to update tour');
     }
@@ -140,24 +233,31 @@ export default function TourManagement() {
     editForm.reset({
       tourId: tour.tourId,
       tourName: tour.tourName,
-      sedan: tour.sedan,
-      ertiga: tour.ertiga,
-      innova: tour.innova,
-      tempo: tour.tempo,
-      luxury: tour.luxury,
       distance: tour.distance,
       days: tour.days,
       description: tour.description,
       imageUrl: tour.imageUrl || "",
+      pricing: tour.pricing
     });
     setIsEditDialogOpen(true);
   };
 
   const handleDelete = async (tourId: string) => {
     try {
-      await tourManagementAPI.deleteTour(tourId);
-      toast.success('Tour deleted successfully');
-      loadTours();
+      const response = await fetch(`/api/admin/tours-management.php?tourId=${tourId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      
+      const data = await response.json();
+      if (data.status === 'success') {
+        toast.success('Tour deleted successfully');
+        loadTours();
+      } else {
+        toast.error(data.message || 'Failed to delete tour');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete tour');
     }
@@ -165,12 +265,25 @@ export default function TourManagement() {
 
   const handleToggleActive = async (tour: TourData) => {
     try {
-      await tourManagementAPI.updateTour({
-        tourId: tour.tourId,
-        isActive: !tour.isActive
+      const response = await fetch('/api/admin/tours-management.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          tourId: tour.tourId,
+          isActive: !tour.isActive
+        })
       });
-      toast.success(`Tour ${tour.isActive ? 'deactivated' : 'activated'} successfully`);
-      loadTours();
+      
+      const data = await response.json();
+      if (data.status === 'success') {
+        toast.success(`Tour ${tour.isActive ? 'deactivated' : 'activated'} successfully`);
+        loadTours();
+      } else {
+        toast.error(data.message || 'Failed to update tour status');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to update tour status');
     }
@@ -190,7 +303,7 @@ export default function TourManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Tour Management</h2>
-          <p className="text-gray-600">Manage tour packages and pricing</p>
+          <p className="text-gray-600">Manage tour packages and dynamic pricing</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={loadTours} variant="outline" size="sm">
@@ -208,7 +321,7 @@ export default function TourManagement() {
               <DialogHeader>
                 <DialogTitle>Add New Tour</DialogTitle>
                 <DialogDescription>
-                  Create a new tour package with pricing for all vehicle types.
+                  Create a new tour package with dynamic pricing for all available vehicles.
                 </DialogDescription>
               </DialogHeader>
               <Form {...addForm}>
@@ -300,72 +413,23 @@ export default function TourManagement() {
 
                   <div className="space-y-3">
                     <h4 className="font-semibold">Vehicle Pricing</h4>
-                    <div className="grid grid-cols-5 gap-4">
-                      <FormField
-                        control={addForm.control}
-                        name="sedan"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sedan (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="ertiga"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Ertiga (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="innova"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Innova (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="tempo"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Tempo (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="luxury"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Luxury (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <div className="grid grid-cols-3 gap-4">
+                      {vehicles.map((vehicle) => (
+                        <FormField
+                          key={vehicle.id}
+                          control={addForm.control}
+                          name={`pricing.${vehicle.id}`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{vehicle.name} (₹)</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      ))}
                     </div>
                   </div>
 
@@ -412,9 +476,19 @@ export default function TourManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="text-sm">Sedan: ₹{tour.sedan}</div>
-                      <div className="text-sm">Ertiga: ₹{tour.ertiga}</div>
-                      <div className="text-sm">Innova: ₹{tour.innova}</div>
+                      {Object.entries(tour.pricing).slice(0, 3).map(([vehicleId, price]) => {
+                        const vehicle = vehicles.find(v => v.id === vehicleId);
+                        return (
+                          <div key={vehicleId} className="text-sm">
+                            {vehicle?.name}: ₹{price}
+                          </div>
+                        );
+                      })}
+                      {Object.keys(tour.pricing).length > 3 && (
+                        <div className="text-xs text-gray-400">
+                          +{Object.keys(tour.pricing).length - 3} more
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -476,11 +550,6 @@ export default function TourManagement() {
               ))}
             </TableBody>
           </Table>
-          {tours.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No tours found. Add your first tour package to get started.
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -493,104 +562,18 @@ export default function TourManagement() {
               Update tour package details and pricing.
             </DialogDescription>
           </DialogHeader>
-          <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="tourId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tour ID</FormLabel>
-                      <FormControl>
-                        <Input {...field} disabled />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="tourName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tour Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="distance"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Distance (km)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="days"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duration (days)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="imageUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Image URL</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={editForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="space-y-3">
-                <h4 className="font-semibold">Vehicle Pricing</h4>
-                <div className="grid grid-cols-5 gap-4">
+          {editingTour && (
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}
-                    name="sedan"
+                    name="tourId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Sedan (₹)</FormLabel>
+                        <FormLabel>Tour ID</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input {...field} disabled />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -598,67 +581,106 @@ export default function TourManagement() {
                   />
                   <FormField
                     control={editForm.control}
-                    name="ertiga"
+                    name="tourName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Ertiga (₹)</FormLabel>
+                        <FormLabel>Tour Name</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury (₹)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-              </div>
 
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Update Tour</Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="distance"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Distance (km)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="days"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Duration (days)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Image URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={editForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold">Vehicle Pricing</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    {vehicles.map((vehicle) => (
+                      <FormField
+                        key={vehicle.id}
+                        control={editForm.control}
+                        name={`pricing.${vehicle.id}`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{vehicle.name} (₹)</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Update Tour</Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

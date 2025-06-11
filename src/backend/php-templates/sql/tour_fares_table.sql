@@ -1,8 +1,11 @@
 
+-- Drop existing table if it exists to avoid conflicts
+DROP TABLE IF EXISTS `tour_fares`;
+
 -- Create tour_fares table with proper structure
-CREATE TABLE IF NOT EXISTS `tour_fares` (
+CREATE TABLE `tour_fares` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `tour_id` varchar(50) NOT NULL UNIQUE,
+  `tour_id` varchar(50) NOT NULL,
   `tour_name` varchar(255) NOT NULL,
   `sedan` decimal(10,2) NOT NULL DEFAULT 0.00,
   `ertiga` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -17,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `tour_fares` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `tour_id` (`tour_id`),
+  UNIQUE KEY `unique_tour_id` (`tour_id`),
   KEY `is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
