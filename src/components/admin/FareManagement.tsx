@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -20,7 +21,8 @@ import {
   Globe,
   Map,
   Car,
-  Bookmark
+  Bookmark,
+  MapPin
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
@@ -38,25 +40,7 @@ import {
 import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
 import OutstationFareManagement from "@/components/admin/OutstationFareManagement";
 import AirportFareManagement from "@/components/admin/AirportFareManagement";
-
-const formSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
-
-const newTourFormSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour ID is required" }),
-  tourName: z.string().min(1, { message: "Tour name is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
+import TourManagement from "@/components/admin/TourManagement";
 
 export default function FareManagement() {
   return (
@@ -65,6 +49,7 @@ export default function FareManagement() {
         <TabsTrigger value="local">Local Fares</TabsTrigger>
         <TabsTrigger value="outstation">Outstation Fares</TabsTrigger>
         <TabsTrigger value="airport">Airport Fares</TabsTrigger>
+        <TabsTrigger value="tours">Tours</TabsTrigger>
       </TabsList>
       <TabsContent value="local">
         <LocalFareManagement />
@@ -74,6 +59,9 @@ export default function FareManagement() {
       </TabsContent>
       <TabsContent value="airport">
         <AirportFareManagement />
+      </TabsContent>
+      <TabsContent value="tours">
+        <TourManagement />
       </TabsContent>
     </Tabs>
   );
