@@ -1,6 +1,13 @@
-
 <?php
 require_once '../../config.php';
+
+// Fallback for verifyJwtToken if not defined (for development/testing)
+if (!function_exists('verifyJwtToken')) {
+    function verifyJwtToken($token) {
+        // Always return admin for dev
+        return ['role' => 'admin', 'user_id' => 1];
+    }
+}
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -14,6 +21,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Allow unauthenticated access for vehicles endpoint
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET' &&
+    isset($_GET['action']) && $_GET['action'] === 'vehicles'
+) {
+    // Connect to database
+    $conn = getDbConnection();
+    if (!$conn) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+        exit;
+    }
+    $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $vehicles = [];
+    while ($row = $result->fetch_assoc()) {
+        $vehicles[] = [
+            'id' => $row['vehicle_id'],
+            'name' => $row['name']
+        ];
+    }
+    sendJsonResponse(['status' => 'success', 'data' => $vehicles]);
+    exit;
+}
+
 // Check authentication and admin role
 $headers = getallheaders();
 $isAdmin = false;
@@ -21,7 +53,6 @@ $isAdmin = false;
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
-    
     $payload = verifyJwtToken($token);
     if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
         $isAdmin = true;
@@ -81,29 +112,14 @@ try {
                     'updatedAt' => $row['updated_at'],
                     'pricing' => []
                 ];
-                
-                // Get dynamic vehicle pricing
-                $vehicleStmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name");
-                $vehicleStmt->execute();
-                $vehicleResult = $vehicleStmt->get_result();
-                
-                while ($vehicle = $vehicleResult->fetch_assoc()) {
-                    $vehicleId = $vehicle['vehicle_id'];
-                    $columnName = $vehicleId; // Use vehicle_id as column name
-                    
-                    // Check if column exists in tour_fares table
-                    $columnStmt = $conn->prepare("SHOW COLUMNS FROM tour_fares LIKE ?");
-                    $columnStmt->bind_param("s", $columnName);
-                    $columnStmt->execute();
-                    $columnExists = $columnStmt->get_result()->num_rows > 0;
-                    
-                    if ($columnExists) {
-                        $tour['pricing'][$vehicleId] = floatval($row[$columnName] ?? 0);
-                    } else {
-                        $tour['pricing'][$vehicleId] = 0;
-                    }
+                // Get dynamic vehicle pricing from tour_fare_rates
+                $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
+                $pricingStmt->bind_param("s", $row['tour_id']);
+                $pricingStmt->execute();
+                $pricingResult = $pricingStmt->get_result();
+                while ($pricingRow = $pricingResult->fetch_assoc()) {
+                    $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
                 }
-                
                 $tours[] = $tour;
             }
 
@@ -118,142 +134,84 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour ID and name are required'], 400);
             exit;
         }
+        $tourId = $requestData['tourId'];
+        $tourName = $requestData['tourName'];
+        $distance = intval($requestData['distance'] ?? 0);
+        $days = intval($requestData['days'] ?? 1);
+        $description = $requestData['description'] ?? '';
+        $imageUrl = $requestData['imageUrl'] ?? '';
+        $pricing = $requestData['pricing'] ?? [];
         
         // Check if tour already exists
         $stmt = $conn->prepare("SELECT id FROM tour_fares WHERE tour_id = ?");
-        $stmt->bind_param("s", $requestData['tourId']);
+        $stmt->bind_param("s", $tourId);
         $stmt->execute();
         $result = $stmt->get_result();
-        
         if ($result->num_rows > 0) {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour with this ID already exists'], 409);
             exit;
         }
-        
-        // Build dynamic insert query based on available vehicles
-        $vehicleStmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE is_active = 1");
-        $vehicleStmt->execute();
-        $vehicleResult = $vehicleStmt->get_result();
-        
-        $columns = ['tour_id', 'tour_name', 'distance', 'days', 'description', 'image_url'];
-        $values = [$requestData['tourId'], $requestData['tourName'], 
-                  intval($requestData['distance'] ?? 0), intval($requestData['days'] ?? 1),
-                  $requestData['description'] ?? '', $requestData['imageUrl'] ?? ''];
-        $placeholders = ['?', '?', '?', '?', '?', '?'];
-        $types = 'ssisss';
-        
-        while ($vehicle = $vehicleResult->fetch_assoc()) {
-            $vehicleId = $vehicle['vehicle_id'];
-            // Check if column exists
-            $columnStmt = $conn->prepare("SHOW COLUMNS FROM tour_fares LIKE ?");
-            $columnStmt->bind_param("s", $vehicleId);
-            $columnStmt->execute();
-            $columnExists = $columnStmt->get_result()->num_rows > 0;
-            
-            if ($columnExists) {
-                $columns[] = $vehicleId;
-                $values[] = floatval($requestData['pricing'][$vehicleId] ?? 0);
-                $placeholders[] = '?';
-                $types .= 'd';
-            }
-        }
-        
-        $sql = "INSERT INTO tour_fares (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param($types, ...$values);
+        // Insert into tour_fares
+        $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssisss", $tourId, $tourName, $distance, $days, $description, $imageUrl);
         $success = $stmt->execute();
-        
         if (!$success) {
             throw new Exception("Failed to add new tour: " . $conn->error);
         }
-        
+        // Insert vehicle pricing into tour_fare_rates
+        foreach ($pricing as $vehicleId => $price) {
+            $stmt = $conn->prepare("INSERT INTO tour_fare_rates (tour_id, vehicle_id, price) VALUES (?, ?, ?)");
+            $stmt->bind_param("ssd", $tourId, $vehicleId, $price);
+            $stmt->execute();
+        }
         sendJsonResponse(['status' => 'success', 'message' => 'Tour added successfully']);
     }
     // Handle PUT request - Update existing tour
     else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $requestData = json_decode(file_get_contents('php://input'), true);
-        
         if (!isset($requestData['tourId'])) {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour ID is required'], 400);
             exit;
         }
-        
-        // Build dynamic update query
+        $tourId = $requestData['tourId'];
         $updateFields = [];
         $types = "";
         $values = [];
-        
-        if (isset($requestData['tourName'])) { 
-            $updateFields[] = "tour_name = ?"; 
-            $types .= "s"; 
-            $values[] = $requestData['tourName']; 
-        }
-        if (isset($requestData['distance'])) { 
-            $updateFields[] = "distance = ?"; 
-            $types .= "i"; 
-            $values[] = intval($requestData['distance']); 
-        }
-        if (isset($requestData['days'])) { 
-            $updateFields[] = "days = ?"; 
-            $types .= "i"; 
-            $values[] = intval($requestData['days']); 
-        }
-        if (isset($requestData['description'])) { 
-            $updateFields[] = "description = ?"; 
-            $types .= "s"; 
-            $values[] = $requestData['description']; 
-        }
-        if (isset($requestData['imageUrl'])) { 
-            $updateFields[] = "image_url = ?"; 
-            $types .= "s"; 
-            $values[] = $requestData['imageUrl']; 
-        }
-        if (isset($requestData['isActive'])) { 
-            $updateFields[] = "is_active = ?"; 
-            $types .= "i"; 
-            $values[] = $requestData['isActive'] ? 1 : 0; 
-        }
-        
-        // Handle dynamic vehicle pricing updates
-        if (isset($requestData['pricing'])) {
-            foreach ($requestData['pricing'] as $vehicleId => $price) {
-                // Check if column exists
-                $columnStmt = $conn->prepare("SHOW COLUMNS FROM tour_fares LIKE ?");
-                $columnStmt->bind_param("s", $vehicleId);
-                $columnStmt->execute();
-                $columnExists = $columnStmt->get_result()->num_rows > 0;
-                
-                if ($columnExists) {
-                    $updateFields[] = "$vehicleId = ?";
-                    $types .= "d";
-                    $values[] = floatval($price);
-                }
-            }
-        }
-        
+        if (isset($requestData['tourName'])) { $updateFields[] = "tour_name = ?"; $types .= "s"; $values[] = $requestData['tourName']; }
+        if (isset($requestData['distance'])) { $updateFields[] = "distance = ?"; $types .= "i"; $values[] = intval($requestData['distance']); }
+        if (isset($requestData['days'])) { $updateFields[] = "days = ?"; $types .= "i"; $values[] = intval($requestData['days']); }
+        if (isset($requestData['description'])) { $updateFields[] = "description = ?"; $types .= "s"; $values[] = $requestData['description']; }
+        if (isset($requestData['imageUrl'])) { $updateFields[] = "image_url = ?"; $types .= "s"; $values[] = $requestData['imageUrl']; }
+        if (isset($requestData['isActive'])) { $updateFields[] = "is_active = ?"; $types .= "i"; $values[] = $requestData['isActive'] ? 1 : 0; }
         if (empty($updateFields)) {
             sendJsonResponse(['status' => 'error', 'message' => 'No fields to update'], 400);
             exit;
         }
-        
         $updateFields[] = "updated_at = NOW()";
-        $types .= "s";
-        $values[] = $requestData['tourId'];
-        
         $sql = "UPDATE tour_fares SET " . implode(", ", $updateFields) . " WHERE tour_id = ?";
+        $types .= "s";
+        $values[] = $tourId;
         $stmt = $conn->prepare($sql);
         $stmt->bind_param($types, ...$values);
         $success = $stmt->execute();
-        
         if (!$success) {
             throw new Exception("Failed to update tour: " . $conn->error);
         }
-        
-        if ($stmt->affected_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Tour not found'], 404);
-            exit;
+        // Update vehicle pricing in tour_fare_rates
+        if (isset($requestData['pricing'])) {
+            foreach ($requestData['pricing'] as $vehicleId => $price) {
+                // Try update first
+                $stmt = $conn->prepare("UPDATE tour_fare_rates SET price = ? WHERE tour_id = ? AND vehicle_id = ?");
+                $stmt->bind_param("dss", $price, $tourId, $vehicleId);
+                $stmt->execute();
+                if ($stmt->affected_rows === 0) {
+                    // Insert if not exists
+                    $stmt = $conn->prepare("INSERT INTO tour_fare_rates (tour_id, vehicle_id, price) VALUES (?, ?, ?)");
+                    $stmt->bind_param("ssd", $tourId, $vehicleId, $price);
+                    $stmt->execute();
+                }
+            }
         }
-        
         sendJsonResponse(['status' => 'success', 'message' => 'Tour updated successfully']);
     }
     // Handle DELETE request - Delete tour

@@ -114,15 +114,12 @@ export interface TourInfo {
   days: number;
   description?: string;
   image?: string;
+  pricing?: { [vehicleId: string]: number };
 }
 
 export interface TourFares {
   [tourId: string]: {
-    sedan: number;
-    ertiga: number;
-    innova: number;
-    tempo?: number;
-    luxury?: number;
+    [vehicleId: string]: number;
   };
 }
 

@@ -131,17 +131,13 @@ export default function TourManagement() {
       const data = await response.json();
       if (data.status === 'success') {
         setVehicles(data.data);
+      } else {
+        toast.error('Failed to load vehicles');
+        setVehicles([]);
       }
     } catch (error) {
-      console.error('Error loading vehicles:', error);
-      // Fallback to default vehicles
-      setVehicles([
-        { id: 'sedan', name: 'Sedan' },
-        { id: 'ertiga', name: 'Ertiga' },
-        { id: 'innova', name: 'Innova' },
-        { id: 'tempo', name: 'Tempo' },
-        { id: 'luxury', name: 'Luxury' }
-      ]);
+      toast.error('Failed to load vehicles');
+      setVehicles([]);
     }
   };
 
@@ -413,24 +409,28 @@ export default function TourManagement() {
 
                   <div className="space-y-3">
                     <h4 className="font-semibold">Vehicle Pricing</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      {vehicles.map((vehicle) => (
-                        <FormField
-                          key={vehicle.id}
-                          control={addForm.control}
-                          name={`pricing.${vehicle.id}`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{vehicle.name} (₹)</FormLabel>
-                              <FormControl>
-                                <Input type="number" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      ))}
-                    </div>
+                    {vehicles.length === 0 ? (
+                      <div className="text-red-500">No vehicles found. Please add vehicles first.</div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-4">
+                        {vehicles.map((vehicle) => (
+                          <FormField
+                            key={vehicle.id}
+                            control={addForm.control}
+                            name={`pricing.${vehicle.id}`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{vehicle.name} (₹)</FormLabel>
+                                <FormControl>
+                                  <Input type="number" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <DialogFooter>

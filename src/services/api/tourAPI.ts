@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
 import { TourInfo, TourFares } from '@/types/cab';
@@ -8,11 +7,11 @@ const baseURL = getApiUrl();
 export interface TourFareResponse {
   tourId: string;
   tourName: string;
-  sedan: number;
-  ertiga: number;
-  innova: number;
-  tempo?: number;
-  luxury?: number;
+  distance?: number;
+  days?: number;
+  description?: string;
+  imageUrl?: string;
+  pricing: { [vehicleId: string]: number };
 }
 
 export const tourAPI = {

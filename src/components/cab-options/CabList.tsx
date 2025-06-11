@@ -121,61 +121,71 @@ export const CabList: React.FC<CabListProps> = ({
         </div>
       ) : (
         cabTypes.map((cab) => {
-          const normalizedId = normalizeVehicleId(cab.id);
-          const { fareData, isLoading, error } = useFare(
-            normalizedId,
-            tripType,
-            distance,
-            packageType,
-            pickupDate
-          );
-
           let fare = 0;
           let fareText = 'Price unavailable';
           let fareSource = 'unknown';
-          
-          if (isLoading) {
-            fareText = 'Calculating...';
-          } else if (error) {
-            console.error(`Fare error for ${cab.name}:`, error);
-            fareText = 'Error fetching price';
-          } else if (fareData) {
-            fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
-            fareSource = fareData.source || 'unknown';
+          let isLoading = false;
+          let fareData = undefined;
 
-            if (tripType === 'local') {
-              const localPackageLimits: Record<string, { km: number; hours: number }> = {
-                '4hrs-40km': { km: 40, hours: 4 },
-                '8hrs-80km': { km: 80, hours: 8 },
-                '10hrs-100km': { km: 100, hours: 10 },
-              };
-              const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
-              const extraKm = Math.max(0, distance - selectedPackage.km);
-              const extraHours = 0;
-              const breakdown = fareData.breakdown || {};
-              const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
-              const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
-              const extraKmFare = extraKm * extraKmCharge;
-              const extraHourFare = extraHours * extraHourCharge;
-              fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
-            }
+          if (tripType === 'tour' && typeof cab.price === 'number') {
+            fare = cab.price;
+            fareText = `₹${fare.toLocaleString()} (api)`;
+            fareSource = 'api';
+            isLoading = false;
+          } else {
+            const normalizedId = normalizeVehicleId(cab.id);
+            const fareResult = useFare(
+              normalizedId,
+              tripType,
+              distance,
+              packageType,
+              pickupDate
+            );
+            fareData = fareResult.fareData;
+            isLoading = fareResult.isLoading;
+            const error = fareResult.error;
 
-            if (tripType === 'airport') {
-              const breakdown = fareData.breakdown || {};
-              const base = breakdown.basePrice || 0;
-              const airportFee = breakdown.airportFee || 0;
-              const extra = breakdown.extraDistanceFare || 0;
-              fare = base + airportFee + extra;
-            }
+            if (error) {
+              console.error(`Fare error for ${cab.name}:`, error);
+              fareText = 'Error fetching price';
+            } else if (fareData) {
+              fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
+              fareSource = fareData.source || 'unknown';
 
-            if (fareSource === 'database') {
-              fareText = `₹${fare.toLocaleString()} (verified)`;
-            } else if (fareSource === 'stored') {
-              fareText = `₹${fare.toLocaleString()} (saved)`;
-            } else if (fareSource === 'default') {
-              fareText = `₹${fare.toLocaleString()} (standard)`;
-            } else {
-              fareText = `₹${fare.toLocaleString()}`;
+              if (tripType === 'local') {
+                const localPackageLimits: Record<string, { km: number; hours: number }> = {
+                  '4hrs-40km': { km: 40, hours: 4 },
+                  '8hrs-80km': { km: 80, hours: 8 },
+                  '10hrs-100km': { km: 100, hours: 10 },
+                };
+                const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
+                const extraKm = Math.max(0, distance - selectedPackage.km);
+                const extraHours = 0;
+                const breakdown = fareData.breakdown || {};
+                const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
+                const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
+                const extraKmFare = extraKm * extraKmCharge;
+                const extraHourFare = extraHours * extraHourCharge;
+                fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
+              }
+
+              if (tripType === 'airport') {
+                const breakdown = fareData.breakdown || {};
+                const base = breakdown.basePrice || 0;
+                const airportFee = breakdown.airportFee || 0;
+                const extra = breakdown.extraDistanceFare || 0;
+                fare = base + airportFee + extra;
+              }
+
+              if (fareSource === 'database') {
+                fareText = `₹${fare.toLocaleString()} (verified)`;
+              } else if (fareSource === 'stored') {
+                fareText = `₹${fare.toLocaleString()} (saved)`;
+              } else if (fareSource === 'default') {
+                fareText = `₹${fare.toLocaleString()} (standard)`;
+              } else {
+                fareText = `₹${fare.toLocaleString()}`;
+              }
             }
           }
 

@@ -11,7 +11,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { cabTypes, formatPrice } from "@/lib/cabData";
-import { defaultTours, loadAvailableTours, getTourFare, loadTourFares } from "@/lib/tourData";
+import { loadAvailableTours, getTourFare, loadTourFares } from "@/lib/tourData";
 import { TripType } from "@/lib/tripTypes";
 import { CabType, TourInfo } from "@/types/cab";
 import { MapPin, Calendar, Check, Loader2 } from "lucide-react";
@@ -46,6 +46,7 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isLoadingFares, setIsLoadingFares] = useState(true);
   
   // Load tours on component mount
   useEffect(() => {
@@ -53,6 +54,11 @@ const ToursPage = () => {
     if (locationState?.pickupLocation && locationState?.pickupDate) {
       handleSearchTours();
     }
+  }, []);
+  
+  useEffect(() => {
+    setIsLoadingFares(true);
+    loadTourFares().finally(() => setIsLoadingFares(false));
   }, []);
   
   // Function to search for available tours
@@ -112,7 +118,7 @@ const ToursPage = () => {
       }
     } catch (error) {
       console.error("Error loading tours:", error);
-      setAvailableTours(defaultTours);
+      setAvailableTours([]);
       toast({
         title: "Error loading tours",
         description: "We encountered an error while loading tours. Please try again later.",
@@ -278,7 +284,7 @@ const ToursPage = () => {
         <LocationInput
           label="PICKUP LOCATION"
           placeholder="Enter your pickup location"
-          value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+          location={pickupLocation || undefined}
           onLocationChange={setPickupLocation}
           isPickupLocation={true}
         />
@@ -354,20 +360,17 @@ const ToursPage = () => {
               onClick={() => handleTourSelect(tour.id)}
             >
               <div className="h-40 bg-gray-200 relative">
-                {tour.image ? (
-                  <img 
-                    src={tour.image} 
-                    alt={tour.name} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/tours/default-tour.jpg';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                    <span className="text-gray-400">No image</span>
-                  </div>
-                )}
+                <img
+                  src={tour.image && tour.image.trim() !== '' ? tour.image : 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg'}
+                  alt={tour.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('pixabay.com')) {
+                      target.src = 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg';
+                    }
+                  }}
+                />
                 {selectedTour === tour.id && (
                   <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
                     <Check size={16} />
@@ -381,7 +384,11 @@ const ToursPage = () => {
                   <span>{tour.distance} km journey</span>
                 </div>
                 <div className="mt-2 text-sm text-blue-600">
-                  Starts from ₹{getTourFare(tour.id, 'sedan').toLocaleString('en-IN')}
+                  {(() => {
+                    const fares = tour.pricing ? Object.values(tour.pricing).filter(f => f > 0) : [];
+                    const minFare = fares.length ? Math.min(...fares) : 0;
+                    return `Starts from ₹${minFare.toLocaleString('en-IN')}`;
+                  })()}
                 </div>
               </div>
             </div>
@@ -389,31 +396,73 @@ const ToursPage = () => {
         </div>
       )}
       
-      {selectedTour && (
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <h3 className="font-semibold text-lg mb-4">Select Cab Type for Your Tour</h3>
-          
-          <CabOptions
-            cabTypes={cabTypes.slice(0, 3)} // Only show the first 3 cab types for tours
-            selectedCab={selectedCab}
-            onSelectCab={handleCabSelect}
-            distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-            tripType="tour"
-            tripMode="one-way" // Tours are considered one-way
-            pickupDate={pickupDate}
-          />
-          
-          <Button
-            onClick={handleBookNow}
-            disabled={!selectedTour || !selectedCab}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md mt-6 w-full md:w-auto"
-          >
-            BOOK NOW
-          </Button>
-        </div>
-      )}
+      {selectedTour && (() => {
+        const tour = availableTours.find(t => t.id === selectedTour);
+        if (!tour || !tour.pricing) return null;
+        const dynamicCabTypes = Object.keys(tour.pricing)
+          .map(vehicleId => {
+            const cab = cabTypes.find(c => c.id === vehicleId);
+            const fare = tour.pricing[vehicleId];
+            if (cab) return { ...cab, price: fare };
+            // Fallback for unknown vehicles
+            return {
+              id: vehicleId,
+              name: vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+              capacity: 4,
+              luggageCapacity: 2,
+              image: 'https://cdn.pixabay.com/photo/2016/11/29/09/32/auto-1868726_1280.jpg',
+              amenities: ['AC'],
+              description: 'Tour vehicle',
+              ac: true,
+              fuelType: 'CNG',
+              price: fare,
+            };
+          });
+        console.log('tour.pricing keys:', Object.keys(tour.pricing));
+        console.log('dynamicCabTypes:', dynamicCabTypes.map(c => c.id));
+        console.log('dynamicCabTypes full:', dynamicCabTypes);
+        // PATCH: Show all vehicles, even if price is 0 or missing
+        const cabTypesWithFare = dynamicCabTypes;
+        console.log('cabTypesWithFare:', cabTypesWithFare);
+        if (cabTypesWithFare.length === 0) {
+          return <div className="text-gray-500">No vehicles available for this tour.</div>;
+        }
+        return (
+          <>
+            {cabTypesWithFare.some(cab => !cab.price || cab.price === 0) && (
+              <div className="text-amber-600 text-sm mb-2">Some vehicles have no price set. Please update fares in the admin panel.</div>
+            )}
+            <CabOptions
+              cabTypes={cabTypesWithFare}
+              selectedCab={selectedCab}
+              onSelectCab={handleCabSelect}
+              distance={tour.distance || 0}
+              tripType="tour"
+              tripMode="one-way"
+              pickupDate={pickupDate}
+              isCalculatingFares={false}
+            />
+          </>
+        );
+      })()}
+      
+      <Button
+        onClick={handleBookNow}
+        disabled={!selectedTour || !selectedCab}
+        className="bg-blue-600 text-white px-6 py-2 rounded-md mt-6 w-full md:w-auto"
+      >
+        BOOK NOW
+      </Button>
     </div>
   );
+  
+  if (isLoadingFares) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <span className="text-lg text-gray-500">Loading fares...</span>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -430,9 +479,8 @@ const ToursPage = () => {
               <div>
                 <GuestDetailsForm
                   onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? 
-                    getTourFare(selectedTour, selectedCab.id) : 0}
-                  isSubmitting={isSubmitting}
+                  totalPrice={selectedTour && selectedCab ? getTourFare(selectedTour, selectedCab.id) : 0}
+                  isLoading={isSubmitting}
                   onBack={() => setShowGuestDetailsForm(false)}
                 />
               </div>

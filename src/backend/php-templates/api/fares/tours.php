@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -11,29 +10,34 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $conn = getDbConnection();
 
 try {
-    // Get all tour fares
+    // Get all tours
     $stmt = $conn->prepare("SELECT * FROM tour_fares ORDER BY tour_name");
     $stmt->execute();
     $result = $stmt->get_result();
 
     $tourFares = [];
     while ($row = $result->fetch_assoc()) {
-        // Convert numeric strings to actual numbers
         $tourFare = [
             'id' => intval($row['id']),
             'tourId' => $row['tour_id'],
             'tourName' => $row['tour_name'],
-            'sedan' => floatval($row['sedan']),
-            'ertiga' => floatval($row['ertiga']),
-            'innova' => floatval($row['innova']),
-            'tempo' => floatval($row['tempo']),
-            'luxury' => floatval($row['luxury'])
+            'distance' => intval($row['distance']),
+            'days' => intval($row['days']),
+            'description' => $row['description'],
+            'imageUrl' => $row['image_url'],
+            'pricing' => []
         ];
-        
+        // Fetch all vehicle fares for this tour
+        $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
+        $pricingStmt->bind_param("s", $row['tour_id']);
+        $pricingStmt->execute();
+        $pricingResult = $pricingStmt->get_result();
+        while ($pricingRow = $pricingResult->fetch_assoc()) {
+            $tourFare['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
+        }
         $tourFares[] = $tourFare;
     }
 
-    // Send response as a simple array, not an object with numbered keys
     sendJsonResponse($tourFares);
 } catch (Exception $e) {
     logError("Error fetching tour fares", ['error' => $e->getMessage()]);

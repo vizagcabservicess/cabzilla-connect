@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,53 +44,7 @@ export function TourPackages() {
       setError('Failed to load tours');
       
       // Fallback to default tours if API fails
-      setTours([
-        {
-          id: 1,
-          tourId: 'lambasingi',
-          tourName: "Lambasingi Hill Station",
-          sedan: 8500,
-          ertiga: 10000,
-          innova: 12000,
-          tempo: 15000,
-          luxury: 18000,
-          distance: 150,
-          days: 2,
-          description: "Kashmir of Andhra Pradesh - Experience the enchanting hill station known for its misty mornings and coffee plantations.",
-          imageUrl: "/tours/lambasingi.jpg",
-          isActive: true
-        },
-        {
-          id: 2,
-          tourId: 'araku_valley',
-          tourName: "Araku Valley Adventure",
-          sedan: 6200,
-          ertiga: 7500,
-          innova: 9000,
-          tempo: 12000,
-          luxury: 15000,
-          distance: 120,
-          days: 1,
-          description: "Discover the beautiful valley with waterfalls, tribal museums, and lush coffee plantations. Experience the famous toy train journey through scenic landscapes.",
-          imageUrl: "/tours/araku_valley.jpg",
-          isActive: true
-        },
-        {
-          id: 3,
-          tourId: 'vizag_city',
-          tourName: "Vizag City Explorer",
-          sedan: 4800,
-          ertiga: 3800,
-          innova: 4600,
-          tempo: 6000,
-          luxury: 8000,
-          distance: 50,
-          days: 1,
-          description: "Explore the beautiful beaches, ancient temples, and modern attractions of Visakhapatnam. Perfect for first-time visitors and photography enthusiasts.",
-          imageUrl: "/tours/vizag_city.jpg",
-          isActive: true
-        }
-      ]);
+      setTours([]);
     } finally {
       setLoading(false);
     }
