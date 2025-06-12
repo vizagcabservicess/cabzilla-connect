@@ -50,6 +50,7 @@ import LocalTaxiPage from './pages/LocalTaxiPage';
 import OutstationTaxiPage from './pages/OutstationTaxiPage';
 import AirportTaxiPage from './pages/AirportTaxiPage';
 import RentalsPage from './pages/RentalsPage';
+import TourDetailPage from './pages/TourDetailPage';
 
 const router = createBrowserRouter([
   {
@@ -159,6 +160,10 @@ const router = createBrowserRouter([
   {
     path: '/tours',
     element: <ToursPage />,
+  },
+  {
+    path: '/tours/:tourId',
+    element: <TourDetailPage />,
   },
   {
     path: '/payment',
