@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -134,6 +135,7 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour ID and name are required'], 400);
             exit;
         }
+        
         $tourId = $requestData['tourId'];
         $tourName = $requestData['tourName'];
         $distance = intval($requestData['distance'] ?? 0);
@@ -141,6 +143,10 @@ try {
         $description = $requestData['description'] ?? '';
         $imageUrl = $requestData['imageUrl'] ?? '';
         $pricing = $requestData['pricing'] ?? [];
+        $gallery = $requestData['gallery'] ?? [];
+        $inclusions = $requestData['inclusions'] ?? [];
+        $exclusions = $requestData['exclusions'] ?? [];
+        $itinerary = $requestData['itinerary'] ?? [];
         
         // Check if tour already exists
         $stmt = $conn->prepare("SELECT id FROM tour_fares WHERE tour_id = ?");
@@ -151,6 +157,7 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour with this ID already exists'], 409);
             exit;
         }
+        
         // Insert into tour_fares
         $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("ssisss", $tourId, $tourName, $distance, $days, $description, $imageUrl);
@@ -158,12 +165,53 @@ try {
         if (!$success) {
             throw new Exception("Failed to add new tour: " . $conn->error);
         }
+        
         // Insert vehicle pricing into tour_fare_rates
         foreach ($pricing as $vehicleId => $price) {
-            $stmt = $conn->prepare("INSERT INTO tour_fare_rates (tour_id, vehicle_id, price) VALUES (?, ?, ?)");
-            $stmt->bind_param("ssd", $tourId, $vehicleId, $price);
-            $stmt->execute();
+            if ($price > 0) {
+                $stmt = $conn->prepare("INSERT INTO tour_fare_rates (tour_id, vehicle_id, price) VALUES (?, ?, ?)");
+                $stmt->bind_param("ssd", $tourId, $vehicleId, $price);
+                $stmt->execute();
+            }
         }
+        
+        // Insert gallery images
+        foreach ($gallery as $index => $image) {
+            if (!empty($image['url'])) {
+                $stmt = $conn->prepare("INSERT INTO tour_gallery (tour_id, image_url, alt_text, caption, sort_order) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssi", $tourId, $image['url'], $image['alt'], $image['caption'], $index);
+                $stmt->execute();
+            }
+        }
+        
+        // Insert inclusions
+        foreach ($inclusions as $index => $inclusion) {
+            if (!empty($inclusion)) {
+                $stmt = $conn->prepare("INSERT INTO tour_inclusions (tour_id, description, sort_order) VALUES (?, ?, ?)");
+                $stmt->bind_param("ssi", $tourId, $inclusion, $index);
+                $stmt->execute();
+            }
+        }
+        
+        // Insert exclusions
+        foreach ($exclusions as $index => $exclusion) {
+            if (!empty($exclusion)) {
+                $stmt = $conn->prepare("INSERT INTO tour_exclusions (tour_id, description, sort_order) VALUES (?, ?, ?)");
+                $stmt->bind_param("ssi", $tourId, $exclusion, $index);
+                $stmt->execute();
+            }
+        }
+        
+        // Insert itinerary
+        foreach ($itinerary as $day) {
+            if (!empty($day['title'])) {
+                $activities = json_encode($day['activities']);
+                $stmt = $conn->prepare("INSERT INTO tour_itinerary (tour_id, day_number, title, description, activities) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("sisss", $tourId, $day['day'], $day['title'], $day['description'], $activities);
+                $stmt->execute();
+            }
+        }
+        
         sendJsonResponse(['status' => 'success', 'message' => 'Tour added successfully']);
     }
     // Handle PUT request - Update existing tour
@@ -173,45 +221,115 @@ try {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour ID is required'], 400);
             exit;
         }
+        
         $tourId = $requestData['tourId'];
         $updateFields = [];
         $types = "";
         $values = [];
+        
         if (isset($requestData['tourName'])) { $updateFields[] = "tour_name = ?"; $types .= "s"; $values[] = $requestData['tourName']; }
         if (isset($requestData['distance'])) { $updateFields[] = "distance = ?"; $types .= "i"; $values[] = intval($requestData['distance']); }
         if (isset($requestData['days'])) { $updateFields[] = "days = ?"; $types .= "i"; $values[] = intval($requestData['days']); }
         if (isset($requestData['description'])) { $updateFields[] = "description = ?"; $types .= "s"; $values[] = $requestData['description']; }
         if (isset($requestData['imageUrl'])) { $updateFields[] = "image_url = ?"; $types .= "s"; $values[] = $requestData['imageUrl']; }
         if (isset($requestData['isActive'])) { $updateFields[] = "is_active = ?"; $types .= "i"; $values[] = $requestData['isActive'] ? 1 : 0; }
-        if (empty($updateFields)) {
-            sendJsonResponse(['status' => 'error', 'message' => 'No fields to update'], 400);
-            exit;
+        
+        if (!empty($updateFields)) {
+            $updateFields[] = "updated_at = NOW()";
+            $sql = "UPDATE tour_fares SET " . implode(", ", $updateFields) . " WHERE tour_id = ?";
+            $types .= "s";
+            $values[] = $tourId;
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param($types, ...$values);
+            $stmt->execute();
         }
-        $updateFields[] = "updated_at = NOW()";
-        $sql = "UPDATE tour_fares SET " . implode(", ", $updateFields) . " WHERE tour_id = ?";
-        $types .= "s";
-        $values[] = $tourId;
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param($types, ...$values);
-        $success = $stmt->execute();
-        if (!$success) {
-            throw new Exception("Failed to update tour: " . $conn->error);
-        }
+        
         // Update vehicle pricing in tour_fare_rates
         if (isset($requestData['pricing'])) {
+            // Delete existing pricing
+            $stmt = $conn->prepare("DELETE FROM tour_fare_rates WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
+            $stmt->execute();
+            
+            // Insert new pricing
             foreach ($requestData['pricing'] as $vehicleId => $price) {
-                // Try update first
-                $stmt = $conn->prepare("UPDATE tour_fare_rates SET price = ? WHERE tour_id = ? AND vehicle_id = ?");
-                $stmt->bind_param("dss", $price, $tourId, $vehicleId);
-                $stmt->execute();
-                if ($stmt->affected_rows === 0) {
-                    // Insert if not exists
+                if ($price > 0) {
                     $stmt = $conn->prepare("INSERT INTO tour_fare_rates (tour_id, vehicle_id, price) VALUES (?, ?, ?)");
                     $stmt->bind_param("ssd", $tourId, $vehicleId, $price);
                     $stmt->execute();
                 }
             }
         }
+        
+        // Update gallery if provided
+        if (isset($requestData['gallery'])) {
+            // Delete existing gallery
+            $stmt = $conn->prepare("DELETE FROM tour_gallery WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
+            $stmt->execute();
+            
+            // Insert new gallery
+            foreach ($requestData['gallery'] as $index => $image) {
+                if (!empty($image['url'])) {
+                    $stmt = $conn->prepare("INSERT INTO tour_gallery (tour_id, image_url, alt_text, caption, sort_order) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->bind_param("ssssi", $tourId, $image['url'], $image['alt'], $image['caption'], $index);
+                    $stmt->execute();
+                }
+            }
+        }
+        
+        // Update inclusions if provided
+        if (isset($requestData['inclusions'])) {
+            // Delete existing inclusions
+            $stmt = $conn->prepare("DELETE FROM tour_inclusions WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
+            $stmt->execute();
+            
+            // Insert new inclusions
+            foreach ($requestData['inclusions'] as $index => $inclusion) {
+                if (!empty($inclusion)) {
+                    $stmt = $conn->prepare("INSERT INTO tour_inclusions (tour_id, description, sort_order) VALUES (?, ?, ?)");
+                    $stmt->bind_param("ssi", $tourId, $inclusion, $index);
+                    $stmt->execute();
+                }
+            }
+        }
+        
+        // Update exclusions if provided
+        if (isset($requestData['exclusions'])) {
+            // Delete existing exclusions
+            $stmt = $conn->prepare("DELETE FROM tour_exclusions WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
+            $stmt->execute();
+            
+            // Insert new exclusions
+            foreach ($requestData['exclusions'] as $index => $exclusion) {
+                if (!empty($exclusion)) {
+                    $stmt = $conn->prepare("INSERT INTO tour_exclusions (tour_id, description, sort_order) VALUES (?, ?, ?)");
+                    $stmt->bind_param("ssi", $tourId, $exclusion, $index);
+                    $stmt->execute();
+                }
+            }
+        }
+        
+        // Update itinerary if provided
+        if (isset($requestData['itinerary'])) {
+            // Delete existing itinerary
+            $stmt = $conn->prepare("DELETE FROM tour_itinerary WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
+            $stmt->execute();
+            
+            // Insert new itinerary
+            foreach ($requestData['itinerary'] as $day) {
+                if (!empty($day['title'])) {
+                    $activities = json_encode($day['activities']);
+                    $stmt = $conn->prepare("INSERT INTO tour_itinerary (tour_id, day_number, title, description, activities) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->bind_param("sisss", $tourId, $day['day'], $day['title'], $day['description'], $activities);
+                    $stmt->execute();
+                }
+            }
+        }
+        
         sendJsonResponse(['status' => 'success', 'message' => 'Tour updated successfully']);
     }
     // Handle DELETE request - Delete tour
@@ -223,6 +341,28 @@ try {
             exit;
         }
         
+        // Delete related data first
+        $stmt = $conn->prepare("DELETE FROM tour_fare_rates WHERE tour_id = ?");
+        $stmt->bind_param("s", $tourId);
+        $stmt->execute();
+        
+        $stmt = $conn->prepare("DELETE FROM tour_gallery WHERE tour_id = ?");
+        $stmt->bind_param("s", $tourId);
+        $stmt->execute();
+        
+        $stmt = $conn->prepare("DELETE FROM tour_inclusions WHERE tour_id = ?");
+        $stmt->bind_param("s", $tourId);
+        $stmt->execute();
+        
+        $stmt = $conn->prepare("DELETE FROM tour_exclusions WHERE tour_id = ?");
+        $stmt->bind_param("s", $tourId);
+        $stmt->execute();
+        
+        $stmt = $conn->prepare("DELETE FROM tour_itinerary WHERE tour_id = ?");
+        $stmt->bind_param("s", $tourId);
+        $stmt->execute();
+        
+        // Delete main tour record
         $stmt = $conn->prepare("DELETE FROM tour_fares WHERE tour_id = ?");
         $stmt->bind_param("s", $tourId);
         $success = $stmt->execute();

@@ -1,688 +1,272 @@
+
 import { useState, useEffect } from 'react';
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/use-toast";
 import { 
   PlusCircle, 
   Edit, 
   Trash2, 
-  RefreshCw, 
-  MapPin,
-  Calendar,
-  Clock,
-  Car
+  MapPin, 
+  Calendar, 
+  Image,
+  RefreshCw
 } from "lucide-react";
-import { tourManagementAPI } from '@/services/api/tourManagementAPI';
-
-interface Vehicle {
-  id: string;
-  name: string;
-}
-
-interface TourData {
-  id?: number;
-  tourId: string;
-  tourName: string;
-  distance: number;
-  days: number;
-  description: string;
-  imageUrl?: string;
-  isActive?: boolean;
-  pricing: Record<string, number>;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import { TourFormModal } from "./TourFormModal";
+import { tourManagementAPI, TourData } from '@/services/api/tourManagementAPI';
+import { vehicleAPI } from '@/services/api/vehicleAPI';
+import { Vehicle } from '@/types/vehicle';
+import { TourManagementRequest } from '@/types/api';
 
 export default function TourManagement() {
   const [tours, setTours] = useState<TourData[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingTour, setEditingTour] = useState<TourData | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTour, setSelectedTour] = useState<TourData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
-  // Create dynamic schema based on available vehicles
-  const createTourFormSchema = (availableVehicles: Vehicle[]) => {
-    const pricingSchema: Record<string, z.ZodNumber> = {};
-    availableVehicles.forEach(vehicle => {
-      pricingSchema[vehicle.id] = z.coerce.number().min(0, { message: "Price cannot be negative" });
-    });
-
-    return z.object({
-      tourId: z.string().min(1, { message: "Tour ID is required" }),
-      tourName: z.string().min(1, { message: "Tour name is required" }),
-      distance: z.coerce.number().min(1, { message: "Distance must be at least 1 km" }),
-      days: z.coerce.number().min(1, { message: "Duration must be at least 1 day" }),
-      description: z.string().min(10, { message: "Description must be at least 10 characters" }),
-      imageUrl: z.string().optional(),
-      pricing: z.object(pricingSchema)
-    });
-  };
-
-  const getDefaultValues = (availableVehicles: Vehicle[]) => {
-    const defaultPricing: Record<string, number> = {};
-    availableVehicles.forEach(vehicle => {
-      defaultPricing[vehicle.id] = 0;
-    });
-
-    return {
-      tourId: "",
-      tourName: "",
-      distance: 0,
-      days: 1,
-      description: "",
-      imageUrl: "",
-      pricing: defaultPricing
-    };
-  };
-
-  const addForm = useForm({
-    resolver: vehicles.length > 0 ? zodResolver(createTourFormSchema(vehicles)) : undefined,
-    defaultValues: getDefaultValues(vehicles),
-  });
-
-  const editForm = useForm({
-    resolver: vehicles.length > 0 ? zodResolver(createTourFormSchema(vehicles)) : undefined,
-  });
-
-  const loadVehicles = async () => {
-    try {
-      const response = await fetch('/api/admin/tours-management.php?action=vehicles', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        setVehicles(data.data);
-      } else {
-        toast.error('Failed to load vehicles');
-        setVehicles([]);
-      }
-    } catch (error) {
-      toast.error('Failed to load vehicles');
-      setVehicles([]);
-    }
-  };
+  useEffect(() => {
+    loadTours();
+    loadVehicles();
+  }, []);
 
   const loadTours = async () => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/admin/tours-management.php', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        setTours(data.data);
-      }
+      setIsLoading(true);
+      const toursData = await tourManagementAPI.getTours();
+      setTours(toursData);
     } catch (error) {
       console.error('Error loading tours:', error);
-      toast.error('Failed to load tours');
+      toast({
+        title: "Error",
+        description: "Failed to load tours",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadVehicles().then(() => {
+  const loadVehicles = async () => {
+    try {
+      const vehiclesData = await vehicleAPI.getVehicles();
+      setVehicles(vehiclesData.vehicles || []);
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load vehicles",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddTour = () => {
+    setSelectedTour(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditTour = (tour: TourData) => {
+    setSelectedTour(tour);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteTour = async (tourId: string) => {
+    if (!confirm('Are you sure you want to delete this tour?')) return;
+
+    try {
+      await tourManagementAPI.deleteTour(tourId);
+      toast({
+        title: "Success",
+        description: "Tour deleted successfully",
+      });
       loadTours();
-    });
-  }, []);
-
-  // Reset forms when vehicles change
-  useEffect(() => {
-    if (vehicles.length > 0) {
-      addForm.reset(getDefaultValues(vehicles));
-    }
-  }, [vehicles]);
-
-  const onAddSubmit = async (values: any) => {
-    try {
-      const response = await fetch('/api/admin/tours-management.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify(values)
+    } catch (error) {
+      console.error('Error deleting tour:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete tour",
+        variant: "destructive",
       });
-      
-      const data = await response.json();
-      if (data.status === 'success') {
-        toast.success('Tour added successfully');
-        setIsAddDialogOpen(false);
-        addForm.reset(getDefaultValues(vehicles));
-        loadTours();
-      } else {
-        toast.error(data.message || 'Failed to add tour');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add tour');
     }
   };
 
-  const onEditSubmit = async (values: any) => {
+  const handleSubmitTour = async (tourData: TourManagementRequest) => {
     try {
-      const response = await fetch('/api/admin/tours-management.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify(values)
-      });
+      setIsSubmitting(true);
       
-      const data = await response.json();
-      if (data.status === 'success') {
-        toast.success('Tour updated successfully');
-        setIsEditDialogOpen(false);
-        setEditingTour(null);
-        loadTours();
+      if (selectedTour) {
+        await tourManagementAPI.updateTour(tourData);
+        toast({
+          title: "Success",
+          description: "Tour updated successfully",
+        });
       } else {
-        toast.error(data.message || 'Failed to update tour');
+        await tourManagementAPI.createTour(tourData);
+        toast({
+          title: "Success",
+          description: "Tour created successfully",
+        });
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update tour');
+      
+      setIsModalOpen(false);
+      loadTours();
+    } catch (error) {
+      console.error('Error saving tour:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save tour",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleEdit = (tour: TourData) => {
-    setEditingTour(tour);
-    editForm.reset({
-      tourId: tour.tourId,
-      tourName: tour.tourName,
-      distance: tour.distance,
-      days: tour.days,
-      description: tour.description,
-      imageUrl: tour.imageUrl || "",
-      pricing: tour.pricing
-    });
-    setIsEditDialogOpen(true);
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(price);
   };
 
-  const handleDelete = async (tourId: string) => {
-    try {
-      const response = await fetch(`/api/admin/tours-management.php?tourId=${tourId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-      
-      const data = await response.json();
-      if (data.status === 'success') {
-        toast.success('Tour deleted successfully');
-        loadTours();
-      } else {
-        toast.error(data.message || 'Failed to delete tour');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete tour');
-    }
+  const getMinPrice = (pricing: { [key: string]: number }) => {
+    const prices = Object.values(pricing).filter(p => p > 0);
+    return prices.length > 0 ? Math.min(...prices) : 0;
   };
-
-  const handleToggleActive = async (tour: TourData) => {
-    try {
-      const response = await fetch('/api/admin/tours-management.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          tourId: tour.tourId,
-          isActive: !tour.isActive
-        })
-      });
-      
-      const data = await response.json();
-      if (data.status === 'success') {
-        toast.success(`Tour ${tour.isActive ? 'deactivated' : 'activated'} successfully`);
-        loadTours();
-      } else {
-        toast.error(data.message || 'Failed to update tour status');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update tour status');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <RefreshCw className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Tour Management</h2>
-          <p className="text-gray-600">Manage tour packages and dynamic pricing</p>
+          <h2 className="text-2xl font-bold">Tour Management</h2>
+          <p className="text-gray-600">Manage tour packages with dynamic pricing for all vehicles</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={loadTours} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={loadTours} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Add Tour
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add New Tour</DialogTitle>
-                <DialogDescription>
-                  Create a new tour package with dynamic pricing for all available vehicles.
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...addForm}>
-                <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={addForm.control}
-                      name="tourId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tour ID</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., araku_valley" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={addForm.control}
-                      name="tourName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tour Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., Araku Valley Tour" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <FormField
-                      control={addForm.control}
-                      name="distance"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Distance (km)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={addForm.control}
-                      name="days"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Duration (days)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={addForm.control}
-                      name="imageUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Image URL</FormLabel>
-                          <FormControl>
-                            <Input placeholder="/tours/tour.jpg" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={addForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder="Describe the tour package..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="space-y-3">
-                    <h4 className="font-semibold">Vehicle Pricing</h4>
-                    {vehicles.length === 0 ? (
-                      <div className="text-red-500">No vehicles found. Please add vehicles first.</div>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-4">
-                        {vehicles.map((vehicle) => (
-                          <FormField
-                            key={vehicle.id}
-                            control={addForm.control}
-                            name={`pricing.${vehicle.id}`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{vehicle.name} (₹)</FormLabel>
-                                <FormControl>
-                                  <Input type="number" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">Add Tour</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={handleAddTour}>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Add New Tour
+          </Button>
         </div>
       </div>
 
-      {/* Tours Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tours ({tours.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tour Details</TableHead>
-                <TableHead>Pricing</TableHead>
-                <TableHead>Info</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tours.map((tour) => (
-                <TableRow key={tour.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{tour.tourName}</div>
-                      <div className="text-sm text-gray-500">{tour.tourId}</div>
-                      <div className="text-xs text-gray-400 line-clamp-2 mt-1">
-                        {tour.description}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {Object.entries(tour.pricing).slice(0, 3).map(([vehicleId, price]) => {
-                        const vehicle = vehicles.find(v => v.id === vehicleId);
-                        return (
-                          <div key={vehicleId} className="text-sm">
-                            {vehicle?.name}: ₹{price}
-                          </div>
-                        );
-                      })}
-                      {Object.keys(tour.pricing).length > 3 && (
-                        <div className="text-xs text-gray-400">
-                          +{Object.keys(tour.pricing).length - 3} more
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1 text-sm">
-                        <MapPin className="h-3 w-3" />
-                        {tour.distance} km
-                      </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <Calendar className="h-3 w-3" />
-                        {tour.days} day{tour.days > 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={tour.isActive}
-                        onCheckedChange={() => handleToggleActive(tour)}
-                      />
-                      <Badge variant={tour.isActive ? "default" : "secondary"}>
-                        {tour.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(tour)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Tour</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete "{tour.tourName}"? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(tour.tourId)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Tour</DialogTitle>
-            <DialogDescription>
-              Update tour package details and pricing.
-            </DialogDescription>
-          </DialogHeader>
-          {editingTour && (
-            <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={editForm.control}
-                    name="tourId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tour ID</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="tourName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tour Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <div className="bg-gray-200 h-48 rounded-t-lg"></div>
+              <CardContent className="p-4">
+                <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded mb-4"></div>
+                <div className="flex justify-between">
+                  <div className="h-6 bg-gray-200 rounded w-20"></div>
+                  <div className="h-8 bg-gray-200 rounded w-24"></div>
                 </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={editForm.control}
-                    name="distance"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Distance (km)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="days"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Duration (days)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={editForm.control}
-                    name="imageUrl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Image URL</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={editForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tours.map((tour) => (
+            <Card key={tour.id} className="group hover:shadow-lg transition-shadow">
+              <div className="relative">
+                <img
+                  src={tour.imageUrl || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=200&fit=crop'}
+                  alt={tour.tourName}
+                  className="w-full h-48 object-cover rounded-t-lg"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=200&fit=crop';
+                  }}
                 />
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <Badge variant={tour.isActive ? "default" : "secondary"}>
+                    {tour.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+              
+              <CardContent className="p-4">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-lg mb-1">{tour.tourName}</h3>
+                  <p className="text-sm text-gray-600 line-clamp-2">
+                    {tour.description || "No description available"}
+                  </p>
+                </div>
 
-                <div className="space-y-3">
-                  <h4 className="font-semibold">Vehicle Pricing</h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    {vehicles.map((vehicle) => (
-                      <FormField
-                        key={vehicle.id}
-                        control={editForm.control}
-                        name={`pricing.${vehicle.id}`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{vehicle.name} (₹)</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    ))}
+                <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    {tour.distance} km
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    {tour.days} day{tour.days > 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-lg font-bold text-blue-600">
+                      {formatPrice(getMinPrice(tour.pricing))}
+                    </div>
+                    <div className="text-xs text-gray-500">Starting from</div>
+                  </div>
+                  
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditTour(tour)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteTour(tour.tourId)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Update Tour</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          )}
-        </DialogContent>
-      </Dialog>
+      {tours.length === 0 && !isLoading && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <Image className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No tours found</h3>
+            <p className="text-gray-600 mb-4">Get started by creating your first tour package</p>
+            <Button onClick={handleAddTour}>
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Add Your First Tour
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <TourFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSubmitTour}
+        tour={selectedTour}
+        vehicles={vehicles}
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }

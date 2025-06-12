@@ -1,4 +1,3 @@
-
 // API Types
 
 export type BookingStatus = 'pending' | 'confirmed' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'no-show' | 'payment_pending' | 'payment_received' | 'continued';
@@ -225,4 +224,46 @@ export interface TourFare {
   tourId: string;
   vehicleType: string;
   rate: number;
+}
+
+export interface TourData {
+  id: number;
+  tourId: string;
+  tourName: string;
+  distance: number;
+  days: number;
+  description?: string;
+  imageUrl?: string;
+  isActive: boolean;
+  pricing: { [vehicleId: string]: number };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TourGalleryItem {
+  id?: string;
+  url: string;
+  alt?: string;
+  caption?: string;
+}
+
+export interface TourItineraryDay {
+  day: number;
+  title: string;
+  description: string;
+  activities: string[];
+}
+
+export interface TourManagementRequest {
+  tourId: string;
+  tourName: string;
+  distance: number;
+  days: number;
+  description?: string;
+  imageUrl?: string;
+  pricing: { [vehicleId: string]: number };
+  gallery?: TourGalleryItem[];
+  inclusions?: string[];
+  exclusions?: string[];
+  itinerary?: TourItineraryDay[];
 }

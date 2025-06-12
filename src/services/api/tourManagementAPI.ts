@@ -1,23 +1,28 @@
 
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
+import { TourData, TourManagementRequest } from '@/types/api';
 
 const baseURL = getApiUrl();
 
 export const tourManagementAPI = {
-  getTours: async () => {
+  getTours: async (): Promise<TourData[]> => {
     try {
       const response = await axios.get(`${baseURL}/api/admin/tours-management.php`, {
         headers: { ...defaultHeaders, 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
       });
-      return response.data;
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data || [];
+      }
+      return [];
     } catch (error) {
       console.error('Error fetching tours:', error);
       throw error;
     }
   },
 
-  createTour: async (tourData: any) => {
+  createTour: async (tourData: TourManagementRequest) => {
     try {
       const response = await axios.post(`${baseURL}/api/admin/tours-management.php`, tourData, {
         headers: { 
@@ -33,7 +38,7 @@ export const tourManagementAPI = {
     }
   },
 
-  updateTour: async (tourData: any) => {
+  updateTour: async (tourData: TourManagementRequest) => {
     try {
       const response = await axios.put(`${baseURL}/api/admin/tours-management.php`, tourData, {
         headers: { 
@@ -76,3 +81,5 @@ export const tourManagementAPI = {
     }
   }
 };
+
+export type { TourData };
