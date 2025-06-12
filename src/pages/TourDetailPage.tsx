@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -62,7 +61,7 @@ const TourDetailPage = () => {
     if (tour && vehicles.length > 0) {
       // Map vehicles with tour pricing
       const vehiclesWithPrices = vehicles.map(vehicle => {
-        const price = tour.pricing[vehicle.vehicle_id] || 0;
+        const price = tour.pricing?.[vehicle.vehicle_id] || 0;
         return {
           ...vehicle,
           price
@@ -82,7 +81,21 @@ const TourDetailPage = () => {
       const tourDetail = await tourDetailAPI.getTourDetail(tourId);
       if (tourDetail) {
         setTour(tourDetail);
-        setSelectedImage(tourDetail.gallery[0]?.url || tourDetail.imageUrl || '');
+        setSelectedImage(
+          Array.isArray(tourDetail.gallery) && tourDetail.gallery.length > 0
+            ? tourDetail.gallery[0].url
+            : tourDetail.imageUrl || 'https://cdn.pixabay.com/photo/2015/09/18/18/36/nature-944112_1280.jpg'
+        );
+        // Fetch vehicles after tour is loaded
+        const vehicleResponse = await vehicleAPI.getVehicles();
+        const vehicleList = vehicleResponse.vehicles || [];
+        setVehicles(vehicleList);
+        // Attach pricing from tour to each vehicle
+        const vehiclesWithPrices = vehicleList.map(vehicle => ({
+          ...vehicle,
+          price: tourDetail.pricing?.[vehicle.vehicle_id] || 0
+        }));
+        setVehiclesWithPricing(vehiclesWithPrices);
       }
     } catch (error) {
       console.error('Error loading tour detail:', error);
@@ -252,28 +265,33 @@ const TourDetailPage = () => {
                   <div className="grid grid-cols-4 gap-2">
                     <div className="col-span-3">
                       <img
-                        src={selectedImage}
-                        alt={tour.tourName}
+                        src={selectedImage || 'https://cdn.pixabay.com/photo/2015/09/18/18/36/nature-944112_1280.jpg'}
+                        alt={tour.tourName || 'Tour'}
                         className="w-full h-64 md:h-80 object-cover rounded-l-lg"
                       />
                     </div>
                     <div className="space-y-2">
-                      {tour.gallery.slice(0, 3).map((image, index) => (
-                        <img
-                          key={image.id}
-                          src={image.url}
-                          alt={image.alt}
-                          className={`w-full h-20 md:h-[104px] object-cover cursor-pointer rounded ${
-                            selectedImage === image.url ? 'ring-2 ring-blue-500' : ''
-                          }`}
-                          onClick={() => setSelectedImage(image.url)}
-                        />
-                      ))}
-                      {tour.gallery.length > 3 && (
-                        <div className="w-full h-20 md:h-[104px] bg-gray-200 rounded flex items-center justify-center text-gray-600 cursor-pointer">
-                          +{tour.gallery.length - 3} more
-                        </div>
-                      )}
+                      {Array.isArray(tour.gallery) && tour.gallery.length > 0
+                        ? tour.gallery.slice(0, 3).filter(Boolean).map((image, idx) =>
+                            image ? (
+                              <img
+                                key={image.id || idx}
+                                src={image.url || 'https://cdn.pixabay.com/photo/2015/09/18/18/36/nature-944112_1280.jpg'}
+                                alt={image.alt || tour.tourName}
+                                className={`w-full h-20 md:h-[104px] object-cover cursor-pointer rounded ${
+                                  selectedImage === image.url ? 'ring-2 ring-blue-500' : ''
+                                }`}
+                                onClick={() => setSelectedImage(image.url)}
+                              />
+                            ) : null
+                          )
+                        : (
+                          <img
+                            src="https://cdn.pixabay.com/photo/2015/09/18/18/36/nature-944112_1280.jpg"
+                            alt={tour.tourName || 'Tour'}
+                            className="w-full h-20 md:h-[104px] object-cover cursor-pointer rounded"
+                          />
+                        )}
                     </div>
                   </div>
                 </CardContent>
@@ -293,20 +311,22 @@ const TourDetailPage = () => {
                       <CardTitle>About This Tour</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-700 mb-4">{tour.description}</p>
+                      <p className="text-gray-700 mb-4">{tour?.description || 'No description available.'}</p>
                       
                       <div className="grid md:grid-cols-3 gap-4">
-                        {tour.highlights.map((highlight, index) => (
-                          <div key={index} className="text-center">
-                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                              {highlight.icon === 'mountain' && <Mountain className="h-6 w-6 text-blue-600" />}
-                              {highlight.icon === 'camera' && <Camera className="h-6 w-6 text-blue-600" />}
-                              {highlight.icon === 'coffee' && <Coffee className="h-6 w-6 text-blue-600" />}
+                        {Array.isArray(tour.highlights) && tour.highlights.filter(Boolean).map((highlight, idx) =>
+                          highlight ? (
+                            <div key={idx} className="text-center">
+                              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                {highlight.icon === 'mountain' && <Mountain className="h-6 w-6 text-blue-600" />}
+                                {highlight.icon === 'camera' && <Camera className="h-6 w-6 text-blue-600" />}
+                                {highlight.icon === 'coffee' && <Coffee className="h-6 w-6 text-blue-600" />}
+                              </div>
+                              <h4 className="font-semibold mb-1">{highlight.title}</h4>
+                              <p className="text-sm text-gray-600">{highlight.description}</p>
                             </div>
-                            <h4 className="font-semibold mb-1">{highlight.title}</h4>
-                            <p className="text-sm text-gray-600">{highlight.description}</p>
-                          </div>
-                        ))}
+                          ) : null
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -318,20 +338,24 @@ const TourDetailPage = () => {
                       <CardTitle>Tour Itinerary</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {tour.itinerary.map((day, index) => (
-                        <div key={index} className="mb-6 last:mb-0">
-                          <h4 className="font-semibold text-lg mb-2">Day {day.day}: {day.title}</h4>
-                          <p className="text-gray-700 mb-3">{day.description}</p>
-                          <ul className="space-y-1">
-                            {day.activities.map((activity, actIndex) => (
-                              <li key={actIndex} className="flex items-start gap-2 text-sm">
-                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                {activity}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
+                      {Array.isArray(tour.itinerary) && tour.itinerary.filter(Boolean).map((day, idx) =>
+                        day ? (
+                          <div key={idx} className="mb-6 last:mb-0">
+                            <h4 className="font-semibold text-lg mb-2">Day {day.day}: {day.title}</h4>
+                            <p className="text-gray-700 mb-3">{day.description}</p>
+                            <ul className="space-y-1">
+                              {Array.isArray(day.activities) && day.activities.filter(Boolean).map((activity, actIndex) =>
+                                activity ? (
+                                  <li key={actIndex} className="flex items-start gap-2 text-sm">
+                                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    {activity}
+                                  </li>
+                                ) : null
+                              )}
+                            </ul>
+                          </div>
+                        ) : null
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -344,12 +368,14 @@ const TourDetailPage = () => {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
-                          {tour.inclusions.map((item, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm">
-                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              {item}
-                            </li>
-                          ))}
+                          {Array.isArray(tour.inclusions) && tour.inclusions.filter(Boolean).map((item, idx) =>
+                            item ? (
+                              <li key={idx} className="flex items-start gap-2 text-sm">
+                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                {item}
+                              </li>
+                            ) : null
+                          )}
                         </ul>
                       </CardContent>
                     </Card>
@@ -360,12 +386,14 @@ const TourDetailPage = () => {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
-                          {tour.exclusions.map((item, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm">
-                              <X className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                              {item}
-                            </li>
-                          ))}
+                          {Array.isArray(tour.exclusions) && tour.exclusions.filter(Boolean).map((item, idx) =>
+                            item ? (
+                              <li key={idx} className="flex items-start gap-2 text-sm">
+                                <X className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                                {item}
+                              </li>
+                            ) : null
+                          )}
                         </ul>
                       </CardContent>
                     </Card>
@@ -387,34 +415,38 @@ const TourDetailPage = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {vehiclesWithPricing.map((vehicle) => (
-                        <div
-                          key={vehicle.id}
-                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                            selectedVehicle?.id === vehicle.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                          onClick={() => handleVehicleSelect(vehicle)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-semibold">{vehicle.name}</h4>
-                              <p className="text-sm text-gray-600">{vehicle.capacity} passengers</p>
-                              <div className="flex items-center gap-1 text-yellow-500 mt-1">
-                                <Star size={14} fill="currentColor" />
-                                <span className="text-sm text-gray-600">4.5</span>
+                      {Array.isArray(vehiclesWithPricing) && vehiclesWithPricing.length > 0 ? (
+                        vehiclesWithPricing.map((vehicle, idx) => (
+                          <div
+                            key={vehicle.id || idx}
+                            className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                              selectedVehicle?.id === vehicle.id
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => handleVehicleSelect(vehicle)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold">{vehicle.name}</h4>
+                                <p className="text-sm text-gray-600">{vehicle.capacity} passengers</p>
+                                <div className="flex items-center gap-1 text-yellow-500 mt-1">
+                                  <Star size={14} fill="currentColor" />
+                                  <span className="text-sm text-gray-600">4.5</span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold text-blue-600">
-                                ₹{vehicle.price.toLocaleString('en-IN')}
+                              <div className="text-right">
+                                <div className="text-lg font-bold text-blue-600">
+                                  ₹{vehicle.price.toLocaleString('en-IN')}
+                                </div>
+                                <div className="text-sm text-gray-500">Total</div>
                               </div>
-                              <div className="text-sm text-gray-500">Total</div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      ) : (
+                        <div>No vehicles available for this tour.</div>
+                      )}
                     </div>
                   )}
                   
