@@ -1,21 +1,35 @@
 
-import { CabType } from '@/types/cab';
-import { getVehicles } from '@/services/directVehicleService';
+import axios from 'axios';
+import { getApiUrl, defaultHeaders } from '@/config/api';
+import { Vehicle } from '@/types/vehicle';
+
+const baseURL = getApiUrl();
 
 export const vehicleAPI = {
-  /**
-   * Get all vehicles
-   * @param includeInactive Whether to include inactive vehicles
-   */
-  getVehicles: async (includeInactive = false): Promise<{vehicles: CabType[]}> => {
+  getVehicles: async (): Promise<{ vehicles: Vehicle[] }> => {
     try {
-      const vehicles = await getVehicles(includeInactive);
-      return { vehicles };
+      const response = await axios.get(`${baseURL}/api/admin/tours-management.php?action=vehicles`, {
+        headers: { ...defaultHeaders }
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        const vehicles = response.data.data.map((vehicle: any) => ({
+          id: vehicle.id,
+          vehicle_id: vehicle.id,
+          name: vehicle.name,
+          type: 'car',
+          capacity: 4,
+          features: [],
+          isActive: true
+        }));
+        
+        return { vehicles };
+      }
+      
+      return { vehicles: [] };
     } catch (error) {
-      console.error("Error in vehicleAPI.getVehicles:", error);
-      throw error;
+      console.error('Error fetching vehicles:', error);
+      return { vehicles: [] };
     }
-  },
+  }
 };
-
-export default vehicleAPI;
