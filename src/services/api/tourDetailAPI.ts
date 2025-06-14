@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
 import { TourDetail, TourListItem } from '@/types/tour';
@@ -25,7 +24,8 @@ export const tourDetailAPI = {
         days: tour.days || 1,
         imageUrl: tour.imageUrl || `https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop`,
         pricing: tour.pricing || {},
-        minPrice: tour.minPrice || 0
+        minPrice: tour.minPrice || 0,
+        timeDuration: tour.timeDuration || ''
       }));
     } catch (error) {
       console.error('Error fetching tours:', error);
