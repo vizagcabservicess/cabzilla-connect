@@ -296,36 +296,36 @@ const TourDetailPage = () => {
                 </TabsContent>
 
                 <TabsContent value="inclusions">
-                  <div className="grid md:grid-cols-2 gap-2">
+                  <div className="grid md:grid-cols-2 gap-4 mt-2">
                     {/* Included */}
-                    <div className="border border-gray-200 bg-white rounded-xl p-3 min-h-[120px]">
-                      <h3 className="text-green-600 font-bold text-xs mb-2">Included</h3>
+                    <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
+                      <h3 className="text-green-600 font-semibold text-sm mb-2">Included</h3>
                       <ul className="space-y-1">
-                        {tour.inclusions.length > 0 ? (
+                        {tour.inclusions && tour.inclusions.length > 0 ? (
                           tour.inclusions.map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-xs text-gray-700">
-                              <span className="text-green-500"><Check size={14} /></span>
-                              <span className="text-[12px]">{item}</span>
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-base">✔</span>
+                              <span className="text-[13px]">{item}</span>
                             </li>
                           ))
                         ) : (
-                          <li className="text-gray-400 text-xs">No inclusions listed</li>
+                          <li className="text-gray-400 text-xs pl-6">No inclusions listed</li>
                         )}
                       </ul>
                     </div>
                     {/* Not Included */}
-                    <div className="border border-gray-200 bg-white rounded-xl p-3 min-h-[120px]">
-                      <h3 className="text-red-600 font-bold text-xs mb-2">Not Included</h3>
+                    <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
+                      <h3 className="text-red-600 font-semibold text-sm mb-2">Not Included</h3>
                       <ul className="space-y-1">
-                        {tour.exclusions.length > 0 ? (
+                        {tour.exclusions && tour.exclusions.length > 0 ? (
                           tour.exclusions.map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-xs text-gray-700">
-                              <span className="text-red-500"><X size={14} /></span>
-                              <span className="text-[12px]">{item}</span>
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-base">✖</span>
+                              <span className="text-[13px]">{item}</span>
                             </li>
                           ))
                         ) : (
-                          <li className="text-gray-400 text-xs">No exclusions listed</li>
+                          <li className="text-gray-400 text-xs pl-6">No exclusions listed</li>
                         )}
                       </ul>
                     </div>
