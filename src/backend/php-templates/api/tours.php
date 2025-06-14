@@ -192,44 +192,48 @@ function getTourById($conn, $tourId) {
         ];
     }
     
-    // Get inclusions
+    // Get inclusions (fix: fetch 'description')
     $inclusionsStmt = $conn->prepare("
-        SELECT inclusion
+        SELECT description
         FROM tour_inclusions 
         WHERE tour_id = ? 
-        ORDER BY id
+        ORDER BY sort_order, id
     ");
     $inclusionsStmt->bind_param("s", $tourId);
     $inclusionsStmt->execute();
     $inclusionsResult = $inclusionsStmt->get_result();
-    
+
     if (!$inclusionsStmt) {
         logErrorToFile('Failed to prepare inclusionsStmt', ['error' => $conn->error]);
     }
-    
+
     while ($inclusionRow = $inclusionsResult->fetch_assoc()) {
-        $tourDetail['inclusions'][] = $inclusionRow['inclusion'];
+        if (!empty($inclusionRow['description'])) { // skip empty
+            $tourDetail['inclusions'][] = $inclusionRow['description'];
+        }
     }
-    
-    // Get exclusions
+
+    // Get exclusions (fix: fetch 'description')
     $exclusionsStmt = $conn->prepare("
-        SELECT exclusion
+        SELECT description
         FROM tour_exclusions 
         WHERE tour_id = ? 
-        ORDER BY id
+        ORDER BY sort_order, id
     ");
     $exclusionsStmt->bind_param("s", $tourId);
     $exclusionsStmt->execute();
     $exclusionsResult = $exclusionsStmt->get_result();
-    
+
     if (!$exclusionsStmt) {
         logErrorToFile('Failed to prepare exclusionsStmt', ['error' => $conn->error]);
     }
-    
+
     while ($exclusionRow = $exclusionsResult->fetch_assoc()) {
-        $tourDetail['exclusions'][] = $exclusionRow['exclusion'];
+        if (!empty($exclusionRow['description'])) { // skip empty
+            $tourDetail['exclusions'][] = $exclusionRow['description'];
+        }
     }
-    
+
     // Get itinerary
     $itineraryStmt = $conn->prepare("
         SELECT day as day, title, description, activities
