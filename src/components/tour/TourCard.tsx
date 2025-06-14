@@ -1,7 +1,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Calendar, Clock } from "lucide-react";
+import { MapPin, Calendar } from "lucide-react";
 import React from "react";
 import type { TourListItem } from "@/types/tour";
 
@@ -12,34 +12,27 @@ interface TourCardProps {
   tour: TourListItem & {
     inclusions?: string[];
     sightseeingPlaces?: string[];
-    category?: string; // Optional for future: like "Nature & Adventure"
-    difficulty?: string; // e.g. "Easy"
+    category?: string;
+    difficulty?: string;
   };
   onClick?: () => void;
 }
 
-// Utility to format 1N/2D etc correctly (only used as fallback)
-function getNightsDays(days?: number) {
-  if (!days || typeof days !== "number" || days < 1) return "1N/1D";
-  const nights = Math.max(1, days - 1);
-  return `${nights}N/${days}D`;
-}
-
-// Utility for duration text display
+// Clean duration: prefer timeDuration if present and not empty/whitespace
 function getDurationText(tour: TourListItem & { timeDuration?: string; days?: number }) {
   if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
-    return tour.timeDuration;
+    return tour.timeDuration.trim();
   }
   // fallback to 1N/1D, 2N/3D etc.
-  return getNightsDays(tour.days);
+  if (!tour.days || typeof tour.days !== "number" || tour.days < 1) return "1N/1D";
+  const nights = Math.max(1, tour.days - 1);
+  return `${nights}N/${tour.days}D`;
 }
 
 export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
-  // Always expect inclusions/sightseeing as arrays, else empty
   const sightseeing: string[] = Array.isArray(tour.sightseeingPlaces) ? tour.sightseeingPlaces : [];
   const inclusions: string[] = Array.isArray(tour.inclusions) ? tour.inclusions : [];
 
-  // Price selection and formatting
   const sedanVehicleId = Object.keys(tour.pricing || {}).find(
     (vid) => vid.toLowerCase().includes("sedan")
   );
@@ -78,21 +71,8 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
               style={{ fontWeight: 500, fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif' }}>
             {tour.tourName}
           </h3>
-          {/* Optional badges (for future: category/difficulty) */}
-          {/* <div className="flex gap-2 mb-1">
-            {tour.category && (
-              <Badge className="bg-[#EBF1FF] text-[#2744FF] font-medium rounded px-2 py-0.5 text-xs">
-                {tour.category}
-              </Badge>
-            )}
-            {tour.difficulty && (
-              <Badge className="bg-[#F4F4F4] text-gray-700 font-medium rounded px-2 py-0.5 text-xs">
-                {tour.difficulty}
-              </Badge>
-            )}
-          </div> */}
         </div>
-        {/* Distance, Days, (Optional: Duration) */}
+        {/* Distance, Days */}
         <div className="flex gap-4 text-gray-600 text-xs mb-2 items-center">
           <span className="flex items-center gap-1">
             <MapPin size={14} /> {tour.distance} km
@@ -103,7 +83,6 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
         </div>
         {/* Description */}
         <p className="text-[13px] text-gray-700 mb-3 line-clamp-2">{tour.description}</p>
-        {/* Sightseeing is currently omitted – add if needed per design */}
         {/* Inclusions */}
         {inclusions.length > 0 &&
           <ul className="mb-3 mt-0.5">
@@ -130,12 +109,14 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
           >
             Book Now
           </button>
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end">
+            <div className="text-xs text-gray-500 font-medium mb-1" style={{ fontWeight: 500 }}>
+              Starts from
+            </div>
             <div className="text-xl font-medium text-[#1565c0] leading-tight"
-                 style={{ fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif', fontWeight: 500 }}>
+              style={{ fontWeight: 500, fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif' }}>
               ₹{displayPrice.toLocaleString("en-IN")}
             </div>
-            <div className="text-xs text-gray-500 font-medium"><span>Starts from</span></div>
           </div>
         </div>
       </CardContent>
