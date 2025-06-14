@@ -5,6 +5,9 @@ import { MapPin, Calendar } from "lucide-react";
 import React from "react";
 import type { TourListItem } from "@/types/tour";
 
+// Use Poppins by default if available, else fallback
+const fontClass = "font-poppins font-semibold tracking-tight";
+
 interface TourCardProps {
   tour: TourListItem & {
     inclusions?: string[];
@@ -35,7 +38,7 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
 
   return (
     <Card
-      className="rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all h-full border-0 bg-[#f6f7fb] flex flex-col font-sans cursor-pointer"
+      className="rounded-2xl overflow-hidden shadow-lg transition-all h-full border-0 bg-[#fafbfc] flex flex-col font-sans cursor-pointer"
       style={{ fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif' }}
       onClick={onClick}
     >
@@ -52,14 +55,12 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
         </Badge>
       </div>
 
-      <CardContent className="px-6 pt-5 pb-6 flex flex-col flex-1">
+      <CardContent className={`px-6 pt-5 pb-6 flex flex-col flex-1 ${fontClass}`}>
         {/* Title */}
         <div className="mb-2">
           <h3 className="font-bold text-lg text-gray-900 tracking-tight leading-snug mb-1">
             {tour.tourName}
           </h3>
-          {/* Optional: Add a subtitle with location, if available */}
-          {/* <div className="text-xs text-gray-500 mb-2">...some city summary here...</div> */}
         </div>
         {/* Distance, Days row */}
         <div className="flex gap-4 text-gray-600 text-xs mb-2">
@@ -72,17 +73,9 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
         </div>
         {/* Description */}
         <p className="text-[13px] text-gray-700 mb-3 line-clamp-2">{tour.description}</p>
-        {/* Sightseeing - green */}
-        {sightseeing.length > 0 &&
-          <ul className="mb-0.5">
-            {sightseeing.map((place, idx) => (
-              <li key={idx} className="flex items-center gap-2 text-sm font-medium text-green-700">
-                <span className="text-green-500 text-base">✔</span>
-                <span>{place}</span>
-              </li>
-            ))}
-          </ul>
-        }
+
+        {/* Sightseeing - green (Omitted here as per screenshot: only Araku/Lambasingi details and inclusions) */}
+
         {/* Inclusions - blue */}
         {inclusions.length > 0 &&
           <ul className="mb-3 mt-0.5">
@@ -98,20 +91,22 @@ export const TourCard: React.FC<TourCardProps> = ({ tour, onClick }) => {
         {/* Book Now & Price */}
         <div className="flex items-end justify-between mt-auto pt-3 gap-2">
           <button
-            className="inline-block bg-[#1565c0] text-white py-2 px-7 rounded font-semibold text-sm shadow hover:bg-[#185cc5] transition-all"
+            className="inline-block bg-[#2563eb] text-white font-bold py-2 px-7 rounded-lg text-sm shadow transition-all hover:bg-[#1e48b6] focus:outline-none focus:ring-2 focus:ring-blue-300"
             onClick={e => {
               e.stopPropagation();
               if (onClick) onClick();
             }}
+            style={{ fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif' }}
           >
             Book Now
           </button>
           <div className="text-right">
-            <div className="text-xl font-bold text-[#1565c0] leading-tight">₹{displayPrice.toLocaleString("en-IN")}</div>
-            <div className="text-xs text-gray-500"><span className="font-medium">Starts from</span></div>
+            <div className="text-xl font-bold text-[#1565c0] leading-tight" style={{ fontFamily: '"Poppins", "Segoe UI", Arial, sans-serif' }}>₹{displayPrice.toLocaleString("en-IN")}</div>
+            <div className="text-xs text-gray-500 font-semibold"><span>Starts from</span></div>
           </div>
         </div>
       </CardContent>
     </Card>
   );
 };
+
