@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -45,6 +44,22 @@ const TourDetailPage = () => {
   // Mock pickup details for booking
   const [pickupLocation] = useState({ name: 'Visakhapatnam', isInVizag: true });
   const [pickupDate] = useState(new Date());
+
+  // Helper to get vehicle price directly from tour.pricing using vehicle_id or name
+  const getVehiclePrice = (selectedVehicle: VehicleWithPricing | null, tour: TourDetail | null): number => {
+    if (!selectedVehicle || !tour) return 0;
+    // Use vehicle_id if exists, else fallback to name mapping
+    if (selectedVehicle.id && tour.pricing[selectedVehicle.id] !== undefined) {
+      return tour.pricing[selectedVehicle.id];
+    }
+    // If id mapping doesn't exist, try with vehicle name (in case id is not available)
+    // Sometimes keys can be vehicle name like 'sedan', 'ertiga', etc.
+    const nameKey = (selectedVehicle.name || "").toLowerCase();
+    if (tour.pricing[nameKey] !== undefined) {
+      return tour.pricing[nameKey];
+    }
+    return 0;
+  };
 
   useEffect(() => {
     if (tourId) {
@@ -368,7 +383,8 @@ const TourDetailPage = () => {
                     pickupDate={pickupDate}
                     selectedCab={selectedVehicle}
                     distance={tour.distance}
-                    totalPrice={selectedVehicle.price}
+                    // --- USE direct pricing lookup ---
+                    totalPrice={getVehiclePrice(selectedVehicle, tour)}
                     tripType="tour"
                     hourlyPackage="tour"
                   />
@@ -387,12 +403,12 @@ const TourDetailPage = () => {
             <div>
               <GuestDetailsForm
                 onSubmit={handleBookingSubmit}
-                totalPrice={selectedVehicle?.price || 0}
+                // --- Also pass button price for payment ---
+                totalPrice={getVehiclePrice(selectedVehicle, tour)}
                 isLoading={isSubmitting}
                 onBack={() => setShowBookingForm(false)}
               />
             </div>
-            
             <div>
               {selectedVehicle && (
                 <BookingSummary
@@ -401,7 +417,7 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  totalPrice={selectedVehicle.price}
+                  totalPrice={getVehiclePrice(selectedVehicle, tour)}
                   tripType="tour"
                   hourlyPackage="tour"
                 />
