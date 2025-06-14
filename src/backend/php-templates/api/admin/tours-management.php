@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -33,14 +32,15 @@ if (
         sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
         exit;
     }
-    $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name");
+    $stmt = $conn->prepare("SELECT vehicle_id, name, capacity FROM vehicles WHERE is_active = 1 ORDER BY name");
     $stmt->execute();
     $result = $stmt->get_result();
     $vehicles = [];
     while ($row = $result->fetch_assoc()) {
         $vehicles[] = [
             'id' => $row['vehicle_id'],
-            'name' => $row['name']
+            'name' => $row['name'],
+            'capacity' => isset($row['capacity']) ? intval($row['capacity']) : 4
         ];
     }
     sendJsonResponse(['status' => 'success', 'data' => $vehicles]);

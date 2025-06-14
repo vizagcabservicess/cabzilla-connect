@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
 import { Vehicle } from '@/types/vehicle';
@@ -18,10 +17,11 @@ export const vehicleAPI = {
           vehicle_id: vehicle.id,
           name: vehicle.name,
           type: 'car',
-          capacity: 4,
+          capacity: Number(vehicle.capacity) || Number(vehicle.seatingCapacity) || 4,
           features: [],
           isActive: true
         }));
+        console.log('Loaded vehicles:', vehicles);
         
         return { vehicles };
       }
