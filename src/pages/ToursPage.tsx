@@ -105,35 +105,15 @@ const ToursPage = () => {
     navigate(`/tours/${tourId}`);
   };
 
-  // Example sightseeingPlaces fallback for demo (real implementation should pass from API)
-  const sightseeingFallback = [
-    "Kailasagiri",
-    "Borra Caves",
-    "Coffee Museum",
-    "Tribal Museum",
-    "Padmapuram Garden",
-    "Katiki Waterfalls"
-  ];
-
-  // Demo: make inclusions and sightseeing dynamic for TourCard. (Replace with API as needed)
+  // Only use what is available from backend for each card
   const buildTourCardProps = (tour: TourListItem) => {
-    // If backend adds 'inclusions' and 'sightseeingPlaces', use those.
-    let inclusions: string[] = (tour as any).inclusions ?? [];
-    let sightseeingPlaces: string[] = (tour as any).sightseeingPlaces ?? [];
-
-    // Demo fallback for inclusions (should come from backend)
-    if (!inclusions || inclusions.length === 0)
-      inclusions = [
-        "Houseboat Day Cruise",
-        "Photoshoot at Tea Estate",
-        "Speed Boat Ride"
-      ];
-
-    // Demo fallback for sightseeingPlaces (should come from backend)
-    if (!sightseeingPlaces || sightseeingPlaces.length === 0)
-      sightseeingPlaces = sightseeingFallback;
-
-    return { ...tour, inclusions, sightseeingPlaces };
+    // Use the real inclusions and sightseeingPlaces passed from props or API
+    // If missing, send as empty lists (don't inject demo data!)
+    return {
+      ...tour,
+      inclusions: (tour as any).inclusions || [],
+      sightseeingPlaces: (tour as any).sightseeingPlaces || [],
+    };
   };
 
   const renderSearchForm = () => (
