@@ -381,8 +381,8 @@ const TourDetailPage = () => {
                     pickupDate={pickupDate}
                     selectedCab={selectedVehicle}
                     distance={tour.distance}
-                    // !!! Pass correct fare:
-                    totalPrice={getTourFare(selectedVehicle, tour.pricing)}
+                    // FIX: Pass the price already on the selected vehicle
+                    totalPrice={selectedVehicle.price}
                     tripType="tour"
                     hourlyPackage="tour"
                   />
@@ -401,8 +401,8 @@ const TourDetailPage = () => {
             <div>
               <GuestDetailsForm
                 onSubmit={handleBookingSubmit}
-                // Pass correct fare:
-                totalPrice={getTourFare(selectedVehicle, tour.pricing)}
+                // FIX: Pass selected vehicle's price
+                totalPrice={selectedVehicle ? selectedVehicle.price : 0}
                 isLoading={isSubmitting}
                 onBack={() => setShowBookingForm(false)}
               />
@@ -415,8 +415,8 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  // Pass correct fare:
-                  totalPrice={getTourFare(selectedVehicle, tour.pricing)}
+                  // FIX: Pass selected vehicle's price
+                  totalPrice={selectedVehicle.price}
                   tripType="tour"
                   hourlyPackage="tour"
                 />
