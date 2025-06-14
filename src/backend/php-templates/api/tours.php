@@ -194,7 +194,7 @@ function getTourById($conn, $tourId) {
     
     // Get inclusions
     $inclusionsStmt = $conn->prepare("
-        SELECT inclusion, description
+        SELECT inclusion
         FROM tour_inclusions 
         WHERE tour_id = ? 
         ORDER BY id
@@ -202,25 +202,18 @@ function getTourById($conn, $tourId) {
     $inclusionsStmt->bind_param("s", $tourId);
     $inclusionsStmt->execute();
     $inclusionsResult = $inclusionsStmt->get_result();
-
+    
     if (!$inclusionsStmt) {
         logErrorToFile('Failed to prepare inclusionsStmt', ['error' => $conn->error]);
     }
-
+    
     while ($inclusionRow = $inclusionsResult->fetch_assoc()) {
-        // Take 'description' if available, otherwise fallback to 'inclusion'
-        $desc = trim($inclusionRow['description']);
-        $inc = trim($inclusionRow['inclusion']);
-        if ($desc !== "") {
-            $tourDetail['inclusions'][] = $desc;
-        } else if ($inc !== "") {
-            $tourDetail['inclusions'][] = $inc;
-        }
+        $tourDetail['inclusions'][] = $inclusionRow['inclusion'];
     }
-
+    
     // Get exclusions
     $exclusionsStmt = $conn->prepare("
-        SELECT exclusion, description
+        SELECT exclusion
         FROM tour_exclusions 
         WHERE tour_id = ? 
         ORDER BY id
@@ -228,22 +221,15 @@ function getTourById($conn, $tourId) {
     $exclusionsStmt->bind_param("s", $tourId);
     $exclusionsStmt->execute();
     $exclusionsResult = $exclusionsStmt->get_result();
-
+    
     if (!$exclusionsStmt) {
         logErrorToFile('Failed to prepare exclusionsStmt', ['error' => $conn->error]);
     }
-
+    
     while ($exclusionRow = $exclusionsResult->fetch_assoc()) {
-        // Take 'description' if available, otherwise fallback to 'exclusion'
-        $desc = trim($exclusionRow['description']);
-        $exc = trim($exclusionRow['exclusion']);
-        if ($desc !== "") {
-            $tourDetail['exclusions'][] = $desc;
-        } else if ($exc !== "") {
-            $tourDetail['exclusions'][] = $exc;
-        }
+        $tourDetail['exclusions'][] = $exclusionRow['exclusion'];
     }
-
+    
     // Get itinerary
     $itineraryStmt = $conn->prepare("
         SELECT day as day, title, description, activities
