@@ -107,6 +107,17 @@ export const BookingSummary = ({
     airportTotal = base + airportFee + extra;
   }
 
+  // Patch: For tour bookings, use selectedCab.price or tour pricing
+  let tourBaseFare = 0;
+  if (tripType === 'tour' && selectedCab) {
+    // Try selectedCab.price first
+    if (typeof selectedCab.price === 'number' && selectedCab.price > 0) {
+      tourBaseFare = selectedCab.price;
+    } else if (selectedCab.id && fareData && fareData.pricing && fareData.pricing[selectedCab.id]) {
+      tourBaseFare = fareData.pricing[selectedCab.id];
+    }
+  }
+
   function getFareKey({ tripType, cabId, packageType }: { tripType: string, cabId: string, packageType?: string }) {
     if (tripType === "outstation") {
       return `fare_outstation_${cabId}`;
@@ -950,6 +961,18 @@ export const BookingSummary = ({
               <div className="flex justify-between items-center">
                 <p className="font-semibold">Total Price</p>
                 <p className="font-bold text-lg">{formatPrice(localTotal)}</p>
+              </div>
+            </>
+          ) : tripType === 'tour' ? (
+            <>
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-gray-600">Base fare</p>
+                <p className="font-medium">{formatPrice(tourBaseFare)}</p>
+              </div>
+              <Separator className="my-3" />
+              <div className="flex justify-between items-center">
+                <p className="font-semibold">Total Price</p>
+                <p className="font-bold text-lg">{formatPrice(tourBaseFare)}</p>
               </div>
             </>
           ) : (
