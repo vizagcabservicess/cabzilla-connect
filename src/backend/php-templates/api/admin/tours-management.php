@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -108,51 +109,60 @@ try {
                 'itinerary' => []
             ];
             
-            // Get gallery images
+            // Get gallery images - ensure we always have an array
             $galleryStmt = $conn->prepare("SELECT image_url, alt_text, caption FROM tour_gallery WHERE tour_id = ? ORDER BY sort_order, id");
             $galleryStmt->bind_param("s", $tourId);
             $galleryStmt->execute();
             $galleryResult = $galleryStmt->get_result();
+            $gallery = [];
             while ($img = $galleryResult->fetch_assoc()) {
-                $tour['gallery'][] = [
+                $gallery[] = [
                     'url' => $img['image_url'],
                     'alt' => $img['alt_text'] ?? '',
                     'caption' => $img['caption'] ?? ''
                 ];
             }
+            $tour['gallery'] = $gallery;
             
             // Get dynamic vehicle pricing
             $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
             $pricingStmt->bind_param("s", $tourId);
             $pricingStmt->execute();
             $pricingResult = $pricingStmt->get_result();
+            $pricing = [];
             while ($pricingRow = $pricingResult->fetch_assoc()) {
-                $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
+                $pricing[$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
             }
+            $tour['pricing'] = $pricing;
             
-            // Get inclusions
+            // Get inclusions - ensure we always have an array
             $inclusionsStmt = $conn->prepare("SELECT description FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
             $inclusionsStmt->bind_param("s", $tourId);
             $inclusionsStmt->execute();
             $inclusionsResult = $inclusionsStmt->get_result();
+            $inclusions = [];
             while ($inc = $inclusionsResult->fetch_assoc()) {
-                $tour['inclusions'][] = $inc['description'];
+                $inclusions[] = $inc['description'];
             }
+            $tour['inclusions'] = $inclusions;
             
-            // Get exclusions
+            // Get exclusions - ensure we always have an array
             $exclusionsStmt = $conn->prepare("SELECT description FROM tour_exclusions WHERE tour_id = ? ORDER BY sort_order, id");
             $exclusionsStmt->bind_param("s", $tourId);
             $exclusionsStmt->execute();
             $exclusionsResult = $exclusionsStmt->get_result();
+            $exclusions = [];
             while ($exc = $exclusionsResult->fetch_assoc()) {
-                $tour['exclusions'][] = $exc['description'];
+                $exclusions[] = $exc['description'];
             }
+            $tour['exclusions'] = $exclusions;
             
-            // Get itinerary
+            // Get itinerary - ensure we always have an array
             $itineraryStmt = $conn->prepare("SELECT day_number, title, description, activities FROM tour_itinerary WHERE tour_id = ? ORDER BY day_number, id");
             $itineraryStmt->bind_param("s", $tourId);
             $itineraryStmt->execute();
             $itineraryResult = $itineraryStmt->get_result();
+            $itinerary = [];
             while ($it = $itineraryResult->fetch_assoc()) {
                 $activities = [];
                 if (!empty($it['activities'])) {
@@ -160,13 +170,14 @@ try {
                     $activities = is_array($decoded) ? $decoded : explode(',', $it['activities']);
                 }
                 
-                $tour['itinerary'][] = [
+                $itinerary[] = [
                     'day' => intval($it['day_number']),
                     'title' => $it['title'] ?? '',
                     'description' => $it['description'] ?? '',
                     'activities' => $activities
                 ];
             }
+            $tour['itinerary'] = $itinerary;
             
             sendJsonResponse(['status' => 'success', 'data' => $tour]);
             exit;
@@ -198,9 +209,11 @@ try {
                 $pricingStmt->bind_param("s", $row['tour_id']);
                 $pricingStmt->execute();
                 $pricingResult = $pricingStmt->get_result();
+                $pricing = [];
                 while ($pricingRow = $pricingResult->fetch_assoc()) {
-                    $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
+                    $pricing[$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
                 }
+                $tour['pricing'] = $pricing;
                 
                 $tours[] = $tour;
             }

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +48,18 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
   useEffect(() => {
     console.log('Tour data received in modal:', tour);
     if (tour) {
+      const safeGallery = Array.isArray(tour.gallery) ? tour.gallery : [];
+      const safeInclusions = Array.isArray(tour.inclusions) ? tour.inclusions : [];
+      const safeExclusions = Array.isArray(tour.exclusions) ? tour.exclusions : [];
+      const safeItinerary = Array.isArray(tour.itinerary) ? tour.itinerary : [];
+      
+      console.log('Setting form data with arrays:', {
+        gallery: safeGallery,
+        inclusions: safeInclusions,
+        exclusions: safeExclusions,
+        itinerary: safeItinerary
+      });
+      
       setFormData({
         tourId: tour.tourId || '',
         tourName: tour.tourName || '',
@@ -58,10 +69,10 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
         description: tour.description || '',
         imageUrl: tour.imageUrl || '',
         pricing: tour.pricing || {},
-        gallery: tour.gallery || [],
-        inclusions: tour.inclusions || [],
-        exclusions: tour.exclusions || [],
-        itinerary: tour.itinerary || []
+        gallery: safeGallery,
+        inclusions: safeInclusions,
+        exclusions: safeExclusions,
+        itinerary: safeItinerary
       });
     } else {
       setFormData({
@@ -109,16 +120,22 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
   const handleFileUpload = async (file: File): Promise<string> => {
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      const formDataUpload = new FormData();
+      formDataUpload.append('image', file);
       
       const baseURL = getApiUrl();
       const response = await fetch(`${baseURL}/api/upload-image.php`, {
         method: 'POST',
-        body: formData,
+        body: formDataUpload,
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Upload response:', data);
+      
       if (data && data.url) {
         return data.url;
       }
@@ -450,7 +467,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
               </Card>
 
               <div className="space-y-2">
-                {formData.gallery?.length === 0 && (
+                {(!formData.gallery || formData.gallery.length === 0) && (
                   <div className="text-gray-500 text-center py-4">No images added yet.</div>
                 )}
                 {formData.gallery?.map((item, index) => (
@@ -497,7 +514,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   Add Inclusion
                 </Button>
               </div>
-              {(formData.inclusions || []).length === 0 && (
+              {(!formData.inclusions || formData.inclusions.length === 0) && (
                 <div className="text-gray-500 text-center py-4">No inclusions added yet.</div>
               )}
               {formData.inclusions?.map((inclusion, index) => (
@@ -529,7 +546,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   Add Exclusion
                 </Button>
               </div>
-              {(formData.exclusions || []).length === 0 && (
+              {(!formData.exclusions || formData.exclusions.length === 0) && (
                 <div className="text-gray-500 text-center py-4">No exclusions added yet.</div>
               )}
               {formData.exclusions?.map((exclusion, index) => (
@@ -561,7 +578,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   Add Day
                 </Button>
               </div>
-              {(formData.itinerary || []).length === 0 && (
+              {(!formData.itinerary || formData.itinerary.length === 0) && (
                 <div className="text-gray-500 text-center py-4">No itinerary days added yet.</div>
               )}
               {formData.itinerary?.map((day, index) => (
