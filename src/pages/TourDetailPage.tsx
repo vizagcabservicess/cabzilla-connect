@@ -53,10 +53,10 @@ const TourDetailPage = () => {
 
   const loadTourDetail = async () => {
     if (!tourId) return;
-    
     try {
       setIsLoading(true);
       const tourDetail = await tourDetailAPI.getTourDetail(tourId);
+      console.log('Fetched Tour Detail:', tourDetail);
       if (tourDetail) {
         setTour(tourDetail);
       } else {
@@ -77,6 +77,11 @@ const TourDetailPage = () => {
       setIsLoading(false);
     }
   };
+
+  // Debug: See what the `tour` state looks like in the render
+  if (tour) {
+    console.log('Tour State in Render:', tour);
+  }
 
   const handleVehicleSelect = (vehicle: VehicleWithPricing) => {
     setSelectedVehicle(vehicle);
