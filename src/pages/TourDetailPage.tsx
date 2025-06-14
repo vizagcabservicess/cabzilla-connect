@@ -85,15 +85,19 @@ const TourDetailPage = () => {
     }
   };
 
-  // Helper to get the correct fare from pricing for the selected vehicle
+  // Helper: always fetch the fare directly from `tour.pricing` by selected vehicle
   const getSelectedVehiclePrice = (): number => {
     if (!tour || !selectedVehicle) return 0;
-    // pricing has keys matching vehicle_id, value=price
-    const priceFromPricing =
-      tour.pricing?.[selectedVehicle.vehicleId] ??
-      tour.pricing?.[selectedVehicle.name?.toLowerCase()] ?? // fallback by name (should rarely be used)
-      0;
-    return typeof priceFromPricing === "number" && priceFromPricing > 0 ? priceFromPricing : 0;
+    // Use ID as primary key, or lowercased name as fallback
+    const idKey = selectedVehicle.vehicleId || selectedVehicle.id || "";
+    let fare = 0;
+    if (idKey && tour.pricing && tour.pricing[idKey] !== undefined) {
+      fare = tour.pricing[idKey];
+    } else if (selectedVehicle.name && tour.pricing && tour.pricing[selectedVehicle.name.toLowerCase()] !== undefined) {
+      fare = tour.pricing[selectedVehicle.name.toLowerCase()];
+    }
+    // Always ensure it's a positive number
+    return typeof fare === "number" && fare > 0 ? fare : 0;
   };
 
   // Debug: See what the `tour` state looks like in the render
@@ -121,12 +125,9 @@ const TourDetailPage = () => {
   // --- BOOKING SUBMISSION ---
   const handleBookingSubmit = async (guestDetails: any) => {
     if (!tour || !selectedVehicle) return;
-
-    // Always fetch latest price from pricing table for selected vehicle
-    const fare = getSelectedVehiclePrice();
+    const fare = getSelectedVehiclePrice(); // Always fetch from pricing!
     try {
       setIsSubmitting(true);
-      
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
         dropLocation: '',
@@ -142,9 +143,7 @@ const TourDetailPage = () => {
         passengerEmail: guestDetails.email,
         tourId: tour.tourId
       };
-      
       const response = await bookingAPI.createBooking(bookingData);
-      
       const bookingDataForStorage = {
         tourId: tour.tourId,
         tourName: tour.tourName,
@@ -158,14 +157,11 @@ const TourDetailPage = () => {
         bookingId: response.id,
         bookingNumber: response.bookingNumber
       };
-      
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
-      
       toast({
         title: "Booking Confirmed!",
         description: "Your tour has been booked successfully",
       });
-      
       navigate("/booking-confirmation", { state: { newBooking: true } });
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -377,13 +373,13 @@ const TourDetailPage = () => {
               ) : (
                 // Show Booking Summary and "Book Now" at bottom
                 <div>
+                  {/* Always show totalPrice from pricing table */}
                   <BookingSummary
                     pickupLocation={pickupLocation}
                     dropLocation={null}
                     pickupDate={pickupDate}
                     selectedCab={selectedVehicle}
                     distance={tour.distance}
-                    // ---- Directly fetch total price from pricing!
                     totalPrice={getSelectedVehiclePrice()}
                     tripType="tour"
                     hourlyPackage="tour"
