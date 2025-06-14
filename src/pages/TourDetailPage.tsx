@@ -234,7 +234,7 @@ const TourDetailPage = () => {
                 <TabsList>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
-                  <TabsTrigger value="inclusions">Inclusions</TabsTrigger>
+                  <TabsTrigger value="inclusions">Inclusions & Exclusions</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
@@ -292,45 +292,38 @@ const TourDetailPage = () => {
 
                 <TabsContent value="inclusions">
                   <div className="grid md:grid-cols-2 gap-4">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-green-600">Included</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {tour.inclusions.length > 0 ? (
-                            tour.inclusions.map((item, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-sm">
-                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                {item}
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-gray-500">No inclusions listed</li>
-                          )}
-                        </ul>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-red-600">Not Included</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {tour.exclusions.length > 0 ? (
-                            tour.exclusions.map((item, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-sm">
-                                <X className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                                {item}
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-gray-500">No exclusions listed</li>
-                          )}
-                        </ul>
-                      </CardContent>
-                    </Card>
+                    {/* Included */}
+                    <div className="border border-gray-200 bg-white rounded-xl p-6 min-h-[220px]">
+                      <h3 className="text-green-600 font-bold text-base mb-3">Included</h3>
+                      <ul className="space-y-1">
+                        {tour.inclusions.length > 0 ? (
+                          tour.inclusions.map((item, idx) => (
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                              <span className="text-green-500"><Check size={16} /></span>
+                              <span className="text-[14px]">{item}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-gray-400 text-[14px]">No inclusions listed</li>
+                        )}
+                      </ul>
+                    </div>
+                    {/* Not Included */}
+                    <div className="border border-gray-200 bg-white rounded-xl p-6 min-h-[220px]">
+                      <h3 className="text-red-600 font-bold text-base mb-3">Not Included</h3>
+                      <ul className="space-y-1">
+                        {tour.exclusions.length > 0 ? (
+                          tour.exclusions.map((item, idx) => (
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                              <span className="text-red-500"><X size={16} /></span>
+                              <span className="text-[14px]">{item}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-gray-400 text-[14px]">No exclusions listed</li>
+                        )}
+                      </ul>
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -338,15 +331,18 @@ const TourDetailPage = () => {
 
             {/* Right Section - Vehicle Selection & Booking */}
             <div className="space-y-6">
-              <TourVehicleSelection
-                pricing={tour.pricing}
-                onVehicleSelect={handleVehicleSelect}
-                selectedVehicle={selectedVehicle}
-                onBookNow={handleBookNow}
-              />
-
-              {/* Booking Summary */}
-              {selectedVehicle && (
+              {!selectedVehicle ? (
+                <TourVehicleSelection
+                  pricing={tour.pricing}
+                  onVehicleSelect={(vehicle) => {
+                    setSelectedVehicle(vehicle);
+                    setShowBookingForm(true); // Move directly to booking summary
+                  }}
+                  selectedVehicle={selectedVehicle}
+                  onBookNow={() => {}}
+                />
+              ) : (
+                // Show Booking Summary (no Book Now button here)
                 <BookingSummary
                   pickupLocation={pickupLocation}
                   dropLocation={null}
@@ -356,6 +352,15 @@ const TourDetailPage = () => {
                   totalPrice={selectedVehicle.price}
                   tripType="tour"
                   hourlyPackage="tour"
+                  // Add Book Now button below summary as per your screenshot
+                  renderExtra={() => (
+                    <Button
+                      className="w-full mt-4"
+                      onClick={() => setShowBookingForm(true)}
+                    >
+                      Book Now
+                    </Button>
+                  )}
                 />
               )}
             </div>

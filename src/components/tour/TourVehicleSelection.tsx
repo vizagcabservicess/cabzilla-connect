@@ -1,10 +1,7 @@
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Star } from 'lucide-react';
 import { Vehicle, VehicleWithPricing } from '@/types/vehicle';
-import { vehicleAPI } from '@/services/api/vehicleAPI';
 
 interface TourVehicleSelectionProps {
   pricing: { [vehicleId: string]: number };
@@ -16,8 +13,7 @@ interface TourVehicleSelectionProps {
 export const TourVehicleSelection = ({
   pricing,
   onVehicleSelect,
-  selectedVehicle,
-  onBookNow
+  selectedVehicle
 }: TourVehicleSelectionProps) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesWithPricing, setVehiclesWithPricing] = useState<VehicleWithPricing[]>([]);
@@ -44,10 +40,11 @@ export const TourVehicleSelection = ({
 
   const loadVehicles = async () => {
     try {
+      // @ts-ignore
+      const { vehicleAPI } = await import('@/services/api/vehicleAPI');
       const response = await vehicleAPI.getVehicles();
       setVehicles(response.vehicles || []);
     } catch (error) {
-      console.error('Error loading vehicles:', error);
       setVehicles([]);
       setIsLoading(false);
     }
@@ -61,7 +58,10 @@ export const TourVehicleSelection = ({
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            <svg className="animate-spin h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 017-7.938V4a8 8 0 100 16v-1.062A8.001 8.001 0 014 12z"></path>
+            </svg>
           </div>
         ) : (
           <div className="space-y-3">
@@ -76,20 +76,17 @@ export const TourVehicleSelection = ({
                   }`}
                   onClick={() => onVehicleSelect(vehicle)}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-center">
                     <div>
-                      <h4 className="font-semibold">{vehicle.name}</h4>
-                      <p className="text-sm text-gray-600">{vehicle.capacity} passengers</p>
-                      <div className="flex items-center gap-1 text-yellow-500 mt-1">
-                        <Star size={14} fill="currentColor" />
-                        <span className="text-sm text-gray-600">4.5</span>
-                      </div>
+                      <h4 className="font-semibold text-base md:text-[16px] text-gray-900">{vehicle.name}</h4>
+                      <p className="text-xs text-gray-600">{vehicle.capacity} passengers</p>
+                      {/* Star rating removed */}
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-bold text-blue-600">
                         ₹{vehicle.price.toLocaleString('en-IN')}
                       </div>
-                      <div className="text-sm text-gray-500">Total</div>
+                      <div className="text-xs text-gray-500">Total</div>
                     </div>
                   </div>
                 </div>
@@ -101,14 +98,7 @@ export const TourVehicleSelection = ({
             )}
           </div>
         )}
-        
-        <Button
-          onClick={onBookNow}
-          disabled={!selectedVehicle}
-          className="w-full mt-4"
-        >
-          Book Now
-        </Button>
+        {/* Book Now button removed from here */}
       </CardContent>
     </Card>
   );
