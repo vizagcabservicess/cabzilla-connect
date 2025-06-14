@@ -1,4 +1,7 @@
 <?php
+if (file_exists(__DIR__ . '/../../config.php')) {
+    require_once __DIR__ . '/../../config.php';
+}
 /**
  * direct-vehicle-modify.php - Direct database operations for vehicle data
  * This script provides a robust interface for both adding and modifying vehicle data
@@ -260,7 +263,7 @@ if ($conn) {
         $acInt = $ac ? 1 : 0;
         $isActiveInt = $isActive ? 1 : 0;
         
-        $stmt->bind_param('siiddsssidis', 
+        $stmt->bind_param('siiddsssidids', 
             $name, 
             $capacity, 
             $luggageCapacity,
@@ -299,7 +302,7 @@ if ($conn) {
         $acInt = $ac ? 1 : 0;
         $isActiveInt = $isActive ? 1 : 0;
         
-        $stmt->bind_param('ssiiddssiidi', 
+        $stmt->bind_param('ssiiddssiiddi', 
             $vehicleId,
             $name, 
             $capacity, 
