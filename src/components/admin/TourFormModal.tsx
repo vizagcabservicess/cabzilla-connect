@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +25,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     tourName: '',
     distance: 0,
     days: 1,
+    timeDuration: '',
     description: '',
     imageUrl: '',
     pricing: {},
@@ -35,27 +35,38 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     itinerary: []
   });
 
+  // State for gallery image input
+  const [galleryImageUrl, setGalleryImageUrl] = useState('');
+  const [galleryImageFile, setGalleryImageFile] = useState<File | null>(null);
+  const [galleryAlt, setGalleryAlt] = useState('');
+  const [galleryCaption, setGalleryCaption] = useState('');
+
   useEffect(() => {
     if (tour) {
-      setFormData({
-        tourId: tour.tourId,
-        tourName: tour.tourName,
-        distance: tour.distance,
-        days: tour.days,
+      setFormData(prev => ({
+        ...prev,
+        tourId: tour.tourId || '',
+        tourName: tour.tourName || '',
+        distance: typeof tour.distance === 'number' ? tour.distance : 0,
+        days: typeof tour.days === 'number' ? tour.days : 1,
+        timeDuration: tour.timeDuration || '',
         description: tour.description || '',
         imageUrl: tour.imageUrl || '',
         pricing: tour.pricing || {},
-        gallery: [],
-        inclusions: [],
-        exclusions: [],
-        itinerary: []
-      });
+        gallery: Array.isArray(prev.gallery) && prev.gallery.length > 0
+          ? [...prev.gallery, ...((tour.gallery || []).filter(img => !prev.gallery.some(g => g.url === img.url)))]
+          : (tour.gallery || []),
+        inclusions: tour.inclusions || [],
+        exclusions: tour.exclusions || [],
+        itinerary: tour.itinerary || []
+      }));
     } else {
       setFormData({
         tourId: '',
         tourName: '',
         distance: 0,
         days: 1,
+        timeDuration: '',
         description: '',
         imageUrl: '',
         pricing: {},
@@ -69,7 +80,16 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Filter out empty inclusions/exclusions before submit
+    const cleanedFormData = {
+      ...formData,
+      inclusions: (formData.inclusions || []).filter(i => i && i.trim() !== ""),
+      exclusions: (formData.exclusions || []).filter(e => e && e.trim() !== ""),
+      gallery: formData.gallery || [],
+      itinerary: formData.itinerary || [],
+    };
+    console.log('Submitting formData:', cleanedFormData);
+    onSubmit(cleanedFormData);
   };
 
   const handlePricingChange = (vehicleId: string, price: string) => {
@@ -82,11 +102,41 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     }));
   };
 
-  const addGalleryItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      gallery: [...(prev.gallery || []), { url: '', alt: '', caption: '' }]
-    }));
+  // Upload image file to server and get URL
+  const handleFileUpload = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch('/api/upload-image.php', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (data && data.url) {
+      return data.url;
+    }
+    throw new Error('Image upload failed');
+  };
+
+  // Add gallery item from file or URL
+  const addGalleryItem = async () => {
+    let url = galleryImageUrl.trim();
+    let alt = galleryAlt.trim();
+    let caption = galleryCaption.trim();
+    if (galleryImageFile) {
+      url = await handleFileUpload(galleryImageFile);
+    }
+    if (!url) return;
+    setFormData(prev => {
+      const prevGallery = Array.isArray(prev.gallery) ? prev.gallery : [];
+      return {
+        ...prev,
+        gallery: [...prevGallery, { url, alt, caption }]
+      };
+    });
+    setGalleryImageUrl('');
+    setGalleryImageFile(null);
+    setGalleryAlt('');
+    setGalleryCaption('');
   };
 
   const updateGalleryItem = (index: number, field: keyof TourGalleryItem, value: string) => {
@@ -176,7 +226,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog key={tour?.tourId || 'new'} open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{tour ? 'Edit Tour' : 'Add New Tour'}</DialogTitle>
@@ -202,7 +252,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   <Input
                     id="tourId"
                     placeholder="e.g., araku_valley"
-                    value={formData.tourId}
+                    value={formData.tourId || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, tourId: e.target.value }))}
                     required
                     disabled={!!tour}
@@ -213,7 +263,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   <Input
                     id="tourName"
                     placeholder="e.g., Araku Valley Tour"
-                    value={formData.tourName}
+                    value={formData.tourName || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, tourName: e.target.value }))}
                     required
                   />
@@ -226,7 +276,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   <Input
                     id="distance"
                     type="number"
-                    value={formData.distance}
+                    value={formData.distance?.toString() || '0'}
                     onChange={(e) => setFormData(prev => ({ ...prev, distance: parseInt(e.target.value) || 0 }))}
                     required
                   />
@@ -236,9 +286,19 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   <Input
                     id="days"
                     type="number"
-                    value={formData.days}
+                    value={formData.days?.toString() || '1'}
                     onChange={(e) => setFormData(prev => ({ ...prev, days: parseInt(e.target.value) || 1 }))}
                     required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="timeDuration">Time Duration</Label>
+                  <Input
+                    id="timeDuration"
+                    type="text"
+                    placeholder="e.g. 6 hours, Full Day"
+                    value={formData.timeDuration || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, timeDuration: e.target.value }))}
                   />
                 </div>
                 <div>
@@ -246,7 +306,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                   <Input
                     id="imageUrl"
                     placeholder="/tours/tour.jpg"
-                    value={formData.imageUrl}
+                    value={formData.imageUrl || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
                   />
                 </div>
@@ -257,7 +317,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                 <Textarea
                   id="description"
                   placeholder="Describe the tour package..."
-                  value={formData.description}
+                  value={formData.description || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   rows={3}
                 />
@@ -289,54 +349,53 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
             <TabsContent value="gallery" className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Gallery Images</h3>
-                <Button type="button" onClick={addGalleryItem} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Image
-                </Button>
               </div>
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex flex-col gap-2 w-full md:w-1/2">
+                  <Label>Upload Image</Label>
+                  <Input type="file" accept="image/*" onChange={e => setGalleryImageFile(e.target.files?.[0] || null)} />
+                  <span className="text-xs text-gray-500">or paste an image URL below</span>
+                  <Input type="text" placeholder="Image URL" value={galleryImageUrl} onChange={e => setGalleryImageUrl(e.target.value)} />
+                  <Input type="text" placeholder="Alt text (optional)" value={galleryAlt} onChange={e => setGalleryAlt(e.target.value)} />
+                  <Input type="text" placeholder="Caption (optional)" value={galleryCaption} onChange={e => setGalleryCaption(e.target.value)} />
+                  <Button type="button" onClick={addGalleryItem} size="sm" className="mt-2">
+                    <Plus className="h-4 w-4 mr-2" /> Add Image
+                  </Button>
+                </div>
+              </div>
+              {formData.gallery?.length === 0 && (
+                <div className="text-gray-500">No images added yet.</div>
+              )}
               {formData.gallery?.map((item, index) => (
-                <Card key={index}>
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-2">
-                        <Image className="h-4 w-4" />
-                        <span className="font-medium">Image {index + 1}</span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeGalleryItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label>Image URL</Label>
-                        <Input
-                          placeholder="https://example.com/image.jpg"
-                          value={item.url}
-                          onChange={(e) => updateGalleryItem(index, 'url', e.target.value)}
-                        />
-                      </div>
-                      <div>
+                <Card key={index} className="mb-2">
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <img
+                      src={item.url}
+                      alt={item.alt || `Gallery ${index + 1}`}
+                      className="w-24 h-16 object-cover rounded border"
+                      onError={e => (e.currentTarget.src = 'https://via.placeholder.com/96x64?text=No+Image')}
+                    />
+                    <div className="flex-1">
+                      <div className="mb-1">
                         <Label>Alt Text</Label>
                         <Input
-                          placeholder="Image description"
                           value={item.alt || ''}
-                          onChange={(e) => updateGalleryItem(index, 'alt', e.target.value)}
+                          onChange={e => updateGalleryItem(index, 'alt', e.target.value)}
+                          placeholder="Image description"
                         />
                       </div>
                       <div>
                         <Label>Caption</Label>
                         <Input
-                          placeholder="Image caption"
                           value={item.caption || ''}
-                          onChange={(e) => updateGalleryItem(index, 'caption', e.target.value)}
+                          onChange={e => updateGalleryItem(index, 'caption', e.target.value)}
+                          placeholder="Image caption"
                         />
                       </div>
                     </div>
+                    <Button type="button" variant="outline" size="icon" onClick={() => removeGalleryItem(index)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -463,7 +522,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" onClick={() => console.log('Button clicked, gallery:', formData.gallery)} disabled={isLoading}>
               {isLoading ? 'Saving...' : tour ? 'Update Tour' : 'Add Tour'}
             </Button>
           </DialogFooter>

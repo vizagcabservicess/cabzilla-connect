@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -214,7 +213,7 @@ const TourDetailPage = () => {
                   </span>
                   <span className="flex items-center gap-1">
                     <Clock size={16} />
-                    {tour.duration}
+                    {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}
                   </span>
                 </div>
               </div>

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
 import { TourData, TourManagementRequest } from '@/types/api';
@@ -77,6 +76,21 @@ export const tourManagementAPI = {
       return response.data;
     } catch (error) {
       console.error('Error fetching vehicles:', error);
+      throw error;
+    }
+  },
+
+  getTourById: async (tourId: string): Promise<TourData | null> => {
+    try {
+      const response = await axios.get(`${baseURL}/api/admin/tours-management.php?tourId=${tourId}`, {
+        headers: { ...defaultHeaders, 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      });
+      if (response.data && response.data.status === 'success') {
+        return response.data.data || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching tour by ID:', error);
       throw error;
     }
   }

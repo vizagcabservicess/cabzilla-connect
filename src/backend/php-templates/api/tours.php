@@ -1,4 +1,3 @@
-
 <?php
 require_once '../config.php';
 
@@ -21,6 +20,21 @@ if (!$conn) {
     exit;
 }
 
+// At the top, for debugging (remove in production):
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+function logErrorToFile($message, $context = []) {
+    $logFile = __DIR__ . '/tours.log';
+    $entry = date('Y-m-d H:i:s') . ' | ' . $message;
+    if (!empty($context)) {
+        $entry .= ' | ' . json_encode($context);
+    }
+    $entry .= "\n";
+    file_put_contents($logFile, $entry, FILE_APPEND);
+}
+
 try {
     $method = $_SERVER['REQUEST_METHOD'];
     
@@ -40,7 +54,7 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
-    logError("Error in tours API", ['error' => $e->getMessage()]);
+    logErrorToFile("Error in tours API", ['error' => $e->getMessage()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Internal server error'], 500);
 }
 
@@ -53,7 +67,8 @@ function getAllTours($conn) {
             tf.distance,
             tf.days,
             tf.image_url as imageUrl,
-            tf.is_active as isActive
+            tf.is_active as isActive,
+            tf.time_duration as timeDuration
         FROM tour_fares tf 
         WHERE tf.is_active = 1 
         ORDER BY tf.tour_name
@@ -72,7 +87,8 @@ function getAllTours($conn) {
             'days' => intval($row['days']),
             'imageUrl' => $row['imageUrl'] ?? 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop',
             'pricing' => [],
-            'minPrice' => 0
+            'minPrice' => 0,
+            'timeDuration' => isset($row['timeDuration']) && $row['timeDuration'] !== null ? $row['timeDuration'] : ''
         ];
         
         // Get pricing for this tour
@@ -112,7 +128,8 @@ function getTourById($conn, $tourId) {
             tf.image_url as imageUrl,
             tf.is_active as isActive,
             tf.created_at as createdAt,
-            tf.updated_at as updatedAt
+            tf.updated_at as updatedAt,
+            tf.time_duration as timeDuration
         FROM tour_fares tf 
         WHERE tf.tour_id = ?
     ");
@@ -147,7 +164,8 @@ function getTourById($conn, $tourId) {
         'gallery' => [],
         'inclusions' => [],
         'exclusions' => [],
-        'pricing' => []
+        'pricing' => [],
+        'timeDuration' => isset($tour['timeDuration']) && $tour['timeDuration'] !== null ? $tour['timeDuration'] : ''
     ];
     
     // Get gallery images
@@ -155,11 +173,15 @@ function getTourById($conn, $tourId) {
         SELECT id, image_url as url, alt_text as alt, caption
         FROM tour_gallery 
         WHERE tour_id = ? 
-        ORDER BY sort_order, id
+        ORDER BY id
     ");
     $galleryStmt->bind_param("s", $tourId);
     $galleryStmt->execute();
     $galleryResult = $galleryStmt->get_result();
+    
+    if (!$galleryStmt) {
+        logErrorToFile('Failed to prepare galleryStmt', ['error' => $conn->error]);
+    }
     
     while ($galleryRow = $galleryResult->fetch_assoc()) {
         $tourDetail['gallery'][] = [
@@ -172,44 +194,56 @@ function getTourById($conn, $tourId) {
     
     // Get inclusions
     $inclusionsStmt = $conn->prepare("
-        SELECT description
+        SELECT inclusion
         FROM tour_inclusions 
         WHERE tour_id = ? 
-        ORDER BY sort_order, id
+        ORDER BY id
     ");
     $inclusionsStmt->bind_param("s", $tourId);
     $inclusionsStmt->execute();
     $inclusionsResult = $inclusionsStmt->get_result();
     
+    if (!$inclusionsStmt) {
+        logErrorToFile('Failed to prepare inclusionsStmt', ['error' => $conn->error]);
+    }
+    
     while ($inclusionRow = $inclusionsResult->fetch_assoc()) {
-        $tourDetail['inclusions'][] = $inclusionRow['description'];
+        $tourDetail['inclusions'][] = $inclusionRow['inclusion'];
     }
     
     // Get exclusions
     $exclusionsStmt = $conn->prepare("
-        SELECT description
+        SELECT exclusion
         FROM tour_exclusions 
         WHERE tour_id = ? 
-        ORDER BY sort_order, id
+        ORDER BY id
     ");
     $exclusionsStmt->bind_param("s", $tourId);
     $exclusionsStmt->execute();
     $exclusionsResult = $exclusionsStmt->get_result();
     
+    if (!$exclusionsStmt) {
+        logErrorToFile('Failed to prepare exclusionsStmt', ['error' => $conn->error]);
+    }
+    
     while ($exclusionRow = $exclusionsResult->fetch_assoc()) {
-        $tourDetail['exclusions'][] = $exclusionRow['description'];
+        $tourDetail['exclusions'][] = $exclusionRow['exclusion'];
     }
     
     // Get itinerary
     $itineraryStmt = $conn->prepare("
-        SELECT day_number as day, title, description, activities
+        SELECT day as day, title, description, activities
         FROM tour_itinerary 
         WHERE tour_id = ? 
-        ORDER BY day_number
+        ORDER BY day
     ");
     $itineraryStmt->bind_param("s", $tourId);
     $itineraryStmt->execute();
     $itineraryResult = $itineraryStmt->get_result();
+    
+    if (!$itineraryStmt) {
+        logErrorToFile('Failed to prepare itineraryStmt', ['error' => $conn->error]);
+    }
     
     while ($itineraryRow = $itineraryResult->fetch_assoc()) {
         $activities = [];
@@ -236,6 +270,10 @@ function getTourById($conn, $tourId) {
     $pricingStmt->bind_param("s", $tourId);
     $pricingStmt->execute();
     $pricingResult = $pricingStmt->get_result();
+    
+    if (!$pricingStmt) {
+        logErrorToFile('Failed to prepare pricingStmt', ['error' => $conn->error]);
+    }
     
     while ($pricingRow = $pricingResult->fetch_assoc()) {
         $tourDetail['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);

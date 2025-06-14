@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -76,22 +75,90 @@ try {
     // Handle GET request - Get all tours or vehicles
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $action = isset($_GET['action']) ? $_GET['action'] : 'tours';
+        $tourId = isset($_GET['tourId']) ? $_GET['tourId'] : null;
         
-        if ($action === 'vehicles') {
-            // Fetch all active vehicles for tour pricing
-            $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE is_active = 1 ORDER BY name");
+        if ($tourId) {
+            // Fetch a single tour by ID, including gallery
+            $stmt = $conn->prepare("SELECT * FROM tour_fares WHERE tour_id = ?");
+            $stmt->bind_param("s", $tourId);
             $stmt->execute();
             $result = $stmt->get_result();
-
-            $vehicles = [];
-            while ($row = $result->fetch_assoc()) {
-                $vehicles[] = [
-                    'id' => $row['vehicle_id'],
-                    'name' => $row['name']
+            if ($result->num_rows === 0) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Tour not found'], 404);
+                exit;
+            }
+            $row = $result->fetch_assoc();
+            $tour = [
+                'id' => intval($row['id']),
+                'tourId' => $row['tour_id'],
+                'tourName' => $row['tour_name'],
+                'distance' => intval($row['distance']),
+                'days' => intval($row['days']),
+                'description' => $row['description'],
+                'imageUrl' => $row['image_url'],
+                'isActive' => boolval($row['is_active']),
+                'createdAt' => $row['created_at'],
+                'updatedAt' => $row['updated_at'],
+                'pricing' => [],
+                'timeDuration' => isset($row['time_duration']) && $row['time_duration'] !== null ? $row['time_duration'] : '',
+                'gallery' => [],
+                'inclusions' => [],
+                'exclusions' => [],
+                'itinerary' => []
+            ];
+            // Get gallery images
+            $galleryStmt = $conn->prepare("SELECT image_url, alt_text, caption FROM tour_gallery WHERE tour_id = ? ORDER BY sort_order, id");
+            $galleryStmt->bind_param("s", $tourId);
+            $galleryStmt->execute();
+            $galleryResult = $galleryStmt->get_result();
+            while ($img = $galleryResult->fetch_assoc()) {
+                $tour['gallery'][] = [
+                    'url' => $img['image_url'],
+                    'alt' => $img['alt_text'],
+                    'caption' => $img['caption']
                 ];
             }
-
-            sendJsonResponse(['status' => 'success', 'data' => $vehicles]);
+            // Get dynamic vehicle pricing
+            $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
+            $pricingStmt->bind_param("s", $tourId);
+            $pricingStmt->execute();
+            $pricingResult = $pricingStmt->get_result();
+            while ($pricingRow = $pricingResult->fetch_assoc()) {
+                $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
+            }
+            // Get inclusions
+            $inclusionsStmt = $conn->prepare("SELECT inclusion FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
+            $inclusionsStmt = $conn->prepare("SELECT description FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
+            $inclusionsStmt->bind_param("s", $tourId);
+            $inclusionsStmt->execute();
+            $inclusionsResult = $inclusionsStmt->get_result();
+            while ($inc = $inclusionsResult->fetch_assoc()) {
+                $tour['inclusions'][] = $inc['description'];
+            }
+            // Get exclusions
+            $exclusionsStmt = $conn->prepare("SELECT description FROM tour_exclusions WHERE tour_id = ? ORDER BY sort_order, id");
+            $exclusionsStmt->bind_param("s", $tourId);
+            $exclusionsStmt->execute();
+            $exclusionsResult = $exclusionsStmt->get_result();
+            while ($exc = $exclusionsResult->fetch_assoc()) {
+                $tour['exclusions'][] = $exc['description'];
+            }
+            // Get itinerary
+            $itineraryStmt = $conn->prepare("SELECT day_number, title, description, activities FROM tour_itinerary WHERE tour_id = ? ORDER BY day_number, id");
+            $itineraryStmt->bind_param("s", $tourId);
+            $itineraryStmt->execute();
+            $itineraryResult = $itineraryStmt->get_result();
+            while ($it = $itineraryResult->fetch_assoc()) {
+                $tour['itinerary'][] = [
+                    'day' => intval($it['day_number']),
+                    'title' => $it['title'],
+                    'description' => $it['description'],
+                    'activities' => $it['activities'] ? json_decode($it['activities'], true) : []
+                ];
+            }
+            // Always return a single tour object, not an array
+            sendJsonResponse(['status' => 'success', 'data' => $tour]);
+            exit;
         } else {
             // Fetch all tours
             $stmt = $conn->prepare("SELECT * FROM tour_fares ORDER BY tour_name");
@@ -111,7 +178,12 @@ try {
                     'isActive' => boolval($row['is_active']),
                     'createdAt' => $row['created_at'],
                     'updatedAt' => $row['updated_at'],
-                    'pricing' => []
+                    'pricing' => [],
+                    'timeDuration' => isset($row['time_duration']) && $row['time_duration'] !== null ? $row['time_duration'] : '',
+                    'gallery' => [],
+                    'inclusions' => [],
+                    'exclusions' => [],
+                    'itinerary' => []
                 ];
                 // Get dynamic vehicle pricing from tour_fare_rates
                 $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
@@ -120,6 +192,47 @@ try {
                 $pricingResult = $pricingStmt->get_result();
                 while ($pricingRow = $pricingResult->fetch_assoc()) {
                     $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
+                }
+                // Get gallery images
+                $galleryStmt = $conn->prepare("SELECT image_url, alt_text, caption FROM tour_gallery WHERE tour_id = ? ORDER BY sort_order, id");
+                $galleryStmt->bind_param("s", $row['tour_id']);
+                $galleryStmt->execute();
+                $galleryResult = $galleryStmt->get_result();
+                while ($img = $galleryResult->fetch_assoc()) {
+                    $tour['gallery'][] = [
+                        'url' => $img['image_url'],
+                        'alt' => $img['alt_text'],
+                        'caption' => $img['caption']
+                    ];
+                }
+                // Get inclusions
+                $inclusionsStmt = $conn->prepare("SELECT description FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
+                $inclusionsStmt->bind_param("s", $row['tour_id']);
+                $inclusionsStmt->execute();
+                $inclusionsResult = $inclusionsStmt->get_result();
+                while ($inc = $inclusionsResult->fetch_assoc()) {
+                    $tour['inclusions'][] = $inc['description'];
+                }
+                // Get exclusions
+                $exclusionsStmt = $conn->prepare("SELECT description FROM tour_exclusions WHERE tour_id = ? ORDER BY sort_order, id");
+                $exclusionsStmt->bind_param("s", $row['tour_id']);
+                $exclusionsStmt->execute();
+                $exclusionsResult = $exclusionsStmt->get_result();
+                while ($exc = $exclusionsResult->fetch_assoc()) {
+                    $tour['exclusions'][] = $exc['description'];
+                }
+                // Get itinerary
+                $itineraryStmt = $conn->prepare("SELECT day_number, title, description, activities FROM tour_itinerary WHERE tour_id = ? ORDER BY day_number, id");
+                $itineraryStmt->bind_param("s", $row['tour_id']);
+                $itineraryStmt->execute();
+                $itineraryResult = $itineraryStmt->get_result();
+                while ($it = $itineraryResult->fetch_assoc()) {
+                    $tour['itinerary'][] = [
+                        'day' => intval($it['day_number']),
+                        'title' => $it['title'],
+                        'description' => $it['description'],
+                        'activities' => $it['activities'] ? json_decode($it['activities'], true) : []
+                    ];
                 }
                 $tours[] = $tour;
             }
@@ -142,6 +255,7 @@ try {
         $days = intval($requestData['days'] ?? 1);
         $description = $requestData['description'] ?? '';
         $imageUrl = $requestData['imageUrl'] ?? '';
+        $timeDuration = $requestData['timeDuration'] ?? '';
         $pricing = $requestData['pricing'] ?? [];
         $gallery = $requestData['gallery'] ?? [];
         $inclusions = $requestData['inclusions'] ?? [];
@@ -159,8 +273,8 @@ try {
         }
         
         // Insert into tour_fares
-        $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssisss", $tourId, $tourName, $distance, $days, $description, $imageUrl);
+        $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url, time_duration) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssissss", $tourId, $tourName, $distance, $days, $description, $imageUrl, $timeDuration);
         $success = $stmt->execute();
         if (!$success) {
             throw new Exception("Failed to add new tour: " . $conn->error);
@@ -178,8 +292,10 @@ try {
         // Insert gallery images
         foreach ($gallery as $index => $image) {
             if (!empty($image['url'])) {
+                $alt = isset($image['alt']) ? $image['alt'] : '';
+                $caption = isset($image['caption']) ? $image['caption'] : '';
                 $stmt = $conn->prepare("INSERT INTO tour_gallery (tour_id, image_url, alt_text, caption, sort_order) VALUES (?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssi", $tourId, $image['url'], $image['alt'], $image['caption'], $index);
+                $stmt->bind_param("ssssi", $tourId, $image['url'], $alt, $caption, $index);
                 $stmt->execute();
             }
         }
@@ -233,6 +349,7 @@ try {
         if (isset($requestData['description'])) { $updateFields[] = "description = ?"; $types .= "s"; $values[] = $requestData['description']; }
         if (isset($requestData['imageUrl'])) { $updateFields[] = "image_url = ?"; $types .= "s"; $values[] = $requestData['imageUrl']; }
         if (isset($requestData['isActive'])) { $updateFields[] = "is_active = ?"; $types .= "i"; $values[] = $requestData['isActive'] ? 1 : 0; }
+        if (isset($requestData['timeDuration'])) { $updateFields[] = "time_duration = ?"; $types .= "s"; $values[] = $requestData['timeDuration']; }
         
         if (!empty($updateFields)) {
             $updateFields[] = "updated_at = NOW()";
@@ -271,8 +388,10 @@ try {
             // Insert new gallery
             foreach ($requestData['gallery'] as $index => $image) {
                 if (!empty($image['url'])) {
+                    $alt = isset($image['alt']) ? $image['alt'] : '';
+                    $caption = isset($image['caption']) ? $image['caption'] : '';
                     $stmt = $conn->prepare("INSERT INTO tour_gallery (tour_id, image_url, alt_text, caption, sort_order) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->bind_param("ssssi", $tourId, $image['url'], $image['alt'], $image['caption'], $index);
+                    $stmt->bind_param("ssssi", $tourId, $image['url'], $alt, $caption, $index);
                     $stmt->execute();
                 }
             }

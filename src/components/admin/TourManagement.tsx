@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,9 +68,28 @@ export default function TourManagement() {
     setIsModalOpen(true);
   };
 
-  const handleEditTour = (tour: TourData) => {
-    setSelectedTour(tour);
-    setIsModalOpen(true);
+  const handleEditTour = async (tour: TourData) => {
+    setIsLoading(true);
+    try {
+      let fullTour = await tourManagementAPI.getTourById(tour.tourId);
+      // If API returns an array, use the first item
+      if (Array.isArray(fullTour)) {
+        fullTour = fullTour[0] || tour;
+      }
+      console.log('Full tour loaded for edit:', fullTour);
+      setSelectedTour(fullTour && fullTour.tourId ? fullTour : tour);
+      setIsModalOpen(true);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load full tour details',
+        variant: 'destructive',
+      });
+      setSelectedTour(tour);
+      setIsModalOpen(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteTour = async (tourId: string) => {

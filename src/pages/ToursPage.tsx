@@ -199,30 +199,23 @@ const ToursPage = () => {
                         target.src = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop';
                       }}
                     />
-                    <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                      {tour.days} Day{tour.days > 1 ? 's' : ''}
+                    <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow">
+                      {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : `${tour.days} Day${tour.days > 1 ? 's' : ''}`}
                     </div>
                   </div>
                   <div className="p-4">
-                    <h3 className="font-semibold text-lg mb-2 line-clamp-2">{tour.tourName}</h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{tour.description}</p>
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                    <h3 className="font-semibold text-lg mb-1 line-clamp-2">{tour.tourName}</h3>
+                    <div className="flex items-center gap-4 text-gray-600 text-sm mb-2">
                       <span className="flex items-center gap-1">
-                        <MapPin size={14} />
-                        {tour.distance} km
+                        <MapPin size={16} /> {tour.distance} km
                       </span>
                       <span className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        {tour.days} day{tour.days > 1 ? 's' : ''}
+                        <Calendar size={16} /> {tour.days} day{tour.days > 1 ? 's' : ''}
                       </span>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-blue-600 font-medium">
-                        Starting from
-                      </div>
-                      <div className="text-lg font-bold text-blue-700">
-                        ₹{tour.minPrice.toLocaleString('en-IN')}
-                      </div>
+                    <div className="text-sm text-gray-700 mb-2 line-clamp-2">{tour.description}</div>
+                    <div className="text-blue-700 font-semibold text-right">
+                      Starting from ₹{tour.minPrice.toLocaleString('en-IN')}
                     </div>
                   </div>
                 </CardContent>

@@ -232,12 +232,17 @@ export interface TourData {
   tourName: string;
   distance: number;
   days: number;
+  timeDuration?: string;
   description?: string;
   imageUrl?: string;
   isActive: boolean;
   pricing: { [vehicleId: string]: number };
   createdAt?: string;
   updatedAt?: string;
+  gallery?: TourGalleryItem[];
+  inclusions?: string[];
+  exclusions?: string[];
+  itinerary?: TourItineraryDay[];
 }
 
 export interface TourGalleryItem {
@@ -259,6 +264,7 @@ export interface TourManagementRequest {
   tourName: string;
   distance: number;
   days: number;
+  timeDuration?: string;
   description?: string;
   imageUrl?: string;
   pricing: { [vehicleId: string]: number };

@@ -12,6 +12,7 @@ export interface TourFareResponse {
   description?: string;
   imageUrl?: string;
   pricing: { [vehicleId: string]: number };
+  timeDuration?: string;
 }
 
 export const tourAPI = {
@@ -32,9 +33,12 @@ export const tourAPI = {
       return response.data.map((tour: TourFareResponse) => ({
         id: tour.tourId,
         name: tour.tourName,
-        distance: 120, // Default distance if not provided by API
-        days: 1,      // Default duration if not provided by API
-        image: `/tours/${tour.tourId}.jpg` // Assuming images follow this naming convention
+        distance: tour.distance ?? 120, // Default distance if not provided by API
+        days: tour.days ?? 1,      // Default duration if not provided by API
+        image: tour.imageUrl || `/tours/${tour.tourId}.jpg`,
+        timeDuration: tour.timeDuration ?? '',
+        description: tour.description ?? '',
+        pricing: tour.pricing ?? {},
       }));
     } catch (error) {
       console.error('Error fetching tour data:', error);

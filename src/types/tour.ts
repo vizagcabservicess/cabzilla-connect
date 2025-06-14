@@ -1,4 +1,3 @@
-
 export interface TourGalleryImage {
   id: string;
   url: string;
@@ -40,6 +39,7 @@ export interface TourDetail {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  timeDuration?: string;
 }
 
 export interface TourListItem {
@@ -51,4 +51,5 @@ export interface TourListItem {
   imageUrl: string;
   pricing: { [vehicleId: string]: number };
   minPrice: number;
+  timeDuration?: string;
 }
