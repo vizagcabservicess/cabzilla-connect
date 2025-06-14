@@ -72,21 +72,22 @@ if (!$conn) {
 }
 
 try {
-    // Handle GET request - Get all tours or vehicles
+    // Handle GET request - Get all tours or specific tour
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $action = isset($_GET['action']) ? $_GET['action'] : 'tours';
         $tourId = isset($_GET['tourId']) ? $_GET['tourId'] : null;
         
         if ($tourId) {
-            // Fetch a single tour by ID, including gallery
+            // Fetch a single tour by ID with ALL related data
             $stmt = $conn->prepare("SELECT * FROM tour_fares WHERE tour_id = ?");
             $stmt->bind_param("s", $tourId);
             $stmt->execute();
             $result = $stmt->get_result();
+            
             if ($result->num_rows === 0) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Tour not found'], 404);
                 exit;
             }
+            
             $row = $result->fetch_assoc();
             $tour = [
                 'id' => intval($row['id']),
@@ -94,18 +95,19 @@ try {
                 'tourName' => $row['tour_name'],
                 'distance' => intval($row['distance']),
                 'days' => intval($row['days']),
-                'description' => $row['description'],
-                'imageUrl' => $row['image_url'],
+                'description' => $row['description'] ?? '',
+                'imageUrl' => $row['image_url'] ?? '',
                 'isActive' => boolval($row['is_active']),
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at'],
+                'timeDuration' => $row['time_duration'] ?? '',
                 'pricing' => [],
-                'timeDuration' => isset($row['time_duration']) && $row['time_duration'] !== null ? $row['time_duration'] : '',
                 'gallery' => [],
                 'inclusions' => [],
                 'exclusions' => [],
                 'itinerary' => []
             ];
+            
             // Get gallery images
             $galleryStmt = $conn->prepare("SELECT image_url, alt_text, caption FROM tour_gallery WHERE tour_id = ? ORDER BY sort_order, id");
             $galleryStmt->bind_param("s", $tourId);
@@ -114,10 +116,11 @@ try {
             while ($img = $galleryResult->fetch_assoc()) {
                 $tour['gallery'][] = [
                     'url' => $img['image_url'],
-                    'alt' => $img['alt_text'],
-                    'caption' => $img['caption']
+                    'alt' => $img['alt_text'] ?? '',
+                    'caption' => $img['caption'] ?? ''
                 ];
             }
+            
             // Get dynamic vehicle pricing
             $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
             $pricingStmt->bind_param("s", $tourId);
@@ -126,8 +129,8 @@ try {
             while ($pricingRow = $pricingResult->fetch_assoc()) {
                 $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
             }
+            
             // Get inclusions
-            $inclusionsStmt = $conn->prepare("SELECT inclusion FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
             $inclusionsStmt = $conn->prepare("SELECT description FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
             $inclusionsStmt->bind_param("s", $tourId);
             $inclusionsStmt->execute();
@@ -135,6 +138,7 @@ try {
             while ($inc = $inclusionsResult->fetch_assoc()) {
                 $tour['inclusions'][] = $inc['description'];
             }
+            
             // Get exclusions
             $exclusionsStmt = $conn->prepare("SELECT description FROM tour_exclusions WHERE tour_id = ? ORDER BY sort_order, id");
             $exclusionsStmt->bind_param("s", $tourId);
@@ -143,20 +147,27 @@ try {
             while ($exc = $exclusionsResult->fetch_assoc()) {
                 $tour['exclusions'][] = $exc['description'];
             }
+            
             // Get itinerary
             $itineraryStmt = $conn->prepare("SELECT day_number, title, description, activities FROM tour_itinerary WHERE tour_id = ? ORDER BY day_number, id");
             $itineraryStmt->bind_param("s", $tourId);
             $itineraryStmt->execute();
             $itineraryResult = $itineraryStmt->get_result();
             while ($it = $itineraryResult->fetch_assoc()) {
+                $activities = [];
+                if (!empty($it['activities'])) {
+                    $decoded = json_decode($it['activities'], true);
+                    $activities = is_array($decoded) ? $decoded : explode(',', $it['activities']);
+                }
+                
                 $tour['itinerary'][] = [
                     'day' => intval($it['day_number']),
-                    'title' => $it['title'],
-                    'description' => $it['description'],
-                    'activities' => $it['activities'] ? json_decode($it['activities'], true) : []
+                    'title' => $it['title'] ?? '',
+                    'description' => $it['description'] ?? '',
+                    'activities' => $activities
                 ];
             }
-            // Always return a single tour object, not an array
+            
             sendJsonResponse(['status' => 'success', 'data' => $tour]);
             exit;
         } else {
@@ -173,18 +184,15 @@ try {
                     'tourName' => $row['tour_name'],
                     'distance' => intval($row['distance']),
                     'days' => intval($row['days']),
-                    'description' => $row['description'],
-                    'imageUrl' => $row['image_url'],
+                    'description' => $row['description'] ?? '',
+                    'imageUrl' => $row['image_url'] ?? '',
                     'isActive' => boolval($row['is_active']),
                     'createdAt' => $row['created_at'],
                     'updatedAt' => $row['updated_at'],
-                    'pricing' => [],
-                    'timeDuration' => isset($row['time_duration']) && $row['time_duration'] !== null ? $row['time_duration'] : '',
-                    'gallery' => [],
-                    'inclusions' => [],
-                    'exclusions' => [],
-                    'itinerary' => []
+                    'timeDuration' => $row['time_duration'] ?? '',
+                    'pricing' => []
                 ];
+                
                 // Get dynamic vehicle pricing from tour_fare_rates
                 $pricingStmt = $conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
                 $pricingStmt->bind_param("s", $row['tour_id']);
@@ -193,47 +201,7 @@ try {
                 while ($pricingRow = $pricingResult->fetch_assoc()) {
                     $tour['pricing'][$pricingRow['vehicle_id']] = floatval($pricingRow['price']);
                 }
-                // Get gallery images
-                $galleryStmt = $conn->prepare("SELECT image_url, alt_text, caption FROM tour_gallery WHERE tour_id = ? ORDER BY sort_order, id");
-                $galleryStmt->bind_param("s", $row['tour_id']);
-                $galleryStmt->execute();
-                $galleryResult = $galleryStmt->get_result();
-                while ($img = $galleryResult->fetch_assoc()) {
-                    $tour['gallery'][] = [
-                        'url' => $img['image_url'],
-                        'alt' => $img['alt_text'],
-                        'caption' => $img['caption']
-                    ];
-                }
-                // Get inclusions
-                $inclusionsStmt = $conn->prepare("SELECT description FROM tour_inclusions WHERE tour_id = ? ORDER BY sort_order, id");
-                $inclusionsStmt->bind_param("s", $row['tour_id']);
-                $inclusionsStmt->execute();
-                $inclusionsResult = $inclusionsStmt->get_result();
-                while ($inc = $inclusionsResult->fetch_assoc()) {
-                    $tour['inclusions'][] = $inc['description'];
-                }
-                // Get exclusions
-                $exclusionsStmt = $conn->prepare("SELECT description FROM tour_exclusions WHERE tour_id = ? ORDER BY sort_order, id");
-                $exclusionsStmt->bind_param("s", $row['tour_id']);
-                $exclusionsStmt->execute();
-                $exclusionsResult = $exclusionsStmt->get_result();
-                while ($exc = $exclusionsResult->fetch_assoc()) {
-                    $tour['exclusions'][] = $exc['description'];
-                }
-                // Get itinerary
-                $itineraryStmt = $conn->prepare("SELECT day_number, title, description, activities FROM tour_itinerary WHERE tour_id = ? ORDER BY day_number, id");
-                $itineraryStmt->bind_param("s", $row['tour_id']);
-                $itineraryStmt->execute();
-                $itineraryResult = $itineraryStmt->get_result();
-                while ($it = $itineraryResult->fetch_assoc()) {
-                    $tour['itinerary'][] = [
-                        'day' => intval($it['day_number']),
-                        'title' => $it['title'],
-                        'description' => $it['description'],
-                        'activities' => $it['activities'] ? json_decode($it['activities'], true) : []
-                    ];
-                }
+                
                 $tours[] = $tour;
             }
 
