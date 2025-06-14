@@ -1,5 +1,4 @@
 
-import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface BookingSummaryProps {
@@ -28,41 +27,32 @@ export const BookingSummary = ({
   onBookNow
 }: BookingSummaryProps) => {
   return (
-    <div className="bg-white shadow rounded-xl p-5">
-      <div className="font-bold text-lg mb-2">Booking Summary</div>
-      <div className="text-xs text-gray-400 font-medium mb-3 uppercase">Trip Type</div>
-      <div className="flex items-center gap-2 text-sm mb-2">
-        <span>Tour</span>
+    <div className="bg-white rounded-lg shadow p-4 mb-2 max-w-md mx-auto">
+      <div className="font-semibold text-lg mb-2">Booking Summary</div>
+      <div className="text-sm mb-1"><b>Trip Type:</b> {tripType === 'tour' ? 'Tour' : tripType}</div>
+      <div className="text-sm mb-1"><b>Pickup:</b> {pickupLocation?.name}</div>
+      <div className="text-sm mb-1">
+        <b>Pickup Date:</b>{" "}
+        {pickupDate && pickupDate instanceof Date
+          ? pickupDate.toLocaleString('en-IN', { dateStyle: "medium", timeStyle: "short" })
+          : ''}
       </div>
-      <div className="flex items-center gap-2 text-sm mb-1">
-        <span className="text-blue-600 font-medium">Total Distance</span>
-        <span className="text-xs font-semibold">{distance} KM</span>
-      </div>
-      <div className="flex items-center gap-1 text-xs mb-1">
-        <span className="text-blue-600">Pickup</span>
-        <span>{pickupLocation?.name}</span>
-      </div>
-      <div className="flex items-center gap-1 text-xs mb-2">
-        <Calendar className="h-4 w-4 text-blue-500 mr-1" />
-        <span>{pickupDate && pickupDate instanceof Date ? pickupDate.toLocaleString('en-IN', { dateStyle: "medium", timeStyle: "short" }) : ''}</span>
-      </div>
+      <div className="text-sm mb-1"><b>Total Distance:</b> {distance} km</div>
       <hr className="my-2" />
-      <div className="mb-2">
-        <div className="flex justify-between items-center text-sm">
-          <span className="font-bold">{selectedCab?.name || ""}</span>
-          <span>{selectedCab?.capacity ? `${selectedCab.capacity} persons` : ""}</span>
-        </div>
+      <div className="flex justify-between items-center text-sm mb-1">
+        <span className="font-semibold">{selectedCab?.name || ""}</span>
+        <span>{selectedCab?.capacity ? `${selectedCab.capacity} persons` : ""}</span>
       </div>
-      <div className="flex justify-between items-center text-sm">
-        <span>Base fare</span>
+      <div className="flex justify-between items-center text-sm mb-1">
+        <span>Base fare:</span>
         <span>₹{totalPrice ? totalPrice.toLocaleString('en-IN') : 0}</span>
       </div>
-      <div className="flex justify-between items-center font-bold mt-2 text-base">
-        <span>Total Price</span>
-        <span className="text-blue-700 text-xl">₹{totalPrice ? totalPrice.toLocaleString('en-IN') : 0}</span>
+      <div className="flex justify-between items-center font-semibold mt-2 text-base">
+        <span>Total Price:</span>
+        <span className="text-blue-700 text-lg">₹{totalPrice ? totalPrice.toLocaleString('en-IN') : 0}</span>
       </div>
       {showBookNow && (
-        <Button className="w-full mt-6" onClick={onBookNow} disabled={!selectedCab}>
+        <Button className="w-full mt-5" onClick={onBookNow} disabled={!selectedCab}>
           Book Now
         </Button>
       )}
