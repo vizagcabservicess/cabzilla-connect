@@ -46,54 +46,67 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    console.log('Tour data received in modal:', tour);
-    if (tour) {
-      const safeGallery = Array.isArray(tour.gallery) ? tour.gallery : [];
-      const safeInclusions = Array.isArray(tour.inclusions) ? tour.inclusions : [];
-      const safeExclusions = Array.isArray(tour.exclusions) ? tour.exclusions : [];
-      const safeItinerary = Array.isArray(tour.itinerary) ? tour.itinerary : [];
-      
-      console.log('Setting form data with arrays:', {
-        gallery: safeGallery,
-        inclusions: safeInclusions,
-        exclusions: safeExclusions,
-        itinerary: safeItinerary
-      });
-      
-      setFormData({
-        tourId: tour.tourId || '',
-        tourName: tour.tourName || '',
-        distance: typeof tour.distance === 'number' ? tour.distance : 0,
-        days: typeof tour.days === 'number' ? tour.days : 1,
-        timeDuration: tour.timeDuration || '',
-        description: tour.description || '',
-        imageUrl: tour.imageUrl || '',
-        pricing: tour.pricing || {},
-        gallery: safeGallery,
-        inclusions: safeInclusions,
-        exclusions: safeExclusions,
-        itinerary: safeItinerary
-      });
-    } else {
-      setFormData({
-        tourId: '',
-        tourName: '',
-        distance: 0,
-        days: 1,
-        timeDuration: '',
-        description: '',
-        imageUrl: '',
-        pricing: {},
-        gallery: [],
-        inclusions: [],
-        exclusions: [],
-        itinerary: []
-      });
+    console.log('TourFormModal: tour prop changed:', tour);
+    console.log('TourFormModal: isOpen:', isOpen);
+    
+    if (isOpen) {
+      if (tour) {
+        console.log('TourFormModal: Setting form data from tour:', tour);
+        
+        // Ensure all arrays exist and log their contents
+        const safeGallery = Array.isArray(tour.gallery) ? tour.gallery : [];
+        const safeInclusions = Array.isArray(tour.inclusions) ? tour.inclusions : [];
+        const safeExclusions = Array.isArray(tour.exclusions) ? tour.exclusions : [];
+        const safeItinerary = Array.isArray(tour.itinerary) ? tour.itinerary : [];
+        
+        console.log('TourFormModal: Processing arrays:', {
+          gallery: safeGallery,
+          inclusions: safeInclusions,
+          exclusions: safeExclusions,
+          itinerary: safeItinerary
+        });
+        
+        const newFormData = {
+          tourId: tour.tourId || '',
+          tourName: tour.tourName || '',
+          distance: typeof tour.distance === 'number' ? tour.distance : 0,
+          days: typeof tour.days === 'number' ? tour.days : 1,
+          timeDuration: tour.timeDuration || '',
+          description: tour.description || '',
+          imageUrl: tour.imageUrl || '',
+          pricing: tour.pricing || {},
+          gallery: safeGallery,
+          inclusions: safeInclusions,
+          exclusions: safeExclusions,
+          itinerary: safeItinerary
+        };
+        
+        console.log('TourFormModal: Final form data being set:', newFormData);
+        setFormData(newFormData);
+      } else {
+        console.log('TourFormModal: Resetting form data for new tour');
+        setFormData({
+          tourId: '',
+          tourName: '',
+          distance: 0,
+          days: 1,
+          timeDuration: '',
+          description: '',
+          imageUrl: '',
+          pricing: {},
+          gallery: [],
+          inclusions: [],
+          exclusions: [],
+          itinerary: []
+        });
+      }
     }
-  }, [tour]);
+  }, [tour, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('TourFormModal: Submitting form data:', formData);
+    
     // Filter out empty inclusions/exclusions before submit
     const cleanedFormData = {
       ...formData,
@@ -102,7 +115,8 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
       gallery: formData.gallery || [],
       itinerary: formData.itinerary || [],
     };
-    console.log('Submitting formData:', cleanedFormData);
+    
+    console.log('TourFormModal: Cleaned form data for submission:', cleanedFormData);
     onSubmit(cleanedFormData);
   };
 
@@ -123,20 +137,30 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
       const formDataUpload = new FormData();
       formDataUpload.append('image', file);
       
+      // Use the correct backend URL
       const baseURL = getApiUrl();
-      const response = await fetch(`${baseURL}/api/upload-image.php`, {
+      const uploadUrl = `${baseURL}/api/upload-image.php`;
+      console.log('Uploading to:', uploadUrl);
+      
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formDataUpload,
       });
+      
+      console.log('Upload response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Upload response:', data);
+      console.log('Upload response data:', data);
       
       if (data && data.url) {
+        toast({
+          title: "Success",
+          description: "Image uploaded successfully",
+        });
         return data.url;
       }
       throw new Error(data.error || 'Image upload failed');
@@ -161,7 +185,9 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     
     try {
       if (galleryImageFile) {
+        console.log('Uploading file:', galleryImageFile.name);
         url = await handleFileUpload(galleryImageFile);
+        console.log('File uploaded, URL:', url);
       }
       
       if (!url) {
@@ -173,11 +199,15 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
         return;
       }
       
+      console.log('Adding gallery item:', { url, alt, caption });
+      
       setFormData(prev => {
         const prevGallery = Array.isArray(prev.gallery) ? prev.gallery : [];
+        const newGallery = [...prevGallery, { url, alt, caption }];
+        console.log('Updated gallery:', newGallery);
         return {
           ...prev,
-          gallery: [...prevGallery, { url, alt, caption }]
+          gallery: newGallery
         };
       });
       
@@ -193,6 +223,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
       });
     } catch (error) {
       // Error handling is done in handleFileUpload
+      console.error('Failed to add gallery item:', error);
     }
   };
 
@@ -280,6 +311,12 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
       ...prev,
       itinerary: prev.itinerary?.filter((_, i) => i !== index) || []
     }));
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    console.log('File selected:', file?.name);
+    setGalleryImageFile(file);
   };
 
   return (
@@ -417,7 +454,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                       <Input 
                         type="file" 
                         accept="image/*" 
-                        onChange={e => setGalleryImageFile(e.target.files?.[0] || null)} 
+                        onChange={handleFileInputChange} 
                       />
                       <div className="text-center text-gray-500">OR</div>
                       <Label>Image URL</Label>
@@ -468,7 +505,14 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
 
               <div className="space-y-2">
                 {(!formData.gallery || formData.gallery.length === 0) && (
-                  <div className="text-gray-500 text-center py-4">No images added yet.</div>
+                  <div className="text-gray-500 text-center py-4">
+                    No images added yet.
+                    {formData.gallery && (
+                      <div className="text-xs mt-2">
+                        Gallery array exists but is empty. Length: {formData.gallery.length}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {formData.gallery?.map((item, index) => (
                   <Card key={index}>
@@ -515,7 +559,14 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                 </Button>
               </div>
               {(!formData.inclusions || formData.inclusions.length === 0) && (
-                <div className="text-gray-500 text-center py-4">No inclusions added yet.</div>
+                <div className="text-gray-500 text-center py-4">
+                  No inclusions added yet.
+                  {formData.inclusions && (
+                    <div className="text-xs mt-2">
+                      Inclusions array exists but is empty. Length: {formData.inclusions.length}
+                    </div>
+                  )}
+                </div>
               )}
               {formData.inclusions?.map((inclusion, index) => (
                 <div key={index} className="flex gap-2">
@@ -547,7 +598,14 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                 </Button>
               </div>
               {(!formData.exclusions || formData.exclusions.length === 0) && (
-                <div className="text-gray-500 text-center py-4">No exclusions added yet.</div>
+                <div className="text-gray-500 text-center py-4">
+                  No exclusions added yet.
+                  {formData.exclusions && (
+                    <div className="text-xs mt-2">
+                      Exclusions array exists but is empty. Length: {formData.exclusions.length}
+                    </div>
+                  )}
+                </div>
               )}
               {formData.exclusions?.map((exclusion, index) => (
                 <div key={index} className="flex gap-2">
@@ -579,7 +637,14 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                 </Button>
               </div>
               {(!formData.itinerary || formData.itinerary.length === 0) && (
-                <div className="text-gray-500 text-center py-4">No itinerary days added yet.</div>
+                <div className="text-gray-500 text-center py-4">
+                  No itinerary days added yet.
+                  {formData.itinerary && (
+                    <div className="text-xs mt-2">
+                      Itinerary array exists but is empty. Length: {formData.itinerary.length}
+                    </div>
+                  )}
+                </div>
               )}
               {formData.itinerary?.map((day, index) => (
                 <Card key={index}>

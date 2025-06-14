@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,22 +70,37 @@ export default function TourManagement() {
   };
 
   const handleEditTour = async (tour: TourData) => {
+    console.log('Starting edit for tour:', tour.tourId);
     setIsLoading(true);
     try {
-      let fullTour = await tourManagementAPI.getTourById(tour.tourId);
-      // If API returns an array, use the first item
-      if (Array.isArray(fullTour)) {
-        fullTour = fullTour[0] || tour;
+      // Fetch the complete tour data with all related information
+      const fullTour = await tourManagementAPI.getTourById(tour.tourId);
+      console.log('Full tour data received from API:', fullTour);
+      
+      if (fullTour) {
+        // Ensure all arrays exist and are properly formatted
+        const tourWithDefaults = {
+          ...fullTour,
+          gallery: Array.isArray(fullTour.gallery) ? fullTour.gallery : [],
+          inclusions: Array.isArray(fullTour.inclusions) ? fullTour.inclusions : [],
+          exclusions: Array.isArray(fullTour.exclusions) ? fullTour.exclusions : [],
+          itinerary: Array.isArray(fullTour.itinerary) ? fullTour.itinerary : []
+        };
+        console.log('Setting tour data for modal:', tourWithDefaults);
+        setSelectedTour(tourWithDefaults);
+      } else {
+        console.log('No full tour data received, using original tour data');
+        setSelectedTour(tour);
       }
-      console.log('Full tour loaded for edit:', fullTour);
-      setSelectedTour(fullTour && fullTour.tourId ? fullTour : tour);
       setIsModalOpen(true);
     } catch (error) {
+      console.error('Error loading full tour details:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load full tour details',
+        description: 'Failed to load full tour details. Using basic data.',
         variant: 'destructive',
       });
+      // Fallback to the basic tour data if detailed fetch fails
       setSelectedTour(tour);
       setIsModalOpen(true);
     } finally {
@@ -131,6 +147,7 @@ export default function TourManagement() {
       }
       
       setIsModalOpen(false);
+      setSelectedTour(null); // Reset selected tour
       loadTours();
     } catch (error) {
       console.error('Error saving tour:', error);
@@ -142,6 +159,11 @@ export default function TourManagement() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedTour(null); // Reset selected tour when closing
   };
 
   const formatPrice = (price: number) => {
@@ -245,6 +267,7 @@ export default function TourManagement() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleEditTour(tour)}
+                      disabled={isLoading}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -279,7 +302,7 @@ export default function TourManagement() {
 
       <TourFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         onSubmit={handleSubmitTour}
         tour={selectedTour}
         vehicles={vehicles}

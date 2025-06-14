@@ -85,7 +85,7 @@ export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCa
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1 text-yellow-500">
-            <Star className="w-4 h-4 fill-current" />
+            <Star className="w-4 w-4 fill-current" />
             <span className="text-sm font-medium">4.5</span>
             <span className="text-xs text-gray-500">(120+ rides)</span>
           </div>
