@@ -80,7 +80,6 @@ const TourDetailPage = () => {
 
   const handleVehicleSelect = (vehicle: VehicleWithPricing) => {
     setSelectedVehicle(vehicle);
-    setShowBookingForm(true);
   };
 
   const handleBookNow = () => {
@@ -187,7 +186,7 @@ const TourDetailPage = () => {
       
       <div className="container mx-auto px-4 py-6 pb-20">
         {/* Back Button */}
-        <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm">
+        <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Tours
         </Button>
@@ -198,22 +197,22 @@ const TourDetailPage = () => {
             <div className="lg:col-span-2 space-y-6">
               {/* Header */}
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
-                  <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="secondary">{tour.category}</Badge>
+                  <Badge variant="outline">{tour.difficulty}</Badge>
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">{tour.tourName}</h1>
-                <div className="flex items-center gap-4 text-gray-600 text-sm">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{tour.tourName}</h1>
+                <div className="flex items-center gap-4 text-gray-600">
                   <span className="flex items-center gap-1">
-                    <MapPin size={14} />
+                    <MapPin size={16} />
                     {tour.distance} km
                   </span>
                   <span className="flex items-center gap-1">
-                    <Calendar size={14} />
+                    <Calendar size={16} />
                     {tour.days} day{tour.days > 1 ? 's' : ''}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Clock size={14} />
+                    <Clock size={16} />
                     {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}
                   </span>
                 </div>
@@ -233,28 +232,29 @@ const TourDetailPage = () => {
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList>
-                  <TabsTrigger value="overview" className="text-sm">Overview</TabsTrigger>
-                  <TabsTrigger value="itinerary" className="text-sm">Itinerary</TabsTrigger>
-                  <TabsTrigger value="inclusions" className="text-sm">Inclusions & Exclusions</TabsTrigger>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
+                  <TabsTrigger value="inclusions">Inclusions</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">About This Tour</CardTitle>
+                      <CardTitle>About This Tour</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-700 text-sm mb-3">{tour.description || 'No description available.'}</p>
+                      <p className="text-gray-700 mb-4">{tour.description || 'No description available.'}</p>
+                      
                       <div className="grid md:grid-cols-3 gap-4">
                         {tour.highlights.map((highlight, idx) => (
                           <div key={idx} className="text-center">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-1">
-                              {highlight.icon === 'mountain' && <Mountain className="h-5 w-5 text-blue-600" />}
-                              {highlight.icon === 'camera' && <Camera className="h-5 w-5 text-blue-600" />}
-                              {highlight.icon === 'coffee' && <Coffee className="h-5 w-5 text-blue-600" />}
+                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                              {highlight.icon === 'mountain' && <Mountain className="h-6 w-6 text-blue-600" />}
+                              {highlight.icon === 'camera' && <Camera className="h-6 w-6 text-blue-600" />}
+                              {highlight.icon === 'coffee' && <Coffee className="h-6 w-6 text-blue-600" />}
                             </div>
-                            <h4 className="font-semibold mb-0.5 text-xs">{highlight.title}</h4>
-                            <p className="text-xs text-gray-600">{highlight.description}</p>
+                            <h4 className="font-semibold mb-1">{highlight.title}</h4>
+                            <p className="text-sm text-gray-600">{highlight.description}</p>
                           </div>
                         ))}
                       </div>
@@ -265,15 +265,15 @@ const TourDetailPage = () => {
                 <TabsContent value="itinerary">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Tour Itinerary</CardTitle>
+                      <CardTitle>Tour Itinerary</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {tour.itinerary.length > 0 ? (
                         tour.itinerary.map((day, idx) => (
                           <div key={idx} className="mb-6 last:mb-0">
-                            <h4 className="font-semibold text-base mb-1">Day {day.day}: {day.title}</h4>
-                            <p className="text-gray-700 text-sm mb-2">{day.description}</p>
-                            <ul className="space-y-1 ml-4">
+                            <h4 className="font-semibold text-lg mb-2">Day {day.day}: {day.title}</h4>
+                            <p className="text-gray-700 mb-3">{day.description}</p>
+                            <ul className="space-y-1">
                               {day.activities.map((activity, actIndex) => (
                                 <li key={actIndex} className="flex items-start gap-2 text-sm">
                                   <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -284,21 +284,20 @@ const TourDetailPage = () => {
                           </div>
                         ))
                       ) : (
-                        <p className="text-gray-500 text-sm">No itinerary information available.</p>
+                        <p className="text-gray-500">No itinerary information available.</p>
                       )}
                     </CardContent>
                   </Card>
                 </TabsContent>
 
-                {/* Compact two-column inclusions/exclusions display */}
                 <TabsContent value="inclusions">
-                  <div className="grid md:grid-cols-2 gap-4 mt-2">
+                  <div className="grid md:grid-cols-2 gap-4">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-green-600 text-base">Included</CardTitle>
+                        <CardTitle className="text-green-600">Included</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <ul className="space-y-1">
+                        <ul className="space-y-2">
                           {tour.inclusions.length > 0 ? (
                             tour.inclusions.map((item, idx) => (
                               <li key={idx} className="flex items-start gap-2 text-sm">
@@ -315,10 +314,10 @@ const TourDetailPage = () => {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-red-600 text-base">Not Included</CardTitle>
+                        <CardTitle className="text-red-600">Not Included</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <ul className="space-y-1">
+                        <ul className="space-y-2">
                           {tour.exclusions.length > 0 ? (
                             tour.exclusions.map((item, idx) => (
                               <li key={idx} className="flex items-start gap-2 text-sm">
@@ -343,9 +342,10 @@ const TourDetailPage = () => {
                 pricing={tour.pricing}
                 onVehicleSelect={handleVehicleSelect}
                 selectedVehicle={selectedVehicle}
-                onBookNow={() => null}
+                onBookNow={handleBookNow}
               />
-              {/* Booking summary will now show if a vehicle is selected */}
+
+              {/* Booking Summary */}
               {selectedVehicle && (
                 <BookingSummary
                   pickupLocation={pickupLocation}
@@ -353,11 +353,9 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  totalPrice={selectedVehicle.price} // Should no longer be 0
+                  totalPrice={selectedVehicle.price}
                   tripType="tour"
                   hourlyPackage="tour"
-                  showBookNow // NEW: show book now here!
-                  onBookNow={handleBookNow}
                 />
               )}
             </div>
@@ -372,6 +370,7 @@ const TourDetailPage = () => {
                 onBack={() => setShowBookingForm(false)}
               />
             </div>
+            
             <div>
               {selectedVehicle && (
                 <BookingSummary

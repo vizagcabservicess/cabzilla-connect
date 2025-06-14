@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ interface TourVehicleSelectionProps {
   pricing: { [vehicleId: string]: number };
   onVehicleSelect: (vehicle: VehicleWithPricing) => void;
   selectedVehicle: VehicleWithPricing | null;
-  onBookNow?: () => void;
+  onBookNow: () => void;
 }
 
 export const TourVehicleSelection = ({
@@ -35,6 +36,7 @@ export const TourVehicleSelection = ({
           price
         };
       }).filter(v => v.price > 0);
+      
       setVehiclesWithPricing(vehiclesWithPrices);
       setIsLoading(false);
     }
@@ -54,7 +56,7 @@ export const TourVehicleSelection = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base font-bold">Select Your Vehicle</CardTitle>
+        <CardTitle>Select Your Vehicle</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -62,43 +64,51 @@ export const TourVehicleSelection = ({
             <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {vehiclesWithPricing.length > 0 ? (
               vehiclesWithPricing.map((vehicle) => (
                 <div
                   key={vehicle.id}
-                  className={`border rounded-lg p-3 cursor-pointer transition-all
-                    text-sm
-                    ${selectedVehicle?.id === vehicle.id
+                  className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                    selectedVehicle?.id === vehicle.id
                       ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'}
-                  `}
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
                   onClick={() => onVehicleSelect(vehicle)}
-                  title={vehicle.name}
                 >
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-semibold truncate w-36" style={{ fontSize: '1rem', lineHeight: '1.1' }}>
-                        {vehicle.name}
-                      </h4>
-                      <p className="text-xs text-gray-500">{vehicle.capacity} passengers</p>
+                      <h4 className="font-semibold">{vehicle.name}</h4>
+                      <p className="text-sm text-gray-600">{vehicle.capacity} passengers</p>
+                      <div className="flex items-center gap-1 text-yellow-500 mt-1">
+                        <Star size={14} fill="currentColor" />
+                        <span className="text-sm text-gray-600">4.5</span>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-extrabold text-blue-600">
+                      <div className="text-lg font-bold text-blue-600">
                         ₹{vehicle.price.toLocaleString('en-IN')}
                       </div>
-                      <div className="text-xs text-gray-500">Total</div>
+                      <div className="text-sm text-gray-500">Total</div>
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-gray-500 text-sm">
+              <div className="text-center py-4 text-gray-500">
                 No vehicles available for this tour
               </div>
             )}
           </div>
         )}
+        
+        <Button
+          onClick={onBookNow}
+          disabled={!selectedVehicle}
+          className="w-full mt-4"
+        >
+          Book Now
+        </Button>
       </CardContent>
     </Card>
   );
