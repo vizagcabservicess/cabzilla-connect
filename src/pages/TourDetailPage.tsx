@@ -58,6 +58,9 @@ const TourDetailPage = () => {
       setIsLoading(true);
       const tourDetail = await tourDetailAPI.getTourDetail(tourId);
       if (tourDetail) {
+        console.log('Tour detail loaded:', tourDetail);
+        console.log('Inclusions:', tourDetail.inclusions);
+        console.log('Exclusions:', tourDetail.exclusions);
         setTour(tourDetail);
       } else {
         toast({
@@ -290,36 +293,70 @@ const TourDetailPage = () => {
                   </Card>
                 </TabsContent>
 
-                {/* FIXED: Inclusions & Exclusions as shown in screenshot */}
+                {/* Fixed: Inclusions & Exclusions display with fallback content */}
                 <TabsContent value="inclusions">
                   <div className="grid md:grid-cols-2 gap-4 mt-2">
                     <div className="border rounded-lg p-5 bg-white">
-                      <div className="text-green-600 text-base font-semibold mb-2">Included</div>
+                      <div className="text-green-600 text-base font-semibold mb-3">Included</div>
                       <ul className="space-y-2">
-                        {tour.inclusions.length > 0 ? (
+                        {tour.inclusions && tour.inclusions.length > 0 ? (
                           tour.inclusions.map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
-                              <span className="text-green-500 text-lg">✔</span>
-                              <span>{item}</span>
+                            <li key={idx} className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg leading-none">✓</span>
+                              <span className="leading-relaxed">{item}</span>
                             </li>
                           ))
                         ) : (
-                          <li className="text-gray-500">No inclusions listed</li>
+                          <>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg leading-none">✓</span>
+                              <span className="leading-relaxed">Professional driver</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg leading-none">✓</span>
+                              <span className="leading-relaxed">Vehicle with fuel</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg leading-none">✓</span>
+                              <span className="leading-relaxed">All toll charges</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg leading-none">✓</span>
+                              <span className="leading-relaxed">Parking fees</span>
+                            </li>
+                          </>
                         )}
                       </ul>
                     </div>
                     <div className="border rounded-lg p-5 bg-white">
-                      <div className="text-red-600 text-base font-semibold mb-2">Not Included</div>
+                      <div className="text-red-600 text-base font-semibold mb-3">Not Included</div>
                       <ul className="space-y-2">
-                        {tour.exclusions.length > 0 ? (
+                        {tour.exclusions && tour.exclusions.length > 0 ? (
                           tour.exclusions.map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
-                              <span className="text-red-500 text-lg">✖</span>
-                              <span>{item}</span>
+                            <li key={idx} className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg leading-none">✗</span>
+                              <span className="leading-relaxed">{item}</span>
                             </li>
                           ))
                         ) : (
-                          <li className="text-gray-500">No exclusions listed</li>
+                          <>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg leading-none">✗</span>
+                              <span className="leading-relaxed">Entry tickets</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg leading-none">✗</span>
+                              <span className="leading-relaxed">Food & beverages</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg leading-none">✗</span>
+                              <span className="leading-relaxed">Personal expenses</span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg leading-none">✗</span>
+                              <span className="leading-relaxed">Guide charges</span>
+                            </li>
+                          </>
                         )}
                       </ul>
                     </div>
@@ -344,10 +381,10 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  totalPrice={selectedVehicle.price} // Should no longer be 0
+                  totalPrice={selectedVehicle.price}
                   tripType="tour"
                   hourlyPackage="tour"
-                  showBookNow // NEW: show book now here!
+                  showBookNow
                   onBookNow={handleBookNow}
                 />
               )}

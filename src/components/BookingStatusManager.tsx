@@ -1,229 +1,155 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
 import { bookingAPI } from '@/services/api';
-import { BookingStatus } from '@/types/api';
-import { AlertCircle, Clock, CheckCheck, X, RefreshCcw } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Booking, BookingStatus } from '@/types/booking';
 
 interface BookingStatusManagerProps {
-  bookingId?: number | string;
-  currentStatus: BookingStatus;
-  onStatusChange?: (newStatus: BookingStatus) => void;
-  className?: string;
-  variant?: 'default' | 'compact';
-  showLabel?: boolean;
-  isAdmin?: boolean;
-  onDelete?: () => void;
+  booking: Booking;
+  onUpdate: () => void;
 }
 
-export function BookingStatusManager({
-  bookingId,
-  currentStatus,
-  onStatusChange,
-  className = '',
-  variant = 'default',
-  showLabel = true,
-  isAdmin = false,
-  onDelete
-}: BookingStatusManagerProps) {
-  const [status, setStatus] = useState<BookingStatus>(currentStatus);
+export const BookingStatusManager = ({ booking, onUpdate }: BookingStatusManagerProps) => {
+  const [status, setStatus] = useState<BookingStatus>(booking.status);
+  const [notes, setNotes] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Update local state when the prop changes
-  useEffect(() => {
-    setStatus(currentStatus);
-  }, [currentStatus]);
-  
-  const getNextStatus = (current: BookingStatus): BookingStatus | null => {
-    switch (current) {
+  const { toast } = useToast();
+
+  const statusOptions: { value: BookingStatus; label: string; color: string }[] = [
+    { value: 'pending', label: 'Pending', color: 'bg-yellow-500' },
+    { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-500' },
+    { value: 'in_progress', label: 'In Progress', color: 'bg-purple-500' },
+    { value: 'completed', label: 'Completed', color: 'bg-green-500' },
+    { value: 'cancelled', label: 'Cancelled', color: 'bg-red-500' }
+  ];
+
+  const getStatusColor = (status: BookingStatus) => {
+    const statusOption = statusOptions.find(option => option.value === status);
+    return statusOption?.color || 'bg-gray-500';
+  };
+
+  const getNextStatus = (currentStatus: BookingStatus): BookingStatus => {
+    switch (currentStatus) {
       case 'pending':
         return 'confirmed';
       case 'confirmed':
-        return 'assigned';
-      case 'assigned':
-        return 'in-progress';
-      case 'in-progress':
+        return 'in_progress';
+      case 'in_progress':
         return 'completed';
-      case 'payment_received':
-        return 'completed';
-      case 'payment_pending':
-        return 'payment_received';
-      case 'completed':
-        return null;
-      case 'continued':
-        return 'completed';
-      case 'cancelled':
-        return null;
       default:
-        return null;
+        return currentStatus;
     }
   };
-  
-  const getPrevStatus = (current: BookingStatus): BookingStatus | null => {
-    switch (current) {
-      case 'pending':
-        return null;
-      case 'confirmed':
-        return 'pending';
-      case 'assigned':
-        return 'confirmed';
-      case 'in-progress':
-        return 'assigned';
-      case 'payment_received':
-        return 'payment_pending';
-      case 'payment_pending':
-        return 'in-progress';
-      case 'completed':
-        return 'in-progress';
-      case 'continued':
-        return 'in-progress';
-      case 'cancelled':
-        return null;
-      default:
-        return null;
-    }
+
+  const canAdvanceStatus = (currentStatus: BookingStatus) => {
+    return ['pending', 'confirmed', 'in_progress'].includes(currentStatus);
   };
-  
-  const updateStatus = async (newStatus: BookingStatus) => {
-    if (!bookingId) {
-      onStatusChange?.(newStatus);
-      setStatus(newStatus);
-      return;
-    }
-    
-    setIsUpdating(true);
-    setError(null);
-    
+
+  const handleStatusUpdate = async (newStatus: BookingStatus) => {
+    if (newStatus === booking.status) return;
+
     try {
-      await bookingAPI.updateBookingStatus(bookingId, newStatus);
+      setIsUpdating(true);
+      await bookingAPI.updateBookingStatus(booking.id.toString(), newStatus, notes);
       setStatus(newStatus);
-      onStatusChange?.(newStatus);
-    } catch (error: any) {
-      console.error("Error updating booking status:", error);
-      setError(error.message || "Failed to update status");
+      setNotes('');
+      onUpdate();
+      toast({
+        title: "Status Updated",
+        description: `Booking status updated to ${newStatus}`,
+      });
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update booking status",
+        variant: "destructive",
+      });
     } finally {
       setIsUpdating(false);
     }
   };
-  
-  const handleNextStatus = () => {
-    const next = getNextStatus(status);
-    if (next) {
-      updateStatus(next);
+
+  const handleQuickAdvance = () => {
+    const nextStatus = getNextStatus(booking.status);
+    if (nextStatus !== booking.status) {
+      handleStatusUpdate(nextStatus);
     }
   };
-  
-  const handlePrevStatus = () => {
-    const prev = getPrevStatus(status);
-    if (prev) {
-      updateStatus(prev);
-    }
-  };
-  
-  const renderStatusBadge = () => {
-    let badgeText = status.replace(/_/g, ' ');
-    badgeText = badgeText.charAt(0).toUpperCase() + badgeText.slice(1);
-    
-    let badgeColor = "bg-gray-100 text-gray-800";
-    
-    switch (status) {
-      case 'pending':
-        badgeColor = "bg-yellow-100 text-yellow-800";
-        break;
-      case 'confirmed':
-        badgeColor = "bg-blue-100 text-blue-800";
-        break;
-      case 'assigned':
-        badgeColor = "bg-purple-100 text-purple-800";
-        break;
-      case 'in-progress':
-        badgeColor = "bg-orange-100 text-orange-800";
-        break;
-      case 'completed':
-        badgeColor = "bg-green-100 text-green-800";
-        break;
-      case 'payment_received':
-        badgeColor = "bg-green-100 text-green-800";
-        break;
-      case 'payment_pending':
-        badgeColor = "bg-red-100 text-red-800";
-        break;
-      case 'continued':
-        badgeColor = "bg-blue-100 text-blue-800";
-        break;
-      case 'cancelled':
-        badgeColor = "bg-red-100 text-red-800";
-        break;
-    }
-    
-    return (
-      <Badge className={cn(badgeColor, "font-medium", className)}>
-        {showLabel && <span className="mr-1">{badgeText}</span>}
-        {status === 'pending' && <Clock className="h-4 w-4" />}
-        {status === 'confirmed' && <CheckCheck className="h-4 w-4" />}
-        {status === 'assigned' && <CheckCheck className="h-4 w-4" />}
-        {status === 'in-progress' && <Clock className="h-4 w-4" />}
-        {status === 'completed' && <CheckCheck className="h-4 w-4" />}
-        {status === 'payment_received' && <CheckCheck className="h-4 w-4" />}
-        {status === 'payment_pending' && <Clock className="h-4 w-4" />}
-        {status === 'continued' && <Clock className="h-4 w-4" />}
-        {status === 'cancelled' && <X className="h-4 w-4" />}
-      </Badge>
-    );
-  };
-  
+
   return (
-    <div className="flex items-center space-x-2">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      
-      {variant === 'default' && (
-        <>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handlePrevStatus} 
-            disabled={!getPrevStatus(status) || isUpdating}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>Booking Status</span>
+          <Badge className={`${getStatusColor(booking.status)} text-white`}>
+            {booking.status.replace('_', ' ').toUpperCase()}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Update Status</label>
+          <Select value={status} onValueChange={(value: BookingStatus) => setStatus(value)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-3 h-3 rounded-full ${option.color}`}></div>
+                    <span>{option.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-2 block">Notes (Optional)</label>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add any notes about this status change..."
+            rows={3}
+          />
+        </div>
+
+        <div className="flex space-x-2">
+          <Button
+            onClick={() => handleStatusUpdate(status)}
+            disabled={isUpdating || status === booking.status}
+            className="flex-1"
           >
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Previous
+            {isUpdating ? 'Updating...' : 'Update Status'}
           </Button>
           
-          {renderStatusBadge()}
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleNextStatus} 
-            disabled={!getNextStatus(status) || isUpdating}
-          >
-            Next
-            <RefreshCcw className="ml-2 h-4 w-4" />
-          </Button>
-          
-          {isAdmin && onDelete && (
-            <Button 
-              variant="destructive" 
-              size="sm" 
-              onClick={onDelete} 
-              className="ml-2"
+          {canAdvanceStatus(booking.status) && (
+            <Button
+              variant="outline"
+              onClick={handleQuickAdvance}
+              disabled={isUpdating}
             >
-              <X className="mr-2 h-4 w-4" />
-              Delete
+              Advance to {getNextStatus(booking.status).replace('_', ' ')}
             </Button>
           )}
-        </>
-      )}
-      
-      {variant === 'compact' && renderStatusBadge()}
-    </div>
+        </div>
+
+        {booking.status === 'in_progress' && (
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>In Progress:</strong> This booking is currently active. Make sure to update to "Completed" when the trip is finished.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
-}
+};
