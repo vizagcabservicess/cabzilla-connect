@@ -92,7 +92,6 @@ const TourDetailPage = () => {
   }
 
   const handleVehicleSelect = (vehicle: VehicleWithPricing) => {
-    console.log("Vehicle selected:", vehicle);
     setSelectedVehicle(vehicle);
   };
 
@@ -354,9 +353,8 @@ const TourDetailPage = () => {
                 <TourVehicleSelection
                   pricing={tour.pricing}
                   onVehicleSelect={(vehicle) => {
-                    console.log("TourVehicleSelection -> onVehicleSelect:", vehicle);
                     setSelectedVehicle(vehicle);
-                    setShowBookingForm(true);
+                    setShowBookingForm(true); // auto-navigate to summary form
                   }}
                   selectedVehicle={selectedVehicle}
                   onBookNow={() => {}}
@@ -394,6 +392,7 @@ const TourDetailPage = () => {
                 onBack={() => setShowBookingForm(false)}
               />
             </div>
+            
             <div>
               {selectedVehicle && (
                 <BookingSummary
@@ -411,6 +410,7 @@ const TourDetailPage = () => {
           </div>
         )}
       </div>
+      
       <MobileNavigation />
     </div>
   );
