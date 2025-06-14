@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -85,21 +86,6 @@ const TourDetailPage = () => {
     }
   };
 
-  // Helper: always fetch the fare directly from `tour.pricing` by selected vehicle
-  const getSelectedVehiclePrice = (): number => {
-    if (!tour || !selectedVehicle) return 0;
-    // Use ID as primary key, or lowercased name as fallback
-    const idKey = selectedVehicle.vehicleId || selectedVehicle.id || "";
-    let fare = 0;
-    if (idKey && tour.pricing && tour.pricing[idKey] !== undefined) {
-      fare = tour.pricing[idKey];
-    } else if (selectedVehicle.name && tour.pricing && tour.pricing[selectedVehicle.name.toLowerCase()] !== undefined) {
-      fare = tour.pricing[selectedVehicle.name.toLowerCase()];
-    }
-    // Always ensure it's a positive number
-    return typeof fare === "number" && fare > 0 ? fare : 0;
-  };
-
   // Debug: See what the `tour` state looks like in the render
   if (tour) {
     console.log('Tour State in Render:', tour);
@@ -122,12 +108,12 @@ const TourDetailPage = () => {
     setShowBookingForm(true);
   };
 
-  // --- BOOKING SUBMISSION ---
   const handleBookingSubmit = async (guestDetails: any) => {
     if (!tour || !selectedVehicle) return;
-    const fare = getSelectedVehiclePrice(); // Always fetch from pricing!
+    
     try {
       setIsSubmitting(true);
+      
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
         dropLocation: '',
@@ -137,13 +123,15 @@ const TourDetailPage = () => {
         distance: tour.distance,
         tripType: 'tour',
         tripMode: 'one-way',
-        totalAmount: fare,
+        totalAmount: selectedVehicle.price,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
         tourId: tour.tourId
       };
+      
       const response = await bookingAPI.createBooking(bookingData);
+      
       const bookingDataForStorage = {
         tourId: tour.tourId,
         tourName: tour.tourName,
@@ -151,17 +139,20 @@ const TourDetailPage = () => {
         tourDistance: tour.distance,
         pickupDate: pickupDate.toISOString(),
         selectedCab: selectedVehicle,
-        totalPrice: fare,
+        totalPrice: selectedVehicle.price,
         guestDetails,
         bookingType: 'tour',
         bookingId: response.id,
         bookingNumber: response.bookingNumber
       };
+      
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
+      
       toast({
         title: "Booking Confirmed!",
         description: "Your tour has been booked successfully",
       });
+      
       navigate("/booking-confirmation", { state: { newBooking: true } });
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -373,14 +364,13 @@ const TourDetailPage = () => {
               ) : (
                 // Show Booking Summary and "Book Now" at bottom
                 <div>
-                  {/* Always show totalPrice from pricing table */}
                   <BookingSummary
                     pickupLocation={pickupLocation}
                     dropLocation={null}
                     pickupDate={pickupDate}
                     selectedCab={selectedVehicle}
                     distance={tour.distance}
-                    totalPrice={getSelectedVehiclePrice()}
+                    totalPrice={selectedVehicle.price}
                     tripType="tour"
                     hourlyPackage="tour"
                   />
@@ -399,7 +389,7 @@ const TourDetailPage = () => {
             <div>
               <GuestDetailsForm
                 onSubmit={handleBookingSubmit}
-                totalPrice={getSelectedVehiclePrice()}
+                totalPrice={selectedVehicle?.price || 0}
                 isLoading={isSubmitting}
                 onBack={() => setShowBookingForm(false)}
               />
@@ -412,7 +402,7 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  totalPrice={getSelectedVehiclePrice()}
+                  totalPrice={selectedVehicle.price}
                   tripType="tour"
                   hourlyPackage="tour"
                 />
