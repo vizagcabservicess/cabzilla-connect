@@ -45,19 +45,18 @@ const TourDetailPage = () => {
   const [pickupLocation] = useState({ name: 'Visakhapatnam', isInVizag: true });
   const [pickupDate] = useState(new Date());
 
-  // Helper: get the actual tour fare for the selected vehicle
+  // Helper: Get the actual tour fare for the selected vehicle using correct DB column names.
   const getTourFare = (
     vehicle: VehicleWithPricing | null,
     pricing: Record<string, number>
   ): number => {
     if (!vehicle) return 0;
-    // Try by id first
-    if (vehicle.id && pricing[vehicle.id] !== undefined) {
-      return pricing[vehicle.id];
-    }
-    // Fallback to lowercased name
-    const key = (vehicle.name || '').toLowerCase();
-    return pricing[key] || 0;
+    // Ensure we use lowercase just as in your DB
+    const vehId = (vehicle.id || '').toLowerCase();
+    const price = pricing[vehId];
+    console.log('Tour Fare Lookup:', { vehId, price, pricing });
+    if (typeof price === 'number') return price;
+    return 0;
   };
 
   useEffect(() => {
