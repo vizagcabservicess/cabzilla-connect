@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -86,6 +85,17 @@ const TourDetailPage = () => {
     }
   };
 
+  // Helper to get the correct fare from pricing for the selected vehicle
+  const getSelectedVehiclePrice = (): number => {
+    if (!tour || !selectedVehicle) return 0;
+    // pricing has keys matching vehicle_id, value=price
+    const priceFromPricing =
+      tour.pricing?.[selectedVehicle.vehicleId] ??
+      tour.pricing?.[selectedVehicle.name?.toLowerCase()] ?? // fallback by name (should rarely be used)
+      0;
+    return typeof priceFromPricing === "number" && priceFromPricing > 0 ? priceFromPricing : 0;
+  };
+
   // Debug: See what the `tour` state looks like in the render
   if (tour) {
     console.log('Tour State in Render:', tour);
@@ -108,9 +118,12 @@ const TourDetailPage = () => {
     setShowBookingForm(true);
   };
 
+  // --- BOOKING SUBMISSION ---
   const handleBookingSubmit = async (guestDetails: any) => {
     if (!tour || !selectedVehicle) return;
-    
+
+    // Always fetch latest price from pricing table for selected vehicle
+    const fare = getSelectedVehiclePrice();
     try {
       setIsSubmitting(true);
       
@@ -123,7 +136,7 @@ const TourDetailPage = () => {
         distance: tour.distance,
         tripType: 'tour',
         tripMode: 'one-way',
-        totalAmount: selectedVehicle.price,
+        totalAmount: fare,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
@@ -139,7 +152,7 @@ const TourDetailPage = () => {
         tourDistance: tour.distance,
         pickupDate: pickupDate.toISOString(),
         selectedCab: selectedVehicle,
-        totalPrice: selectedVehicle.price,
+        totalPrice: fare,
         guestDetails,
         bookingType: 'tour',
         bookingId: response.id,
@@ -370,7 +383,8 @@ const TourDetailPage = () => {
                     pickupDate={pickupDate}
                     selectedCab={selectedVehicle}
                     distance={tour.distance}
-                    totalPrice={selectedVehicle.price}
+                    // ---- Directly fetch total price from pricing!
+                    totalPrice={getSelectedVehiclePrice()}
                     tripType="tour"
                     hourlyPackage="tour"
                   />
@@ -389,7 +403,7 @@ const TourDetailPage = () => {
             <div>
               <GuestDetailsForm
                 onSubmit={handleBookingSubmit}
-                totalPrice={selectedVehicle?.price || 0}
+                totalPrice={getSelectedVehiclePrice()}
                 isLoading={isSubmitting}
                 onBack={() => setShowBookingForm(false)}
               />
@@ -402,7 +416,7 @@ const TourDetailPage = () => {
                   pickupDate={pickupDate}
                   selectedCab={selectedVehicle}
                   distance={tour.distance}
-                  totalPrice={selectedVehicle.price}
+                  totalPrice={getSelectedVehiclePrice()}
                   tripType="tour"
                   hourlyPackage="tour"
                 />
