@@ -290,48 +290,39 @@ const TourDetailPage = () => {
                   </Card>
                 </TabsContent>
 
-                {/* Compact two-column inclusions/exclusions display */}
+                {/* FIXED: Inclusions & Exclusions as shown in screenshot */}
                 <TabsContent value="inclusions">
                   <div className="grid md:grid-cols-2 gap-4 mt-2">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-green-600 text-base">Included</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-1">
-                          {tour.inclusions.length > 0 ? (
-                            tour.inclusions.map((item, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-sm">
-                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                {item}
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-gray-500">No inclusions listed</li>
-                          )}
-                        </ul>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-red-600 text-base">Not Included</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-1">
-                          {tour.exclusions.length > 0 ? (
-                            tour.exclusions.map((item, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-sm">
-                                <X className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                                {item}
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-gray-500">No exclusions listed</li>
-                          )}
-                        </ul>
-                      </CardContent>
-                    </Card>
+                    <div className="border rounded-lg p-5 bg-white">
+                      <div className="text-green-600 text-base font-semibold mb-2">Included</div>
+                      <ul className="space-y-2">
+                        {tour.inclusions.length > 0 ? (
+                          tour.inclusions.map((item, idx) => (
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                              <span className="text-green-500 text-lg">✔</span>
+                              <span>{item}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-gray-500">No inclusions listed</li>
+                        )}
+                      </ul>
+                    </div>
+                    <div className="border rounded-lg p-5 bg-white">
+                      <div className="text-red-600 text-base font-semibold mb-2">Not Included</div>
+                      <ul className="space-y-2">
+                        {tour.exclusions.length > 0 ? (
+                          tour.exclusions.map((item, idx) => (
+                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                              <span className="text-red-500 text-lg">✖</span>
+                              <span>{item}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-gray-500">No exclusions listed</li>
+                        )}
+                      </ul>
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
