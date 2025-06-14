@@ -104,7 +104,38 @@ const ToursPage = () => {
   const handleTourSelect = (tourId: string) => {
     navigate(`/tours/${tourId}`);
   };
-  
+
+  // Example sightseeingPlaces fallback for demo (real implementation should pass from API)
+  const sightseeingFallback = [
+    "Kailasagiri",
+    "Borra Caves",
+    "Coffee Museum",
+    "Tribal Museum",
+    "Padmapuram Garden",
+    "Katiki Waterfalls"
+  ];
+
+  // Demo: make inclusions and sightseeing dynamic for TourCard. (Replace with API as needed)
+  const buildTourCardProps = (tour: TourListItem) => {
+    // If backend adds 'inclusions' and 'sightseeingPlaces', use those.
+    let inclusions: string[] = (tour as any).inclusions ?? [];
+    let sightseeingPlaces: string[] = (tour as any).sightseeingPlaces ?? [];
+
+    // Demo fallback for inclusions (should come from backend)
+    if (!inclusions || inclusions.length === 0)
+      inclusions = [
+        "Houseboat Day Cruise",
+        "Photoshoot at Tea Estate",
+        "Speed Boat Ride"
+      ];
+
+    // Demo fallback for sightseeingPlaces (should come from backend)
+    if (!sightseeingPlaces || sightseeingPlaces.length === 0)
+      sightseeingPlaces = sightseeingFallback;
+
+    return { ...tour, inclusions, sightseeingPlaces };
+  };
+
   const renderSearchForm = () => (
     <Card className="bg-white shadow-lg">
       <CardContent className="p-6">
@@ -157,12 +188,12 @@ const ToursPage = () => {
         </button>
       </div>
       {/* Tour Cards Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-7">
         {tours.length > 0 ? (
           tours.map((tour) => (
             <TourCard
               key={tour.tourId}
-              tour={tour}
+              tour={buildTourCardProps(tour)}
               onClick={() => handleTourSelect(tour.tourId)}
             />
           ))
