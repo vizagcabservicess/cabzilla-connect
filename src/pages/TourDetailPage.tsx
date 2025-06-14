@@ -51,6 +51,13 @@ const TourDetailPage = () => {
     }
   }, [tourId]);
 
+  useEffect(() => {
+    if (tour) {
+      console.log("Tour Inclusions:", tour.inclusions);
+      console.log("Tour Exclusions:", tour.exclusions);
+    }
+  }, [tour]);
+
   const loadTourDetail = async () => {
     if (!tourId) return;
     try {
@@ -306,7 +313,11 @@ const TourDetailPage = () => {
                     <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
                       <h3 className="text-green-600 font-semibold text-sm mb-2">Included</h3>
                       <ul className="space-y-1">
-                        {tour.inclusions && tour.inclusions.filter(i => i && i.trim() !== '').length > 0 ? (
+                        {/* log: show length */}
+                        <li className="text-[12px] text-gray-600">
+                          inclusions type: {typeof tour.inclusions} | length: {Array.isArray(tour.inclusions) ? tour.inclusions.length : 'not array'}
+                        </li>
+                        {Array.isArray(tour.inclusions) && tour.inclusions.filter(i => i && i.trim() !== '').length > 0 ? (
                           tour.inclusions.filter(i => i && i.trim() !== '').map((item, idx) => (
                             <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
                               <span className="text-green-500 text-base">✔</span>
@@ -322,7 +333,11 @@ const TourDetailPage = () => {
                     <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
                       <h3 className="text-red-600 font-semibold text-sm mb-2">Not Included</h3>
                       <ul className="space-y-1">
-                        {tour.exclusions && tour.exclusions.filter(e => e && e.trim() !== '').length > 0 ? (
+                        {/* log: show length */}
+                        <li className="text-[12px] text-gray-600">
+                          exclusions type: {typeof tour.exclusions} | length: {Array.isArray(tour.exclusions) ? tour.exclusions.length : 'not array'}
+                        </li>
+                        {Array.isArray(tour.exclusions) && tour.exclusions.filter(e => e && e.trim() !== '').length > 0 ? (
                           tour.exclusions.filter(e => e && e.trim() !== '').map((item, idx) => (
                             <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
                               <span className="text-red-500 text-base">✖</span>
