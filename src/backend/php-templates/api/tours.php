@@ -192,11 +192,11 @@ function getTourById($conn, $tourId) {
         ];
     }
     
-    // Get inclusions (fix: fetch 'description')
+    // Get inclusions (fetch only 'description')
     $inclusionsStmt = $conn->prepare("
         SELECT description
-        FROM tour_inclusions 
-        WHERE tour_id = ? 
+        FROM tour_inclusions
+        WHERE tour_id = ?
         ORDER BY sort_order, id
     ");
     $inclusionsStmt->bind_param("s", $tourId);
@@ -207,17 +207,22 @@ function getTourById($conn, $tourId) {
         logErrorToFile('Failed to prepare inclusionsStmt', ['error' => $conn->error]);
     }
 
+    $inclusionsDebugArr = [];
     while ($inclusionRow = $inclusionsResult->fetch_assoc()) {
-        if (!empty($inclusionRow['description'])) { // skip empty
-            $tourDetail['inclusions'][] = $inclusionRow['description'];
+        $desc = isset($inclusionRow['description']) ? trim($inclusionRow['description']) : '';
+        $inclusionsDebugArr[] = $desc; // log for debug
+        if ($desc !== '') {
+            $tourDetail['inclusions'][] = $desc;
         }
     }
+    // Debug log
+    logErrorToFile('Fetched inclusions', ['tour_id' => $tourId, 'found' => $inclusionsDebugArr]);
 
-    // Get exclusions (fix: fetch 'description')
+    // Get exclusions (fetch only 'description')
     $exclusionsStmt = $conn->prepare("
         SELECT description
-        FROM tour_exclusions 
-        WHERE tour_id = ? 
+        FROM tour_exclusions
+        WHERE tour_id = ?
         ORDER BY sort_order, id
     ");
     $exclusionsStmt->bind_param("s", $tourId);
@@ -228,11 +233,16 @@ function getTourById($conn, $tourId) {
         logErrorToFile('Failed to prepare exclusionsStmt', ['error' => $conn->error]);
     }
 
+    $exclusionsDebugArr = [];
     while ($exclusionRow = $exclusionsResult->fetch_assoc()) {
-        if (!empty($exclusionRow['description'])) { // skip empty
-            $tourDetail['exclusions'][] = $exclusionRow['description'];
+        $desc = isset($exclusionRow['description']) ? trim($exclusionRow['description']) : '';
+        $exclusionsDebugArr[] = $desc; // log for debug
+        if ($desc !== '') {
+            $tourDetail['exclusions'][] = $desc;
         }
     }
+    // Debug log
+    logErrorToFile('Fetched exclusions', ['tour_id' => $tourId, 'found' => $exclusionsDebugArr]);
 
     // Get itinerary
     $itineraryStmt = $conn->prepare("
