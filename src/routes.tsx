@@ -51,6 +51,9 @@ import OutstationTaxiPage from './pages/OutstationTaxiPage';
 import AirportTaxiPage from './pages/AirportTaxiPage';
 import RentalsPage from './pages/RentalsPage';
 import TourDetailPage from './pages/TourDetailPage';
+import SedanPage from './pages/SedanPage';
+import SUVPage from './pages/SUVPage';
+import TempoTravellerPage from './pages/TempoTravellerPage';
 
 const router = createBrowserRouter([
   {
@@ -265,6 +268,18 @@ const router = createBrowserRouter([
   {
     path: '/pooling/admin',
     element: <PoolingAdminPage />,
+  },
+  {
+    path: '/sedan',
+    element: <SedanPage />,
+  },
+  {
+    path: '/suv',
+    element: <SUVPage />,
+  },
+  {
+    path: '/tempotraveller',
+    element: <TempoTravellerPage />,
   },
   // Catch-all route for 404s
   {
