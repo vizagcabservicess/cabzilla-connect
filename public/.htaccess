@@ -1,3 +1,11 @@
+# Ensure PHP files are executed and accessible FIRST
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>
+AddType application/x-httpd-php .php
 
 # Enable Cross-Origin Resource Sharing (CORS)
 <IfModule mod_headers.c>
@@ -15,15 +23,6 @@ RewriteEngine On
 # Handle preflight OPTIONS request
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Ensure PHP files are executed and accessible
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-    <IfModule mod_authz_core.c>
-        Require all granted
-    </IfModule>
-</FilesMatch>
-AddType application/x-httpd-php .php
 
 # Fix for PUT/DELETE requests
 <IfModule mod_rewrite.c>
