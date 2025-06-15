@@ -39,6 +39,101 @@ const sumBreakdown = (breakdown: any) => {
   return total;
 };
 
+// New child component to safely use hooks
+const CabFareCard = ({
+  cab,
+  tripType,
+  distance,
+  packageType,
+  pickupDate,
+  selectedCabId,
+  handleSelectCab
+}: any) => {
+  const normalizeVehicleId = (id: string): string => {
+    return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  };
+  let fare = 0;
+  let fareText = 'Price unavailable';
+  let fareSource = 'unknown';
+  let isLoading = false;
+  let fareData = undefined;
+
+  if (tripType === 'tour' && typeof cab.price === 'number') {
+    fare = cab.price;
+    fareText = `₹${fare.toLocaleString()} (api)`;
+    fareSource = 'api';
+    isLoading = false;
+  } else {
+    const normalizedId = normalizeVehicleId(cab.id);
+    const fareResult = useFare(
+      normalizedId,
+      tripType,
+      distance,
+      packageType,
+      pickupDate
+    );
+    fareData = fareResult.fareData;
+    isLoading = fareResult.isLoading;
+    const error = fareResult.error;
+
+    if (error) {
+      console.error(`Fare error for ${cab.name}:`, error);
+      fareText = 'Error fetching price';
+    } else if (fareData) {
+      fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
+      fareSource = fareData.source || 'unknown';
+
+      if (tripType === 'local') {
+        const localPackageLimits: Record<string, { km: number; hours: number }> = {
+          '4hrs-40km': { km: 40, hours: 4 },
+          '8hrs-80km': { km: 80, hours: 8 },
+          '10hrs-100km': { km: 100, hours: 10 },
+        };
+        const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
+        const extraKm = Math.max(0, distance - selectedPackage.km);
+        const extraHours = 0;
+        const breakdown = fareData.breakdown || {};
+        const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
+        const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
+        const extraKmFare = extraKm * extraKmCharge;
+        const extraHourFare = extraHours * extraHourCharge;
+        fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
+      }
+
+      if (tripType === 'airport') {
+        const breakdown = fareData.breakdown || {};
+        const base = breakdown.basePrice || 0;
+        const airportFee = breakdown.airportFee || 0;
+        const extra = breakdown.extraDistanceFare || 0;
+        fare = base + airportFee + extra;
+      }
+
+      if (fareSource === 'database') {
+        fareText = `₹${fare.toLocaleString()} (verified)`;
+      } else if (fareSource === 'stored') {
+        fareText = `₹${fare.toLocaleString()} (saved)`;
+      } else if (fareSource === 'default') {
+        fareText = `₹${fare.toLocaleString()} (standard)`;
+      } else {
+        fareText = `₹${fare.toLocaleString()}`;
+      }
+    }
+  }
+
+  return (
+    <CabOptionCard
+      key={cab.id}
+      cab={cab}
+      fare={fare}
+      isSelected={selectedCabId === cab.id}
+      onSelect={() => handleSelectCab(cab, fare, fareSource, fareData?.breakdown)}
+      fareDetails={fareText}
+      isCalculating={isLoading}
+      tripType={tripType}
+    />
+  );
+};
+
 export const CabList: React.FC<CabListProps> = ({
   cabTypes,
   selectedCabId,
@@ -51,19 +146,16 @@ export const CabList: React.FC<CabListProps> = ({
   packageType,
   pickupDate
 }) => {
-  console.log(`CabList: Rendering with package ${packageType}`);
+  console.log('[CabList] cabTypes:', cabTypes);
+  console.log('[CabList] tripType:', tripType);
+  if (!cabTypes || cabTypes.length === 0) {
+    console.warn('[CabList] No cab options available for tripType:', tripType);
+  }
   
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   const isMobile = useIsMobile();
   
-  const normalizeVehicleId = (id: string): string => {
-    return id.trim()
-      .toLowerCase()
-      .replace(/\s+/g, '_')
-      .replace(/[^a-z0-9_]/g, '');
-  };
-
   useEffect(() => {
     const handleFareUpdate = () => {
       console.log('CabList: Detected fare update, refreshing list');
@@ -120,90 +212,18 @@ export const CabList: React.FC<CabListProps> = ({
           <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
         </div>
       ) : (
-        cabTypes.map((cab) => {
-          let fare = 0;
-          let fareText = 'Price unavailable';
-          let fareSource = 'unknown';
-          let isLoading = false;
-          let fareData = undefined;
-
-          if (tripType === 'tour' && typeof cab.price === 'number') {
-            fare = cab.price;
-            fareText = `₹${fare.toLocaleString()} (api)`;
-            fareSource = 'api';
-            isLoading = false;
-          } else {
-            const normalizedId = normalizeVehicleId(cab.id);
-            const fareResult = useFare(
-              normalizedId,
-              tripType,
-              distance,
-              packageType,
-              pickupDate
-            );
-            fareData = fareResult.fareData;
-            isLoading = fareResult.isLoading;
-            const error = fareResult.error;
-
-            if (error) {
-              console.error(`Fare error for ${cab.name}:`, error);
-              fareText = 'Error fetching price';
-            } else if (fareData) {
-              fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
-              fareSource = fareData.source || 'unknown';
-
-              if (tripType === 'local') {
-                const localPackageLimits: Record<string, { km: number; hours: number }> = {
-                  '4hrs-40km': { km: 40, hours: 4 },
-                  '8hrs-80km': { km: 80, hours: 8 },
-                  '10hrs-100km': { km: 100, hours: 10 },
-                };
-                const selectedPackage = localPackageLimits[packageType || '8hrs-80km'] || { km: 80, hours: 8 };
-                const extraKm = Math.max(0, distance - selectedPackage.km);
-                const extraHours = 0;
-                const breakdown = fareData.breakdown || {};
-                const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
-                const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
-                const extraKmFare = extraKm * extraKmCharge;
-                const extraHourFare = extraHours * extraHourCharge;
-                fare = (breakdown.basePrice || fare) + extraKmFare + extraHourFare;
-              }
-
-              if (tripType === 'airport') {
-                const breakdown = fareData.breakdown || {};
-                const base = breakdown.basePrice || 0;
-                const airportFee = breakdown.airportFee || 0;
-                const extra = breakdown.extraDistanceFare || 0;
-                fare = base + airportFee + extra;
-              }
-
-              if (fareSource === 'database') {
-                fareText = `₹${fare.toLocaleString()} (verified)`;
-              } else if (fareSource === 'stored') {
-                fareText = `₹${fare.toLocaleString()} (saved)`;
-              } else if (fareSource === 'default') {
-                fareText = `₹${fare.toLocaleString()} (standard)`;
-              } else {
-                fareText = `₹${fare.toLocaleString()}`;
-              }
-            }
-          }
-
-          return (
-            <CabOptionCard
-              key={cab.id}
-              cab={cab}
-              fare={fare}
-              isSelected={selectedCabId === cab.id}
-              onSelect={() => enhancedSelectCab(cab, fare, fareSource, fareData?.breakdown)}
-              fareDetails={fareText}
-              isCalculating={isLoading}
-              tripType={tripType}
-              tripMode={tripMode}
-              fareSource={fareSource}
-            />
-          );
-        })
+        cabTypes.map((cab) => (
+          <CabFareCard
+            key={cab.id}
+            cab={cab}
+            tripType={tripType}
+            distance={distance}
+            packageType={packageType}
+            pickupDate={pickupDate}
+            selectedCabId={selectedCabId}
+            handleSelectCab={enhancedSelectCab}
+          />
+        ))
       )}
     </div>
   );

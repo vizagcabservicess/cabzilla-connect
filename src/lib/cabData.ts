@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
@@ -517,7 +516,8 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
 };
 
 // Function to format price with Indian Rupees symbol
-export const formatPrice = (price: number): string => {
+export const formatPrice = (price: number | undefined | null): string => {
+  if (typeof price !== 'number' || isNaN(price)) return '₹0';
   return `₹${price.toLocaleString('en-IN')}`;
 };
 

@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { CabBookingInterface } from '@/components/CabBookingInterface';
@@ -10,11 +9,22 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 
 export const CabsPage = () => {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  // Parse from/to from the URL path if present
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  // Example: ['', 'outstation-taxi', 'visakhapatnam', 'narsipatnam']
+  let from = searchParams.get('from') || '';
+  let to = searchParams.get('to') || '';
+  if (pathParts.length >= 4) {
+    from = from || decodeURIComponent(pathParts[2]);
+    to = to || decodeURIComponent(pathParts[3]);
+  }
 
   const initialTripDetails: Partial<TripDetails> = {
     tripType: searchParams.get('tripType') || 'outstation',
-    from: searchParams.get('from') || '',
-    to: searchParams.get('to') || '',
+    from,
+    to,
     pickupDate: searchParams.get('date') || '',
     pickupTime: searchParams.get('time') || '',
     returnDate: searchParams.get('returnDate') || '',
