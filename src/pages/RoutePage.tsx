@@ -63,17 +63,33 @@ const RoutePage = () => {
               </Card>
             </div>
             <div className="lg:col-span-1">
-              <Card className="sticky top-8 text-center p-6">
-                <CardHeader className="p-0">
-                  <CardTitle>Ready to Go?</CardTitle>
+              <Card className="sticky top-8">
+                <CardHeader>
+                  <CardTitle>Indicative Fares</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0 mt-4">
-                  <p className="text-gray-600 mb-6">
-                    Book your taxi from {route.from} to {route.to} now and enjoy a hassle-free journey.
-                  </p>
-                  <Button size="lg" className="w-full" onClick={handleBookNowClick}>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Sedan (Dzire, etc.)</span>
+                      <span className="font-bold text-lg text-blue-600">{route.fares.sedan}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">SUV (Ertiga, etc.)</span>
+                      <span className="font-bold text-lg text-blue-600">{route.fares.suv}</span>
+                    </div>
+                    {route.fares.tempo && <div className="flex justify-between items-center">
+                      <span className="font-medium">Tempo Traveller</span>
+                      <span className="font-bold text-lg text-blue-600">{route.fares.tempo}</span>
+                    </div>}
+                     {route.fares.luxury && <div className="flex justify-between items-center">
+                      <span className="font-medium">Luxury (Innova, etc.)</span>
+                      <span className="font-bold text-lg text-blue-600">{route.fares.luxury}</span>
+                    </div>}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-4">*Fares are approximate. Actual price may vary.</p>
+                  <Button size="lg" className="w-full mt-6" onClick={handleBookNowClick}>
                       <Car className="mr-2 h-5 w-5" />
-                      Book Your Cab
+                      Book Your Cab Now
                   </Button>
                 </CardContent>
               </Card>
