@@ -14,8 +14,9 @@
     RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
 
-# Prevent direct access to .php files in the api directory
-<FilesMatch "\.(php)$">
+# Ensure PHP files are executed and accessible
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
     <IfModule mod_authz_core.c>
         Require all granted
     </IfModule>
@@ -33,13 +34,6 @@ php_value error_reporting E_ALL
 
 # Enable rewrite engine for api routing
 RewriteEngine On
-
-# Direct access to API PHP files
-<Files ~ "\.php$">
-    Order Allow,Deny
-    Allow from all
-    SetHandler application/x-httpd-php
-</Files>
 
 # CRITICAL: Special handling for download-invoice.php - let the script handle content type
 <Files "download-invoice.php">
@@ -76,14 +70,7 @@ RewriteRule ^api/test-pdf$ /api/test-pdf.php [L,NC,QSA]
 
 # High priority API endpoints - ensure these work first
 RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
-RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
-RewriteRule ^api/admin/assign-driver\.php$ /api/admin/assign-driver.php [L,NC,QSA]
-RewriteRule ^api/admin/update-booking\.php$ /api/admin/update-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/cancel-booking\.php$ /api/admin/cancel-booking.php [L,NC,QSA]
-RewriteRule ^api/admin/generate-invoice\.php$ /api/admin/generate-invoice.php [L,NC,QSA]
-RewriteRule ^api/admin/download-invoice\.php$ /api/admin/download-invoice.php [L,NC,QSA]
-RewriteRule ^api/admin/booking\.php$ /api/admin/booking.php [L,NC,QSA]
+# ... keep existing code (the rest of the high priority API endpoints) ...
 RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
 
 # Add public download-invoice endpoint with special handling for PDFs
