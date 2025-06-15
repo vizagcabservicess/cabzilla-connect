@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Phone, MessageCircle, X, Send } from 'lucide-react';
@@ -8,7 +9,7 @@ import { FloatingButtons } from './FloatingButtons';
 export const QuickActionBar = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Array<{id: number | string; text: string; sender: 'bot' | 'user'; timestamp: Date}>>([
     {
       id: 1,
       text: "Hello! I'm Vizag Taxi Hub assistant. How can I help you today?",
@@ -16,6 +17,7 @@ export const QuickActionBar = () => {
       timestamp: new Date()
     }
   ]);
+  const [isBotTyping, setIsBotTyping] = useState(false);
 
   const handleCall = () => {
     window.location.href = 'tel:+919966363662';
@@ -26,25 +28,66 @@ export const QuickActionBar = () => {
     window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
   };
 
-  const handleSendMessage = () => {
-    if (message.trim()) {
-      const newMessage = {
-        id: messages.length + 1,
+  const handleSendMessage = async () => {
+    if (message.trim() && !isBotTyping) {
+      const userMessage = {
+        id: Date.now(),
         text: message,
         sender: 'user',
         timestamp: new Date()
       };
-      setMessages([...messages, newMessage]);
+      
+      const currentMessages = [...messages, userMessage];
+      setMessages(currentMessages);
       setMessage('');
-      setTimeout(() => {
+      setIsBotTyping(true);
+
+      try {
+        const chatHistory = currentMessages.map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text
+        }));
+
+        const res = await fetch('/api/chatbot.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                history: chatHistory.slice(-6), // Send last 6 messages for context
+            }),
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ message: 'Failed to get response from bot' }));
+            throw new Error(errorData.message);
+        }
+
+        const data = await res.json();
+        const botData = data.data; // The actual response is nested in 'data'
+        
         const botReply = {
-          id: messages.length + 2,
-          text: "Thank you for your message! Our team will get back to you shortly. For immediate assistance, please call +91 9966363662 or WhatsApp us.",
-          sender: 'bot',
-          timestamp: new Date()
+            id: Date.now() + 1,
+            text: botData.reply || "Sorry, I couldn't process that.",
+            sender: 'bot',
+            timestamp: new Date()
         };
+        
         setMessages(prev => [...prev, botReply]);
-      }, 1000);
+
+      } catch (error: any) {
+        console.error("Chatbot error:", error);
+        const errorReply = {
+            id: Date.now() + 1,
+            text: `Sorry, something went wrong. ${error.message || 'Please try again.'}`,
+            sender: 'bot',
+            timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorReply]);
+      } finally {
+        setIsBotTyping(false);
+      }
     }
   };
 
@@ -132,6 +175,17 @@ export const QuickActionBar = () => {
                     </div>
                   </div>
                 ))}
+                {isBotTyping && (
+                   <div className="flex justify-start">
+                       <div className="max-w-[80%] p-3 rounded-2xl text-sm bg-gray-100 text-gray-800">
+                          <div className="flex items-center space-x-1">
+                              <span className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></span>
+                              <span className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></span>
+                              <span className="h-2 w-2 bg-gray-400 rounded-full animate-pulse"></span>
+                          </div>
+                       </div>
+                   </div>
+                )}
               </div>
               {/* Input */}
               <div className="p-4 border-t bg-gray-50">
@@ -143,11 +197,13 @@ export const QuickActionBar = () => {
                     onKeyPress={handleKeyPress}
                     placeholder="Type your message..."
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isBotTyping}
                   />
                   <Button
                     size="icon"
                     onClick={handleSendMessage}
                     className="bg-blue-600 hover:bg-blue-700 rounded-full h-8 w-8"
+                    disabled={isBotTyping}
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -159,4 +215,4 @@ export const QuickActionBar = () => {
       )}
     </>
   );
-}; 
+};
