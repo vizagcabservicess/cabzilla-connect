@@ -1,5 +1,5 @@
 
-import React, { useState, Suspense, useEffect } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { TabTripSelector } from '@/components/TabTripSelector';
 import { CabOptions } from '@/components/CabOptions';
@@ -11,11 +11,11 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { Card } from '@/components/ui/card';
 import { useCabOptions } from './cab-options/useCabOptions';
+import { useDistance } from '@/hooks/useDistance';
+import { TripType } from '@/types/trip';
 
-// Temporary type definitions to fix build errors since I cannot edit src/types/cab.ts
-// These should ideally be in a shared types file.
 export interface TripDetails {
-  tripType: string;
+  tripType: TripType;
   from: string;
   to: string;
   pickupDate: string;
@@ -32,7 +32,6 @@ export interface GuestDetails {
   specialRequest?: string;
 }
 
-
 interface CabBookingInterfaceProps {
     initialTripDetails?: Partial<TripDetails>;
 }
@@ -44,12 +43,11 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
     const [fare, setFare] = useState<number | null>(null);
 
-    let tripType = initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation';
+    let tripType: TripType = (initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation') as TripType;
     if (location.pathname.startsWith('/outstation-taxi')) {
         tripType = 'outstation';
     }
 
-    // Get current date and time in required formats
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const currentDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -62,10 +60,12 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         pickupDate: initialTripDetails?.pickupDate || searchParams.get('date') || currentDate,
         pickupTime: initialTripDetails?.pickupTime || searchParams.get('time') || currentTime,
         returnDate: initialTripDetails?.returnDate || searchParams.get('returnDate') || '',
+        tripMode: 'one-way',
+        package: initialTripDetails?.package || '',
     });
 
-    // Use the cab options hook with the correct tripType
-    const { cabOptions, isLoading: isCabsLoading, distance } = useCabOptions({ tripType: tripDetails.tripType, from: tripDetails.from, to: tripDetails.to });
+    const { distance, isLoading: isDistanceLoading } = useDistance(tripDetails.from, tripDetails.to);
+    const { cabOptions, isLoading: isCabsLoading } = useCabOptions({ tripType: tripDetails.tripType, from: tripDetails.from, to: tripDetails.to });
 
     const [guestDetails, setGuestDetails] = useState<GuestDetails | null>(null);
 
@@ -75,13 +75,6 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
             setStep(1);
             setSelectedCab(null);
         }
-    };
-
-    const handleCabSelect = (cab: CabType) => {
-        setSelectedCab(cab);
-        setFare(cab.price); // Assuming price is on cab object, will be updated by CabList later
-        setStep(2);
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
 
     const handleActualCabSelect = (cab: CabType, calculatedFare: number) => {
@@ -117,7 +110,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                                 tripType={tripDetails.tripType}
                                 onSelectCab={handleActualCabSelect}
                                 selectedCab={selectedCab}
-                                isCalculatingFares={isCabsLoading}
+                                isCalculatingFares={isCabsLoading || isDistanceLoading}
                                 distance={distance}
                                 tripMode={tripDetails.tripMode}
                                 packageType={tripDetails.package}

@@ -1,6 +1,18 @@
 
 <?php
-require_once 'pooling/config.php';
+// Define helper functions locally to avoid dependency issues on config files.
+function sendResponse($data) {
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}
+
+function sendError($message, $code = 500) {
+    http_response_code($code);
+    header('Content-Type: application/json');
+    echo json_encode(['message' => $message]);
+    exit;
+}
 
 // IMPORTANT: Using API keys directly in code is not recommended for production.
 // It's better to store this in a secure environment variable.
@@ -15,30 +27,21 @@ if (empty($user_message)) {
     sendError('Message is required.', 400);
 }
 
-if (OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY_HERE') {
+if (OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY_HERE' || empty(OPENAI_API_KEY)) {
     sendResponse(['reply' => 'The chatbot is not configured yet. An API key for the AI service is missing.']);
-    exit;
 }
 
 try {
-    // Fetch vehicle data to provide context to the AI
-    $stmt = $pdo->prepare("SELECT DISTINCT make, model FROM pooling_vehicles");
-    $stmt->execute();
-    $vehicles = $stmt->fetchAll();
-    $vehicle_list = '';
-    if ($vehicles) {
-        $vehicle_names = array_map(function($v) {
-            return $v['make'] . ' ' . $v['model'];
-        }, $vehicles);
-        $vehicle_list = implode(', ', $vehicle_names);
-    }
+    // The database part is removed for now to ensure the chatbot works.
+    // The context is simplified/hardcoded.
+    $vehicle_list = 'Sedans, SUVs, Ertiga, Innova Crysta';
 
     // System prompt to guide the AI
-    $system_prompt = "You are a friendly and helpful chatbot for 'Vizag Taxi Hub'. Your goal is to assist users with car pooling services.
+    $system_prompt = "You are a friendly and helpful chatbot for 'Vizag Taxi Hub'. Your goal is to assist users with car pooling and taxi services.
     - Be concise and friendly.
-    - You can answer questions about available shared rides.
-    - Our available vehicle types for pooling are: " . ($vehicle_list ?: 'Sedans, SUVs') . ".
-    - When asked about fares, explain that the price is per seat for shared rides.
+    - You can answer questions about available taxi types.
+    - Our available vehicle types are: " . ($vehicle_list ?: 'Sedans, SUVs') . ".
+    - When asked about fares, explain that the price depends on the trip and vehicle, and they can see it by entering details.
     - When asked to book, guide the user to use the interface to search for and book rides.
     - If you don't know the answer, say that you can't help with that and suggest they contact support.";
 
@@ -67,14 +70,28 @@ try {
 
     $response = curl_exec($ch);
     $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    if (curl_errno($ch)) {
+        $error_msg = curl_error($ch);
+        curl_close($ch);
+        error_log("cURL Error: " . $error_msg);
+        sendError('Error communicating with AI service (cURL).', 500);
+    }
+    
     curl_close($ch);
 
     if ($httpcode >= 400) {
-        error_log("OpenAI API Error: " . $response);
+        error_log("OpenAI API Error: HTTP " . $httpcode . " - " . $response);
         sendError('Error communicating with AI service.', 500);
     }
     
     $result = json_decode($response, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log("Failed to decode JSON from OpenAI: " . $response);
+        sendError('Invalid response from AI service.', 500);
+    }
+
     $reply = $result['choices'][0]['message']['content'] ?? 'I am sorry, I could not generate a response.';
 
     sendResponse(['reply' => $reply]);
@@ -83,4 +100,3 @@ try {
     error_log("Chatbot Error: " . $e->getMessage());
     sendError('An internal error occurred.', 500);
 }
-?>
