@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Map, Shield, Star, Phone, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { FleetShowcase } from '@/components/FleetShowcase';
 
 const OutstationTaxiPage = () => {
   const popularRoutes = [
@@ -108,6 +109,8 @@ const OutstationTaxiPage = () => {
             ))}
           </div>
         </section>
+
+        <FleetShowcase />
 
         {/* CTA Section */}
         <section className="py-16">
