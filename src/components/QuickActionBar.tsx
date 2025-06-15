@@ -6,10 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FloatingButtons } from './FloatingButtons';
 
+interface ChatMessage {
+  id: number | string;
+  text: string;
+  sender: 'bot' | 'user';
+  timestamp: Date;
+}
+
 export const QuickActionBar = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Array<{id: number | string; text: string; sender: 'bot' | 'user'; timestamp: Date}>>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
       text: "Hello! I'm Vizag Taxi Hub assistant. How can I help you today?",
@@ -30,7 +37,7 @@ export const QuickActionBar = () => {
 
   const handleSendMessage = async () => {
     if (message.trim() && !isBotTyping) {
-      const userMessage = {
+      const userMessage: ChatMessage = {
         id: Date.now(),
         text: message,
         sender: 'user',
@@ -65,11 +72,10 @@ export const QuickActionBar = () => {
         }
 
         const data = await res.json();
-        const botData = data.data; // The actual response is nested in 'data'
         
-        const botReply = {
+        const botReply: ChatMessage = {
             id: Date.now() + 1,
-            text: botData.reply || "Sorry, I couldn't process that.",
+            text: data.reply || "Sorry, I couldn't process that.",
             sender: 'bot',
             timestamp: new Date()
         };
@@ -78,7 +84,7 @@ export const QuickActionBar = () => {
 
       } catch (error: any) {
         console.error("Chatbot error:", error);
-        const errorReply = {
+        const errorReply: ChatMessage = {
             id: Date.now() + 1,
             text: `Sorry, something went wrong. ${error.message || 'Please try again.'}`,
             sender: 'bot',

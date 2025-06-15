@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,12 +8,18 @@ import { CabType } from '@/types/cab';
 
 interface CabOptionCardProps {
   cab: CabType;
-  onSelect: (cab: CabType) => void;
+  fare: number;
+  fareDetails: string;
+  isCalculating: boolean;
+  onSelect: () => void;
   isSelected?: boolean;
+  tripType?: string;
 }
 
-export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCardProps) => {
+export const CabOptionCard = ({ cab, fare, onSelect, isSelected = false, fareDetails, isCalculating }: CabOptionCardProps) => {
   const formatPrice = (price: number) => {
+    if (isCalculating) return '...';
+    if (!price || isNaN(price)) return 'N/A';
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -23,14 +30,14 @@ export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCa
   return (
     <Card className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
       isSelected ? 'ring-2 ring-blue-500 shadow-lg' : ''
-    }`} onClick={() => onSelect(cab)}>
+    }`} onClick={onSelect}>
       <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             <img
               src={cab.image}
               alt={cab.name}
-              className="w-16 h-12 object-cover rounded"
+              className="w-20 h-14 object-cover rounded"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = '/cars/sedan.png';
@@ -38,7 +45,7 @@ export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCa
             />
             <div>
               <h3 className="font-semibold text-lg">{cab.name}</h3>
-              <div className="flex items-center space-x-4 text-sm text-gray-600">
+              <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                 <span className="flex items-center space-x-1">
                   <Users className="w-4 h-4" />
                   <span>{cab.capacity}</span>
@@ -57,11 +64,15 @@ export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCa
             </div>
           </div>
           
-          <div className="text-right">
+          <div className="text-right flex-shrink-0 pl-2">
             <div className="text-2xl font-bold text-blue-600">
-              {formatPrice(cab.price)}
+              {isCalculating ? (
+                <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+              ) : (
+                formatPrice(fare)
+              )}
             </div>
-            <div className="text-xs text-gray-500">Total fare</div>
+            <div className="text-xs text-gray-500">{fareDetails}</div>
           </div>
         </div>
 
@@ -94,8 +105,9 @@ export const CabOptionCard = ({ cab, onSelect, isSelected = false }: CabOptionCa
             variant={isSelected ? "default" : "outline"}
             onClick={(e) => {
               e.stopPropagation();
-              onSelect(cab);
+              onSelect();
             }}
+            disabled={isCalculating}
           >
             {isSelected ? 'Selected' : 'Select'}
           </Button>

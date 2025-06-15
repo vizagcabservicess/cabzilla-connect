@@ -2,9 +2,9 @@
 <?php
 require_once 'pooling/config.php';
 
-// IMPORTANT: Replace with your actual Perplexity API key.
-// For production, it's highly recommended to store this in a secure environment variable.
-define('PERPLEXITY_API_KEY', 'YOUR_PERPLEXITY_API_KEY_HERE');
+// IMPORTANT: Using API keys directly in code is not recommended for production.
+// It's better to store this in a secure environment variable.
+define('OPENAI_API_KEY', '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');
 
 // Get the request body
 $input = json_decode(file_get_contents('php://input'), true);
@@ -15,7 +15,7 @@ if (empty($user_message)) {
     sendError('Message is required.', 400);
 }
 
-if (PERPLEXITY_API_KEY === 'YOUR_PERPLEXITY_API_KEY_HERE') {
+if (OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY_HERE') {
     sendResponse(['reply' => 'The chatbot is not configured yet. An API key for the AI service is missing.']);
     exit;
 }
@@ -51,17 +51,17 @@ try {
     
     $messages[] = ['role' => 'user', 'content' => $user_message];
 
-    // Call Perplexity API
+    // Call OpenAI API
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://api.perplexity.ai/chat/completions');
+    curl_setopt($ch, CURLOPT_URL, 'https://api.openai.com/v1/chat/completions');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-        'model' => 'llama-3.1-sonar-small-128k-online',
+        'model' => 'gpt-3.5-turbo',
         'messages' => $messages,
     ]));
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . PERPLEXITY_API_KEY,
+        'Authorization: Bearer ' . OPENAI_API_KEY,
         'Content-Type: application/json'
     ]);
 
@@ -70,7 +70,7 @@ try {
     curl_close($ch);
 
     if ($httpcode >= 400) {
-        error_log("Perplexity API Error: " . $response);
+        error_log("OpenAI API Error: " . $response);
         sendError('Error communicating with AI service.', 500);
     }
     
