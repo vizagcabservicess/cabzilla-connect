@@ -5,7 +5,7 @@ import { MobileNavigation } from '@/components/MobileNavigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Map, Shield, Star, Phone, Car } from 'lucide-react';
+import { Map, Shield, Star, Phone, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const OutstationTaxiPage = () => {
@@ -31,97 +31,108 @@ const OutstationTaxiPage = () => {
       to: 'Rajahmundry',
       distance: '200 KM',
       time: '4-5 Hours',
-      description: 'Experience the culture and heritage on the banks of Godavari.',
+      description: 'Experience culture on the banks of Godavari.',
       image: 'https://images.unsplash.com/photo-1629822359420-554199d2b27a?w=500&h=300&fit=crop'
     },
   ];
 
   const features = [
-    { icon: <Star className="h-8 w-8 text-green-600" />, title: 'Transparent Pricing', desc: 'No hidden charges. Pay for what you see.' },
-    { icon: <Car className="h-8 w-8 text-green-600" />, title: 'Wide Range of Cars', desc: 'Choose from Sedans, SUVs, and more.' },
-    { icon: <Shield className="h-8 w-8 text-green-600" />, title: 'Safe & Secure Trips', desc: 'Verified drivers and 24/7 support.' },
-    { icon: <Map className="h-8 w-8 text-green-600" />, title: 'All India Permit', desc: 'Travel anywhere across the country.' }
+    { icon: <Star />, title: 'Transparent Pricing', description: 'No hidden charges. Pay for what you see.' },
+    { icon: <Car />, title: 'Wide Range of Cars', description: 'Choose from Sedans, SUVs, and more.' },
+    { icon: <Shield />, title: 'Safe & Secure Trips', description: 'Verified drivers and 24/7 support.' },
+    { icon: <Map />, title: 'All India Permit', description: 'Travel anywhere across the country.' }
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8 pb-20">
+      <main className="container mx-auto px-4 py-8 pb-24">
         {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Outstation Taxi Service in Visakhapatnam
+        <section className="text-center py-16">
+          <Badge variant="outline" className="mb-4 border-green-300 bg-green-50 text-green-700">Reliable & Affordable</Badge>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 leading-tight">
+            Outstation Taxi Service
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Plan your perfect getaway from Visakhapatnam with our reliable outstation taxi service. 
-            Enjoy comfortable rides, transparent pricing, and professional drivers.
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-8">
+            Explore beyond Visakhapatnam with our comfortable and safe outstation cabs. One-way or round trip, we've got you covered.
           </p>
-        </div>
+          <Link to="/cabs/outstation">
+            <Button size="lg">
+              Book Your Trip <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </Link>
+        </section>
 
-        {/* Features */}
-        <div className="grid md:grid-cols-4 gap-6 mb-12">
-          {features.map((feature, index) => (
-             <Card key={index} className="text-center hover:shadow-lg transition-shadow">
-              <CardContent className="pt-6 flex flex-col items-center">
-                <div className="bg-green-100 p-3 rounded-full mb-4">{feature.icon}</div>
-                <h3 className="font-semibold mb-2">{feature.title}</h3>
-                <p className="text-sm text-gray-600">{feature.desc}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Features Section */}
+        <section className="py-12">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="text-center flex flex-col items-center">
+                <div className="flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                  {React.cloneElement(feature.icon, { className: "h-8 w-8 text-green-600" })}
+                </div>
+                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
         
-        {/* Popular Routes */}
-        <div className="mb-12">
-          <h2 className="text-3xl font-bold text-center mb-8">Popular Outstation Routes</h2>
-          <div className="grid md:grid-cols-3 gap-6">
+        {/* Popular Routes Section */}
+        <section className="py-12 bg-white rounded-2xl px-6">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900">Popular Outstation Routes</h2>
+            <p className="text-gray-600 mt-2">Journeys our customers love the most.</p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {popularRoutes.map((route, index) => (
-              <Card key={index} className="overflow-hidden group hover:shadow-xl transition-shadow duration-300">
-                <img src={route.image} alt={route.to} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
-                <CardContent className="p-6">
-                  <Badge variant="secondary" className="mb-2">Trip</Badge>
-                  <h3 className="text-xl font-bold mb-2 flex items-center justify-between">
-                    <span>{route.from} to {route.to}</span>
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-4">{route.description}</p>
-                  <div className="flex justify-between items-center text-sm text-gray-700 mb-4">
-                    <span><strong>Distance:</strong> {route.distance}</span>
-                    <span><strong>Time:</strong> {route.time}</span>
+              <Card key={index} className="overflow-hidden group hover:shadow-xl transition-all duration-300 rounded-lg border">
+                <div className="relative">
+                  <img src={route.image} alt={route.to} className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105" />
+                  <div className="absolute top-4 left-4">
+                     <Badge>{route.from} &rarr; {route.to}</Badge>
                   </div>
-                  <Link to="/cabs/outstation">
-                    <Button className="w-full">
-                      View Details
-                    </Button>
-                  </Link>
+                </div>
+                <CardContent className="p-5">
+                  <p className="text-sm text-gray-600 mb-4 h-12">{route.description}</p>
+                  <div className="flex justify-between items-center text-sm text-gray-800 font-medium mb-4">
+                    <span>~{route.distance}</span>
+                    <span>~{route.time}</span>
+                  </div>
+                  <Button asChild className="w-full">
+                    <Link to="/cabs/outstation">View Cabs</Link>
+                  </Button>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </div>
+        </section>
 
         {/* CTA Section */}
-        <Card className="bg-green-600 text-white text-center">
-          <CardContent className="py-8">
-            <h2 className="text-2xl font-bold mb-4">Ready for Your Next Adventure?</h2>
-            <p className="mb-6">Book your outstation cab now for a memorable journey.</p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/cabs/outstation">
-                <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-                  <Car className="mr-2 h-5 w-5" />
-                  Book Outstation Taxi
+        <section className="py-16">
+          <Card className="bg-green-600 text-white text-center rounded-2xl">
+            <CardContent className="p-10">
+              <h2 className="text-3xl font-bold mb-3">Ready for Your Next Adventure?</h2>
+              <p className="mb-6 max-w-2xl mx-auto">Book your outstation cab now for a memorable journey. Our team is available 24/7 to assist you.</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto">
+                   <Link to="/cabs/outstation">
+                    <Car className="mr-2 h-5 w-5" />
+                    Book Outstation Taxi
+                   </Link>
                 </Button>
-              </Link>
-              <a href="tel:+919440440440">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-green-600">
-                  <Phone className="mr-2 h-5 w-5" />
-                  Call: +91 9440440440
+                <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-green-600">
+                  <a href="tel:+919440440440">
+                    <Phone className="mr-2 h-5 w-5" />
+                    Call: +91 9440440440
+                  </a>
                 </Button>
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      </main>
 
       <MobileNavigation />
     </div>
