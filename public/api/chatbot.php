@@ -1,4 +1,3 @@
-
 <?php
 // Define helper functions locally to avoid dependency issues on config files.
 function sendResponse($data) {
@@ -87,13 +86,17 @@ try {
     
     curl_close($ch);
 
-    if ($httpcode >= 400) {
-        error_log("OpenAI API Error: HTTP " . $httpcode . " - " . $response);
-        sendError('Error communicating with AI service.', 500);
-    }
-    
     $result = json_decode($response, true);
 
+    if ($httpcode >= 400) {
+        $error_detail = 'An unknown error occurred.';
+        if (isset($result['error']['message'])) {
+            $error_detail = $result['error']['message'];
+        }
+        error_log("OpenAI API Error: HTTP " . $httpcode . " - " . $response);
+        sendError('Error from AI service: ' . $error_detail, 500);
+    }
+    
     if (json_last_error() !== JSON_ERROR_NONE) {
         error_log("Failed to decode JSON from OpenAI: " . $response);
         sendError('Invalid response from AI service.', 500);
@@ -107,4 +110,3 @@ try {
     error_log("Chatbot Error: " . $e->getMessage());
     sendError('An internal error occurred.', 500);
 }
-

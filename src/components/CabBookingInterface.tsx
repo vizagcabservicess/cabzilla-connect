@@ -112,7 +112,6 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                                 isCalculatingFares={isCabsLoading || isDistanceLoading}
                                 distance={distance}
                                 tripMode={tripDetails.tripMode}
-                                packageType={tripDetails.package}
                                 pickupDate={new Date(tripDetails.pickupDate)}
                             />
                         </Suspense>
@@ -123,9 +122,15 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                     {selectedCab && fare !== null && (
                         <BookingSummary
                             selectedCab={selectedCab}
-                            tripDetails={tripDetails}
-                            onEdit={handleBack}
                             fare={fare}
+                            onEdit={handleBack}
+                            from={tripDetails.from}
+                            to={tripDetails.to}
+                            pickupDate={tripDetails.pickupDate}
+                            pickupTime={tripDetails.pickupTime}
+                            tripType={tripDetails.tripType}
+                            tripMode={tripDetails.tripMode}
+                            returnDate={tripDetails.returnDate}
                         />
                     )}
                 </div>
@@ -141,7 +146,6 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
 
             {step === 3 && selectedCab && tripDetails && guestDetails && fare !== null && (
                 <PaymentGateway
-                    selectedCab={selectedCab}
                     tripDetails={tripDetails}
                     guestDetails={guestDetails}
                     totalAmount={fare}

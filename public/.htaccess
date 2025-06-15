@@ -62,7 +62,8 @@ php_value error_reporting E_ALL
     Header always set X-Content-Type-Options "nosniff"
 </FilesMatch>
 
-# API Test Endpoint - highest priority
+# API Endpoints
+RewriteRule ^api/chatbot\.php$ /api/chatbot.php [L,NC,QSA]
 RewriteRule ^api/test$ /api/test.php [L,NC,QSA]
 RewriteRule ^api/test-pdf$ /api/test-pdf.php [L,NC,QSA]
 
