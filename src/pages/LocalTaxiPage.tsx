@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
@@ -100,7 +99,7 @@ const LocalTaxiPage = () => {
                   <ul className="space-y-3">
                     {pkg.features.map((feature, idx) => (
                       <li key={idx} className="flex items-center gap-3 text-sm">
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-blue-600" />
                         <span>{feature}</span>
                       </li>
                     ))}

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
@@ -135,7 +134,7 @@ const AirportTaxiPage = () => {
                   <div className="space-y-4">
                     {features.map((feature, index) => (
                       <div key={index} className="flex items-start gap-3">
-                        <CheckCircle className="h-6 w-6 text-green-500 mt-1 flex-shrink-0" />
+                        <CheckCircle className="h-6 w-6 text-blue-600 mt-1 flex-shrink-0" />
                         <span className="text-gray-700">{feature}</span>
                       </div>
                     ))}
