@@ -10,32 +10,39 @@ import { Link } from 'react-router-dom';
 const LocalTaxiPage = () => {
   const packages = [
     {
-      name: '4 Hours 40 KM',
-      duration: '4 Hours',
-      distance: '40 KM',
-      description: 'Perfect for city tours and local shopping',
+      name: '4 Hours / 40 KM',
+      price: '1200',
+      description: 'Perfect for quick city tours and local shopping sprees.',
       features: ['AC Sedan', 'Professional Driver', 'Fuel Included', 'Toll & Parking Extra']
     },
     {
-      name: '8 Hours 80 KM',
-      duration: '8 Hours',
-      distance: '80 KM',
-      description: 'Ideal for full day city exploration',
+      name: '8 Hours / 80 KM',
+      price: '2400',
+      description: 'Ideal for a full day of city exploration and sightseeing.',
       features: ['AC Sedan', 'Professional Driver', 'Fuel Included', 'Toll & Parking Extra']
     },
     {
-      name: '10 Hours 100 KM',
-      duration: '10 Hours',
-      distance: '100 KM',
-      description: 'Extended city tours and nearby attractions',
+      name: '10 Hours / 100 KM',
+      price: '3000',
+      description: 'For extended city tours and visiting nearby attractions.',
       features: ['AC Sedan', 'Professional Driver', 'Fuel Included', 'Toll & Parking Extra']
     }
   ];
 
   const popularDestinations = [
-    'RK Beach', 'Kailasagiri', 'Submarine Museum', 'Araku Valley (Day Trip)',
-    'Borra Caves', 'Simhachalam Temple', 'VUDA Park', 'Rushikonda Beach',
-    'Indira Gandhi Zoological Park', 'Visakha Museum'
+    { name: 'RK Beach', image: 'https://images.unsplash.com/photo-1605537932640-038c35345b57?w=500&h=300&fit=crop' },
+    { name: 'Kailasagiri', image: 'https://images.unsplash.com/photo-1615836245338-f5d9b5662754?w=500&h=300&fit=crop' },
+    { name: 'Submarine Museum', image: 'https://images.unsplash.com/photo-1594966613342-99e6c45d3e23?w=500&h=300&fit=crop' },
+    { name: 'Rushikonda Beach', image: 'https://images.unsplash.com/photo-1587974929318-7f28a5065c71?w=500&h=300&fit=crop' },
+    { name: 'Simhachalam Temple', image: 'https://images.unsplash.com/photo-1594774591439-ed8e4fe33400?w=500&h=300&fit=crop' },
+    { name: 'Dolphin\'s Nose', image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop' }
+  ];
+
+  const features = [
+      { icon: <Clock className="h-8 w-8 text-blue-600" />, title: 'Flexible Packages', desc: 'Choose from 4, 8, or 10-hour options.' },
+      { icon: <MapPin className="h-8 w-8 text-blue-600" />, title: 'Local Expertise', desc: 'Our drivers know the best routes and spots.' },
+      { icon: <Star className="h-8 w-8 text-blue-600" />, title: 'Affordable Rates', desc: 'Competitive pricing for all local trips.' },
+      { icon: <Shield className="h-8 w-8 text-blue-600" />, title: 'Safe & Reliable', desc: 'Licensed drivers and well-maintained cars.' },
   ];
 
   return (
@@ -56,74 +63,47 @@ const LocalTaxiPage = () => {
 
         {/* Features */}
         <div className="grid md:grid-cols-4 gap-6 mb-12">
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <Clock className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">Flexible Hours</h3>
-              <p className="text-sm text-gray-600">Choose from 4, 8, or 10-hour packages</p>
-            </CardContent>
-          </Card>
-
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <MapPin className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">Local Expertise</h3>
-              <p className="text-sm text-gray-600">Drivers know all local attractions</p>
-            </CardContent>
-          </Card>
-
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <Star className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">Best Rates</h3>
-              <p className="text-sm text-gray-600">Competitive pricing for local trips</p>
-            </CardContent>
-          </Card>
-
-          <Card className="text-center">
-            <CardContent className="pt-6">
-              <Shield className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">Safe & Reliable</h3>
-              <p className="text-sm text-gray-600">Licensed drivers and insured vehicles</p>
-            </CardContent>
-          </Card>
+            {features.map((feature, index) => (
+                <Card key={index} className="text-center hover:shadow-lg transition-shadow">
+                    <CardContent className="pt-6 flex flex-col items-center">
+                        <div className="bg-blue-100 p-3 rounded-full mb-4">{feature.icon}</div>
+                        <h3 className="font-semibold mb-2">{feature.title}</h3>
+                        <p className="text-sm text-gray-600">{feature.desc}</p>
+                    </CardContent>
+                </Card>
+            ))}
         </div>
 
         {/* Packages */}
         <div className="mb-12">
-          <h2 className="text-3xl font-bold text-center mb-8">Local Taxi Packages</h2>
+          <h2 className="text-3xl font-bold text-center mb-8">Our Local Taxi Packages</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {packages.map((pkg, index) => (
-              <Card key={index} className="hover:shadow-lg transition-shadow">
+              <Card key={index} className="flex flex-col hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
-                  <CardTitle className="text-center text-blue-600">{pkg.name}</CardTitle>
-                  <div className="text-center text-gray-600">
-                    <div className="flex justify-center items-center gap-4">
-                      <span className="flex items-center gap-1">
-                        <Clock size={16} />
-                        {pkg.duration}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin size={16} />
-                        {pkg.distance}
-                      </span>
-                    </div>
-                  </div>
+                  <CardTitle className="text-center text-2xl font-bold text-blue-600">{pkg.name}</CardTitle>
+                  <p className="text-center text-4xl font-bold text-gray-800 flex items-center justify-center">
+                    ₹{pkg.price}
+                  </p>
+                  <p className="text-center text-gray-500 text-sm">{pkg.description}</p>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-center text-gray-700 mb-4">{pkg.description}</p>
-                  <ul className="space-y-2 mb-6">
+                <CardContent className="flex-grow">
+                  <ul className="space-y-3 mb-6">
                     {pkg.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-center gap-2 text-sm">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                        {feature}
+                      <li key={idx} className="flex items-center gap-3 text-sm">
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                        <span>{feature}</span>
                       </li>
                     ))}
                   </ul>
-                  <Link to="/cabs/local">
-                    <Button className="w-full">Book Now</Button>
-                  </Link>
                 </CardContent>
+                <div className="p-6 pt-0">
+                  <Link to="/cabs/local">
+                    <Button className="w-full" size="lg">Book Package</Button>
+                  </Link>
+                </div>
               </Card>
             ))}
           </div>
@@ -132,16 +112,14 @@ const LocalTaxiPage = () => {
         {/* Popular Destinations */}
         <div className="mb-12">
           <h2 className="text-3xl font-bold text-center mb-8">Popular Local Destinations</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {popularDestinations.map((destination, index) => (
-              <Card key={index} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-5 w-5 text-blue-600" />
-                    <span className="font-medium">{destination}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <div key={index} className="relative group overflow-hidden rounded-lg">
+                <img src={destination.image} alt={destination.name} className="w-full h-40 object-cover transform group-hover:scale-110 transition-transform duration-300" />
+                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end p-4">
+                    <h3 className="text-white font-bold text-lg">{destination.name}</h3>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -158,10 +136,12 @@ const LocalTaxiPage = () => {
                   Book Local Taxi
                 </Button>
               </Link>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
-                <Phone className="mr-2 h-5 w-5" />
-                Call: +91 9440440440
-              </Button>
+              <a href="tel:+919440440440">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
+                  <Phone className="mr-2 h-5 w-5" />
+                  Call: +91 9440440440
+                </Button>
+              </a>
             </div>
           </CardContent>
         </Card>
