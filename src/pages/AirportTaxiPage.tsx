@@ -66,7 +66,7 @@ const AirportTaxiPage = () => {
                     Reliable transfers to and from Visakhapatnam Airport. Book your ride for hassle-free travel.
                 </p>
                 <Link to="/cabs/airport">
-                    <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white">
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
                         Book Airport Ride <ArrowRight className="ml-2 h-5 w-5" />
                     </Button>
                 </Link>
@@ -79,8 +79,8 @@ const AirportTaxiPage = () => {
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
               {services.map((service, index) => (
                 <div key={index} className="text-center flex flex-col items-center">
-                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-orange-100 mb-4">
-                    {React.cloneElement(service.icon, { className: "h-8 w-8 text-orange-600" })}
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+                    {React.cloneElement(service.icon, { className: "h-8 w-8 text-blue-600" })}
                   </div>
                   <h3 className="text-lg font-semibold mb-2">{service.title}</h3>
                   <p className="text-gray-600">{service.description}</p>
@@ -141,7 +141,7 @@ const AirportTaxiPage = () => {
                     ))}
                   </div>
                 </div>
-                <Card className="bg-orange-500 text-white text-center flex flex-col justify-center rounded-2xl">
+                <Card className="bg-blue-600 text-white text-center flex flex-col justify-center rounded-2xl">
                   <CardContent className="p-10">
                     <h2 className="text-3xl font-bold mb-3">Need an Airport Transfer?</h2>
                     <p className="mb-6">Book now for a comfortable and reliable journey.</p>
@@ -152,7 +152,7 @@ const AirportTaxiPage = () => {
                           Book Airport Taxi
                         </Link>
                       </Button>
-                      <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-orange-600">
+                      <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
                         <a href="tel:+919440440440">
                           <Phone className="mr-2 h-5 w-5" />
                           Call to Book

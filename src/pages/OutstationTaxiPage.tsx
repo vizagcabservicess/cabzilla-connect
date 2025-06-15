@@ -51,7 +51,7 @@ const OutstationTaxiPage = () => {
       <main className="container mx-auto px-4 py-8 pb-24">
         {/* Hero Section */}
         <section className="text-center py-16">
-          <Badge variant="outline" className="mb-4 border-green-300 bg-green-50 text-green-700">Reliable & Affordable</Badge>
+          <Badge variant="outline" className="mb-4 border-blue-300 bg-blue-50 text-blue-700">Reliable & Affordable</Badge>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 leading-tight">
             Outstation Taxi Service
           </h1>
@@ -70,8 +70,8 @@ const OutstationTaxiPage = () => {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
               <div key={index} className="text-center flex flex-col items-center">
-                <div className="flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
-                  {React.cloneElement(feature.icon, { className: "h-8 w-8 text-green-600" })}
+                <div className="flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+                  {React.cloneElement(feature.icon, { className: "h-8 w-8 text-blue-600" })}
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
                 <p className="text-gray-600">{feature.description}</p>
@@ -114,7 +114,7 @@ const OutstationTaxiPage = () => {
 
         {/* CTA Section */}
         <section className="py-16">
-          <Card className="bg-green-600 text-white text-center rounded-2xl">
+          <Card className="bg-blue-600 text-white text-center rounded-2xl">
             <CardContent className="p-10">
               <h2 className="text-3xl font-bold mb-3">Ready for Your Next Adventure?</h2>
               <p className="mb-6 max-w-2xl mx-auto">Book your outstation cab now for a memorable journey. Our team is available 24/7 to assist you.</p>
@@ -125,7 +125,7 @@ const OutstationTaxiPage = () => {
                     Book Outstation Taxi
                    </Link>
                 </Button>
-                <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-green-600">
+                <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
                   <a href="tel:+919440440440">
                     <Phone className="mr-2 h-5 w-5" />
                     Call: +91 9440440440
