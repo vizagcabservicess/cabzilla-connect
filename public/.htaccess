@@ -7,12 +7,14 @@
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
-    
-    # Handle preflight OPTIONS request
-    RewriteEngine On
-    RewriteCond %{REQUEST_METHOD} OPTIONS
-    RewriteRule ^(.*)$ $1 [R=200,L]
 </IfModule>
+
+# Enable URL rewriting
+RewriteEngine On
+
+# Handle preflight OPTIONS request
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
 
 # Ensure PHP files are executed and accessible
 <FilesMatch "\.php$">
@@ -21,19 +23,16 @@
         Require all granted
     </IfModule>
 </FilesMatch>
+AddType application/x-httpd-php .php
 
 # Fix for PUT/DELETE requests
 <IfModule mod_rewrite.c>
-    RewriteEngine On
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
 
 # Ensure PHP errors are displayed in development
 php_flag display_errors On
 php_value error_reporting E_ALL
-
-# Enable rewrite engine for api routing
-RewriteEngine On
 
 # CRITICAL: Special handling for download-invoice.php - let the script handle content type
 <Files "download-invoice.php">
@@ -70,7 +69,6 @@ RewriteRule ^api/test-pdf$ /api/test-pdf.php [L,NC,QSA]
 
 # High priority API endpoints - ensure these work first
 RewriteRule ^api/admin/test-booking-api$ /api/admin/test-booking-api.php [L,NC,QSA]
-# ... keep existing code (the rest of the high priority API endpoints) ...
 RewriteRule ^api/admin/booking$ /api/admin/booking.php [L,NC,QSA]
 
 # Add public download-invoice endpoint with special handling for PDFs
