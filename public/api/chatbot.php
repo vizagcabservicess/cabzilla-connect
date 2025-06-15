@@ -2,6 +2,12 @@
 <?php
 // Define helper functions locally to avoid dependency issues on config files.
 function sendResponse($data) {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+        exit(0);
+    }
     header('Content-Type: application/json');
     echo json_encode($data);
     exit;
@@ -9,6 +15,7 @@ function sendResponse($data) {
 
 function sendError($message, $code = 500) {
     http_response_code($code);
+    header('Access-Control-Allow-Origin: *');
     header('Content-Type: application/json');
     echo json_encode(['message' => $message]);
     exit;
@@ -100,3 +107,4 @@ try {
     error_log("Chatbot Error: " . $e->getMessage());
     sendError('An internal error occurred.', 500);
 }
+
