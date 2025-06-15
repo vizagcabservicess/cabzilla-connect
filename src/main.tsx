@@ -1,7 +1,9 @@
+
 import React, { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 
