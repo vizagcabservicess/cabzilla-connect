@@ -8,107 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Map, Shield, Star, Phone, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FleetShowcase } from '@/components/FleetShowcase';
+import { popularRoutes } from '@/lib/routeData';
+import { slugify } from '@/lib/utils';
 
 const OutstationTaxiPage = () => {
-  const popularRoutes = [
-    {
-      from: 'Visakhapatnam',
-      to: 'Araku Valley',
-      distance: '120 KM',
-      time: '3-4 Hours',
-      description: 'Explore the serene hills and coffee plantations of Araku.',
-      image: 'https://images.unsplash.com/photo-1594774591439-ed8e4fe33400?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Srikakulam',
-      distance: '110 KM',
-      time: '2-3 Hours',
-      description: 'Visit ancient temples and historical sites.',
-      image: 'https://images.unsplash.com/photo-1615598854932-a25a3a2d603a?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Rajahmundry',
-      distance: '200 KM',
-      time: '4-5 Hours',
-      description: 'Experience culture on the banks of Godavari.',
-      image: 'https://images.unsplash.com/photo-1629822359420-554199d2b27a?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Narsipatnam',
-      distance: '80 KM',
-      time: '2 Hours',
-      description: 'Discover lush landscapes and nearby waterfalls, a perfect nature escape.',
-      image: 'https://images.unsplash.com/photo-1505144808419-1957a94ca61e?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Annavaram',
-      distance: '125 KM',
-      time: '3 Hours',
-      description: 'Embark on a spiritual journey to the famed Satyanarayana Swamy Temple.',
-      image: 'https://images.unsplash.com/photo-1605613136450-13a89191a783?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Kakinada',
-      distance: '160 KM',
-      time: '3-4 Hours',
-      description: 'Explore the "Fertilizer City" with its beautiful coastline and rich culture.',
-      image: 'https://images.unsplash.com/photo-1621945235317-b749a0a0ab3a?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Palasa',
-      distance: '200 KM',
-      time: '4-5 Hours',
-      description: 'Famous for its high-quality cashew nuts and beautiful beaches.',
-      image: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Bobbili',
-      distance: '100 KM',
-      time: '2-3 Hours',
-      description: 'Famous for the Bobbili Veena and the historic Battle of Bobbili.',
-      image: 'https://images.unsplash.com/photo-1598226662382-079a022998a4?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Eluru',
-      distance: '300 KM',
-      time: '6-7 Hours',
-      description: 'A city known for its hand-woven carpets and historical Kolleru Lake.',
-      image: 'https://images.unsplash.com/photo-1616161560417-66a3788c9f5f?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Vijayawada',
-      distance: '350 KM',
-      time: '7-8 Hours',
-      description: 'Explore the bustling city on the banks of Krishna, home to Kanaka Durga Temple.',
-      image: 'https://images.unsplash.com/photo-1593365463032-05a91593b4e6?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Hyderabad',
-      distance: '620 KM',
-      time: '11-12 Hours',
-      description: 'Discover the City of Pearls, with its iconic Charminar and delicious biryani.',
-      image: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=500&h=300&fit=crop'
-    },
-    {
-      from: 'Visakhapatnam',
-      to: 'Puri (Odisha)',
-      distance: '450 KM',
-      time: '9-10 Hours',
-      description: 'A holy city famous for the Jagannath Temple and its beautiful coastline.',
-      image: 'https://images.unsplash.com/photo-1599432868243-55d8f6f5e85d?w=500&h=300&fit=crop'
-    }
-  ];
-
   const features = [
     { icon: <Star />, title: 'Transparent Pricing', description: 'No hidden charges. Pay for what you see.' },
     { icon: <Car />, title: 'Wide Range of Cars', description: 'Choose from Sedans, SUVs, and more.' },
@@ -159,7 +62,7 @@ const OutstationTaxiPage = () => {
             <p className="text-gray-600 mt-2">Journeys our customers love the most.</p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {popularRoutes.map((route, index) => (
+            {popularRoutes.slice(0, 9).map((route, index) => (
               <Card key={index} className="overflow-hidden group hover:shadow-xl transition-all duration-300 rounded-lg border">
                 <div className="relative">
                   <img src={route.image} alt={route.to} className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -174,7 +77,7 @@ const OutstationTaxiPage = () => {
                     <span>~{route.time}</span>
                   </div>
                   <Button asChild className="w-full">
-                    <Link to="/cabs/outstation">View Cabs</Link>
+                    <Link to={`/outstation-taxi/${slugify(route.from)}/${slugify(route.to)}`}>View Details</Link>
                   </Button>
                 </CardContent>
               </Card>

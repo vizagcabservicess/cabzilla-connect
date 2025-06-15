@@ -1,3 +1,4 @@
+
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -54,6 +55,7 @@ import TourDetailPage from './pages/TourDetailPage';
 import SedanPage from './pages/SedanPage';
 import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
+import RoutePage from './pages/RoutePage';
 
 const router = createBrowserRouter([
   {
@@ -180,6 +182,10 @@ const router = createBrowserRouter([
   {
     path: '/outstation-taxi',
     element: <OutstationTaxiPage />,
+  },
+  {
+    path: '/outstation-taxi/:fromSlug/:toSlug',
+    element: <RoutePage />,
   },
   {
     path: '/airport-taxi',
