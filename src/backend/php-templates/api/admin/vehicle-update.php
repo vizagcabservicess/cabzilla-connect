@@ -1,4 +1,3 @@
-
 <?php
 // Main vehicle update script
 
@@ -118,6 +117,12 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     }
                 }
                 
+                // Prepare new fields
+                $inclusions = isset($vehicleData['inclusions']) ? (is_array($vehicleData['inclusions']) ? json_encode($vehicleData['inclusions']) : $vehicleData['inclusions']) : null;
+                $exclusions = isset($vehicleData['exclusions']) ? (is_array($vehicleData['exclusions']) ? json_encode($vehicleData['exclusions']) : $vehicleData['exclusions']) : null;
+                $cancellationPolicy = $vehicleData['cancellationPolicy'] ?? null;
+                $fuelType = $vehicleData['fuelType'] ?? null;
+                
                 // Check if vehicle exists
                 $checkSql = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
                 $stmt = $conn->prepare($checkSql);
@@ -141,7 +146,11 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         ac = ?, 
                         night_halt_charge = ?, 
                         driver_allowance = ?, 
-                        is_active = ?
+                        is_active = ?,
+                        inclusions = ?, 
+                        exclusions = ?, 
+                        cancellation_policy = ?, 
+                        fuel_type = ?
                     WHERE vehicle_id = ? OR id = ?";
                     
                     $stmt = $conn->prepare($sql);
@@ -165,7 +174,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("siiddsssiddiss", 
+                    $stmt->bind_param("siiddsssiddisssss", 
                         $name, 
                         $capacity, 
                         $luggageCapacity, 
@@ -178,8 +187,8 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         $nightHaltCharge, 
                         $driverAllowance, 
                         $isActive,
-                        $vehicleId,
-                        $vehicleId
+                        $inclusions, $exclusions, $cancellationPolicy, $fuelType,
+                        $vehicleId, $vehicleId
                     );
                     
                     if ($stmt->execute()) {
@@ -193,9 +202,9 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     logUpdateDebug("Inserting new vehicle into database");
                     
                     $sql = "INSERT INTO vehicles 
-                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, image, amenities, description, ac, night_halt_charge, driver_allowance, is_active) 
+                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, inclusions, exclusions, cancellation_policy, fuel_type) 
                     VALUES 
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -218,7 +227,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("ssiiddsssiddi", 
+                    $stmt->bind_param("ssiiddsssiddiisss", 
                         $vehicleId, 
                         $name, 
                         $capacity, 
@@ -231,7 +240,8 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         $ac, 
                         $nightHaltCharge, 
                         $driverAllowance, 
-                        $isActive
+                        $isActive,
+                        $inclusions, $exclusions, $cancellationPolicy, $fuelType
                     );
                     
                     if ($stmt->execute()) {
@@ -279,7 +289,11 @@ if ($vehicleIndex < 0) {
         'ac' => true,
         'nightHaltCharge' => 700,
         'driverAllowance' => 250,
-        'isActive' => true
+        'isActive' => true,
+        'inclusions' => [],
+        'exclusions' => [],
+        'cancellationPolicy' => '',
+        'fuelType' => ''
     ];
     $persistentData[] = $newVehicle;
     $vehicleIndex = count($persistentData) - 1;
@@ -374,6 +388,26 @@ if (isset($vehicleData['driverAllowance'])) {
     $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driverAllowance'];
 } else if (isset($vehicleData['driver_allowance'])) {
     $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driver_allowance'];
+}
+
+if (isset($vehicleData['inclusions'])) {
+    $normalizedVehicle['inclusions'] = is_string($vehicleData['inclusions'])
+        ? array_map('trim', explode(',', $vehicleData['inclusions']))
+        : $vehicleData['inclusions'];
+}
+
+if (isset($vehicleData['exclusions'])) {
+    $normalizedVehicle['exclusions'] = is_string($vehicleData['exclusions'])
+        ? array_map('trim', explode(',', $vehicleData['exclusions']))
+        : $vehicleData['exclusions'];
+}
+
+if (isset($vehicleData['cancellationPolicy'])) {
+    $normalizedVehicle['cancellationPolicy'] = $vehicleData['cancellationPolicy'];
+}
+
+if (isset($vehicleData['fuelType'])) {
+    $normalizedVehicle['fuelType'] = $vehicleData['fuelType'];
 }
 
 logUpdateDebug("Normalized vehicle data", $normalizedVehicle);

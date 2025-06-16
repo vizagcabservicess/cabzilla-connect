@@ -539,7 +539,11 @@ function loadVehiclesFromDatabase() {
                         'ac' => (bool)$row['ac'],
                         'nightHaltCharge' => (float)$row['night_halt_charge'],
                         'driverAllowance' => (float)$row['driver_allowance'],
-                        'isActive' => (bool)$row['is_active']
+                        'isActive' => (bool)$row['is_active'],
+                        'inclusions' => isset($row['inclusions']) && $row['inclusions'] !== null && $row['inclusions'] !== '' ? (is_array(json_decode($row['inclusions'], true)) ? json_decode($row['inclusions'], true) : array_map('trim', explode(',', $row['inclusions']))) : [],
+                        'exclusions' => isset($row['exclusions']) && $row['exclusions'] !== null && $row['exclusions'] !== '' ? (is_array(json_decode($row['exclusions'], true)) ? json_decode($row['exclusions'], true) : array_map('trim', explode(',', $row['exclusions']))) : [],
+                        'cancellationPolicy' => $row['cancellation_policy'] ?? '',
+                        'fuelType' => $row['fuel_type'] ?? ''
                     ];
                     
                     $vehicles[] = $vehicle;
