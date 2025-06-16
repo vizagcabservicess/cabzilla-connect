@@ -48,21 +48,18 @@ export function EditFleetVehicleDialog({
     }
   });
 
+  // Reset form when dialog opens with new vehicle data
   useEffect(() => {
     if (open) {
-      const formData = {
+      form.reset({
         ...vehicle,
         lastServiceOdometer: vehicle.lastServiceOdometer || 0,
-        nextServiceOdometer: vehicle.nextServiceOdometer || 0,
-        inclusions: Array.isArray(vehicle.inclusions) ? vehicle.inclusions.join(', ') : vehicle.inclusions || '',
-        exclusions: Array.isArray(vehicle.exclusions) ? vehicle.exclusions.join(', ') : vehicle.exclusions || '',
-        cancellationPolicy: vehicle.cancellationPolicy || '',
-        fuelType: vehicle.fuelType || ''
-      };
-      form.reset(formData);
+        nextServiceOdometer: vehicle.nextServiceOdometer || 0
+      });
     }
   }, [open, vehicle, form]);
 
+  // When submitting, parse inclusions/exclusions as arrays
   const handleSubmit = async (data: any) => {
     const inclusions = data.inclusions
       ? data.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
@@ -74,10 +71,9 @@ export function EditFleetVehicleDialog({
       ...data,
       inclusions,
       exclusions,
-      cancellationPolicy: data.cancellationPolicy || '',
-      fuelType: data.fuelType || ''
     };
     
+    // Preserve ID and other metadata
     const updatedVehicle: FleetVehicle = {
       ...vehicle,
       ...payload,
@@ -87,6 +83,16 @@ export function EditFleetVehicleDialog({
     
     onSave(updatedVehicle);
   };
+
+  // When loading, join arrays for textarea
+  useEffect(() => {
+    if (formData.inclusions && Array.isArray(formData.inclusions)) {
+      form.setValue('inclusions', formData.inclusions.join(', '));
+    }
+    if (formData.exclusions && Array.isArray(formData.exclusions)) {
+      form.setValue('exclusions', formData.exclusions.join(', '));
+    }
+  }, [formData]);
 
   const handleDeleteClick = () => {
     setIsDeleteDialogOpen(true);
@@ -339,11 +345,7 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Inclusions</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="e.g., AC, Bottle Water, Music System" 
-                        {...field} 
-                        value={field.value || ''}
-                      />
+                      <Textarea placeholder="e.g., AC, Bottle Water, Music System" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -356,11 +358,7 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Exclusions</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="e.g., Toll, Parking, State Tax" 
-                        {...field} 
-                        value={field.value || ''}
-                      />
+                      <Textarea placeholder="e.g., Toll, Parking, State Tax" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -373,11 +371,7 @@ export function EditFleetVehicleDialog({
                   <FormItem>
                     <FormLabel>Cancellation Policy</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="e.g., Free cancellation up to 1 hour before pickup." 
-                        {...field} 
-                        value={field.value || ''}
-                      />
+                      <Textarea placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

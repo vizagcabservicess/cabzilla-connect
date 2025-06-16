@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -33,6 +32,7 @@ export function CabOptionCard({
   const getFareBreakdown = () => {
     if (typeof fare !== 'number' || !fare) return null;
     
+    // Sample breakdown - you can enhance this based on your fare calculation logic
     const baseFare = Math.floor(fare * 0.7);
     const taxes = Math.floor(fare * 0.12);
     const driverAllowance = fare - baseFare - taxes;
@@ -60,6 +60,7 @@ export function CabOptionCard({
           )}
           onClick={() => { if (typeof onSelect === 'function') onSelect(); }}
         >
+          {/* Car Image */}
           <div className="flex items-center justify-center w-20 h-16 bg-gray-100 flex-shrink-0">
             {cab.image ? (
               <img src={cab.image} alt={cab.name} className="object-contain w-full h-full rounded-lg" />
@@ -67,6 +68,7 @@ export function CabOptionCard({
               <span className={cn("text-xl font-bold text-gray-600")}>{cab.name.charAt(0)}</span>
             )}
           </div>
+          {/* Info */}
           <div className="flex-1 flex flex-col justify-between p-2 w-full min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-base text-gray-900">{cab.name}</span>
@@ -75,7 +77,7 @@ export function CabOptionCard({
               {cab.year && <span className="ml-2 text-xs text-gray-500">{cab.year}</span>}
               {isSelected && <span className="ml-2 px-2 py-0.5 rounded bg-blue-600 text-white text-xs font-semibold">Selected</span>}
             </div>
-            
+            {/* View more details link (mobile only, always under vehicle type) */}
             <button
               type="button"
               className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-base font-semibold my-2 focus:outline-none"
@@ -84,12 +86,18 @@ export function CabOptionCard({
               {showDetails ? 'Hide Details' : 'View Details'}
               {showDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
-            
+            {/* Extra details accordion (mobile only) */}
             {showDetails && (
               <>
                 <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1"><Star className="h-3 w-3 inline" /> 4.5</span>
-                
+                {cab.discount && (
+                  <span className="ml-1 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-xs font-semibold">{cab.discount}</span>
+                )}
+                {cab.oldPrice && (
+                  <span className="ml-1 text-xs text-gray-400 line-through">{cab.oldPrice}</span>
+                )}
                 <div className="mt-2 text-xs bg-gray-50 rounded p-2">
+                  {/* Rating and Reviews */}
                   <div className="flex items-center gap-2 mb-1">
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -97,22 +105,22 @@ export function CabOptionCard({
                     </div>
                     <span className="text-gray-500">(150+ reviews)</span>
                   </div>
-                  
+                  {/* Vehicle Features */}
                   <div className="flex items-center gap-4 text-gray-600 mb-1">
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4" />
-                      <span>{cab.capacity || 4} Seats</span>
+                      <span>4 Seats</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Briefcase className="h-4 w-4" />
-                      <span>{cab.luggageCapacity || 2} Bags</span>
+                      <span>2 Bags</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Fuel className="h-4 w-4" />
                       <span>{cab.fuelType || 'CNG'}</span>
                     </div>
                   </div>
-                  
+                  {/* Amenities Tags */}
                   {cab.amenities && cab.amenities.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-1">
                       {cab.amenities.slice(0, 3).map((amenity, index) => (
@@ -130,48 +138,10 @@ export function CabOptionCard({
                       )}
                     </div>
                   )}
-
-                  {/* Display inclusions */}
-                  {cab.inclusions && cab.inclusions.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-green-700 mb-1">Inclusions:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {cab.inclusions.slice(0, 3).map((inclusion, index) => (
-                          <span key={index} className="text-xs text-green-600">✓ {inclusion}</span>
-                        ))}
-                        {cab.inclusions.length > 3 && (
-                          <span className="text-xs text-green-600">+{cab.inclusions.length - 3} more</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Display exclusions */}
-                  {cab.exclusions && cab.exclusions.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-red-700 mb-1">Exclusions:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {cab.exclusions.slice(0, 2).map((exclusion, index) => (
-                          <span key={index} className="text-xs text-red-600">✗ {exclusion}</span>
-                        ))}
-                        {cab.exclusions.length > 2 && (
-                          <span className="text-xs text-red-600">+{cab.exclusions.length - 2} more</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Display cancellation policy */}
-                  {cab.cancellationPolicy && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-blue-700 mb-1">Cancellation:</p>
-                      <p className="text-xs text-blue-600">{cab.cancellationPolicy}</p>
-                    </div>
-                  )}
                 </div>
               </>
             )}
-            
+            {/* Third row: Price, taxes, select button */}
             <div className="flex flex-col gap-1 mt-2 w-full">
               <div className="flex items-end justify-between w-full">
                 <div>
@@ -201,7 +171,6 @@ export function CabOptionCard({
           </div>
         </div>
       </div>
-      
       {/* Desktop: original vertical, detailed card */}
       <div className="hidden md:block">
         <div 
@@ -215,6 +184,7 @@ export function CabOptionCard({
         >
           <div className="p-4">
             <div className="flex items-start gap-4">
+              {/* Vehicle Image/Icon */}
               <div className={cn(
                 "w-20 h-16 rounded-lg flex items-center justify-center bg-cover bg-center flex-shrink-0",
                 isSelected ? "bg-blue-100" : "bg-gray-100"
@@ -228,12 +198,12 @@ export function CabOptionCard({
                   </span>
                 )}
               </div>
-              
+              {/* Vehicle Details */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg text-gray-900 mb-1">{cab.name}</h3>
-                    
+                    {/* Rating and Reviews */}
                     <div className="flex items-center gap-2 mb-2">
                       <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -241,22 +211,22 @@ export function CabOptionCard({
                       </div>
                       <span className="text-sm text-gray-500">(150+ reviews)</span>
                     </div>
-                    
+                    {/* Vehicle Features */}
                     <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        <span>{cab.capacity || 4} Seats</span>
+                        <span>4 Seats</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Briefcase className="h-4 w-4" />
-                        <span>{cab.luggageCapacity || 2} Bags</span>
+                        <span>2 Bags</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Fuel className="h-4 w-4" />
-                        <span>{cab.fuelType || 'CNG'}</span>
+                        <span>CNG</span>
                       </div>
                     </div>
-                    
+                    {/* Amenities Tags */}
                     {cab.amenities && cab.amenities.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-2">
                         {cab.amenities.slice(0, 3).map((amenity, index) => (
@@ -275,7 +245,7 @@ export function CabOptionCard({
                       </div>
                     )}
                   </div>
-                  
+                  {/* Price Section */}
                   <div className="text-right ml-4">
                     {isCalculating ? (
                       <div className="flex items-center text-sm text-gray-500">
@@ -293,7 +263,7 @@ export function CabOptionCard({
                     )}
                   </div>
                 </div>
-                
+                {/* Action Buttons */}
                 <div className="flex items-center justify-between mt-3">
                   <button 
                     onClick={(e) => {
@@ -324,51 +294,39 @@ export function CabOptionCard({
                     )}
                   </button>
                 </div>
-                
+                {/* Expandable Details */}
                 {showDetails && (
                   <div className="mt-4 px-4 pb-4">
                     <div className="flex flex-col md:flex-row gap-6">
                       <div className="flex-1">
                         <h4 className="font-semibold mb-2">Inclusions</h4>
                         {cab.inclusions && cab.inclusions.length > 0 ? (
-                          <ul className="text-sm text-gray-700 list-none space-y-1">
+                          <ul className="text-sm text-gray-700 list-disc list-inside">
                             {cab.inclusions.map((inc: string, idx: number) => (
-                              <li key={idx} className="flex items-center gap-2">
-                                <span className="text-green-600">✓</span>
-                                {inc}
-                              </li>
+                              <li key={idx}>✓ {inc}</li>
                             ))}
                           </ul>
                         ) : (
                           <div className="text-sm text-gray-500 italic">No inclusions listed.</div>
                         )}
                       </div>
-                      
+                      {/* Exclusions Section */}
                       {cab.exclusions && cab.exclusions.length > 0 && (
                         <div className="flex-1">
                           <h4 className="font-semibold mb-2">Exclusions</h4>
-                          <ul className="text-sm text-gray-700 list-none space-y-1">
+                          <ul className="text-sm text-gray-700 list-disc list-inside">
                             {cab.exclusions.map((exc: string, idx: number) => (
-                              <li key={idx} className="flex items-center gap-2">
-                                <span className="text-red-600">✗</span>
-                                {exc}
-                              </li>
+                              <li key={idx}>✗ {exc}</li>
                             ))}
                           </ul>
                         </div>
                       )}
                     </div>
-                    
+                    {/* Always show cancellation policy if present */}
                     {cab.cancellationPolicy && (
-                      <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600 border border-gray-200">
-                        <strong>Cancellation Policy:</strong><br />
+                      <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600 border border-gray-200">
+                        <strong>Cancellation Policy</strong><br />
                         {cab.cancellationPolicy}
-                      </div>
-                    )}
-                    
-                    {cab.fuelType && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        <strong>Fuel Type:</strong> {cab.fuelType}
                       </div>
                     )}
                   </div>

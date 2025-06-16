@@ -1,99 +1,120 @@
 
 <?php
-// Set CORS headers
+// Alias for vehicle-update.php
+// This file simply includes the main vehicle-update.php file for compatibility
+// with different API endpoint naming conventions
+
+// First, set all necessary CORS headers for preflight requests
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
 
+// Handle OPTIONS request directly here to ensure it works
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Get request data
-$rawInput = file_get_contents('php://input');
-$vehicleData = json_decode($rawInput, true);
-
-if (!$vehicleData && $_POST) {
-    $vehicleData = $_POST;
-}
-
-// Log for debugging
+// Log request for debugging
 $logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0777, true);
 }
-$logFile = $logDir . '/vehicle_update_' . date('Y-m-d') . '.log';
-file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Update request: " . json_encode($vehicleData) . "\n", FILE_APPEND);
 
-// Create cache directory
+$logFile = $logDir . '/vehicle_update_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+
+// Get the raw input data for logging
+$rawInput = file_get_contents('php://input');
+file_put_contents($logFile, "[$timestamp] $requestMethod request received\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Input data: $rawInput\n", FILE_APPEND);
+
+// Create cache directory if it doesn't exist
 $cacheDir = __DIR__ . '/../../cache';
 if (!file_exists($cacheDir)) {
     mkdir($cacheDir, 0755, true);
 }
 
-// Load existing vehicles from cache
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$vehicles = [];
-
-if (file_exists($persistentCacheFile)) {
-    $json = file_get_contents($persistentCacheFile);
-    if ($json) {
-        $vehicles = json_decode($json, true) ?: [];
-    }
+// Before passing to vehicle-update.php, make sure the data is parsed and set correctly
+$vehicleData = json_decode($rawInput, true);
+if (!$vehicleData && $_POST) {
+    $vehicleData = $_POST;
+    file_put_contents($logFile, "[$timestamp] Using POST data instead\n", FILE_APPEND);
 }
 
-// Find and update the vehicle
-$vehicleId = $vehicleData['id'] ?? $vehicleData['vehicleId'] ?? null;
-$updated = false;
+// Load the existing vehicle data from persistent storage to avoid data loss
+$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+$savedVehicleData = null;
 
-if ($vehicleId) {
-    for ($i = 0; $i < count($vehicles); $i++) {
-        if ($vehicles[$i]['id'] === $vehicleId || $vehicles[$i]['vehicleId'] === $vehicleId) {
-            // Update vehicle with new data
-            $vehicles[$i] = array_merge($vehicles[$i], [
-                'vehicleNumber' => $vehicleData['vehicleNumber'] ?? $vehicles[$i]['vehicleNumber'],
-                'make' => $vehicleData['make'] ?? $vehicles[$i]['make'],
-                'model' => $vehicleData['model'] ?? $vehicles[$i]['model'],
-                'year' => $vehicleData['year'] ?? $vehicles[$i]['year'],
-                'status' => $vehicleData['status'] ?? $vehicles[$i]['status'],
-                'fuelType' => $vehicleData['fuelType'] ?? $vehicles[$i]['fuelType'],
-                'capacity' => $vehicleData['capacity'] ?? $vehicles[$i]['capacity'],
-                'luggageCapacity' => $vehicleData['luggageCapacity'] ?? $vehicles[$i]['luggageCapacity'],
-                'lastService' => $vehicleData['lastService'] ?? $vehicles[$i]['lastService'],
-                'nextServiceDue' => $vehicleData['nextServiceDue'] ?? $vehicles[$i]['nextServiceDue'],
-                'lastServiceOdometer' => $vehicleData['lastServiceOdometer'] ?? $vehicles[$i]['lastServiceOdometer'],
-                'nextServiceOdometer' => $vehicleData['nextServiceOdometer'] ?? $vehicles[$i]['nextServiceOdometer'],
-                'emi' => $vehicleData['emi'] ?? $vehicles[$i]['emi'],
-                // Important: Handle the new fields properly
-                'inclusions' => $vehicleData['inclusions'] ?? $vehicles[$i]['inclusions'] ?? [],
-                'exclusions' => $vehicleData['exclusions'] ?? $vehicles[$i]['exclusions'] ?? [],
-                'cancellationPolicy' => $vehicleData['cancellationPolicy'] ?? $vehicles[$i]['cancellationPolicy'] ?? '',
-                'updatedAt' => date('Y-m-d H:i:s')
-            ]);
-            $updated = true;
-            break;
+// Check if we can read from persistent storage to fill in missing values
+if (file_exists($persistentCacheFile)) {
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $persistentData = json_decode($persistentJson, true);
+            if (is_array($persistentData)) {
+                // Find existing vehicle data
+                $vehicleId = $vehicleData['id'] ?? $vehicleData['vehicleId'] ?? null;
+                foreach ($persistentData as $existingVehicle) {
+                    if ($existingVehicle['id'] === $vehicleId || $existingVehicle['vehicleId'] === $vehicleId) {
+                        // Save existing vehicle data for reference
+                        $savedVehicleData = $existingVehicle;
+                        file_put_contents($logFile, "[$timestamp] Found existing data for vehicle: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            file_put_contents($logFile, "[$timestamp] Error reading persistent data: {$e->getMessage()}\n", FILE_APPEND);
         }
     }
 }
 
-if ($updated) {
-    // Save updated vehicles back to cache
-    file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Vehicle updated successfully\n", FILE_APPEND);
+// Force values to be set when passed to the update script
+if ($vehicleData) {
+    // If id/vehicleId is provided but no price data, keep these fields non-zero
+    // to prevent data loss during refresh
+    if ((!isset($vehicleData['price']) || $vehicleData['price'] === 0) && $savedVehicleData) {
+        $vehicleData['price'] = $savedVehicleData['price'] ?? $savedVehicleData['basePrice'] ?? 1500;
+        file_put_contents($logFile, "[$timestamp] Restored price from saved data: {$vehicleData['price']}\n", FILE_APPEND);
+    }
     
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Vehicle updated successfully and saved to database',
-        'vehicle' => $vehicles[array_search($vehicleId, array_column($vehicles, 'id'))]
-    ]);
-} else {
-    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Vehicle not found for update\n", FILE_APPEND);
-    http_response_code(404);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle not found'
-    ]);
+    if ((!isset($vehicleData['basePrice']) || $vehicleData['basePrice'] === 0) && $savedVehicleData) {
+        $vehicleData['basePrice'] = $savedVehicleData['basePrice'] ?? $savedVehicleData['price'] ?? 1500;
+        file_put_contents($logFile, "[$timestamp] Restored basePrice from saved data: {$vehicleData['basePrice']}\n", FILE_APPEND);
+    }
+    
+    if ((!isset($vehicleData['pricePerKm']) || $vehicleData['pricePerKm'] === 0) && $savedVehicleData) {
+        $vehicleData['pricePerKm'] = $savedVehicleData['pricePerKm'] ?? 14;
+        file_put_contents($logFile, "[$timestamp] Restored pricePerKm from saved data: {$vehicleData['pricePerKm']}\n", FILE_APPEND);
+    }
+    
+    if ((!isset($vehicleData['amenities']) || empty($vehicleData['amenities'])) && $savedVehicleData) {
+        $vehicleData['amenities'] = $savedVehicleData['amenities'] ?? ['AC', 'Bottle Water', 'Music System'];
+        file_put_contents($logFile, "[$timestamp] Restored amenities from saved data\n", FILE_APPEND);
+    }
+    
+    if (!isset($vehicleData['isActive']) && $savedVehicleData) {
+        $vehicleData['isActive'] = $savedVehicleData['isActive'];
+        file_put_contents($logFile, "[$timestamp] Restored isActive from saved data\n", FILE_APPEND);
+    }
+    
+    // Make sure the data is available to vehicle-update.php
+    $_POST = array_merge($_POST, $vehicleData);
+    $_SERVER['VEHICLE_DATA'] = $vehicleData;
+    file_put_contents($logFile, "[$timestamp] Enhanced data: " . json_encode($vehicleData) . "\n", FILE_APPEND);
 }
-?>
+
+// Try updating directly here if vehicle-update.php doesn't exist
+if (!file_exists(__DIR__ . '/vehicle-update.php')) {
+    file_put_contents($logFile, "[$timestamp] vehicle-update.php doesn't exist, updating directly\n", FILE_APPEND);
+    
+    // Include the direct-vehicle-modify.php script instead
+    require_once __DIR__ . '/direct-vehicle-modify.php';
+    exit;
+}
+
+// Include the main vehicle update file
+require_once __DIR__ . '/vehicle-update.php';

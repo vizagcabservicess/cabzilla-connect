@@ -39,7 +39,7 @@ export default function VehicleManagement() {
   const canRefresh = useCallback(() => {
     const now = Date.now();
     const timeSinceLastRefresh = now - lastRefreshTime;
-    return timeSinceLastRefresh > 2000 || lastRefreshTime === 0;
+    return timeSinceLastRefresh > 2000 || lastRefreshTime === 0; // Reduced throttle to 2 seconds
   }, [lastRefreshTime]);
   
   const checkDatabaseConnection = async () => {
@@ -210,11 +210,14 @@ export default function VehicleManagement() {
           setVehicles(fetchedVehicles);
           setOfflineMode(false);
           
-          // Cache the vehicles locally as backup
-          try {
-            localStorage.setItem('cachedVehicles', JSON.stringify(fetchedVehicles));
-          } catch (cacheError) {
-            console.error("Failed to cache vehicles:", cacheError);
+          // If this is our first successful fetch, attempt another one after a delay
+          // to ensure we're getting the latest data (helps with cache inconsistencies)
+          if (refreshAttempts === 1 && forceRefresh) {
+            setTimeout(() => {
+              if (mountedRef.current) {
+                handleRefreshData(true);
+              }
+            }, 1000);
           }
           
           return;
@@ -342,8 +345,7 @@ export default function VehicleManagement() {
   const handleAddVehicle = (newVehicle: CabType) => {
     setVehicles(prevVehicles => [...prevVehicles, newVehicle]);
     
-    // Clear cache and force refresh to get latest data from database
-    clearVehicleDataCache();
+    // Re-fetch data after a brief delay to ensure we have the latest from the server
     setTimeout(() => {
       if (mountedRef.current) {
         handleRefreshData(true);
@@ -352,7 +354,6 @@ export default function VehicleManagement() {
   };
 
   const handleEditVehicle = (editedVehicle: CabType) => {
-    // Immediately update local state for responsive UI
     setVehicles(prevVehicles =>
       prevVehicles.map(vehicle =>
         vehicle.id === editedVehicle.id ? { ...editedVehicle } : vehicle
@@ -360,28 +361,24 @@ export default function VehicleManagement() {
     );
     setSelectedVehicle(null);
     
-    // Clear all caches to force fresh data fetch
+    // Clear cache and re-fetch data to ensure we have the latest
     clearVehicleDataCache();
     
-    // Force refresh from database after a brief delay
+    // Re-fetch data after a brief delay
     setTimeout(() => {
       if (mountedRef.current) {
-        console.log("Force refreshing after vehicle edit");
         handleRefreshData(true);
       }
-    }, 500);
-    
-    // Show success message
-    toast.success("Vehicle updated successfully");
+    }, 1000);
   };
 
   const handleDeleteVehicle = (id: string) => {
     setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle.id !== id));
     
     // Clear cache and re-fetch after deletion
-    clearVehicleDataCache();
     setTimeout(() => {
       if (mountedRef.current) {
+        clearVehicleDataCache();
         handleRefreshData(true);
       }
     }, 1000);
@@ -404,8 +401,8 @@ export default function VehicleManagement() {
 
   const handleRefreshButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
-    clearVehicleDataCache();
-    setRefreshAttempts(0);
+    clearVehicleDataCache(); // Clear cache on manual refresh
+    setRefreshAttempts(0); // Reset attempts counter
     handleRefreshData(true);
   };
 
