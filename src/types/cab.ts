@@ -29,6 +29,11 @@ export interface CabType {
   // Commission properties
   commissionPercentage?: number;
   defaultCommission?: boolean;
+  // Added for vehicle management
+  inclusions?: string[];
+  exclusions?: string[];
+  cancellationPolicy?: string;
+  fuelType?: string;
 }
 
 export interface OutstationFare {

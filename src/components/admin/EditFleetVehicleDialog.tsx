@@ -21,6 +21,7 @@ import { useForm } from "react-hook-form";
 import { FleetVehicle } from '@/types/cab';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Clock, Timer } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
 
 interface EditFleetVehicleDialogProps {
   open: boolean;
@@ -58,17 +59,40 @@ export function EditFleetVehicleDialog({
     }
   }, [open, vehicle, form]);
 
-  const handleSubmit = (data: FleetVehicle) => {
+  // When submitting, parse inclusions/exclusions as arrays
+  const handleSubmit = async (data: any) => {
+    const inclusions = data.inclusions
+      ? data.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    const exclusions = data.exclusions
+      ? data.exclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    const payload = {
+      ...data,
+      inclusions,
+      exclusions,
+    };
+    
     // Preserve ID and other metadata
     const updatedVehicle: FleetVehicle = {
       ...vehicle,
-      ...data,
+      ...payload,
       id: vehicle.id,
       updatedAt: new Date().toISOString()
     };
     
     onSave(updatedVehicle);
   };
+
+  // When loading, join arrays for textarea
+  useEffect(() => {
+    if (formData.inclusions && Array.isArray(formData.inclusions)) {
+      form.setValue('inclusions', formData.inclusions.join(', '));
+    }
+    if (formData.exclusions && Array.isArray(formData.exclusions)) {
+      form.setValue('exclusions', formData.exclusions.join(', '));
+    }
+  }, [formData]);
 
   const handleDeleteClick = () => {
     setIsDeleteDialogOpen(true);
@@ -314,6 +338,45 @@ export function EditFleetVehicleDialog({
                 </div>
               </div>
               
+              <FormField
+                control={form.control}
+                name="inclusions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inclusions</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="e.g., AC, Bottle Water, Music System" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="exclusions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Exclusions</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="e.g., Toll, Parking, State Tax" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cancellationPolicy"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cancellation Policy</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button variant="destructive" type="button" onClick={handleDeleteClick}>
                   Delete Vehicle

@@ -4,7 +4,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { Car, MapPin, Calendar, User, Info } from 'lucide-react';
+import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare } from '@/lib/fareCalculationService';
@@ -59,6 +59,7 @@ export const BookingSummary = ({
   const [effectiveDistance, setEffectiveDistance] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
@@ -1016,17 +1017,51 @@ export const BookingSummary = ({
               <Separator className="my-3" />
               <div className="flex justify-between items-center">
                 <p className="font-semibold">Total Price</p>
-                <p className="font-bold text-lg">
-                  {formatPrice(sumBreakdown(breakdown))}
-                </p>
+                <p className="font-bold text-lg">{formatPrice(sumBreakdown(breakdown))}</p>
+                <button
+                  className="ml-2 flex items-center text-blue-600 hover:text-blue-800 text-xs font-medium"
+                  onClick={() => setShowBreakdown((v) => !v)}
+                  type="button"
+                >
+                  {showBreakdown ? 'Hide' : 'Show'} Fare Breakdown
+                  {showBreakdown ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
+                </button>
               </div>
             </>
+          )}
+          {showBreakdown && (
+            <div className="bg-gray-50 rounded p-3 mb-3 text-sm">
+              <div className="flex justify-between"><span>Base fare</span><span>{formatPrice(breakdown.basePrice)}</span></div>
+              {breakdown.driverAllowance > 0 && <div className="flex justify-between"><span>Driver allowance</span><span>{formatPrice(breakdown.driverAllowance)}</span></div>}
+              {breakdown.nightCharges > 0 && <div className="flex justify-between"><span>Night charges</span><span>{formatPrice(breakdown.nightCharges)}</span></div>}
+              {breakdown.extraDistanceFare > 0 && <div className="flex justify-between"><span>Extra distance</span><span>{formatPrice(breakdown.extraDistanceFare)}</span></div>}
+              {breakdown.extraHourCharge > 0 && <div className="flex justify-between"><span>Extra hour</span><span>{formatPrice(breakdown.extraHourCharge)}</span></div>}
+              {breakdown.airportFee > 0 && <div className="flex justify-between"><span>Airport fee</span><span>{formatPrice(breakdown.airportFee)}</span></div>}
+              {breakdown.taxes > 0 && <div className="flex justify-between"><span>Taxes</span><span>{formatPrice(breakdown.taxes)}</span></div>}
+              {breakdown.discount > 0 && <div className="flex justify-between text-green-700"><span>Discount</span><span>-{formatPrice(breakdown.discount)}</span></div>}
+              {breakdown.surcharge > 0 && <div className="flex justify-between text-red-700"><span>Surcharge</span><span>+{formatPrice(breakdown.surcharge)}</span></div>}
+            </div>
           )}
           {isLoading && (
             <div className="mt-3 text-center">
               <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
             </div>
           )}
+        </div>
+
+        <div className="mt-4 border-t pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Car className="h-5 w-5 text-blue-500" />
+            <span className="font-medium">{selectedCab.name}</span>
+            {selectedCab.model && <span className="ml-2 text-xs text-gray-500">{selectedCab.model}</span>}
+            {selectedCab.make && <span className="ml-2 text-xs text-gray-500">{selectedCab.make}</span>}
+            {selectedCab.year && <span className="ml-2 text-xs text-gray-500">{selectedCab.year}</span>}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {selectedCab.amenities && selectedCab.amenities.map((a, i) => (
+              <span key={i} className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs"><Tag className="h-3 w-3 mr-1" />{a}</span>
+            ))}
+          </div>
         </div>
       </div>
     </div>

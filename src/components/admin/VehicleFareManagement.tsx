@@ -15,6 +15,7 @@ import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { VehiclePricing, TourFare, VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { Textarea } from '@/components/ui/textarea';
 
 // Vehicle pricing form schema
 const vehiclePricingSchema = z.object({
@@ -23,6 +24,10 @@ const vehiclePricingSchema = z.object({
   pricePerKm: z.coerce.number().min(0, { message: "Price cannot be negative" }),
   nightHaltCharge: z.coerce.number().min(0, { message: "Charge cannot be negative" }),
   driverAllowance: z.coerce.number().min(0, { message: "Allowance cannot be negative" }),
+  inclusions: z.string().optional(),
+  exclusions: z.string().optional(),
+  cancellationPolicy: z.string().optional(),
+  fuelType: z.string().optional(),
 });
 
 // Tour fare form schema
@@ -69,6 +74,11 @@ export function VehicleFareManagement() {
       luxury: 0,
     },
   });
+  
+  const [selectedTourPricing, setSelectedTourPricing] = useState<{ [vehicleType: string]: number }>({});
+  const [newVehicleType, setNewVehicleType] = useState('');
+  const [newVehiclePrice, setNewVehiclePrice] = useState('');
+  const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
   
   useEffect(() => {
     fetchAllFareData();
@@ -160,78 +170,88 @@ export function VehicleFareManagement() {
     if (selectedVehicle) {
       vehiclePricingForm.setValue("vehicleType", selectedVehicle.vehicleType);
       vehiclePricingForm.setValue("basePrice", selectedVehicle.basePrice);
-      vehiclePricingForm.setValue("pricePerKm", selectedVehicle.pricePerKm || selectedVehicle.perKmRate);
+      vehiclePricingForm.setValue("pricePerKm", selectedVehicle.pricePerKm);
       vehiclePricingForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
       vehiclePricingForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
+      vehiclePricingForm.setValue("inclusions", selectedVehicle.inclusions ? selectedVehicle.inclusions.join(", ") : "");
+      vehiclePricingForm.setValue("exclusions", selectedVehicle.exclusions ? selectedVehicle.exclusions.join(", ") : "");
+      vehiclePricingForm.setValue("cancellationPolicy", selectedVehicle.cancellationPolicy || "");
+      vehiclePricingForm.setValue("fuelType", selectedVehicle.fuelType || "");
     }
   };
   
   const handleTourSelect = (tourId: string) => {
     const selectedTour = tourFares.find(fare => fare.tourId === tourId);
     if (selectedTour) {
-      tourFareForm.setValue("tourId", selectedTour.tourId);
-      tourFareForm.setValue("sedan", selectedTour.sedan);
-      tourFareForm.setValue("ertiga", selectedTour.ertiga);
-      tourFareForm.setValue("innova", selectedTour.innova);
-      tourFareForm.setValue("tempo", selectedTour.tempo);
-      tourFareForm.setValue("luxury", selectedTour.luxury);
+      setSelectedTourId(selectedTour.tourId);
+      setSelectedTourPricing({ ...(selectedTour.pricing || {}) });
+    }
+  };
+  
+  const handleAddVehicleType = () => {
+    if (newVehicleType && newVehiclePrice) {
+      setSelectedTourPricing(prev => ({
+        ...prev,
+        [newVehicleType]: Number(newVehiclePrice)
+      }));
+      setNewVehicleType('');
+      setNewVehiclePrice('');
+    }
+  };
+  
+  const handlePricingChange = (vehicleType: string, value: string) => {
+    setSelectedTourPricing(prev => ({
+      ...prev,
+      [vehicleType]: Number(value)
+    }));
+  };
+  
+  const onTourFareSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTourId) return;
+    try {
+      setIsLoading(true);
+      const fareUpdateData = {
+        pricing: selectedTourPricing
+      };
+      await fareAPI.updateTourFare(selectedTourId, fareUpdateData);
+      toast.success("Tour fare updated successfully");
+      await fetchTourFares();
+    } catch (error) {
+      console.error("Error updating tour fare:", error);
+      toast.error("Failed to update tour fare");
+    } finally {
+      setIsLoading(false);
     }
   };
   
   const onVehiclePricingSubmit = async (values: z.infer<typeof vehiclePricingSchema>) => {
     try {
       setIsLoading(true);
-      console.log("Submitting vehicle pricing update:", values);
-      
-      // Ensure values match the required interface
+      const inclusions = values.inclusions
+        ? values.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const exclusions = values.exclusions
+        ? values.exclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
       const updateData: VehiclePricingUpdateRequest = {
         vehicleType: values.vehicleType,
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
-        perKmRate: values.pricePerKm,  // Add this for compatibility
         nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance
+        driverAllowance: values.driverAllowance,
+        inclusions,
+        exclusions,
+        cancellationPolicy: values.cancellationPolicy,
+        fuelType: values.fuelType,
       };
-      
-      const data = await fareAPI.updateVehiclePricing(updateData.vehicleType, updateData);
-      console.log("Vehicle pricing update response:", data);
-      
+      await fareAPI.updateVehiclePricing(updateData.vehicleType, updateData);
       toast.success("Vehicle pricing updated successfully");
       await fetchVehiclePricing();
-      
-      // Dispatch event to notify other components that fare data has been updated
       window.dispatchEvent(new CustomEvent('fare-data-updated', { detail: { vehicleType: values.vehicleType } }));
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
       toast.error("Failed to update vehicle pricing");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const onTourFareSubmit = async (values: z.infer<typeof tourFareSchema>) => {
-    try {
-      setIsLoading(true);
-      console.log("Submitting tour fare update:", values);
-      
-      // Ensure values match the required interface
-      const fareUpdateData: FareUpdateRequest = {
-        tourId: values.tourId,
-        sedan: values.sedan,
-        ertiga: values.ertiga,
-        innova: values.innova,
-        tempo: values.tempo,
-        luxury: values.luxury
-      };
-      
-      const data = await fareAPI.updateTourFare(values.tourId, fareUpdateData);
-      console.log("Tour fare update response:", data);
-      
-      toast.success("Tour fare updated successfully");
-      await fetchTourFares();
-    } catch (error) {
-      console.error("Error updating tour fare:", error);
-      toast.error("Failed to update tour fare");
     } finally {
       setIsLoading(false);
     }
@@ -395,6 +415,70 @@ export function VehicleFareManagement() {
                   />
                 </div>
                 
+                <FormField
+                  control={vehiclePricingForm.control}
+                  name="inclusions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Inclusions</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="e.g., AC, Bottle Water, Music System" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={vehiclePricingForm.control}
+                  name="exclusions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Exclusions</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="e.g., Toll, Parking, State Tax" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={vehiclePricingForm.control}
+                  name="cancellationPolicy"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cancellation Policy</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={vehiclePricingForm.control}
+                  name="fuelType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fuel Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select fuel type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Petrol">Petrol</SelectItem>
+                          <SelectItem value="Diesel">Diesel</SelectItem>
+                          <SelectItem value="CNG">CNG</SelectItem>
+                          <SelectItem value="Electric">Electric</SelectItem>
+                          <SelectItem value="Hybrid">Hybrid</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
@@ -427,6 +511,10 @@ export function VehicleFareManagement() {
                         <th className="text-right py-2 px-2">Price/KM</th>
                         <th className="text-right py-2 px-2">Night Halt</th>
                         <th className="text-right py-2 px-2">Driver Allowance</th>
+                        <th className="text-right py-2 px-2">Inclusions</th>
+                        <th className="text-right py-2 px-2">Exclusions</th>
+                        <th className="text-right py-2 px-2">Cancellation Policy</th>
+                        <th className="text-right py-2 px-2">Fuel Type</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -437,6 +525,10 @@ export function VehicleFareManagement() {
                           <td className="text-right py-2 px-2">₹{pricing.pricePerKm.toLocaleString('en-IN')}</td>
                           <td className="text-right py-2 px-2">₹{(pricing.nightHaltCharge || 0).toLocaleString('en-IN')}</td>
                           <td className="text-right py-2 px-2">₹{(pricing.driverAllowance || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-right py-2 px-2">{pricing.inclusions ? pricing.inclusions.join(', ') : '-'}</td>
+                          <td className="text-right py-2 px-2">{pricing.exclusions ? pricing.exclusions.join(', ') : '-'}</td>
+                          <td className="text-right py-2 px-2">{pricing.cancellationPolicy || '-'}</td>
+                          <td className="text-right py-2 px-2">{pricing.fuelType || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -480,110 +572,47 @@ export function VehicleFareManagement() {
             )}
             
             <Form {...tourFareForm}>
-              <form onSubmit={tourFareForm.handleSubmit(onTourFareSubmit)} className="space-y-6">
-                <FormField
-                  control={tourFareForm.control}
-                  name="tourId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Tour</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleTourSelect(value);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a tour" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {tourFares.map((fare) => (
-                            <SelectItem key={fare.tourId} value={fare.tourId}>
-                              {fare.tourName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  <FormField
-                    control={tourFareForm.control}
-                    name="sedan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sedan Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={tourFareForm.control}
-                    name="ertiga"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ertiga Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={tourFareForm.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={tourFareForm.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo Traveller Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={tourFareForm.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury Vehicle Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <form onSubmit={onTourFareSubmit} className="space-y-6">
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">Select Tour</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={selectedTourId || ''}
+                    onChange={e => handleTourSelect(e.target.value)}
+                  >
+                    <option value="">Select a tour</option>
+                    {tourFares.map(fare => (
+                      <option key={fare.tourId} value={fare.tourId}>{fare.tourName}</option>
+                    ))}
+                  </select>
                 </div>
-                
+                {Object.entries(selectedTourPricing).map(([vehicleType, price]) => (
+                  <div key={vehicleType} className="mb-2">
+                    <label className="block mb-1">{vehicleType.charAt(0).toUpperCase() + vehicleType.slice(1)} Price</label>
+                    <input
+                      type="number"
+                      className="w-full border rounded px-3 py-2"
+                      value={price}
+                      onChange={e => handlePricingChange(vehicleType, e.target.value)}
+                    />
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-2">
+                  <input
+                    placeholder="Vehicle Type"
+                    className="border rounded px-2 py-1"
+                    value={newVehicleType}
+                    onChange={e => setNewVehicleType(e.target.value)}
+                  />
+                  <input
+                    placeholder="Price"
+                    type="number"
+                    className="border rounded px-2 py-1"
+                    value={newVehiclePrice}
+                    onChange={e => setNewVehiclePrice(e.target.value)}
+                  />
+                  <Button type="button" onClick={handleAddVehicleType}>Add</Button>
+                </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
@@ -612,22 +641,18 @@ export function VehicleFareManagement() {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-2 px-2">Tour Name</th>
-                        <th className="text-right py-2 px-2">Sedan</th>
-                        <th className="text-right py-2 px-2">Ertiga</th>
-                        <th className="text-right py-2 px-2">Innova</th>
-                        <th className="text-right py-2 px-2">Tempo</th>
-                        <th className="text-right py-2 px-2">Luxury</th>
+                        {tourFares.length > 0 && Object.keys(tourFares[0].pricing || {}).map(vehicleType => (
+                          <th key={vehicleType} className="text-right py-2 px-2">{vehicleType.charAt(0).toUpperCase() + vehicleType.slice(1)}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {tourFares.map((fare) => (
                         <tr key={fare.id} className="border-b hover:bg-gray-50">
                           <td className="py-2 px-2">{fare.tourName}</td>
-                          <td className="text-right py-2 px-2">₹{fare.sedan.toLocaleString('en-IN')}</td>
-                          <td className="text-right py-2 px-2">₹{fare.ertiga.toLocaleString('en-IN')}</td>
-                          <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString('en-IN')}</td>
-                          <td className="text-right py-2 px-2">₹{fare.tempo.toLocaleString('en-IN')}</td>
-                          <td className="text-right py-2 px-2">₹{fare.luxury.toLocaleString('en-IN')}</td>
+                          {Object.entries(fare.pricing || {}).map(([vehicleType, price]) => (
+                            <td key={vehicleType} className="text-right py-2 px-2">₹{price.toLocaleString('en-IN')}</td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>

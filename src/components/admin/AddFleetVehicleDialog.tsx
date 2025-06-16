@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { FleetVehicle } from '@/types/cab';
+import { Textarea } from "@/components/ui/textarea";
 
 interface AddFleetVehicleDialogProps {
   open: boolean;
@@ -50,7 +51,7 @@ export function AddFleetVehicleDialog({
   });
   
   // Reset form when dialog opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       form.reset({
         vehicleNumber: '',
@@ -70,6 +71,15 @@ export function AddFleetVehicleDialog({
       setHasSubmitted(false);
     }
   }, [open, form]);
+
+  useEffect(() => {
+    if (form.getValues('inclusions') && Array.isArray(form.getValues('inclusions'))) {
+      form.setValue('inclusions', form.getValues('inclusions').join(', '));
+    }
+    if (form.getValues('exclusions') && Array.isArray(form.getValues('exclusions'))) {
+      form.setValue('exclusions', form.getValues('exclusions').join(', '));
+    }
+  }, [form]);
 
   const handleSubmit = async (data: Partial<FleetVehicle>) => {
     if (hasSubmitted) {
@@ -106,10 +116,22 @@ export function AddFleetVehicleDialog({
         isActive: data.isActive !== undefined ? data.isActive : true
       };
       
+      const inclusions = data.inclusions
+        ? data.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const exclusions = data.exclusions
+        ? data.exclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const payload = {
+        ...vehicleToSubmit,
+        inclusions,
+        exclusions,
+      };
+      
       try {
         // In this example, we'll directly call onAddVehicle instead of using an API
         // In a real app with a backend, you would call the API here first
-        onAddVehicle(vehicleToSubmit as FleetVehicle);
+        onAddVehicle(payload as FleetVehicle);
         form.reset();
         onClose();
       } catch (apiError: any) {
@@ -376,6 +398,46 @@ export function AddFleetVehicleDialog({
                 />
               </div>
             </div>
+            
+            <FormField
+              control={form.control}
+              name="inclusions"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Inclusions</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="e.g., AC, Bottle Water, Music System" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="exclusions"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exclusions</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="e.g., Toll, Parking, State Tax" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="cancellationPolicy"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cancellation Policy</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="e.g., Free cancellation up to 1 hour before pickup." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

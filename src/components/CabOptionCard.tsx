@@ -53,9 +53,9 @@ export function CabOptionCard({
       <div className="block md:hidden">
         <div 
           className={cn(
-            "border rounded-xl bg-white shadow-sm flex flex-row items-stretch mb-3 overflow-hidden box-border",
+            "border-2 rounded-xl bg-white shadow-sm flex flex-row items-stretch mb-3 overflow-hidden box-border transition-all duration-200",
             isSelected 
-              ? "border-blue-500 bg-blue-50/50 shadow-md" 
+              ? "border-4 border-blue-600 bg-blue-50/70 shadow-lg ring-2 ring-blue-300" 
               : "border-gray-200"
           )}
           onClick={() => { if (typeof onSelect === 'function') onSelect(); }}
@@ -70,9 +70,12 @@ export function CabOptionCard({
           </div>
           {/* Info */}
           <div className="flex-1 flex flex-col justify-between p-2 w-full min-w-0">
-            {/* Top row: Car name, rating, discount, old price */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-base text-gray-900">{cab.name}</span>
+              {cab.model && <span className="ml-2 text-xs text-gray-500">{cab.model}</span>}
+              {cab.make && <span className="ml-2 text-xs text-gray-500">{cab.make}</span>}
+              {cab.year && <span className="ml-2 text-xs text-gray-500">{cab.year}</span>}
+              {isSelected && <span className="ml-2 px-2 py-0.5 rounded bg-blue-600 text-white text-xs font-semibold">Selected</span>}
             </div>
             {/* View more details link (mobile only, always under vehicle type) */}
             <button
@@ -293,58 +296,39 @@ export function CabOptionCard({
                 </div>
                 {/* Expandable Details */}
                 {showDetails && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {/* Inclusions */}
-                      <div>
-                        <h4 className="font-medium text-sm text-gray-900 mb-2">Inclusions</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
-                          <li className="flex items-center gap-2">
-                            <Check className="h-3 w-3 text-green-600" />
-                            Base fare & fuel
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <Check className="h-3 w-3 text-green-600" />
-                            Driver allowance
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <Check className="h-3 w-3 text-green-600" />
-                            Taxes & tolls
-                          </li>
-                        </ul>
+                  <div className="mt-4 px-4 pb-4">
+                    <div className="flex flex-col md:flex-row gap-6">
+                      <div className="flex-1">
+                        <h4 className="font-semibold mb-2">Inclusions</h4>
+                        {cab.inclusions && cab.inclusions.length > 0 ? (
+                          <ul className="text-sm text-gray-700 list-disc list-inside">
+                            {cab.inclusions.map((inc: string, idx: number) => (
+                              <li key={idx}>✓ {inc}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="text-sm text-gray-500 italic">No inclusions listed.</div>
+                        )}
                       </div>
-                      {/* Fare Breakdown */}
-                      {breakdown && (
-                        <div>
-                          <h4 className="font-medium text-sm text-gray-900 mb-2">Fare Breakdown</h4>
-                          <div className="text-sm space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Base fare</span>
-                              <span>₹{breakdown.baseFare.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Driver allowance</span>
-                              <span>₹{breakdown.driverAllowance.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Taxes & fees</span>
-                              <span>₹{breakdown.taxes.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between font-medium border-t pt-1">
-                              <span>Total</span>
-                              <span>₹{breakdown.total.toLocaleString()}</span>
-                            </div>
-                          </div>
+                      {/* Exclusions Section */}
+                      {cab.exclusions && cab.exclusions.length > 0 && (
+                        <div className="flex-1">
+                          <h4 className="font-semibold mb-2">Exclusions</h4>
+                          <ul className="text-sm text-gray-700 list-disc list-inside">
+                            {cab.exclusions.map((exc: string, idx: number) => (
+                              <li key={idx}>✗ {exc}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                     </div>
-                    {/* Cancellation Policy */}
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-sm text-gray-900 mb-1">Cancellation Policy</h4>
-                      <p className="text-xs text-gray-600">
-                        Free cancellation up to 1 hour before pickup. ₹100 charge after that.
-                      </p>
-                    </div>
+                    {/* Always show cancellation policy if present */}
+                    {cab.cancellationPolicy && (
+                      <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600 border border-gray-200">
+                        <strong>Cancellation Policy</strong><br />
+                        {cab.cancellationPolicy}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

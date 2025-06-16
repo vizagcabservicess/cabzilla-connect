@@ -34,6 +34,8 @@ export function EditVehicleDialog({
   const [serverError, setServerError] = useState<string | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const [inclusionsText, setInclusionsText] = useState('');
+  const [exclusionsText, setExclusionsText] = useState('');
 
   useEffect(() => {
     if (initialVehicle && open) {
@@ -69,6 +71,9 @@ export function EditVehicleDialog({
         nightHaltCharge: numNightHaltCharge,
         amenities: vehicleAmenities
       });
+      
+      setInclusionsText(Array.isArray(initialVehicle.inclusions) ? initialVehicle.inclusions.join(', ') : (initialVehicle.inclusions || ''));
+      setExclusionsText(Array.isArray(initialVehicle.exclusions) ? initialVehicle.exclusions.join(', ') : (initialVehicle.exclusions || ''));
       
       setIsInitialized(true);
     }
@@ -159,6 +164,8 @@ export function EditVehicleDialog({
 
       const updatedVehicle: CabType = {
         ...vehicle,
+        inclusions: inclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
+        exclusions: exclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
         capacity: Number(vehicle.capacity),
         luggageCapacity: Number(vehicle.luggageCapacity),
         basePrice: Number(vehicle.basePrice || 0),
@@ -458,6 +465,53 @@ export function EditVehicleDialog({
               placeholder="Enter vehicle description"
               rows={3}
             />
+          </div>
+          
+          <div className="mt-4">
+            <Label htmlFor="inclusions">Inclusions</Label>
+            <Textarea
+              id="inclusions"
+              value={inclusionsText}
+              onChange={e => setInclusionsText(e.target.value)}
+              placeholder="e.g., AC, Bottle Water, Music System"
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="exclusions">Exclusions</Label>
+            <Textarea
+              id="exclusions"
+              value={exclusionsText}
+              onChange={e => setExclusionsText(e.target.value)}
+              placeholder="e.g., Toll, Parking, State Tax"
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
+            <Textarea
+              id="cancellationPolicy"
+              value={vehicle.cancellationPolicy || ''}
+              onChange={e => setVehicle(v => ({ ...v, cancellationPolicy: e.target.value }))}
+              placeholder="e.g., Free cancellation up to 1 hour before pickup."
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="fuelType">Fuel Type</Label>
+            <select
+              id="fuelType"
+              className="w-full border rounded px-2 py-1 mt-1"
+              value={vehicle.fuelType || ''}
+              onChange={e => setVehicle(v => ({ ...v, fuelType: e.target.value }))}
+            >
+              <option value="">Select fuel type</option>
+              <option value="Petrol">Petrol</option>
+              <option value="Diesel">Diesel</option>
+              <option value="CNG">CNG</option>
+              <option value="Electric">Electric</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

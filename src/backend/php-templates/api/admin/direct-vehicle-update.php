@@ -4,6 +4,15 @@
  * ENHANCED: Now prioritizes database operations and ensures proper synchronization
  */
 
+// Enable error reporting and log test
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Write a test log entry to the main log file for confirmation
+$mainLogFile = __DIR__ . '/vehicle_update_' . date('Y-m-d') . '.log';
+file_put_contents($mainLogFile, "[" . date('Y-m-d H:i:s') . "] Test log entry from direct-vehicle-update.php\n", FILE_APPEND);
+
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
@@ -12,10 +21,6 @@ header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
-
-// Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 // Create logs directory
 $logDir = __DIR__ . '/../../logs';
@@ -107,6 +112,20 @@ if (!$vehicleId) {
 
 logDebug("Processing vehicle ID: $vehicleId");
 
+// Map frontend camelCase to backend snake_case for new fields
+if (isset($vehicleData['cancellationPolicy'])) {
+    $vehicleData['cancellation_policy'] = $vehicleData['cancellationPolicy'];
+}
+if (isset($vehicleData['fuelType'])) {
+    $vehicleData['fuel_type'] = $vehicleData['fuelType'];
+}
+if (isset($vehicleData['inclusions'])) {
+    $vehicleData['inclusions'] = $vehicleData['inclusions']; // for clarity, keep as is
+}
+if (isset($vehicleData['exclusions'])) {
+    $vehicleData['exclusions'] = $vehicleData['exclusions']; // for clarity, keep as is
+}
+
 // First, try to update the database if possible (DATABASE FIRST APPROACH)
 $dbUpdated = false;
 $dbVehicle = null;
@@ -172,6 +191,12 @@ try {
         $image = isset($vehicleData['image']) ? $vehicleData['image'] : '';
         $description = isset($vehicleData['description']) ? $vehicleData['description'] : '';
         
+        // Handle new fields (force as non-null strings)
+        $inclusionsValue = isset($vehicleData['inclusions']) ? (is_array($vehicleData['inclusions']) ? json_encode($vehicleData['inclusions']) : (string)$vehicleData['inclusions']) : '';
+        $exclusionsValue = isset($vehicleData['exclusions']) ? (is_array($vehicleData['exclusions']) ? json_encode($vehicleData['exclusions']) : (string)$vehicleData['exclusions']) : '';
+        $cancellationPolicy = isset($vehicleData['cancellation_policy']) ? (string)$vehicleData['cancellation_policy'] : '';
+        $fuelType = isset($vehicleData['fuel_type']) ? (string)$vehicleData['fuel_type'] : '';
+        
         logDebug("Parsed numeric values:", [
             "capacity: $capacity",
             "luggageCapacity: $luggageCapacity",
@@ -207,11 +232,15 @@ try {
                 night_halt_charge = ?,
                 driver_allowance = ?,
                 is_active = ?,
+                inclusions = ?,
+                exclusions = ?,
+                cancellation_policy = ?,
+                fuel_type = ?,
                 updated_at = NOW()
                 WHERE vehicle_id = ?";
             
             $stmt = $conn->prepare($query);
-            $stmt->bind_param('siiddsssidis', 
+            $stmt->bind_param('siiddsssidissssss', 
                 $name, 
                 $capacity, 
                 $luggageCapacity,
@@ -224,28 +253,59 @@ try {
                 $nightHaltCharge,
                 $driverAllowance,
                 $isActive,
+                $inclusionsValue,
+                $exclusionsValue,
+                $cancellationPolicy,
+                $fuelType,
                 $vehicleId
             );
             
             $updateResult = $stmt->execute();
             $affectedRows = $stmt->affected_rows;
             
-            if ($updateResult) {
+            // Log SQL errors
+            if ($stmt->error) {
+                logDebug("SQL Error (main update): " . $stmt->error);
+            }
+            
+            if ($updateResult && $affectedRows > 0) {
                 logDebug("Updated in database: " . $affectedRows . " rows affected");
                 $dbUpdated = true;
+                // Re-fetch the updated row after update
+                $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ?";
+                $stmt2 = $conn->prepare($checkQuery);
+                $stmt2->bind_param('s', $vehicleId);
+                $stmt2->execute();
+                $result2 = $stmt2->get_result();
+                if ($result2->num_rows > 0) {
+                    $dbVehicle = $result2->fetch_assoc();
+                }
             } else {
-                logDebug("Database update failed: " . $stmt->error);
+                logDebug("Database update failed or no rows affected: " . $stmt->error);
+                // Try a minimal update for debug
+                $debugQuery = "UPDATE vehicles SET inclusions = ?, exclusions = ?, cancellation_policy = ?, fuel_type = ? WHERE vehicle_id = ?";
+                $debugStmt = $conn->prepare($debugQuery);
+                $debugStmt->bind_param('sssss', $inclusionsValue, $exclusionsValue, $cancellationPolicy, $fuelType, $vehicleId);
+                $debugResult = $debugStmt->execute();
+                if ($debugStmt->error) {
+                    logDebug("SQL Error (minimal update): " . $debugStmt->error);
+                }
+                if ($debugResult && $debugStmt->affected_rows > 0) {
+                    logDebug("Minimal update succeeded for new fields.");
+                } else {
+                    logDebug("Minimal update failed: " . $debugStmt->error);
+                }
             }
         } else {
             // Insert new vehicle
             logDebug("Vehicle does not exist in database, inserting new record");
             $query = "INSERT INTO vehicles 
                 (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, 
-                image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, inclusions, exclusions, cancellation_policy, fuel_type, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
             
             $stmt = $conn->prepare($query);
-            $stmt->bind_param('ssiiddssidii', 
+            $stmt->bind_param('ssiiddssssidiissss', 
                 $vehicleId,
                 $name, 
                 $capacity, 
@@ -258,7 +318,11 @@ try {
                 $ac,
                 $nightHaltCharge,
                 $driverAllowance,
-                $isActive
+                $isActive,
+                $inclusionsValue,
+                $exclusionsValue,
+                $cancellationPolicy,
+                $fuelType
             );
             
             $insertResult = $stmt->execute();
@@ -310,8 +374,13 @@ if ($dbVehicle) {
         'ac' => (bool)$dbVehicle['ac'],
         'nightHaltCharge' => floatval($dbVehicle['night_halt_charge']),
         'driverAllowance' => floatval($dbVehicle['driver_allowance']),
-        'isActive' => (bool)$dbVehicle['is_active']
+        'isActive' => (bool)$dbVehicle['is_active'],
+        'inclusions' => isset($dbVehicle['inclusions']) ? (json_decode($dbVehicle['inclusions'], true) ?: $dbVehicle['inclusions']) : (isset($vehicleData['inclusions']) ? $vehicleData['inclusions'] : []),
+        'exclusions' => isset($dbVehicle['exclusions']) ? (json_decode($dbVehicle['exclusions'], true) ?: $dbVehicle['exclusions']) : (isset($vehicleData['exclusions']) ? $vehicleData['exclusions'] : []),
+        'cancellation_policy' => isset($dbVehicle['cancellation_policy']) ? $dbVehicle['cancellation_policy'] : (isset($vehicleData['cancellation_policy']) ? $vehicleData['cancellation_policy'] : ''),
+        'fuel_type' => isset($dbVehicle['fuel_type']) ? $dbVehicle['fuel_type'] : (isset($vehicleData['fuel_type']) ? $vehicleData['fuel_type'] : ''),
     ];
+    logDebug('Final vehicle array:', $vehicle);
     
     // Parse amenities from database
     if (!empty($dbVehicle['amenities'])) {
@@ -346,8 +415,13 @@ if ($dbVehicle) {
         'ac' => isset($vehicleData['ac']) ? (bool)$vehicleData['ac'] : true,
         'nightHaltCharge' => isset($vehicleData['nightHaltCharge']) ? (float)$vehicleData['nightHaltCharge'] : 700,
         'driverAllowance' => isset($vehicleData['driverAllowance']) ? (float)$vehicleData['driverAllowance'] : 250,
-        'isActive' => isset($vehicleData['isActive']) ? (bool)$vehicleData['isActive'] : true
+        'isActive' => isset($vehicleData['isActive']) ? (bool)$vehicleData['isActive'] : true,
+        'inclusions' => isset($vehicleData['inclusions']) ? $vehicleData['inclusions'] : [],
+        'exclusions' => isset($vehicleData['exclusions']) ? $vehicleData['exclusions'] : [],
+        'cancellation_policy' => isset($vehicleData['cancellation_policy']) ? $vehicleData['cancellation_policy'] : '',
+        'fuel_type' => isset($vehicleData['fuel_type']) ? $vehicleData['fuel_type'] : '',
     ];
+    logDebug('Final vehicle array:', $vehicle);
     
     // Handle amenities
     if (isset($vehicleData['amenities'])) {
@@ -371,6 +445,10 @@ if ($dbVehicle) {
     
     logDebug("Using input data as base for vehicle object", $vehicle);
 }
+
+// After building the new, complete $vehicle array (with all fields):
+logDebug('Prepared vehicle data for update::', $vehicle);
+logDebug('Normalized vehicle data:', $vehicle);
 
 // Now that we have the vehicle data (from DB or input), update the persistent cache
 

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,6 +141,18 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
             <p className="text-sm mt-2 text-gray-600 line-clamp-2">
               {formatAmenities(vehicle.amenities || [])}
             </p>
+            {vehicle.inclusions && (
+              <p className="text-xs mt-1 text-gray-500"><span className="font-medium">Inclusions:</span> {Array.isArray(vehicle.inclusions) ? vehicle.inclusions.join(', ') : vehicle.inclusions}</p>
+            )}
+            {vehicle.exclusions && (
+              <p className="text-xs mt-1 text-gray-500"><span className="font-medium">Exclusions:</span> {Array.isArray(vehicle.exclusions) ? vehicle.exclusions.join(', ') : vehicle.exclusions}</p>
+            )}
+            {vehicle.cancellationPolicy && (
+              <p className="text-xs mt-1 text-gray-500"><span className="font-medium">Cancellation Policy:</span> {vehicle.cancellationPolicy}</p>
+            )}
+            {vehicle.fuelType && (
+              <p className="text-xs mt-1 text-gray-500"><span className="font-medium">Fuel Type:</span> {vehicle.fuelType}</p>
+            )}
           </div>
           
           <div className="flex gap-2 items-start">

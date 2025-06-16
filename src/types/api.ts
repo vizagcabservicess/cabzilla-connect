@@ -173,24 +173,51 @@ export interface VehiclePricing {
   id: number;
   vehicleId: number;
   vehicleType: string;
-  localRate: number;
-  outstationRate: number;
-  airportTransferRate: number;
-}
-
-export interface VehiclePricingUpdateRequest {
-  vehicleId: number;
   localRate?: number;
   outstationRate?: number;
   airportTransferRate?: number;
+  // New fields for vehicle management UI
+  basePrice?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  inclusions?: string[];
+  exclusions?: string[];
+  cancellationPolicy?: string;
+  fuelType?: string;
+}
+
+export interface VehiclePricingUpdateRequest {
+  vehicleId?: number;
+  vehicleType?: string;
+  localRate?: number;
+  outstationRate?: number;
+  airportTransferRate?: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  inclusions?: string[];
+  exclusions?: string[];
+  cancellationPolicy?: string;
+  fuelType?: string;
 }
 
 export interface FareUpdateRequest {
   id?: number;
-  vehicleType: string;
+  vehicleType?: string;
   localRate?: number;
   outstationRate?: number;
   airportRate?: number;
+  basePrice?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+  inclusions?: string[];
+  exclusions?: string[];
+  cancellationPolicy?: string;
+  fuelType?: string;
+  pricing?: { [vehicleType: string]: number };
 }
 
 export interface DashboardMetrics {
@@ -222,8 +249,8 @@ export interface DashboardMetrics {
 export interface TourFare {
   id: number;
   tourId: string;
-  vehicleType: string;
-  rate: number;
+  tourName?: string;
+  pricing?: { [vehicleType: string]: number };
 }
 
 export interface TourData {
