@@ -65,6 +65,49 @@ const CabFareCard = ({
   let isLoading = false;
   let fareData = undefined;
 
+  // Handle outstation round trips with shared calculation
+  if (
+    tripType === 'outstation' &&
+    (tripMode === 'round-trip' || tripMode === 'round') &&
+    pickupDate &&
+    returnDate &&
+    distance > 0
+  ) {
+    // Use shared fare calculation with per-vehicle rates
+    const perKmRate = cab.pricePerKm ?? cab.outstationFares?.pricePerKm ?? 15;
+    const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? 0;
+    const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? 250;
+    const actualDistance = distance * 2;
+    const fareResult = calculateOutstationRoundTripFare({
+      pickupDate,
+      returnDate,
+      actualDistance,
+      perKmRate,
+      nightAllowancePerNight,
+      driverAllowancePerDay
+    });
+    fare = fareResult.totalFare;
+    fareText = `₹${fare.toLocaleString()}`;
+    fareData = { breakdown: fareResult };
+    isLoading = false;
+    fareSource = 'calculated';
+    
+    return (
+      <CabOptionCard
+        key={cab.id}
+        cab={cab}
+        fare={fare}
+        isSelected={selectedCabId === cab.id}
+        onSelect={() => handleSelectCab(cab, fare, fareResult)}
+        fareDetails={fareText}
+        isCalculating={isLoading}
+        tripType={tripType}
+        breakdown={fareResult}
+      />
+    );
+  }
+
+  // Handle other trip types (tour, local, airport, one-way outstation)
   if (tripType === 'tour' && typeof cab.price === 'number') {
     fare = cab.price;
     fareText = `₹${fare.toLocaleString()} (api)`;
@@ -127,44 +170,6 @@ const CabFareCard = ({
     }
   }
 
-  if (
-    tripType === 'outstation' &&
-    tripMode === 'round-trip' &&
-    pickupDate &&
-    returnDate
-  ) {
-    // Use shared fare calculation with per-vehicle rates
-    const perKmRate = cab.pricePerKm ?? cab.outstationFares?.pricePerKm ?? 15;
-    const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? 0;
-    const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? 250;
-    const actualDistance = distance * 2;
-    const fareResult = calculateOutstationRoundTripFare({
-      pickupDate,
-      returnDate,
-      actualDistance,
-      perKmRate,
-      nightAllowancePerNight,
-      driverAllowancePerDay
-    });
-    fare = fareResult.totalFare;
-    fareText = `₹${fare.toLocaleString()}`;
-    fareData = { breakdown: fareResult };
-    // Always use this fare for the card and selection
-    return (
-      <CabOptionCard
-        key={cab.id}
-        cab={cab}
-        fare={fare}
-        isSelected={selectedCabId === cab.id}
-        onSelect={() => handleSelectCab(cab, fare, 'roundtrip', fareResult)}
-        fareDetails={fareText}
-        isCalculating={isLoading}
-        tripType={tripType}
-        breakdown={fareResult}
-      />
-    );
-  }
-
   return (
     <CabOptionCard
       key={cab.id}
@@ -175,7 +180,7 @@ const CabFareCard = ({
       fareDetails={fareText}
       isCalculating={isLoading}
       tripType={tripType}
-      breakdown={tripType === 'outstation' && tripMode === 'round-trip' ? fareData?.breakdown : undefined}
+      breakdown={tripType === 'outstation' && (tripMode === 'round-trip' || tripMode === 'round') ? fareData?.breakdown : undefined}
     />
   );
 };
