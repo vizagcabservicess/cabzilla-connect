@@ -14,6 +14,7 @@ interface CabOptionCardProps {
   tripType?: string;
   tripMode?: string;
   fareSource?: string;
+  breakdown?: any;
 }
 
 export function CabOptionCard({ 

@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
-import { calculateFare } from '@/lib/fareCalculationService';
+import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -60,6 +60,7 @@ export const BookingSummary = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [outstationBreakdown, setOutstationBreakdown] = useState<any>(null);
 
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
@@ -367,51 +368,30 @@ export const BookingSummary = ({
           const outstationFares = await getOutstationFaresForVehicle(normalizedId);
 
           // Only apply for round-trip
-          if (tripMode === 'round-trip' && pickupDate && returnDate) {
-            console.log('Using calendar day logic for outstation round-trip in BookingSummary', {pickupDate, returnDate, distance});
-            const MS_PER_DAY = 24 * 60 * 60 * 1000;
-            let calendarDays = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / MS_PER_DAY);
-            if (calendarDays < 1) calendarDays = 1;
-
-            const perKmRate = outstationFares.pricePerKm ?? 15;
-            const nightAllowancePerNight = outstationFares.nightHaltCharge ?? 0;
-            const driverAllowancePerDay = outstationFares.driverAllowance ?? 250;
-
-            const includedKM = calendarDays * 300;
-            const actualDistance = distance * 2; // Double the distance for round trip
-            const extraDistance = Math.max(0, actualDistance - includedKM);
-            const extraDistanceFare = extraDistance * perKmRate;
-            const nightCharges = (calendarDays - 1) * nightAllowancePerNight;
-            const driverAllowance = calendarDays * driverAllowancePerDay;
-
-            const finalFare = includedKM * perKmRate + extraDistanceFare + nightCharges + driverAllowance;
-
-            setBaseFare(includedKM * perKmRate);
-            setDriverAllowance(driverAllowance);
-            setNightCharges(nightCharges);
-            setExtraDistance(extraDistance);
-            setExtraDistanceFare(extraDistanceFare);
+          if (tripMode === 'round-trip' && pickupDate && returnDate && selectedCab) {
+            const perKmRate = outstationFares.pricePerKm;
+            const nightAllowancePerNight = outstationFares.nightHaltCharge;
+            const driverAllowancePerDay = outstationFares.driverAllowance;
+            const actualDistance = distance * 2;
+            const fareResult = calculateOutstationRoundTripFare({
+              pickupDate,
+              returnDate,
+              actualDistance,
+              perKmRate,
+              nightAllowancePerNight,
+              driverAllowancePerDay
+            });
+            setBaseFare(fareResult.baseFare);
+            setDriverAllowance(fareResult.driverAllowance);
+            setNightCharges(fareResult.nightAllowance);
+            setExtraDistance(fareResult.extraDistance);
+            setExtraDistanceFare(fareResult.extraDistanceCharges);
             setPerKmRate(perKmRate);
-            setEffectiveDistance(includedKM);
-            setCalculatedFare(finalFare);
-
-            try {
-              const fareKey = getFareKey({ tripType, cabId: normalizedId });
-              localStorage.setItem(fareKey, String(finalFare));
-              window.dispatchEvent(new CustomEvent("fare-calculated", {
-                detail: {
-                  cabId: normalizedId,
-                  tripType: tripType,
-                  tripMode: tripMode,
-                  calculated: true,
-                  fare: finalFare,
-                  timestamp: Date.now(),
-                }
-              }));
-            } catch (error) {
-              console.error('[BookingSummary][OUTSTATION]: Error storing/disoatching fare', error);
-            }
-            return; // Do not run the default logic below
+            setEffectiveDistance(fareResult.includedKM);
+            setCalculatedFare(fareResult.totalFare);
+            // Store breakdown for UI
+            setOutstationBreakdown(fareResult);
+            return;
           }
 
           // ... existing one-way or fallback logic below ...
@@ -852,6 +832,20 @@ export const BookingSummary = ({
   const breakdown = fareData?.breakdown || {};
   const finalTotal = fareData?.totalPrice || totalPrice;
 
+  let summaryBaseFare = breakdown.basePrice || 0;
+  let summaryDriverAllowance = breakdown.driverAllowance || 0;
+  let summaryNightAllowance = breakdown.nightCharges || 0;
+  let summaryExtraDistanceCharges = breakdown.extraDistanceFare || 0;
+  let summaryTotal = sumBreakdown(breakdown);
+
+  if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
+    summaryBaseFare = outstationBreakdown.baseFare;
+    summaryDriverAllowance = outstationBreakdown.driverAllowance;
+    summaryNightAllowance = outstationBreakdown.nightAllowance;
+    summaryExtraDistanceCharges = outstationBreakdown.extraDistanceCharges;
+    summaryTotal = outstationBreakdown.totalFare;
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 relative">
       <h2 className="text-xl font-bold mb-4 text-left">Booking Summary</h2>
@@ -976,32 +970,26 @@ export const BookingSummary = ({
             <>
               <div className="flex justify-between items-center mb-2">
                 <p className="text-gray-600">Base fare</p>
-                <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
+                <p className="font-medium">{formatPrice(summaryBaseFare)}</p>
               </div>
-              {tripType !== 'airport' && breakdown.driverAllowance > 0 && (
+              {summaryDriverAllowance > 0 && (
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-gray-600">Driver allowance</p>
-                  <p className="font-medium">{formatPrice(breakdown.driverAllowance)}</p>
+                  <p className="font-medium">{formatPrice(summaryDriverAllowance)}</p>
                 </div>
               )}
-              {breakdown.nightCharges > 0 && (
+              {summaryNightAllowance > 0 && (
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Night charges</p>
-                  <p>{formatPrice(breakdown.nightCharges)}</p>
+                  <p className="text-gray-600">Night allowance</p>
+                  <p>{formatPrice(summaryNightAllowance)}</p>
                 </div>
               )}
-              {breakdown.extraDistanceFare > 0 && (
+              {summaryExtraDistanceCharges > 0 && (
                 <div className="flex justify-between items-center mb-2 group">
                   <div className="flex items-center gap-1">
                     <p className="text-gray-600">Extra distance charges</p>
-                    <div className="relative">
-                      <Info className="h-4 w-4 text-blue-500 cursor-help" />
-                      <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs p-2 rounded w-48 invisible group-hover:visible transition-opacity z-10">
-                        {Math.round(breakdown.extraDistanceFare / (breakdown.extraKmCharge || 1))} km × ₹{breakdown.extraKmCharge || 0}/km
-                      </div>
-                    </div>
                   </div>
-                  <p>{formatPrice(breakdown.extraDistanceFare)}</p>
+                  <p>{formatPrice(summaryExtraDistanceCharges)}</p>
                 </div>
               )}
               {tripType === 'airport' && breakdown.airportFee > 0 && (
@@ -1013,7 +1001,7 @@ export const BookingSummary = ({
               <Separator className="my-3" />
               <div className="flex justify-between items-center">
                 <p className="font-semibold">Total Price</p>
-                <p className="font-bold text-lg">{formatPrice(sumBreakdown(breakdown))}</p>
+                <p className="font-bold text-lg">{formatPrice(summaryTotal)}</p>
               </div>
             </>
           )}
@@ -1023,6 +1011,25 @@ export const BookingSummary = ({
             </div>
           )}
         </div>
+
+        {tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown && (
+          <div className="mt-4 border rounded bg-gray-50 p-3">
+            <div className="font-semibold mb-2">Fare Breakdown</div>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr><td>Calendar Days</td><td>{outstationBreakdown.calendarDays}</td></tr>
+                <tr><td>Included KM</td><td>{outstationBreakdown.includedKM}</td></tr>
+                <tr><td>Actual KM (2-way)</td><td>{outstationBreakdown.actualDistance}</td></tr>
+                <tr><td>Extra KM</td><td>{outstationBreakdown.extraDistance}</td></tr>
+                <tr><td>Extra KM Charges</td><td>{formatPrice(outstationBreakdown.extraDistanceCharges)}</td></tr>
+                <tr><td>Base Fare</td><td>{formatPrice(outstationBreakdown.baseFare)}</td></tr>
+                <tr><td>Night Allowance</td><td>{formatPrice(outstationBreakdown.nightAllowance)}</td></tr>
+                <tr><td>Driver Allowance</td><td>{formatPrice(outstationBreakdown.driverAllowance)}</td></tr>
+                <tr className="font-bold"><td>Total Fare</td><td>{formatPrice(outstationBreakdown.totalFare)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

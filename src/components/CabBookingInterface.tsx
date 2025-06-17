@@ -1,4 +1,4 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { TabTripSelector } from '@/components/TabTripSelector';
 import { CabOptions } from '@/components/CabOptions';
@@ -12,6 +12,8 @@ import { Card } from '@/components/ui/card';
 import { useCabOptions } from './cab-options/useCabOptions';
 import { useDistance } from '@/hooks/useDistance';
 import { TripType } from '@/types/trip';
+import { calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
+import { getOutstationFaresForVehicle } from '@/services/fareService';
 
 export interface TripDetails {
   tripType: TripType;
@@ -41,6 +43,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const [step, setStep] = useState(1);
     const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
     const [fare, setFare] = useState<number | null>(null);
+    const [fareBreakdown, setFareBreakdown] = useState<any>(null);
 
     let tripType: TripType = (initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation') as TripType;
     if (location.pathname.startsWith('/outstation-taxi')) {
@@ -68,6 +71,37 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
 
     const [guestDetails, setGuestDetails] = useState<GuestDetails | null>(null);
 
+    useEffect(() => {
+        async function recalcFareIfNeeded() {
+            if (
+                selectedCab &&
+                tripDetails.tripType === 'outstation' &&
+                tripDetails.tripMode === 'round-trip' &&
+                tripDetails.pickupDate &&
+                tripDetails.returnDate &&
+                distance > 0
+            ) {
+                const outstationFares = await getOutstationFaresForVehicle(selectedCab.id);
+                const perKmRate = outstationFares.pricePerKm;
+                const nightAllowancePerNight = outstationFares.nightHaltCharge;
+                const driverAllowancePerDay = outstationFares.driverAllowance;
+                const actualDistance = distance * 2;
+                const breakdown = calculateOutstationRoundTripFare({
+                    pickupDate: new Date(tripDetails.pickupDate),
+                    returnDate: new Date(tripDetails.returnDate),
+                    actualDistance,
+                    perKmRate,
+                    nightAllowancePerNight,
+                    driverAllowancePerDay
+                });
+                setFare(breakdown.totalFare);
+                setFareBreakdown(breakdown);
+            }
+        }
+        recalcFareIfNeeded();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCab, tripDetails.pickupDate, tripDetails.returnDate, distance, tripDetails.tripType, tripDetails.tripMode]);
+
     const handleTripDetailsChange = (details: TripDetails) => {
         setTripDetails(details);
         if (step > 1) {
@@ -76,9 +110,15 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         }
     };
 
-    const handleActualCabSelect = (cab: CabType, calculatedFare: number) => {
+    const handleActualCabSelect = (cab: CabType, calculatedFare: number, breakdown?: any) => {
         setSelectedCab(cab);
-        setFare(calculatedFare);
+        if (breakdown && breakdown.totalFare) {
+            setFare(breakdown.totalFare);
+            setFareBreakdown(breakdown);
+        } else {
+            setFare(calculatedFare);
+            setFareBreakdown(null);
+        }
         setStep(2);
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
@@ -93,6 +133,10 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
             setStep(step - 1);
         }
     };
+
+    const isOutstationRoundTrip = tripDetails.tripType === 'outstation' && tripDetails.tripMode === 'round-trip';
+    const summaryFare = isOutstationRoundTrip && fareBreakdown?.totalFare ? fareBreakdown.totalFare : fare;
+    const summaryBreakdown = isOutstationRoundTrip && fareBreakdown ? fareBreakdown : undefined;
 
     return (
         <>
@@ -122,7 +166,8 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                     {selectedCab && fare !== null && (
                         <BookingSummary
                             selectedCab={selectedCab}
-                            fare={fare}
+                            fare={summaryFare}
+                            breakdown={summaryBreakdown}
                             onEdit={handleBack}
                             from={tripDetails.from}
                             to={tripDetails.to}

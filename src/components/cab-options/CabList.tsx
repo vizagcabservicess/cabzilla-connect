@@ -7,6 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { getOutstationFares } from '@/services/fareService';
+import { calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
+
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -131,27 +133,36 @@ const CabFareCard = ({
     pickupDate &&
     returnDate
   ) {
-    console.log('Using calendar day logic for outstation round-trip in CabList', {pickupDate, returnDate, distance, cab});
-    // Calendar day logic for outstation round-trip
-    const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    let calendarDays = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / MS_PER_DAY);
-    if (calendarDays < 1) calendarDays = 1;
-
-    const perKmRate = cab.pricePerKm ?? 15;
-    const nightAllowancePerNight = cab.nightHaltCharge ?? 0;
-    const driverAllowancePerDay = cab.driverAllowance ?? 250;
-
-    const includedKM = calendarDays * 300;
-    const baseFare = includedKM * perKmRate;
-    const actualDistance = distance;
-    const extraDistance = Math.max(0, actualDistance - includedKM);
-    const extraDistanceFare = extraDistance * perKmRate;
-    const nightCharges = (calendarDays - 1) * nightAllowancePerNight;
-    const driverAllowance = calendarDays * driverAllowancePerDay;
-
-    fare = baseFare + extraDistanceFare + nightCharges + driverAllowance;
+    // Use shared fare calculation with per-vehicle rates
+    const perKmRate = cab.pricePerKm ?? cab.outstationFares?.pricePerKm ?? 15;
+    const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? 0;
+    const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? 250;
+    const actualDistance = distance * 2;
+    const fareResult = calculateOutstationRoundTripFare({
+      pickupDate,
+      returnDate,
+      actualDistance,
+      perKmRate,
+      nightAllowancePerNight,
+      driverAllowancePerDay
+    });
+    fare = fareResult.totalFare;
     fareText = `₹${fare.toLocaleString()}`;
-    // Optionally, set a breakdown object for details
+    fareData = { breakdown: fareResult };
+    // Always use this fare for the card and selection
+    return (
+      <CabOptionCard
+        key={cab.id}
+        cab={cab}
+        fare={fare}
+        isSelected={selectedCabId === cab.id}
+        onSelect={() => handleSelectCab(cab, fare, 'roundtrip', fareResult)}
+        fareDetails={fareText}
+        isCalculating={isLoading}
+        tripType={tripType}
+        breakdown={fareResult}
+      />
+    );
   }
 
   return (
@@ -164,6 +175,7 @@ const CabFareCard = ({
       fareDetails={fareText}
       isCalculating={isLoading}
       tripType={tripType}
+      breakdown={tripType === 'outstation' && tripMode === 'round-trip' ? fareData?.breakdown : undefined}
     />
   );
 };

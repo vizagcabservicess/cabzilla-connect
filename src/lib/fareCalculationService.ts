@@ -2,7 +2,6 @@ import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subD
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
 import { getLocalPackagePrice } from './packageData';
-import { tourFares } from './tourData';
 import axios from 'axios';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 
@@ -356,3 +355,60 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     throw error;
   }
 };
+
+/**
+ * Calculate fare breakdown for outstation round trip bookings.
+ * @param {Object} params
+ * @param {Date} params.pickupDate - Pickup date/time
+ * @param {Date} params.returnDate - Return date/time
+ * @param {number} params.actualDistance - Total distance (two-way, in KM)
+ * @param {number} params.perKmRate - Rate per KM (₹)
+ * @param {number} params.nightAllowancePerNight - Night allowance per night (₹)
+ * @param {number} params.driverAllowancePerDay - Driver allowance per day (₹)
+ * @returns {Object} Fare breakdown and total
+ */
+export function calculateOutstationRoundTripFare({
+  pickupDate,
+  returnDate,
+  actualDistance,
+  perKmRate,
+  nightAllowancePerNight,
+  driverAllowancePerDay
+}: {
+  pickupDate: Date,
+  returnDate: Date,
+  actualDistance: number,
+  perKmRate: number,
+  nightAllowancePerNight: number,
+  driverAllowancePerDay: number
+}) {
+  // 1. KM included per calendar day: 300 KM
+  // 2. calendarDays = ceil((returnDate - pickupDate) / (24 * 60 * 60 * 1000)), min 1
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  let calendarDays = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / MS_PER_DAY);
+  if (calendarDays < 1) calendarDays = 1;
+  // 3. includedKM = calendarDays × 300
+  const includedKM = calendarDays * 300;
+  // 4. baseFare = includedKM × perKmRate
+  const baseFare = includedKM * perKmRate;
+  // 5. extraDistance = max(0, actualDistance - includedKM)
+  const extraDistance = Math.max(0, actualDistance - includedKM);
+  // 6. extraDistanceCharges = extraDistance × perKmRate
+  const extraDistanceCharges = extraDistance * perKmRate;
+  // 7. nightAllowance = (calendarDays - 1) × nightAllowancePerNight
+  const nightAllowance = (calendarDays - 1) * nightAllowancePerNight;
+  // 8. driverAllowance = calendarDays × driverAllowancePerDay
+  const driverAllowance = calendarDays * driverAllowancePerDay;
+  // 9. totalFare = baseFare + extraDistanceCharges + nightAllowance + driverAllowance
+  const totalFare = baseFare + extraDistanceCharges + nightAllowance + driverAllowance;
+  return {
+    calendarDays,
+    includedKM,
+    baseFare,
+    extraDistance,
+    extraDistanceCharges,
+    nightAllowance,
+    driverAllowance,
+    totalFare
+  };
+}
