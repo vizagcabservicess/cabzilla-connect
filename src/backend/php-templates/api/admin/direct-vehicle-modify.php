@@ -540,8 +540,20 @@ function loadVehiclesFromDatabase() {
                         'nightHaltCharge' => (float)$row['night_halt_charge'],
                         'driverAllowance' => (float)$row['driver_allowance'],
                         'isActive' => (bool)$row['is_active'],
-                        'inclusions' => isset($row['inclusions']) && $row['inclusions'] !== null && $row['inclusions'] !== '' ? (is_array(json_decode($row['inclusions'], true)) ? json_decode($row['inclusions'], true) : array_map('trim', explode(',', $row['inclusions']))) : [],
-                        'exclusions' => isset($row['exclusions']) && $row['exclusions'] !== null && $row['exclusions'] !== '' ? (is_array(json_decode($row['exclusions'], true)) ? json_decode($row['exclusions'], true) : array_map('trim', explode(',', $row['exclusions']))) : [],
+                        'inclusions' => (function($val) {
+                            $decoded = json_decode($val, true);
+                            if (is_array($decoded)) return $decoded;
+                            if (is_string($decoded)) return [$decoded];
+                            if (is_string($val) && strlen(trim($val))) return array_map('trim', explode(',', $val));
+                            return [];
+                        })($row['inclusions'] ?? ''),
+                        'exclusions' => (function($val) {
+                            $decoded = json_decode($val, true);
+                            if (is_array($decoded)) return $decoded;
+                            if (is_string($decoded)) return [$decoded];
+                            if (is_string($val) && strlen(trim($val))) return array_map('trim', explode(',', $val));
+                            return [];
+                        })($row['exclusions'] ?? ''),
                         'cancellationPolicy' => $row['cancellation_policy'] ?? '',
                         'fuelType' => $row['fuel_type'] ?? ''
                     ];

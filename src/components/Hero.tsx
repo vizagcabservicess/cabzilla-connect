@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
+import { calculateDistanceMatrix } from '@/lib/distanceService';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -99,6 +100,95 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [finalTotal, setFinalTotal] = useState<number>(0);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [minTravelHours, setMinTravelHours] = useState<number>(0);
+  const [isCheckingTravelTime, setIsCheckingTravelTime] = useState<boolean>(false);
+  const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
+  const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
+
+  // Always keep pickupDate enabled and default to now on mount/refresh
+  useEffect(() => {
+    setPickupDate(new Date());
+  }, []);
+
+  // Reset/disable returnDate and errors when locations change
+  useEffect(() => {
+    if (tripType === 'outstation' && tripMode === 'round-trip') {
+      setPickupDate(new Date());
+      setReturnDate(null);
+      setIsReturnTimeEnabled(false);
+      setMinValidReturnTime(null);
+      setValidationError(null);
+    }
+  }, []);
+
+  // Only call travel time API and set returnDate when both locations are filled
+  useEffect(() => {
+    if (
+      tripType === 'outstation' &&
+      tripMode === 'round-trip'
+    ) {
+      // If either location is missing, disable and clear returnDate, do not call API
+      if (!pickupLocation || !dropLocation) {
+        setIsReturnTimeEnabled(false);
+        setReturnDate(null);
+        setMinValidReturnTime(null);
+        setValidationError(null);
+        setIsCheckingTravelTime(false);
+        return;
+      }
+      // Both locations are filled, call API and set returnDate
+      setIsCheckingTravelTime(true);
+      (async () => {
+        try {
+          const result = await calculateDistanceMatrix(pickupLocation, dropLocation);
+          if (result.status === 'OK') {
+            const minMinutes = result.duration + 30;
+            const minReturn = new Date(pickupDate.getTime() + minMinutes * 60 * 1000);
+            setIsReturnTimeEnabled(true);
+            setMinValidReturnTime(minReturn);
+            // Always prefill returnDate with minReturn on every change
+            setReturnDate(minReturn);
+            setValidationError(null);
+          } else {
+            setIsReturnTimeEnabled(false);
+            setMinValidReturnTime(null);
+            setReturnDate(null);
+            setValidationError('Could not validate travel time. Please try again.');
+          }
+        } catch (err) {
+          setIsReturnTimeEnabled(false);
+          setMinValidReturnTime(null);
+          setReturnDate(null);
+          setValidationError('Could not validate travel time. Please try again.');
+        } finally {
+          setIsCheckingTravelTime(false);
+        }
+      })();
+    }
+  // Only depend on pickupLocation, dropLocation, pickupDate, tripType, tripMode
+  }, [pickupLocation, dropLocation, pickupDate, tripType, tripMode]);
+
+  // Validate returnDate when user manually edits it
+  useEffect(() => {
+    if (
+      tripType === 'outstation' &&
+      tripMode === 'round-trip' &&
+      pickupLocation && dropLocation &&
+      pickupDate &&
+      returnDate &&
+      minValidReturnTime
+    ) {
+      if (returnDate < minValidReturnTime) {
+        const minMinutes = Math.round((minValidReturnTime.getTime() - pickupDate.getTime()) / 60000);
+        setValidationError(
+          `Return time must be at least ${Math.ceil(minMinutes/60)} hours after pickup time based on travel time from Google Maps.`
+        );
+      } else {
+        setValidationError(null);
+      }
+    }
+  }, [returnDate, minValidReturnTime, pickupDate, pickupLocation, dropLocation, tripType, tripMode]);
 
   // Validate form fields and set isFormValid
   useEffect(() => {
@@ -232,6 +322,15 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
         description: "Please fill in all required fields before continuing.",
         variant: "destructive",
         duration: 3000,
+      });
+      return;
+    }
+    if (validationError) {
+      toast({
+        title: "Invalid Return Time",
+        description: validationError,
+        variant: "destructive",
+        duration: 4000,
       });
       return;
     }
@@ -524,12 +623,24 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
                   />
 
                   {tripType === 'outstation' && tripMode === 'round-trip' && (
-                    <DateTimePicker
-                      label="RETURN DATE & TIME"
-                      date={returnDate}
-                      onDateChange={setReturnDate}
-                      minDate={pickupDate}
-                    />
+                    <>
+                      <DateTimePicker
+                        label="RETURN DATE & TIME"
+                        date={returnDate}
+                        onDateChange={isReturnTimeEnabled ? setReturnDate : () => {}}
+                        minDate={minValidReturnTime || pickupDate}
+                        disabled={!isReturnTimeEnabled}
+                      />
+                      {isCheckingTravelTime && (
+                        <div className="flex items-center text-blue-500 mt-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                          <span>Checking minimum return time...</span>
+                        </div>
+                      )}
+                      {validationError && (
+                        <div className="text-red-600 text-xs mt-1">{validationError}</div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -635,6 +746,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
                   </div>
                 </div>
                 <div className="lg:col-span-1">
+                
                   <div ref={bookingSummaryRef} id="booking-summary">
                     <BookingSummary 
                       pickupLocation={pickupLocation!} 

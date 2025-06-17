@@ -5,6 +5,8 @@ import { TripType } from '@/lib/tripTypes';
 import { CabOptionCard } from '@/components/CabOptionCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { getVehicleData } from '@/services/vehicleDataService';
+import { getOutstationFares } from '@/services/fareService';
 
 interface CabListProps {
   cabTypes: CabType[];
@@ -17,6 +19,7 @@ interface CabListProps {
   distance?: number;
   packageType?: string;
   pickupDate?: Date;
+  returnDate?: Date;
 }
 
 const sumBreakdown = (breakdown: any) => {
@@ -47,7 +50,9 @@ const CabFareCard = ({
   packageType,
   pickupDate,
   selectedCabId,
-  handleSelectCab
+  handleSelectCab,
+  tripMode,
+  returnDate
 }: any) => {
   const normalizeVehicleId = (id: string): string => {
     return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
@@ -120,6 +125,35 @@ const CabFareCard = ({
     }
   }
 
+  if (
+    tripType === 'outstation' &&
+    tripMode === 'round-trip' &&
+    pickupDate &&
+    returnDate
+  ) {
+    console.log('Using calendar day logic for outstation round-trip in CabList', {pickupDate, returnDate, distance, cab});
+    // Calendar day logic for outstation round-trip
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    let calendarDays = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / MS_PER_DAY);
+    if (calendarDays < 1) calendarDays = 1;
+
+    const perKmRate = cab.pricePerKm ?? 15;
+    const nightAllowancePerNight = cab.nightHaltCharge ?? 0;
+    const driverAllowancePerDay = cab.driverAllowance ?? 250;
+
+    const includedKM = calendarDays * 300;
+    const baseFare = includedKM * perKmRate;
+    const actualDistance = distance;
+    const extraDistance = Math.max(0, actualDistance - includedKM);
+    const extraDistanceFare = extraDistance * perKmRate;
+    const nightCharges = (calendarDays - 1) * nightAllowancePerNight;
+    const driverAllowance = calendarDays * driverAllowancePerDay;
+
+    fare = baseFare + extraDistanceFare + nightCharges + driverAllowance;
+    fareText = `₹${fare.toLocaleString()}`;
+    // Optionally, set a breakdown object for details
+  }
+
   return (
     <CabOptionCard
       key={cab.id}
@@ -135,7 +169,7 @@ const CabFareCard = ({
 };
 
 export const CabList: React.FC<CabListProps> = ({
-  cabTypes,
+  cabTypes: initialCabTypes,
   selectedCabId,
   isCalculatingFares,
   handleSelectCab,
@@ -144,14 +178,11 @@ export const CabList: React.FC<CabListProps> = ({
   tripMode = 'one-way',
   distance = 0,
   packageType,
-  pickupDate
+  pickupDate,
+  returnDate
 }) => {
-  console.log('[CabList] cabTypes:', cabTypes);
-  console.log('[CabList] tripType:', tripType);
-  if (!cabTypes || cabTypes.length === 0) {
-    console.warn('[CabList] No cab options available for tripType:', tripType);
-  }
-  
+  const [cabTypes, setCabTypes] = useState<CabType[]>(initialCabTypes);
+  const [loading, setLoading] = useState(false);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   const isMobile = useIsMobile();
@@ -172,6 +203,33 @@ export const CabList: React.FC<CabListProps> = ({
       window.removeEventListener('significant-fare-difference', handleFareUpdate);
     };
   }, []);
+
+  useEffect(() => {
+    async function fetchAndMerge() {
+      setLoading(true);
+      try {
+        // 1. Fetch vehicles
+        const vehicles = await getVehicleData();
+        // 2. Fetch fares (example for outstation)
+        let fares = {};
+        if (tripType === 'outstation') {
+          fares = await getOutstationFares(); // Should return an object keyed by vehicleId
+        }
+        // 3. Merge fares into vehicles
+        const merged = vehicles.map(v => ({
+          ...v,
+          ...(fares[v.id] || {})
+        }));
+        setCabTypes(merged);
+      } catch (e) {
+        console.error('Error merging vehicles and fares:', e);
+        setCabTypes(initialCabTypes);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAndMerge();
+  }, [tripType, packageType, distance, pickupDate]);
 
   const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
     handleSelectCab(cab, fare, breakdown);
@@ -206,24 +264,30 @@ export const CabList: React.FC<CabListProps> = ({
         </div>
       )}
 
-      {(!cabTypes || cabTypes.length === 0) ? (
-        <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
-          <p className="font-medium">No cab options available</p>
-          <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
-        </div>
+      {loading ? (
+        <div>Loading cabs...</div>
       ) : (
-        cabTypes.map((cab) => (
-          <CabFareCard
-            key={cab.id}
-            cab={cab}
-            tripType={tripType}
-            distance={distance}
-            packageType={packageType}
-            pickupDate={pickupDate}
-            selectedCabId={selectedCabId}
-            handleSelectCab={enhancedSelectCab}
-          />
-        ))
+        (!cabTypes || cabTypes.length === 0) ? (
+          <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
+            <p className="font-medium">No cab options available</p>
+            <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
+          </div>
+        ) : (
+          cabTypes.map((cab) => (
+            <CabFareCard
+              key={cab.id}
+              cab={cab}
+              tripType={tripType}
+              distance={distance}
+              packageType={packageType}
+              pickupDate={pickupDate}
+              selectedCabId={selectedCabId}
+              handleSelectCab={enhancedSelectCab}
+              tripMode={tripMode}
+              returnDate={returnDate}
+            />
+          ))
+        )
       )}
     </div>
   );

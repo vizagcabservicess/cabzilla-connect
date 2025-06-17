@@ -109,11 +109,11 @@ export function CabOptionCard({
                   <div className="flex items-center gap-4 text-gray-600 mb-1">
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4" />
-                      <span>4 Seats</span>
+                      <span>{cab.capacity || 4} Seats</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Briefcase className="h-4 w-4" />
-                      <span>2 Bags</span>
+                      <span>{cab.luggageCapacity || 2} Bags</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Fuel className="h-4 w-4" />
@@ -146,7 +146,6 @@ export function CabOptionCard({
               <div className="flex items-end justify-between w-full">
                 <div>
                   <span className="text-lg font-bold text-gray-900 block">₹{typeof fare === 'number' ? fare.toLocaleString() : fareDetails}</span>
-                  <span className="text-xs text-gray-500 block">Incl. taxes</span>
                 </div>
                 <button
                   onClick={onSelect}
@@ -215,15 +214,15 @@ export function CabOptionCard({
                     <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        <span>4 Seats</span>
+                        <span>{cab.capacity || 4} Seats</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Briefcase className="h-4 w-4" />
-                        <span>2 Bags</span>
+                        <span>{cab.luggageCapacity || 2} Bags</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Fuel className="h-4 w-4" />
-                        <span>CNG</span>
+                        <span>{cab.fuelType || 'CNG'}</span>
                       </div>
                     </div>
                     {/* Amenities Tags */}
@@ -257,8 +256,6 @@ export function CabOptionCard({
                         <div className="text-2xl font-bold text-gray-900">
                           {typeof fare === 'number' ? `₹${fare.toLocaleString()}` : fareDetails}
                         </div>
-                        <div className="text-xs text-gray-500 mb-2">{fareSource}</div>
-                        <div className="text-xs text-gray-500">Incl. taxes & fees</div>
                       </>
                     )}
                   </div>
@@ -311,16 +308,18 @@ export function CabOptionCard({
                         )}
                       </div>
                       {/* Exclusions Section */}
-                      {cab.exclusions && cab.exclusions.length > 0 && (
-                        <div className="flex-1">
-                          <h4 className="font-semibold mb-2">Exclusions</h4>
+                      <div className="flex-1">
+                        <h4 className="font-semibold mb-2">Exclusions</h4>
+                        {cab.exclusions && cab.exclusions.length > 0 ? (
                           <ul className="text-sm text-gray-700 list-disc list-inside">
                             {cab.exclusions.map((exc: string, idx: number) => (
                               <li key={idx}>✗ {exc}</li>
                             ))}
                           </ul>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="text-sm text-gray-500 italic">No exclusions listed.</div>
+                        )}
+                      </div>
                     </div>
                     {/* Always show cancellation policy if present */}
                     {cab.cancellationPolicy && (

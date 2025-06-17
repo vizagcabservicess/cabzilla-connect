@@ -15,6 +15,7 @@ export interface DateTimePickerProps {
   minDate?: Date;
   className?: string;
   label?: string;
+  disabled?: boolean;
 }
 
 export function DateTimePicker({ 
@@ -22,7 +23,8 @@ export function DateTimePicker({
   onDateChange, 
   minDate, 
   className,
-  label
+  label,
+  disabled = false
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -119,8 +121,10 @@ export function DateTimePicker({
               "w-full justify-start text-left font-normal h-[50px] bg-white",
               "border-gray-200 hover:bg-gray-50",
               !date && "text-gray-400",
+              disabled && "opacity-60 cursor-not-allowed pointer-events-none",
               "md:h-[42px]"
             )}
+            disabled={disabled}
           >
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 text-gray-400" />
@@ -137,7 +141,7 @@ export function DateTimePicker({
           <Calendar
             mode="single"
             selected={date}
-            onSelect={handleCalendarSelect}
+            onSelect={disabled ? undefined : handleCalendarSelect}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
             className="rounded-t-none border-t pointer-events-auto"
@@ -147,12 +151,14 @@ export function DateTimePicker({
             <Input
               type="time"
               value={selectedTime || ""}
-              onChange={handleTimeChange}
+              onChange={disabled ? undefined : handleTimeChange}
               className="max-w-[120px]"
+              disabled={disabled}
             />
             <Button 
-              onClick={handleApply}
+              onClick={disabled ? undefined : handleApply}
               className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+              disabled={disabled}
             >
               Apply
             </Button>
