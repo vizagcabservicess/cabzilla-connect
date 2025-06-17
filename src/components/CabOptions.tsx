@@ -15,6 +15,7 @@ export interface CabListProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares: boolean;
+  selectedCabBreakdown?: any;
 }
 
 interface CabOptionsProps {
@@ -28,6 +29,7 @@ interface CabOptionsProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares: boolean;
+  selectedCabBreakdown?: any;
 }
 
 // Clear the fare cache to ensure fresh data
@@ -57,6 +59,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   pickupDate,
   returnDate,
   isCalculatingFares,
+  selectedCabBreakdown,
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
@@ -170,6 +173,8 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       tripMode={tripMode}
       packageType={hourlyPackage}
       pickupDate={pickupDate}
+      returnDate={returnDate}
+      selectedCabBreakdown={selectedCabBreakdown}
     />
   );
 };

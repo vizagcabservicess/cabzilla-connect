@@ -26,27 +26,15 @@ export function CabOptionCard({
   isCalculating,
   tripType = 'local',
   tripMode = 'one-way',
-  fareSource = 'unknown'
+  fareSource = 'unknown',
+  breakdown
 }: CabOptionCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
-  const getFareBreakdown = () => {
-    if (typeof fare !== 'number' || !fare) return null;
-    
-    // Sample breakdown - you can enhance this based on your fare calculation logic
-    const baseFare = Math.floor(fare * 0.7);
-    const taxes = Math.floor(fare * 0.12);
-    const driverAllowance = fare - baseFare - taxes;
-    
-    return {
-      baseFare,
-      driverAllowance,
-      taxes,
-      total: fare
-    };
-  };
-
-  const breakdown = getFareBreakdown();
+  const displayFare =
+    tripType === 'outstation' && (tripMode === 'round' || tripMode === 'round-trip') && breakdown?.totalFare
+      ? breakdown.totalFare
+      : fare;
 
   return (
     <>
@@ -146,7 +134,7 @@ export function CabOptionCard({
             <div className="flex flex-col gap-1 mt-2 w-full">
               <div className="flex items-end justify-between w-full">
                 <div>
-                  <span className="text-lg font-bold text-gray-900 block">₹{typeof fare === 'number' ? fare.toLocaleString() : fareDetails}</span>
+                  <span className="text-lg font-bold text-gray-900 block">₹{typeof displayFare === 'number' ? displayFare.toLocaleString() : fareDetails}</span>
                 </div>
                 <button
                   onClick={onSelect}
@@ -255,7 +243,7 @@ export function CabOptionCard({
                     ) : (
                       <>
                         <div className="text-2xl font-bold text-gray-900">
-                          {typeof fare === 'number' ? `₹${fare.toLocaleString()}` : fareDetails}
+                          {typeof displayFare === 'number' ? `₹${displayFare.toLocaleString()}` : fareDetails}
                         </div>
                       </>
                     )}

@@ -22,6 +22,7 @@ interface CabListProps {
   packageType?: string;
   pickupDate?: Date;
   returnDate?: Date;
+  selectedCabBreakdown?: any;
 }
 
 const sumBreakdown = (breakdown: any) => {
@@ -54,7 +55,8 @@ const CabFareCard = ({
   selectedCabId,
   handleSelectCab,
   tripMode,
-  returnDate
+  returnDate,
+  selectedCabBreakdown
 }: any) => {
   const normalizeVehicleId = (id: string): string => {
     return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
@@ -64,11 +66,12 @@ const CabFareCard = ({
   let fareSource = 'unknown';
   let isLoading = false;
   let fareData = undefined;
+  let fareResult = undefined;
 
   // Handle outstation round trips with shared calculation
   if (
     tripType === 'outstation' &&
-    (tripMode === 'round-trip' || tripMode === 'round') &&
+    (tripMode === 'round' || tripMode === 'round-trip') &&
     pickupDate &&
     returnDate &&
     distance > 0
@@ -78,7 +81,7 @@ const CabFareCard = ({
     const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? 0;
     const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? 250;
     const actualDistance = distance * 2;
-    const fareResult = calculateOutstationRoundTripFare({
+    fareResult = calculateOutstationRoundTripFare({
       pickupDate,
       returnDate,
       actualDistance,
@@ -91,18 +94,18 @@ const CabFareCard = ({
     fareData = { breakdown: fareResult };
     isLoading = false;
     fareSource = 'calculated';
-    
+    // Always use this fare for the card and selection
     return (
       <CabOptionCard
         key={cab.id}
         cab={cab}
         fare={fare}
         isSelected={selectedCabId === cab.id}
-        onSelect={() => handleSelectCab(cab, fare, fareResult)}
+        onSelect={() => handleSelectCab(cab, fare, 'calculated', fareResult)}
         fareDetails={fareText}
         isCalculating={isLoading}
         tripType={tripType}
-        breakdown={fareResult}
+        breakdown={selectedCabBreakdown ? selectedCabBreakdown : fareResult}
       />
     );
   }
@@ -170,17 +173,24 @@ const CabFareCard = ({
     }
   }
 
+  const isSelected = selectedCabId === cab.id;
+  const breakdownToUse = isSelected && selectedCabBreakdown
+    ? selectedCabBreakdown
+    : (tripType === 'outstation' && (tripMode === 'round' || tripMode === 'round-trip') && fareResult
+      ? fareResult
+      : fareData?.breakdown);
+
   return (
     <CabOptionCard
       key={cab.id}
       cab={cab}
       fare={fare}
-      isSelected={selectedCabId === cab.id}
+      isSelected={isSelected}
       onSelect={() => handleSelectCab(cab, fare, fareSource, fareData?.breakdown)}
       fareDetails={fareText}
       isCalculating={isLoading}
       tripType={tripType}
-      breakdown={tripType === 'outstation' && (tripMode === 'round-trip' || tripMode === 'round') ? fareData?.breakdown : undefined}
+      breakdown={breakdownToUse}
     />
   );
 };
@@ -196,7 +206,8 @@ export const CabList: React.FC<CabListProps> = ({
   distance = 0,
   packageType,
   pickupDate,
-  returnDate
+  returnDate,
+  selectedCabBreakdown
 }) => {
   const [cabTypes, setCabTypes] = useState<CabType[]>(initialCabTypes);
   const [loading, setLoading] = useState(false);
@@ -249,7 +260,16 @@ export const CabList: React.FC<CabListProps> = ({
   }, [tripType, packageType, distance, pickupDate]);
 
   const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
-    handleSelectCab(cab, fare, breakdown);
+    // For outstation round trip, always use breakdown.totalFare as fare and pass breakdown
+    if (
+      tripType === 'outstation' &&
+      (tripMode === 'round' || tripMode === 'round-trip') &&
+      breakdown && breakdown.totalFare
+    ) {
+      handleSelectCab(cab, breakdown.totalFare, breakdown);
+    } else {
+      handleSelectCab(cab, fare, breakdown);
+    }
     setFadeIn(prev => ({ ...prev, [cab.id]: true }));
 
     setTimeout(() => {
@@ -302,6 +322,7 @@ export const CabList: React.FC<CabListProps> = ({
               handleSelectCab={enhancedSelectCab}
               tripMode={tripMode}
               returnDate={returnDate}
+              selectedCabBreakdown={selectedCabBreakdown}
             />
           ))
         )

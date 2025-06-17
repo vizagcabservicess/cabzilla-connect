@@ -67,7 +67,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     });
 
     const { distance, isLoading: isDistanceLoading } = useDistance(tripDetails.from, tripDetails.to);
-    const { cabOptions, isLoading: isCabsLoading } = useCabOptions({ tripType: tripDetails.tripType, from: tripDetails.from, to: tripDetails.to });
+    const { cabOptions, isLoading: isCabsLoading } = useCabOptions({ tripType: tripDetails.tripType });
 
     const [guestDetails, setGuestDetails] = useState<GuestDetails | null>(null);
 
@@ -111,13 +111,18 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     };
 
     const handleActualCabSelect = (cab: CabType, calculatedFare: number, breakdown?: any) => {
-        setSelectedCab(cab);
-        if (breakdown && breakdown.totalFare) {
+        if (
+            tripDetails.tripType === 'outstation' &&
+            tripDetails.tripMode === 'round-trip' &&
+            breakdown && breakdown.totalFare
+        ) {
+            setSelectedCab(cab);
             setFare(breakdown.totalFare);
             setFareBreakdown(breakdown);
         } else {
+            setSelectedCab(cab);
             setFare(calculatedFare);
-            setFareBreakdown(null);
+            setFareBreakdown(breakdown);
         }
         setStep(2);
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -138,10 +143,17 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const summaryFare = isOutstationRoundTrip && fareBreakdown?.totalFare ? fareBreakdown.totalFare : fare;
     const summaryBreakdown = isOutstationRoundTrip && fareBreakdown ? fareBreakdown : undefined;
 
+    const bookNowTotal = fareBreakdown?.totalFare ?? fare ?? 0;
+
     return (
         <>
             <Card className="p-4 md:p-6 mb-8 shadow-none border-0">
-                <TabTripSelector onTripDetailsChange={handleTripDetailsChange} initialTripDetails={tripDetails} />
+                <TabTripSelector
+                    selectedTab={tripDetails.tripType}
+                    tripMode={tripDetails.tripMode}
+                    onTabChange={(tab) => setTripDetails(prev => ({ ...prev, tripType: tab }))}
+                    onTripModeChange={(mode) => setTripDetails(prev => ({ ...prev, tripMode: mode }))}
+                />
             </Card>
 
             <div className="grid lg:grid-cols-3 gap-8 items-start">
@@ -156,7 +168,10 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                                 isCalculatingFares={isCabsLoading || isDistanceLoading}
                                 distance={distance}
                                 tripMode={tripDetails.tripMode}
-                                pickupDate={new Date(tripDetails.pickupDate)}
+                                hourlyPackage={tripDetails.package}
+                                pickupDate={tripDetails.pickupDate ? new Date(tripDetails.pickupDate) : undefined}
+                                returnDate={tripDetails.returnDate ? new Date(tripDetails.returnDate) : undefined}
+                                selectedCabBreakdown={fareBreakdown}
                             />
                         </Suspense>
                     </ErrorBoundary>
@@ -166,34 +181,32 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                     {selectedCab && fare !== null && (
                         <BookingSummary
                             selectedCab={selectedCab}
-                            fare={summaryFare}
-                            breakdown={summaryBreakdown}
-                            onEdit={handleBack}
-                            from={tripDetails.from}
-                            to={tripDetails.to}
-                            pickupDate={tripDetails.pickupDate}
-                            pickupTime={tripDetails.pickupTime}
+                            pickupDate={tripDetails.pickupDate ? new Date(tripDetails.pickupDate) : undefined}
+                            returnDate={tripDetails.returnDate ? new Date(tripDetails.returnDate) : undefined}
                             tripType={tripDetails.tripType}
                             tripMode={tripDetails.tripMode}
-                            returnDate={tripDetails.returnDate}
+                            totalPrice={isOutstationRoundTrip && fareBreakdown?.totalFare !== undefined ? fareBreakdown.totalFare : fare}
+                            hourlyPackage={tripDetails.package || ''}
+                            distance={distance}
+                            pickupLocation={null}
+                            dropLocation={null}
                         />
                     )}
                 </div>
             </div>
 
-            {step === 2 && selectedCab && fare !== null && (
+            {step === 2 && selectedCab && fareBreakdown?.totalFare !== undefined && (
                 <GuestDetailsForm
                     onSubmit={handleGuestDetailsSubmit}
                     onBack={handleBack}
-                    totalPrice={fare}
+                    totalPrice={fareBreakdown.totalFare}
                 />
             )}
 
             {step === 3 && selectedCab && tripDetails && guestDetails && fare !== null && (
                 <PaymentGateway
-                    tripDetails={tripDetails}
-                    guestDetails={guestDetails}
-                    totalAmount={fare}
+                    totalAmount={bookNowTotal}
+                    onPaymentComplete={() => {}}
                 />
             )}
         </>
