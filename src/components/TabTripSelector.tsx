@@ -12,13 +12,15 @@ interface TabTripSelectorProps {
   tripMode: 'one-way' | 'round-trip';
   onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
   onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
+  onClearLocations?: () => void;
 }
 
 export function TabTripSelector({ 
   selectedTab, 
   tripMode, 
   onTabChange, 
-  onTripModeChange 
+  onTripModeChange, 
+  onClearLocations
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -151,9 +153,13 @@ export function TabTripSelector({
   
   // Function to handle tab change with debounce
   const handleTabChange = (value: string) => {
-    // Use the less aggressive clearing method
     clearFormState();
     clearCacheData();
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupCoordinates');
+    sessionStorage.removeItem('dropCoordinates');
+    if (onClearLocations) onClearLocations();
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
   };
   
