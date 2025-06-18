@@ -1,3 +1,4 @@
+
 import React, { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { TabTripSelector } from '@/components/TabTripSelector';
@@ -44,6 +45,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
     const [fare, setFare] = useState<number | null>(null);
     const [fareBreakdown, setFareBreakdown] = useState<any>(null);
+    const [bookNowFare, setBookNowFare] = useState<number | null>(null);
 
     let tripType: TripType = (initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation') as TripType;
     if (location.pathname.startsWith('/outstation-taxi')) {
@@ -119,10 +121,12 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
             setSelectedCab(cab);
             setFare(breakdown.totalFare);
             setFareBreakdown(breakdown);
+            setBookNowFare(breakdown.totalFare);
         } else {
             setSelectedCab(cab);
             setFare(calculatedFare);
             setFareBreakdown(breakdown);
+            setBookNowFare(calculatedFare);
         }
         setStep(2);
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -139,11 +143,27 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         }
     };
 
+    // Handle fare updates from BookingSummary for outstation round trips only
+    const handleFinalTotalChange = (newTotal: number) => {
+        // Only update Book Now fare for outstation round trips
+        if (
+            tripDetails.tripType === 'outstation' &&
+            (tripDetails.tripMode === 'round' || tripDetails.tripMode === 'round-trip')
+        ) {
+            setBookNowFare(newTotal);
+        }
+    };
+
     const isOutstationRoundTrip = tripDetails.tripType === 'outstation' && tripDetails.tripMode === 'round-trip';
     const summaryFare = isOutstationRoundTrip && fareBreakdown?.totalFare ? fareBreakdown.totalFare : fare;
     const summaryBreakdown = isOutstationRoundTrip && fareBreakdown ? fareBreakdown : undefined;
 
-    const bookNowTotal = fareBreakdown?.totalFare ?? fare ?? 0;
+    // Use bookNowFare for outstation round trips, otherwise use the original fare
+    const finalBookNowTotal = (
+        tripDetails.tripType === 'outstation' && 
+        (tripDetails.tripMode === 'round' || tripDetails.tripMode === 'round-trip') &&
+        bookNowFare !== null
+    ) ? bookNowFare : (fareBreakdown?.totalFare ?? fare ?? 0);
 
     return (
         <>
@@ -190,22 +210,23 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                             distance={distance}
                             pickupLocation={null}
                             dropLocation={null}
+                            onFinalTotalChange={handleFinalTotalChange}
                         />
                     )}
                 </div>
             </div>
 
-            {step === 2 && selectedCab && fareBreakdown?.totalFare !== undefined && (
+            {step === 2 && selectedCab && fare !== null && (
                 <GuestDetailsForm
                     onSubmit={handleGuestDetailsSubmit}
                     onBack={handleBack}
-                    totalPrice={fareBreakdown.totalFare}
+                    totalPrice={finalBookNowTotal}
                 />
             )}
 
             {step === 3 && selectedCab && tripDetails && guestDetails && fare !== null && (
                 <PaymentGateway
-                    totalAmount={bookNowTotal}
+                    totalAmount={finalBookNowTotal}
                     onPaymentComplete={() => {}}
                 />
             )}
