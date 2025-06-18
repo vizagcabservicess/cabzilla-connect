@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl } from '@/config/api';
 import { directVehicleOperation, formatDataForMultipart, forceRefreshVehicles } from '@/utils/apiHelper';
@@ -81,93 +80,7 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
       throw new Error(data?.message || 'Failed to create vehicle');
     } catch (jsonError) {
       console.error('JSON POST method failed:', jsonError);
-      
-      // Try with FormData approach
-      console.log('Falling back to FormData submission');
-      const formData = formatDataForMultipart(preparedVehicle);
-      
-      const endpoint = `api/admin/direct-vehicle-create.php?_t=${timestamp}`;
-      const url = getApiUrl(endpoint);
-      
-      const formResponse = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true',
-          'X-Admin-Mode': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
-        body: formData
-      });
-      
-      if (!formResponse.ok) {
-        // For 500 status code, try using the simpler debug version as fallback
-        if (formResponse.status === 500) {
-          console.log('Server error 500, trying debug endpoint as fallback');
-          const debugEndpoint = `api/admin/vehicle-create-debug.php?_t=${timestamp}`;
-          const debugUrl = getApiUrl(debugEndpoint);
-          
-          const debugResponse = await fetch(debugUrl, {
-            method: 'POST',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest',
-              'X-Force-Refresh': 'true',
-              'X-Admin-Mode': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
-            },
-            body: formData
-          });
-          
-          if (debugResponse.ok) {
-            const debugResult = await debugResponse.json();
-            console.log('Debug endpoint succeeded:', debugResult);
-            
-            await forceRefreshVehicles();
-            return debugResult.vehicle || preparedVehicle;
-          }
-        }
-        
-        throw new Error(`Server returned ${formResponse.status}: ${formResponse.statusText}`);
-      }
-      
-      const responseText = await formResponse.text();
-      console.log('FormData response text:', responseText);
-      
-      // If we got an empty response but successful status code, create a default response
-      if ((!responseText || responseText.trim() === '') && formResponse.ok) {
-        console.log('Empty but successful response, assuming creation worked');
-        
-        // Force refresh to ensure new vehicle appears in list
-        await forceRefreshVehicles();
-        return preparedVehicle;
-      }
-      
-      let formData2;
-      try {
-        formData2 = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Failed to parse JSON response from FormData:', e);
-        
-        // If status was OK but invalid JSON, assume success anyway
-        if (formResponse.ok) {
-          console.log('Invalid JSON but successful response, assuming creation worked');
-          await forceRefreshVehicles();
-          return preparedVehicle;
-        }
-        
-        throw new Error(`Invalid JSON response: ${responseText}`);
-      }
-      
-      if (formData2 && formData2.status === 'success') {
-        console.log('Vehicle created successfully via form data:', formData2);
-        
-        // Force refresh to ensure new vehicle appears in list
-        await forceRefreshVehicles();
-        
-        return formData2.vehicle || preparedVehicle;
-      }
-      
-      throw new Error(formData2?.message || 'Failed to create vehicle via form data');
+      throw jsonError;
     }
   } catch (error) {
     console.error('Failed to add vehicle:', error);
@@ -206,15 +119,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     console.log('Prepared vehicle data for update:', preparedVehicle);
     
     // Try multiple methods to ensure the update goes through
-    
     // 1. Direct JSON approach
     try {
       const timestamp = Date.now();
       const endpoint = `api/admin/update-vehicle.php?_t=${timestamp}`;
       const url = getApiUrl(endpoint);
-      
       console.log('Trying direct JSON update to:', url);
-      
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -226,16 +136,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         },
         body: JSON.stringify(preparedVehicle)
       });
-      
-      // Check the raw response text first
       const responseText = await response.text();
       console.log('Update vehicle response text:', responseText);
-      
       if (!responseText || responseText.trim() === '') {
         console.warn('Received empty response');
         throw new Error('Received empty response from server');
       }
-      
       let data;
       try {
         data = JSON.parse(responseText);
@@ -243,19 +149,18 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         console.error('Failed to parse JSON response:', e);
         throw new Error(`Invalid JSON response: ${responseText}`);
       }
-      
       if (data && data.status === 'success') {
         console.log('Vehicle updated successfully via JSON:', data);
-        
-        // Force refresh to ensure changes are reflected
-        await forceRefreshVehicles();
-        
+        try {
+          await forceRefreshVehicles();
+        } catch (refreshError) {
+          console.warn('Vehicle updated, but refresh failed:', refreshError);
+        }
         return data.vehicle || preparedVehicle;
       }
     } catch (jsonError) {
       console.error('JSON update failed:', jsonError);
     }
-    
     // 2. Try through our helper function with different endpoint
     try {
       const result = await directVehicleOperation('api/admin/direct-vehicle-modify.php', 'POST', {
@@ -267,74 +172,18 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         },
         data: preparedVehicle
       });
-      
       if (result && result.status === 'success') {
         console.log('Vehicle updated successfully via direct-vehicle-modify:', result);
-        
-        // Force refresh to ensure changes are reflected
-        await forceRefreshVehicles();
-        
+        try {
+          await forceRefreshVehicles();
+        } catch (refreshError) {
+          console.warn('Vehicle updated, but refresh failed:', refreshError);
+        }
         return result.vehicle || preparedVehicle;
       }
     } catch (modifyError) {
       console.error('Modify endpoint failed:', modifyError);
     }
-    
-    // 3. FormData approach as last resort
-    try {
-      const timestamp = Date.now();
-      const formData = formatDataForMultipart(preparedVehicle);
-      const endpoint = `api/admin/direct-vehicle-modify.php?_t=${timestamp}`;
-      const url = getApiUrl(endpoint);
-      
-      console.log('Trying FormData update to:', url);
-      
-      const formResponse = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true',
-          'X-Admin-Mode': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
-        body: formData
-      });
-      
-      const formResponseText = await formResponse.text();
-      console.log('FormData update response:', formResponseText);
-      
-      if (!formResponseText || formResponseText.trim() === '') {
-        // If empty response but status is OK, consider it a success
-        if (formResponse.ok) {
-          console.log('Empty but successful response, assuming update worked');
-          await forceRefreshVehicles();
-          return preparedVehicle;
-        }
-      }
-      
-      let formResult;
-      try {
-        formResult = JSON.parse(formResponseText);
-      } catch (e) {
-        if (formResponse.ok) {
-          // If can't parse but status is OK, consider it a success
-          console.log('Invalid JSON but successful response, assuming update worked');
-          await forceRefreshVehicles();
-          return preparedVehicle;
-        }
-        console.error('Failed to parse JSON from FormData response:', e);
-        throw new Error(`Invalid JSON response: ${formResponseText}`);
-      }
-      
-      if (formResult && formResult.status === 'success') {
-        console.log('Vehicle updated successfully via FormData:', formResult);
-        await forceRefreshVehicles();
-        return formResult.vehicle || preparedVehicle;
-      }
-    } catch (formError) {
-      console.error('FormData update failed:', formError);
-    }
-    
     // If all update attempts failed but we're in preview mode, pretend it worked
     if (window.location.hostname.includes('lovableproject.com') || 
         window.location.hostname.includes('localhost')) {
@@ -342,7 +191,6 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       await forceRefreshVehicles();
       return preparedVehicle;
     }
-    
     throw new Error('All update attempts failed');
   } catch (error) {
     console.error('Failed to update vehicle:', error);
@@ -376,10 +224,11 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
       
       if (data && data.status === 'success') {
         console.log('Vehicle deleted successfully:', data);
-        
-        // Force refresh to ensure deletion is reflected
-        await forceRefreshVehicles();
-        
+        try {
+          await forceRefreshVehicles();
+        } catch (refreshError) {
+          console.warn('Vehicle deleted, but refresh failed:', refreshError);
+        }
         return { status: 'success', message: data.message };
       }
     } catch (deleteError) {
@@ -399,10 +248,11 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
       
       if (result && result.status === 'success') {
         console.log('Vehicle deleted successfully via POST:', result);
-        
-        // Force refresh to ensure deletion is reflected
-        await forceRefreshVehicles();
-        
+        try {
+          await forceRefreshVehicles();
+        } catch (refreshError) {
+          console.warn('Vehicle deleted, but refresh failed:', refreshError);
+        }
         return { status: 'success', message: result.message };
       }
     } catch (postError) {

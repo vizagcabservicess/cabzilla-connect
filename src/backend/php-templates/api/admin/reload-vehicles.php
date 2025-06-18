@@ -1,4 +1,3 @@
-
 <?php
 /**
  * reload-vehicles.php - Reload vehicles from database first, then from persistent storage

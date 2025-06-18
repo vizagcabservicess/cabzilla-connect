@@ -1,4 +1,3 @@
-
 <?php
 // Alias for vehicle-update.php
 // This file simply includes the main vehicle-update.php file for compatibility
@@ -43,6 +42,26 @@ if (!$vehicleData && $_POST) {
     $vehicleData = $_POST;
     file_put_contents($logFile, "[$timestamp] Using POST data instead\n", FILE_APPEND);
 }
+// Robust error handling for missing data
+if (!$vehicleData) {
+    file_put_contents($logFile, "[$timestamp] ERROR: No vehicle data parsed from input or POST\n", FILE_APPEND);
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'No vehicle data provided'
+    ]);
+    exit;
+}
+if (!isset($vehicleData['id']) && !isset($vehicleData['vehicleId']) && !isset($vehicleData['vehicle_id'])) {
+    file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID in data\n", FILE_APPEND);
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Vehicle ID is required'
+    ]);
+    exit;
+}
+file_put_contents($logFile, "[$timestamp] Final VEHICLE_DATA: " . json_encode($vehicleData) . "\n", FILE_APPEND);
 
 // Load the existing vehicle data from persistent storage to avoid data loss
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';

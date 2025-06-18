@@ -82,28 +82,23 @@ export function EditVehicleDialog({
   const handleDirectUpdate = async () => {
     try {
       setIsLoading(true);
-      toast.loading("Attempting direct update via form submission...");
-      
-      // Create FormData for more reliable PHP handling
-      const formData = formatDataForMultipart({
-        ...vehicle,
-        id: vehicle.id || vehicle.vehicleId,
-        vehicleId: vehicle.vehicleId || vehicle.id
-      });
-      
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`, {
+      toast.loading("Attempting direct update via JSON...");
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php?_t=${Date.now()}`, {
         method: 'POST',
-        body: formData,
         headers: {
+          'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-Force-Refresh': 'true',
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
-        }
+        },
+        body: JSON.stringify({
+          ...vehicle,
+          id: vehicle.id || vehicle.vehicleId,
+          vehicleId: vehicle.vehicleId || vehicle.id
+        })
       });
-      
       const text = await response.text();
-      
       if (response.ok) {
         try {
           const data = JSON.parse(text);
@@ -124,8 +119,6 @@ export function EditVehicleDialog({
     } catch (error: any) {
       console.error("Direct update failed:", error);
       toast.error(`Direct update failed: ${error.message}`);
-      
-      // Continue with regular update as fallback
       handleSubmit(new Event('submit') as any);
     } finally {
       setIsLoading(false);

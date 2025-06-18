@@ -174,7 +174,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("siiddsssiddisssss", 
+                    $stmt->bind_param("siiddsssiddissssss", 
                         $name, 
                         $capacity, 
                         $luggageCapacity, 

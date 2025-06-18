@@ -9,8 +9,8 @@ if (file_exists(__DIR__ . '/../../config.php')) {
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh, X-Database-First');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -66,17 +66,12 @@ if (!$vehicleData && !empty($_GET)) {
     $vehicleData = $_GET;
 }
 
-logModifyDebug("Received vehicle modify request", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'data' => $vehicleData
-]);
-
-// Only require vehicle ID or name for actions other than load/list
+// Robust error handling for missing data
 if (!(
     isset($_GET['action']) && in_array($_GET['action'], ['load', 'list']) && $_SERVER['REQUEST_METHOD'] === 'GET'
 )) {
-    // Validate vehicle data
     if (empty($vehicleData)) {
+        logModifyDebug('ERROR: No vehicle data provided');
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
@@ -84,8 +79,6 @@ if (!(
         ]);
         exit;
     }
-
-    // Get vehicle ID (required for updating, optional for new vehicles)
     $vehicleId = null;
     if (isset($vehicleData['id'])) {
         $vehicleId = $vehicleData['id'];
@@ -96,15 +89,12 @@ if (!(
     } elseif (isset($_GET['id'])) {
         $vehicleId = $_GET['id'];
     }
-
-    // For new vehicles without ID, generate one
     if (!$vehicleId && isset($vehicleData['name'])) {
         $vehicleId = strtolower(str_replace(' ', '_', $vehicleData['name']));
         logModifyDebug("Generated vehicle ID from name: $vehicleId");
     }
-
-    // If we still don't have an ID, error out
     if (!$vehicleId) {
+        logModifyDebug('ERROR: Vehicle ID or name is required');
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
@@ -112,6 +102,7 @@ if (!(
         ]);
         exit;
     }
+    logModifyDebug('Final VEHICLE_DATA for operation', $vehicleData);
 }
 
 // Prepare vehicle data for database

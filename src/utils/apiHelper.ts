@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config';
@@ -269,6 +268,16 @@ export const directVehicleOperation = async (endpoint: string, method: string = 
     }
     
     // For real API calls in production
+    let fetchBody = undefined;
+    if (method !== 'GET') {
+      if (options.data) {
+        fetchBody = JSON.stringify(options.data);
+        console.log('Sending payload to', endpoint, options.data);
+      } else if (options.body) {
+        fetchBody = JSON.stringify(options.body);
+        console.log('Sending payload to', endpoint, options.body);
+      }
+    }
     const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
       method: method,
       headers: {
@@ -276,7 +285,7 @@ export const directVehicleOperation = async (endpoint: string, method: string = 
         'Accept': 'application/json',
         ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {})
       },
-      body: method !== 'GET' && options.body ? JSON.stringify(options.body) : undefined,
+      body: fetchBody,
       cache: 'no-store'
     });
 
