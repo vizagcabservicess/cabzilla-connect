@@ -819,11 +819,13 @@ export const BookingSummary = ({
     if (onFinalTotalChange) {
       if (tripType === 'local') {
         onFinalTotalChange(localTotal);
+      } else if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
+        onFinalTotalChange(outstationBreakdown.totalFare);
       } else {
         onFinalTotalChange(sumBreakdown(fareData?.breakdown || {}));
       }
     }
-  }, [localTotal, fareData?.breakdown, tripType, onFinalTotalChange]);
+  }, [localTotal, fareData?.breakdown, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;

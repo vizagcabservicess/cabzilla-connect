@@ -44,6 +44,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
     const [fare, setFare] = useState<number | null>(null);
     const [fareBreakdown, setFareBreakdown] = useState<any>(null);
+    const [bookNowFare, setBookNowFare] = useState<number | null>(null);
 
     let tripType: TripType = (initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation') as TripType;
     if (location.pathname.startsWith('/outstation-taxi')) {
@@ -111,6 +112,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     };
 
     const handleActualCabSelect = (cab: CabType, calculatedFare: number, breakdown?: any) => {
+        setBookNowFare(null);
         if (
             tripDetails.tripType === 'outstation' &&
             tripDetails.tripMode === 'round-trip' &&
@@ -143,7 +145,9 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const summaryFare = isOutstationRoundTrip && fareBreakdown?.totalFare ? fareBreakdown.totalFare : fare;
     const summaryBreakdown = isOutstationRoundTrip && fareBreakdown ? fareBreakdown : undefined;
 
-    const bookNowTotal = fareBreakdown?.totalFare ?? fare ?? 0;
+    const bookNowTotal = isOutstationRoundTrip && bookNowFare !== null
+        ? bookNowFare
+        : fareBreakdown?.totalFare ?? fare ?? 0;
 
     return (
         <>
@@ -190,16 +194,17 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                             distance={distance}
                             pickupLocation={null}
                             dropLocation={null}
+                            onFinalTotalChange={isOutstationRoundTrip ? setBookNowFare : undefined}
                         />
                     )}
                 </div>
             </div>
 
-            {step === 2 && selectedCab && fareBreakdown?.totalFare !== undefined && (
+            {step === 2 && selectedCab && fare !== null && (
                 <GuestDetailsForm
                     onSubmit={handleGuestDetailsSubmit}
                     onBack={handleBack}
-                    totalPrice={fareBreakdown.totalFare}
+                    totalPrice={bookNowTotal}
                 />
             )}
 
