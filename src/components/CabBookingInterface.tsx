@@ -44,6 +44,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
     const [fare, setFare] = useState<number | null>(null);
     const [fareBreakdown, setFareBreakdown] = useState<any>(null);
+    const [bookNowFare, setBookNowFare] = useState<number | null>(null);
 
     let tripType: TripType = (initialTripDetails?.tripType || searchParams.get('tripType') || 'outstation') as TripType;
     if (location.pathname.startsWith('/outstation-taxi')) {
@@ -119,10 +120,12 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
             setSelectedCab(cab);
             setFare(breakdown.totalFare);
             setFareBreakdown(breakdown);
+            setBookNowFare(breakdown.totalFare);
         } else {
             setSelectedCab(cab);
             setFare(calculatedFare);
             setFareBreakdown(breakdown);
+            setBookNowFare(calculatedFare);
         }
         setStep(2);
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -139,11 +142,21 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         }
     };
 
+    const handleFinalTotalChange = (newTotal: number) => {
+        // Only update for outstation round trips
+        if (
+            tripDetails.tripType === 'outstation' &&
+            tripDetails.tripMode === 'round-trip'
+        ) {
+            setBookNowFare(newTotal);
+        }
+    };
+
     const isOutstationRoundTrip = tripDetails.tripType === 'outstation' && tripDetails.tripMode === 'round-trip';
     const summaryFare = isOutstationRoundTrip && fareBreakdown?.totalFare ? fareBreakdown.totalFare : fare;
     const summaryBreakdown = isOutstationRoundTrip && fareBreakdown ? fareBreakdown : undefined;
 
-    const bookNowTotal = fareBreakdown?.totalFare ?? fare ?? 0;
+    const bookNowTotal = bookNowFare ?? fare ?? 0;
 
     return (
         <>
@@ -190,6 +203,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                             distance={distance}
                             pickupLocation={null}
                             dropLocation={null}
+                            onFinalTotalChange={handleFinalTotalChange}
                         />
                     )}
                 </div>
