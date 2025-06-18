@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,7 +44,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       // Apply fare calculation only for outstation round trips
       if (
         tripType === 'outstation' &&
-        (tripMode === 'round' || tripMode === 'round-trip') &&
+        (tripMode === 'round-trip') &&
         pickupDate &&
         returnDate &&
         distance > 0
@@ -82,7 +83,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
     calculateRoundTripFare();
   }, [selectedCab.id, pickupDate, returnDate, distance, tripType, tripMode, totalPrice, onFinalTotalChange]);
 
-  const displayTotal = tripType === 'outstation' && (tripMode === 'round' || tripMode === 'round-trip') 
+  const displayTotal = tripType === 'outstation' && tripMode === 'round-trip' 
     ? calculatedTotal 
     : totalPrice;
 
@@ -128,7 +129,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           <Separator />
 
           {/* Fare Breakdown for Outstation Round Trip */}
-          {tripType === 'outstation' && (tripMode === 'round' || tripMode === 'round-trip') && fareBreakdown && (
+          {tripType === 'outstation' && tripMode === 'round-trip' && fareBreakdown && (
             <div className="space-y-2">
               <h4 className="font-semibold text-gray-900">Fare Breakdown</h4>
               <div className="space-y-1 text-sm">
@@ -170,7 +171,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           )}
 
           {/* Basic fare breakdown for other trip types */}
-          {!(tripType === 'outstation' && (tripMode === 'round' || tripMode === 'round-trip')) && (
+          {!(tripType === 'outstation' && tripMode === 'round-trip') && (
             <div className="space-y-2">
               <div className="flex justify-between text-lg font-semibold">
                 <span>Base fare</span>

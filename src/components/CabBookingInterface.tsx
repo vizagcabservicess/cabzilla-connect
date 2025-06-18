@@ -1,4 +1,3 @@
-
 import React, { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { TabTripSelector } from '@/components/TabTripSelector';
@@ -148,7 +147,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         // Only update Book Now fare for outstation round trips
         if (
             tripDetails.tripType === 'outstation' &&
-            (tripDetails.tripMode === 'round' || tripDetails.tripMode === 'round-trip')
+            tripDetails.tripMode === 'round-trip'
         ) {
             setBookNowFare(newTotal);
         }
@@ -161,7 +160,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
     // Use bookNowFare for outstation round trips, otherwise use the original fare
     const finalBookNowTotal = (
         tripDetails.tripType === 'outstation' && 
-        (tripDetails.tripMode === 'round' || tripDetails.tripMode === 'round-trip') &&
+        tripDetails.tripMode === 'round-trip' &&
         bookNowFare !== null
     ) ? bookNowFare : (fareBreakdown?.totalFare ?? fare ?? 0);
 
