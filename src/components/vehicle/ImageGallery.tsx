@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 
 interface ImageGalleryProps {
@@ -13,25 +14,30 @@ export const ImageGallery = ({ images, vehicleName }: ImageGalleryProps) => {
   const displayImages = images && images.length > 0 ? images : [fallbackImage];
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      <div className="col-span-3">
+    <div className="space-y-4">
+      {/* Main Image */}
+      <div className="w-full">
         <img
           src={selectedImage}
           alt={vehicleName}
-          className="w-full h-64 md:h-80 object-cover rounded-l-lg"
+          className="w-full h-80 md:h-96 object-cover rounded-lg"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.src = fallbackImage;
           }}
         />
       </div>
-      <div className="space-y-2">
-        {displayImages.slice(0, 4).map((img, idx) => (
+      
+      {/* Vertical Thumbnails at Bottom */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {displayImages.slice(0, 6).map((img, idx) => (
           <img
             key={idx}
             src={img}
-            alt={vehicleName}
-            className={`w-full h-20 md:h-[104px] object-cover cursor-pointer rounded ${selectedImage === img ? 'ring-2 ring-blue-500' : ''}`}
+            alt={`${vehicleName} view ${idx + 1}`}
+            className={`w-20 h-20 md:w-24 md:h-24 object-cover cursor-pointer rounded flex-shrink-0 ${
+              selectedImage === img ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-gray-300'
+            }`}
             onClick={() => setSelectedImage(img)}
             onError={(e) => {
               const target = e.target as HTMLImageElement;
@@ -44,4 +50,4 @@ export const ImageGallery = ({ images, vehicleName }: ImageGalleryProps) => {
   );
 };
 
-export default ImageGallery; 
+export default ImageGallery;

@@ -1,135 +1,135 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchVehicleDetails } from '@/services/api/vehicleAPI';
-import { ArrowLeft, Car, Users, Fuel } from 'lucide-react';
+import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import ImageGallery from '@/components/vehicle/ImageGallery';
-import FareSummary from '@/components/vehicle/FareSummary';
+import RateCardPanel from '@/components/vehicle/RateCardPanel';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
 import FeatureChecklist from '@/components/vehicle/FeatureChecklist';
 import RateCard from '@/components/vehicle/RateCard';
 import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
+import { getVehicleData } from '@/services/vehicleDataService';
+import { fareAPI } from '@/services/api/fareAPI';
+
+interface VehicleData {
+  id: string;
+  name: string;
+  capacity: number;
+  fuelType?: string;
+  images?: string[];
+  tags?: string[];
+  overview?: string;
+  specs?: {
+    seatingCapacity?: string;
+    fuelType?: string;
+    transmission?: string;
+    luggage?: string;
+    airConditioning?: string;
+  };
+  inclusions?: string[];
+  exclusions?: string[];
+  features?: string[];
+}
 
 const VehicleDetailPage = () => {
   const { vehicleId } = useParams();
-  const [vehicle, setVehicle] = useState<any>(null);
+  const [vehicle, setVehicle] = useState<VehicleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Mock data for demonstration
-  const mockVehicle = {
-    id: vehicleId,
-    name: "Ertiga",
-    images: [
-      "https://images.unsplash.com/photo-1549399683-cfa5c8b75ee6?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&h=600&fit=crop"
-    ],
-    tags: ["Comfort Ride", "Family Friendly", "AC"],
-    fuelType: "Diesel",
-    capacity: 6,
-    fareSummary: {
-      price: 6500,
-      tour: "Arukahdy Tour",
-      passengers: 6,
-      bags: { large: 2, small: 2 }
-    },
-    overview: "The Ertiga is a versatile MPV with a spacious interior and comfortable seating for six passengers. It's ideal for families, business trips, or small group tours. The vehicle offers excellent fuel efficiency and a smooth ride experience with full air conditioning to keep you comfortable throughout your journey.",
-    specs: {
-      seatingCapacity: "6 Passengers",
-      fuelType: "Diesel", 
-      transmission: "Manual",
-      luggage: "3 Medium Bags",
-      airConditioning: "Full AC"
-    },
-    inclusions: [
-      "Driver", "Fuel", "AC", "Tolls", "Parking", "Driver Food", "Entry Tickets"
-    ],
-    exclusions: [
-      "Personal expenses", "Extra meals", "Additional sightseeing", "Shopping expenses"
-    ],
-    features: [
-      "AC", "Music System", "Charging Point", "Water", "Bottle Water", 
-      "Extra Legroom", "WiFi", "Entertainment System"
-    ],
-    rateCard: [
-      {
-        tripType: "City Tour",
-        baseFare: "₹12/km",
-        distanceIncluded: "Min 80 km",
-        notes: "AC Included, Driver, Parking extra"
-      },
-      {
-        tripType: "Outstation", 
-        baseFare: "₹18/km",
-        distanceIncluded: "Min 300 km",
-        notes: "AC Included, Driver, Night charges apply"
-      },
-      {
-        tripType: "Airport Transfer",
-        baseFare: "₹15/km", 
-        distanceIncluded: "One way",
-        notes: "AC Included, Driver, Tolls included"
-      },
-      {
-        tripType: "Araku Tour",
-        baseFare: "₹6,500",
-        distanceIncluded: "Full day", 
-        notes: "AC, Driver, Fuel, Parking included"
-      }
-    ],
-    similarVehicles: [
-      {
-        id: "honda-amaze",
-        name: "Honda Amaze",
-        capacity: "4 Passengers",
-        price: "₹12/km"
-      },
-      {
-        id: "innova-crysta", 
-        name: "Innova Crysta",
-        capacity: "7 Passengers",
-        price: "₹22/km"
-      },
-      {
-        id: "swift-dzire",
-        name: "Swift Dzire", 
-        capacity: "4 Passengers",
-        price: "₹13/km"
-      }
-    ]
-  };
+  const [similarVehicles, setSimilarVehicles] = useState<any[]>([]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    
-    // Use mock data for now, replace with actual API call when ready
-    setTimeout(() => {
-      setVehicle(mockVehicle);
-      setLoading(false);
-    }, 500);
-    
-    /* 
-    fetchVehicleDetails(vehicleId as string)
-      .then(data => {
-        setVehicle(data);
+    const loadVehicleData = async () => {
+      if (!vehicleId) {
+        setError('Vehicle ID not provided');
         setLoading(false);
-      })
-      .catch(err => {
-        setError('Failed to load vehicle details');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all vehicles from vehicle management
+        const allVehicles = await getVehicleData(true, true); // Force refresh and include inactive
+        
+        // Find the specific vehicle
+        const foundVehicle = allVehicles.find(v => 
+          v.id === vehicleId || 
+          v.vehicle_id === vehicleId ||
+          v.name?.toLowerCase().replace(/\s+/g, '_') === vehicleId
+        );
+
+        if (!foundVehicle) {
+          setError(`Vehicle with ID "${vehicleId}" not found`);
+          setLoading(false);
+          return;
+        }
+
+        // Transform the vehicle data to match our interface
+        const vehicleData: VehicleData = {
+          id: foundVehicle.id || vehicleId,
+          name: foundVehicle.name || 'Unknown Vehicle',
+          capacity: foundVehicle.capacity || 4,
+          fuelType: foundVehicle.fuelType || 'Petrol',
+          images: foundVehicle.images || [
+            "https://images.unsplash.com/photo-1549399683-cfa5c8b75ee6?w=800&h=600&fit=crop",
+            "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=600&fit=crop",
+            "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=800&h=600&fit=crop"
+          ],
+          tags: ['Comfort Ride', 'AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
+          overview: foundVehicle.description || `The ${foundVehicle.name} is a reliable vehicle with comfortable seating for ${foundVehicle.capacity} passengers. Perfect for your travel needs with modern amenities and excellent fuel efficiency.`,
+          specs: {
+            seatingCapacity: `${foundVehicle.capacity} Passengers`,
+            fuelType: foundVehicle.fuelType || 'Petrol',
+            transmission: 'Manual',
+            luggage: `${Math.floor(foundVehicle.capacity / 2)} Medium Bags`,
+            airConditioning: foundVehicle.ac ? 'Full AC' : 'Non-AC'
+          },
+          inclusions: foundVehicle.amenities || [
+            'Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'
+          ],
+          exclusions: [
+            'Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'
+          ],
+          features: foundVehicle.amenities || [
+            foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water'
+          ]
+        };
+
+        setVehicle(vehicleData);
+
+        // Get similar vehicles (exclude current vehicle)
+        const similar = allVehicles
+          .filter(v => v.id !== vehicleId && v.isActive !== false)
+          .slice(0, 3)
+          .map(v => ({
+            id: v.id,
+            name: v.name,
+            capacity: `${v.capacity} Passengers`,
+            price: `₹${v.pricePerKm || 12}/km`,
+            image: v.image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
+          }));
+        
+        setSimilarVehicles(similar);
+
+      } catch (err) {
+        console.error('Error loading vehicle data:', err);
+        setError('Failed to load vehicle details. Please try again.');
+      } finally {
         setLoading(false);
-      });
-    */
+      }
+    };
+
+    loadVehicleData();
   }, [vehicleId]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Car className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">Loading vehicle details...</p>
         </div>
       </div>
@@ -140,6 +140,7 @@ const VehicleDetailPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
+          <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-red-500 mb-4">{error}</p>
           <Link to="/vehicles" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
         </div>
@@ -151,6 +152,7 @@ const VehicleDetailPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
+          <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-4">Vehicle not found</p>
           <Link to="/vehicles" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
         </div>
@@ -174,7 +176,7 @@ const VehicleDetailPage = () => {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
             {/* Image Gallery */}
-            <ImageGallery images={vehicle.images} vehicleName={vehicle.name} />
+            <ImageGallery images={vehicle.images || []} vehicleName={vehicle.name} />
 
             {/* Vehicle Header */}
             <div className="bg-white rounded-xl shadow-sm p-6">
@@ -213,17 +215,15 @@ const VehicleDetailPage = () => {
             <FeatureChecklist features={vehicle.features} />
 
             {/* Rate Card */}
-            <RateCard rates={vehicle.rateCard} />
+            <RateCard />
 
             {/* Similar Vehicles */}
-            <SimilarVehicles vehicles={vehicle.similarVehicles} />
+            <SimilarVehicles vehicles={similarVehicles} />
           </div>
 
-          {/* Sidebar - Fare Summary */}
+          {/* Sidebar - Rate Card Panel */}
           <div className="lg:col-span-1">
-            <div className="sticky top-8">
-              <FareSummary fare={vehicle.fareSummary} />
-            </div>
+            <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
           </div>
         </div>
       </div>
