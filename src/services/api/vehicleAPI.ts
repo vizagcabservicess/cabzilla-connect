@@ -33,3 +33,8 @@ export const vehicleAPI = {
     }
   }
 };
+
+export const fetchVehicleDetails = async (vehicleId: string) => {
+  const { data } = await axios.get(`/api/vehicles/${vehicleId}`);
+  return data;
+};

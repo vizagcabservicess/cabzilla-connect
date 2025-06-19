@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Car, Users, MapPin, CheckCircle, Fuel, Star, Shield } from 'lucide-react';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { Link } from 'react-router-dom';
 
 export function FleetShowcase() {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -124,78 +125,91 @@ export function FleetShowcase() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {filteredVehicles.map((vehicle, index) => (
-              <Card key={vehicle.id || index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-3xl overflow-hidden relative">
-                {/* Vehicle Image Section */}
-                <div className={`relative h-40 md:h-48 bg-gradient-to-br ${getBgGradient(getType(vehicle))} p-6 flex items-center justify-center`}>
-                  <div className="absolute top-4 right-4 flex flex-col gap-2">
-                    <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
-                      <Users className="h-3 w-3 mr-1" />
-                      {getCapacity(vehicle)}
-                    </Badge>
-                    <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
-                      {getCategory(vehicle)}
-                    </Badge>
-                  </div>
-                  {/* Vehicle Image or Icon */}
-                  {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
-                    <img
-                      src={vehicle.image}
-                      alt={vehicle.name}
-                      className="absolute inset-0 w-full h-full object-cover rounded-2xl"
-                      style={{ zIndex: 1 }}
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className="w-20 h-20 md:w-24 md:h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm z-10">
-                      <Car className="h-10 w-10 md:h-12 md:w-12 text-gray-700" />
-                    </div>
-                  )}
-                  <div className="absolute bottom-4 left-4 flex items-center text-gray-700">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    <span className="text-sm font-medium">Visakhapatnam</span>
-                  </div>
-                </div>
-                <CardContent className="p-5 md:p-6">
-                  {/* Vehicle Info */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="text-base font-medium text-gray-900">{vehicle.name}</div>
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+            {filteredVehicles.map((vehicle, index) => {
+              const vehicleSlug = vehicle.id ? vehicle.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
+              return (
+                <Link
+                  key={vehicle.id || index}
+                  to={`/vehicle/${vehicleSlug}`}
+                  style={{ textDecoration: 'none' }}
+                  className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-3xl overflow-hidden relative"
+                >
+                  <Card className="border-0 bg-white rounded-3xl overflow-hidden relative">
+                    {/* Vehicle Image Section */}
+                    <div className={`relative h-40 md:h-48 bg-gradient-to-br ${getBgGradient(getType(vehicle))} p-6 flex items-center justify-center`}>
+                      <div className="absolute top-4 right-4 flex flex-col gap-2">
+                        <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
+                          <Users className="h-3 w-3 mr-1" />
+                          {getCapacity(vehicle)}
+                        </Badge>
+                        <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
+                          {getCategory(vehicle)}
+                        </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{getDescription(vehicle)}</p>
+                      {/* Vehicle Image or Icon */}
+                      {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
+                        <img
+                          src={vehicle.image}
+                          alt={vehicle.name}
+                          className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+                          style={{ zIndex: 1 }}
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-20 h-20 md:w-24 md:h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm z-10">
+                          <Car className="h-10 w-10 md:h-12 md:w-12 text-gray-700" />
+                        </div>
+                      )}
+                      <div className="absolute bottom-4 left-4 flex items-center text-gray-700">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        <span className="text-sm font-medium">Visakhapatnam</span>
+                      </div>
                     </div>
-                  </div>
-                  {/* Pricing */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-blue-50 px-4 py-2 rounded-xl">
-                      <span className="text-base font-medium text-blue-600">{getPrice(vehicle)}</span>
-                      <span className="text-sm text-blue-500 ml-1">/ per KM</span>
-                    </div>
-                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">
-                      {getCategory(vehicle)}
-                    </Badge>
-                  </div>
-                  {/* Features */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {getAmenities(vehicle).map((feature: string, idx: number) => (
-                      <Badge key={idx} variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
-                        {feature}
-                      </Badge>
-                    ))}
-                  </div>
-                  {/* Minimum Booking Info */}
-                  <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">
-                    ℹ️ Minimum 300 km for outstation
-                  </p>
-                  {/* Book Button */}
-                  <Button className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl py-3 font-medium shadow-lg hover:shadow-xl transition-all">
-                    Book Now
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <CardContent className="p-5 md:p-6">
+                      {/* Vehicle Info */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="text-base font-medium text-gray-900">{vehicle.name}</div>
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{getDescription(vehicle)}</p>
+                        </div>
+                      </div>
+                      {/* Pricing */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="bg-blue-50 px-4 py-2 rounded-xl">
+                          <span className="text-base font-medium text-blue-600">{getPrice(vehicle)}</span>
+                          <span className="text-sm text-blue-500 ml-1">/ per KM</span>
+                        </div>
+                        <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">
+                          {getCategory(vehicle)}
+                        </Badge>
+                      </div>
+                      {/* Features */}
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {getAmenities(vehicle).map((feature: string, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
+                            {feature}
+                          </Badge>
+                        ))}
+                      </div>
+                      {/* Minimum Booking Info */}
+                      <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">
+                        ℹ️ Minimum 300 km for outstation
+                      </p>
+                      {/* Book Button */}
+                      <Button
+                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl py-3 font-medium shadow-lg hover:shadow-xl transition-all"
+                        asChild
+                      >
+                        <Link to={`/vehicle/${vehicleSlug}`}>Book Now</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         )}
         {/* Bottom Info */}

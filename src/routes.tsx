@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -56,6 +55,7 @@ import SedanPage from './pages/SedanPage';
 import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
+import VehicleDetailPage from '@/pages/VehicleDetailPage';
 
 const router = createBrowserRouter([
   {
@@ -286,6 +286,10 @@ const router = createBrowserRouter([
   {
     path: '/tempotraveller',
     element: <TempoTravellerPage />,
+  },
+  {
+    path: '/vehicle/:vehicleId',
+    element: <VehicleDetailPage />,
   },
   // Catch-all route for 404s
   {
