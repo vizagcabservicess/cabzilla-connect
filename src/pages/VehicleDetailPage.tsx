@@ -10,6 +10,7 @@ import RateCard from '@/components/vehicle/RateCard';
 import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
 import VehicleTours from '@/components/vehicle/VehicleTours';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 
 interface VehicleData {
   id: string;
@@ -37,6 +38,7 @@ const VehicleDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<any[]>([]);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
   useEffect(() => {
     const loadVehicleData = async () => {
@@ -64,12 +66,17 @@ const VehicleDetailPage = () => {
           return;
         }
 
+        // Load gallery images
+        const gallery = await vehicleGalleryAPI.getVehicleGallery(vehicleId);
+        const imageUrls = gallery.map(img => img.url);
+        setGalleryImages(imageUrls);
+
         const vehicleData: VehicleData = {
           id: foundVehicle.id || vehicleId,
           name: foundVehicle.name,
           capacity: foundVehicle.capacity,
           fuelType: foundVehicle.fuelType,
-          images: foundVehicle.image ? [foundVehicle.image] : [],
+          images: imageUrls.length > 0 ? imageUrls : (foundVehicle.image ? [foundVehicle.image] : []),
           tags: ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
           overview: foundVehicle.description,
           inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
