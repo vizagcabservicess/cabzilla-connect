@@ -9,8 +9,8 @@ import VehicleTabs from '@/components/vehicle/VehicleTabs';
 import FeatureChecklist from '@/components/vehicle/FeatureChecklist';
 import RateCard from '@/components/vehicle/RateCard';
 import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
+import VehicleTours from '@/components/vehicle/VehicleTours';
 import { getVehicleData } from '@/services/vehicleDataService';
-import { fareAPI } from '@/services/api/fareAPI';
 
 interface VehicleData {
   id: string;
@@ -51,10 +51,8 @@ const VehicleDetailPage = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch all vehicles from vehicle management
-        const allVehicles = await getVehicleData(true, true); // Force refresh and include inactive
+        const allVehicles = await getVehicleData(true, true);
         
-        // Find the specific vehicle
         const foundVehicle = allVehicles.find(v => 
           v.id === vehicleId || 
           v.vehicle_id === vehicleId ||
@@ -67,40 +65,28 @@ const VehicleDetailPage = () => {
           return;
         }
 
-        // Transform the vehicle data to match our interface
         const vehicleData: VehicleData = {
           id: foundVehicle.id || vehicleId,
-          name: foundVehicle.name || 'Unknown Vehicle',
-          capacity: foundVehicle.capacity || 4,
-          fuelType: foundVehicle.fuelType || 'Petrol',
-          images: foundVehicle.images || [
-            "https://images.unsplash.com/photo-1549399683-cfa5c8b75ee6?w=800&h=600&fit=crop",
-            "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=600&fit=crop",
-            "https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=800&h=600&fit=crop"
-          ],
-          tags: ['Comfort Ride', 'AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
-          overview: foundVehicle.description || `The ${foundVehicle.name} is a reliable vehicle with comfortable seating for ${foundVehicle.capacity} passengers. Perfect for your travel needs with modern amenities and excellent fuel efficiency.`,
+          name: foundVehicle.name,
+          capacity: foundVehicle.capacity,
+          fuelType: foundVehicle.fuelType,
+          images: foundVehicle.images || foundVehicle.imageUrls || [],
+          tags: foundVehicle.tags || ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
+          overview: foundVehicle.description || foundVehicle.overview,
           specs: {
             seatingCapacity: `${foundVehicle.capacity} Passengers`,
-            fuelType: foundVehicle.fuelType || 'Petrol',
-            transmission: 'Manual',
-            luggage: `${Math.floor(foundVehicle.capacity / 2)} Medium Bags`,
+            fuelType: foundVehicle.fuelType,
+            transmission: foundVehicle.transmission || 'Manual',
+            luggage: foundVehicle.luggageCapacity || `${Math.floor(foundVehicle.capacity / 2)} Medium Bags`,
             airConditioning: foundVehicle.ac ? 'Full AC' : 'Non-AC'
           },
-          inclusions: foundVehicle.amenities || [
-            'Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'
-          ],
-          exclusions: [
-            'Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'
-          ],
-          features: foundVehicle.amenities || [
-            foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water'
-          ]
+          inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
+          exclusions: foundVehicle.exclusions || ['Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'],
+          features: foundVehicle.features || foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water']
         };
 
         setVehicle(vehicleData);
 
-        // Get similar vehicles (exclude current vehicle)
         const similar = allVehicles
           .filter(v => v.id !== vehicleId && v.isActive !== false)
           .slice(0, 3)
@@ -109,7 +95,7 @@ const VehicleDetailPage = () => {
             name: v.name,
             capacity: `${v.capacity} Passengers`,
             price: `₹${v.pricePerKm || 12}/km`,
-            image: v.image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
+            image: v.image || v.imageUrls?.[0] || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
           }));
         
         setSimilarVehicles(similar);
@@ -163,7 +149,6 @@ const VehicleDetailPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Back Navigation */}
         <Link 
           to="/vehicles" 
           className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 transition-colors"
@@ -173,12 +158,9 @@ const VehicleDetailPage = () => {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Image Gallery */}
             <ImageGallery images={vehicle.images || []} vehicleName={vehicle.name} />
 
-            {/* Vehicle Header */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{vehicle.name}</h1>
@@ -203,7 +185,6 @@ const VehicleDetailPage = () => {
               </div>
             </div>
 
-            {/* Tabs Section */}
             <VehicleTabs 
               overview={vehicle.overview} 
               specs={vehicle.specs} 
@@ -211,17 +192,15 @@ const VehicleDetailPage = () => {
               exclusions={vehicle.exclusions}
             />
 
-            {/* Feature Checklist */}
             <FeatureChecklist features={vehicle.features} />
 
-            {/* Rate Card */}
             <RateCard />
 
-            {/* Similar Vehicles */}
+            <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
+
             <SimilarVehicles vehicles={similarVehicles} />
           </div>
 
-          {/* Sidebar - Rate Card Panel */}
           <div className="lg:col-span-1">
             <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
           </div>
