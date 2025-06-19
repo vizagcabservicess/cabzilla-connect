@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { fleetAPI } from '@/services/api/fleetAPI';
-import { VehicleGalleryManager } from './VehicleGalleryManager';
 
 interface AddVehicleDialogProps {
   open: boolean;
@@ -194,7 +194,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add New Vehicle</DialogTitle>
           <DialogDescription>
@@ -229,9 +229,8 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="gallery">Gallery</TabsTrigger>
               <TabsTrigger value="fleet">Fleet Details</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
             </TabsList>
@@ -346,21 +345,6 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                   <Label htmlFor="isActive">Active</Label>
                 </div>
               </div>
-            </TabsContent>
-
-            <TabsContent value="gallery" className="space-y-4 pt-4">
-              {formData.vehicleId ? (
-                <VehicleGalleryManager 
-                  vehicleId={formData.vehicleId}
-                  onGalleryUpdate={(images) => {
-                    console.log('Gallery updated for new vehicle:', images);
-                  }}
-                />
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <p>Please enter a Vehicle ID in Basic Info to manage gallery images.</p>
-                </div>
-              )}
             </TabsContent>
 
             <TabsContent value="fleet" className="space-y-4 pt-4">

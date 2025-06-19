@@ -1,315 +1,561 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { Driver, DriverStatus } from '@/types/api';
-import { VehicleGalleryManager } from './VehicleGalleryManager';
+import { CabType } from "@/types/cab";
+import { updateVehicle } from "@/services/directVehicleService";
+import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
+import { fixDatabaseTables, formatDataForMultipart } from '@/utils/apiHelper';
+import { apiBaseUrl } from '@/config/api';
 
-interface EditDriverDialogProps {
-  isOpen: boolean;
+interface EditVehicleDialogProps {
+  open: boolean;
   onClose: () => void;
-  onSubmit: (data: Partial<Driver>) => Promise<void>;
-  driver: Driver;
-  isSubmitting: boolean;
+  onEditVehicle: (vehicle: CabType) => void;
+  vehicle: CabType;
 }
 
-export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitting }: EditDriverDialogProps) {
-  // Initial driver data state with all required fields
-  const [formData, setFormData] = useState<Partial<Driver>>({
-    name: '',
-    phone: '',
-    email: '',
-    license_no: '', // Use license_no consistently
-    vehicle: '',
-    vehicle_id: '',
-    status: 'available',
-    location: ''
-  });
-  
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  
-  // Initialize form data with driver details only when dialog opens or driver changes
+export function EditVehicleDialog({
+  open,
+  onClose,
+  onEditVehicle,
+  vehicle: initialVehicle
+}: EditVehicleDialogProps) {
+  const [vehicle, setVehicle] = useState<CabType>(initialVehicle);
+  const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [inclusionsText, setInclusionsText] = useState('');
+  const [exclusionsText, setExclusionsText] = useState('');
+
   useEffect(() => {
-    if (isOpen && driver) {
-      console.log("Initializing form with driver data:", driver);
-      // Ensure we're using license_no consistently
-      const licenseNo = driver.license_no || '';
+    if (initialVehicle && open) {
+      console.log('Initial vehicle data received:', initialVehicle);
       
-      setFormData({
-        name: driver.name || '',
-        phone: driver.phone || '',
-        email: driver.email || '',
-        license_no: licenseNo, // Always use license_no field
-        vehicle: driver.vehicle || '',
-        vehicle_id: driver.vehicle_id || '',
-        status: (['available', 'busy', 'offline'].includes(driver.status as DriverStatus) 
-                ? driver.status 
-                : 'available') as DriverStatus,
-        location: driver.location || ''
+      const numCapacity = parseNumericValue(initialVehicle.capacity, 4);
+      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity, 2);
+      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price, 0);
+      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm, 0);
+      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance, 250);
+      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge, 700);
+      
+      const vehicleAmenities = parseAmenities(initialVehicle.amenities);
+      
+      console.log('Parsed numeric values:');
+      console.log('- capacity:', initialVehicle.capacity, '->', numCapacity);
+      console.log('- luggageCapacity:', initialVehicle.luggageCapacity, '->', numLuggageCapacity);
+      console.log('- basePrice:', initialVehicle.basePrice, '->', numBasePrice);
+      console.log('- price per km:', initialVehicle.pricePerKm, '->', numPricePerKm);
+      console.log('- nightHaltCharge:', initialVehicle.nightHaltCharge, '->', numNightHaltCharge);
+      console.log('- driverAllowance:', initialVehicle.driverAllowance, '->', numDriverAllowance);
+      
+      setServerError(null);
+      
+      setVehicle({
+        ...initialVehicle,
+        capacity: numCapacity,
+        luggageCapacity: numLuggageCapacity,
+        basePrice: numBasePrice,
+        price: numBasePrice,
+        pricePerKm: numPricePerKm,
+        driverAllowance: numDriverAllowance,
+        nightHaltCharge: numNightHaltCharge,
+        amenities: vehicleAmenities
       });
-      setFormErrors({});
+      
+      setInclusionsText(Array.isArray(initialVehicle.inclusions) ? initialVehicle.inclusions.join(', ') : (initialVehicle.inclusions || ''));
+      setExclusionsText(Array.isArray(initialVehicle.exclusions) ? initialVehicle.exclusions.join(', ') : (initialVehicle.exclusions || ''));
+      
+      setIsInitialized(true);
     }
-  }, [isOpen, driver]);
-  
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    
-    if (!formData.name?.trim()) {
-      errors.name = 'Name is required';
+  }, [initialVehicle, open]);
+
+  const handleDirectUpdate = async () => {
+    try {
+      setIsLoading(true);
+      toast.loading("Attempting direct update via JSON...");
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+        body: JSON.stringify({
+          ...vehicle,
+          id: vehicle.id || vehicle.vehicleId,
+          vehicleId: vehicle.vehicleId || vehicle.id
+        })
+      });
+      const text = await response.text();
+      if (response.ok) {
+        try {
+          const data = JSON.parse(text);
+          if (data.status === 'success') {
+            toast.success(`Vehicle ${vehicle.name} updated successfully`);
+            onEditVehicle(vehicle);
+            onClose();
+          } else {
+            throw new Error(data.message || 'Unknown error');
+          }
+        } catch (e) {
+          console.error('Failed to parse response:', e, text);
+          throw new Error('Invalid server response format');
+        }
+      } else {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+    } catch (error: any) {
+      console.error("Direct update failed:", error);
+      toast.error(`Direct update failed: ${error.message}`);
+      handleSubmit(new Event('submit') as any);
+    } finally {
+      setIsLoading(false);
     }
-    
-    if (!formData.phone?.trim()) {
-      errors.phone = 'Phone number is required';
-    } else if (!/^[0-9]{10}$/.test(formData.phone)) {
-      errors.phone = 'Phone number must be 10 digits';
-    }
-    
-    if (!formData.email?.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Invalid email format';
-    }
-    
-    if (!formData.license_no?.trim()) {
-      errors.license_no = 'License number is required';
-    }
-    
-    if (!formData.status || !['available', 'busy', 'offline'].includes(formData.status)) {
-      errors.status = 'Status must be Available, Busy, or Offline';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
   };
-  
+
+  const fixDatabase = async () => {
+    try {
+      setIsLoading(true);
+      toast.loading("Attempting to fix database tables...");
+      
+      const success = await fixDatabaseTables();
+      
+      if (success) {
+        toast.success("Database tables fixed successfully");
+        handleSubmit(new Event('submit') as any);
+      } else {
+        toast.error("Failed to fix database tables");
+        setServerError("Database fix failed. Please try again or contact support.");
+      }
+    } catch (error) {
+      console.error("Error fixing database:", error);
+      toast.error("Error fixing database tables");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting driver data:", formData);
-    
-    if (!validateForm()) {
-      toast.error("Please fix form errors before submitting");
-      return;
-    }
+    setIsLoading(true);
+    setServerError(null);
     
     try {
-      const payload = {
-        ...formData,
-        id: driver.id
+      console.log('Submitting vehicle data:', vehicle);
+
+      const updatedVehicle: CabType = {
+        ...vehicle,
+        inclusions: inclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
+        exclusions: exclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
+        capacity: Number(vehicle.capacity),
+        luggageCapacity: Number(vehicle.luggageCapacity),
+        basePrice: Number(vehicle.basePrice || 0),
+        price: Number(vehicle.basePrice || 0),
+        pricePerKm: Number(vehicle.pricePerKm || 0),
+        nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+        driverAllowance: Number(vehicle.driverAllowance || 250)
       };
       
-      // Ensure we're using consistent field name for license
-      if (!payload.license_no) {
-        toast.error("License number is required");
-        setFormErrors(prev => ({...prev, license_no: 'License number is required'}));
-        return;
+      console.log("Prepared vehicle data for update:", updatedVehicle);
+      
+      const maxRetries = 3;
+      let attempt = 0;
+      let success = false;
+      let lastError: any = null;
+      
+      while (attempt < maxRetries && !success) {
+        try {
+          if (attempt > 0) {
+            const delay = 1000 * (attempt) + Math.random() * 500;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            toast.loading(`Update attempt ${attempt + 1}/${maxRetries}...`);
+          }
+          
+          console.log(`Update attempt ${attempt + 1}/${maxRetries} for vehicle ${vehicle.id}`);
+          const response = await updateVehicle(updatedVehicle);
+          console.log("Vehicle update API response:", response);
+          success = true;
+          
+          toast.success(`Vehicle ${vehicle.name} updated successfully`);
+          onEditVehicle(updatedVehicle);
+          onClose();
+          return; // Exit on success
+        } catch (error: any) {
+          attempt++;
+          lastError = error;
+          console.error(`Update attempt ${attempt} failed:`, error);
+          
+          if (error.message && (error.message.includes('404') || error.response?.status === 404)) {
+            console.error("404 error detected - API endpoint not found");
+            setServerError(`API endpoint not found (404): The vehicle update endpoint could not be found on the server.`);
+            break; // Don't retry 404 errors
+          }
+          
+          if (error.message && (error.message.includes('500') || error.response?.status === 500)) {
+            console.error("500 error detected - Internal server error");
+            setServerError(`Database Error: The server encountered an issue processing your request. This might be due to database connectivity or server maintenance.`);
+            
+            // Keep retrying, but with a little more delay
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+          
+          if (attempt >= maxRetries) {
+            throw error; // Rethrow after max retries
+          }
+        }
       }
       
-      // Ensure status is valid
-      if (!payload.status || !['available', 'busy', 'offline'].includes(payload.status)) {
-        toast.error("Status must be Available, Busy, or Offline");
-        setFormErrors(prev => ({...prev, status: 'Invalid status value'}));
-        return;
+      if (lastError && !success) throw lastError;
+      
+    } catch (error: any) {
+      console.error("Error updating vehicle:", error);
+      
+      const errorMessage = error.response?.data?.message || error.message || "Unknown error";
+      
+      if (errorMessage.includes('500')) {
+        setServerError(`Failed to update vehicle: Internal Server Error (500). The server encountered an issue processing your request.`);
+      } else {
+        setServerError(`Failed to update vehicle: ${errorMessage}`);
       }
       
-      // Log the payload for debugging
-      console.log("API payload to be sent:", payload);
-      await onSubmit(payload);
-    } catch (error) {
-      console.error("Error in EditDriverDialog.handleSubmit:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to update driver");
+      toast.error(`Failed to update vehicle: ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
-    }
+
+  const handleRetry = () => {
+    setServerError(null);
+    handleSubmit(new Event('submit') as any);
   };
-  
-  const handleStatusChange = (value: string) => {
-    if (!['available', 'busy', 'offline'].includes(value)) {
-      setFormErrors(prev => ({ ...prev, status: 'Invalid status value' }));
-      return;
-    }
-    
-    setFormData(prev => ({ ...prev, status: value as DriverStatus }));
-    if (formErrors.status) {
-      setFormErrors(prev => ({ ...prev, status: '' }));
-    }
-  };
-  
-  const handleClose = () => {
-    // Reset form when closing
-    setFormData({
-      name: '',
-      phone: '',
-      email: '',
-      license_no: '',
-      vehicle: '',
-      vehicle_id: '',
-      status: 'available',
-      location: ''
-    });
-    setFormErrors({});
-    onClose();
-  };
-  
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Edit Driver</DialogTitle>
-          <DialogDescription>
-            Update the driver's information below.
-          </DialogDescription>
+          <DialogTitle>Edit Vehicle</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Driver Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className={formErrors.name ? "border-red-500" : ""}
-                />
-                {formErrors.name && (
-                  <p className="text-xs text-red-500">{formErrors.name}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className={formErrors.phone ? "border-red-500" : ""}
-                />
-                {formErrors.phone && (
-                  <p className="text-xs text-red-500">{formErrors.phone}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email || ''}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className={formErrors.email ? "border-red-500" : ""}
-                />
-                {formErrors.email && (
-                  <p className="text-xs text-red-500">{formErrors.email}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="license_no">License Number</Label>
-                <Input
-                  id="license_no"
-                  name="license_no"
-                  value={formData.license_no}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                  className={formErrors.license_no ? "border-red-500" : ""}
-                />
-                {formErrors.license_no && (
-                  <p className="text-xs text-red-500">{formErrors.license_no}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="vehicle">Vehicle</Label>
-                <Input
-                  id="vehicle"
-                  name="vehicle"
-                  value={formData.vehicle || ''}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="vehicle_id">Vehicle ID</Label>
-                <Input
-                  id="vehicle_id"
-                  name="vehicle_id"
-                  value={formData.vehicle_id || ''}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formData.status as string}
-                  onValueChange={handleStatusChange}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger className={formErrors.status ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="busy">Busy</SelectItem>
-                    <SelectItem value="offline">Offline</SelectItem>
-                  </SelectContent>
-                </Select>
-                {formErrors.status && (
-                  <p className="text-xs text-red-500">{formErrors.status}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  name="location"
-                  value={formData.location || ''}
-                  onChange={handleChange}
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              {/* Vehicle Gallery Section */}
-              {driver.vehicle_id && (
-                <div className="space-y-2">
-                  <VehicleGalleryManager 
-                    vehicleId={driver.vehicle_id}
-                    onGalleryUpdate={(images) => {
-                      console.log('Gallery updated:', images);
-                    }}
-                  />
-                </div>
-              )}
+        
+        {serverError && (
+          <FareUpdateError 
+            error={new Error(serverError)}
+            onRetry={handleRetry}
+            isAdmin={true}
+            title="Database Error"
+            description="There was an issue connecting to the database. This could be due to a temporary network issue or server maintenance."
+            fixDatabaseHandler={fixDatabase}
+            directDatabaseAccess={handleDirectUpdate}
+          />
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto px-1 py-2" style={{ maxHeight: "calc(80vh - 120px)" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="id">Vehicle ID</Label>
+              <Input
+                id="id"
+                name="id"
+                value={vehicle.id || ''}
+                onChange={(e) => setVehicle({ ...vehicle, id: e.target.value })}
+                disabled
+              />
+              <p className="text-xs text-muted-foreground">Vehicle ID cannot be changed</p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="name">Vehicle Name</Label>
+              <Input
+                id="name"
+                name="name"
+                value={vehicle.name || ''}
+                onChange={(e) => setVehicle({ ...vehicle, name: e.target.value })}
+                required
+              />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="capacity">Seating Capacity</Label>
+              <Input
+                id="capacity"
+                name="capacity"
+                type="number"
+                min={1}
+                value={vehicle.capacity || 4}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setVehicle({ 
+                    ...vehicle, 
+                    capacity: isNaN(value) ? 4 : value 
+                  });
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="luggageCapacity">Luggage Capacity</Label>
+              <Input
+                id="luggageCapacity"
+                name="luggageCapacity"
+                type="number"
+                min={0}
+                value={vehicle.luggageCapacity || 2}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setVehicle({ 
+                    ...vehicle, 
+                    luggageCapacity: isNaN(value) ? 2 : value
+                  });
+                }}
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="basePrice">Base Price</Label>
+              <Input
+                id="basePrice"
+                name="basePrice"
+                type="number"
+                min={0}
+                step={100}
+                value={vehicle.basePrice || 0}
+                onChange={(e) => {
+                  const basePrice = parseFloat(e.target.value) || 0;
+                  setVehicle({ 
+                    ...vehicle, 
+                    basePrice: basePrice,
+                    price: basePrice  // Keep price synchronized
+                  });
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="pricePerKm">Price Per KM</Label>
+              <Input
+                id="pricePerKm"
+                name="pricePerKm"
+                type="number"
+                min={0}
+                step={0.5}
+                value={vehicle.pricePerKm || 0}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    pricePerKm: isNaN(value) ? 0 : value 
+                  });
+                }}
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="driverAllowance">Driver Allowance</Label>
+              <Input
+                id="driverAllowance"
+                name="driverAllowance"
+                type="number"
+                min={0}
+                step={50}
+                value={vehicle.driverAllowance || 250}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    driverAllowance: isNaN(value) ? 250 : value 
+                  });
+                }}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="nightHaltCharge">Night Halt Charge</Label>
+              <Input
+                id="nightHaltCharge"
+                name="nightHaltCharge"
+                type="number"
+                min={0}
+                step={50}
+                value={vehicle.nightHaltCharge || 700}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    nightHaltCharge: isNaN(value) ? 700 : value 
+                  });
+                }}
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="image">Image URL</Label>
+            <Input
+              id="image"
+              name="image"
+              value={vehicle.image || ''}
+              onChange={(e) => setVehicle({ ...vehicle, image: e.target.value })}
+              placeholder="/cars/vehicle-name.png"
+            />
+            <p className="text-xs text-muted-foreground">Path to vehicle image (e.g., /cars/sedan.png)</p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Amenities</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {amenitiesList.map((amenity) => (
+                <div key={amenity} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`amenity-${amenity}`}
+                    checked={(vehicle.amenities || []).includes(amenity)}
+                    onCheckedChange={(checked) => {
+                      const currentAmenities = Array.isArray(vehicle.amenities) 
+                        ? [...vehicle.amenities] 
+                        : [];
+                      
+                      const newAmenities = checked
+                        ? [...currentAmenities, amenity]
+                        : currentAmenities.filter((a) => a !== amenity);
+                      
+                      setVehicle({ ...vehicle, amenities: newAmenities });
+                    }}
+                  />
+                  <label
+                    htmlFor={`amenity-${amenity}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {amenity}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              value={vehicle.description || ''}
+              onChange={(e) => setVehicle({ ...vehicle, description: e.target.value })}
+              placeholder="Enter vehicle description"
+              rows={3}
+            />
+          </div>
+          
+          <div className="mt-4">
+            <Label htmlFor="inclusions">Inclusions</Label>
+            <Textarea
+              id="inclusions"
+              value={inclusionsText}
+              onChange={e => setInclusionsText(e.target.value)}
+              placeholder="e.g., AC, Bottle Water, Music System"
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="exclusions">Exclusions</Label>
+            <Textarea
+              id="exclusions"
+              value={exclusionsText}
+              onChange={e => setExclusionsText(e.target.value)}
+              placeholder="e.g., Toll, Parking, State Tax"
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
+            <Textarea
+              id="cancellationPolicy"
+              value={vehicle.cancellationPolicy || ''}
+              onChange={e => setVehicle(v => ({ ...v, cancellationPolicy: e.target.value }))}
+              placeholder="e.g., Free cancellation up to 1 hour before pickup."
+              className="mt-1"
+            />
+          </div>
+          <div className="mt-2">
+            <Label htmlFor="fuelType">Fuel Type</Label>
+            <select
+              id="fuelType"
+              className="w-full border rounded px-2 py-1 mt-1"
+              value={vehicle.fuelType || ''}
+              onChange={e => setVehicle(v => ({ ...v, fuelType: e.target.value }))}
+            >
+              <option value="">Select fuel type</option>
+              <option value="Petrol">Petrol</option>
+              <option value="Diesel">Diesel</option>
+              <option value="CNG">CNG</option>
+              <option value="Electric">Electric</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="ac-toggle"
+                checked={vehicle.ac !== false}
+                onCheckedChange={(checked) => setVehicle({ ...vehicle, ac: checked })}
+              />
+              <Label htmlFor="ac-toggle">Vehicle has AC</Label>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="active-toggle"
+                checked={vehicle.isActive !== false}
+                onCheckedChange={(checked) => setVehicle({ ...vehicle, isActive: checked })}
+              />
+              <Label htmlFor="active-toggle">Vehicle is Active</Label>
+            </div>
+          </div>
+          
+          <DialogFooter className="mt-4 pt-2 border-t">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={isSubmitting}
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleDirectUpdate}
+              disabled={isLoading}
+              className="mr-2"
             >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Direct Update"
+              )}
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
           </DialogFooter>
         </form>
@@ -317,3 +563,15 @@ export function EditDriverDialog({ isOpen, onClose, onSubmit, driver, isSubmitti
     </Dialog>
   );
 }
+
+const amenitiesList = [
+  "AC",
+  "Bottle Water",
+  "Music System",
+  "Extra Legroom",
+  "Charging Point",
+  "WiFi",
+  "Premium Amenities",
+  "Entertainment System",
+  "Refrigerator",
+];
