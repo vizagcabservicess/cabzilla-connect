@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
@@ -55,7 +54,7 @@ const VehicleDetailPage = () => {
         
         const foundVehicle = allVehicles.find(v => 
           v.id === vehicleId || 
-          v.vehicle_id === vehicleId ||
+          v.vehicleId === vehicleId ||
           v.name?.toLowerCase().replace(/\s+/g, '_') === vehicleId
         );
 
@@ -70,19 +69,12 @@ const VehicleDetailPage = () => {
           name: foundVehicle.name,
           capacity: foundVehicle.capacity,
           fuelType: foundVehicle.fuelType,
-          images: foundVehicle.images || foundVehicle.imageUrls || [],
-          tags: foundVehicle.tags || ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
-          overview: foundVehicle.description || foundVehicle.overview,
-          specs: {
-            seatingCapacity: `${foundVehicle.capacity} Passengers`,
-            fuelType: foundVehicle.fuelType,
-            transmission: foundVehicle.transmission || 'Manual',
-            luggage: foundVehicle.luggageCapacity || `${Math.floor(foundVehicle.capacity / 2)} Medium Bags`,
-            airConditioning: foundVehicle.ac ? 'Full AC' : 'Non-AC'
-          },
+          images: foundVehicle.image ? [foundVehicle.image] : [],
+          tags: ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
+          overview: foundVehicle.description,
           inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
           exclusions: foundVehicle.exclusions || ['Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'],
-          features: foundVehicle.features || foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water']
+          features: foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water']
         };
 
         setVehicle(vehicleData);
@@ -95,7 +87,7 @@ const VehicleDetailPage = () => {
             name: v.name,
             capacity: `${v.capacity} Passengers`,
             price: `₹${v.pricePerKm || 12}/km`,
-            image: v.image || v.imageUrls?.[0] || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
+            image: v.image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
           }));
         
         setSimilarVehicles(similar);
@@ -187,14 +179,13 @@ const VehicleDetailPage = () => {
 
             <VehicleTabs 
               overview={vehicle.overview} 
-              specs={vehicle.specs} 
               inclusions={vehicle.inclusions}
               exclusions={vehicle.exclusions}
             />
 
-            <FeatureChecklist features={vehicle.features} />
-
             <RateCard />
+
+            <FeatureChecklist features={vehicle.features} />
 
             <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
 

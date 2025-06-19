@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,10 +45,9 @@ const VehicleTabs: React.FC<VehicleTabsProps> = ({
     <Card className="mb-8">
       <CardContent className="p-6">
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="specs">Vehicle Specs</TabsTrigger>
-            <TabsTrigger value="inclusions">Inclusions & Exclusions</TabsTrigger>
+          <TabsList className="flex w-full flex-nowrap overflow-x-auto gap-2 p-1 bg-gray-50 rounded-lg mb-4">
+            <TabsTrigger value="overview" className="whitespace-nowrap">Overview</TabsTrigger>
+            <TabsTrigger value="inclusions" className="whitespace-nowrap">Inclusions & Exclusions</TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview" className="mt-6">
