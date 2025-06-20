@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -196,13 +195,27 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   const handleBooking = () => {
     if (!selectedRate) return;
     
-    let bookingUrl = `/book?vehicle=${vehicleId}`;
+    // Build the booking URL with proper tab-based routing
+    let bookingUrl = '/book';
+    const params = new URLSearchParams();
     
+    // Add vehicle parameter
+    params.append('vehicle', vehicleId);
+    
+    // Determine the correct tab based on booking type
     if (selectedRate.bookingType === 'tour' && selectedRate.tourId) {
-      bookingUrl += `&type=tour&id=${selectedRate.tourId}`;
-    } else if (selectedRate.bookingType) {
-      bookingUrl += `&type=${selectedRate.bookingType}`;
+      params.append('tab', 'tour');
+      params.append('id', selectedRate.tourId);
+    } else if (selectedRate.bookingType === 'outstation') {
+      params.append('tab', 'outstation');
+    } else if (selectedRate.bookingType === 'airport') {
+      params.append('tab', 'airport');
+    } else {
+      // Default to local for city tours and other local trips
+      params.append('tab', 'local');
     }
+    
+    bookingUrl += '?' + params.toString();
     
     console.log('Navigating to:', bookingUrl);
     navigate(bookingUrl);
