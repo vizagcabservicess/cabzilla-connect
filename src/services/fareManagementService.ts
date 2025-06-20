@@ -125,12 +125,9 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
     params._t = Date.now().toString();
     params._cb = Math.random().toString(36).substring(2, 15); // Add cache buster
 
-    const response = await axios.get(getApiUrl('api/admin/direct-airport-fares'), {
+    const response = await axios.get(getApiUrl('api/direct-airport-fares.php'), {
       params,
       headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0'
@@ -324,12 +321,10 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
     // Add timestamp to bust cache
     params._t = Date.now().toString();
 
-    const response = await axios.get(getApiUrl('api/admin/direct-local-fares'), {
+    const response = await axios.get(getApiUrl('api/direct-local-fares.php'), {
       params,
       headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
+        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
       }
     });
 

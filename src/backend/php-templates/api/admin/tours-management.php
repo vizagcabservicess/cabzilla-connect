@@ -47,6 +47,55 @@ if (
     exit;
 }
 
+// --- PUBLIC TOUR LIST ENDPOINT ---
+// This block is now before the admin check to allow public fetching of all tours.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId'])) {
+    try {
+        $db_conn = getDbConnection();
+        if (!$db_conn) {
+            sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+            exit;
+        }
+        
+        $tour_stmt = $db_conn->prepare("SELECT id, tour_id, tour_name, distance, days, description, image_url, time_duration FROM tour_fares ORDER BY tour_name");
+        $tour_stmt->execute();
+        $tour_result = $tour_stmt->get_result();
+
+        $all_tours = [];
+        while ($tour_row = $tour_result->fetch_assoc()) {
+            $current_tour = [
+                'id' => intval($tour_row['id']),
+                'tourId' => $tour_row['tour_id'],
+                'tourName' => $tour_row['tour_name'],
+                'distance' => intval($tour_row['distance']),
+                'days' => intval($tour_row['days']),
+                'description' => $tour_row['description'] ?? '',
+                'imageUrl' => $tour_row['image_url'] ?? '',
+                'timeDuration' => $tour_row['time_duration'] ?? '',
+                'pricing' => []
+            ];
+            
+            $pricing_stmt = $db_conn->prepare("SELECT vehicle_id, price FROM tour_fare_rates WHERE tour_id = ?");
+            $pricing_stmt->bind_param("s", $tour_row['tour_id']);
+            $pricing_stmt->execute();
+            $pricing_result = $pricing_stmt->get_result();
+            $tour_pricing = [];
+            while ($pricing_row = $pricing_result->fetch_assoc()) {
+                $tour_pricing[$pricing_row['vehicle_id']] = floatval($pricing_row['price']);
+            }
+            $current_tour['pricing'] = $tour_pricing;
+            
+            $all_tours[] = $current_tour;
+        }
+
+        sendJsonResponse(['status' => 'success', 'data' => $all_tours]);
+    } catch (Exception $e) {
+        logError("Public tour fetch failed", ['error' => $e->getMessage()]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Failed to fetch public tour data.'], 500);
+    }
+    exit;
+}
+
 // Check authentication and admin role
 $headers = getallheaders();
 $isAdmin = false;
@@ -182,7 +231,7 @@ try {
             sendJsonResponse(['status' => 'success', 'data' => $tour]);
             exit;
         } else {
-            // Fetch all tours
+            // This block is for fetching all tours within the admin context, which might have different requirements (e.g., include inactive tours)
             $stmt = $conn->prepare("SELECT * FROM tour_fares ORDER BY tour_name");
             $stmt->execute();
             $result = $stmt->get_result();

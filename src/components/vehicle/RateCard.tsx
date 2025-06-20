@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -12,8 +11,8 @@ interface RateCardProps {
 interface FareRow {
   tripType: string;
   baseFare: string;
-  distanceIncluded: string;
-  notes: string;
+  distance: string;
+  duration: string;
 }
 
 const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
@@ -35,14 +34,22 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
           ]);
 
           // Add local fares
-          if (localFares.length > 0) {
-            const localFare = localFares[0];
-            if (localFare.price4hrs40km && localFare.price4hrs40km > 0) {
+          if (localFares.length > 0 && vehicleId) {
+            const localFare = localFares.find(f => f.vehicle_id === vehicleId);
+            if (localFare && localFare.price_4hrs_40km && parseFloat(localFare.price_4hrs_40km) > 0) {
               fareRows.push({
-                tripType: "City Tour",
-                baseFare: `₹${localFare.pricePerKm || 12}/km`,
-                distanceIncluded: "Min 80 km",
-                notes: "AC Included, Driver, Parking extra"
+                tripType: "City Tour (4hr/40km)",
+                baseFare: `₹${parseFloat(localFare.price_4hrs_40km).toFixed(0)}`,
+                distance: `Extra @ ₹${parseFloat(localFare.price_extra_km).toFixed(0)}/km`,
+                duration: `Extra @ ₹${parseFloat(localFare.price_extra_hour).toFixed(0)}/hr`
+              });
+            }
+            if (localFare && localFare.price_8hrs_80km && parseFloat(localFare.price_8hrs_80km) > 0) {
+              fareRows.push({
+                tripType: "City Tour (8hr/80km)",
+                baseFare: `₹${parseFloat(localFare.price_8hrs_80km).toFixed(0)}`,
+                distance: `Extra @ ₹${parseFloat(localFare.price_extra_km).toFixed(0)}/km`,
+                duration: `Extra @ ₹${parseFloat(localFare.price_extra_hour).toFixed(0)}/hr`
               });
             }
           }
@@ -58,8 +65,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                   fareRows.push({
                     tripType: "Outstation",
                     baseFare: `₹${vehicleData.pricing.outstation.pricePerKm}/km`,
-                    distanceIncluded: "Min 300 km",
-                    notes: "AC Included, Driver, Night charges apply"
+                    distance: "Min 300 km",
+                    duration: "Per Day"
                   });
                 }
               }
@@ -76,8 +83,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
               fareRows.push({
                 tripType: "Airport Transfer",
                 baseFare: `₹${airportPrice}`,
-                distanceIncluded: "One way",
-                notes: "AC Included, Driver, Tolls included"
+                distance: "One way",
+                duration: "N/A"
               });
             }
           }
@@ -88,11 +95,20 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
               if (tour.pricing && tour.pricing[vehicleId]) {
                 const tourPrice = tour.pricing[vehicleId];
                 if (tourPrice > 0) {
+                  let durationText = 'N/A';
+                  if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
+                    durationText = tour.timeDuration.trim();
+                  } else if (tour.days && tour.days > 0) {
+                    durationText = tour.days === 1 ? 'Full Day' : `${tour.days} Days`;
+                  }
+                  
+                  let distanceText = tour.distance ? `${tour.distance} km` : 'N/A';
+                  
                   fareRows.push({
                     tripType: tour.tourName,
                     baseFare: `₹${tourPrice}`,
-                    distanceIncluded: "Full day",
-                    notes: "AC, Driver, Fuel, Parking included"
+                    distance: distanceText,
+                    duration: durationText
                   });
                 }
               }
@@ -106,20 +122,20 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             {
               tripType: "City Tour",
               baseFare: "₹12/km",
-              distanceIncluded: "Min 80 km",
-              notes: "AC Included, Driver, Parking extra"
+              distance: "Min 80 km",
+              duration: "4 hours"
             },
             {
               tripType: "Outstation",
               baseFare: "₹18/km",
-              distanceIncluded: "Min 300 km",
-              notes: "AC Included, Driver, Night charges apply"
+              distance: "Min 300 km",
+              duration: "Per Day"
             },
             {
               tripType: "Airport Transfer",
               baseFare: "₹15/km",
-              distanceIncluded: "One way",
-              notes: "AC Included, Driver, Tolls included"
+              distance: "One way",
+              duration: "N/A"
             }
           );
         }
@@ -132,8 +148,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
           {
             tripType: "Contact for Rates",
             baseFare: "Call for pricing",
-            distanceIncluded: "Varies",
-            notes: "Contact us for current rates"
+            distance: "Varies",
+            duration: "Contact us for current rates"
           }
         ]);
       } finally {
@@ -176,8 +192,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
               <tr className="border-b">
                 <th className="text-left py-3 px-2 font-medium text-gray-700">Trip Type</th>
                 <th className="text-left py-3 px-2 font-medium text-gray-700">Base Fare</th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700">Distance Included</th>
-                <th className="text-left py-3 px-2 font-medium text-gray-700">Notes</th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Distance</th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Duration</th>
               </tr>
             </thead>
             <tbody>
@@ -185,8 +201,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                 <tr key={index} className="border-b last:border-b-0 hover:bg-gray-50">
                   <td className="py-3 px-2 font-medium">{fare.tripType}</td>
                   <td className="py-3 px-2 text-blue-600 font-semibold">{fare.baseFare}</td>
-                  <td className="py-3 px-2 text-gray-600">{fare.distanceIncluded}</td>
-                  <td className="py-3 px-2 text-gray-600 text-sm">{fare.notes}</td>
+                  <td className="py-3 px-2 text-gray-600">{fare.distance}</td>
+                  <td className="py-3 px-2 text-gray-600">{fare.duration}</td>
                 </tr>
               ))}
             </tbody>

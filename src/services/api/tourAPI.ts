@@ -50,16 +50,28 @@ export const tourAPI = {
   getTourFares: async (): Promise<TourFareResponse[]> => {
     try {
       const response = await axios.get(`${baseURL}/api/fares/tours.php`, { 
-        headers: { ...defaultHeaders }
+        headers: { ...defaultHeaders },
+        params: {
+          // Add a cache-busting parameter to ensure fresh data is always fetched
+          t: new Date().getTime()
+        }
       });
       
-      if (!response.data || !Array.isArray(response.data)) {
-        throw new Error('Invalid tour fare data received');
+      // The public endpoint returns a direct array of tour data.
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
       }
       
-      return response.data;
+      // Handle cases where the API might return an object with an error message
+      if (response.data && response.data.error) {
+        throw new Error(`API Error: ${response.data.error}`);
+      }
+
+      // If the response is not a valid array, throw an error.
+      throw new Error('Invalid tour fare data received');
     } catch (error) {
       console.error('Error fetching tour fares:', error);
+      // Re-throw the error to be handled by the calling component
       throw error;
     }
   }
