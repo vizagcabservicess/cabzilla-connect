@@ -33,6 +33,10 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             tourAPI.getTourFares().catch(() => [])
           ]);
 
+          // DEBUGGING: Log the received data
+          console.log('Fetched localFares:', JSON.stringify(localFares, null, 2));
+          console.log('Fetched tourFares:', JSON.stringify(tourFares, null, 2));
+
           // Add local fares
           if (localFares.length > 0 && vehicleId) {
             const localFare = localFares.find(f => f.vehicle_id === vehicleId);
