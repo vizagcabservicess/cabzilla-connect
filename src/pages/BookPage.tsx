@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CabBookingInterface } from '@/components/CabBookingInterface';
@@ -16,9 +17,46 @@ const BookPage: React.FC = () => {
 
     console.log('BookPage params:', { tab, vehicle, tourId });
 
+    // Normalize vehicle ID - convert slug back to ID if needed
+    let normalizedVehicle = vehicle;
+    if (vehicle) {
+      // Convert common slugs back to vehicle IDs
+      const vehicleSlugMap: { [key: string]: string } = {
+        'swift-dzire': 'sedan',
+        'dzire': 'sedan',
+        'ertiga': 'ertiga',
+        'toyota-glanza': 'glanza',
+        'glanza': 'glanza',
+        'innova-crysta': 'innova',
+        'innova': 'innova',
+        'tempo-traveller': 'tempo',
+        'traveller': 'tempo'
+      };
+      
+      normalizedVehicle = vehicleSlugMap[vehicle.toLowerCase()] || vehicle;
+    }
+
+    // Normalize tour ID - handle both slug and ID formats
+    let normalizedTourId = tourId;
+    if (tourId) {
+      // Convert common tour slugs to IDs
+      const tourSlugMap: { [key: string]: string } = {
+        'araku': 'araku-valley-tour',
+        'araku-valley': 'araku-valley-tour',
+        'araku-valley-tour': 'araku-valley-tour',
+        'lambasingi': 'lambasingi-tour',
+        'lambasingi-tour': 'lambasingi-tour',
+        'vizag': 'vizag-city-tour',
+        'vizag-city': 'vizag-city-tour',
+        'vizag-city-tour': 'vizag-city-tour'
+      };
+      
+      normalizedTourId = tourSlugMap[tourId.toLowerCase()] || tourId;
+    }
+
     setInitialTab(tab);
-    setSelectedVehicle(vehicle);
-    setSelectedTourId(tourId);
+    setSelectedVehicle(normalizedVehicle);
+    setSelectedTourId(normalizedTourId);
   }, [searchParams]);
 
   return (
