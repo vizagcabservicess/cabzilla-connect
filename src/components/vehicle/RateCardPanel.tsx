@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -195,8 +196,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   const handleBooking = () => {
     if (!selectedRate) return;
     
-    // Build the booking URL with proper tab-based routing
-    let bookingUrl = '/book';
+    // Build the booking URL to redirect to homepage with proper tab
+    let bookingUrl = '/?booking=true';
     const params = new URLSearchParams();
     
     // Add vehicle parameter
@@ -215,7 +216,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
       params.append('tab', 'local');
     }
     
-    bookingUrl += '?' + params.toString();
+    bookingUrl += '&' + params.toString();
     
     console.log('Navigating to:', bookingUrl);
     navigate(bookingUrl);
