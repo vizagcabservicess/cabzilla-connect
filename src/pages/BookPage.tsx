@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import CabBookingInterface from '@/components/CabBookingInterface';
+import { CabBookingInterface } from '@/components/CabBookingInterface';
 
 const BookPage: React.FC = () => {
   const [searchParams] = useSearchParams();
