@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
@@ -36,6 +36,14 @@ export function EditVehicleDialog({
   const [isInitialized, setIsInitialized] = useState(false);
   const [inclusionsText, setInclusionsText] = useState('');
   const [exclusionsText, setExclusionsText] = useState('');
+
+  // Add gallery state
+  const [gallery, setGallery] = useState<{ url: string; alt?: string; caption?: string }[]>(initialVehicle.gallery || []);
+  const [galleryImageUrl, setGalleryImageUrl] = useState('');
+  const [galleryImageFile, setGalleryImageFile] = useState<File | null>(null);
+  const [galleryAlt, setGalleryAlt] = useState('');
+  const [galleryCaption, setGalleryCaption] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (initialVehicle && open) {
@@ -148,7 +156,7 @@ export function EditVehicleDialog({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setIsLoading(true);
     setServerError(null);
     
@@ -165,7 +173,12 @@ export function EditVehicleDialog({
         price: Number(vehicle.basePrice || 0),
         pricePerKm: Number(vehicle.pricePerKm || 0),
         nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-        driverAllowance: Number(vehicle.driverAllowance || 250)
+        driverAllowance: Number(vehicle.driverAllowance || 250),
+        gallery: gallery.map(item => ({
+          url: item.url,
+          alt: item.alt || '',
+          caption: item.caption || ''
+        }))
       };
       
       console.log("Prepared vehicle data for update:", updatedVehicle);
@@ -173,7 +186,7 @@ export function EditVehicleDialog({
       const maxRetries = 3;
       let attempt = 0;
       let success = false;
-      let lastError: any = null;
+      let lastError: Error | null = null;
       
       while (attempt < maxRetries && !success) {
         try {
@@ -184,53 +197,65 @@ export function EditVehicleDialog({
           }
           
           console.log(`Update attempt ${attempt + 1}/${maxRetries} for vehicle ${vehicle.id}`);
-          const response = await updateVehicle(updatedVehicle);
-          console.log("Vehicle update API response:", response);
-          success = true;
           
-          toast.success(`Vehicle ${vehicle.name} updated successfully`);
-          onEditVehicle(updatedVehicle);
-          onClose();
-          return; // Exit on success
-        } catch (error: any) {
-          attempt++;
+          // Format data as FormData
+          const formData = new FormData();
+          
+          // Add all vehicle fields
+          Object.entries(updatedVehicle).forEach(([key, value]) => {
+            if (key === 'gallery') {
+              // Handle gallery array specially
+              formData.append('gallery', JSON.stringify(value));
+            } else if (Array.isArray(value)) {
+              // Handle other arrays
+              formData.append(key, JSON.stringify(value));
+            } else if (value !== null && value !== undefined) {
+              formData.append(key, String(value));
+            }
+          });
+          
+          // Send as multipart/form-data
+          const response = await fetch(`${apiBaseUrl}/api/admin/update-vehicle.php?_t=${Date.now()}`, {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-Force-Refresh': 'true',
+              'X-Admin-Mode': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            },
+            body: formData
+          });
+          
+          const responseText = await response.text();
+          console.log("Update response:", responseText);
+          
+          const data = JSON.parse(responseText);
+          if (data.status === 'success') {
+            success = true;
+            toast.success(`Vehicle ${vehicle.name} updated successfully`);
+            onEditVehicle(data.vehicle || updatedVehicle);
+            onClose();
+          } else {
+            throw new Error(data.message || 'Update failed');
+          }
+        } catch (err) {
+          const error = err as Error;
+          console.error(`Update attempt ${attempt + 1} failed:`, error);
           lastError = error;
-          console.error(`Update attempt ${attempt} failed:`, error);
-          
-          if (error.message && (error.message.includes('404') || error.response?.status === 404)) {
-            console.error("404 error detected - API endpoint not found");
-            setServerError(`API endpoint not found (404): The vehicle update endpoint could not be found on the server.`);
-            break; // Don't retry 404 errors
-          }
-          
-          if (error.message && (error.message.includes('500') || error.response?.status === 500)) {
-            console.error("500 error detected - Internal server error");
-            setServerError(`Database Error: The server encountered an issue processing your request. This might be due to database connectivity or server maintenance.`);
-            
-            // Keep retrying, but with a little more delay
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
+          attempt++;
           
           if (attempt >= maxRetries) {
-            throw error; // Rethrow after max retries
+            console.error('All update attempts failed');
+            setServerError(lastError?.message || 'Failed to update vehicle after multiple attempts');
+            toast.error('Failed to update vehicle. Please try again.');
           }
         }
       }
-      
-      if (lastError && !success) throw lastError;
-      
-    } catch (error: any) {
-      console.error("Error updating vehicle:", error);
-      
-      const errorMessage = error.response?.data?.message || error.message || "Unknown error";
-      
-      if (errorMessage.includes('500')) {
-        setServerError(`Failed to update vehicle: Internal Server Error (500). The server encountered an issue processing your request.`);
-      } else {
-        setServerError(`Failed to update vehicle: ${errorMessage}`);
-      }
-      
-      toast.error(`Failed to update vehicle: ${errorMessage}`);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error in form submission:', error);
+      setServerError(error?.message || 'An unexpected error occurred');
+      toast.error('Failed to update vehicle');
     } finally {
       setIsLoading(false);
     }
@@ -239,6 +264,87 @@ export function EditVehicleDialog({
   const handleRetry = () => {
     setServerError(null);
     handleSubmit(new Event('submit') as any);
+  };
+
+  const handleFileUpload = async (file: File): Promise<string> => {
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch(`${apiBaseUrl}/api/upload-image.php`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      if (data.url) {
+        return `${apiBaseUrl}${data.url}`;
+      } else {
+        throw new Error('No URL returned from server');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload image. Please try again.');
+      throw error;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const addGalleryItem = async () => {
+    try {
+      let imageUrl = '';
+
+      if (galleryImageFile) {
+        // Handle file upload
+        imageUrl = await handleFileUpload(galleryImageFile);
+        setGalleryImageFile(null); // Reset file input
+      } else if (galleryImageUrl) {
+        // Use provided URL
+        imageUrl = galleryImageUrl;
+      } else {
+        toast.error('Please provide an image file or URL');
+        return;
+      }
+
+      // Add new gallery item
+      const newItem = {
+        url: imageUrl,
+        alt: galleryAlt,
+        caption: galleryCaption
+      };
+
+      setGallery(prev => [...prev, newItem]);
+
+      // Reset form
+      setGalleryImageUrl('');
+      setGalleryAlt('');
+      setGalleryCaption('');
+
+      toast.success('Image added to gallery');
+    } catch (error) {
+      console.error('Failed to add gallery item:', error);
+      toast.error('Failed to add image to gallery');
+    }
+  };
+
+  const updateGalleryItem = (index: number, field: 'alt' | 'caption', value: string) => {
+    setGallery((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const removeGalleryItem = (index: number) => {
+    setGallery((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setGalleryImageFile(e.target.files?.[0] || null);
   };
 
   return (
@@ -458,6 +564,102 @@ export function EditVehicleDialog({
               placeholder="Enter vehicle description"
               rows={3}
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Gallery</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <Label>Upload Image File</Label>
+                <Input type="file" accept="image/*" onChange={handleFileInputChange} />
+                <div className="text-center text-gray-500">OR</div>
+                <Label>Image URL</Label>
+                <Input
+                  type="text"
+                  placeholder="https://example.com/image.jpg"
+                  value={galleryImageUrl}
+                  onChange={(e) => setGalleryImageUrl(e.target.value)}
+                />
+              </div>
+              <div className="space-y-3">
+                <Label>Alt Text (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="Describe the image"
+                  value={galleryAlt}
+                  onChange={(e) => setGalleryAlt(e.target.value)}
+                />
+                <Label>Caption (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="Image caption"
+                  value={galleryCaption}
+                  onChange={(e) => setGalleryCaption(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={addGalleryItem}
+                  disabled={isUploading || (!galleryImageFile && !galleryImageUrl.trim())}
+                  className="w-full"
+                >
+                  {isUploading ? (
+                    <>
+                      <Upload className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Image
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2 mt-4">
+              {gallery.length === 0 && (
+                <div className="text-gray-500 text-center py-4">No images added yet.</div>
+              )}
+              {gallery.map((item, index) => (
+                <div key={index} className="flex items-center gap-4 border rounded p-2">
+                  <img
+                    src={item.url}
+                    alt={item.alt || `Gallery ${index + 1}`}
+                    className="w-24 h-16 object-cover rounded border"
+                    onError={(e) =>
+                      ((e.target as HTMLImageElement).src =
+                        'https://via.placeholder.com/96x64?text=No+Image')
+                    }
+                  />
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <Label>Alt Text</Label>
+                      <Input
+                        value={item.alt || ''}
+                        onChange={(e) => updateGalleryItem(index, 'alt', e.target.value)}
+                        placeholder="Image description"
+                      />
+                    </div>
+                    <div>
+                      <Label>Caption</Label>
+                      <Input
+                        value={item.caption || ''}
+                        onChange={(e) => updateGalleryItem(index, 'caption', e.target.value)}
+                        placeholder="Image caption"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => removeGalleryItem(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
           
           <div className="mt-4">

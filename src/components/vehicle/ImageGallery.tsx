@@ -1,9 +1,9 @@
-
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { GalleryItem } from '@/types/cab';
 
 interface ImageGalleryProps {
-  images: string[];
+  images: GalleryItem[];
   vehicleName: string;
 }
 
@@ -13,11 +13,11 @@ export const ImageGallery = ({ images, vehicleName }: ImageGalleryProps) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   
   const displayImages = images && images.length > 0 ? images : [
-    fallbackImage,
-    'https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&h=600&fit=crop',
-    'https://images.unsplash.com/photo-1570294917816-eceb74fccfa9?w=800&h=600&fit=crop'
+    { url: fallbackImage, alt: 'Fallback image 1' },
+    { url: 'https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=600&fit=crop', alt: 'Fallback image 2' },
+    { url: 'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=800&h=600&fit=crop', alt: 'Fallback image 3' },
+    { url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&h=600&fit=crop', alt: 'Fallback image 4' },
+    { url: 'https://images.unsplash.com/photo-1570294917816-eceb74fccfa9?w=800&h=600&fit=crop', alt: 'Fallback image 5' }
   ];
 
   const nextImage = () => {
@@ -33,8 +33,8 @@ export const ImageGallery = ({ images, vehicleName }: ImageGalleryProps) => {
       {/* Main Image Slider */}
       <div className="relative w-full">
         <img
-          src={displayImages[selectedImageIndex]}
-          alt={vehicleName}
+          src={displayImages[selectedImageIndex].url}
+          alt={displayImages[selectedImageIndex].alt || vehicleName}
           className="w-full h-80 md:h-96 object-cover rounded-lg"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
@@ -60,15 +60,22 @@ export const ImageGallery = ({ images, vehicleName }: ImageGalleryProps) => {
         <div className="absolute bottom-4 right-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
           {selectedImageIndex + 1} / {displayImages.length}
         </div>
+
+        {/* Caption */}
+        {displayImages[selectedImageIndex].caption && (
+          <div className="absolute bottom-4 left-4 right-16 bg-black/50 text-white px-3 py-1 rounded-lg text-sm">
+            {displayImages[selectedImageIndex].caption}
+          </div>
+        )}
       </div>
       
-      {/* Vertical Thumbnails at Bottom */}
+      {/* Thumbnails */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {displayImages.map((img, idx) => (
           <img
             key={idx}
-            src={img}
-            alt={`${vehicleName} view ${idx + 1}`}
+            src={img.url}
+            alt={img.alt || `${vehicleName} view ${idx + 1}`}
             className={`w-20 h-20 md:w-24 md:h-24 object-cover cursor-pointer rounded flex-shrink-0 transition-all ${
               selectedImageIndex === idx 
                 ? 'ring-2 ring-blue-500 opacity-100' 

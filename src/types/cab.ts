@@ -1,3 +1,9 @@
+export interface GalleryItem {
+  url: string;
+  alt?: string;
+  caption?: string;
+}
+
 export interface CabType {
   id: string;
   name: string;
@@ -34,6 +40,7 @@ export interface CabType {
   exclusions?: string[];
   cancellationPolicy?: string;
   fuelType?: string;
+  gallery?: GalleryItem[];
 }
 
 export interface OutstationFare {

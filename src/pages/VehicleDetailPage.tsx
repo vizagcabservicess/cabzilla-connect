@@ -10,13 +10,14 @@ import RateCard from '@/components/vehicle/RateCard';
 import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
 import VehicleTours from '@/components/vehicle/VehicleTours';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { GalleryItem } from '@/types/cab';
 
 interface VehicleData {
   id: string;
   name: string;
   capacity: number;
   fuelType?: string;
-  images?: string[];
+  gallery?: GalleryItem[];
   tags?: string[];
   overview?: string;
   specs?: {
@@ -69,7 +70,11 @@ const VehicleDetailPage = () => {
           name: foundVehicle.name,
           capacity: foundVehicle.capacity,
           fuelType: foundVehicle.fuelType,
-          images: foundVehicle.image ? [foundVehicle.image] : [],
+          gallery: foundVehicle.gallery && Array.isArray(foundVehicle.gallery) 
+            ? foundVehicle.gallery 
+            : foundVehicle.image 
+              ? [{ url: foundVehicle.image, alt: foundVehicle.name }] 
+              : [],
           tags: ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
           overview: foundVehicle.description,
           inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
@@ -151,7 +156,7 @@ const VehicleDetailPage = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <ImageGallery images={vehicle.images || []} vehicleName={vehicle.name} />
+            <ImageGallery images={vehicle.gallery || []} vehicleName={vehicle.name} />
 
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
