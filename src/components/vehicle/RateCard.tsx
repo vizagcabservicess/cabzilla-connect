@@ -34,10 +34,6 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             tourAPI.getTourFares().catch(() => [])
           ]);
 
-          // DEBUGGING: Log the received data
-          console.log('Fetched localFares:', JSON.stringify(localFares, null, 2));
-          console.log('Fetched tourFares:', JSON.stringify(tourFares, null, 2));
-
           // Add local fares
           if (localFares.length > 0 && vehicleId) {
             const localFare = localFares.find(f => f.vehicle_id === vehicleId);
@@ -71,7 +67,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                     tripType: "Outstation",
                     baseFare: `₹${vehicleData.pricing.outstation.pricePerKm}/km`,
                     distance: "Min 300 km",
-                    duration: "13 hours" // Special case: always show 13 hours for outstation
+                    duration: "13 hours"
                   });
                 }
               }
@@ -100,7 +96,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
               if (tour.pricing && tour.pricing[vehicleId]) {
                 const tourPrice = tour.pricing[vehicleId];
                 if (tourPrice > 0) {
-                  // Get duration from time_duration field, fallback to "Full Day"
+                  // Get duration from timeDuration field, fallback to "Full Day"
                   let durationText = 'Full Day';
                   if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
                     durationText = tour.timeDuration.trim();

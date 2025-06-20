@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import RateCardPanel from '@/components/vehicle/RateCardPanel';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
@@ -167,7 +168,20 @@ const VehicleDetailPage = () => {
 
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{vehicle.name}</h1>
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{vehicle.name}</h1>
+                  
+                  {/* Vehicle Tags displayed prominently next to vehicle name */}
+                  {vehicle.tags && vehicle.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {vehicle.tags.map((tag: string, idx: number) => (
+                        <Badge key={idx} className="bg-blue-100 text-blue-800 border-blue-200">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="flex items-center gap-6 text-gray-600">
@@ -187,7 +201,7 @@ const VehicleDetailPage = () => {
               inclusions={vehicle.inclusions}
               exclusions={vehicle.exclusions}
               features={vehicle.features}
-              tags={vehicle.tags}
+              tags={[]} // Empty array since tags are now displayed at the top
             />
 
             <RateCard vehicleId={vehicle.id} />
