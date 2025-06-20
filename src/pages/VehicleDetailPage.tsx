@@ -1,11 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import RateCardPanel from '@/components/vehicle/RateCardPanel';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
-import FeatureChecklist from '@/components/vehicle/FeatureChecklist';
 import RateCard from '@/components/vehicle/RateCard';
 import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
 import VehicleTours from '@/components/vehicle/VehicleTours';
@@ -169,13 +168,6 @@ const VehicleDetailPage = () => {
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{vehicle.name}</h1>
-                <div className="flex flex-wrap gap-2">
-                  {vehicle.tags?.map((tag: string, idx: number) => (
-                    <Badge key={idx} className="bg-blue-100 text-blue-800 border-blue-200">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
               </div>
               
               <div className="flex items-center gap-6 text-gray-600">
@@ -194,11 +186,11 @@ const VehicleDetailPage = () => {
               overview={vehicle.overview} 
               inclusions={vehicle.inclusions}
               exclusions={vehicle.exclusions}
+              features={vehicle.features}
+              tags={vehicle.tags}
             />
 
             <RateCard vehicleId={vehicle.id} />
-
-            <FeatureChecklist features={vehicle.features} />
 
             <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
 

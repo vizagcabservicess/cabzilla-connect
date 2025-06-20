@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -70,7 +71,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                     tripType: "Outstation",
                     baseFare: `₹${vehicleData.pricing.outstation.pricePerKm}/km`,
                     distance: "Min 300 km",
-                    duration: "Per Day"
+                    duration: "13 hours" // Special case: always show 13 hours for outstation
                   });
                 }
               }
@@ -93,13 +94,14 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             }
           }
 
-          // Add tour fares
+          // Add tour fares with proper duration display
           if (tourFares.length > 0) {
             tourFares.forEach(tour => {
               if (tour.pricing && tour.pricing[vehicleId]) {
                 const tourPrice = tour.pricing[vehicleId];
                 if (tourPrice > 0) {
-                  let durationText = 'N/A';
+                  // Get duration from time_duration field, fallback to "Full Day"
+                  let durationText = 'Full Day';
                   if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
                     durationText = tour.timeDuration.trim();
                   } else if (tour.days && tour.days > 0) {
@@ -133,7 +135,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
               tripType: "Outstation",
               baseFare: "₹18/km",
               distance: "Min 300 km",
-              duration: "Per Day"
+              duration: "13 hours"
             },
             {
               tripType: "Airport Transfer",

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Car, MapPin, Loader2 } from 'lucide-react';
 import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
+import { useNavigate } from 'react-router-dom';
 
 interface RateCardPanelProps {
   vehicleId: string;
@@ -18,12 +19,15 @@ interface VehicleRate {
   distanceIncluded: string;
   notes: string;
   farePerKm?: number;
+  bookingType?: string; // local, airport, outstation, tour
+  tourId?: string; // for tour bookings
 }
 
 const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 'Vehicle' }) => {
   const [rates, setRates] = useState<VehicleRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRate, setSelectedRate] = useState<VehicleRate | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchRates = async () => {
@@ -60,7 +64,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
               tripType: "City Tour",
               baseFare: `₹${localFare.price4hrs40km}`,
               distanceIncluded: "4hrs/40km",
-              notes: "AC, Driver, Fuel, Parking extra"
+              notes: "AC, Driver, Fuel, Parking extra",
+              bookingType: "local"
             });
           }
           
@@ -69,7 +74,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
               tripType: "Local (8hrs/80km)",
               baseFare: `₹${localFare.price8hrs80km}`,
               distanceIncluded: "8hrs/80km",
-              notes: "AC, Driver, Fuel included"
+              notes: "AC, Driver, Fuel included",
+              bookingType: "local"
             });
           }
           
@@ -78,7 +84,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
               tripType: "Local Per KM",
               baseFare: `₹${localFare.pricePerKm}/km`,
               distanceIncluded: "Min 80 km",
-              notes: "AC Included, Driver, Parking extra"
+              notes: "AC Included, Driver, Parking extra",
+              bookingType: "local"
             });
           }
         }
@@ -99,7 +106,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
                     tripType: "Outstation",
                     baseFare: `₹${outstation.pricePerKm}/km`,
                     distanceIncluded: "Min 300 km",
-                    notes: "AC Included, Driver, Night charges apply"
+                    notes: "AC Included, Driver, Night charges apply",
+                    bookingType: "outstation"
                   });
                 }
               }
@@ -120,7 +128,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
               tripType: "Airport Transfer",
               baseFare: `₹${airportPrice}`,
               distanceIncluded: "One way",
-              notes: "AC Included, Driver, Tolls included"
+              notes: "AC Included, Driver, Tolls included",
+              bookingType: "airport"
             });
           }
         }
@@ -137,7 +146,9 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
                   tripType: tour.tourName,
                   baseFare: `₹${tourPrice}`,
                   distanceIncluded: `${tour.distance || 260} km`,
-                  notes: `Full day - AC, Driver, Fuel, Parking included`
+                  notes: `Full day - AC, Driver, Fuel, Parking included`,
+                  bookingType: "tour",
+                  tourId: tour.tourId
                 });
               }
             }
@@ -153,7 +164,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
             tripType: "Standard Rate",
             baseFare: "₹12/km",
             distanceIncluded: "Min 8 km",
-            notes: "AC, Driver, Fuel included"
+            notes: "AC, Driver, Fuel included",
+            bookingType: "local"
           });
         }
 
@@ -166,7 +178,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
           tripType: "Contact for Rates",
           baseFare: "Call for pricing",
           distanceIncluded: "Varies",
-          notes: "Contact us for current rates"
+          notes: "Contact us for current rates",
+          bookingType: "local"
         }];
         setRates(fallbackRates);
         setSelectedRate(fallbackRates[0]);
@@ -179,6 +192,21 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
       fetchRates();
     }
   }, [vehicleId]);
+
+  const handleBooking = () => {
+    if (!selectedRate) return;
+    
+    let bookingUrl = `/book?vehicle=${vehicleId}`;
+    
+    if (selectedRate.bookingType === 'tour' && selectedRate.tourId) {
+      bookingUrl += `&type=tour&id=${selectedRate.tourId}`;
+    } else if (selectedRate.bookingType) {
+      bookingUrl += `&type=${selectedRate.bookingType}`;
+    }
+    
+    console.log('Navigating to:', bookingUrl);
+    navigate(bookingUrl);
+  };
 
   if (loading) {
     return (
@@ -255,7 +283,10 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
         )}
 
         {/* Book Now Button */}
-        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3">
+        <Button 
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
+          onClick={handleBooking}
+        >
           <MapPin className="h-4 w-4 mr-2" />
           Book {vehicleName}
         </Button>
