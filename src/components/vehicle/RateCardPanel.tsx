@@ -28,33 +28,6 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   const [selectedRate, setSelectedRate] = useState<VehicleRate | null>(null);
   const navigate = useNavigate();
 
-  // Helper function to convert vehicle name to slug
-  const getVehicleSlug = (vehicleId: string, vehicleName: string) => {
-    // Create slug mapping based on common vehicle IDs and names
-    const slugMap: { [key: string]: string } = {
-      'sedan': 'swift-dzire',
-      'ertiga': 'ertiga',
-      'glanza': 'toyota-glanza',
-      'innova': 'innova-crysta',
-      'tempo': 'tempo-traveller'
-    };
-    
-    return slugMap[vehicleId] || vehicleName.toLowerCase().replace(/\s+/g, '-');
-  };
-
-  // Helper function to convert tour name to slug/ID
-  const getTourSlug = (tourName: string, tourId?: string) => {
-    if (tourId) return tourId;
-    
-    const tourSlugMap: { [key: string]: string } = {
-      'Araku Valley Tour': 'araku-valley-tour',
-      'Lambasingi Tour': 'lambasingi-tour',
-      'Vizag City Tour': 'vizag-city-tour'
-    };
-    
-    return tourSlugMap[tourName] || tourName.toLowerCase().replace(/\s+/g, '-');
-  };
-
   useEffect(() => {
     const fetchRates = async () => {
       try {
@@ -174,7 +147,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
                   distanceIncluded: `${tour.distance || 260} km`,
                   notes: `Full day - AC, Driver, Fuel, Parking included`,
                   bookingType: "tour",
-                  tourId: tour.tourId || tour.id
+                  tourId: tour.tourId
                 });
               }
             }
@@ -226,15 +199,13 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     let bookingUrl = '/book';
     const params = new URLSearchParams();
     
-    // Add vehicle parameter with proper slug
-    const vehicleSlug = getVehicleSlug(vehicleId, vehicleName);
-    params.append('vehicle', vehicleSlug);
+    // Add vehicle parameter
+    params.append('vehicle', vehicleId);
     
     // Determine the correct tab based on booking type
     if (selectedRate.bookingType === 'tour' && selectedRate.tourId) {
       params.append('tab', 'tour');
-      const tourSlug = getTourSlug(selectedRate.tripType, selectedRate.tourId);
-      params.append('id', tourSlug);
+      params.append('id', selectedRate.tourId);
     } else if (selectedRate.bookingType === 'outstation') {
       params.append('tab', 'outstation');
     } else if (selectedRate.bookingType === 'airport') {
