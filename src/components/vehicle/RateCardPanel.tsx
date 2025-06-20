@@ -196,27 +196,13 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   const handleBooking = () => {
     if (!selectedRate) return;
     
-    // Build the booking URL to redirect to homepage with proper tab
-    let bookingUrl = '/?booking=true';
-    const params = new URLSearchParams();
+    let bookingUrl = `/book?vehicle=${vehicleId}`;
     
-    // Add vehicle parameter
-    params.append('vehicle', vehicleId);
-    
-    // Determine the correct tab based on booking type
     if (selectedRate.bookingType === 'tour' && selectedRate.tourId) {
-      params.append('tab', 'tour');
-      params.append('id', selectedRate.tourId);
-    } else if (selectedRate.bookingType === 'outstation') {
-      params.append('tab', 'outstation');
-    } else if (selectedRate.bookingType === 'airport') {
-      params.append('tab', 'airport');
-    } else {
-      // Default to local for city tours and other local trips
-      params.append('tab', 'local');
+      bookingUrl += `&type=tour&id=${selectedRate.tourId}`;
+    } else if (selectedRate.bookingType) {
+      bookingUrl += `&type=${selectedRate.bookingType}`;
     }
-    
-    bookingUrl += '&' + params.toString();
     
     console.log('Navigating to:', bookingUrl);
     navigate(bookingUrl);

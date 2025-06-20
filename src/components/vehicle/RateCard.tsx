@@ -90,13 +90,13 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             }
           }
 
-          // Add tour fares with proper duration display from timeDuration field
+          // Add tour fares with proper duration display
           if (tourFares.length > 0) {
             tourFares.forEach(tour => {
               if (tour.pricing && tour.pricing[vehicleId]) {
                 const tourPrice = tour.pricing[vehicleId];
                 if (tourPrice > 0) {
-                  // Get duration from timeDuration field from database, fallback to "Full Day"
+                  // Get duration from timeDuration field, fallback to "Full Day"
                   let durationText = 'Full Day';
                   if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
                     durationText = tour.timeDuration.trim();
