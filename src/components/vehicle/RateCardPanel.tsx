@@ -29,106 +29,147 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     const fetchRates = async () => {
       try {
         setLoading(true);
+        console.log(`Fetching rates for vehicle: ${vehicleId}`);
         
         const [localFares, airportFares, tourFares] = await Promise.all([
-          fetchLocalFares(vehicleId).catch(() => []),
-          fetchAirportFares(vehicleId).catch(() => []),
-          tourAPI.getTourFares().catch(() => [])
+          fetchLocalFares(vehicleId).catch((err) => {
+            console.error('Local fares fetch failed:', err);
+            return [];
+          }),
+          fetchAirportFares(vehicleId).catch((err) => {
+            console.error('Airport fares fetch failed:', err);
+            return [];
+          }),
+          tourAPI.getTourFares().catch((err) => {
+            console.error('Tour fares fetch failed:', err);
+            return [];
+          })
         ]);
+
+        console.log('Fetched data:', { localFares, airportFares, tourFares });
 
         const formattedRates: VehicleRate[] = [];
 
         // Add local package rates
         if (localFares.length > 0) {
           const localFare = localFares[0];
-          if (localFare.price4hrs40km) {
+          console.log('Processing local fare:', localFare);
+          
+          if (localFare.price4hrs40km && localFare.price4hrs40km > 0) {
             formattedRates.push({
-              tripType: "Local (4hrs/40km)",
+              tripType: "City Tour",
               baseFare: `₹${localFare.price4hrs40km}`,
-              distanceIncluded: "40 km included",
-              notes: "AC, Driver, Fuel included"
+              distanceIncluded: "4hrs/40km",
+              notes: "AC, Driver, Fuel, Parking extra"
             });
           }
-          if (localFare.price8hrs80km) {
+          
+          if (localFare.price8hrs80km && localFare.price8hrs80km > 0) {
             formattedRates.push({
               tripType: "Local (8hrs/80km)",
               baseFare: `₹${localFare.price8hrs80km}`,
-              distanceIncluded: "80 km included",
+              distanceIncluded: "8hrs/80km",
               notes: "AC, Driver, Fuel included"
             });
           }
-          if (localFare.pricePerKm) {
+          
+          if (localFare.pricePerKm && localFare.pricePerKm > 0) {
             formattedRates.push({
-              tripType: "Outstation",
+              tripType: "Local Per KM",
               baseFare: `₹${localFare.pricePerKm}/km`,
-              distanceIncluded: "Per km basis",
-              notes: "AC, Driver, Night charges apply"
+              distanceIncluded: "Min 80 km",
+              notes: "AC Included, Driver, Parking extra"
             });
           }
         }
 
-        // Add airport rates
+        // Add outstation rates - fetch from the pricing API
+        try {
+          const outstationResponse = await fetch(`https://www.vizagup.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
+          if (outstationResponse.ok) {
+            const outstationData = await outstationResponse.json();
+            console.log('Outstation data:', outstationData);
+            
+            if (outstationData.status === 'success' && outstationData.data) {
+              const vehicleData = outstationData.data.find((v: any) => v.vehicleId === vehicleId);
+              if (vehicleData?.pricing?.outstation) {
+                const outstation = vehicleData.pricing.outstation;
+                if (outstation.pricePerKm && outstation.pricePerKm > 0) {
+                  formattedRates.push({
+                    tripType: "Outstation",
+                    baseFare: `₹${outstation.pricePerKm}/km`,
+                    distanceIncluded: "Min 300 km",
+                    notes: "AC Included, Driver, Night charges apply"
+                  });
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching outstation fares:', error);
+        }
+
+        // Add airport rates with proper vehicle-specific data
         if (airportFares.length > 0) {
           const airportFare = airportFares[0];
-          formattedRates.push({
-            tripType: "Airport Transfer",
-            baseFare: `₹${airportFare.basePrice || airportFare.pickupPrice || 800}`,
-            distanceIncluded: "One way",
-            notes: "AC, Driver, Tolls included"
-          });
+          console.log('Processing airport fare:', airportFare);
+          
+          const airportPrice = airportFare.basePrice || airportFare.pickupPrice || airportFare.tier1Price || 0;
+          if (airportPrice > 0) {
+            formattedRates.push({
+              tripType: "Airport Transfer",
+              baseFare: `₹${airportPrice}`,
+              distanceIncluded: "One way",
+              notes: "AC Included, Driver, Tolls included"
+            });
+          }
         }
 
         // Add tour rates for this vehicle
-        tourFares.forEach(tour => {
-          if (tour.pricing && tour.pricing[vehicleId]) {
-            formattedRates.push({
-              tripType: tour.tourName,
-              baseFare: `₹${tour.pricing[vehicleId]}`,
-              distanceIncluded: `${tour.distance || 120} km`,
-              notes: `${tour.days || 1} day tour - AC, Driver, Fuel included`
-            });
-          }
-        });
-
-        // Fallback rates if no data found
-        if (formattedRates.length === 0) {
-          formattedRates.push(
-            {
-              tripType: "Local Trip",
-              baseFare: "₹12/km",
-              distanceIncluded: "Min 8 km",
-              notes: "AC, Driver, Fuel included"
-            },
-            {
-              tripType: "Outstation",
-              baseFare: "₹18/km",
-              distanceIncluded: "Min 300 km",
-              notes: "AC, Driver, Night charges apply"
-            },
-            {
-              tripType: "Airport Transfer",
-              baseFare: "₹800",
-              distanceIncluded: "One way",
-              notes: "AC, Driver, Tolls included"
+        if (tourFares.length > 0) {
+          console.log('Processing tour fares:', tourFares);
+          
+          tourFares.forEach(tour => {
+            if (tour.pricing && tour.pricing[vehicleId]) {
+              const tourPrice = tour.pricing[vehicleId];
+              if (tourPrice > 0) {
+                formattedRates.push({
+                  tripType: tour.tourName,
+                  baseFare: `₹${tourPrice}`,
+                  distanceIncluded: `${tour.distance || 260} km`,
+                  notes: `Full day - AC, Driver, Fuel, Parking included`
+                });
+              }
             }
-          );
+          });
+        }
+
+        console.log('Final formatted rates:', formattedRates);
+
+        // Only add fallback if we have no rates at all
+        if (formattedRates.length === 0) {
+          console.log('No rates found, using fallback');
+          formattedRates.push({
+            tripType: "Standard Rate",
+            baseFare: "₹12/km",
+            distanceIncluded: "Min 8 km",
+            notes: "AC, Driver, Fuel included"
+          });
         }
 
         setRates(formattedRates);
         setSelectedRate(formattedRates[0]);
       } catch (error) {
         console.error('Error fetching rates:', error);
-        // Set default rates on error
-        const defaultRates: VehicleRate[] = [
-          {
-            tripType: "Local Trip",
-            baseFare: "₹12/km",
-            distanceIncluded: "Min 8 km",
-            notes: "AC, Driver, Fuel included"
-          }
-        ];
-        setRates(defaultRates);
-        setSelectedRate(defaultRates[0]);
+        // Set minimal fallback only on error
+        const fallbackRates: VehicleRate[] = [{
+          tripType: "Contact for Rates",
+          baseFare: "Call for pricing",
+          distanceIncluded: "Varies",
+          notes: "Contact us for current rates"
+        }];
+        setRates(fallbackRates);
+        setSelectedRate(fallbackRates[0]);
       } finally {
         setLoading(false);
       }

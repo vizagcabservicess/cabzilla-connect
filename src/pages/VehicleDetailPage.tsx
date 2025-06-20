@@ -196,7 +196,7 @@ const VehicleDetailPage = () => {
               exclusions={vehicle.exclusions}
             />
 
-            <RateCard />
+            <RateCard vehicleId={vehicle.id} />
 
             <FeatureChecklist features={vehicle.features} />
 

@@ -1,67 +1,192 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
+import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
+import { tourAPI } from '@/services/api/tourAPI';
 
 interface RateCardProps {
-  rates?: {
-    tripType: string;
-    baseFare: string;
-    distanceIncluded: string;
-    notes: string;
-  }[];
+  vehicleId?: string;
 }
 
-const RateCard: React.FC<RateCardProps> = ({ 
-  rates = [
-    {
-      tripType: "City Tour",
-      baseFare: "₹12/km",
-      distanceIncluded: "Min 80 km",
-      notes: "AC Included, Driver, Parking extra"
-    },
-    {
-      tripType: "Outstation",
-      baseFare: "₹18/km",
-      distanceIncluded: "Min 300 km",
-      notes: "AC Included, Driver, Night charges apply"
-    },
-    {
-      tripType: "Airport Transfer",
-      baseFare: "₹15/km",
-      distanceIncluded: "One way",
-      notes: "AC Included, Driver, Tolls included"
-    },
-    {
-      tripType: "Araku Tour",
-      baseFare: "₹6,500",
-      distanceIncluded: "Full day",
-      notes: "AC, Driver, Fuel, Parking included"
-    }
-  ]
-}) => {
+interface FareRow {
+  tripType: string;
+  baseFare: string;
+  distanceIncluded: string;
+  notes: string;
+}
+
+const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
+  const [fares, setFares] = useState<FareRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAllFares = async () => {
+      try {
+        setLoading(true);
+        const fareRows: FareRow[] = [];
+
+        if (vehicleId) {
+          // Fetch vehicle-specific fares
+          const [localFares, airportFares, tourFares] = await Promise.all([
+            fetchLocalFares(vehicleId).catch(() => []),
+            fetchAirportFares(vehicleId).catch(() => []),
+            tourAPI.getTourFares().catch(() => [])
+          ]);
+
+          // Add local fares
+          if (localFares.length > 0) {
+            const localFare = localFares[0];
+            if (localFare.price4hrs40km && localFare.price4hrs40km > 0) {
+              fareRows.push({
+                tripType: "City Tour",
+                baseFare: `₹${localFare.pricePerKm || 12}/km`,
+                distanceIncluded: "Min 80 km",
+                notes: "AC Included, Driver, Parking extra"
+              });
+            }
+          }
+
+          // Fetch outstation rates
+          try {
+            const outstationResponse = await fetch(`https://www.vizagup.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
+            if (outstationResponse.ok) {
+              const outstationData = await outstationResponse.json();
+              if (outstationData.status === 'success' && outstationData.data) {
+                const vehicleData = outstationData.data.find((v: any) => v.vehicleId === vehicleId);
+                if (vehicleData?.pricing?.outstation?.pricePerKm) {
+                  fareRows.push({
+                    tripType: "Outstation",
+                    baseFare: `₹${vehicleData.pricing.outstation.pricePerKm}/km`,
+                    distanceIncluded: "Min 300 km",
+                    notes: "AC Included, Driver, Night charges apply"
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching outstation fares:', error);
+          }
+
+          // Add airport fares
+          if (airportFares.length > 0) {
+            const airportFare = airportFares[0];
+            const airportPrice = airportFare.basePrice || airportFare.pickupPrice || airportFare.tier1Price;
+            if (airportPrice && airportPrice > 0) {
+              fareRows.push({
+                tripType: "Airport Transfer",
+                baseFare: `₹${airportPrice}`,
+                distanceIncluded: "One way",
+                notes: "AC Included, Driver, Tolls included"
+              });
+            }
+          }
+
+          // Add tour fares
+          if (tourFares.length > 0) {
+            tourFares.forEach(tour => {
+              if (tour.pricing && tour.pricing[vehicleId]) {
+                const tourPrice = tour.pricing[vehicleId];
+                if (tourPrice > 0) {
+                  fareRows.push({
+                    tripType: tour.tourName,
+                    baseFare: `₹${tourPrice}`,
+                    distanceIncluded: "Full day",
+                    notes: "AC, Driver, Fuel, Parking included"
+                  });
+                }
+              }
+            });
+          }
+        }
+
+        // Fallback data if no vehicle ID or no fares found
+        if (fareRows.length === 0) {
+          fareRows.push(
+            {
+              tripType: "City Tour",
+              baseFare: "₹12/km",
+              distanceIncluded: "Min 80 km",
+              notes: "AC Included, Driver, Parking extra"
+            },
+            {
+              tripType: "Outstation",
+              baseFare: "₹18/km",
+              distanceIncluded: "Min 300 km",
+              notes: "AC Included, Driver, Night charges apply"
+            },
+            {
+              tripType: "Airport Transfer",
+              baseFare: "₹15/km",
+              distanceIncluded: "One way",
+              notes: "AC Included, Driver, Tolls included"
+            }
+          );
+        }
+
+        setFares(fareRows);
+      } catch (error) {
+        console.error('Error fetching fares:', error);
+        // Set fallback fares on error
+        setFares([
+          {
+            tripType: "Contact for Rates",
+            baseFare: "Call for pricing",
+            distanceIncluded: "Varies",
+            notes: "Contact us for current rates"
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllFares();
+  }, [vehicleId]);
+
+  if (loading) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading Rate Card...
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-full"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="mb-8">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl font-semibold">Rate Card</CardTitle>
+        <CardTitle className="text-lg">Rate Card</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full border-collapse">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Trip Type</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Base Fare</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Distance Included</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Notes</th>
+              <tr className="border-b">
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Trip Type</th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Base Fare</th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Distance Included</th>
+                <th className="text-left py-3 px-2 font-medium text-gray-700">Notes</th>
               </tr>
             </thead>
             <tbody>
-              {rates.map((rate, index) => (
-                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium text-gray-900">{rate.tripType}</td>
-                  <td className="py-3 px-4 text-blue-600 font-semibold">{rate.baseFare}</td>
-                  <td className="py-3 px-4 text-gray-700">{rate.distanceIncluded}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{rate.notes}</td>
+              {fares.map((fare, index) => (
+                <tr key={index} className="border-b last:border-b-0 hover:bg-gray-50">
+                  <td className="py-3 px-2 font-medium">{fare.tripType}</td>
+                  <td className="py-3 px-2 text-blue-600 font-semibold">{fare.baseFare}</td>
+                  <td className="py-3 px-2 text-gray-600">{fare.distanceIncluded}</td>
+                  <td className="py-3 px-2 text-gray-600 text-sm">{fare.notes}</td>
                 </tr>
               ))}
             </tbody>
