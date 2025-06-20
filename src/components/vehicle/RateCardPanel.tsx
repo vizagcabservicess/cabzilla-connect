@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -194,19 +193,15 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   }, [vehicleId]);
 
   const handleBooking = () => {
-    if (!selectedRate) return;
-    
-    let bookingUrl = `/book?vehicle=${vehicleId}`;
-    
-    if (selectedRate.bookingType === 'tour' && selectedRate.tourId) {
-      bookingUrl += `&type=tour&id=${selectedRate.tourId}`;
-    } else if (selectedRate.bookingType) {
-      bookingUrl += `&type=${selectedRate.bookingType}`;
+    if (selectedRate && selectedRate.bookingType === 'tour' && selectedRate.tourId) {
+      navigate(`/tours/${selectedRate.tourId}`);
+    } else {
+      navigate('/');
     }
-    
-    console.log('Navigating to:', bookingUrl);
-    navigate(bookingUrl);
   };
+
+  const selectedFare = selectedRate?.baseFare ?? 'N/A';
+  const selectedDistance = selectedRate?.distanceIncluded ?? 'N/A';
 
   if (loading) {
     return (
