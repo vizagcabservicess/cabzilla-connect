@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
 import { fixDatabaseTables, formatDataForMultipart } from '@/utils/apiHelper';
 import { apiBaseUrl } from '@/config/api';
+import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -37,8 +38,8 @@ export function EditVehicleDialog({
   const [inclusionsText, setInclusionsText] = useState('');
   const [exclusionsText, setExclusionsText] = useState('');
 
-  // Add gallery state
-  const [gallery, setGallery] = useState<{ url: string; alt?: string; caption?: string }[]>(initialVehicle.gallery || []);
+  // Updated gallery state to include database IDs
+  const [gallery, setGallery] = useState<Array<GalleryItem & {id?: string}>>([]);
   const [galleryImageUrl, setGalleryImageUrl] = useState('');
   const [galleryImageFile, setGalleryImageFile] = useState<File | null>(null);
   const [galleryAlt, setGalleryAlt] = useState('');
@@ -83,9 +84,25 @@ export function EditVehicleDialog({
       setInclusionsText(Array.isArray(initialVehicle.inclusions) ? initialVehicle.inclusions.join(', ') : (initialVehicle.inclusions || ''));
       setExclusionsText(Array.isArray(initialVehicle.exclusions) ? initialVehicle.exclusions.join(', ') : (initialVehicle.exclusions || ''));
       
+      // Load gallery images from database
+      loadGalleryImages();
+      
       setIsInitialized(true);
     }
   }, [initialVehicle, open]);
+
+  const loadGalleryImages = async () => {
+    if (!initialVehicle?.id) return;
+    
+    try {
+      const galleryImages = await vehicleGalleryAPI.getGallery(initialVehicle.id);
+      console.log('Loaded gallery images:', galleryImages);
+      setGallery(galleryImages);
+    } catch (error) {
+      console.error('Error loading gallery images:', error);
+      toast.error('Failed to load gallery images');
+    }
+  };
 
   const handleDirectUpdate = async () => {
     try {
@@ -269,24 +286,13 @@ export function EditVehicleDialog({
   const handleFileUpload = async (file: File): Promise<string> => {
     try {
       setIsUploading(true);
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const response = await fetch(`${apiBaseUrl}/api/upload-image.php`, {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
+      const imageUrl = await vehicleGalleryAPI.uploadImage(file);
+      
+      if (!imageUrl) {
+        throw new Error('Failed to upload image');
       }
-
-      if (data.url) {
-        return `${apiBaseUrl}${data.url}`;
-      } else {
-        throw new Error('No URL returned from server');
-      }
+      
+      return imageUrl;
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Failed to upload image. Please try again.');
@@ -297,13 +303,18 @@ export function EditVehicleDialog({
   };
 
   const addGalleryItem = async () => {
+    if (!initialVehicle?.id) {
+      toast.error('Vehicle ID is required');
+      return;
+    }
+
     try {
       let imageUrl = '';
 
       if (galleryImageFile) {
         // Handle file upload
         imageUrl = await handleFileUpload(galleryImageFile);
-        setGalleryImageFile(null); // Reset file input
+        setGalleryImageFile(null);
       } else if (galleryImageUrl) {
         // Use provided URL
         imageUrl = galleryImageUrl;
@@ -312,35 +323,74 @@ export function EditVehicleDialog({
         return;
       }
 
-      // Add new gallery item
-      const newItem = {
+      // Save to database
+      const success = await vehicleGalleryAPI.addImage(initialVehicle.id, {
         url: imageUrl,
         alt: galleryAlt,
         caption: galleryCaption
-      };
+      });
 
-      setGallery(prev => [...prev, newItem]);
-
-      // Reset form
-      setGalleryImageUrl('');
-      setGalleryAlt('');
-      setGalleryCaption('');
-
-      toast.success('Image added to gallery');
+      if (success) {
+        // Reload gallery images from database
+        await loadGalleryImages();
+        
+        // Reset form
+        setGalleryImageUrl('');
+        setGalleryAlt('');
+        setGalleryCaption('');
+        
+        toast.success('Image added to gallery');
+      } else {
+        toast.error('Failed to save image to database');
+      }
     } catch (error) {
       console.error('Failed to add gallery item:', error);
       toast.error('Failed to add image to gallery');
     }
   };
 
-  const updateGalleryItem = (index: number, field: 'alt' | 'caption', value: string) => {
-    setGallery((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-    );
+  const updateGalleryItem = async (index: number, field: 'alt' | 'caption', value: string) => {
+    const item = gallery[index];
+    if (!item?.id) return;
+
+    try {
+      const success = await vehicleGalleryAPI.updateImage(item.id, {
+        [field]: value
+      });
+
+      if (success) {
+        setGallery(prev => 
+          prev.map((galleryItem, i) => 
+            i === index ? { ...galleryItem, [field]: value } : galleryItem
+          )
+        );
+        toast.success('Image updated successfully');
+      } else {
+        toast.error('Failed to update image');
+      }
+    } catch (error) {
+      console.error('Error updating gallery item:', error);
+      toast.error('Failed to update image');
+    }
   };
 
-  const removeGalleryItem = (index: number) => {
-    setGallery((prev) => prev.filter((_, i) => i !== index));
+  const removeGalleryItem = async (index: number) => {
+    const item = gallery[index];
+    if (!item?.id) return;
+
+    try {
+      const success = await vehicleGalleryAPI.deleteImage(item.id);
+
+      if (success) {
+        setGallery(prev => prev.filter((_, i) => i !== index));
+        toast.success('Image removed from gallery');
+      } else {
+        toast.error('Failed to remove image');
+      }
+    } catch (error) {
+      console.error('Error removing gallery item:', error);
+      toast.error('Failed to remove image');
+    }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

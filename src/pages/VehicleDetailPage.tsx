@@ -11,6 +11,7 @@ import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
 import VehicleTours from '@/components/vehicle/VehicleTours';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { GalleryItem } from '@/types/cab';
+import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 
 interface VehicleData {
   id: string;
@@ -38,6 +39,7 @@ const VehicleDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<any[]>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
 
   useEffect(() => {
     const loadVehicleData = async () => {
@@ -70,11 +72,6 @@ const VehicleDetailPage = () => {
           name: foundVehicle.name,
           capacity: foundVehicle.capacity,
           fuelType: foundVehicle.fuelType,
-          gallery: foundVehicle.gallery && Array.isArray(foundVehicle.gallery) 
-            ? foundVehicle.gallery 
-            : foundVehicle.image 
-              ? [{ url: foundVehicle.image, alt: foundVehicle.name }] 
-              : [],
           tags: ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
           overview: foundVehicle.description,
           inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
@@ -83,6 +80,17 @@ const VehicleDetailPage = () => {
         };
 
         setVehicle(vehicleData);
+
+        // Load gallery images from database
+        const gallery = await vehicleGalleryAPI.getGallery(vehicleData.id);
+        console.log('Loaded gallery for vehicle details:', gallery);
+        
+        // If no gallery images found, use the main vehicle image as fallback
+        if (gallery.length === 0 && foundVehicle.image) {
+          setGalleryImages([{ url: foundVehicle.image, alt: foundVehicle.name }]);
+        } else {
+          setGalleryImages(gallery);
+        }
 
         const similar = allVehicles
           .filter(v => v.id !== vehicleId && v.isActive !== false)
@@ -156,7 +164,7 @@ const VehicleDetailPage = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <ImageGallery images={vehicle.gallery || []} vehicleName={vehicle.name} />
+            <ImageGallery images={galleryImages} vehicleName={vehicle.name} />
 
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
