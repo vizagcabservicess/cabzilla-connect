@@ -1,3 +1,4 @@
+
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -56,6 +57,7 @@ import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
+import BookPage from './pages/BookPage';
 
 const router = createBrowserRouter([
   {
@@ -137,6 +139,10 @@ const router = createBrowserRouter([
     element: <AdminDashboardPage />,
   },
   // Booking routes
+  {
+    path: '/book',
+    element: <BookPage />,
+  },
   {
     path: '/booking/:bookingId/confirmation',
     element: <BookingConfirmationPage />,
