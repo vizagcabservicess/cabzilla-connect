@@ -1,4 +1,3 @@
-
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -11,9 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Database connection
 $servername = "localhost";
-$username = "u644605165_admin";
-$password = "Vizag@123";
+$username = "u644605165_usr_be";
+$password = "Vizag@1213";
 $dbname = "u644605165_db_be";
+
 
 try {
     $pdo = new PDO("mysql:host=$servername;dbname=$dbname;charset=utf8", $username, $password);
