@@ -19,10 +19,7 @@ export const RoutePage = () => {
   } | null>(null);
 
   useEffect(() => {
-    console.log('RoutePage params:', { fromSlug, toSlug });
-    
     if (!fromSlug || !toSlug) {
-      console.log('Missing route params, redirecting to outstation-taxi');
       navigate('/outstation-taxi');
       return;
     }
@@ -30,8 +27,6 @@ export const RoutePage = () => {
     // Convert slugs to readable names
     const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    
-    console.log('Converted names:', { fromName, toName });
     
     // Set route info based on the URL params
     setRouteInfo({
@@ -62,8 +57,6 @@ export const RoutePage = () => {
       pickupDate: new Date(),
       autoTriggerSearch: true
     };
-
-    console.log('Setting prefill data:', prefillData);
 
     // Store prefill data for Hero component
     sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));

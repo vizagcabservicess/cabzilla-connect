@@ -1,28 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Star, MapPin, Clock, Users, Share2, Mail, Phone, Camera, Mountain, Waves, RefreshCw } from 'lucide-react';
 import { tourAPI } from '@/services/api/tourAPI';
-
-interface TourData {
-  id: number;
-  tourId: string;
-  tourName: string;
-  distance: number;
-  days: number;
-  description: string;
-  imageUrl: string;
-  isActive: boolean;
-  pricing: {
-    sedan: number;
-    ertiga: number;
-    innova: number;
-    tempo?: number;
-    luxury?: number;
-  };
-}
+import { TourData } from '@/services/api/tourManagementAPI';
 
 export function TourPackages() {
   const [tours, setTours] = useState<TourData[]>([]);
@@ -44,18 +26,16 @@ export function TourPackages() {
           id: Math.random(), // Temporary ID for key
           tourId: tour.tourId,
           tourName: tour.tourName,
+          sedan: tour.sedan,
+          ertiga: tour.ertiga,
+          innova: tour.innova,
+          tempo: tour.tempo || 0,
+          luxury: tour.luxury || 0,
           distance: 120, // Default values since not in current API
           days: 1,
           description: `Experience the beautiful ${tour.tourName.toLowerCase()} with our professional taxi service. Comfortable ride with experienced drivers.`,
           imageUrl: `/tours/${tour.tourId}.jpg`,
-          isActive: true,
-          pricing: {
-            sedan: tour.pricing?.sedan || 0,
-            ertiga: tour.pricing?.ertiga || 0,
-            innova: tour.pricing?.innova || 0,
-            tempo: tour.pricing?.tempo || 0,
-            luxury: tour.pricing?.luxury || 0
-          }
+          isActive: true
         }));
       
       setTours(formattedTours);
@@ -169,7 +149,7 @@ export function TourPackages() {
           {tours.slice(0, 6).map((tour, index) => {
             const IconComponent = getIconForTour(tour.tourName, index);
             const gradient = getGradientForTour(index);
-            const lowestPrice = Math.min(tour.pricing.sedan, tour.pricing.ertiga, tour.pricing.innova);
+            const lowestPrice = Math.min(tour.sedan, tour.ertiga, tour.innova);
             
             return (
               <Card key={tour.id || tour.tourId} className="group hover:shadow-2xl transition-all duration-500 border-0 bg-white rounded-3xl overflow-hidden">

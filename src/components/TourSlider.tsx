@@ -15,7 +15,7 @@ import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import 'swiper/css/effect-coverflow';
 
-export const TourSlider = () => {
+export function TourSlider() {
   const [tours, setTours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [vehicleCapacities, setVehicleCapacities] = useState({});
@@ -78,13 +78,6 @@ export const TourSlider = () => {
   } else if (tours.length === 2) {
     displayTours = [...tours, ...tours]; // 4 slides (2x2)
   }
-
-  const handlePriceClick = (tourId: string, vehicleType: string, price: number) => {
-    if (price && typeof price === 'number' && price > 0) {
-      console.log(`Booking ${vehicleType} for tour ${tourId} at ₹${price}`);
-      // Handle booking logic here
-    }
-  };
 
   return (
     <section className="py-12 md:py-16 bg-gradient-to-b from-gray-50 to-white">

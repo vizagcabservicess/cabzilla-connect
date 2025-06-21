@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Car, MapPin, Clock, Star, Phone, MessageCircle } from 'lucide-react';
@@ -102,7 +101,7 @@ export function EnhancedHero() {
           <div className="relative z-20 flex justify-center items-center mb-8">
             <div className="w-full max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto px-2 md:px-0">
               <div className="bg-white/90 md:bg-white/80 rounded-2xl md:rounded-3xl shadow-2xl md:p-10 p-4 border border-gray-100 backdrop-blur-md">
-                <Hero />
+                <Hero showOnlySearchWidget />
               </div>
             </div>
           </div>
