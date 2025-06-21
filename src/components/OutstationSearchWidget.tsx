@@ -30,41 +30,73 @@ export function OutstationSearchWidget({
   const [pickupDate, setPickupDate] = useState<Date>(new Date());
 
   useEffect(() => {
-    const initialPickupLocation: Location | null = initialPickup
-      ? {
-          id: 'initial-pickup',
+    if (initialPickup) {
+      setPickupLocation({
+        id: `pickup-${Date.now()}`,
+        name: initialPickup,
+        address: initialPickup,
+        city: "Visakhapatnam",
+        state: "Andhra Pradesh",
+        lat: 17.6868,
+        lng: 83.2185,
+        isInVizag: true,
+        type: 'other',
+        popularityScore: 0
+      });
+    }
+    
+    if (initialDrop) {
+      setDropLocation({
+        id: `drop-${Date.now()}`,
+        name: initialDrop,
+        address: initialDrop,
+        city: initialDrop, // Assuming drop location can be a city
+        state: "Andhra Pradesh",
+        lat: 17.9784,
+        lng: 82.9344,
+        isInVizag: false,
+        type: 'other',
+        popularityScore: 0
+      });
+    }
+
+    // Auto-trigger search if both locations are prefilled
+    if (initialPickup && initialDrop && onSearch) {
+      const searchData = {
+        pickupLocation: {
+          id: `pickup-search-${Date.now()}`,
           name: initialPickup,
           address: initialPickup,
+          city: 'Visakhapatnam',
+          state: 'Andhra Pradesh',
           lat: 17.6868,
           lng: 83.2185,
           isInVizag: true,
-          city: 'Visakhapatnam',
-          state: 'Andhra Pradesh',
-          type: 'other',
-          popularityScore: 50,
-        }
-      : null;
-
-    const initialDropLocation: Location | null = initialDrop
-      ? {
-          id: 'initial-drop',
+          type: 'other' as const,
+          popularityScore: 0,
+        },
+        dropLocation: {
+          id: `drop-search-${Date.now()}`,
           name: initialDrop,
           address: initialDrop,
+          city: initialDrop,
+          state: 'Andhra Pradesh',
           lat: 17.9784,
           lng: 82.9344,
           isInVizag: false,
-          city: 'Unknown',
-          state: 'Unknown',
-          type: 'other',
-          popularityScore: 50,
-        }
-      : null;
-
-    setPickupLocation(initialPickupLocation);
-    setDropLocation(initialDropLocation);
-    setPickupInputValue(initialPickup || '');
-    setDropInputValue(initialDrop || '');
-  }, [initialPickup, initialDrop]);
+          type: 'other' as const,
+          popularityScore: 0,
+        },
+        pickupDate: new Date(),
+        tripType: 'outstation',
+        tripMode: 'one-way'
+      };
+      
+      setTimeout(() => {
+        onSearch(searchData);
+      }, 100);
+    }
+  }, [initialPickup, initialDrop, onSearch]);
 
   const handleSearch = () => {
     if (onSearch && pickupLocation && dropLocation) {
