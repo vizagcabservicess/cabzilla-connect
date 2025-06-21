@@ -2,6 +2,7 @@
 import React from 'react';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
+import { OutstationHero } from '@/components/OutstationHero';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,23 +24,10 @@ const OutstationTaxiPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
+      {/* Hero Section with Outstation Search Widget */}
+      <OutstationHero />
+      
       <main className="container mx-auto px-4 py-8 pb-24">
-        {/* Hero Section */}
-        <section className="text-center py-16">
-          <Badge variant="outline" className="mb-4 border-blue-300 bg-blue-50 text-blue-700">Reliable & Affordable</Badge>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 leading-tight">
-            Outstation Taxi Service
-          </h1>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-8">
-            Explore beyond Visakhapatnam with our comfortable and safe outstation cabs. One-way or round trip, we've got you covered.
-          </p>
-          <Link to="/cabs/outstation">
-            <Button size="lg">
-              Book Your Trip <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-        </section>
-
         {/* Features Section */}
         <section className="py-12">
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">

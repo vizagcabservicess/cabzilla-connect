@@ -1,12 +1,12 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
-import { OutstationSearchWidget } from '@/components/OutstationSearchWidget';
+import { OutstationHero } from '@/components/OutstationHero';
 import { CabOptions } from '@/components/CabOptions';
 import { Helmet } from 'react-helmet-async';
 import { ScrollToTop } from '@/components/ScrollToTop';
-import { Location } from '@/types/location';
 
 export const RoutePage = () => {
   const { slug } = useParams();
@@ -28,7 +28,7 @@ export const RoutePage = () => {
 
     const parts = slug.split('-to-');
     if (parts.length !== 2) {
-      navigate('/404'); // Or a dedicated not found page
+      navigate('/404');
       return;
     }
     const fromSlug = parts[0];
@@ -71,21 +71,12 @@ export const RoutePage = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         
-        {/* Hero Section with Route Info */}
-        <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-12">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-3xl md:text-4xl font-bold mb-4">
-              {routeInfo.from} to {routeInfo.to}
-            </h1>
-            <p className="text-lg mb-2">
-              Discover lush landscapes and nearby waterfalls, a perfect nature escape.
-            </p>
-            <div className="flex justify-center items-center gap-8 text-sm">
-              <span>~{routeInfo.distance}</span>
-              <span>~{routeInfo.duration}</span>
-            </div>
-          </div>
-        </section>
+        {/* Hero Section with Route-specific Search Widget */}
+        <OutstationHero
+          initialPickup={routeInfo.from}
+          initialDrop={routeInfo.to}
+          onSearch={handleSearch}
+        />
 
         {/* Route Description */}
         <section className="bg-white py-8">
@@ -102,17 +93,10 @@ export const RoutePage = () => {
             </div>
           </div>
         </section>
-
-        {/* Search Widget */}
-        <main className="container mx-auto px-4 py-8">
-          <OutstationSearchWidget
-            initialPickup={routeInfo.from}
-            initialDrop={routeInfo.to}
-            onSearch={handleSearch}
-          />
-          
-          {/* Cab Options */}
-          {showCabOptions && searchData && (
+        
+        {/* Cab Options */}
+        {showCabOptions && searchData && (
+          <main className="container mx-auto px-4 py-8">
             <div className="mt-8">
               <CabOptions
                 cabTypes={searchData.cabTypes}
@@ -127,8 +111,8 @@ export const RoutePage = () => {
                 selectedCabBreakdown={searchData.selectedCabBreakdown}
               />
             </div>
-          )}
-        </main>
+          </main>
+        )}
         
         <MobileNavigation />
       </div>
