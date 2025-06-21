@@ -9,7 +9,7 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { Location } from '@/types/location';
 
 export const RoutePage = () => {
-  const { fromSlug, toSlug } = useParams();
+  const { routeSlug } = useParams();
   const navigate = useNavigate();
   const [routeInfo, setRouteInfo] = useState<{
     from: string;
@@ -19,11 +19,20 @@ export const RoutePage = () => {
   } | null>(null);
 
   useEffect(() => {
-    if (!fromSlug || !toSlug) {
+    if (!routeSlug) {
       navigate('/outstation-taxi');
       return;
     }
 
+    // Parse the route slug (e.g., "visakhapatnam-to-narsipatnam")
+    const routeParts = routeSlug.split('-to-');
+    if (routeParts.length !== 2) {
+      navigate('/outstation-taxi');
+      return;
+    }
+
+    const [fromSlug, toSlug] = routeParts;
+    
     // Convert slugs to readable names
     const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -64,7 +73,7 @@ export const RoutePage = () => {
     // Trigger a custom event to notify Hero component
     const event = new CustomEvent('routePrefill', { detail: prefillData });
     window.dispatchEvent(event);
-  }, [fromSlug, toSlug, navigate]);
+  }, [routeSlug, navigate]);
 
   if (!routeInfo) {
     return (

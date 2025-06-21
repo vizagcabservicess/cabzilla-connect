@@ -9,7 +9,6 @@ import { Map, Shield, Star, Phone, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FleetShowcase } from '@/components/FleetShowcase';
 import { popularRoutes } from '@/lib/routeData';
-import { slugify } from '@/lib/utils';
 
 const OutstationTaxiPage = () => {
   const features = [
@@ -18,6 +17,10 @@ const OutstationTaxiPage = () => {
     { icon: <Shield />, title: 'Safe & Secure Trips', description: 'Verified drivers and 24/7 support.' },
     { icon: <Map />, title: 'All India Permit', description: 'Travel anywhere across the country.' }
   ];
+
+  const slugify = (text: string) => {
+    return text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
