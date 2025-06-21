@@ -33,6 +33,51 @@ export function OutstationOnlyWidget({
   const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
 
+  // URL-based prefill for route pages
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    const match = pathname.match(/\/outstation-taxi\/(.+)-to-(.+)/);
+    
+    if (match && !initialPickup && !initialDrop) {
+      const fromSlug = match[1];
+      const toSlug = match[2];
+      
+      // Convert slugs to readable names
+      const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      
+      setPickupInputValue(fromName);
+      setDropInputValue(toName);
+      
+      // Create location objects
+      setPickupLocation({
+        id: `url-pickup-${Date.now()}`,
+        name: fromName,
+        address: fromName,
+        city: "Visakhapatnam",
+        state: "Andhra Pradesh",
+        lat: 17.6868,
+        lng: 83.2185,
+        isInVizag: true,
+        type: 'other',
+        popularityScore: 0
+      });
+      
+      setDropLocation({
+        id: `url-drop-${Date.now()}`,
+        name: toName,
+        address: toName,
+        city: toName,
+        state: "Andhra Pradesh",
+        lat: 17.9784,
+        lng: 82.9344,
+        isInVizag: false,
+        type: 'other',
+        popularityScore: 0
+      });
+    }
+  }, [initialPickup, initialDrop]);
+
   useEffect(() => {
     if (initialPickup) {
       setPickupLocation({
@@ -63,45 +108,7 @@ export function OutstationOnlyWidget({
         popularityScore: 0
       });
     }
-
-    // Auto-trigger search if both locations are prefilled
-    if (initialPickup && initialDrop && onSearch) {
-      const searchData = {
-        pickupLocation: {
-          id: `pickup-search-${Date.now()}`,
-          name: initialPickup,
-          address: initialPickup,
-          city: 'Visakhapatnam',
-          state: 'Andhra Pradesh',
-          lat: 17.6868,
-          lng: 83.2185,
-          isInVizag: true,
-          type: 'other' as const,
-          popularityScore: 0,
-        },
-        dropLocation: {
-          id: `drop-search-${Date.now()}`,
-          name: initialDrop,
-          address: initialDrop,
-          city: initialDrop,
-          state: 'Andhra Pradesh',
-          lat: 17.9784,
-          lng: 82.9344,
-          isInVizag: false,
-          type: 'other' as const,
-          popularityScore: 0,
-        },
-        pickupDate: new Date(),
-        returnDate: tripMode === 'round-trip' ? returnDate : undefined,
-        tripType: 'outstation',
-        tripMode: tripMode
-      };
-      
-      setTimeout(() => {
-        onSearch(searchData);
-      }, 100);
-    }
-  }, [initialPickup, initialDrop, onSearch, tripMode, returnDate]);
+  }, [initialPickup, initialDrop]);
 
   const handleSearch = () => {
     if (!pickupLocation || !dropLocation) {
@@ -209,8 +216,8 @@ export function OutstationOnlyWidget({
             {/* Return Date for Round Trip */}
             {tripMode === 'round-trip' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div></div> {/* Empty space */}
-                <div></div> {/* Empty space */}
+                <div></div>
+                <div></div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
