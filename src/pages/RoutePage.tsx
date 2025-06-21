@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
@@ -10,7 +9,7 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { Location } from '@/types/location';
 
 export const RoutePage = () => {
-  const { fromSlug, toSlug } = useParams();
+  const { slug } = useParams();
   const navigate = useNavigate();
   const [routeInfo, setRouteInfo] = useState<{
     from: string;
@@ -22,10 +21,18 @@ export const RoutePage = () => {
   const [searchData, setSearchData] = useState<any>(null);
 
   useEffect(() => {
-    if (!fromSlug || !toSlug) {
+    if (!slug) {
       navigate('/outstation-taxi');
       return;
     }
+
+    const parts = slug.split('-to-');
+    if (parts.length !== 2) {
+      navigate('/404'); // Or a dedicated not found page
+      return;
+    }
+    const fromSlug = parts[0];
+    const toSlug = parts[1];
 
     // Convert slugs to readable names
     const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -38,13 +45,13 @@ export const RoutePage = () => {
       distance: '71 KM',
       duration: '2 Hours'
     });
-  }, [fromSlug, toSlug, navigate]);
+  }, [slug, navigate]);
 
-  const handleSearch = (data: any) => {
+  const handleSearch = useCallback((data: any) => {
     console.log('Search triggered with data:', data);
     setSearchData(data);
     setShowCabOptions(true);
-  };
+  }, []);
 
   if (!routeInfo) {
     return (
@@ -108,11 +115,16 @@ export const RoutePage = () => {
           {showCabOptions && searchData && (
             <div className="mt-8">
               <CabOptions
-                pickupLocation={searchData.pickupLocation}
-                dropLocation={searchData.dropLocation}
-                pickupDate={searchData.pickupDate}
+                cabTypes={searchData.cabTypes}
+                selectedCab={searchData.selectedCab}
+                onSelectCab={searchData.onSelectCab}
+                distance={searchData.distance}
                 tripType={searchData.tripType}
                 tripMode={searchData.tripMode}
+                pickupDate={searchData.pickupDate}
+                returnDate={searchData.returnDate}
+                isCalculatingFares={searchData.isCalculatingFares}
+                selectedCabBreakdown={searchData.selectedCabBreakdown}
               />
             </div>
           )}

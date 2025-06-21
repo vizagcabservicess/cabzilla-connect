@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { LocationInput } from '@/components/LocationInput';
 import { DateTimePicker } from '@/components/DateTimePicker';
@@ -26,56 +25,46 @@ export function OutstationSearchWidget({
 }: OutstationSearchWidgetProps) {
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [dropLocation, setDropLocation] = useState<Location | null>(null);
+  const [pickupInputValue, setPickupInputValue] = useState(initialPickup || '');
+  const [dropInputValue, setDropInputValue] = useState(initialDrop || '');
   const [pickupDate, setPickupDate] = useState<Date>(new Date());
 
   useEffect(() => {
-    if (initialPickup) {
-      setPickupLocation({
-        name: initialPickup,
-        address: initialPickup,
-        lat: 17.6868,
-        lng: 83.2185,
-        isInVizag: true
-      });
-    }
-    
-    if (initialDrop) {
-      setDropLocation({
-        name: initialDrop,
-        address: initialDrop,
-        lat: 17.9784,
-        lng: 82.9344,
-        isInVizag: false
-      });
-    }
-
-    // Auto-trigger search if both locations are prefilled
-    if (initialPickup && initialDrop && onSearch) {
-      const searchData = {
-        pickupLocation: {
+    const initialPickupLocation: Location | null = initialPickup
+      ? {
+          id: 'initial-pickup',
           name: initialPickup,
           address: initialPickup,
           lat: 17.6868,
           lng: 83.2185,
-          isInVizag: true
-        },
-        dropLocation: {
+          isInVizag: true,
+          city: 'Visakhapatnam',
+          state: 'Andhra Pradesh',
+          type: 'other',
+          popularityScore: 50,
+        }
+      : null;
+
+    const initialDropLocation: Location | null = initialDrop
+      ? {
+          id: 'initial-drop',
           name: initialDrop,
           address: initialDrop,
           lat: 17.9784,
           lng: 82.9344,
-          isInVizag: false
-        },
-        pickupDate: new Date(),
-        tripType: 'outstation',
-        tripMode: 'one-way'
-      };
-      
-      setTimeout(() => {
-        onSearch(searchData);
-      }, 100);
-    }
-  }, [initialPickup, initialDrop, onSearch]);
+          isInVizag: false,
+          city: 'Unknown',
+          state: 'Unknown',
+          type: 'other',
+          popularityScore: 50,
+        }
+      : null;
+
+    setPickupLocation(initialPickupLocation);
+    setDropLocation(initialDropLocation);
+    setPickupInputValue(initialPickup || '');
+    setDropInputValue(initialDrop || '');
+  }, [initialPickup, initialDrop]);
 
   const handleSearch = () => {
     if (onSearch && pickupLocation && dropLocation) {
@@ -100,8 +89,9 @@ export function OutstationSearchWidget({
             </label>
             <LocationInput
               placeholder="Pickup location"
-              value={pickupLocation}
-              onChange={setPickupLocation}
+              value={pickupInputValue}
+              onChange={setPickupInputValue}
+              onLocationChange={setPickupLocation}
               tripType="outstation"
             />
           </div>
@@ -113,8 +103,9 @@ export function OutstationSearchWidget({
             </label>
             <LocationInput
               placeholder="Drop location"
-              value={dropLocation}
-              onChange={setDropLocation}
+              value={dropInputValue}
+              onChange={setDropInputValue}
+              onLocationChange={setDropLocation}
               tripType="outstation"
             />
           </div>
@@ -125,8 +116,8 @@ export function OutstationSearchWidget({
               Pickup Date & Time
             </label>
             <DateTimePicker
-              value={pickupDate}
-              onChange={setPickupDate}
+              date={pickupDate}
+              onDateChange={setPickupDate}
             />
           </div>
         </div>
