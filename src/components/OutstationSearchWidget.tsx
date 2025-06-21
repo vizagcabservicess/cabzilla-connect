@@ -30,40 +30,62 @@ export function OutstationSearchWidget({
 
   useEffect(() => {
     if (initialPickup) {
-      setPickupLocation({
+      const pickupLoc: Location = {
+        id: 'vizag_initial',
         name: initialPickup,
         address: initialPickup,
+        city: 'Visakhapatnam',
+        state: 'Andhra Pradesh',
         lat: 17.6868,
         lng: 83.2185,
+        type: 'landmark',
+        popularityScore: 90,
         isInVizag: true
-      });
+      };
+      setPickupLocation(pickupLoc);
     }
     
     if (initialDrop) {
-      setDropLocation({
+      const dropLoc: Location = {
+        id: 'drop_initial',
         name: initialDrop,
         address: initialDrop,
+        city: initialDrop,
+        state: 'Andhra Pradesh',
         lat: 17.9784,
         lng: 82.9344,
+        type: 'landmark',
+        popularityScore: 85,
         isInVizag: false
-      });
+      };
+      setDropLocation(dropLoc);
     }
 
     // Auto-trigger search if both locations are prefilled
     if (initialPickup && initialDrop && onSearch) {
       const searchData = {
         pickupLocation: {
+          id: 'vizag_auto',
           name: initialPickup,
           address: initialPickup,
+          city: 'Visakhapatnam',
+          state: 'Andhra Pradesh',
           lat: 17.6868,
           lng: 83.2185,
+          type: 'landmark' as const,
+          popularityScore: 90,
           isInVizag: true
         },
         dropLocation: {
+          id: 'drop_auto',
           name: initialDrop,
           address: initialDrop,
+          city: initialDrop,
+          state: 'Andhra Pradesh',
           lat: 17.9784,
           lng: 82.9344,
+          type: 'landmark' as const,
+          popularityScore: 85,
           isInVizag: false
         },
         pickupDate: new Date(),
@@ -125,8 +147,8 @@ export function OutstationSearchWidget({
               Pickup Date & Time
             </label>
             <DateTimePicker
-              value={pickupDate}
-              onChange={setPickupDate}
+              date={pickupDate}
+              setDate={setPickupDate}
             />
           </div>
         </div>
