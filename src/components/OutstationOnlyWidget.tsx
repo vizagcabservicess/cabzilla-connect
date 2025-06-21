@@ -6,7 +6,8 @@ import { DateTimePicker } from '@/components/DateTimePicker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RadioGroupTripMode } from '@/components/RadioGroupTripMode';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Search, MapPin, Calendar } from 'lucide-react';
 import { Location } from '@/types/location';
 
@@ -149,10 +150,20 @@ export function OutstationOnlyWidget({
           <TabsContent value="outstation" className="space-y-6">
             {/* Trip Mode Selection */}
             <div className="flex justify-center">
-              <RadioGroupTripMode
+              <RadioGroup
                 value={tripMode}
                 onValueChange={(value) => setTripMode(value as 'one-way' | 'round-trip')}
-              />
+                className="flex space-x-6"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="one-way" id="one-way" />
+                  <Label htmlFor="one-way">One Way</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="round-trip" id="round-trip" />
+                  <Label htmlFor="round-trip">Round Trip</Label>
+                </div>
+              </RadioGroup>
             </div>
 
             {/* Location and Date Inputs */}
@@ -167,7 +178,6 @@ export function OutstationOnlyWidget({
                   value={pickupInputValue}
                   onChange={setPickupInputValue}
                   onLocationChange={setPickupLocation}
-                  tripType="outstation"
                 />
               </div>
 
@@ -181,7 +191,6 @@ export function OutstationOnlyWidget({
                   value={dropInputValue}
                   onChange={setDropInputValue}
                   onLocationChange={setDropLocation}
-                  tripType="outstation"
                 />
               </div>
 
