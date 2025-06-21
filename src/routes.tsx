@@ -184,7 +184,7 @@ const router = createBrowserRouter([
     element: <OutstationTaxiPage />,
   },
   {
-    path: '/outstation-taxi/:fromSlug/:toSlug',
+    path: '/outstation-taxi/:fromSlug-to-:toSlug',
     element: <RoutePage />,
   },
   {

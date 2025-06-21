@@ -48,6 +48,24 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
   
   const loadFromSessionStorage = () => {
     try {
+      // Check for route prefill data first
+      const routePrefillData = sessionStorage.getItem('routePrefillData');
+      if (routePrefillData) {
+        const prefillData = JSON.parse(routePrefillData);
+        sessionStorage.removeItem('routePrefillData'); // Clear after use
+        return {
+          pickupLocation: prefillData.pickupLocation,
+          dropLocation: prefillData.dropLocation,
+          pickupDate: new Date(),
+          returnDate: null,
+          tripType: prefillData.tripType || 'outstation',
+          tripMode: prefillData.tripMode || 'one-way',
+          hourlyPackage: hourlyPackageOptions[0].value,
+          selectedCab: null,
+          autoTriggerSearch: prefillData.autoTriggerSearch
+        };
+      }
+
       const pickupData = sessionStorage.getItem('pickupLocation');
       const dropData = sessionStorage.getItem('dropLocation');
       const pickupDateStr = sessionStorage.getItem('pickupDate');
@@ -65,7 +83,8 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
         tripType: tripTypeData as TripType || 'outstation',
         tripMode: tripModeData as TripMode || 'one-way',
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
-        selectedCab: cabData ? JSON.parse(cabData) as CabType : null
+        selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
+        autoTriggerSearch: false
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
@@ -77,7 +96,8 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
         tripType: 'outstation' as TripType,
         tripMode: 'one-way' as TripMode,
         hourlyPackage: hourlyPackageOptions[0].value,
-        selectedCab: null
+        selectedCab: null,
+        autoTriggerSearch: false
       };
     }
   };
@@ -91,7 +111,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [currentStep, setCurrentStep] = useState<number>(savedData.autoTriggerSearch ? 2 : 1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
   const [tripType, setTripType] = useState<TripType>(savedData.tripType);
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
@@ -106,9 +126,33 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
   const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
 
+  // Listen for route prefill events
+  useEffect(() => {
+    const handleRoutePrefill = (event: CustomEvent) => {
+      const { pickupLocation: pickup, dropLocation: drop, tripType: type, tripMode: mode } = event.detail;
+      setPickupLocation(pickup);
+      setDropLocation(drop);
+      setTripType(type);
+      setTripMode(mode);
+      setPickupDate(new Date());
+      
+      // Auto-trigger search after a short delay
+      setTimeout(() => {
+        if (pickup && drop) {
+          setCurrentStep(2);
+        }
+      }, 500);
+    };
+
+    window.addEventListener('routePrefill', handleRoutePrefill as EventListener);
+    return () => window.removeEventListener('routePrefill', handleRoutePrefill as EventListener);
+  }, []);
+
   // Always keep pickupDate enabled and default to now on mount/refresh
   useEffect(() => {
-    setPickupDate(new Date());
+    if (!savedData.autoTriggerSearch) {
+      setPickupDate(new Date());
+    }
   }, []);
 
   // Reset/disable returnDate and errors when locations change

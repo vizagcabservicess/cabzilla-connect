@@ -77,7 +77,7 @@ const OutstationTaxiPage = () => {
                     <span>~{route.time}</span>
                   </div>
                   <Button asChild className="w-full">
-                    <Link to={`/outstation-taxi/${slugify(route.from)}/${slugify(route.to)}`}>View Details</Link>
+                    <Link to={`/outstation-taxi/${slugify(route.from)}-to-${slugify(route.to)}`}>View Details</Link>
                   </Button>
                 </CardContent>
               </Card>

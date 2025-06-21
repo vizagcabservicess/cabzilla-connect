@@ -1,110 +1,126 @@
 
-import React, { useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
-import { getRouteBySlug } from '@/lib/routeData';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
-import NotFound from './NotFound';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Car } from 'lucide-react';
-import { CabBookingInterface } from '@/components/CabBookingInterface';
+import { Hero } from '@/components/Hero';
+import { Helmet } from 'react-helmet-async';
+import { ScrollToTop } from '@/components/ScrollToTop';
+import { Location } from '@/types/location';
 
-const RoutePage = () => {
-  const { fromSlug, toSlug } = useParams<{ fromSlug: string; toSlug: string }>();
-  const route = getRouteBySlug(fromSlug, toSlug);
-  const bookingSectionRef = useRef<HTMLDivElement>(null);
+export const RoutePage = () => {
+  const { fromSlug, toSlug } = useParams();
+  const navigate = useNavigate();
+  const [routeInfo, setRouteInfo] = useState<{
+    from: string;
+    to: string;
+    distance: string;
+    duration: string;
+  } | null>(null);
 
-  if (!route) {
-    return <NotFound />;
+  useEffect(() => {
+    if (!fromSlug || !toSlug) {
+      navigate('/outstation-taxi');
+      return;
+    }
+
+    // Convert slugs to readable names
+    const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    
+    // Set route info based on the URL params
+    setRouteInfo({
+      from: fromName,
+      to: toName,
+      distance: '71 KM', // Default distance for the example
+      duration: '2 Hours'
+    });
+
+    // Prefill the Hero component with route data by triggering search
+    const prefillData = {
+      pickupLocation: {
+        name: fromName,
+        address: fromName,
+        lat: 17.6868,
+        lng: 83.2185,
+        isInVizag: true
+      } as Location,
+      dropLocation: {
+        name: toName,
+        address: toName,
+        lat: 17.9784,
+        lng: 82.9344,
+        isInVizag: false
+      } as Location,
+      tripType: 'outstation' as const,
+      tripMode: 'one-way' as const,
+      pickupDate: new Date(),
+      autoTriggerSearch: true
+    };
+
+    // Store prefill data for Hero component
+    sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
+    
+    // Trigger a custom event to notify Hero component
+    const event = new CustomEvent('routePrefill', { detail: prefillData });
+    window.dispatchEvent(event);
+  }, [fromSlug, toSlug, navigate]);
+
+  if (!routeInfo) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
-
-  const handleBookNowClick = () => {
-    bookingSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   return (
     <>
       <Helmet>
-        <title>{route.seo.title}</title>
-        <meta name="description" content={route.seo.description} />
-        <meta name="keywords" content={route.seo.keywords} />
+        <title>{`${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`}</title>
+        <meta name="description" content={`Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
       </Helmet>
+      <ScrollToTop />
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-
-        <section className="relative bg-gray-800 text-white">
-          <img
-            src={route.image.replace('h=300', 'h=400').replace('w=500', 'w=1200')}
-            alt={`Taxi from ${route.from} to ${route.to}`}
-            className="absolute inset-0 w-full h-full object-cover z-0 opacity-40"
-          />
-          <div className="relative container mx-auto px-4 py-24 text-center z-10">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              {`Visakhapatnam to ${route.to} Taxi`}
+        
+        {/* Hero Section with Route Info */}
+        <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-12">
+          <div className="container mx-auto px-4 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold mb-4">
+              {routeInfo.from} to {routeInfo.to}
             </h1>
-            <p className="text-xl text-gray-200 max-w-3xl mx-auto">
-              {route.description}
+            <p className="text-lg mb-2">
+              Discover lush landscapes and nearby waterfalls, a perfect nature escape.
             </p>
+            <div className="flex justify-center items-center gap-8 text-sm">
+              <span>~{routeInfo.distance}</span>
+              <span>~{routeInfo.duration}</span>
+            </div>
           </div>
         </section>
 
-        <main className="container mx-auto px-4 py-12 pb-24">
-          <div className="grid lg:grid-cols-3 gap-8 mb-12">
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-3xl">{`About Your Trip to ${route.to}`}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: route.content }} />
-                </CardContent>
-              </Card>
-            </div>
-            <div className="lg:col-span-1">
-              <Card className="sticky top-8">
-                <CardHeader>
-                  <CardTitle>Indicative Fares</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Sedan (Dzire, etc.)</span>
-                      <span className="font-bold text-lg text-blue-600">{route.fares.sedan}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">SUV (Ertiga, etc.)</span>
-                      <span className="font-bold text-lg text-blue-600">{route.fares.suv}</span>
-                    </div>
-                    {route.fares.tempo && <div className="flex justify-between items-center">
-                      <span className="font-medium">Tempo Traveller</span>
-                      <span className="font-bold text-lg text-blue-600">{route.fares.tempo}</span>
-                    </div>}
-                     {route.fares.luxury && <div className="flex justify-between items-center">
-                      <span className="font-medium">Luxury (Innova, etc.)</span>
-                      <span className="font-bold text-lg text-blue-600">{route.fares.luxury}</span>
-                    </div>}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-4">*Fares are approximate. Actual price may vary.</p>
-                  <Button size="lg" className="w-full mt-6" onClick={handleBookNowClick}>
-                      <Car className="mr-2 h-5 w-5" />
-                      Book Your Cab Now
-                  </Button>
-                </CardContent>
-              </Card>
+        {/* Route Description */}
+        <section className="bg-white py-8">
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                About Your Trip to {routeInfo.to}
+              </h2>
+              <p className="text-gray-600 leading-relaxed">
+                Journey from {routeInfo.from} to {routeInfo.to}, a town celebrated for its scenic beauty and cultural heritage. 
+                This {routeInfo.distance} route takes approximately {routeInfo.duration} and offers breathtaking views of the countryside. 
+                Book your comfortable cab ride with professional drivers and enjoy a hassle-free travel experience.
+              </p>
             </div>
           </div>
-           <section className="mt-12" ref={bookingSectionRef}>
-             <Card className="bg-white p-4 sm:p-6 lg:p-8">
-               <h2 className="text-3xl font-bold text-center mb-8">Select Your Cab & Book</h2>
-               <CabBookingInterface
-                  key={`${fromSlug}-${toSlug}`}
-                  initialTripDetails={{ from: route.from, to: route.to, tripType: 'outstation' }}
-               />
-             </Card>
-           </section>
+        </section>
+
+        {/* Booking Interface */}
+        <main className="container mx-auto px-4 py-8 pb-24">
+          <Hero />
         </main>
+        
         <MobileNavigation />
       </div>
     </>
