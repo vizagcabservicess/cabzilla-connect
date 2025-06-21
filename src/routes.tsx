@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -185,7 +184,7 @@ const router = createBrowserRouter([
     element: <OutstationTaxiPage />,
   },
   {
-    path: '/outstation-taxi/:routeSlug',
+    path: '/outstation-taxi/:fromSlug-to-:toSlug',
     element: <RoutePage />,
   },
   {
