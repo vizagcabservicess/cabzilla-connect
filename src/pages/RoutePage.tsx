@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
-import { Hero } from '@/components/Hero';
+import { OutstationSearchWidget } from '@/components/OutstationSearchWidget';
+import { CabOptions } from '@/components/CabOptions';
 import { Helmet } from 'react-helmet-async';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { Location } from '@/types/location';
@@ -17,6 +18,8 @@ export const RoutePage = () => {
     distance: string;
     duration: string;
   } | null>(null);
+  const [showCabOptions, setShowCabOptions] = useState(false);
+  const [searchData, setSearchData] = useState<any>(null);
 
   useEffect(() => {
     if (!fromSlug || !toSlug) {
@@ -32,39 +35,16 @@ export const RoutePage = () => {
     setRouteInfo({
       from: fromName,
       to: toName,
-      distance: '71 KM', // Default distance for the example
+      distance: '71 KM',
       duration: '2 Hours'
     });
-
-    // Prefill the Hero component with route data by triggering search
-    const prefillData = {
-      pickupLocation: {
-        name: fromName,
-        address: fromName,
-        lat: 17.6868,
-        lng: 83.2185,
-        isInVizag: true
-      } as Location,
-      dropLocation: {
-        name: toName,
-        address: toName,
-        lat: 17.9784,
-        lng: 82.9344,
-        isInVizag: false
-      } as Location,
-      tripType: 'outstation' as const,
-      tripMode: 'one-way' as const,
-      pickupDate: new Date(),
-      autoTriggerSearch: true
-    };
-
-    // Store prefill data for Hero component
-    sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
-    
-    // Trigger a custom event to notify Hero component
-    const event = new CustomEvent('routePrefill', { detail: prefillData });
-    window.dispatchEvent(event);
   }, [fromSlug, toSlug, navigate]);
+
+  const handleSearch = (data: any) => {
+    console.log('Search triggered with data:', data);
+    setSearchData(data);
+    setShowCabOptions(true);
+  };
 
   if (!routeInfo) {
     return (
@@ -116,9 +96,26 @@ export const RoutePage = () => {
           </div>
         </section>
 
-        {/* Booking Interface */}
-        <main className="container mx-auto px-4 py-8 pb-24">
-          <Hero />
+        {/* Search Widget */}
+        <main className="container mx-auto px-4 py-8">
+          <OutstationSearchWidget
+            initialPickup={routeInfo.from}
+            initialDrop={routeInfo.to}
+            onSearch={handleSearch}
+          />
+          
+          {/* Cab Options */}
+          {showCabOptions && searchData && (
+            <div className="mt-8">
+              <CabOptions
+                pickupLocation={searchData.pickupLocation}
+                dropLocation={searchData.dropLocation}
+                pickupDate={searchData.pickupDate}
+                tripType={searchData.tripType}
+                tripMode={searchData.tripMode}
+              />
+            </div>
+          )}
         </main>
         
         <MobileNavigation />

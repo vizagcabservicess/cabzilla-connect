@@ -45,8 +45,8 @@ export function BookingStatusManager({
       case 'confirmed':
         return 'assigned';
       case 'assigned':
-        return 'in-progress';
-      case 'in-progress':
+        return 'in_progress';
+      case 'in_progress':
         return 'completed';
       case 'payment_received':
         return 'completed';
@@ -71,16 +71,16 @@ export function BookingStatusManager({
         return 'pending';
       case 'assigned':
         return 'confirmed';
-      case 'in-progress':
+      case 'in_progress':
         return 'assigned';
       case 'payment_received':
         return 'payment_pending';
       case 'payment_pending':
-        return 'in-progress';
+        return 'in_progress';
       case 'completed':
-        return 'in-progress';
+        return 'in_progress';
       case 'continued':
-        return 'in-progress';
+        return 'in_progress';
       case 'cancelled':
         return null;
       default:
@@ -140,7 +140,7 @@ export function BookingStatusManager({
       case 'assigned':
         badgeColor = "bg-purple-100 text-purple-800";
         break;
-      case 'in-progress':
+      case 'in_progress':
         badgeColor = "bg-orange-100 text-orange-800";
         break;
       case 'completed':
@@ -166,7 +166,7 @@ export function BookingStatusManager({
         {status === 'pending' && <Clock className="h-4 w-4" />}
         {status === 'confirmed' && <CheckCheck className="h-4 w-4" />}
         {status === 'assigned' && <CheckCheck className="h-4 w-4" />}
-        {status === 'in-progress' && <Clock className="h-4 w-4" />}
+        {status === 'in_progress' && <Clock className="h-4 w-4" />}
         {status === 'completed' && <CheckCheck className="h-4 w-4" />}
         {status === 'payment_received' && <CheckCheck className="h-4 w-4" />}
         {status === 'payment_pending' && <Clock className="h-4 w-4" />}
