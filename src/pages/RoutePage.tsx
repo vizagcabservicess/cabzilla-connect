@@ -28,15 +28,17 @@ export const RoutePage = () => {
     const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     
+    console.log('Route params:', { fromSlug, toSlug, fromName, toName });
+    
     // Set route info based on the URL params
     setRouteInfo({
       from: fromName,
       to: toName,
-      distance: '71 KM', // Default distance for the example
+      distance: '71 KM',
       duration: '2 Hours'
     });
 
-    // Prefill the Hero component with route data by triggering search
+    // Create prefill data for Hero component
     const prefillData = {
       pickupLocation: {
         name: fromName,
@@ -57,6 +59,8 @@ export const RoutePage = () => {
       pickupDate: new Date(),
       autoTriggerSearch: true
     };
+
+    console.log('Setting prefill data:', prefillData);
 
     // Store prefill data for Hero component
     sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
