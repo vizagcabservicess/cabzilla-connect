@@ -46,10 +46,12 @@ import PoolingLoginPage from './pages/PoolingLoginPage';
 import PoolingProviderPage from './pages/PoolingProviderPage';
 import PoolingAdminPage from './pages/PoolingAdminPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
-import LocalTaxiPage from './pages/LocalTaxiPage';
+import { LocalTaxiPage } from './pages/LocalTaxiPage';
+import { LocalTaxiPrefilledPage } from './pages/LocalTaxiPrefilledPage';
 import { OutstationTaxiPage } from './pages/OutstationTaxiPage';
 import { OutstationTaxiPrefilledPage } from './pages/OutstationTaxiPrefilledPage';
-import AirportTaxiPage from './pages/AirportTaxiPage';
+import { AirportTaxiPage } from './pages/AirportTaxiPage';
+import { AirportTaxiPrefilledPage } from './pages/AirportTaxiPrefilledPage';
 import RentalsPage from './pages/RentalsPage';
 import TourDetailPage from './pages/TourDetailPage';
 import SedanPage from './pages/SedanPage';
@@ -181,6 +183,10 @@ const router = createBrowserRouter([
     element: <LocalTaxiPage />,
   },
   {
+    path: '/local-taxi/:from-to-:to',
+    element: <LocalTaxiPrefilledPage />,
+  },
+  {
     path: '/outstation-taxi',
     element: <OutstationTaxiPage />,
   },
@@ -195,6 +201,10 @@ const router = createBrowserRouter([
   {
     path: '/airport-taxi',
     element: <AirportTaxiPage />,
+  },
+  {
+    path: '/airport-taxi/:from-to-:to',
+    element: <AirportTaxiPrefilledPage />,
   },
   {
     path: '/rentals',
