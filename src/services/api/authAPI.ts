@@ -44,7 +44,9 @@ class AuthAPI {
 
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
-      const response = await axios.post(`${API_BASE_URL}/login.php`, credentials);
+      const response = await axios.post(`${API_BASE_URL}/login.php`, credentials, {
+        headers: { 'Content-Type': 'application/json' }
+      });
       if (response.data.success && response.data.token && response.data.user) {
         this.token = response.data.token;
         localStorage.setItem('auth_token', this.token);
@@ -59,7 +61,9 @@ class AuthAPI {
 
   async signup(userData: RegisterRequest): Promise<AuthResponse> {
     try {
-      const response = await axios.post(`${API_BASE_URL}/register.php`, userData);
+      const response = await axios.post(`${API_BASE_URL}/register.php`, userData, {
+        headers: { 'Content-Type': 'application/json' }
+      });
       return response.data;
     } catch (error) {
       console.error('Signup error:', error);
