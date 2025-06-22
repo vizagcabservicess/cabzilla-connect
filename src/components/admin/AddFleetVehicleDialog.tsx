@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { 
@@ -24,6 +25,25 @@ interface AddFleetVehicleDialogProps {
   onAddVehicle: (vehicle: FleetVehicle) => void;
 }
 
+interface FormData {
+  vehicleNumber: string;
+  name: string;
+  model: string;
+  make: string;
+  year: number;
+  status: 'Active' | 'Maintenance' | 'Inactive';
+  fuelType: string;
+  vehicleType: string;
+  capacity: number;
+  luggageCapacity: number;
+  lastServiceOdometer: number;
+  nextServiceOdometer: number;
+  isActive: boolean;
+  inclusions: string;
+  exclusions: string;
+  cancellationPolicy: string;
+}
+
 export function AddFleetVehicleDialog({ 
   open, 
   onClose,
@@ -32,7 +52,7 @@ export function AddFleetVehicleDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const form = useForm<Partial<FleetVehicle>>({
+  const form = useForm<FormData>({
     defaultValues: {
       vehicleNumber: '',
       name: '',
@@ -47,6 +67,9 @@ export function AddFleetVehicleDialog({
       lastServiceOdometer: 0,
       nextServiceOdometer: 5000,
       isActive: true,
+      inclusions: '',
+      exclusions: '',
+      cancellationPolicy: '',
     }
   });
   
@@ -67,21 +90,15 @@ export function AddFleetVehicleDialog({
         lastServiceOdometer: 0,
         nextServiceOdometer: 5000,
         isActive: true,
+        inclusions: '',
+        exclusions: '',
+        cancellationPolicy: '',
       });
       setHasSubmitted(false);
     }
   }, [open, form]);
 
-  useEffect(() => {
-    if (form.getValues('inclusions') && Array.isArray(form.getValues('inclusions'))) {
-      form.setValue('inclusions', form.getValues('inclusions').join(', '));
-    }
-    if (form.getValues('exclusions') && Array.isArray(form.getValues('exclusions'))) {
-      form.setValue('exclusions', form.getValues('exclusions').join(', '));
-    }
-  }, [form]);
-
-  const handleSubmit = async (data: Partial<FleetVehicle>) => {
+  const handleSubmit = async (data: FormData) => {
     if (hasSubmitted) {
       toast.warning("Form already submitted, please wait...");
       return;
@@ -95,6 +112,14 @@ export function AddFleetVehicleDialog({
       const today = new Date();
       const nextServiceDate = new Date();
       nextServiceDate.setMonth(today.getMonth() + 3);
+      
+      // Parse inclusions and exclusions from strings to arrays
+      const inclusions = data.inclusions
+        ? data.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
+      const exclusions = data.exclusions
+        ? data.exclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
+        : [];
       
       // Create a complete FleetVehicle object with odometer readings
       const vehicleToSubmit: Partial<FleetVehicle> = {
@@ -113,25 +138,16 @@ export function AddFleetVehicleDialog({
         cabTypeId: data.vehicleType || '', // Use vehicle type as cab type id
         capacity: data.capacity || 4,
         luggageCapacity: data.luggageCapacity || 2,
-        isActive: data.isActive !== undefined ? data.isActive : true
-      };
-      
-      const inclusions = data.inclusions
-        ? data.inclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
-        : [];
-      const exclusions = data.exclusions
-        ? data.exclusions.split(/,|\n/).map((s: string) => s.trim()).filter(Boolean)
-        : [];
-      const payload = {
-        ...vehicleToSubmit,
+        isActive: data.isActive !== undefined ? data.isActive : true,
         inclusions,
         exclusions,
+        cancellationPolicy: data.cancellationPolicy || '',
       };
       
       try {
         // In this example, we'll directly call onAddVehicle instead of using an API
         // In a real app with a backend, you would call the API here first
-        onAddVehicle(payload as FleetVehicle);
+        onAddVehicle(vehicleToSubmit as FleetVehicle);
         form.reset();
         onClose();
       } catch (apiError: any) {

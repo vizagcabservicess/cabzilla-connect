@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -47,9 +46,12 @@ import PoolingLoginPage from './pages/PoolingLoginPage';
 import PoolingProviderPage from './pages/PoolingProviderPage';
 import PoolingAdminPage from './pages/PoolingAdminPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
-import LocalTaxiPage from './pages/LocalTaxiPage';
-import OutstationTaxiPage from './pages/OutstationTaxiPage';
-import AirportTaxiPage from './pages/AirportTaxiPage';
+import { LocalTaxiPage } from './pages/LocalTaxiPage';
+import { LocalTaxiPrefilledPage } from './pages/LocalTaxiPrefilledPage';
+import { OutstationTaxiPage } from './pages/OutstationTaxiPage';
+import { OutstationTaxiPrefilledPage } from './pages/OutstationTaxiPrefilledPage';
+import { AirportTaxiPage } from './pages/AirportTaxiPage';
+import { AirportTaxiPrefilledPage } from './pages/AirportTaxiPrefilledPage';
 import RentalsPage from './pages/RentalsPage';
 import TourDetailPage from './pages/TourDetailPage';
 import SedanPage from './pages/SedanPage';
@@ -57,6 +59,7 @@ import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
+import { AdminProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
   {
@@ -78,64 +81,66 @@ const router = createBrowserRouter([
   // Main admin routes
   {
     path: '/admin',
-    element: <AdminDashboardPage />,
-  },
-  {
-    path: '/admin/database',
-    element: <AdminDatabasePage />,
-  },
-  {
-    path: '/admin/reports',
-    element: <ReportsPage />,
-  },
-  {
-    path: '/admin/fleet',
-    element: <FleetManagementPage />,
-  },
-  {
-    path: '/admin/fuel',
-    element: <FuelManagementPage />,
-  },
-  {
-    path: '/admin/maintenance',
-    element: <VehicleMaintenancePage />,
-  },
-  {
-    path: '/admin/ledger',
-    element: <LedgerPage />,
-  },
-  {
-    path: '/admin/expenses',
-    element: <ExpensesPage />,
-  },
-  {
-    path: '/admin/payroll',
-    element: <PayrollPage />,
-  },
-  {
-    path: '/admin/payments',
-    element: <PaymentsManagementPage />,
-  },
-  {
-    path: '/admin/commission',
-    element: <CommissionManagementPage />,
-  },
-  {
-    path: '/admin/create-booking',
-    element: <AdminBookingCreationPage />,
-  },
-  {
-    path: '/admin/pooling',
-    element: <PoolingDashboard />,
-  },
-  {
-    path: '/admin/pooling-enhanced',
-    element: <PoolingAdminDashboard />,
-  },
-  // Add catch-all route for admin to prevent 404s on admin routes
-  {
-    path: '/admin/*',
-    element: <AdminDashboardPage />,
+    element: <AdminProtectedRoute />,
+    children: [
+      {
+        index: true,
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'database',
+        element: <AdminDatabasePage />,
+      },
+      {
+        path: 'reports',
+        element: <ReportsPage />,
+      },
+      {
+        path: 'fleet',
+        element: <FleetManagementPage />,
+      },
+      {
+        path: 'fuel',
+        element: <FuelManagementPage />,
+      },
+      {
+        path: 'maintenance',
+        element: <VehicleMaintenancePage />,
+      },
+      {
+        path: 'ledger',
+        element: <LedgerPage />,
+      },
+      {
+        path: 'expenses',
+        element: <ExpensesPage />,
+      },
+      {
+        path: 'payroll',
+        element: <PayrollPage />,
+      },
+      {
+        path: 'payments',
+        element: <PaymentsManagementPage />,
+      },
+      {
+        path: 'commission',
+        element: <CommissionManagementPage />,
+      },
+      {
+        path: 'create-booking',
+        element: <AdminBookingCreationPage />,
+      },
+
+      {
+        path: 'pooling',
+        element: <PoolingDashboard />,
+      },
+      {
+        path: 'pooling-enhanced',
+        element: <PoolingAdminDashboard />,
+      },
+    ]
   },
   // Booking routes
   {
@@ -181,8 +186,16 @@ const router = createBrowserRouter([
     element: <LocalTaxiPage />,
   },
   {
+    path: '/local-taxi/:from-to-:to',
+    element: <LocalTaxiPrefilledPage />,
+  },
+  {
     path: '/outstation-taxi',
     element: <OutstationTaxiPage />,
+  },
+  {
+    path: '/outstation-taxi/:from-to-:to',
+    element: <OutstationTaxiPrefilledPage />,
   },
   {
     path: '/outstation-taxi/:slug',
@@ -191,6 +204,10 @@ const router = createBrowserRouter([
   {
     path: '/airport-taxi',
     element: <AirportTaxiPage />,
+  },
+  {
+    path: '/airport-taxi/:from-to-:to',
+    element: <AirportTaxiPrefilledPage />,
   },
   {
     path: '/rentals',

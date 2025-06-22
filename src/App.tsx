@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,18 +26,14 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      {USE_ORIGINAL_APP ? (
-        <AuthProvider>
-          <PoolingAuthProvider>
+      <AuthProvider>
+        <PoolingAuthProvider>
+          {USE_ORIGINAL_APP ? (
             <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
               <RouterProvider router={router} />
             </GoogleMapsProvider>
-          </PoolingAuthProvider>
-        </AuthProvider>
-      ) : (
-        <BrowserRouter>
-          <AuthProvider>
-            <PoolingAuthProvider>
+          ) : (
+            <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/admin" element={<AdminDashboard />} />
@@ -50,10 +45,10 @@ const App = () => (
                 <Route path="/pooling/admin" element={<PoolingAdminPage />} />
                 <Route path="/pooling/guest" element={<GuestDashboardPage />} />
               </Routes>
-            </PoolingAuthProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      )}
+            </BrowserRouter>
+          )}
+        </PoolingAuthProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

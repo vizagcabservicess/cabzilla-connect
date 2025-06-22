@@ -43,13 +43,13 @@ try {
     $conn = getDbConnectionWithRetry();
     
     // Check if user exists
-    $stmt = $conn->prepare("SELECT id, name, email, password_hash, role, is_active FROM pooling_users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT id, name, email, password, role, is_active FROM users WHERE email = ?");
     $stmt->bind_param("s", $input['email']);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     
-    if (!$user || !password_verify($input['password'], $user['password_hash'])) {
+    if (!$user || !password_verify($input['password'], $user['password'])) {
         http_response_code(401);
         echo json_encode(['error' => 'Invalid credentials']);
         exit();
@@ -71,7 +71,7 @@ try {
     $stmt->execute();
     
     // Remove password_hash from response
-    unset($user['password_hash']);
+    unset($user['password']);
 
     echo json_encode([
         'success' => true,
