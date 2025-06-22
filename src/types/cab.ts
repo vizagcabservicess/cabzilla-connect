@@ -22,6 +22,8 @@ export interface CabType {
   basePrice?: number;
   vehicleId?: string;
   vehicleType?: string;
+  discount?: string;
+  oldPrice?: string;
   // Fleet management properties
   year?: number;
   lastService?: string;

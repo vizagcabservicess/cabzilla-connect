@@ -12,6 +12,20 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface BookingRequest {
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  pickupTime?: string;
+  returnDate?: string;
+  tripType: string;
+  tripMode?: string;
+  vehicleType: string;
+  passengerName: string;
+  passengerPhone: string;
+  passengerEmail: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message?: string;
@@ -69,6 +83,9 @@ export interface Booking {
   guest_name?: string;
   guest_email?: string;
   guest_phone?: string;
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
 }
 
 export interface Driver {
