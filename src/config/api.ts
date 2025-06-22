@@ -2,7 +2,7 @@
 
 // Base API URL - use localhost for development, vizagup.com for production
 export const apiBaseUrl = window.location.hostname.includes('localhost')
-  ? 'https://www.vizagup.com'
+  ? ''
   : 'https://www.vizagup.com';
 
 // Helper function to get full API URL

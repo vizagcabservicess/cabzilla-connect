@@ -59,6 +59,7 @@ import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
+import { AdminProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
   {
@@ -80,64 +81,66 @@ const router = createBrowserRouter([
   // Main admin routes
   {
     path: '/admin',
-    element: <AdminDashboardPage />,
-  },
-  {
-    path: '/admin/database',
-    element: <AdminDatabasePage />,
-  },
-  {
-    path: '/admin/reports',
-    element: <ReportsPage />,
-  },
-  {
-    path: '/admin/fleet',
-    element: <FleetManagementPage />,
-  },
-  {
-    path: '/admin/fuel',
-    element: <FuelManagementPage />,
-  },
-  {
-    path: '/admin/maintenance',
-    element: <VehicleMaintenancePage />,
-  },
-  {
-    path: '/admin/ledger',
-    element: <LedgerPage />,
-  },
-  {
-    path: '/admin/expenses',
-    element: <ExpensesPage />,
-  },
-  {
-    path: '/admin/payroll',
-    element: <PayrollPage />,
-  },
-  {
-    path: '/admin/payments',
-    element: <PaymentsManagementPage />,
-  },
-  {
-    path: '/admin/commission',
-    element: <CommissionManagementPage />,
-  },
-  {
-    path: '/admin/create-booking',
-    element: <AdminBookingCreationPage />,
-  },
-  {
-    path: '/admin/pooling',
-    element: <PoolingDashboard />,
-  },
-  {
-    path: '/admin/pooling-enhanced',
-    element: <PoolingAdminDashboard />,
-  },
-  // Add catch-all route for admin to prevent 404s on admin routes
-  {
-    path: '/admin/*',
-    element: <AdminDashboardPage />,
+    element: <AdminProtectedRoute />,
+    children: [
+      {
+        index: true,
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'database',
+        element: <AdminDatabasePage />,
+      },
+      {
+        path: 'reports',
+        element: <ReportsPage />,
+      },
+      {
+        path: 'fleet',
+        element: <FleetManagementPage />,
+      },
+      {
+        path: 'fuel',
+        element: <FuelManagementPage />,
+      },
+      {
+        path: 'maintenance',
+        element: <VehicleMaintenancePage />,
+      },
+      {
+        path: 'ledger',
+        element: <LedgerPage />,
+      },
+      {
+        path: 'expenses',
+        element: <ExpensesPage />,
+      },
+      {
+        path: 'payroll',
+        element: <PayrollPage />,
+      },
+      {
+        path: 'payments',
+        element: <PaymentsManagementPage />,
+      },
+      {
+        path: 'commission',
+        element: <CommissionManagementPage />,
+      },
+      {
+        path: 'create-booking',
+        element: <AdminBookingCreationPage />,
+      },
+
+      {
+        path: 'pooling',
+        element: <PoolingDashboard />,
+      },
+      {
+        path: 'pooling-enhanced',
+        element: <PoolingAdminDashboard />,
+      },
+    ]
   },
   // Booking routes
   {

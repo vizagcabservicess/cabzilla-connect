@@ -14,8 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { authAPI } from '@/services/api';
-import { poolingAPI } from '@/services/api/poolingAPI';
+import { authAPI } from '@/services/api/authAPI';
 import { SignupRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { toast } from 'sonner';
@@ -53,15 +52,10 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        console.log('DEBUG poolingAPI:', poolingAPI);
-        console.log('DEBUG poolingAPI.auth:', poolingAPI.auth);
-        console.log('DEBUG poolingAPI.auth.register:', poolingAPI.auth && poolingAPI.auth.register);
-        if (typeof poolingAPI.auth.register !== 'function') {
-          throw new Error('poolingAPI.auth.register is not a function');
-        }
-        const response = await poolingAPI.auth.register({ ...values, role: 'customer' as UserRole });
+        const response = await authAPI.signup({ ...values, role: 'customer' });
         console.log('Registration API response:', response);
-        if (response && response.success) {
+
+        if (response && response.message.includes('successful')) {
           // Success - update the loading toast
           toast.success("Account created successfully!", { id: loadingToastId });
           uiToast({
@@ -71,7 +65,7 @@ export function SignupForm() {
           });
           // Short delay before redirecting to ensure toast is seen
           setTimeout(() => {
-            navigate('/dashboard');
+            navigate('/login');
           }, 1000);
         } else {
           // Show backend error message if available
