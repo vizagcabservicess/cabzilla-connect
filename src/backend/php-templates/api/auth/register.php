@@ -69,9 +69,9 @@ try {
     // Hash password
     $hashedPassword = password_hash($input['password'], PASSWORD_DEFAULT);
     
-    // Insert user with the correct role into users table
+    // Insert user with the correct role into pooling_users
     $stmt = $conn->prepare("
-        INSERT INTO users (name, email, phone, password, role, is_active)
+        INSERT INTO pooling_users (name, email, phone, password_hash, role, is_active)
         VALUES (?, ?, ?, ?, ?, 1)
     ");
     if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
@@ -79,9 +79,6 @@ try {
     $stmt->execute();
     $userId = $conn->insert_id;
     
-    // The wallet logic below seems specific to pooling,
-    // which you asked to avoid. I am commenting it out.
-    /*
     // Check if wallet already exists for this user
     $stmt = $conn->prepare("SELECT id FROM pooling_wallets WHERE user_id = ?");
     $stmt->bind_param("i", $userId);
@@ -94,10 +91,9 @@ try {
         $stmt->bind_param("i", $userId);
         $stmt->execute();
     }
-    */
     
-    // Fetch the created user from users table
-    $stmt = $conn->prepare("SELECT id, name, email, phone, role, is_active FROM users WHERE id = ?");
+    // Fetch the created user from pooling_users
+    $stmt = $conn->prepare("SELECT id, name, email, phone, role, is_active FROM pooling_users WHERE id = ?");
     if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
     $stmt->bind_param("i", $userId);
     $stmt->execute();

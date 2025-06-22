@@ -19,7 +19,7 @@ export function WhatsAppShareButton({
   children,
 }: WhatsAppShareButtonProps) {
   const handleShare = () => {
-    const phone = booking.passengerPhone || booking.guest_phone;
+    const phone = booking.passengerPhone;
     const message = generateBookingConfirmationMessage(booking);
     
     if (!phone) {

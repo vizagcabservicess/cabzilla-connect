@@ -9,10 +9,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { poolingAPI } from '@/services/api/poolingAPI';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
-import { useAuth } from '@/providers/AuthProvider';
 
 export function LoginForm() {
-  const { login } = useAuth();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -32,8 +31,6 @@ export function LoginForm() {
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
     localStorage.removeItem('user');
-    localStorage.removeItem('pooling_user');
-    localStorage.removeItem('pooling_auth_token');
     
     // Only test connection on component mount if we have an API URL
     if (url) {
@@ -102,18 +99,29 @@ export function LoginForm() {
     setError(null);
     try {
       toast.loading('Logging in...', { id: 'login-toast' });
-      await login(email, password);
-      toast.success('Login successful', { 
-        id: 'login-toast', 
-        description: `Redirecting to your dashboard...` 
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      // Debug log
+      console.log('Login payload:', { email, password });
+      const response = await fetch('https://vizagup.com/api/auth/login.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
       });
-      // The redirect is handled by the AuthProvider/route protection
-      // We can just reload or let the state update trigger it.
-      // A small delay can help the user see the message.
-      setTimeout(() => {
-        window.location.href = '/admin'; // Or a more dynamic dashboard path
-      }, 500);
-
+      const data = await response.json();
+      if (response.ok && data.token) {
+        toast.success('Login successful', { 
+          id: 'login-toast', 
+          description: `Welcome back, ${data.user?.name || 'User'}!` 
+        });
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 500);
+      } else {
+        throw new Error(data.error || 'Authentication failed');
+      }
     } catch (error) {
       console.error('Login error details:', error);
       toast.error('Login Failed', {

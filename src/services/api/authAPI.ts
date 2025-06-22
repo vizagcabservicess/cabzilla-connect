@@ -1,6 +1,8 @@
-import axios from 'axios';
 
-const API_BASE_URL = '/api/auth'; // Using relative path for proxy
+import axios from 'axios';
+import { getApiUrl } from '@/config/api';
+
+const AUTH_API_URL = getApiUrl('/api/auth');
 
 export interface User {
   id: number;
@@ -25,33 +27,27 @@ export interface RegisterRequest {
 
 export interface AuthResponse {
   success: boolean;
-  message?: string;
-  error?: string;
-  user?: User;
-  token?: string;
+  user: User;
+  token: string;
 }
 
 class AuthAPI {
   private token: string | null = null;
 
   constructor() {
-    try {
-      this.token = localStorage.getItem('auth_token');
-    } catch (e) {
-      console.error("Could not access localStorage:", e);
-    }
+    this.token = localStorage.getItem('auth_token');
   }
 
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
-      const response = await axios.post(`${API_BASE_URL}/login.php`, credentials, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (response.data.success && response.data.token && response.data.user) {
+      const response = await axios.post(`${AUTH_API_URL}/login.php`, credentials);
+      
+      if (response.data.success) {
         this.token = response.data.token;
         localStorage.setItem('auth_token', this.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
+      
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
@@ -59,14 +55,12 @@ class AuthAPI {
     }
   }
 
-  async signup(userData: RegisterRequest): Promise<AuthResponse> {
+  async register(userData: RegisterRequest): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await axios.post(`${API_BASE_URL}/register.php`, userData, {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const response = await axios.post(`${AUTH_API_URL}/register.php`, userData);
       return response.data;
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Registration error:', error);
       throw error;
     }
   }
@@ -74,7 +68,7 @@ class AuthAPI {
   async logout(): Promise<void> {
     try {
       if (this.token) {
-        await axios.post(`${API_BASE_URL}/logout.php`, {}, {
+        await axios.post(`${AUTH_API_URL}/logout.php`, {}, {
           headers: { Authorization: `Bearer ${this.token}` }
         });
       }
@@ -91,7 +85,7 @@ class AuthAPI {
     try {
       if (!this.token) return null;
       
-      const response = await axios.get(`${API_BASE_URL}/me.php`, {
+      const response = await axios.get(`${AUTH_API_URL}/me.php`, {
         headers: { Authorization: `Bearer ${this.token}` }
       });
       

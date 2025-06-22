@@ -47,7 +47,6 @@ try {
         exit();
     }
 
-    /*
     // If user is a provider, fetch provider_id from pooling_providers
     if ($user['role'] === 'provider') {
         $stmt2 = $conn->prepare("SELECT id FROM pooling_providers WHERE user_id = ? LIMIT 1");
@@ -57,7 +56,6 @@ try {
         $provider = $result2->fetch_assoc();
         $user['provider_id'] = $provider ? $provider['id'] : null;
     }
-    */
 
     echo json_encode(['success' => true, 'user' => $user]);
     

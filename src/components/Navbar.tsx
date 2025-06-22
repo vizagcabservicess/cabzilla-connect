@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/providers/AuthProvider';
+import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
 import {
@@ -100,7 +100,7 @@ const serviceLinks = [
 ];
 
 export function Navbar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = usePoolingAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [megaMenuOpen, setMegaMenuOpen] = useState(null);
@@ -115,7 +115,9 @@ export function Navbar() {
   };
 
   const handleDashboard = () => {
-    if (isAdmin) navigate('/admin');
+    if (user?.role === 'guest') navigate('/pooling/guest');
+    else if (user?.role === 'provider') navigate('/pooling/provider');
+    else if (user?.role === 'admin') navigate('/pooling/admin');
     else navigate('/dashboard');
   };
 

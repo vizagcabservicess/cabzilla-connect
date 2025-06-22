@@ -172,7 +172,7 @@ export function TabTripSelector({
   ];
   
   return (
-    <div className="space-y-4" id="tab-trip-selector">
+    <div className="space-y-4">
       {/* Tab bar with top border/line */}
       <div className="mb-4">
         <div className="relative w-full flex justify-center">
