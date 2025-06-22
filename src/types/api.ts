@@ -25,15 +25,15 @@ export interface BookingRequest {
   passengerName: string;
   passengerPhone: string;
   passengerEmail: string;
-  distance?: number; // Add distance property
-  totalAmount?: number; // Add totalAmount property
-  hourlyPackage?: string | null; // Add hourlyPackage property
-  adminNotes?: string; // Add adminNotes property
-  discountAmount?: number; // Add discountAmount property
-  discountType?: string | null; // Add discountType property
-  discountValue?: number; // Add discountValue property
-  isPaid?: boolean; // Add isPaid property
-  createdBy?: string; // Add createdBy property
+  distance?: number;
+  totalAmount?: number;
+  hourlyPackage?: string | null;
+  adminNotes?: string;
+  discountAmount?: number;
+  discountType?: string | null;
+  discountValue?: number;
+  isPaid?: boolean;
+  createdBy?: string;
 }
 
 export interface AuthResponse {
@@ -99,7 +99,7 @@ export interface Booking {
   totalAmount?: number;
   status: BookingStatus;
   payment_status: string;
-  payment_method?: string; // Add payment_method property
+  payment_method?: string;
   vehicleId?: string;
   vehicleNumber?: string;
   created_at: string;
@@ -118,7 +118,7 @@ export interface Booking {
     amount: number;
     description: string;
   }>;
-  paymentStatus?: string; // Add paymentStatus as alias
+  paymentStatus?: string;
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';
@@ -129,22 +129,22 @@ export interface Driver {
   email: string;
   phone: string;
   license_number: string;
-  license_no?: string; // Add license_no as alias
+  license_no?: string;
   experience_years: number;
   status: DriverStatus;
   rating: number;
   total_trips: number;
   created_at: string;
   updated_at: string;
-  location?: string; // Add location property
-  vehicle?: string; // Add vehicle property
-  vehicle_id?: string; // Add vehicle_id property
+  location?: string;
+  vehicle?: string;
+  vehicle_id?: string;
 }
 
 export interface DashboardMetrics {
   totalBookings: number;
   totalRevenue: number;
-  revenue?: number; // Add revenue as alias
+  revenue?: number;
   activeRides: number;
   upcomingRides: number;
   availableDrivers: number;
@@ -153,26 +153,43 @@ export interface DashboardMetrics {
   availableStatuses: BookingStatus[];
 }
 
-// Add missing type exports for tour management
 export interface TourData {
   id: string;
+  tourId?: string;
   name: string;
+  tourName?: string;
   description: string;
   duration: string;
+  timeDuration?: string;
   price: number;
+  distance?: number;
+  days?: number;
   image?: string;
+  imageUrl?: string;
   gallery?: TourGalleryItem[];
   itinerary?: TourItineraryDay[];
+  inclusions?: string[];
+  exclusions?: string[];
+  pricing?: { [vehicleId: string]: number };
 }
 
 export interface TourManagementRequest {
+  tourId?: string;
   name: string;
+  tourName?: string;
   description: string;
   duration: string;
+  timeDuration?: string;
   price: number;
+  distance?: number;
+  days?: number;
   image?: string;
+  imageUrl?: string;
   gallery?: TourGalleryItem[];
   itinerary?: TourItineraryDay[];
+  inclusions?: string[];
+  exclusions?: string[];
+  pricing?: { [vehicleId: string]: number };
 }
 
 export interface TourGalleryItem {
@@ -235,11 +252,10 @@ export interface VehiclePricingUpdateRequest {
   pricing: Partial<VehiclePricing>;
 }
 
-// Add commission-related interfaces
 export interface CommissionPayment {
   id: string;
   bookingId: string;
-  bookingNumber?: string; // Add bookingNumber property
+  bookingNumber?: string;
   vehicleId: string;
   driverId?: string;
   amount: number;
