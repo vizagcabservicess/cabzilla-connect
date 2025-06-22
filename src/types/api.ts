@@ -21,6 +21,7 @@ export interface BookingRequest {
   tripType: string;
   tripMode?: string;
   vehicleType: string;
+  cabType?: string; // Add cabType property
   passengerName: string;
   passengerPhone: string;
   passengerEmail: string;
@@ -41,7 +42,7 @@ export interface User {
   phone: string;
   role: 'customer' | 'driver' | 'admin' | 'guest' | 'provider';
   is_active: boolean;
-  imageUrl?: string;
+  imageUrl?: string; // Add imageUrl property
 }
 
 export type BookingStatus = 
@@ -56,6 +57,10 @@ export type BookingStatus =
   | 'continued';
 
 export interface Location {
+  id?: string;
+  name?: string;
+  type?: string;
+  popularityScore?: number;
   city: string;
   state: string;
   lat: number;
@@ -66,26 +71,43 @@ export interface Location {
 
 export interface Booking {
   id: number;
+  bookingNumber?: string; // Add bookingNumber property
   user_id: number;
   pickup_location: string | Location;
-  drop_location: string | Location;
+  pickupLocation?: string; // Add camelCase alias
+  drop_location?: string | Location;
+  dropLocation?: string; // Add camelCase alias
   pickup_date: string;
+  pickupDate?: string; // Add camelCase alias
   return_date?: string;
   trip_type: string;
-  trip_mode: string;
+  tripType?: string; // Add camelCase alias
+  trip_mode?: string;
+  tripMode?: string; // Add camelCase alias
   vehicle_type: string;
+  cabType?: string; // Add cabType property
   fare: number;
+  totalAmount?: number; // Add totalAmount property
   status: BookingStatus;
   payment_status: string;
   vehicleId?: string;
+  vehicleNumber?: string; // Add vehicleNumber property
   created_at: string;
   updated_at: string;
+  updatedAt?: string; // Add camelCase alias
   guest_name?: string;
   guest_email?: string;
   guest_phone?: string;
   passengerName?: string;
   passengerPhone?: string;
   passengerEmail?: string;
+  driverName?: string; // Add driverName property
+  driverPhone?: string; // Add driverPhone property
+  billingAddress?: string; // Add billingAddress property
+  extraCharges?: Array<{ // Add extraCharges property
+    amount: number;
+    description: string;
+  }>;
 }
 
 export interface Driver {

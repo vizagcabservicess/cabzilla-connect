@@ -1,4 +1,3 @@
-
 export interface GalleryItem {
   url: string;
   alt?: string;
@@ -212,6 +211,9 @@ export interface FleetVehicle {
   vehicle_number?: string;
   emi?: number; // Vehicle EMI (optional)
   commissionPercentage?: number; // Commission percentage for this vehicle
+  inclusions?: string[]; // Add inclusions property
+  exclusions?: string[]; // Add exclusions property
+  cancellationPolicy?: string; // Add cancellationPolicy property
 }
 
 export interface VehicleDocument {
