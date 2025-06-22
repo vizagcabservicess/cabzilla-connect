@@ -1,4 +1,3 @@
-
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
@@ -48,7 +47,8 @@ import PoolingProviderPage from './pages/PoolingProviderPage';
 import PoolingAdminPage from './pages/PoolingAdminPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
 import LocalTaxiPage from './pages/LocalTaxiPage';
-import OutstationTaxiPage from './pages/OutstationTaxiPage';
+import { OutstationTaxiPage } from './pages/OutstationTaxiPage';
+import { OutstationTaxiPrefilledPage } from './pages/OutstationTaxiPrefilledPage';
 import AirportTaxiPage from './pages/AirportTaxiPage';
 import RentalsPage from './pages/RentalsPage';
 import TourDetailPage from './pages/TourDetailPage';
@@ -183,6 +183,10 @@ const router = createBrowserRouter([
   {
     path: '/outstation-taxi',
     element: <OutstationTaxiPage />,
+  },
+  {
+    path: '/outstation-taxi/:from-to-:to',
+    element: <OutstationTaxiPrefilledPage />,
   },
   {
     path: '/outstation-taxi/:slug',
