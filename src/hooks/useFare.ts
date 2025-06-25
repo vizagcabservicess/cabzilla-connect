@@ -196,33 +196,35 @@ export function useFare(
             console.log(`Retrieved airport fares for ${cabId}:`, airportFares);
 
             let basePrice = 0;
-            const airportFee = 40; // Updated airport fee to Rs 40
-
+            let extraKmCharge = airportFares.extraKmCharge;
+            if (!extraKmCharge || isNaN(extraKmCharge)) {
+              if (normalizedCabId.includes('ertiga')) extraKmCharge = 18;
+              else extraKmCharge = 14;
+              console.warn('Missing extraKmCharge for airport fare, using fallback:', extraKmCharge);
+            }
             if (distance <= 10) {
               basePrice = airportFares.tier1Price || 1200;
             } else if (distance <= 20) {
               basePrice = airportFares.tier2Price || 1800;
             } else if (distance <= 30) {
               basePrice = airportFares.tier3Price || 2400;
+            } else if (distance <= 40) {
+              basePrice = airportFares.tier4Price || 1500;
             } else {
-              basePrice = airportFares.tier3Price || 2400;
-              const extraKm = distance - 30;
-              const extraKmCharge = airportFares.extraKmCharge || 14;
+              basePrice = airportFares.tier4Price || 1500;
+              const extraKm = distance - 40;
               const extraDistanceFare = extraKm * extraKmCharge;
               fare = basePrice + extraDistanceFare;
             }
 
-            if (distance <= 30) {
+            if (distance <= 40) {
               fare = basePrice;
             }
 
-            fare += airportFee;
-
             breakdown = {
               basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * (airportFares.extraKmCharge || 14)) : 0,
-              extraKmCharge: airportFares.extraKmCharge || 14
+              extraDistanceFare: distance > 40 ? ((distance - 40) * extraKmCharge) : 0,
+              extraKmCharge: extraKmCharge
             };
 
             source = 'database';
@@ -243,32 +245,32 @@ export function useFare(
             
             let basePrice = 0;
             let fare = 0;
-            const airportFee = 40; // Updated airport fee here too
 
+            let extraKmCharge = 14;
+            if (normalizedCabId.includes('ertiga')) extraKmCharge = 18;
             if (distance <= 10) {
               basePrice = 1200;
             } else if (distance <= 20) {
               basePrice = 1800;
             } else if (distance <= 30) {
               basePrice = 2400;
+            } else if (distance <= 40) {
+              basePrice = 1500;
             } else {
-              basePrice = 2400;
-              const extraKm = distance - 30;
-              const extraDistanceFare = extraKm * 14;
+              basePrice = 1500;
+              const extraKm = distance - 40;
+              const extraDistanceFare = extraKm * extraKmCharge;
               fare = basePrice + extraDistanceFare;
             }
 
-            if (distance <= 30) {
+            if (distance <= 40) {
               fare = basePrice;
             }
 
-            fare += airportFee;
-
             breakdown = {
               basePrice: basePrice,
-              airportFee: airportFee,
-              extraDistanceFare: distance > 30 ? ((distance - 30) * 14) : 0,
-              extraKmCharge: 14
+              extraDistanceFare: distance > 40 ? ((distance - 40) * extraKmCharge) : 0,
+              extraKmCharge: extraKmCharge
             };
 
             source = 'default';

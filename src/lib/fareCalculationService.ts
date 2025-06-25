@@ -245,9 +245,11 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
       basePrice = airportFares.tier2Price || 1800;
     } else if (distance <= 30) {
       basePrice = airportFares.tier3Price || 2400;
+    } else if (distance <= 40) {
+      basePrice = airportFares.tier4Price || 1500;
     } else {
-      basePrice = airportFares.tier3Price || 2400;
-      const extraKm = distance - 30;
+      basePrice = airportFares.tier4Price || 1500;
+      const extraKm = distance - 40;
       const extraKmCharge = airportFares.extraKmCharge || 14;
       const extraDistanceFare = extraKm * extraKmCharge;
       basePrice += extraDistanceFare;

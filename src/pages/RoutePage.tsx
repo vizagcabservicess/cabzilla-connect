@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
@@ -19,6 +18,7 @@ export const RoutePage = () => {
   } | null>(null);
   const [showCabOptions, setShowCabOptions] = useState(false);
   const [searchData, setSearchData] = useState<any>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
     if (!slug) {
@@ -51,6 +51,7 @@ export const RoutePage = () => {
     console.log('Search triggered with data:', data);
     setSearchData(data);
     setShowCabOptions(true);
+    setHasSearched(true);
   }, []);
 
   if (!routeInfo) {
@@ -79,20 +80,22 @@ export const RoutePage = () => {
         />
 
         {/* Route Description */}
-        <section className="bg-white py-8">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                About Your Trip to {routeInfo.to}
-              </h2>
-              <p className="text-gray-600 leading-relaxed">
-                Journey from {routeInfo.from} to {routeInfo.to}, a town celebrated for its scenic beauty and cultural heritage. 
-                This {routeInfo.distance} route takes approximately {routeInfo.duration} and offers breathtaking views of the countryside. 
-                Book your comfortable cab ride with professional drivers and enjoy a hassle-free travel experience.
-              </p>
+        {!hasSearched && (
+          <section className="bg-white py-8">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                  About Your Trip to {routeInfo.to}
+                </h2>
+                <p className="text-gray-600 leading-relaxed">
+                  Journey from {routeInfo.from} to {routeInfo.to}, a town celebrated for its scenic beauty and cultural heritage. 
+                  This {routeInfo.distance} route takes approximately {routeInfo.duration} and offers breathtaking views of the countryside. 
+                  Book your comfortable cab ride with professional drivers and enjoy a hassle-free travel experience.
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
         
         {/* Cab Options */}
         {showCabOptions && searchData && (

@@ -41,7 +41,8 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero({ onSearch }: { onSearch?: () => void }) {
+export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
+  console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
@@ -52,7 +53,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
       const routePrefillData = sessionStorage.getItem('routePrefillData');
       if (routePrefillData) {
         const prefillData = JSON.parse(routePrefillData);
-        sessionStorage.removeItem('routePrefillData'); // Clear after use
+        // sessionStorage.removeItem('routePrefillData'); // Do NOT clear after use
         return {
           pickupLocation: prefillData.pickupLocation,
           dropLocation: prefillData.dropLocation,
@@ -125,6 +126,8 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
   const [isCheckingTravelTime, setIsCheckingTravelTime] = useState<boolean>(false);
   const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
+
+  console.log('PREFILL:', { pickupLocation, dropLocation });
 
   // Listen for route prefill events
   useEffect(() => {
@@ -313,12 +316,13 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
     }
     
     if (tripType === 'local') {
-      // For local trips, we don't need drop location
-      setDropLocation(null);
-      sessionStorage.removeItem('dropLocation');
-      // Do NOT auto-set pickup location for local trips
-      setPickupLocation(null);
-      sessionStorage.removeItem('pickupLocation');
+      // Only clear if not already set by prefill
+      if (!pickupLocation && !dropLocation) {
+        setDropLocation(null);
+        sessionStorage.removeItem('dropLocation');
+        setPickupLocation(null);
+        sessionStorage.removeItem('pickupLocation');
+      }
     }
   }, [tripType, tripMode]);
 
@@ -378,7 +382,16 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
       });
       return;
     }
-    if (onSearch) onSearch();
+    if (onSearch) onSearch({
+      pickupLocation,
+      dropLocation,
+      pickupDate,
+      returnDate,
+      tripType,
+      tripMode,
+      hourlyPackage,
+      selectedCab
+    });
     setIsLoading(true);
     
     // If trip type is tour, navigate to the tour page with location and date params
@@ -496,6 +509,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
         pickupDate: pickupDate?.toISOString() || '',
         returnDate: returnDate?.toISOString() || null,
         cabType: selectedCab?.name || '',
+        vehicleType: selectedCab?.name || '',
         distance: distance,
         tripType: tripType,
         tripMode: tripMode,
@@ -570,16 +584,19 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
 
   // Custom handler for tab (trip type) changes
   const handleTabChange = (type: TripType) => {
+    console.log('Tab changed to:', type);
     setTripType(type);
     setDistance(0);
     setDuration(0);
     // Always clear drop location for Local and Tour
     if (type === 'local' || type === 'tour') {
+      console.log('Clearing dropLocation due to tab change to:', type);
       setDropLocation(null);
     }
     // For airport, clear drop location if pickup is not in Vizag
     if (type === 'airport') {
       if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
+        console.log('Clearing dropLocation due to airport tab and pickup not in Vizag');
         setDropLocation(null);
       }
     }
@@ -619,6 +636,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <LocationInput
+                    key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
                     value={pickupLocation || undefined}
@@ -629,6 +647,7 @@ export function Hero({ onSearch }: { onSearch?: () => void }) {
                   
                   {(tripType === 'outstation' || tripType === 'airport') && (
                     <LocationInput
+                      key={dropLocation?.id || dropLocation?.name || 'drop'}
                       label="DROP LOCATION"
                       placeholder="Enter drop location"
                       value={dropLocation || undefined}

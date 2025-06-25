@@ -502,10 +502,13 @@ export const BookingSummary = ({
           newBaseFare = airportFares.tier2Price || airportFares.basePrice || 1200;
         } else if (distance <= 30) {
           newBaseFare = airportFares.tier3Price || airportFares.basePrice || 1500;
+        } else if (distance <= 40) {
+          newBaseFare = airportFares.tier4Price || airportFares.basePrice || 2000;
+          newExtraDistance = 0;
+          newExtraDistanceFare = 0;
         } else {
           newBaseFare = airportFares.tier4Price || airportFares.basePrice || 2000;
-
-          newExtraDistance = distance - 30;
+          newExtraDistance = distance - 40;
           newExtraDistanceFare = newExtraDistance * (airportFares.extraKmCharge || 14);
           newPerKmRate = airportFares.extraKmCharge || 14;
         }
@@ -994,12 +997,6 @@ export const BookingSummary = ({
                   <p>{formatPrice(summaryExtraDistanceCharges)}</p>
                 </div>
               )}
-              {tripType === 'airport' && breakdown.airportFee > 0 && (
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Airport fee</p>
-                  <p>{formatPrice(breakdown.airportFee)}</p>
-                </div>
-              )}
               <Separator className="my-3" />
               <div className="flex justify-between items-center">
                 <p className="font-semibold">Total Price</p>
@@ -1032,6 +1029,8 @@ export const BookingSummary = ({
             </table>
           </div>
         )}
+
+        <div className="text-xs text-gray-500 mt-2">Parking and tolls fees are extra.</div>
       </div>
     </div>
   );
