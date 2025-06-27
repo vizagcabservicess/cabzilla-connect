@@ -20,7 +20,7 @@ const CITY_LOOKUP: Record<string, { city: string; state: string; lat: number; ln
   'Araku Valley': { city: 'Araku Valley', state: 'Andhra Pradesh', lat: 18.3272, lng: 82.8763 },
   'Parvathipuram': { city: 'Parvathipuram', state: 'Andhra Pradesh', lat: 18.783, lng: 83.4268 },
   'Bobbili': { city: 'Bobbili', state: 'Andhra Pradesh', lat: 18.5735, lng: 83.3584 },
-  'Vizianagaram': { city: 'Vizianagaram', state: 'Andhra Pradesh', lat: 18.1114, lng: 83.3937 },
+  'Vizianagaram': { city: 'Vizianagaram', state: 'Andhra Pradesh', lat: 18.1114, lng: 83.393 },
   'Sompeta': { city: 'Sompeta', state: 'Andhra Pradesh', lat: 18.9448, lng: 84.5821 },
   'Ichchapuram': { city: 'Ichchapuram', state: 'Andhra Pradesh', lat: 19.1139, lng: 84.6872 },
   'Palasa': { city: 'Palasa', state: 'Andhra Pradesh', lat: 18.7726, lng: 84.4100 },

@@ -69,6 +69,7 @@ const CabFareCard = ({
   let fareResult = undefined;
 
   // Handle outstation round trips with shared calculation
+  let actualDistance = distance;
   if (
     tripType === 'outstation' &&
     (tripMode === 'round' || tripMode === 'round-trip') &&
@@ -76,11 +77,11 @@ const CabFareCard = ({
     returnDate &&
     distance > 0
   ) {
+    actualDistance = distance * 2;
     // Use shared fare calculation with per-vehicle rates
     const perKmRate = cab.pricePerKm ?? cab.outstationFares?.pricePerKm ?? 15;
     const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? 0;
     const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? 250;
-    const actualDistance = distance * 2;
     fareResult = calculateOutstationRoundTripFare({
       pickupDate,
       returnDate,
@@ -108,6 +109,10 @@ const CabFareCard = ({
         breakdown={selectedCabBreakdown ? selectedCabBreakdown : fareResult}
       />
     );
+  }
+  // For one-way outstation, use actual distance as-is
+  if (tripType === 'outstation' && (tripMode === 'one-way' || !tripMode)) {
+    actualDistance = distance;
   }
 
   // Handle other trip types (tour, local, airport, one-way outstation)

@@ -47,6 +47,12 @@ export const RoutePage = () => {
     });
   }, [slug, navigate]);
 
+  useEffect(() => {
+    setShowCabOptions(false);
+    setSearchData(null);
+    setHasSearched(false);
+  }, [slug]);
+
   const handleSearch = useCallback((data: any) => {
     console.log('Search triggered with data:', data);
     setSearchData(data);
@@ -95,26 +101,6 @@ export const RoutePage = () => {
               </div>
             </div>
           </section>
-        )}
-        
-        {/* Cab Options */}
-        {showCabOptions && searchData && (
-          <main className="container mx-auto px-4 py-8">
-            <div className="mt-8">
-              <CabOptions
-                cabTypes={searchData.cabTypes}
-                selectedCab={searchData.selectedCab}
-                onSelectCab={searchData.onSelectCab}
-                distance={searchData.distance}
-                tripType={searchData.tripType}
-                tripMode={searchData.tripMode}
-                pickupDate={searchData.pickupDate}
-                returnDate={searchData.returnDate}
-                isCalculatingFares={searchData.isCalculatingFares}
-                selectedCabBreakdown={searchData.selectedCabBreakdown}
-              />
-            </div>
-          </main>
         )}
         
         <MobileNavigation />
