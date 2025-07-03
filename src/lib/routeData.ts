@@ -17,6 +17,8 @@ export interface RouteInfo {
     title: string;
     description: string;
     keywords: string;
+    faq: { question: string; answer: string }[];
+    extraContent: string;
   };
   content: string;
 }
@@ -34,7 +36,13 @@ export const popularRoutes: RouteInfo[] = [
     seo: {
       title: 'Visakhapatnam to Araku Valley Taxi | Book Cabs at Best Fares',
       description: 'Book a taxi from Visakhapatnam to Araku Valley. Enjoy a comfortable journey to explore serene hills and coffee plantations. Safe, reliable, and affordable cabs.',
-      keywords: 'visakhapatnam to araku valley taxi, vizag to araku cabs, araku valley tour package'
+      keywords: 'visakhapatnam to araku valley taxi, vizag to araku cabs, araku valley tour package',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Araku Valley?', answer: 'The distance is approximately 120 KM by road.' },
+        { question: 'How long does it take to reach Araku Valley from Vizag?', answer: 'It usually takes about 3-4 hours depending on traffic and weather conditions.' },
+        { question: 'Are there sightseeing stops on the way?', answer: 'Yes, you can visit Borra Caves, coffee plantations, and Padmapuram Gardens en route.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> The best time to visit Araku Valley is from October to March for pleasant weather and lush green views. Don\'t forget to try the local coffee and tribal cuisine!</p>'
     },
     content: `<p>Embark on a scenic journey from Visakhapatnam to the breathtaking Araku Valley. Our reliable taxi service ensures a comfortable and memorable trip through winding ghat roads, lush green landscapes, and mesmerizing coffee plantations. Araku Valley is a perfect getaway for nature lovers, offering attractions like the Borra Caves, Padmapuram Gardens, and tribal museums.</p>`
   },
@@ -58,30 +66,42 @@ export const popularRoutes: RouteInfo[] = [
     to: 'Annavaram',
     distance: '125 KM',
     time: '3 Hours',
-    description: 'Embark on a spiritual journey to the famed Satyanarayana Swamy Temple.',
-    image: 'https://images.unsplash.com/photo-1605613136450-13a89191a783?w=500&h=300&fit=crop',
+    description: 'Visit the temple town of Annavaram, famous for the Satyanarayana Swamy Temple.',
+    image: '',
     fares: { sedan: '₹3,000', suv: '₹4,000' },
     seo: {
-        title: 'Visakhapatnam to Annavaram Taxi | Temple Darshan Cabs',
-        description: 'Book a taxi from Visakhapatnam to Annavaram for a divine pilgrimage to the Satyanarayana Swamy Temple. We offer reliable and comfortable rides for your spiritual journey.',
-        keywords: 'visakhapatnam to annavaram taxi, annavaram temple cabs, vizag to annavaram'
+      title: 'Visakhapatnam to Annavaram Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Annavaram. Enjoy a comfortable journey to the temple town, famous for the Satyanarayana Swamy Temple.',
+      keywords: 'visakhapatnam to annavaram taxi, vizag to annavaram cabs, annavaram travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Annavaram?', answer: 'The distance is approximately 125 KM by road.' },
+        { question: 'How long does it take to reach Annavaram from Vizag?', answer: 'It usually takes about 3 hours depending on traffic and road conditions.' },
+        { question: 'What is Annavaram famous for?', answer: 'Annavaram is renowned for the Satyanarayana Swamy Temple.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> The best time to visit Annavaram is during the temple festivals for a spiritual experience.</p>'
     },
-    content: `<p>Take a spiritual trip from Visakhapatnam to Annavaram, home to the renowned Sri Veera Venkata Satyanarayanaswamy Vari Devasthanam. Our taxi service offers a peaceful and comfortable journey for your pilgrimage. The temple, situated on Ratnagiri hill, is a significant spiritual center in Andhra Pradesh.</p>`
+    content: `<p>Travel from Visakhapatnam to Annavaram, a spiritual destination in Andhra Pradesh. Our taxi service ensures a safe and comfortable ride to the famous Satyanarayana Swamy Temple, located on Ratnagiri hill.</p>`
   },
   {
     from: 'Visakhapatnam',
     to: 'Kakinada',
     distance: '160 KM',
     time: '3-4 Hours',
-    description: 'Explore the "Fertilizer City" with its beautiful coastline and rich culture.',
-    image: 'https://images.unsplash.com/photo-1621945235317-b749a0a0ab3a?w=500&h=300&fit=crop',
+    description: 'Explore the beautiful port city of Kakinada, known for its beaches and culture.',
+    image: '',
     fares: { sedan: '₹3,800', suv: '₹5,000' },
     seo: {
-        title: 'Visakhapatnam to Kakinada Taxi | Coastal Ride Cabs',
-        description: 'Book your cab from Visakhapatnam to Kakinada. Discover its beautiful coastline, rich culture, and delicious local cuisine with our reliable taxi service.',
-        keywords: 'visakhapatnam to kakinada taxi, vizag to kakinada cabs, kakinada travel'
+      title: 'Visakhapatnam to Kakinada Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Kakinada. Enjoy a comfortable journey to the port city, famous for its beaches and delicious cuisine.',
+      keywords: 'visakhapatnam to kakinada taxi, vizag to kakinada cabs, kakinada travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Kakinada?', answer: 'The distance is approximately 160 KM by road.' },
+        { question: 'How long does it take to reach Kakinada from Vizag?', answer: 'It usually takes about 3-4 hours depending on traffic and road conditions.' },
+        { question: 'What is Kakinada famous for?', answer: 'Kakinada is known for its port, beaches, and the famous Kakinada Kaja sweet.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Visit Coringa Wildlife Sanctuary and enjoy the local seafood in Kakinada.</p>'
     },
-    content: `<p>Travel from Visakhapatnam to Kakinada, a major port city known as the "Fertilizer City." Enjoy its serene beaches like Uppada, explore the Coringa Wildlife Sanctuary, and savor the famous Kakinada Kaja. Our cabs ensure a comfortable ride along the scenic coastal route.</p>`
+    content: `<p>Travel from Visakhapatnam to Kakinada, a vibrant port city on the east coast. Our taxi service ensures a safe and comfortable ride. Explore the beaches, try the local cuisine, and visit the Coringa Wildlife Sanctuary.</p>`
   },
    {
     from: 'Visakhapatnam',
@@ -89,14 +109,20 @@ export const popularRoutes: RouteInfo[] = [
     distance: '200 KM',
     time: '4-5 Hours',
     description: 'Experience culture on the banks of Godavari.',
-    image: 'https://images.unsplash.com/photo-1629822359420-554199d2b27a?w=500&h=300&fit=crop',
+    image: '',
     fares: { sedan: '₹4,500', suv: '₹5,800' },
     seo: {
-        title: 'Visakhapatnam to Rajahmundry Taxi | Godavari Bank Cabs',
-        description: 'Book a taxi from Visakhapatnam to Rajahmundry and explore the cultural capital of Andhra Pradesh on the banks of the Godavari river. Comfortable and safe journey guaranteed.',
-        keywords: 'visakhapatnam to rajahmundry taxi, vizag to rajahmundry cabs, godavari tour'
+      title: 'Visakhapatnam to Rajahmundry Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Rajahmundry. Enjoy a comfortable journey to the cultural capital of Andhra Pradesh on the banks of the Godavari river.',
+      keywords: 'visakhapatnam to rajahmundry taxi, vizag to rajahmundry cabs, godavari tour',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Rajahmundry?', answer: 'The distance is approximately 200 KM by road.' },
+        { question: 'How long does it take to reach Rajahmundry from Vizag?', answer: 'It usually takes about 4-5 hours depending on traffic and road conditions.' },
+        { question: 'What is Rajahmundry famous for?', answer: 'Rajahmundry is known for the Godavari river, ISKCON temple, and cultural heritage.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Take a boat ride on the Godavari and visit the ISKCON temple in Rajahmundry.</p>'
     },
-    content: `<p>Journey to Rajahmundry, the cultural heart of Andhra Pradesh, situated on the banks of the mighty Godavari River. Visit the ISKCON temple, take a boat ride on the Godavari, and walk across the iconic Godavari Arch Bridge. Our taxi service provides a comfortable and scenic drive from Visakhapatnam.</p>`
+    content: `<p>Travel from Visakhapatnam to Rajahmundry, the cultural heart of Andhra Pradesh. Our taxi service ensures a safe and comfortable ride along scenic highways. Explore the Godavari river, visit temples, and enjoy the local food scene in Rajahmundry.</p>`
   },
   {
     from: 'Visakhapatnam',
@@ -104,14 +130,20 @@ export const popularRoutes: RouteInfo[] = [
     distance: '350 KM',
     time: '7-8 Hours',
     description: 'Explore the bustling city on the banks of Krishna, home to Kanaka Durga Temple.',
-    image: 'https://images.unsplash.com/photo-1593365463032-05a9193b4e6?w=500&h=300&fit=crop',
+    image: '',
     fares: { sedan: '₹7,000', suv: '₹9,000' },
     seo: {
-        title: 'Visakhapatnam to Vijayawada Taxi | Business & Leisure Cabs',
-        description: 'Book a reliable taxi from Visakhapatnam to Vijayawada. Visit the Kanaka Durga Temple, explore Undavalli Caves, and enjoy the vibrant city life with our comfortable cabs.',
-        keywords: 'visakhapatnam to vijayawada taxi, vizag to vijayawada cabs, bezawada taxi'
+      title: 'Visakhapatnam to Vijayawada Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Vijayawada. Enjoy a comfortable journey to the business and cultural hub of Andhra Pradesh.',
+      keywords: 'visakhapatnam to vijayawada taxi, vizag to vijayawada cabs, vijayawada travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Vijayawada?', answer: 'The distance is approximately 350 KM by road.' },
+        { question: 'How long does it take to reach Vijayawada from Vizag?', answer: 'It usually takes about 7-8 hours depending on traffic and road conditions.' },
+        { question: 'What is Vijayawada famous for?', answer: 'Vijayawada is known for the Kanaka Durga Temple, Undavalli Caves, and the Krishna river.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Visit the Kanaka Durga Temple and try the local Andhra cuisine in Vijayawada.</p>'
     },
-    content: `<p>Travel from Visakhapatnam to the bustling city of Vijayawada, a major commercial hub on the banks of the Krishna River. Seek blessings at the Kanaka Durga Temple, explore the ancient Undavalli Caves, and enjoy the city's dynamic atmosphere. Our long-distance cabs make the journey comfortable and convenient.</p>`
+    content: `<p>Travel from Visakhapatnam to Vijayawada, a major city on the banks of the Krishna river. Our taxi service ensures a safe and comfortable ride. Explore temples, caves, and the vibrant city life in Vijayawada.</p>`
   },
   {
     from: 'Visakhapatnam',
@@ -119,14 +151,20 @@ export const popularRoutes: RouteInfo[] = [
     distance: '620 KM',
     time: '11-12 Hours',
     description: 'Discover the City of Pearls, with its iconic Charminar and delicious biryani.',
-    image: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=500&h=300&fit=crop',
+    image: '',
     fares: { sedan: '₹12,000', suv: '₹15,000' },
     seo: {
-        title: 'Visakhapatnam to Hyderabad Taxi | City of Pearls Cabs',
-        description: 'Book a one-way or round trip taxi from Visakhapatnam to Hyderabad. Explore Charminar, Golconda Fort, and taste the world-famous Hyderabadi biryani. Safe and comfortable cabs.',
-        keywords: 'visakhapatnam to hyderabad taxi, vizag to hyderabad cabs, hyderabad trip'
+      title: 'Visakhapatnam to Hyderabad Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Hyderabad. Enjoy a comfortable journey to the City of Pearls, famous for its history, culture, and cuisine.',
+      keywords: 'visakhapatnam to hyderabad taxi, vizag to hyderabad cabs, hyderabad travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Hyderabad?', answer: 'The distance is approximately 620 KM by road.' },
+        { question: 'How long does it take to reach Hyderabad from Vizag?', answer: 'It usually takes about 11-12 hours depending on traffic and road conditions.' },
+        { question: 'What is Hyderabad famous for?', answer: 'Hyderabad is known for Charminar, Golconda Fort, and Hyderabadi biryani.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Visit Charminar, try Hyderabadi biryani, and explore the old city in Hyderabad.</p>'
     },
-    content: `<p>Plan your trip from Visakhapatnam to Hyderabad, the vibrant "City of Pearls." Our comfortable outstation taxis are perfect for this long journey. Discover iconic landmarks like the Charminar, Golconda Fort, and Ramoji Film City. Don't forget to indulge in the legendary Hyderabadi biryani. We ensure your travel is smooth and enjoyable.</p>`
+    content: `<p>Travel from Visakhapatnam to Hyderabad, the capital city of Telangana. Our taxi service ensures a safe and comfortable ride. Explore historical sites, taste the famous biryani, and enjoy the vibrant city life in Hyderabad.</p>`
   },
   {
     from: 'Visakhapatnam',
@@ -142,6 +180,111 @@ export const popularRoutes: RouteInfo[] = [
         keywords: 'visakhapatnam to puri taxi, vizag to puri cabs, jagannath temple yatra'
     },
     content: `<p>Embark on a spiritual journey from Visakhapatnam to the holy city of Puri in Odisha. Our outstation taxi service provides a safe and comfortable ride to the abode of Lord Jagannath. Besides the main temple, you can relax at the Golden Beach, visit the Konark Sun Temple nearby, and explore local crafts. Book your divine trip with us.</p>`
+  },
+  {
+    from: 'Visakhapatnam',
+    to: 'Guntur',
+    distance: '370 KM',
+    time: '7-8 Hours',
+    description: 'Travel to the heart of Andhra Pradesh, known for its rich history and spicy cuisine.',
+    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500&h=300&fit=crop',
+    fares: { sedan: '₹7,500', suv: '₹9,500' },
+    seo: {
+      title: 'Visakhapatnam to Guntur Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Guntur. Enjoy a comfortable journey to the heart of Andhra Pradesh, famous for its history, culture, and cuisine.',
+      keywords: 'visakhapatnam to guntur taxi, vizag to guntur cabs, guntur travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Guntur?', answer: 'The distance is approximately 370 KM by road.' },
+        { question: 'How long does it take to reach Guntur from Vizag?', answer: 'It usually takes about 7-8 hours depending on traffic and road conditions.' },
+        { question: 'What are some attractions in Guntur?', answer: 'Guntur is known for Amaravati, Kondaveedu Fort, Uppalapadu Bird Sanctuary, and its spicy cuisine.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Guntur is famous for its chillies and delicious Andhra meals. The best time to visit is between November and February for pleasant weather.</p>'
+    },
+    content: `<p>Travel from Visakhapatnam to Guntur, a vibrant city in Andhra Pradesh known for its rich history, educational institutions, and spicy cuisine. Our taxi service ensures a safe and comfortable ride through scenic highways. Explore Amaravati, visit ancient temples, and enjoy the local food scene in Guntur.</p>`
+  },
+  {
+    from: 'Visakhapatnam',
+    to: 'Chennai',
+    distance: '800 KM',
+    time: '14-15 Hours',
+    description: 'Travel to the capital of Tamil Nadu, known for its beaches and culture.',
+    image: '',
+    fares: { sedan: '₹15,000', suv: '₹18,000' },
+    seo: {
+      title: 'Visakhapatnam to Chennai Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Chennai. Enjoy a comfortable journey to the capital city, famous for Marina Beach and rich heritage.',
+      keywords: 'visakhapatnam to chennai taxi, vizag to chennai cabs, chennai travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Chennai?', answer: 'The distance is approximately 800 KM by road.' },
+        { question: 'How long does it take to reach Chennai from Vizag?', answer: 'It usually takes about 14-15 hours depending on traffic and road conditions.' },
+        { question: 'What is Chennai famous for?', answer: 'Chennai is known for Marina Beach, temples, and South Indian cuisine.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Visit Marina Beach and try authentic South Indian filter coffee in Chennai.</p>'
+    },
+    content: `<p>Travel from Visakhapatnam to Chennai, the capital city of Tamil Nadu. Our taxi service ensures a safe and comfortable ride. Explore beaches, temples, and the vibrant city life in Chennai.</p>`
+  },
+  {
+    from: 'Visakhapatnam',
+    to: 'Bangalore',
+    distance: '1000 KM',
+    time: '18-20 Hours',
+    description: 'Visit the Garden City, known for its parks, IT industry, and pleasant climate.',
+    image: '',
+    fares: { sedan: '₹18,000', suv: '₹22,000' },
+    seo: {
+      title: 'Visakhapatnam to Bangalore Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Bangalore. Enjoy a comfortable journey to the Garden City, famous for its parks and tech industry.',
+      keywords: 'visakhapatnam to bangalore taxi, vizag to bangalore cabs, bangalore travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Bangalore?', answer: 'The distance is approximately 1000 KM by road.' },
+        { question: 'How long does it take to reach Bangalore from Vizag?', answer: 'It usually takes about 18-20 hours depending on traffic and road conditions.' },
+        { question: 'What is Bangalore famous for?', answer: 'Bangalore is known for its gardens, IT industry, and pleasant weather.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Visit Lalbagh Botanical Garden and enjoy the cool evenings in Bangalore.</p>'
+    },
+    content: `<p>Travel from Visakhapatnam to Bangalore, the IT capital of India. Our taxi service ensures a safe and comfortable ride. Explore parks, cafes, and the cosmopolitan culture of Bangalore.</p>`
+  },
+  {
+    from: 'Visakhapatnam',
+    to: 'Tirupati',
+    distance: '760 KM',
+    time: '13-14 Hours',
+    description: 'Visit the holy city of Tirupati, home to the famous Venkateswara Temple.',
+    image: '',
+    fares: { sedan: '₹14,000', suv: '₹17,000' },
+    seo: {
+      title: 'Visakhapatnam to Tirupati Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Tirupati. Enjoy a comfortable journey to the holy city, famous for the Venkateswara Temple.',
+      keywords: 'visakhapatnam to tirupati taxi, vizag to tirupati cabs, tirupati travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Tirupati?', answer: 'The distance is approximately 760 KM by road.' },
+        { question: 'How long does it take to reach Tirupati from Vizag?', answer: 'It usually takes about 13-14 hours depending on traffic and road conditions.' },
+        { question: 'What is Tirupati famous for?', answer: 'Tirupati is known for the Venkateswara Temple, one of the most visited pilgrimage sites in India.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Book your darshan tickets in advance for a smooth pilgrimage experience in Tirupati.</p>'
+    },
+    content: `<p>Travel from Visakhapatnam to Tirupati, a major pilgrimage city in Andhra Pradesh. Our taxi service ensures a safe and comfortable ride. Visit the famous Venkateswara Temple and explore the spiritual atmosphere of Tirupati.</p>`
+  },
+  {
+    from: 'Visakhapatnam',
+    to: 'Nellore',
+    distance: '700 KM',
+    time: '12-13 Hours',
+    description: 'Visit Nellore, known for its agriculture, temples, and delicious seafood.',
+    image: '',
+    fares: { sedan: '₹13,000', suv: '₹16,000' },
+    seo: {
+      title: 'Visakhapatnam to Nellore Taxi | Book Cabs at Best Fares',
+      description: 'Book a taxi from Visakhapatnam to Nellore. Enjoy a comfortable journey to the city, famous for its agriculture and temples.',
+      keywords: 'visakhapatnam to nellore taxi, vizag to nellore cabs, nellore travel',
+      faq: [
+        { question: 'What is the distance from Visakhapatnam to Nellore?', answer: 'The distance is approximately 700 KM by road.' },
+        { question: 'How long does it take to reach Nellore from Vizag?', answer: 'It usually takes about 12-13 hours depending on traffic and road conditions.' },
+        { question: 'What is Nellore famous for?', answer: 'Nellore is known for its agriculture, temples, and seafood.' }
+      ],
+      extraContent: '<p><strong>Travel Tip:</strong> Try the local Nellore fish curry and visit the Ranganatha Temple.</p>'
+    },
+    content: `<p>Travel from Visakhapatnam to Nellore, a city in Andhra Pradesh known for its agriculture and temples. Our taxi service ensures a safe and comfortable ride. Explore temples, try the local cuisine, and enjoy the hospitality of Nellore.</p>`
   }
   // More routes can be added here following the same structure.
 ];

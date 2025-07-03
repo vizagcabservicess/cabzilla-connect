@@ -6,6 +6,7 @@ import { OutstationHero } from '@/components/OutstationHero';
 import { CabOptions } from '@/components/CabOptions';
 import { Helmet } from 'react-helmet-async';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { getRouteBySlug } from '@/lib/routeData';
 
 export const RoutePage = () => {
   const { slug } = useParams();
@@ -15,6 +16,15 @@ export const RoutePage = () => {
     to: string;
     distance: string;
     duration: string;
+    description?: string;
+    content?: string;
+    seo?: {
+      title?: string;
+      description?: string;
+      keywords?: string;
+      faq?: { question: string; answer: string }[];
+      extraContent?: string;
+    };
   } | null>(null);
   const [showCabOptions, setShowCabOptions] = useState(false);
   const [searchData, setSearchData] = useState<any>(null);
@@ -34,17 +44,33 @@ export const RoutePage = () => {
     const fromSlug = parts[0];
     const toSlug = parts[1];
 
-    // Convert slugs to readable names
-    const fromName = fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const toName = toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    
-    // Set route info based on the URL params
-    setRouteInfo({
-      from: fromName,
-      to: toName,
-      distance: '71 KM',
-      duration: '2 Hours'
-    });
+    const routeData = getRouteBySlug(fromSlug, toSlug);
+
+    if (routeData) {
+      setRouteInfo({
+        from: routeData.from,
+        to: routeData.to,
+        distance: routeData.distance,
+        duration: routeData.time,
+        description: routeData.description,
+        content: routeData.content,
+        seo: routeData.seo,
+      });
+    } else {
+      setRouteInfo({
+        from: fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        to: toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        distance: 'N/A',
+        duration: 'N/A',
+        description: 'No description available.',
+        content: '',
+        seo: {
+          title: `${fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} to ${toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Taxi | Book Outstation Cab`,
+          description: `Book a reliable taxi from ${fromSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} to ${toSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}. N/A journey in N/A. Best rates guaranteed.`,
+          keywords: '',
+        },
+      });
+    }
   }, [slug, navigate]);
 
   useEffect(() => {
@@ -71,8 +97,9 @@ export const RoutePage = () => {
   return (
     <>
       <Helmet>
-        <title>{`${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`}</title>
-        <meta name="description" content={`Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
+        <title>{routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`}</title>
+        <meta name="description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
+        <meta name="keywords" content={routeInfo.seo?.keywords || ''} />
       </Helmet>
       <ScrollToTop />
       <div className="min-h-screen bg-gray-50">
@@ -93,11 +120,45 @@ export const RoutePage = () => {
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">
                   About Your Trip to {routeInfo.to}
                 </h2>
-                <p className="text-gray-600 leading-relaxed">
-                  Journey from {routeInfo.from} to {routeInfo.to}, a town celebrated for its scenic beauty and cultural heritage. 
-                  This {routeInfo.distance} route takes approximately {routeInfo.duration} and offers breathtaking views of the countryside. 
-                  Book your comfortable cab ride with professional drivers and enjoy a hassle-free travel experience.
-                </p>
+                {routeInfo.content ? (
+                  <div className="text-gray-600 leading-relaxed" dangerouslySetInnerHTML={{ __html: routeInfo.content }} />
+                ) : (
+                  <p className="text-gray-600 leading-relaxed">
+                    Journey from {routeInfo.from} to {routeInfo.to}, a town celebrated for its scenic beauty and cultural heritage. 
+                    This {routeInfo.distance} route takes approximately {routeInfo.duration} and offers breathtaking views of the countryside. 
+                    Book your comfortable cab ride with professional drivers and enjoy a hassle-free travel experience.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+        
+        {/* FAQ Section */}
+        {routeInfo?.seo?.faq && routeInfo.seo.faq.length > 0 && !hasSearched && (
+          <section className="bg-white py-8 mt-8">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h3>
+                <div className="space-y-4">
+                  {routeInfo.seo.faq.map((item, idx) => (
+                    <div key={idx}>
+                      <div className="font-semibold text-gray-800">{item.question}</div>
+                      <div className="text-gray-600">{item.answer}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+        
+        {/* Extra SEO Content */}
+        {routeInfo?.seo?.extraContent && !hasSearched && (
+          <section className="bg-white py-8 mt-4">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto">
+                <div className="text-gray-600" dangerouslySetInnerHTML={{ __html: routeInfo.seo.extraContent }} />
               </div>
             </div>
           </section>
