@@ -55,9 +55,11 @@ export const popularRoutes: RouteInfo[] = [
     image: 'https://images.unsplash.com/photo-1505144808419-1957a94ca61e?w=500&h=300&fit=crop',
     fares: { sedan: '₹2,000', suv: '₹2,800' },
     seo: {
-        title: 'Visakhapatnam to Narsipatnam Taxi | Affordable Cabs',
-        description: 'Travel from Visakhapatnam to Narsipatnam with our trusted taxi service. Explore waterfalls and natural attractions. Book your comfortable ride today!',
-        keywords: 'visakhapatnam to narsipatnam taxi, cabs to narsipatnam, narsipatnam trip'
+      title: 'Visakhapatnam to Narsipatnam Taxi | Affordable Cabs',
+      description: 'Travel from Visakhapatnam to Narsipatnam with our trusted taxi service. Explore waterfalls and natural attractions. Book your comfortable ride today!',
+      keywords: 'visakhapatnam to narsipatnam taxi, cabs to narsipatnam, narsipatnam trip',
+      faq: [],
+      extraContent: ''
     },
     content: `<p>Journey from Visakhapatnam to Narsipatnam, a town celebrated for its proximity to stunning waterfalls and verdant landscapes. It's an ideal destination for those seeking a quick and refreshing escape into nature. Our cab service provides a smooth and safe ride, allowing you to relax and enjoy the scenery.</p>`
   },
@@ -177,7 +179,9 @@ export const popularRoutes: RouteInfo[] = [
     seo: {
         title: 'Visakhapatnam to Puri Taxi | Jagannath Dham Yatra Cabs',
         description: 'Book a taxi from Visakhapatnam to Puri for a pilgrimage to the Jagannath Temple. Enjoy the beautiful Golden Beach and other attractions with our reliable cab service.',
-        keywords: 'visakhapatnam to puri taxi, vizag to puri cabs, jagannath temple yatra'
+        keywords: 'visakhapatnam to puri taxi, vizag to puri cabs, jagannath temple yatra',
+        faq: [],
+        extraContent: ''
     },
     content: `<p>Embark on a spiritual journey from Visakhapatnam to the holy city of Puri in Odisha. Our outstation taxi service provides a safe and comfortable ride to the abode of Lord Jagannath. Besides the main temple, you can relax at the Golden Beach, visit the Konark Sun Temple nearby, and explore local crafts. Book your divine trip with us.</p>`
   },
@@ -288,6 +292,12 @@ export const popularRoutes: RouteInfo[] = [
   }
   // More routes can be added here following the same structure.
 ];
+
+// Ensure all seo objects have faq and extraContent
+popularRoutes.forEach(route => {
+  if (!route.seo.faq) route.seo.faq = [];
+  if (!route.seo.extraContent) route.seo.extraContent = '';
+});
 
 // Helper to find a route for the detail page
 export const getRouteBySlug = (fromSlug?: string, toSlug?: string) => {
