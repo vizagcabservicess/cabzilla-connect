@@ -386,13 +386,26 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
     // Check if drop location is Araku Valley - redirect to tour page
     if (dropLocation && dropLocation.name) {
       const dropLocationName = dropLocation.name.toLowerCase().trim();
-      const arakuKeywords = ['araku', 'araku valley', 'araku valley station'];
+      const arakuKeywords = ['araku', 'araku valley', 'araku valley station','damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
+  'katiki waterfalls', 'coffee plantation', 'coffee estates', 'coffee museum',
+  'tribal museum', 'padmapuram garden', 'padmapuram gardens',
+  'borra caves', 'borra guhalu', 'anjadevudu waterfalls'];
       
       if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
         navigate('/tours/araku', { replace: true });
         return;
       }
     }
+       // Check if drop location is Araku Valley - redirect to tour page
+       if (dropLocation && dropLocation.name) {
+        const dropLocationName = dropLocation.name.toLowerCase().trim();
+        const arakuKeywords = ['lambasingi','kothapalli','Lambasingi Hill Top view'];
+        
+        if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
+          navigate('/tours/lambasingi', { replace: true });
+          return;
+        }
+      }
 
     if (onSearch) onSearch({
       pickupLocation,
