@@ -382,18 +382,6 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
       });
       return;
     }
-
-    // Check if drop location is Araku Valley - redirect to tour page
-    if (dropLocation && dropLocation.name) {
-      const dropLocationName = dropLocation.name.toLowerCase().trim();
-      const arakuKeywords = ['araku', 'araku valley', 'araku valley station'];
-      
-      if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
-        navigate('/tours/araku', { replace: true });
-        return;
-      }
-    }
-
     if (onSearch) onSearch({
       pickupLocation,
       dropLocation,
