@@ -58,7 +58,6 @@ import SedanPage from './pages/SedanPage';
 import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
-import GunturPage from './pages/GunturPage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 
@@ -197,10 +196,6 @@ const router = createBrowserRouter([
   {
     path: '/outstation-taxi/:from-to-:to',
     element: <OutstationTaxiPrefilledPage />,
-  },
-  {
-    path: '/outstation-taxi/visakhapatnam-to-guntur',
-    element: <GunturPage />,
   },
   {
     path: '/outstation-taxi/:slug',

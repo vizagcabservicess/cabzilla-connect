@@ -142,21 +142,6 @@ export const popularRoutes: RouteInfo[] = [
         keywords: 'visakhapatnam to puri taxi, vizag to puri cabs, jagannath temple yatra'
     },
     content: `<p>Embark on a spiritual journey from Visakhapatnam to the holy city of Puri in Odisha. Our outstation taxi service provides a safe and comfortable ride to the abode of Lord Jagannath. Besides the main temple, you can relax at the Golden Beach, visit the Konark Sun Temple nearby, and explore local crafts. Book your divine trip with us.</p>`
-  },
-  {
-    from: 'Visakhapatnam',
-    to: 'Guntur',
-    distance: '410 KM',
-    time: '6-7 Hours',
-    description: 'Explore the vibrant commercial city known for its spicy cuisine and rich culture.',
-    image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=500&h=300&fit=crop',
-    fares: { sedan: '₹6,100', suv: '₹7,800' },
-    seo: {
-        title: 'Visakhapatnam to Guntur Taxi | Commercial Hub Cabs',
-        description: 'Book a reliable taxi from Visakhapatnam to Guntur. Explore the bustling commercial city known for spicy cuisine and vibrant culture. Premium outstation services available.',
-        keywords: 'visakhapatnam to guntur taxi, vizag to guntur cabs, guntur outstation travel'
-    },
-    content: `<p>Travel from Visakhapatnam to Guntur, a bustling commercial city in Andhra Pradesh, known for its vibrant culture and spicy cuisine. The 410 KM journey takes around 6–7 hours. Whether you're visiting for business or leisure, enjoy a premium travel experience with our professional drivers and all-inclusive pricing.</p>`
   }
   // More routes can be added here following the same structure.
 ];
