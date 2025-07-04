@@ -629,15 +629,27 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
 
   return (
     <section className="relative min-h-[70vh] py-8 overflow-hidden">
-      {/* Background Image */}
-      <div className="absolute inset-0">
-        <img 
-          src="/lovable-uploads/7a30c216-a864-490a-8065-410eacb29f28.png"
-          alt="Visakhapatnam Tourist Destinations"
-          className="w-full h-full object-cover"
-        />
-        {/* Overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/50" />
+      {/* Modern Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0">
+          <div className="absolute top-10 left-10 w-32 h-32 bg-white/10 rounded-full blur-xl animate-pulse"></div>
+          <div className="absolute top-1/3 right-20 w-24 h-24 bg-cyan-400/20 rounded-full blur-lg animate-bounce"></div>
+          <div className="absolute bottom-20 left-1/4 w-20 h-20 bg-green-400/15 rounded-full blur-md animate-pulse delay-1000"></div>
+          <div className="absolute bottom-1/3 right-1/3 w-16 h-16 bg-yellow-400/10 rounded-full blur-sm animate-bounce delay-500"></div>
+        </div>
+        
+        {/* Geometric Pattern Overlay */}
+        <div className="absolute inset-0 opacity-10">
+          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+        </div>
       </div>
       
       <div className="relative z-10 container mx-auto px-4 flex items-center min-h-[60vh]">
@@ -653,20 +665,20 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
               </button>
             )}
             
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full mb-4">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               <span className="text-sm font-medium">Available 24/7</span>
             </div>
             
-            <h1 className={`font-bold text-gray-900 mb-4 leading-tight transition-all duration-300 ${
+            <h1 className={`font-bold text-white mb-4 leading-tight transition-all duration-300 ${
               currentStep === 1 
                 ? 'text-4xl md:text-5xl lg:text-6xl' 
                 : 'text-3xl md:text-4xl'
             }`}>
               {currentStep === 1 ? (
                 <>
-                  Your <span className="text-primary">Journey</span>,<br />
-                  Our <span className="text-primary">Priority</span>
+                  Your <span className="text-cyan-300">Journey</span>,<br />
+                  Our <span className="text-cyan-300">Priority</span>
                 </>
               ) : (
                 'Complete Your Booking'
@@ -674,7 +686,7 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
             </h1>
             
             {currentStep === 1 && (
-              <p className="text-lg md:text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+              <p className="text-lg md:text-xl text-gray-200 mb-8 max-w-3xl mx-auto leading-relaxed">
                 Experience premium taxi services in Visakhapatnam with professional drivers, 
                 comfortable vehicles, and transparent pricing. Book your ride in just a few clicks.
               </p>
