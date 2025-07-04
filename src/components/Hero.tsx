@@ -628,78 +628,30 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
   };
 
   return (
-    <section className="relative min-h-[70vh] py-8 overflow-hidden">
-      {/* Modern Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-32 h-32 bg-white/10 rounded-full blur-xl animate-pulse"></div>
-          <div className="absolute top-1/3 right-20 w-24 h-24 bg-cyan-400/20 rounded-full blur-lg animate-bounce"></div>
-          <div className="absolute bottom-20 left-1/4 w-20 h-20 bg-green-400/15 rounded-full blur-md animate-pulse delay-1000"></div>
-          <div className="absolute bottom-1/3 right-1/3 w-16 h-16 bg-yellow-400/10 rounded-full blur-sm animate-bounce delay-500"></div>
+    <section className="relative min-h-[60vh] bg-gradient-to-b from-gray-50 to-white py-2 mt-2">
+      <div className="container mx-auto px-4">
+        <div className={`text-center mb-4 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
+          {currentStep > 1 && (
+            <button 
+              onClick={() => setCurrentStep(1)} 
+              className="flex items-center text-blue-600 mb-2 md:hidden animate-fade-in"
+            >
+              <ArrowLeft size={16} className="mr-1" />
+              <span>Back</span>
+            </button>
+          )}
+          <h5 className={`text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
+            Book a Cab in Minutes
+          </h5>
+          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-2 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
+            {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
+          </h1>
         </div>
-        
-        {/* Geometric Pattern Overlay */}
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" strokeWidth="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
-      </div>
-      
-      <div className="relative z-10 container mx-auto px-4 flex items-center min-h-[60vh]">
-        <div className="w-full max-w-6xl mx-auto">
-          <div className={`text-center mb-8 transition-all duration-300 ${currentStep > 1 ? 'md:text-left md:mb-6' : ''}`}>
-            {currentStep > 1 && (
-              <button 
-                onClick={() => setCurrentStep(1)} 
-                className="flex items-center text-primary hover:text-primary/80 mb-3 md:hidden animate-fade-in"
-              >
-                <ArrowLeft size={16} className="mr-2" />
-                <span className="font-medium">Back to Search</span>
-              </button>
-            )}
-            
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full mb-4">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Available 24/7</span>
-            </div>
-            
-            <h1 className={`font-bold text-white mb-4 leading-tight transition-all duration-300 ${
-              currentStep === 1 
-                ? 'text-4xl md:text-5xl lg:text-6xl' 
-                : 'text-3xl md:text-4xl'
-            }`}>
-              {currentStep === 1 ? (
-                <>
-                  Your <span className="text-cyan-300">Journey</span>,<br />
-                  Our <span className="text-cyan-300">Priority</span>
-                </>
-              ) : (
-                'Complete Your Booking'
-              )}
-            </h1>
-            
-            {currentStep === 1 && (
-              <p className="text-lg md:text-xl text-gray-200 mb-8 max-w-3xl mx-auto leading-relaxed">
-                Experience premium taxi services in Visakhapatnam with professional drivers, 
-                comfortable vehicles, and transparent pricing. Book your ride in just a few clicks.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
 
-      <div className="relative z-10 container mx-auto px-4">
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
+              <div className="bg-white rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
