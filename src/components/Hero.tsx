@@ -13,7 +13,7 @@ import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
-import { ChevronRight, ArrowLeft } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -661,7 +661,7 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 p-6 md:p-8 animate-fade-in">
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
@@ -669,77 +669,116 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
                   onTripModeChange={setTripMode}
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <LocationInput
-                    key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
-                    label="PICKUP LOCATION"
-                    placeholder="Enter pickup location"
-                    value={pickupLocation || undefined}
-                    onLocationChange={handlePickupLocationChange}
-                    isPickupLocation={true}
-                    isAirportTransfer={tripType === 'airport'}
-                  />
-                  
-                  {(tripType === 'outstation' || tripType === 'airport') && (
-                    <LocationInput
-                      key={dropLocation?.id || dropLocation?.name || 'drop'}
-                      label="DROP LOCATION"
-                      placeholder="Enter drop location"
-                      value={dropLocation || undefined}
-                      onLocationChange={handleDropLocationChange}
-                      isPickupLocation={false}
-                      isAirportTransfer={tripType === 'airport'}
-                    />
-                  )}
-                  
-                  {tripType === 'local' && (
-                    <div className="space-y-2">
-                      <Label>HOURLY PACKAGE</Label>
-                      <Select
-                        value={hourlyPackage}
-                        onValueChange={setHourlyPackage}
-                      >
-                        <SelectTrigger className="w-full mobile-input">
-                          <SelectValue placeholder="Select package" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {hourlyPackageOptions.map((pkg) => (
-                            <SelectItem key={pkg.value} value={pkg.value}>
-                              {pkg.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                {/* Modern Travel Booking Style Layout */}
+                <div className="mt-8 space-y-6">
+                  {/* Location Selection Row */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div className="flex-1 w-full">
+                      <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
+                        <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">From</span>
+                        <LocationInput
+                          key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
+                          label=""
+                          placeholder="Enter pickup location"
+                          value={pickupLocation || undefined}
+                          onLocationChange={handlePickupLocationChange}
+                          isPickupLocation={true}
+                          isAirportTransfer={tripType === 'airport'}
+                        />
+                      </div>
                     </div>
-                  )}
-                  
-                  <DateTimePicker
-                    label="PICKUP DATE & TIME"
-                    date={pickupDate}
-                    onDateChange={setPickupDate}
-                    minDate={new Date()}
-                  />
-
-                  {tripType === 'outstation' && tripMode === 'round-trip' && (
-                    <>
-                      <DateTimePicker
-                        label="RETURN DATE & TIME"
-                        date={returnDate}
-                        onDateChange={isReturnTimeEnabled ? setReturnDate : () => {}}
-                        minDate={minValidReturnTime || pickupDate}
-                        disabled={!isReturnTimeEnabled}
-                      />
-                      {isCheckingTravelTime && (
-                        <div className="flex items-center text-blue-500 mt-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                          <span>Checking minimum return time...</span>
+                    
+                    {(tripType === 'outstation' || tripType === 'airport') && (
+                      <>
+                        <div className="flex-shrink-0 p-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <ArrowRight className="w-4 h-4 text-blue-600" />
+                          </div>
                         </div>
-                      )}
-                      {validationError && (
-                        <div className="text-red-600 text-xs mt-1">{validationError}</div>
-                      )}
-                    </>
-                  )}
+                        
+                        <div className="flex-1 w-full">
+                          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
+                            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">To</span>
+                            <LocationInput
+                              key={dropLocation?.id || dropLocation?.name || 'drop'}
+                              label=""
+                              placeholder="Enter drop location"
+                              value={dropLocation || undefined}
+                              onLocationChange={handleDropLocationChange}
+                              isPickupLocation={false}
+                              isAirportTransfer={tripType === 'airport'}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    
+                    {tripType === 'local' && (
+                      <div className="flex-1 w-full">
+                        <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
+                          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Package</span>
+                          <Select
+                            value={hourlyPackage}
+                            onValueChange={setHourlyPackage}
+                          >
+                            <SelectTrigger className="w-full border-0 bg-transparent p-0 h-auto text-base font-medium">
+                              <SelectValue placeholder="Select package" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {hourlyPackageOptions.map((pkg) => (
+                                <SelectItem key={pkg.value} value={pkg.value}>
+                                  {pkg.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Date & Time Selection Row */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex-1">
+                      <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
+                        <span className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
+                          Departure
+                        </span>
+                        <DateTimePicker
+                          label=""
+                          date={pickupDate}
+                          onDateChange={setPickupDate}
+                          minDate={new Date()}
+                        />
+                      </div>
+                    </div>
+
+                    {tripType === 'outstation' && tripMode === 'round-trip' && (
+                      <div className="flex-1">
+                        <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
+                          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
+                            Return
+                          </span>
+                          <DateTimePicker
+                            label=""
+                            date={returnDate}
+                            onDateChange={isReturnTimeEnabled ? setReturnDate : () => {}}
+                            minDate={minValidReturnTime || pickupDate}
+                            disabled={!isReturnTimeEnabled}
+                          />
+                          {isCheckingTravelTime && (
+                            <div className="flex items-center text-blue-500 mt-2 text-sm">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 mr-2"></div>
+                              <span>Validating return time...</span>
+                            </div>
+                          )}
+                          {validationError && (
+                            <div className="text-red-600 text-xs mt-1">{validationError}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {isCalculatingDistance && (
