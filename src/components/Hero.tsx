@@ -661,7 +661,7 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 p-6 md:p-8 animate-fade-in">
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 p-4 md:p-6 animate-fade-in max-w-5xl mx-auto">
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
@@ -669,115 +669,110 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
                   onTripModeChange={setTripMode}
                 />
 
-                {/* Modern Travel Booking Style Layout */}
-                <div className="mt-8 space-y-6">
-                  {/* Location Selection Row */}
-                  <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="flex-1 w-full">
-                      <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
-                        <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">From</span>
-                        <LocationInput
-                          key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
-                          label=""
-                          placeholder="Enter pickup location"
-                          value={pickupLocation || undefined}
-                          onLocationChange={handlePickupLocationChange}
-                          isPickupLocation={true}
-                          isAirportTransfer={tripType === 'airport'}
-                        />
+                {/* Compact Horizontal Layout */}
+                <div className="mt-4">
+                  <div className="flex flex-col lg:flex-row gap-3 items-stretch">
+                    {/* Location Fields */}
+                    <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="bg-gray-50/80 rounded-lg p-3 border border-gray-200/50 h-full">
+                          <span className="text-xs font-medium text-gray-600 block mb-1">From</span>
+                          <LocationInput
+                            key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
+                            label=""
+                            placeholder="Pickup location"
+                            value={pickupLocation || undefined}
+                            onLocationChange={handlePickupLocationChange}
+                            isPickupLocation={true}
+                            isAirportTransfer={tripType === 'airport'}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    
-                    {(tripType === 'outstation' || tripType === 'airport') && (
-                      <>
-                        <div className="flex-shrink-0 p-2">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <ArrowRight className="w-4 h-4 text-blue-600" />
+                      
+                      {(tripType === 'outstation' || tripType === 'airport') && (
+                        <>
+                          <div className="flex-shrink-0 flex items-center justify-center">
+                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                              <ArrowRight className="w-3 h-3 text-blue-600" />
+                            </div>
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="bg-gray-50/80 rounded-lg p-3 border border-gray-200/50 h-full">
+                              <span className="text-xs font-medium text-gray-600 block mb-1">To</span>
+                              <LocationInput
+                                key={dropLocation?.id || dropLocation?.name || 'drop'}
+                                label=""
+                                placeholder="Drop location"
+                                value={dropLocation || undefined}
+                                onLocationChange={handleDropLocationChange}
+                                isPickupLocation={false}
+                                isAirportTransfer={tripType === 'airport'}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      
+                      {tripType === 'local' && (
+                        <div className="flex-1 min-w-0">
+                          <div className="bg-gray-50/80 rounded-lg p-3 border border-gray-200/50 h-full">
+                            <span className="text-xs font-medium text-gray-600 block mb-1">Package</span>
+                            <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                              <SelectTrigger className="w-full border-0 bg-transparent p-0 h-auto text-sm">
+                                <SelectValue placeholder="Select package" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {hourlyPackageOptions.map((pkg) => (
+                                  <SelectItem key={pkg.value} value={pkg.value}>
+                                    {pkg.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
-                        
-                        <div className="flex-1 w-full">
-                          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
-                            <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">To</span>
-                            <LocationInput
-                              key={dropLocation?.id || dropLocation?.name || 'drop'}
-                              label=""
-                              placeholder="Enter drop location"
-                              value={dropLocation || undefined}
-                              onLocationChange={handleDropLocationChange}
-                              isPickupLocation={false}
-                              isAirportTransfer={tripType === 'airport'}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    
-                    {tripType === 'local' && (
-                      <div className="flex-1 w-full">
-                        <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
-                          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Package</span>
-                          <Select
-                            value={hourlyPackage}
-                            onValueChange={setHourlyPackage}
-                          >
-                            <SelectTrigger className="w-full border-0 bg-transparent p-0 h-auto text-base font-medium">
-                              <SelectValue placeholder="Select package" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {hourlyPackageOptions.map((pkg) => (
-                                <SelectItem key={pkg.value} value={pkg.value}>
-                                  {pkg.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Date & Time Selection Row */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1">
-                      <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
-                        <span className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
-                          Departure
-                        </span>
-                        <DateTimePicker
-                          label=""
-                          date={pickupDate}
-                          onDateChange={setPickupDate}
-                          minDate={new Date()}
-                        />
-                      </div>
+                      )}
                     </div>
 
-                    {tripType === 'outstation' && tripMode === 'round-trip' && (
-                      <div className="flex-1">
-                        <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50">
-                          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
-                            Return
-                          </span>
+                    {/* Date/Time Fields */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="min-w-0">
+                        <div className="bg-gray-50/80 rounded-lg p-3 border border-gray-200/50 h-full">
+                          <span className="text-xs font-medium text-gray-600 block mb-1">Departure</span>
                           <DateTimePicker
                             label=""
-                            date={returnDate}
-                            onDateChange={isReturnTimeEnabled ? setReturnDate : () => {}}
-                            minDate={minValidReturnTime || pickupDate}
-                            disabled={!isReturnTimeEnabled}
+                            date={pickupDate}
+                            onDateChange={setPickupDate}
+                            minDate={new Date()}
                           />
-                          {isCheckingTravelTime && (
-                            <div className="flex items-center text-blue-500 mt-2 text-sm">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 mr-2"></div>
-                              <span>Validating return time...</span>
-                            </div>
-                          )}
-                          {validationError && (
-                            <div className="text-red-600 text-xs mt-1">{validationError}</div>
-                          )}
                         </div>
                       </div>
-                    )}
+
+                      {tripType === 'outstation' && tripMode === 'round-trip' && (
+                        <div className="min-w-0">
+                          <div className="bg-gray-50/80 rounded-lg p-3 border border-gray-200/50 h-full">
+                            <span className="text-xs font-medium text-gray-600 block mb-1">Return</span>
+                            <DateTimePicker
+                              label=""
+                              date={returnDate}
+                              onDateChange={isReturnTimeEnabled ? setReturnDate : () => {}}
+                              minDate={minValidReturnTime || pickupDate}
+                              disabled={!isReturnTimeEnabled}
+                            />
+                            {isCheckingTravelTime && (
+                              <div className="flex items-center text-blue-500 mt-1 text-xs">
+                                <div className="animate-spin rounded-full h-2 w-2 border-b border-blue-500 mr-1"></div>
+                                <span>Validating...</span>
+                              </div>
+                            )}
+                            {validationError && (
+                              <div className="text-red-600 text-xs mt-1">{validationError}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -788,11 +783,11 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
                   </div>
                 )}
 
-                <div className="mt-8 flex justify-end">
+                <div className="mt-6 flex justify-center">
                   <Button
                     onClick={handleContinue}
                     disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                    className={`px-10 py-6 rounded-md mobile-button ${
+                    className={`px-12 py-4 text-lg font-semibold rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 ${
                       isFormValid && !isCalculatingDistance && pickupLocation && pickupLocation.name && !isLoading
                         ? ""
                         : "opacity-70 cursor-not-allowed"
@@ -800,12 +795,12 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
                   >
                     {isLoading ? (
                       <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                         <span>SEARCHING</span>
                       </div>
                     ) : (
                       <div className="flex items-center">
-                        <span>SEARCH</span> <ChevronRight className="ml-1" />
+                        <span>SEARCH</span>
                       </div>
                     )}
                   </Button>
