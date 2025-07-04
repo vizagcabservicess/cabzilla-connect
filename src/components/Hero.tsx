@@ -628,30 +628,70 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
   };
 
   return (
-    <section className="relative min-h-[60vh] bg-gradient-to-b from-gray-50 to-white py-2 mt-2">
-      <div className="container mx-auto px-4">
-        <div className={`text-center mb-4 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
+    <section className="relative min-h-[85vh] bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white overflow-hidden flex items-center">
+      {/* Animated Background with Illustrations */}
+      <div className="absolute inset-0">
+        {/* Gradient Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/90 via-purple-500/80 to-indigo-600/90"></div>
+        
+        {/* Mountain Silhouettes */}
+        <div className="absolute bottom-0 left-0 w-full h-48 opacity-20">
+          <svg viewBox="0 0 1200 300" className="w-full h-full" preserveAspectRatio="none">
+            <path d="M0,300 L0,200 L200,150 L400,180 L600,120 L800,160 L1000,100 L1200,140 L1200,300 Z" fill="currentColor" />
+          </svg>
+        </div>
+        <div className="absolute bottom-0 left-0 w-full h-32 opacity-30">
+          <svg viewBox="0 0 1200 200" className="w-full h-full" preserveAspectRatio="none">
+            <path d="M0,200 L0,150 L300,120 L500,140 L700,100 L900,130 L1200,110 L1200,200 Z" fill="currentColor" />
+          </svg>
+        </div>
+        
+        {/* Floating Elements */}
+        <div className="absolute top-20 right-20 w-16 h-16 bg-white/10 rounded-full animate-pulse"></div>
+        <div className="absolute top-40 left-16 w-12 h-12 bg-yellow-300/20 rounded-full animate-bounce" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-40 right-32 w-8 h-8 bg-white/15 rounded-full animate-pulse" style={{ animationDelay: '2s' }}></div>
+        
+        {/* Car Illustration */}
+        <div className="absolute bottom-16 right-16 opacity-30 hidden lg:block">
+          <svg width="120" height="60" viewBox="0 0 120 60" className="text-white/40">
+            <rect x="20" y="30" width="80" height="20" rx="4" fill="currentColor"/>
+            <rect x="10" y="35" width="20" height="10" rx="2" fill="currentColor"/>
+            <rect x="90" y="35" width="20" height="10" rx="2" fill="currentColor"/>
+            <circle cx="30" cy="50" r="8" fill="currentColor"/>
+            <circle cx="90" cy="50" r="8" fill="currentColor"/>
+            <rect x="35" y="20" width="50" height="15" rx="3" fill="currentColor"/>
+          </svg>
+        </div>
+      </div>
+      
+      <div className="relative z-10 container mx-auto px-4">
+        <div className={`text-center mb-6 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
           {currentStep > 1 && (
             <button 
               onClick={() => setCurrentStep(1)} 
-              className="flex items-center text-blue-600 mb-2 md:hidden animate-fade-in"
+              className="flex items-center text-white/90 hover:text-white mb-2 md:hidden animate-fade-in"
             >
               <ArrowLeft size={16} className="mr-1" />
               <span>Back</span>
             </button>
           )}
-          <h5 className={`text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
+          <h5 className={`text-white/80 font-semibold text-sm uppercase tracking-wider mb-4 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
             Book a Cab in Minutes
           </h5>
-          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-2 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
+          <h1 className={`text-4xl md:text-6xl font-bold mb-4 animate-slide-in ${currentStep > 1 ? 'text-3xl md:text-4xl' : ''}`}>
             {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
           </h1>
+          {currentStep === 1 && (
+            <p className="text-lg md:text-xl text-white/90 mb-8 max-w-2xl mx-auto animate-fade-in">
+              Experience premium taxi services with professional drivers and transparent pricing
+            </p>
+          )}
         </div>
 
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
-              <div className="bg-white rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
+              <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-card border p-6 md:p-8 animate-fade-in">
                 <TabTripSelector
                   selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
