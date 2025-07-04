@@ -628,22 +628,32 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
   };
 
   return (
-    <section className="relative min-h-[60vh] bg-gradient-to-b from-gray-50 to-white py-2 mt-2">
-      <div className="container mx-auto px-4">
+    <section className="relative min-h-[60vh] overflow-hidden py-2 mt-2">
+      {/* Banner Background */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: `url('/lovable-uploads/d352da7f-9f1c-4ab4-a08b-0e1392f84feb.png')`
+        }}
+      />
+      
+      {/* Overlay for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/50 via-black/30 to-black/40" />
+      <div className="container mx-auto px-4 relative z-10">
         <div className={`text-center mb-4 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
           {currentStep > 1 && (
             <button 
               onClick={() => setCurrentStep(1)} 
-              className="flex items-center text-blue-600 mb-2 md:hidden animate-fade-in"
+              className="flex items-center text-white hover:text-blue-200 mb-2 md:hidden animate-fade-in"
             >
               <ArrowLeft size={16} className="mr-1" />
               <span>Back</span>
             </button>
           )}
-          <h5 className={`text-cabBlue-600 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
+          <h5 className={`text-blue-200 font-semibold text-sm uppercase tracking-wider mb-3 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
             Book a Cab in Minutes
           </h5>
-          <h1 className={`text-3xl md:text-4xl font-bold text-cabGray-800 mb-2 animate-slide-in ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
+          <h1 className={`text-3xl md:text-4xl font-bold text-white mb-2 animate-slide-in drop-shadow-lg ${currentStep > 1 ? 'text-2xl md:text-3xl' : ''}`}>
             {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
           </h1>
         </div>
