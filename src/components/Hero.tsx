@@ -628,12 +628,16 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
   };
 
   return (
-    <section className="relative min-h-[70vh] bg-gradient-to-b from-slate-50 to-white py-8">
-      {/* Subtle Pattern Overlay */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}></div>
+    <section className="relative min-h-[70vh] py-8 overflow-hidden">
+      {/* Background Image */}
+      <div className="absolute inset-0">
+        <img 
+          src="/lovable-uploads/7a30c216-a864-490a-8065-410eacb29f28.png"
+          alt="Visakhapatnam Tourist Destinations"
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/50" />
       </div>
       
       <div className="relative z-10 container mx-auto px-4 flex items-center min-h-[60vh]">
