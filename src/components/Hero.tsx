@@ -628,66 +628,58 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
   };
 
   return (
-    <section className="relative min-h-[85vh] bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 text-white overflow-hidden flex items-center">
-      {/* Animated Background with Illustrations */}
-      <div className="absolute inset-0">
-        {/* Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/90 via-purple-500/80 to-indigo-600/90"></div>
-        
-        {/* Mountain Silhouettes */}
-        <div className="absolute bottom-0 left-0 w-full h-48 opacity-20">
-          <svg viewBox="0 0 1200 300" className="w-full h-full" preserveAspectRatio="none">
-            <path d="M0,300 L0,200 L200,150 L400,180 L600,120 L800,160 L1000,100 L1200,140 L1200,300 Z" fill="currentColor" />
-          </svg>
-        </div>
-        <div className="absolute bottom-0 left-0 w-full h-32 opacity-30">
-          <svg viewBox="0 0 1200 200" className="w-full h-full" preserveAspectRatio="none">
-            <path d="M0,200 L0,150 L300,120 L500,140 L700,100 L900,130 L1200,110 L1200,200 Z" fill="currentColor" />
-          </svg>
-        </div>
-        
-        {/* Floating Elements */}
-        <div className="absolute top-20 right-20 w-16 h-16 bg-white/10 rounded-full animate-pulse"></div>
-        <div className="absolute top-40 left-16 w-12 h-12 bg-yellow-300/20 rounded-full animate-bounce" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute bottom-40 right-32 w-8 h-8 bg-white/15 rounded-full animate-pulse" style={{ animationDelay: '2s' }}></div>
-        
-        {/* Car Illustration */}
-        <div className="absolute bottom-16 right-16 opacity-30 hidden lg:block">
-          <svg width="120" height="60" viewBox="0 0 120 60" className="text-white/40">
-            <rect x="20" y="30" width="80" height="20" rx="4" fill="currentColor"/>
-            <rect x="10" y="35" width="20" height="10" rx="2" fill="currentColor"/>
-            <rect x="90" y="35" width="20" height="10" rx="2" fill="currentColor"/>
-            <circle cx="30" cy="50" r="8" fill="currentColor"/>
-            <circle cx="90" cy="50" r="8" fill="currentColor"/>
-            <rect x="35" y="20" width="50" height="15" rx="3" fill="currentColor"/>
-          </svg>
-        </div>
+    <section className="relative min-h-[70vh] bg-gradient-to-b from-slate-50 to-white py-8">
+      {/* Subtle Pattern Overlay */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        }}></div>
       </div>
       
-      <div className="relative z-10 container mx-auto px-4">
-        <div className={`text-center mb-6 transition-all duration-300 ${currentStep > 1 ? 'md:text-left' : ''}`}>
-          {currentStep > 1 && (
-            <button 
-              onClick={() => setCurrentStep(1)} 
-              className="flex items-center text-white/90 hover:text-white mb-2 md:hidden animate-fade-in"
-            >
-              <ArrowLeft size={16} className="mr-1" />
-              <span>Back</span>
-            </button>
-          )}
-          <h5 className={`text-white/80 font-semibold text-sm uppercase tracking-wider mb-4 animate-slide-in ${currentStep > 1 ? 'md:hidden' : ''}`}>
-            Book a Cab in Minutes
-          </h5>
-          <h1 className={`text-4xl md:text-6xl font-bold mb-4 animate-slide-in ${currentStep > 1 ? 'text-3xl md:text-4xl' : ''}`}>
-            {currentStep === 1 ? 'Your Journey, Our Priority' : 'Complete Your Booking'}
-          </h1>
-          {currentStep === 1 && (
-            <p className="text-lg md:text-xl text-white/90 mb-8 max-w-2xl mx-auto animate-fade-in">
-              Experience premium taxi services with professional drivers and transparent pricing
-            </p>
-          )}
+      <div className="relative z-10 container mx-auto px-4 flex items-center min-h-[60vh]">
+        <div className="w-full max-w-6xl mx-auto">
+          <div className={`text-center mb-8 transition-all duration-300 ${currentStep > 1 ? 'md:text-left md:mb-6' : ''}`}>
+            {currentStep > 1 && (
+              <button 
+                onClick={() => setCurrentStep(1)} 
+                className="flex items-center text-primary hover:text-primary/80 mb-3 md:hidden animate-fade-in"
+              >
+                <ArrowLeft size={16} className="mr-2" />
+                <span className="font-medium">Back to Search</span>
+              </button>
+            )}
+            
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Available 24/7</span>
+            </div>
+            
+            <h1 className={`font-bold text-gray-900 mb-4 leading-tight transition-all duration-300 ${
+              currentStep === 1 
+                ? 'text-4xl md:text-5xl lg:text-6xl' 
+                : 'text-3xl md:text-4xl'
+            }`}>
+              {currentStep === 1 ? (
+                <>
+                  Your <span className="text-primary">Journey</span>,<br />
+                  Our <span className="text-primary">Priority</span>
+                </>
+              ) : (
+                'Complete Your Booking'
+              )}
+            </h1>
+            
+            {currentStep === 1 && (
+              <p className="text-lg md:text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+                Experience premium taxi services in Visakhapatnam with professional drivers, 
+                comfortable vehicles, and transparent pricing. Book your ride in just a few clicks.
+              </p>
+            )}
+          </div>
         </div>
+      </div>
 
+      <div className="relative z-10 container mx-auto px-4">
         {!showGuestDetailsForm ? (
           <>
             {currentStep === 1 && (
