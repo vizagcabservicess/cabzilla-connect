@@ -9,7 +9,6 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
-import { CabBookingInterface } from "@/components/CabBookingInterface";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
@@ -22,24 +21,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      
-      {/* Show Hero (banner + widget) only when not searching */}
-      {!isSearch && <Hero onSearch={() => setSearchParams({ search: '1' })} />}
-      
-      {/* Show search results when searching */}
-      {isSearch && (
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-4">
-            <button 
-              onClick={() => setSearchParams({})}
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              ← Back to Home
-            </button>
-          </div>
-          <CabBookingInterface />
-        </div>
-      )}
+      <Hero onSearch={() => setSearchParams({ search: '1' })} />
       
       {/* Main Content with Optimized Spacing */}
       {!isSearch && (
