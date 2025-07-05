@@ -680,7 +680,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                   {currentStep === 1 && (
                     <div className="space-y-6 sm:space-y-8">
                       {/* Trip Type Selector */}
-                      <div className="w-full">
+                      <div className="w-full mb-6">
                         <TabTripSelector
                           selectedTab={ensureCustomerTripType(tripType)}
                           tripMode={tripMode}
@@ -689,159 +689,179 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         />
                       </div>
 
-                       {/* Location and Date Inputs - Desktop: Single row layout */}
-                       <div className="flex flex-col lg:flex-row gap-3 sm:gap-2 items-stretch">
-                         {/* From Location */}
-                         <div className="flex-1 min-w-0">
-                           <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
-                             <div className="flex items-center gap-2 mb-2">
-                               <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center">
-                                 <div className="w-2 h-2 bg-white rounded-full"></div>
-                               </div>
-                               <span className="text-sm font-semibold text-gray-800">From</span>
-                             </div>
-                             <LocationInput
-                               key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
-                               label=""
-                               placeholder="Pickup location"
-                               value={pickupLocation || undefined}
-                               onLocationChange={handlePickupLocationChange}
-                               isPickupLocation={true}
-                               isAirportTransfer={tripType === 'airport'}
-                             />
-                           </div>
-                         </div>
-
-                         {/* To Location */}
-                         {(tripType === 'outstation' || tripType === 'airport') && (
-                           <>
-                             <div className="hidden sm:flex flex-shrink-0 items-center justify-center">
-                               <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200">
-                                 <ArrowRight className="w-4 h-4 text-gray-600" />
-                               </div>
-                             </div>
-                             
-                             <div className="flex-1 min-w-0">
-                               <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
-                                 <div className="flex items-center gap-2 mb-2">
-                                   <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                                     <div className="w-2 h-2 bg-white rounded-full"></div>
-                                   </div>
-                                   <span className="text-sm font-semibold text-gray-800">To</span>
-                                 </div>
-                                 <LocationInput
-                                   key={dropLocation?.id || dropLocation?.name || 'drop'}
-                                   label=""
-                                   placeholder="Drop location"
-                                   value={dropLocation || undefined}  
-                                   onLocationChange={handleDropLocationChange}
-                                   isPickupLocation={false}
-                                   isAirportTransfer={tripType === 'airport'}
-                                 />
-                               </div>
-                             </div>
-                           </>
-                         )}
-
-                         {/* Package Selection for Local */}
-                         {tripType === 'local' && (
-                           <div className="flex-1 min-w-0">
-                             <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
-                               <div className="flex items-center gap-2 mb-2">
-                                 <div className="w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                                 </div>
-                                 <span className="text-sm font-semibold text-gray-800">Package</span>
-                               </div>
-                               <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                 <SelectTrigger className="h-10 border-0 bg-transparent p-0 text-base font-medium shadow-none focus:ring-0 text-gray-700">
-                                   <SelectValue placeholder="Select package" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                   {hourlyPackageOptions.map((option) => (
-                                     <SelectItem key={option.value} value={option.value}>
-                                       {option.label}
-                                     </SelectItem>
-                                   ))}
-                                 </SelectContent>
-                               </Select>
-                             </div>
-                           </div>
-                         )}
-
-                         {/* Date Picker */}
-                         <div className="flex-1 min-w-0">
-                           <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
-                             <div className="flex items-center gap-2 mb-2">
-                               <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                                 <div className="w-2 h-2 bg-white rounded-full"></div>
-                               </div>
-                               <span className="text-sm font-semibold text-gray-800">Departure</span>
-                             </div>
-                             <DateTimePicker
-                               date={pickupDate}
-                               onDateChange={setPickupDate}
-                               minDate={new Date()}
-                               className="h-10 border-0 bg-transparent p-0 text-base font-medium text-gray-700"
-                             />
-                           </div>
-                         </div>
-
-                         {/* Return Date for Round Trip */}
-                         {tripType === 'outstation' && tripMode === 'round-trip' && (
-                           <div className="flex-1 min-w-0">
-                             <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
-                               <div className="flex items-center gap-2 mb-2">
-                                 <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
-                                   <div className="w-2 h-2 bg-white rounded-full"></div>
-                                 </div>
-                                 <span className="text-sm font-semibold text-gray-800">Return</span>
-                               </div>
-                               <DateTimePicker
-                                 date={returnDate}
-                                 onDateChange={setReturnDate}
-                                 minDate={pickupDate}
-                                 disabled={!isReturnTimeEnabled || isCheckingTravelTime}
-                                 className="h-10 border-0 bg-transparent p-0 text-base font-medium text-gray-700"
-                               />
-                               {validationError && (
-                                 <div className="text-red-600 text-xs mt-1">{validationError}</div>
-                               )}
-                             </div>
-                           </div>
-                         )}
-                       </div>
-
-                      {/* Loading State */}
-                      {isCalculatingDistance && (
-                        <div className="flex items-center justify-center py-4">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                          <p className="text-gray-600 font-medium">Calculating route distance...</p>
+                      {/* Main Booking Row - Bus booking style */}
+                      <div className="flex flex-col lg:flex-row items-center gap-4 mb-6">
+                        {/* From Location */}
+                        <div className="flex-1 w-full">
+                          <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-700 mb-1">From</div>
+                              <LocationInput
+                                key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
+                                label=""
+                                placeholder="Pickup location"
+                                value={pickupLocation || undefined}
+                                onLocationChange={handlePickupLocationChange}
+                                isPickupLocation={true}
+                                isAirportTransfer={tripType === 'airport'}
+                                className="border-0 bg-transparent p-0 text-base font-medium text-gray-900 placeholder:text-gray-500"
+                              />
+                            </div>
+                          </div>
                         </div>
-                      )}
 
-                       {/* Search Button */}
-                       <div className="flex justify-center mt-4 sm:mt-8">
-                         <Button
-                           onClick={handleContinue}
-                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                           className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-12 sm:px-16 py-4 sm:py-5 text-lg sm:text-xl rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 min-w-[280px]"
-                         >
-                           {isLoading ? (
-                             <div className="flex items-center">
-                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                               <span>Searching...</span>
-                             </div>
-                           ) : (
-                             <div className="flex items-center">
-                               <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                               </svg>
-                               Search Cabs
-                             </div>
-                           )}
-                         </Button>
+                        {/* Swap Arrow (visible on desktop) */}
+                        {(tripType === 'outstation' || tripType === 'airport') && (
+                          <div className="hidden lg:flex items-center justify-center">
+                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* To Location */}
+                        {(tripType === 'outstation' || tripType === 'airport') && (
+                          <div className="flex-1 w-full">
+                            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                              <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-700 mb-1">To</div>
+                                <LocationInput
+                                  key={dropLocation?.id || dropLocation?.name || 'drop'}
+                                  label=""
+                                  placeholder="Drop location"
+                                  value={dropLocation || undefined}  
+                                  onLocationChange={handleDropLocationChange}
+                                  isPickupLocation={false}
+                                  isAirportTransfer={tripType === 'airport'}
+                                  className="border-0 bg-transparent p-0 text-base font-medium text-gray-900 placeholder:text-gray-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Package Selection for Local */}
+                        {tripType === 'local' && (
+                          <div className="flex-1 w-full">
+                            <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                              <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 9h.01M15 9h.01M9 15h.01M15 15h.01" />
+                                </svg>
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-700 mb-1">Package</div>
+                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                                  <SelectTrigger className="h-auto border-0 bg-transparent p-0 text-base font-medium text-gray-900 shadow-none focus:ring-0">
+                                    <SelectValue placeholder="Select package" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {hourlyPackageOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Date Picker */}
+                        <div className="flex-1 w-full">
+                          <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-700 mb-1">Date of Journey</div>
+                              <DateTimePicker
+                                date={pickupDate}
+                                onDateChange={setPickupDate}
+                                minDate={new Date()}
+                                className="h-auto border-0 bg-transparent p-0 text-base font-medium text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Return Date for Round Trip */}
+                        {tripType === 'outstation' && tripMode === 'round-trip' && (
+                          <>
+                            <div className="hidden lg:block w-px h-12 bg-gray-300"></div>
+                            <div className="flex-1 w-full">
+                              <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                                <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-700 mb-1">Return Date</div>
+                                  <DateTimePicker
+                                    date={returnDate}
+                                    onDateChange={setReturnDate}
+                                    minDate={pickupDate}
+                                    disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                                    className="h-auto border-0 bg-transparent p-0 text-base font-medium text-gray-900"
+                                  />
+                                </div>
+                              </div>
+                              {validationError && (
+                                <div className="text-red-600 text-sm mt-2 px-4">{validationError}</div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                     {/* Loading State */}
+                     {isCalculatingDistance && (
+                       <div className="flex items-center justify-center py-4">
+                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+                         <p className="text-gray-600 font-medium">Calculating route distance...</p>
                        </div>
+                     )}
+
+                      {/* Search Button - Bus booking style */}
+                      <div className="flex justify-center mt-6">
+                        <Button
+                          onClick={handleContinue}
+                          disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
+                          className="w-full sm:w-auto bg-red-500 hover:bg-red-600 text-white px-16 py-4 text-lg rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 min-w-[200px]"
+                        >
+                          {isLoading ? (
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                              <span>Searching...</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                              </svg>
+                              Search Cabs
+                            </div>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   )}
 
