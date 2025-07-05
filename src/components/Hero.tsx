@@ -671,7 +671,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
           : 'relative z-20 py-1 sm:pb-12 sm:pt-4'
         } w-full px-0 sm:px-0`}>
         <div className="container mx-auto px-0 sm:px-4">
-          <div className="max-w-8xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8">
               
               
@@ -690,21 +690,19 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                       </div>
 
                       {/* Main Booking Container - Bus booking style */}
-                      <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-6 mb-6">
+                      <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
                         <div className="flex flex-col lg:flex-row items-stretch gap-0">
                           {/* From Location */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 p-4">
-                              <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              </svg>
+                              
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs font-medium text-gray-500 uppercase mb-1">From</div>
                                 <LocationInput
                                   key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
                                   label=""
-                                  placeholder="Enter pickup location"
-                                  value={pickupLocation || undefined}
+                                  placeholder="Pickup location"
+                                  value={pickupLocation ? { ...pickupLocation } : undefined}
                                   onLocationChange={handlePickupLocationChange}
                                   isPickupLocation={true}
                                   isAirportTransfer={tripType === 'airport'}
@@ -723,16 +721,14 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           {(tripType === 'outstation' || tripType === 'airport') && (
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 p-4">
-                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                </svg>
+                                
                                 <div className="flex-1 min-w-0">
                                   <div className="text-xs font-medium text-gray-500 uppercase mb-1">To</div>
                                   <LocationInput
                                     key={dropLocation?.id || dropLocation?.name || 'drop'}
                                     label=""
-                                    placeholder="Enter drop location"
-                                    value={dropLocation || undefined}  
+                                    placeholder="Drop location"
+                                    value={dropLocation ? { ...dropLocation } : undefined}
                                     onLocationChange={handleDropLocationChange}
                                     isPickupLocation={false}
                                     isAirportTransfer={tripType === 'airport'}
@@ -749,13 +745,15 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 p-4">
-                                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 9h.01M15 9h.01M9 15h.01M15 15h.01" />
-                                  </svg>
                                   <div className="flex-1 min-w-0">
                                     <div className="text-xs font-medium text-gray-500 uppercase mb-1">Package</div>
                                     <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                      <SelectTrigger className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 shadow-none focus:ring-0">
+                                      <SelectTrigger className="relative h-auto border border-gray-300 bg-white rounded-lg px-4 py-3 text-sm font-semibold text-gray-900 shadow-none focus:ring-2 focus:ring-blue-500 pl-10">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                          </svg>
+                                        </span>
                                         <SelectValue placeholder="Select package" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -778,9 +776,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           {/* Date Picker */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 p-4">
-                              <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
+                             
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs font-medium text-gray-500 uppercase mb-1">Date of Journey</div>
                                 <DateTimePicker
@@ -799,9 +795,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 p-4">
-                                  <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
+                                  
                                   <div className="flex-1 min-w-0">
                                     <div className="text-xs font-medium text-gray-500 uppercase mb-1">Return Date</div>
                                     <DateTimePicker
@@ -837,7 +831,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="w-full sm:w-auto bg-red-500 hover:bg-red-600 text-white px-16 py-4 text-lg rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 min-w-[200px]"
+                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 text-lg font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300"
+                          style={{ minHeight: '56px' }}
                         >
                           {isLoading ? (
                             <div className="flex items-center">

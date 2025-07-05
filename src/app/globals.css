@@ -108,3 +108,9 @@ html, body {
   padding-bottom: 0.5rem;
   gap: 0.5rem;
 }
+
+:focus {
+  scroll-margin-top: 0 !important;
+  scroll-padding-top: 0 !important;
+  scroll-behavior: auto !important;
+}
