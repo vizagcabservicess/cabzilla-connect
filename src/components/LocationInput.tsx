@@ -95,13 +95,11 @@ export function LocationInput({
       setInputValue(value.name || value.address || "");
     } else if (location) {
       setInputValue(location.name || location.address || "");
-    } else {
-      setInputValue("");
     }
     
     // Mark as initialized
     initializedRef.current = true;
-  }, []);
+  }, [value, location]);
   
   // Filter suggestions based on input value
   useEffect(() => {
@@ -263,7 +261,7 @@ export function LocationInput({
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input text-lg font-bold"
+          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input text-sm"
           onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
           onBlur={handleInputBlur}
         />
