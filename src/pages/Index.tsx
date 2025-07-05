@@ -9,6 +9,7 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
+import { CabBookingInterface } from "@/components/CabBookingInterface";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
@@ -36,11 +37,7 @@ const Index = () => {
               ← Back to Home
             </button>
           </div>
-          {/* Search results will be displayed here */}
-          <div className="text-center py-8">
-            <h2 className="text-2xl font-bold mb-4">Available Cabs</h2>
-            <p className="text-gray-600">Search results will appear here</p>
-          </div>
+          <CabBookingInterface />
         </div>
       )}
       
