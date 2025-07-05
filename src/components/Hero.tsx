@@ -640,7 +640,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     <div className="relative">
       {/* Hero Banner Section - Only show when not in search mode */}
       {!isSearchActive && currentStep === 1 && (
-        <section className="relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
+        <section className="hidden sm:block relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
         {/* Background Video/Image */}
         <div className="absolute inset-0 z-0">
       
@@ -659,24 +659,13 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
 
         {/* Hero Content */}
         <div className="relative z-10 container mx-auto px-4 text-white">
-          <div className="max-w-4xl">
-            <h2 className="hidden sm:block text-xl md:text-6xl font-medium mb-6 leading-tight">
-              Vizag's No. 1 
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
-                online cab booking site
-              </span>
-            </h2>
-            <p className="hidden sm:block text-lg md:text-xl mb-8 max-w-2xl text-gray-200 leading-relaxed">
-              Experience premium taxi services in Visakhapatnam with professional drivers, 
-              comfortable vehicles, and transparent pricing.
-            </p>
-          </div>
+          
         </div>
       </section>
       )}
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className={`relative z-20 py-1 sm:pb-12 sm:pt-4 -mb-6 sm:mb-0 ${!isSearchActive && currentStep === 1 ? 'sm:-mt-32 -mt-24' : ''} w-full px-0 sm:px-0`}>
+      <section id="booking-widget" className={`relative z-20 py-1 sm:pb-12 sm:pt-4 sm:-mt-32 w-full px-0 sm:px-0 ${!isSearchActive && currentStep === 1 ? '' : ''}`}>
         <div className="container mx-auto px-0 sm:px-4">
           <div className="max-w-8xl mx-auto">
             <div className="bg-white rounded-none sm:rounded-2xl shadow-lg sm:shadow-2xl border-0 sm:border border-gray-100 p-3 sm:p-6">
