@@ -112,7 +112,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [selectedCab, setSelectedCab] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [currentStep, setCurrentStep] = useState<number>(savedData.autoTriggerSearch ? 2 : 1);
+  const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
   const [tripType, setTripType] = useState<TripType>(savedData.tripType);
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
@@ -628,44 +628,57 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     }
   };
 
+  useEffect(() => {
+    if (isSearchActive) {
+      setCurrentStep(2);
+    } else {
+      setCurrentStep(1);
+    }
+  }, [isSearchActive]);
+
   return (
     <div className="relative">
       {/* Hero Banner Section - Only show when not in search mode */}
       {!isSearchActive && currentStep === 1 && (
         <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
-          {/* Background Video/Image */}
-          <div className="absolute inset-0 z-0">
-            
-            {/* Fallback Image */}
-            <div 
-              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-              style={{
-                backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1494515843206-f3117d3f51b7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2574&q=80')`
-              }}
-            />
-          </div>
+        {/* Background Video/Image */}
+        <div className="absolute inset-0 z-0">
+      
+          
+          {/* Fallback Image */}
+          <div 
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}
+            style={{
+              backgroundImage: "url('https://vizagup.com/uploads/banner-vth.png')"
+            }}
+          />
+          
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
+        </div>
 
-          {/* Hero Content */}
-          <div className="relative z-10 container mx-auto px-4 text-center text-white">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
-                Book Your Perfect{' '}
-                <span className="text-gradient bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                  Cab Ride
-                </span>
-              </h1>
-              <p className="text-xl md:text-2xl mb-8 text-gray-200 max-w-2xl mx-auto leading-relaxed">
-                India's No. 1 online cab booking site. Reliable, comfortable, and affordable rides across Visakhapatnam.
-              </p>
-            </div>
+        {/* Hero Content */}
+        <div className="relative z-10 container mx-auto px-4 text-white">
+          <div className="max-w-4xl">
+            <h2 className="hidden sm:block text-xl md:text-6xl font-medium mb-6 leading-tight">
+              Vizag's No. 1 
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
+                online cab booking site
+              </span>
+            </h2>
+            <p className="hidden sm:block text-lg md:text-xl mb-8 max-w-2xl text-gray-200 leading-relaxed">
+              Experience premium taxi services in Visakhapatnam with professional drivers, 
+              comfortable vehicles, and transparent pricing.
+            </p>
           </div>
-        </section>
+        </div>
+      </section>
       )}
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className={`relative z-20 pb-12 ${!isSearchActive && currentStep === 1 ? '-mt-32' : 'pt-8'}`}>
+      <section id="booking-widget" className={`relative z-20 pb-0 sm:pb-12 sm:pt-4 -mb-10 sm:mb-0 ${!isSearchActive && currentStep === 1 ? 'sm:-mt-32' : ''} absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full px-2 sm:static sm:translate-x-0 sm:translate-y-0 sm:px-0`}>
         <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-8xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
               
               
@@ -704,7 +717,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         {/* To Location */}
                         {(tripType === 'outstation' || tripType === 'airport') && (
                           <>
-                            <div className="flex-shrink-0 flex items-center justify-center">
+                            <div className="hidden sm:flex flex-shrink-0 items-center justify-center">
                               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                                 <ArrowRight className="w-3 h-3 text-blue-600" />
                               </div>
