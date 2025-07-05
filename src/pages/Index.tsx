@@ -21,7 +21,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero onSearch={() => setSearchParams({ search: '1' })} />
+      <Hero onSearch={() => setSearchParams({ search: '1' })} isSearchActive={isSearch} />
       
       {/* Main Content with Optimized Spacing */}
       {!isSearch && (

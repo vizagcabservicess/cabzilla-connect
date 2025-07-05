@@ -41,7 +41,7 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
+export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean }) {
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -630,48 +630,40 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
 
   return (
     <div className="relative">
-      {/* Hero Banner Section */}
-      <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
-        {/* Background Video/Image */}
-        <div className="absolute inset-0 z-0">
-      
-          
-          {/* Fallback Image */}
-          <div 
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}
-            style={{
-              backgroundImage: "url('https://vizagup.com/uploads/banner-vth.png')"
-            }}
-          />
-          
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
-        </div>
-
-        {/* Hero Content */}
-        <div className="relative z-10 container mx-auto px-4 text-white">
-          <div className="max-w-4xl">
-        
+      {/* Hero Banner Section - Only show when not in search mode */}
+      {!isSearchActive && currentStep === 1 && (
+        <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
+          {/* Background Video/Image */}
+          <div className="absolute inset-0 z-0">
             
-            <h2 className="text-xl md:text-6xl font-medium mb-6 leading-tight">
-            Vizag's No. 1 
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
-              online cab booking site
-              </span>
-            </h2>
-            
-            <p className="text-lg md:text-xl mb-8 max-w-2xl text-gray-200 leading-relaxed">
-              Experience premium taxi services in Visakhapatnam with professional drivers, 
-              comfortable vehicles, and transparent pricing.
-            </p>
-            
-            
+            {/* Fallback Image */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://images.unsplash.com/photo-1494515843206-f3117d3f51b7?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2574&q=80')`
+              }}
+            />
           </div>
-        </div>
-      </section>
+
+          {/* Hero Content */}
+          <div className="relative z-10 container mx-auto px-4 text-center text-white">
+            <div className="max-w-4xl mx-auto">
+              <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
+                Book Your Perfect{' '}
+                <span className="text-gradient bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                  Cab Ride
+                </span>
+              </h1>
+              <p className="text-xl md:text-2xl mb-8 text-gray-200 max-w-2xl mx-auto leading-relaxed">
+                India's No. 1 online cab booking site. Reliable, comfortable, and affordable rides across Visakhapatnam.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className="relative -mt-32 z-20 pb-12">
+      <section id="booking-widget" className={`relative z-20 pb-12 ${!isSearchActive && currentStep === 1 ? '-mt-32' : 'pt-8'}`}>
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
