@@ -640,7 +640,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     <div className="relative">
       {/* Hero Banner Section - Only show when not in search mode */}
       {!isSearchActive && currentStep === 1 && (
-        <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
+        <section className="relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
         {/* Background Video/Image */}
         <div className="absolute inset-0 z-0">
       
@@ -676,7 +676,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
       )}
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className={`relative z-20 pb-0 sm:pb-12 sm:pt-4 -mb-10 sm:mb-0 ${!isSearchActive && currentStep === 1 ? 'sm:-mt-32' : ''} absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full px-2 sm:static sm:translate-x-0 sm:translate-y-0 sm:px-0`}>
+      <section id="booking-widget" className={`relative z-20 py-2 sm:pb-12 sm:pt-4 -mb-8 sm:mb-0 ${!isSearchActive && currentStep === 1 ? 'sm:-mt-32 -mt-16' : ''} w-full px-2 sm:px-0`}>
         <div className="container mx-auto px-4">
           <div className="max-w-8xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
