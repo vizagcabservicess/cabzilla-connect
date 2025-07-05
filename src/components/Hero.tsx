@@ -694,7 +694,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {/* From Location */}
                          <div className="flex-1 min-w-0">
                            <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                             <span className="text-sm font-bold text-gray-700 block mb-1">From</span>
+                             <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">From</span>
                              <LocationInput
                                key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
                                label=""
@@ -718,7 +718,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                              
                              <div className="flex-1 min-w-0">
                                <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                                 <span className="text-sm font-bold text-gray-700 block mb-1">To</span>
+                                 <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">To</span>
                                  <LocationInput
                                    key={dropLocation?.id || dropLocation?.name || 'drop'}
                                    label=""
@@ -737,7 +737,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {tripType === 'local' && (
                            <div className="flex-1 min-w-0">
                              <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                               <span className="text-sm font-bold text-gray-700 block mb-1">Package</span>
+                               <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Package</span>
                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
                                  <SelectTrigger className="h-8 border-0 bg-transparent p-0 text-sm font-medium shadow-none focus:ring-0">
                                    <SelectValue placeholder="Select package" />
@@ -757,7 +757,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {/* Date Picker */}
                          <div className="flex-1 min-w-0">
                            <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                             <span className="text-sm font-bold text-gray-700 block mb-1">Departure</span>
+                             <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Departure</span>
                              <DateTimePicker
                                date={pickupDate}
                                onDateChange={setPickupDate}
@@ -771,7 +771,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {tripType === 'outstation' && tripMode === 'round-trip' && (
                            <div className="flex-1 min-w-0">
                              <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                               <span className="text-sm font-bold text-gray-700 block mb-1">Return</span>
+                               <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Return</span>
                                <DateTimePicker
                                  date={returnDate}
                                  onDateChange={setReturnDate}
