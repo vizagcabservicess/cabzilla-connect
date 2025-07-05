@@ -672,13 +672,13 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
         } w-full px-0 sm:px-0`}>
         <div className="container mx-auto px-0 sm:px-4">
           <div className="max-w-8xl mx-auto">
-            <div className="bg-white rounded-none sm:rounded-2xl shadow-lg sm:shadow-2xl border-0 sm:border border-gray-100 p-3 sm:p-6">
+            <div className="bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8">
               
               
               {!showGuestDetailsForm ? (
                 <>
                   {currentStep === 1 && (
-                    <div className="space-y-6">
+                    <div className="space-y-6 sm:space-y-8">
                       {/* Trip Type Selector */}
                       <div className="w-full">
                         <TabTripSelector
@@ -689,12 +689,17 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         />
                       </div>
 
-                       {/* Location and Date Inputs */}
-                       <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch">
+                       {/* Location and Date Inputs - Desktop: Single row layout */}
+                       <div className="flex flex-col lg:flex-row gap-3 sm:gap-2 items-stretch">
                          {/* From Location */}
                          <div className="flex-1 min-w-0">
-                           <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                             <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">From</span>
+                           <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
+                             <div className="flex items-center gap-2 mb-2">
+                               <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center">
+                                 <div className="w-2 h-2 bg-white rounded-full"></div>
+                               </div>
+                               <span className="text-sm font-semibold text-gray-800">From</span>
+                             </div>
                              <LocationInput
                                key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
                                label=""
@@ -711,14 +716,19 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {(tripType === 'outstation' || tripType === 'airport') && (
                            <>
                              <div className="hidden sm:flex flex-shrink-0 items-center justify-center">
-                               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                                 <ArrowRight className="w-3 h-3 text-blue-600" />
+                               <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200">
+                                 <ArrowRight className="w-4 h-4 text-gray-600" />
                                </div>
                              </div>
                              
                              <div className="flex-1 min-w-0">
-                               <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                                 <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">To</span>
+                               <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
+                                 <div className="flex items-center gap-2 mb-2">
+                                   <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                     <div className="w-2 h-2 bg-white rounded-full"></div>
+                                   </div>
+                                   <span className="text-sm font-semibold text-gray-800">To</span>
+                                 </div>
                                  <LocationInput
                                    key={dropLocation?.id || dropLocation?.name || 'drop'}
                                    label=""
@@ -736,10 +746,15 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {/* Package Selection for Local */}
                          {tripType === 'local' && (
                            <div className="flex-1 min-w-0">
-                             <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                               <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Package</span>
+                             <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
+                               <div className="flex items-center gap-2 mb-2">
+                                 <div className="w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                   <div className="w-2 h-2 bg-white rounded-full"></div>
+                                 </div>
+                                 <span className="text-sm font-semibold text-gray-800">Package</span>
+                               </div>
                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                 <SelectTrigger className="h-8 border-0 bg-transparent p-0 text-sm font-medium shadow-none focus:ring-0">
+                                 <SelectTrigger className="h-10 border-0 bg-transparent p-0 text-base font-medium shadow-none focus:ring-0 text-gray-700">
                                    <SelectValue placeholder="Select package" />
                                  </SelectTrigger>
                                  <SelectContent>
@@ -756,13 +771,18 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
 
                          {/* Date Picker */}
                          <div className="flex-1 min-w-0">
-                           <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                             <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Departure</span>
+                           <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
+                             <div className="flex items-center gap-2 mb-2">
+                               <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                                 <div className="w-2 h-2 bg-white rounded-full"></div>
+                               </div>
+                               <span className="text-sm font-semibold text-gray-800">Departure</span>
+                             </div>
                              <DateTimePicker
                                date={pickupDate}
                                onDateChange={setPickupDate}
                                minDate={new Date()}
-                               className="h-8 border-0 bg-transparent p-0 text-sm font-medium"
+                               className="h-10 border-0 bg-transparent p-0 text-base font-medium text-gray-700"
                              />
                            </div>
                          </div>
@@ -770,14 +790,19 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                          {/* Return Date for Round Trip */}
                          {tripType === 'outstation' && tripMode === 'round-trip' && (
                            <div className="flex-1 min-w-0">
-                             <div className="bg-gray-50/80 rounded-lg p-2.5 sm:p-3 border border-gray-200/50 h-full">
-                               <span className="text-xs font-bold sm:font-medium text-gray-700 block mb-1">Return</span>
+                             <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 border border-gray-100 h-full shadow-sm">
+                               <div className="flex items-center gap-2 mb-2">
+                                 <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
+                                   <div className="w-2 h-2 bg-white rounded-full"></div>
+                                 </div>
+                                 <span className="text-sm font-semibold text-gray-800">Return</span>
+                               </div>
                                <DateTimePicker
                                  date={returnDate}
                                  onDateChange={setReturnDate}
                                  minDate={pickupDate}
                                  disabled={!isReturnTimeEnabled || isCheckingTravelTime}
-                                 className="h-8 border-0 bg-transparent p-0 text-sm font-medium"
+                                 className="h-10 border-0 bg-transparent p-0 text-base font-medium text-gray-700"
                                />
                                {validationError && (
                                  <div className="text-red-600 text-xs mt-1">{validationError}</div>
@@ -789,26 +814,31 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
 
                       {/* Loading State */}
                       {isCalculatingDistance && (
-                        <div className="flex items-center justify-center">
+                        <div className="flex items-center justify-center py-4">
                           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                          <p className="text-gray-600">Calculating route distance...</p>
+                          <p className="text-gray-600 font-medium">Calculating route distance...</p>
                         </div>
                       )}
 
                        {/* Search Button */}
-                       <div className="flex justify-center mt-3 sm:mt-6">
+                       <div className="flex justify-center mt-4 sm:mt-8">
                          <Button
                            onClick={handleContinue}
                            disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                           className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 sm:px-12 py-4 text-base sm:text-lg rounded-lg sm:rounded-xl font-bold sm:font-semibold min-w-[200px]"
+                           className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-12 sm:px-16 py-4 sm:py-5 text-lg sm:text-xl rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 min-w-[280px]"
                          >
                            {isLoading ? (
                              <div className="flex items-center">
-                               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
                                <span>Searching...</span>
                              </div>
                            ) : (
-                             'Search Cabs'
+                             <div className="flex items-center">
+                               <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                               </svg>
+                               Search Cabs
+                             </div>
                            )}
                          </Button>
                        </div>
