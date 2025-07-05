@@ -664,8 +664,12 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
       </section>
       )}
 
-      {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className={`relative z-20 py-1 sm:pb-12 sm:pt-4  w-full px-0 sm:px-0 ${!isSearchActive && currentStep === 1 ? '' : ''}`}>
+      {/* Booking Widget Section - Mobile: positioned after banner, Desktop: centered in banner */}
+      <section id="booking-widget" className={`
+        ${!isSearchActive && currentStep === 1 
+          ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
+          : 'relative z-20 py-1 sm:pb-12 sm:pt-4'
+        } w-full px-0 sm:px-0`}>
         <div className="container mx-auto px-0 sm:px-4">
           <div className="max-w-8xl mx-auto">
             <div className="bg-white rounded-none sm:rounded-2xl shadow-lg sm:shadow-2xl border-0 sm:border border-gray-100 p-3 sm:p-6">
