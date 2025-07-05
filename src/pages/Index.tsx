@@ -21,7 +21,28 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero onSearch={() => setSearchParams({ search: '1' })} />
+      
+      {/* Show Hero (banner + widget) only when not searching */}
+      {!isSearch && <Hero onSearch={() => setSearchParams({ search: '1' })} />}
+      
+      {/* Show search results when searching */}
+      {isSearch && (
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-4">
+            <button 
+              onClick={() => setSearchParams({})}
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
+              ← Back to Home
+            </button>
+          </div>
+          {/* Search results will be displayed here */}
+          <div className="text-center py-8">
+            <h2 className="text-2xl font-bold mb-4">Available Cabs</h2>
+            <p className="text-gray-600">Search results will appear here</p>
+          </div>
+        </div>
+      )}
       
       {/* Main Content with Optimized Spacing */}
       {!isSearch && (
