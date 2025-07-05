@@ -634,23 +634,13 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
       <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
         {/* Background Video/Image */}
         <div className="absolute inset-0 z-0">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className={`w-full h-full object-cover transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-100' : 'opacity-0'}`}
-            onLoadedData={() => setIsVideoLoaded(true)}
-            poster="https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
-          >
-            <source src="https://player.vimeo.com/external/195913085.sd.mp4?s=7635c4b1d1e5c7b5e15e5e2b1e5e5e5e&profile_id=164&oauth2_token_id=57447761" type="video/mp4" />
-          </video>
+      
           
           {/* Fallback Image */}
           <div 
             className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}
             style={{
-              backgroundImage: "url('https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80')"
+              backgroundImage: "url('https://vizagup.com/uploads/banner-vth.png')"
             }}
           />
           
@@ -661,62 +651,31 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
         {/* Hero Content */}
         <div className="relative z-10 container mx-auto px-4 text-white">
           <div className="max-w-4xl">
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Available 24/7</span>
-            </div>
+        
             
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-medium mb-6 leading-tight">
-              Your Journey,
+            <h2 className="text-xl md:text-6xl font-medium mb-6 leading-tight">
+            Vizag's No. 1 
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
-                Our Priority
+              online cab booking site
               </span>
-            </h1>
+            </h2>
             
             <p className="text-lg md:text-xl mb-8 max-w-2xl text-gray-200 leading-relaxed">
               Experience premium taxi services in Visakhapatnam with professional drivers, 
               comfortable vehicles, and transparent pricing.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 mb-8">
-              <Button 
-                onClick={() => {
-                  // Scroll to booking widget
-                  const widget = document.getElementById('booking-widget');
-                  if (widget) {
-                    widget.scrollIntoView({ behavior: 'smooth' });
-                  }
-                }}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 text-lg rounded-xl"
-              >
-                Book Now
-              </Button>
-              
-              <div className="flex gap-3">
-                <Button variant="outline" className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30 px-6 py-4 rounded-xl">
-                  Call Now
-                </Button>
-                
-                <Button variant="outline" className="bg-green-600/80 backdrop-blur-sm border-green-500/30 text-white hover:bg-green-600 px-6 py-4 rounded-xl">
-                  WhatsApp
-                </Button>
-              </div>
-            </div>
+            
           </div>
         </div>
       </section>
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className="relative -mt-20 z-20 pb-12">
+      <section id="booking-widget" className="relative -mt-32 z-20 pb-12">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                  India's No. 1 online cab booking site
-                </h2>
-                <p className="text-gray-600">Book your ride in just a few clicks</p>
-              </div>
+              
               
               {!showGuestDetailsForm ? (
                 <>
@@ -843,7 +802,7 @@ export function Hero({ onSearch }: { onSearch?: (searchData: any) => void }) {
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="bg-red-600 hover:bg-red-700 text-white px-12 py-4 text-lg rounded-xl font-semibold min-w-[200px]"
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-4 text-lg rounded-xl font-semibold min-w-[200px]"
                         >
                           {isLoading ? (
                             <div className="flex items-center">
