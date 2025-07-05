@@ -666,17 +666,14 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 online cab booking site
               </span>
             </h2>
-            <p className="hidden sm:block text-lg md:text-xl mb-8 max-w-2xl text-gray-200 leading-relaxed">
-              Experience premium taxi services in Visakhapatnam with professional drivers, 
-              comfortable vehicles, and transparent pricing.
-            </p>
+            
           </div>
         </div>
       </section>
       )}
 
       {/* Booking Widget Section - Positioned between banner and next section */}
-      <section id="booking-widget" className={`relative z-20 pb-0 sm:pb-12 sm:pt-4 -mb-10 sm:mb-0 ${!isSearchActive && currentStep === 1 ? 'sm:-mt-32' : ''} absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full px-2 sm:static sm:translate-x-0 sm:translate-y-0 sm:px-0`}>
+      <section id="booking-widget" className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pb-0 pb-12 pt-4 -mb-10 mb-0 w-full px-2 px-0 ${!isSearchActive && currentStep === 1 ? '' : ''}`}>
         <div className="container mx-auto px-4">
           <div className="max-w-8xl mx-auto">
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
