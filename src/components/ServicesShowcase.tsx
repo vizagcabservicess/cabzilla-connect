@@ -63,7 +63,7 @@ export function ServicesShowcase() {
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-1 leading-tight">
             Your Journey, Our Priority
           </h2>
-          <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
+          <p className="text-gray-600 px-4 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
             From local city trips to outstation travel, we provide reliable and comfortable transportation solutions for all your needs.
           </p>
         </div>

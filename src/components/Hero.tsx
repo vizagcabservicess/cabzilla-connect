@@ -699,7 +699,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs font-medium text-gray-500 uppercase mb-1">From</div>
                                 <LocationInput
-                                  key={pickupLocation?.id || pickupLocation?.name || 'pickup'}
+                                  key="pickup"
                                   label=""
                                   placeholder="Pickup location"
                                   value={pickupLocation ? { ...pickupLocation } : undefined}

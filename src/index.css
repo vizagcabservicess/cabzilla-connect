@@ -249,3 +249,9 @@ html, body {
     margin-bottom: 1.5rem !important;
   }
 }
+
+/* Remove left and right padding from all .container globally */
+.container {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}

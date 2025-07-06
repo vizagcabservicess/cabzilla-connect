@@ -30,7 +30,7 @@ export function EnhancedCTA() {
           <h2 className="text-4xl md:text-5xl font-medium mb-4">
             Ready to Book Your Ride?
           </h2>
-          <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
+          <p className="px-4 text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
             Experience hassle-free travel with Vizag Taxi Hub. Professional service guaranteed.
           </p>
           

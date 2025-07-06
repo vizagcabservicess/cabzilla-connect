@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay, EffectCoverflow } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapPin, Clock, Star, Users } from 'lucide-react';
@@ -13,13 +13,16 @@ import { useNavigate } from 'react-router-dom';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import 'swiper/css/effect-coverflow';
+import 'swiper/css/autoplay';
 
 export function TourSlider() {
   const [tours, setTours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [vehicleCapacities, setVehicleCapacities] = useState({});
   const navigate = useNavigate();
+  const swiperRef = useRef<any>(null);
+  const [isBeginning, setIsBeginning] = useState(true);
+  const [isEnd, setIsEnd] = useState(false);
 
   useEffect(() => {
     async function fetchToursAndVehicles() {
@@ -80,46 +83,65 @@ export function TourSlider() {
   }
 
   return (
-    <section className="py-12 md:py-16 bg-gradient-to-b from-gray-50 to-white">
-      <div className="container mx-auto px-4">
-        <motion.div 
-          className="text-center mb-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-        >
-          <div className="inline-flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-full mb-4">
-            <MapPin className="h-4 w-4 text-orange-600" />
-            <span className="text-sm font-medium text-orange-600">TOUR PACKAGES</span>
+    <section className="py-12 md:py-16 bg-gray-50 px-4">
+      <div
+        className="container mx-auto max-w-6xl"
+        onMouseEnter={() => {
+          if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.stop();
+        }}
+        onMouseLeave={() => {
+          if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.start();
+        }}
+      >
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">Most-visited Tours</h2>
+          <div className="flex gap-2 ml-auto">
+            <button
+              className={`tour-slider-prev bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isBeginning ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
+              aria-label="Previous"
+              disabled={isBeginning}
+            >
+              <svg width="24" height="24" fill="none" stroke={isBeginning ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
+                <path d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button
+              className={`tour-slider-next bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isEnd ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
+              aria-label="Next"
+              disabled={isEnd}
+            >
+              <svg width="24" height="24" fill="none" stroke={isEnd ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
+                <path d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
           </div>
-          <h2 className="text-3xl md:text-4xl font-medium text-gray-900 mb-4">
-            Explore Amazing Destinations
-          </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto text-lg">
-            Discover the beauty of Andhra Pradesh with our carefully curated tour packages
-          </p>
-        </motion.div>
-
+        </div>
         <Swiper
-          modules={[Navigation, Pagination, Autoplay, EffectCoverflow]}
-          spaceBetween={30}
+          modules={[Navigation, Pagination, Autoplay]}
+          spaceBetween={28}
           slidesPerView={1}
+          navigation={{
+            nextEl: '.tour-slider-next',
+            prevEl: '.tour-slider-prev',
+          }}
           pagination={{ clickable: true }}
-          autoplay={{ delay: 4000, disableOnInteraction: false }}
-          effect="coverflow"
-          coverflowEffect={{
-            rotate: 50,
-            stretch: 0,
-            depth: 100,
-            modifier: 1,
-            slideShadows: true,
-          }}
+          autoplay={{ delay: 3500, disableOnInteraction: false }}
           breakpoints={{
-            640: { slidesPerView: 2 },
-            1024: { slidesPerView: 3 }
+            640: { slidesPerView: 1 },
+            768: { slidesPerView: 2 },
+            1024: { slidesPerView: 3 },
+            1280: { slidesPerView: 3 }
           }}
-          className="tour-slider pb-12"
+          className="tour-slider pb-8"
+          onSwiper={swiper => {
+            swiperRef.current = swiper;
+            setIsBeginning(swiper.isBeginning);
+            setIsEnd(swiper.isEnd);
+          }}
+          onSlideChange={swiper => {
+            setIsBeginning(swiper.isBeginning);
+            setIsEnd(swiper.isEnd);
+          }}
         >
           {displayTours.map((tour, idx) => {
             // Find vehicleId with lowest price
@@ -142,27 +164,27 @@ export function TourSlider() {
             }
             return (
               <SwiperSlide key={(tour.tourId || tour.id) + '-' + idx}>
-                <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 bg-white rounded-3xl border-0">
+                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-0 flex flex-col h-full transition hover:shadow-md">
                   <div className="relative">
                     <img 
                       src={tour.image || tour.imageUrl} 
                       alt={tour.name || tour.tourName}
-                      className="w-full h-64 object-cover"
+                      className="w-full h-48 object-cover rounded-t-2xl"
                     />
                   </div>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xl font-bold text-gray-900">{tour.name || tour.tourName}</h3>
-                      <div className="text-2xl font-bold text-blue-600">
+                  <div className="p-5 flex flex-col flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{tour.name || tour.tourName}</h3>
+                      <div className="text-lg font-bold text-blue-600">
                         {tour.pricing && Object.values(tour.pricing).length > 0
-                          ? `₹${Math.min(...Object.values(tour.pricing)).toLocaleString('en-IN')}`
+                          ? `₹${Math.min(...(Object.values(tour.pricing) as number[])).toLocaleString('en-IN')}`
                           : tour.price || '₹--'}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-4 mb-2 text-xs text-gray-600">
                       <div className="flex items-center gap-1">
                         <Clock className="h-4 w-4" />
-                        <span>{tour.timeDuration || tour.duration || 'Full Day'}</span>
+                        <span>{(tour.timeDuration || tour.duration || 'Full Day').replace(/\s*\(.*?\)\s*/g, '')}</span>
                       </div>
                       {maxPeople && (
                         <div className="flex items-center gap-1">
@@ -171,13 +193,13 @@ export function TourSlider() {
                         </div>
                       )}
                     </div>
-                    <div className="space-y-2 mb-6">
-                      <p className="text-sm font-medium text-gray-700">Tour Highlights:</p>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-gray-700 mb-1">Tour Highlights:</p>
+                      <div className="flex flex-wrap gap-1">
                         {highlights.length > 0 && highlights.map((highlight, index) => (
                           <span 
                             key={index}
-                            className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full"
+                            className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full"
                           >
                             {highlight}
                           </span>
@@ -185,13 +207,13 @@ export function TourSlider() {
                       </div>
                     </div>
                     <Button
-                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl py-3"
+                      className="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold"
                       onClick={() => navigate(`/tours/${tour.tourId || tour.id}`)}
                     >
                       Book This Tour
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </SwiperSlide>
             );
           })}

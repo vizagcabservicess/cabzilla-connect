@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
@@ -133,7 +132,7 @@ const VehicleDetailPage = () => {
         <div className="text-center">
           <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-red-500 mb-4">{error}</p>
-          <Link to="/vehicles" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+          <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
         </div>
       </div>
     );
@@ -145,7 +144,7 @@ const VehicleDetailPage = () => {
         <div className="text-center">
           <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-4">Vehicle not found</p>
-          <Link to="/vehicles" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+          <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
         </div>
       </div>
     );
@@ -155,7 +154,7 @@ const VehicleDetailPage = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <Link 
-          to="/vehicles" 
+          to="/" 
           className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
