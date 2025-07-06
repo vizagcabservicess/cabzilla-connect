@@ -83,9 +83,9 @@ export function TourSlider() {
   }
 
   return (
-    <section className="py-12 md:py-16 bg-gray-50 px-4">
+    <section className="py-4 md:py-4  px-4">
       <div
-        className="container mx-auto max-w-6xl"
+        className="container mx-auto max-w-6xl relative"
         onMouseEnter={() => {
           if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.stop();
         }}
@@ -93,28 +93,37 @@ export function TourSlider() {
           if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.start();
         }}
       >
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">Most-visited Tours</h2>
-          <div className="flex gap-2 ml-auto">
-            <button
-              className={`tour-slider-prev bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isBeginning ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
-              aria-label="Previous"
-              disabled={isBeginning}
-            >
-              <svg width="24" height="24" fill="none" stroke={isBeginning ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
-                <path d="M15 19l-7-7 7-7"/>
-              </svg>
-            </button>
-            <button
-              className={`tour-slider-next bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isEnd ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
-              aria-label="Next"
-              disabled={isEnd}
-            >
-              <svg width="24" height="24" fill="none" stroke={isEnd ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
-                <path d="M9 5l7 7-7 7"/>
-              </svg>
-            </button>
+        {/* Arrows absolutely positioned at top right of slider */}
+        <div className="absolute right-0 top-0 z-10 flex gap-2 mt-[7rem] mr-2">
+          <button
+            className={`tour-slider-prev bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isBeginning ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
+            aria-label="Previous"
+            disabled={isBeginning}
+          >
+            <svg width="24" height="24" fill="none" stroke={isBeginning ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
+              <path d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <button
+            className={`tour-slider-next bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isEnd ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
+            aria-label="Next"
+            disabled={isEnd}
+          >
+            <svg width="24" height="24" fill="none" stroke={isEnd ? '#91d5ff' : '#1890ff'} strokeWidth="2.5" viewBox="0 0 24 24">
+              <path d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+        {/* Heading and subtitle centered below arrows */}
+        <div className="mb-8 text-center flex flex-col items-center justify-center">
+          <div className="inline-flex items-center gap-2 bg-orange-50 px-6 py-2 rounded-2xl mb-4" style={{ position: 'relative', left: 0, right: 0, margin: '0 auto' }}>
+            <MapPin className="h-5 w-5 text-orange-500" />
+            <span className="text-base font-medium text-orange-500 tracking-wide">TOUR PACKAGES</span>
           </div>
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">Explore Amazing Destinations</h2>
+          <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+            Discover the beauty of Andhra Pradesh with our carefully curated tour packages
+          </p>
         </div>
         <Swiper
           modules={[Navigation, Pagination, Autoplay]}
