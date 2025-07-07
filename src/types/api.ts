@@ -49,7 +49,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'customer' | 'driver' | 'admin' | 'guest' | 'provider';
+  role: 'guest' | 'admin' | 'super_admin' | 'driver' | 'user' | 'customer' | 'provider';
   is_active: boolean;
   imageUrl?: string;
 }

@@ -23,7 +23,7 @@ const formSchema = z.object({
     message: "Please enter a valid email address.",
   }),
   phone: z.string().optional(),
-  role: z.enum(['user', 'admin', 'driver']).default('user'),
+  role: z.enum(['guest', 'admin', 'super_admin', 'driver']).default('guest'),
 });
 
 export function UserManagement() {
@@ -39,7 +39,7 @@ export function UserManagement() {
       name: "",
       email: "",
       phone: "",
-      role: 'user',
+      role: 'guest',
     },
   });
   
@@ -119,7 +119,7 @@ export function UserManagement() {
     }
   };
 
-  const handleUserRoleUpdate = async (userId: string | number, role: "user" | "admin" | "driver") => {
+  const handleUserRoleUpdate = async (userId: string | number, role: "guest" | "admin" | "super_admin" | "driver") => {
     try {
       // Convert userId to a number if possible
       const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? 
@@ -231,11 +231,12 @@ export function UserManagement() {
                           <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="driver">Driver</SelectItem>
-                      </SelectContent>
+                        <SelectContent>
+                          <SelectItem value="guest">Guest</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
+                          <SelectItem value="driver">Driver</SelectItem>
+                        </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -295,7 +296,7 @@ export function UserManagement() {
                         value={user.role}
                         onValueChange={(newRole) => {
                           // Cast the role value to ensure it's one of the allowed types
-                          const typedRole = newRole as "user" | "admin" | "driver";
+                          const typedRole = newRole as "guest" | "admin" | "super_admin" | "driver";
                           handleUserRoleUpdate(user.id, typedRole);
                         }}
                       >
@@ -303,8 +304,9 @@ export function UserManagement() {
                           <SelectValue placeholder={user.role} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="guest">Guest</SelectItem>
+<SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
                           <SelectItem value="driver">Driver</SelectItem>
                         </SelectContent>
                       </Select>
