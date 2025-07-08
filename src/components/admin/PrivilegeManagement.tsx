@@ -25,10 +25,13 @@ export function PrivilegeManagement({ currentUser }: PrivilegeManagementProps) {
 
   const fetchUsers = async () => {
     try {
-      const data = await userAPI.getAllUsers();
-      if (Array.isArray(data)) {
-        // Filter to show only admin users for privilege management
-        const adminUsers = data.filter(user => user.role === 'admin');
+      const response = await userAPI.getAllUsers();
+      const users = response.data; // Unwrap the data property
+      if (Array.isArray(users)) {
+        // Filter to show only admin and super_admin users for privilege management
+        const adminUsers = users.filter(
+          user => user.role === 'admin' || user.role === 'super_admin'
+        );
         setUsers(adminUsers);
       }
     } catch (error) {
