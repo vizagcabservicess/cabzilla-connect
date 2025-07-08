@@ -59,6 +59,7 @@ import SUVPage from './pages/SUVPage';
 import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
+import OperatorProfilesPage from '@/pages/OperatorProfilesPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
 import { useAuth } from './providers/AuthProvider';
@@ -145,6 +146,10 @@ const router = createBrowserRouter([
       {
         path: 'pooling-enhanced',
         element: <PoolingAdminDashboard />,
+      },
+      {
+        path: 'operator-profiles',
+        element: <OperatorProfilesPage />,
       },
     ]
   },

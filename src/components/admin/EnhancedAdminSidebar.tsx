@@ -23,7 +23,8 @@ import {
   CalendarPlus,
   BadgePercent,
   Info,
-  Shield
+  Shield,
+  Building2
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -178,6 +179,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <Shield size={20} />, 
       path: '/admin/privileges',
       show: isSuperAdmin()
+    },
+    { 
+      id: 'operator-profiles', 
+      label: 'Operator Profiles', 
+      icon: <Building2 size={20} />, 
+      path: '/admin/operator-profiles',
+      show: isAdmin() || isSuperAdmin()
     },
     
     // Always visible
