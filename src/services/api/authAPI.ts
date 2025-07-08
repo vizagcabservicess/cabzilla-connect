@@ -7,7 +7,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'customer' | 'driver' | 'admin';
+  role: 'customer' | 'driver' | 'admin' | 'super_admin';
   is_active: boolean;
 }
 
