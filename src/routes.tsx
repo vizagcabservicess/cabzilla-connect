@@ -62,7 +62,7 @@ import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
 import { useAuth } from './providers/AuthProvider';
-import { UserRole } from '@/types/privileges';
+import { UserRole, EnhancedUser } from '@/types/privileges';
 
 const router = createBrowserRouter([
   {
@@ -324,17 +324,25 @@ const router = createBrowserRouter([
 
 function PrivilegeManagementWrapper() {
   const { user } = useAuth();
-  const enhancedUser = user
-    ? {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole,
-        is_active: user.is_active,
-        privileges: { userId: user.id, role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole, modulePrivileges: [] },
-      }
-    : undefined;
+  
+  if (!user) {
+    return <div>Please log in to access this page.</div>;
+  }
+  
+  const enhancedUser: EnhancedUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole,
+    is_active: user.is_active,
+    privileges: { 
+      userId: user.id, 
+      role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole, 
+      modulePrivileges: [] 
+    },
+  };
+  
   return <PrivilegeManagement currentUser={enhancedUser} />;
 }
 
