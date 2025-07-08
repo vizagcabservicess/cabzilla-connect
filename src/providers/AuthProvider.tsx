@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI, User } from '@/services/api/authAPI';
 
@@ -21,6 +20,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Try to rehydrate user from localStorage first
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
         if (authAPI.isAuthenticated()) {
           const userData = await authAPI.getCurrentUser();
           if (userData) {
@@ -65,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
+    isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
     isDriver: user?.role === 'driver',
     login,
     logout,

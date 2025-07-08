@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -201,6 +200,90 @@ try {
         
         error_log("Successfully updated user role for user $targetUserId to $newRole");
         sendJsonResponse(['status' => 'success', 'message' => 'User role updated successfully', 'data' => $updatedUser]);
+    }
+    // Handle POST request to create a new user
+    else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $requestBody = file_get_contents('php://input');
+        error_log("Received POST request body: " . $requestBody);
+        $requestData = json_decode($requestBody, true);
+
+        // Validate required fields
+        if (!isset($requestData['name']) || !isset($requestData['email']) || !isset($requestData['role'])) {
+            error_log("Missing required fields for user creation");
+            sendJsonResponse(['status' => 'error', 'message' => 'Name, email, and role are required'], 400);
+            exit;
+        }
+
+        $name = $requestData['name'];
+        $email = $requestData['email'];
+        $phone = isset($requestData['phone']) ? $requestData['phone'] : null;
+        $role = $requestData['role'];
+
+        // Insert new user
+        $stmt = $conn->prepare("INSERT INTO users (name, email, phone, role, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+        $stmt->bind_param("ssss", $name, $email, $phone, $role);
+        $success = $stmt->execute();
+
+        if (!$success) {
+            error_log("Failed to create user: " . $conn->error);
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create user: ' . $conn->error], 500);
+            exit;
+        }
+
+        $newUserId = $stmt->insert_id;
+        $stmt = $conn->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
+        $stmt->bind_param("i", $newUserId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $userData = $result->fetch_assoc();
+
+        $createdUser = [
+            'id' => intval($userData['id']),
+            'name' => $userData['name'],
+            'email' => $userData['email'],
+            'phone' => $userData['phone'],
+            'role' => $userData['role'],
+            'createdAt' => $userData['created_at']
+        ];
+
+        error_log("Successfully created user $newUserId");
+        sendJsonResponse(['status' => 'success', 'message' => 'User created successfully', 'data' => $createdUser], 201);
+    }
+    // Handle DELETE request to delete a user (hard delete)
+    else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        // Parse user ID from query string or request body
+        $userIdToDelete = null;
+        if (isset($_GET['user_id'])) {
+            $userIdToDelete = intval($_GET['user_id']);
+        } else {
+            $requestBody = file_get_contents('php://input');
+            $requestData = json_decode($requestBody, true);
+            if (isset($requestData['user_id'])) {
+                $userIdToDelete = intval($requestData['user_id']);
+            }
+        }
+        if (!$userIdToDelete) {
+            error_log("Missing user_id for deletion");
+            sendJsonResponse(['status' => 'error', 'message' => 'User ID is required for deletion'], 400);
+            exit;
+        }
+        // Prevent self-deletion
+        if ($userIdToDelete == $userId) {
+            error_log("Attempt to delete own user account");
+            sendJsonResponse(['status' => 'error', 'message' => 'You cannot delete your own user account'], 403);
+            exit;
+        }
+        // Delete user
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->bind_param("i", $userIdToDelete);
+        $success = $stmt->execute();
+        if (!$success) {
+            error_log("Failed to delete user: " . $conn->error);
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to delete user: ' . $conn->error], 500);
+            exit;
+        }
+        error_log("Successfully deleted user $userIdToDelete");
+        sendJsonResponse(['status' => 'success', 'message' => 'User deleted successfully']);
     } else {
         error_log("Method not allowed: " . $_SERVER['REQUEST_METHOD']);
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);

@@ -15,13 +15,14 @@ import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
+import { useAuth } from '@/providers/AuthProvider';
 
 const MAX_RETRIES = 3;
 
 export default function DashboardPage() {
+  const { user, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +88,6 @@ export default function DashboardPage() {
               email: cachedUser.email || '',
               role: cachedUser.role || 'user'
             };
-            setUser(userData);
             setIsAdmin(cachedUser.role === 'admin');
           }
         } catch (e) {
@@ -99,12 +99,6 @@ export default function DashboardPage() {
         try {
           userData = await authAPI.getCurrentUser();
           if (userData) {
-            setUser({
-              id: userData.id || 0,
-              name: userData.name || '',
-              email: userData.email || '',
-              role: userData.role || 'user'
-            });
             setIsAdmin(userData.role === 'admin');
             console.log('User data loaded from API:', userData);
           } else {
@@ -127,88 +121,30 @@ export default function DashboardPage() {
   }, [navigate, location.pathname]);
 
   const fetchBookings = useCallback(async () => {
-    if (!authAPI.isAuthenticated() && !authIssue) {
-      console.log('No authentication token found, redirecting to login');
+    if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
     try {
       setIsRefreshing(true);
       setError(null);
-      
-      const userDataStr = localStorage.getItem('userData');
-      if (!userDataStr) {
-        throw new Error('User data not found in localStorage');
-      }
-      
-      const userData = JSON.parse(userDataStr);
-      if (!userData || !userData.id) {
-        throw new Error('Invalid user data in localStorage');
-      }
-      
-      const userId = userData.id;
-      console.log('Fetching bookings for user ID:', userId);
-      
-      const data = await bookingAPI.getUserBookings(userId);
-      console.log('Fetched bookings data:', data);
-      
+      const data = await bookingAPI.getUserBookings(user.id);
       if (Array.isArray(data)) {
         setBookings(data);
-        if (data.length > 0) {
-          setAuthIssue(false);
-          toast.success(`Loaded ${data.length} bookings`);
-        } else {
-          toast.info('No bookings found');
-        }
       } else if (data && Array.isArray(data.bookings)) {
         setBookings(data.bookings);
-        if (data.bookings.length > 0) {
-          setAuthIssue(false);
-          toast.success(`Loaded ${data.bookings.length} bookings`);
-        } else {
-          toast.info('No bookings found');
-        }
       } else {
-        console.warn('Unexpected bookings data format:', data);
-        toast.error('Received unexpected data format from server');
         setBookings([]);
-        throw new Error('Invalid booking data format received');
       }
-      
       setRetryCount(0);
     } catch (error) {
-      console.error('Error fetching bookings:', error);
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
-      
-      if (retryCount === 0) {
-        toast.error('Error loading bookings. Retrying...');
-      }
-      
       setRetryCount(prev => prev + 1);
-      
-      if (error instanceof Error && 
-          (error.message.includes('401') || 
-           error.message.includes('authentication') || 
-           error.message.includes('unauthorized'))) {
-        setAuthIssue(true);
-        toast.error('Authentication error. Please log in again.');
-        navigate('/login');
-        return;
-      }
-      
-      if (retryCount < MAX_RETRIES - 1) {
-        setTimeout(() => {
-          fetchBookings();
-        }, 3000);
-      } else {
-        toast.error('Failed to load bookings after multiple attempts. Please try again later.');
-      }
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
+      setIsLoading(false);
     }
-  }, [navigate, retryCount, authIssue]);
+  }, [isAuthenticated, navigate, user?.id]);
 
   const fetchAdminMetrics = useCallback(async () => {
     if (!isAdmin || !user?.id) return;
@@ -285,6 +221,28 @@ export default function DashboardPage() {
     return isNaN(num) ? fallback : num.toFixed(digits);
   }
 
+  // Categorize bookings
+  const now = new Date();
+  const parseDate = (dateStr) => new Date(dateStr);
+  const isFuture = (dateStr) => parseDate(dateStr) > now;
+  const isPast = (dateStr) => parseDate(dateStr) < now;
+
+  const currentBooking = bookings.find(
+    b => ['pending', 'confirmed', 'in_progress'].includes(b.status) && isFuture(b.pickup_date || b.pickupDate)
+  );
+  const upcomingBookings = bookings.filter(
+    b => ['pending', 'confirmed'].includes(b.status) && isFuture(b.pickup_date || b.pickupDate) && b !== currentBooking
+  );
+  const pastBookings = bookings.filter(
+    b => b.status === 'completed' && isPast(b.pickup_date || b.pickupDate)
+  );
+  const cancelledBookings = bookings.filter(
+    b => b.status === 'cancelled'
+  );
+
+  // Helper for invoice download
+  const getInvoiceUrl = (booking) => `/api/invoice/${booking.id}`;
+
   if (authIssue) {
     return (
       <div className="container mx-auto py-10 px-4">
@@ -359,8 +317,45 @@ export default function DashboardPage() {
     );
   }
 
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  if (!isAuthenticated || !user) {
+    navigate('/login');
+    return null;
+  }
+
+  // If user is a guest, show a message and skip booking fetch
+  if (user.role === 'guest') {
+    return (
+      <div className="container mx-auto py-8">
+        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+        <h2 className="text-xl font-semibold mb-4">
+          Welcome back, {user.name}
+        </h2>
+        <div className="mb-4 text-gray-600">Role: Guest</div>
+        <div className="flex flex-col md:flex-row gap-2 mb-8">
+          <Button onClick={() => navigate('/')}>Create Booking</Button>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-1" />
+            Logout
+          </Button>
+        </div>
+        <div className="mt-8 text-gray-500">Guests do not have bookings.</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto py-10 px-4">
+    <div className="container mx-auto py-8">
+      <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+      <h2 className="text-xl font-semibold mb-4">
+        Welcome back, {user.name}
+      </h2>
+      {user.role && (
+        <div className="mb-4 text-gray-600">Role: {user.role.replace('_', ' ')}</div>
+      )}
       {!apiStatus.connected && (
         <Alert variant="warning" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
@@ -368,13 +363,8 @@ export default function DashboardPage() {
           <AlertDescription>{apiStatus.message}</AlertDescription>
         </Alert>
       )}
-      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-medium">Dashboard</h1>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
-        </div>
+        <div />
         <div className="flex flex-col md:flex-row gap-2">
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -442,7 +432,7 @@ export default function DashboardPage() {
         
         <TabsContent value="upcoming">
           <BookingsList 
-            bookings={bookings.filter(b => ['pending', 'confirmed'].includes(b.status))} 
+            bookings={upcomingBookings} 
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
@@ -452,7 +442,7 @@ export default function DashboardPage() {
         
         <TabsContent value="completed">
           <BookingsList 
-            bookings={bookings.filter(b => b.status === 'completed')} 
+            bookings={pastBookings} 
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
@@ -462,7 +452,7 @@ export default function DashboardPage() {
         
         <TabsContent value="cancelled">
           <BookingsList 
-            bookings={bookings.filter(b => b.status === 'cancelled')} 
+            bookings={cancelledBookings} 
             isRefreshing={isRefreshing}
             formatDate={formatDate}
             getStatusColor={getStatusColor}
@@ -470,6 +460,48 @@ export default function DashboardPage() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Current Booking */}
+      <h2 className="text-2xl font-semibold mt-8 mb-2">Current Booking</h2>
+      {currentBooking ? (
+        <div className="mb-4 p-4 border rounded-lg bg-blue-50">
+          <div>Booking #{currentBooking.bookingNumber || currentBooking.id}</div>
+          <div>{currentBooking.pickup_location || currentBooking.pickupLocation} → {currentBooking.drop_location || currentBooking.dropLocation}</div>
+          <div>Date: {currentBooking.pickup_date || currentBooking.pickupDate}</div>
+          <div>Status: {currentBooking.status}</div>
+        </div>
+      ) : <p>No current booking.</p>}
+      {/* Upcoming Bookings */}
+      <h2 className="text-2xl font-semibold mt-8 mb-2">Upcoming Bookings</h2>
+      {upcomingBookings.length > 0 ? upcomingBookings.map(b => (
+        <div key={b.id} className="mb-2 p-4 border rounded-lg">
+          <div>Booking #{b.bookingNumber || b.id}</div>
+          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>Date: {b.pickup_date || b.pickupDate}</div>
+          <div>Status: {b.status}</div>
+        </div>
+      )) : <p>No upcoming bookings.</p>}
+      {/* Past Bookings */}
+      <h2 className="text-2xl font-semibold mt-8 mb-2">Past Bookings</h2>
+      {pastBookings.length > 0 ? pastBookings.map(b => (
+        <div key={b.id} className="mb-2 p-4 border rounded-lg">
+          <div>Booking #{b.bookingNumber || b.id}</div>
+          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>Date: {b.pickup_date || b.pickupDate}</div>
+          <div>Status: {b.status}</div>
+          <a href={getInvoiceUrl(b)} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mt-2 inline-block">Download Invoice</a>
+        </div>
+      )) : <p>No past bookings.</p>}
+      {/* Cancelled Bookings */}
+      <h2 className="text-2xl font-semibold mt-8 mb-2">Cancelled Bookings</h2>
+      {cancelledBookings.length > 0 ? cancelledBookings.map(b => (
+        <div key={b.id} className="mb-2 p-4 border rounded-lg bg-gray-100">
+          <div>Booking #{b.bookingNumber || b.id}</div>
+          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>Date: {b.pickup_date || b.pickupDate}</div>
+          <div>Status: {b.status}</div>
+        </div>
+      )) : <p>No cancelled bookings.</p>}
     </div>
   );
 }

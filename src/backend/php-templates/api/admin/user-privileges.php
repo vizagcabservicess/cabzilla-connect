@@ -1,4 +1,5 @@
 <?php
+file_put_contents(__DIR__ . '/debug.txt', 'Executed at: ' . date('c') . PHP_EOL, FILE_APPEND);
 require_once __DIR__ . '/../../config.php';
 
 // CORS Headers
@@ -105,7 +106,7 @@ try {
                        up.module_privileges, up.custom_permissions, up.updated_at
                 FROM users u 
                 LEFT JOIN user_privileges up ON u.id = up.user_id 
-                WHERE u.role = 'admin'
+                WHERE u.role = 'super_admin'
                 ORDER BY u.name
             ";
             $result = $conn->query($query);
@@ -118,8 +119,8 @@ try {
                     'email' => $row['email'],
                     'role' => $row['role'],
                     'privileges' => [
-                        'modulePrivileges' => json_decode($row['module_privileges'] ?? '[]'),
-                        'customPermissions' => json_decode($row['custom_permissions'] ?? '{}')
+                        'modulePrivileges' => json_decode($row['module_privileges'] ?: '[]'),
+                        'customPermissions' => json_decode($row['custom_permissions'] ?: '{}')
                     ],
                     'lastUpdated' => $row['updated_at']
                 ];

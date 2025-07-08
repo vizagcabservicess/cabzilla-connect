@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { User } from '@/types/api';
@@ -36,13 +35,14 @@ export const userAPI = {
   },
   
   /**
-   * Update user details
+   * Update user details (role only)
    */
   updateUser: async (userId: number | string, userData: Partial<User>) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/update-user.php`,
-        { user_id: userId, ...userData },
+      // Only role update is supported
+      const response = await axios.put(
+        `${API_BASE_URL}/api/admin/users.php`,
+        { userId, role: userData.role },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -61,10 +61,10 @@ export const userAPI = {
    */
   deleteUser: async (userId: number | string) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/delete-user.php`,
-        { user_id: userId },
+      const response = await axios.delete(
+        `${API_BASE_URL}/api/admin/users.php`,
         {
+          data: { user_id: userId },
           headers: {
             'Content-Type': 'application/json',
           },
@@ -82,9 +82,9 @@ export const userAPI = {
    */
   updateUserRole: async (userId: number | string, role: string) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/update-user-role.php`,
-        { user_id: userId, role },
+      const response = await axios.put(
+        `${API_BASE_URL}/api/admin/users.php`,
+        { userId, role },
         {
           headers: {
             'Content-Type': 'application/json',

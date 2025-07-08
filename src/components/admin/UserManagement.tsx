@@ -56,6 +56,8 @@ export function UserManagement() {
       
       if (Array.isArray(data)) {
         setUsers(data);
+      } else if (data && Array.isArray(data.data)) {
+        setUsers(data.data);
       } else {
         console.warn("Invalid user data format:", data);
         setError("Failed to load users. Invalid data format.");

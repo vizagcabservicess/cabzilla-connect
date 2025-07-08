@@ -1,7 +1,9 @@
+console.log('EnhancedAdminSidebar component loaded');
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePrivileges } from '@/hooks/usePrivileges';
+import { useAuth } from '@/providers/AuthProvider';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -31,7 +33,9 @@ interface EnhancedAdminSidebarProps {
 }
 
 export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: EnhancedAdminSidebarProps) {
+  const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
+  console.log('Sidebar authUser:', authUser);
   const { 
     user, 
     isSuperAdmin, 
@@ -209,13 +213,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       {/* User Role Badge */}
       <div className="px-6 py-3 border-b border-gray-800">
         <div className="flex items-center space-x-2">
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            isSuperAdmin() ? 'bg-red-600' : isAdmin() ? 'bg-blue-600' : 'bg-gray-600'
-          }`}>
-            {isSuperAdmin() ? 'Super Admin' : isAdmin() ? 'Admin' : 'Guest'}
-          </div>
-          {user && (
-            <span className="text-sm text-gray-400 truncate">{user.name}</span>
+          {authUser && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-700 capitalize">
+              {authUser.role.replace('_', ' ')}
+            </span>
+          )}
+          {authUser && (
+            <span className="text-sm text-gray-400 truncate">{authUser.name}</span>
           )}
         </div>
       </div>
@@ -248,15 +252,15 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
             <User size={18} />
           </div>
           <div>
-            <p className="font-medium">{user?.name || 'Admin User'}</p>
-            <p className="text-xs text-gray-400">{user?.email || 'admin@vizagtaxihub.com'}</p>
+            <p className="font-medium">{authUser?.name}</p>
+            <p className="text-xs text-gray-400">{authUser?.email}</p>
           </div>
         </div>
         <Button 
           variant="outline" 
           className="w-full justify-start text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-white"
-          onClick={() => {
-            // TODO: Implement logout
+          onClick={async () => {
+            await logout();
             navigate('/login');
           }}
         >

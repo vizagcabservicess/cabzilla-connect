@@ -60,6 +60,9 @@ import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
+import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
+import { useAuth } from './providers/AuthProvider';
+import { UserRole } from '@/types/privileges';
 
 const router = createBrowserRouter([
   {
@@ -131,7 +134,10 @@ const router = createBrowserRouter([
         path: 'create-booking',
         element: <AdminBookingCreationPage />,
       },
-
+      {
+        path: 'privileges',
+        element: <PrivilegeManagementWrapper />,
+      },
       {
         path: 'pooling',
         element: <PoolingDashboard />,
@@ -315,5 +321,21 @@ const router = createBrowserRouter([
     element: <NotFound />,
   },
 ]);
+
+function PrivilegeManagementWrapper() {
+  const { user } = useAuth();
+  const enhancedUser = user
+    ? {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole,
+        is_active: user.is_active,
+        privileges: { userId: user.id, role: (user.role === 'admin' || user.role === 'super_admin' ? user.role : 'guest') as UserRole, modulePrivileges: [] },
+      }
+    : undefined;
+  return <PrivilegeManagement currentUser={enhancedUser} />;
+}
 
 export default router;

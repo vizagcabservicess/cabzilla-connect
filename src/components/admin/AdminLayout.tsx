@@ -1,4 +1,4 @@
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { EnhancedAdminSidebar } from "@/components/admin/EnhancedAdminSidebar";
 import React, { useState } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
 
       {/* Sidebar - hidden on mobile by default, shown when toggled */}
       <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block`}>
-        <AdminSidebar activeTab={tab} setActiveTab={setTab} />
+        <EnhancedAdminSidebar activeTab={tab} setActiveTab={setTab} />
       </div>
 
       {/* Main content */}
