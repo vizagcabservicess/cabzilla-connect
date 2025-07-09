@@ -21,15 +21,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Get user from JWT token
-$headers = getallheaders();
+// Get user from JWT token - Enhanced header handling
 $userId = null;
 $userRole = null;
 
+// Try multiple ways to get the Authorization header
+$authHeader = null;
+if (function_exists('getallheaders')) {
+    $headers = getallheaders();
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? null;
+} else {
+    // Fallback for environments where getallheaders() doesn't exist
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
+}
+
 try {
-    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    if ($authHeader) {
         $token = str_replace('Bearer ', '', $authHeader);
+        
+        if (!function_exists('verifyJwtToken')) {
+            sendJsonResponse(['error' => 'JWT verification function not available'], 500);
+            exit;
+        }
         
         $payload = verifyJwtToken($token);
         if ($payload && (isset($payload['user_id']) || isset($payload['userId']))) {
@@ -38,12 +51,13 @@ try {
         }
     }
 } catch (Exception $e) {
-    sendJsonResponse(['error' => 'Invalid token'], 401);
+    error_log("JWT verification error: " . $e->getMessage());
+    sendJsonResponse(['error' => 'Invalid token: ' . $e->getMessage()], 401);
     exit;
 }
 
 if (!$userId) {
-    sendJsonResponse(['error' => 'Authentication required'], 401);
+    sendJsonResponse(['error' => 'Authentication required. No valid user ID found.'], 401);
     exit;
 }
 
