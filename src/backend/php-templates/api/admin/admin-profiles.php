@@ -21,6 +21,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// DEBUG: Log all headers for troubleshooting
+error_log("DEBUG: All headers: " . json_encode(getallheaders()));
+error_log("DEBUG: _SERVER Authorization headers: " . json_encode([
+    'HTTP_AUTHORIZATION' => $_SERVER['HTTP_AUTHORIZATION'] ?? 'not set',
+    'REDIRECT_HTTP_AUTHORIZATION' => $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? 'not set'
+]));
+
 // Get user from JWT token - Enhanced header handling
 $userId = null;
 $userRole = null;
@@ -35,20 +42,31 @@ if (function_exists('getallheaders')) {
     $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
 }
 
+error_log("DEBUG: Found auth header: " . ($authHeader ? 'YES' : 'NO'));
+
 try {
     if ($authHeader) {
         $token = str_replace('Bearer ', '', $authHeader);
+        error_log("DEBUG: Token extracted: " . substr($token, 0, 20) . "...");
         
         if (!function_exists('verifyJwtToken')) {
+            error_log("ERROR: verifyJwtToken function not available");
             sendJsonResponse(['error' => 'JWT verification function not available'], 500);
             exit;
         }
         
         $payload = verifyJwtToken($token);
+        error_log("DEBUG: JWT payload: " . json_encode($payload));
+        
         if ($payload && (isset($payload['user_id']) || isset($payload['userId']))) {
             $userId = isset($payload['user_id']) ? $payload['user_id'] : $payload['userId'];
             $userRole = $payload['role'] ?? 'guest';
+            error_log("DEBUG: User authenticated - ID: $userId, Role: $userRole");
+        } else {
+            error_log("ERROR: Invalid JWT payload structure");
         }
+    } else {
+        error_log("ERROR: No Authorization header found");
     }
 } catch (Exception $e) {
     error_log("JWT verification error: " . $e->getMessage());
@@ -57,7 +75,14 @@ try {
 }
 
 if (!$userId) {
-    sendJsonResponse(['error' => 'Authentication required. No valid user ID found.'], 401);
+    error_log("ERROR: Authentication failed - no valid user ID");
+    sendJsonResponse([
+        'error' => 'Authentication required. No valid user ID found.',
+        'debug' => [
+            'authHeaderPresent' => $authHeader ? true : false,
+            'payloadReceived' => isset($payload) ? $payload : null
+        ]
+    ], 401);
     exit;
 }
 

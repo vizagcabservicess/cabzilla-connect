@@ -44,11 +44,27 @@ export function AdminProfileManagement() {
   const fetchAllProfiles = async () => {
     try {
       setIsLoading(true);
+      
+      // Debug: Check if we have an auth token
+      const token = localStorage.getItem('auth_token');
+      console.log('DEBUG: Auth token present:', !!token);
+      console.log('DEBUG: Token preview:', token ? token.substring(0, 20) + '...' : 'none');
+      
       const data = await adminProfileAPI.getAllAdminProfiles();
+      console.log('DEBUG: Profiles loaded successfully:', data);
       setProfiles(data);
     } catch (error) {
       console.error('Error fetching profiles:', error);
-      toast.error('Failed to load admin profiles');
+      console.log('DEBUG: Full error object:', error);
+      
+      // Check if it's an auth error
+      if (error.response?.status === 401) {
+        console.log('DEBUG: Authentication failed - clearing token');
+        localStorage.removeItem('auth_token');
+        toast.error('Authentication failed. Please log in again.');
+      } else {
+        toast.error('Failed to load admin profiles');
+      }
     } finally {
       setIsLoading(false);
     }
