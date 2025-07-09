@@ -129,7 +129,7 @@ if (!function_exists('generateJwtToken')) {
         
         $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
         $payload = base64_encode(json_encode($payload));
-        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'your_secret_key', true));
+        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'cabzilla_secret_key_2024', true));
         
         return "$header.$payload.$signature";
     }

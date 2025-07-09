@@ -7,6 +7,11 @@ import {
   OperatorCard 
 } from '@/types/adminProfile';
 
+// Helper to get token from localStorage
+function getAuthToken() {
+  return localStorage.getItem('auth_token');
+}
+
 export const adminProfileAPI = {
   /**
    * Get all operator profiles for public display
@@ -26,7 +31,10 @@ export const adminProfileAPI = {
    */
   getAllAdminProfiles: async (): Promise<AdminProfile[]> => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`);
+      const token = getAuthToken();
+      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data.success ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching admin profiles:', error);
@@ -39,7 +47,10 @@ export const adminProfileAPI = {
    */
   getAdminProfile: async (adminId: number): Promise<AdminProfile | null> => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=${adminId}`);
+      const token = getAuthToken();
+      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=${adminId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data.success ? response.data.data : null;
     } catch (error) {
       console.error('Error fetching admin profile:', error);
@@ -52,12 +63,14 @@ export const adminProfileAPI = {
    */
   createAdminProfile: async (profileData: CreateAdminProfileRequest): Promise<{ id: number }> => {
     try {
+      const token = getAuthToken();
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/admin-profiles.php`,
         profileData,
         {
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         }
       );
@@ -78,12 +91,14 @@ export const adminProfileAPI = {
    */
   updateAdminProfile: async (profileData: UpdateAdminProfileRequest): Promise<void> => {
     try {
+      const token = getAuthToken();
       const response = await axios.put(
         `${API_BASE_URL}/api/admin/admin-profiles.php`,
         profileData,
         {
           headers: {
             'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         }
       );
@@ -102,8 +117,12 @@ export const adminProfileAPI = {
    */
   deleteAdminProfile: async (profileId: number): Promise<void> => {
     try {
+      const token = getAuthToken();
       const response = await axios.delete(
-        `${API_BASE_URL}/api/admin/admin-profiles.php?id=${profileId}`
+        `${API_BASE_URL}/api/admin/admin-profiles.php?id=${profileId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
       );
       
       if (!response.data.success) {
@@ -120,8 +139,10 @@ export const adminProfileAPI = {
    */
   getMyProfile: async (): Promise<AdminProfile | null> => {
     try {
-      // This will get the profile for the currently authenticated user
-      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=me`);
+      const token = getAuthToken();
+      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=me`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data.success ? response.data.data : null;
     } catch (error) {
       console.error('Error fetching my profile:', error);

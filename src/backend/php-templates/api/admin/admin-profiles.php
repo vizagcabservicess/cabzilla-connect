@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 
+// DEBUG: Check if auth.php exists and is included
+$authPath = __DIR__ . '/../utils/auth.php';
+if (!file_exists($authPath)) {
+    die('FATAL: auth.php not found at: ' . $authPath);
+}
+require_once $authPath;
+
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -25,8 +32,8 @@ try {
         $token = str_replace('Bearer ', '', $authHeader);
         
         $payload = verifyJwtToken($token);
-        if ($payload && isset($payload['user_id'])) {
-            $userId = $payload['user_id'];
+        if ($payload && (isset($payload['user_id']) || isset($payload['userId']))) {
+            $userId = isset($payload['user_id']) ? $payload['user_id'] : $payload['userId'];
             $userRole = $payload['role'] ?? 'guest';
         }
     }
