@@ -414,7 +414,7 @@ export function AdminProfileManagement() {
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
                           <Star className="h-4 w-4 text-yellow-500" />
-                          <span>{profile.rating.toFixed(1)} ({profile.totalRatings} reviews)</span>
+                          <span>{typeof profile.rating === 'number' ? profile.rating.toFixed(1) : 'N/A'} ({profile.totalRatings} reviews)</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-gray-500" />
