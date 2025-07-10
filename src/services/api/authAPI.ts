@@ -32,14 +32,29 @@ export interface AuthResponse {
 }
 
 class AuthAPI {
-  private token: string | null = null;
+  public token: string | null = null;
 
   constructor() {
+    this.initializeToken();
+  }
+
+  private initializeToken() {
     try {
       this.token = localStorage.getItem('auth_token');
+      console.log('DEBUG: AuthAPI initialized with token:', this.token ? 'present' : 'null');
     } catch (e) {
       console.error("Could not access localStorage:", e);
     }
+  }
+
+  setToken(token: string | null) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem('auth_token', token);
+    } else {
+      localStorage.removeItem('auth_token');
+    }
+    console.log('DEBUG: AuthAPI token set:', token ? 'present' : 'null');
   }
 
   async login(credentials: LoginRequest): Promise<AuthResponse> {
@@ -48,8 +63,7 @@ class AuthAPI {
         headers: { 'Content-Type': 'application/json' }
       });
       if (response.data.success && response.data.token && response.data.user) {
-        this.token = response.data.token;
-        localStorage.setItem('auth_token', this.token);
+        this.setToken(response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
       return response.data;
@@ -81,8 +95,7 @@ class AuthAPI {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      this.token = null;
-      localStorage.removeItem('auth_token');
+      this.setToken(null);
       localStorage.removeItem('user');
     }
   }

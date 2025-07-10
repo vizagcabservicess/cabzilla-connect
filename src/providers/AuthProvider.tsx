@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Restore token to authAPI instance
         const storedToken = localStorage.getItem('auth_token');
         if (storedToken) {
-          authAPI.token = storedToken;
+          authAPI.setToken(storedToken);
           console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken);
         }
         if (authAPI.isAuthenticated()) {
@@ -50,14 +50,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // DEV PATCH: Always set a valid JWT and user in localStorage for testing
-  if (process.env.NODE_ENV === 'development') {
-    localStorage.setItem('auth_token', 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTIxNTAzNzAsImV4cCI6MTc1MjE1Mzk3MCwidXNlcl9pZCI6OSwiZW1haWwiOiJqb2VsbmFnaXJlZGR5QGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlcl9hZG1pbiJ9.Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI');
-    localStorage.setItem('user', JSON.stringify({
-      id: 9,
-      email: "joelnagireddy@gmail.com",
-      role: "super_admin"
-    }));
-  }
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const devToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTIxNTAzNzAsImV4cCI6MTc1MjE1Mzk3MCwidXNlcl9pZCI6OSwiZW1haWwiOiJqb2VsbmFnaXJlZGR5QGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlcl9hZG1pbiJ9.Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI';
+      const devUser = {
+        id: 9,
+        email: "joelnagireddy@gmail.com",
+        role: "super_admin"
+      };
+      
+      localStorage.setItem('auth_token', devToken);
+      localStorage.setItem('user', JSON.stringify(devUser));
+      authAPI.setToken(devToken);
+      setUser(devUser);
+      console.log('DEBUG: Dev mode - Set token and user');
+    }
+  }, []);
 
   const login = async (email: string, password: string) => {
     try {
@@ -67,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.user);
       }
       if (response.token) {
-        localStorage.setItem('auth_token', response.token);
+        authAPI.setToken(response.token);
       }
       // Debug: Check localStorage after login
       console.log('DEBUG: localStorage["auth_token"] after login:', localStorage.getItem('auth_token'));
