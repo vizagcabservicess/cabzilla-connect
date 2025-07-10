@@ -61,14 +61,8 @@ try {
         exit();
     }
     
-    // Generate session token
-    $token = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+24 hours'));
-    
-    // Store session
-    $stmt = $conn->prepare("INSERT INTO user_sessions (user_id, token, expires_at) VALUES (?, ?, ?)");
-    $stmt->bind_param("iss", $user['id'], $token, $expiresAt);
-    $stmt->execute();
+    // Generate JWT token
+    $token = generateJwtToken($user['id'], $user['email'], $user['role']);
     
     // Remove password_hash from response
     unset($user['password']);

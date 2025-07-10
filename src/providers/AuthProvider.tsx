@@ -49,6 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.user) {
         setUser(response.user);
       }
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+      }
     } catch (error) {
       console.error('Login error:', error);
       throw error;

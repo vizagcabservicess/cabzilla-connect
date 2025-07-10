@@ -123,6 +123,7 @@ if (!function_exists('generateJwtToken')) {
             'iat' => $issuedAt,
             'exp' => $expire,
             'userId' => $userId,
+            'user_id' => $userId, // Add snake_case for compatibility
             'email' => $email,
             'role' => $role
         ];
