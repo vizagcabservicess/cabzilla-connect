@@ -42,12 +42,108 @@ export const adminProfileAPI = {
       const token = getAuthToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       console.log('[adminProfileAPI] Request headers (getAllAdminProfiles):', headers);
+      
+      // In development, return mock data if API fails
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
+            headers,
+          });
+          return response.data.success ? response.data.data : [];
+        } catch (error) {
+          console.warn('[adminProfileAPI] API failed in dev mode, returning mock data:', error);
+          // Return mock operator profiles for development
+          return [
+            {
+              id: 1,
+              businessName: "Elite Taxi Services",
+              displayName: "Elite Taxis",
+              businessPhone: "+91 9876543210",
+              businessEmail: "elite@example.com",
+              businessAddress: "123 Main Street, Vizag",
+              description: "Premium taxi services with experienced drivers",
+              startingFare: 50,
+              serviceAreas: ["Vizag", "Visakhapatnam", "Araku"],
+              amenities: ["AC", "GPS", "Music System"],
+              vehicleTypes: ["Sedan", "SUV", "Hatchback"],
+              isActive: true,
+              createdAt: "2024-01-01",
+              updatedAt: "2024-01-01"
+            },
+            {
+              id: 2,
+              businessName: "Quick Ride Cabs",
+              displayName: "Quick Ride",
+              businessPhone: "+91 9876543211",
+              businessEmail: "quickride@example.com",
+              businessAddress: "456 Service Road, Vizag",
+              description: "Fast and reliable cab services",
+              startingFare: 40,
+              serviceAreas: ["Vizag City", "Suburbs"],
+              amenities: ["AC", "GPS"],
+              vehicleTypes: ["Hatchback", "Sedan"],
+              isActive: true,
+              createdAt: "2024-01-02",
+              updatedAt: "2024-01-02"
+            }
+          ];
+        }
+      }
+      
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
         headers,
       });
       return response.data.success ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching admin profiles:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get my admin profile (admin only)
+   */
+  getMyAdminProfile: async (): Promise<AdminProfile | null> => {
+    try {
+      const token = getAuthToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[adminProfileAPI] Request headers (getMyAdminProfile):', headers);
+      
+      // In development, return mock data if API fails
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?my=1`, {
+            headers,
+          });
+          return response.data.success ? response.data.data : null;
+        } catch (error) {
+          console.warn('[adminProfileAPI] API failed in dev mode, returning mock profile:', error);
+          // Return mock profile for development
+          return {
+            id: 1,
+            businessName: "My Admin Business",
+            displayName: "My Business",
+            businessPhone: "+91 9876543210",
+            businessEmail: "admin@mybusiness.com",
+            businessAddress: "Admin Office, Vizag",
+            description: "My admin business profile",
+            startingFare: 45,
+            serviceAreas: ["Vizag"],
+            amenities: ["AC", "GPS"],
+            vehicleTypes: ["Sedan"],
+            isActive: true,
+            createdAt: "2024-01-01",
+            updatedAt: "2024-01-01"
+          };
+        }
+      }
+      
+      const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?my=1`, {
+        headers,
+      });
+      return response.data.success ? response.data.data : null;
+    } catch (error) {
+      console.error('Error fetching my admin profile:', error);
       throw error;
     }
   },
