@@ -49,6 +49,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
+  // DEV PATCH: Always set a valid JWT and user in localStorage for testing
+  if (process.env.NODE_ENV === 'development') {
+    localStorage.setItem('auth_token', 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTIxNTAzNzAsImV4cCI6MTc1MjE1Mzk3MCwidXNlcl9pZCI6OSwiZW1haWwiOiJqb2VsbmFnaXJlZGR5QGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlcl9hZG1pbiJ9.Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI');
+    localStorage.setItem('user', JSON.stringify({
+      id: 9,
+      email: "joelnagireddy@gmail.com",
+      role: "super_admin"
+    }));
+  }
+
   const login = async (email: string, password: string) => {
     try {
       const response = await authAPI.login({ email, password });
