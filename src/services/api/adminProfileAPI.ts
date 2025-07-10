@@ -12,12 +12,14 @@ import { authAPI } from '@/services/api/authAPI';
 function getAuthToken() {
   const token = authAPI.getToken();
   const localToken = localStorage.getItem('auth_token');
-  if (!token) {
-    console.warn('[adminProfileAPI] No auth_token found in authAPI! localStorage:', localToken);
-  } else {
-    console.log('[adminProfileAPI] Using auth_token from authAPI:', token);
-  }
-  return token;
+  console.log('[adminProfileAPI] Token from authAPI:', token ? token.substring(0, 20) + '...' : 'null');
+  console.log('[adminProfileAPI] Token from localStorage:', localToken ? localToken.substring(0, 20) + '...' : 'null');
+  
+  // Try localStorage first if authAPI token is null
+  const finalToken = token || localToken;
+  console.log('[adminProfileAPI] Using final token:', finalToken ? finalToken.substring(0, 20) + '...' : 'null');
+  
+  return finalToken;
 }
 
 export const adminProfileAPI = {
@@ -42,14 +44,20 @@ export const adminProfileAPI = {
       const token = getAuthToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       console.log('[adminProfileAPI] Request headers (getAllAdminProfiles):', headers);
-      
+      console.log('[adminProfileAPI] Making request to:', `${API_BASE_URL}/api/admin/admin-profiles.php`);
       
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
         headers,
       });
+      console.log('[adminProfileAPI] Response received:', response.data);
       return response.data.success ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching admin profiles:', error);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+        console.error('Response headers:', error.response.headers);
+      }
       throw error;
     }
   },
