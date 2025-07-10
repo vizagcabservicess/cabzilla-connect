@@ -7,13 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Building2, Star, Phone, Mail, MapPin, Save, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
-import { usePrivileges } from '@/hooks/usePrivileges';
 import { AdminProfile, CreateAdminProfileRequest, UpdateAdminProfileRequest } from '@/types/adminProfile';
 import { adminProfileAPI } from '@/services/api/adminProfileAPI';
 
 export function AdminProfileManagement() {
-  const { user, loading, isAuthenticated } = useAuth();
-  const { isSuperAdmin, isAdmin } = usePrivileges();
+  const { user, loading, isAuthenticated, isAdmin } = useAuth();
+  console.log('DEBUG: AdminProfileManagement mounted - auth state:', { isAuthenticated, isAdmin, user });
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [myProfile, setMyProfile] = useState<AdminProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,12 +34,19 @@ export function AdminProfileManagement() {
 
   useEffect(() => {
     console.log('DEBUG: loading:', loading, 'isAuthenticated:', isAuthenticated, 'user:', user);
-    if (loading) return; // Wait for auth to finish
+    console.log('DEBUG: Auth check - loading:', loading, 'isAuthenticated:', isAuthenticated, 'isAdmin:', isAdmin, 'user role:', user?.role);
     if (!isAuthenticated) return; // Only fetch if authenticated
 
-    if (isSuperAdmin()) {
+    const isSuperAdmin = user?.role === 'super_admin';
+    const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+    
+    console.log('DEBUG: Privilege check - isSuperAdmin:', isSuperAdmin, 'isAdminUser:', isAdminUser);
+
+    if (isSuperAdmin) {
+      console.log('DEBUG: Fetching all profiles (super admin)');
       fetchAllProfiles();
-    } else if (isAdmin()) {
+    } else if (isAdminUser) {
+      console.log('DEBUG: Fetching my profile (admin)');
       fetchMyProfile();
     }
   }, [loading, isAuthenticated, user]);
@@ -143,7 +149,10 @@ export function AdminProfileManagement() {
     }));
   };
 
-  if (!isSuperAdmin() && !isAdmin()) {
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  
+  if (!isAdminUser) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-10">
@@ -159,7 +168,7 @@ export function AdminProfileManagement() {
   return (
     <div className="space-y-6">
       {/* My Profile Section (for Admins) */}
-      {isAdmin() && !isSuperAdmin() && (
+      {isAdminUser && !isSuperAdmin && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -366,7 +375,7 @@ export function AdminProfileManagement() {
       )}
 
       {/* All Profiles Section (for Super Admin) */}
-      {isSuperAdmin() && (
+      {isSuperAdmin && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
