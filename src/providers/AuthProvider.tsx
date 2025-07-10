@@ -22,19 +22,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Try to rehydrate user from localStorage first
         const storedUser = localStorage.getItem('user');
+        const storedToken = localStorage.getItem('auth_token');
+        
         if (storedUser) {
           setUser(JSON.parse(storedUser));
         }
-        // Restore token to authAPI instance
-        const storedToken = localStorage.getItem('auth_token');
+        
+        // CRITICAL: Restore token to authAPI instance FIRST
         if (storedToken) {
           authAPI.setToken(storedToken);
-          console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken);
+          console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken.substring(0, 20) + '...');
         }
+        
+        // Then verify token validity with server
         if (authAPI.isAuthenticated()) {
-          const userData = await authAPI.getCurrentUser();
-          if (userData) {
-            setUser(userData);
+          try {
+            const userData = await authAPI.getCurrentUser();
+            if (userData) {
+              setUser(userData);
+              console.log('DEBUG: Successfully validated token and updated user');
+            }
+          } catch (error) {
+            console.error('Token validation failed:', error);
+            // Token is invalid, clear it
+            authAPI.logout();
+            setUser(null);
           }
         }
       } catch (error) {

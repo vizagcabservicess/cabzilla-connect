@@ -9,6 +9,7 @@ import { Building2, Star, Phone, Mail, MapPin, Save, Plus, Trash2 } from 'lucide
 import { useAuth } from '@/providers/AuthProvider';
 import { AdminProfile, CreateAdminProfileRequest, UpdateAdminProfileRequest } from '@/types/adminProfile';
 import { adminProfileAPI } from '@/services/api/adminProfileAPI';
+import { authAPI } from '@/services/api/authAPI';
 
 export function AdminProfileManagement() {
   const { user, loading, isAuthenticated, isAdmin } = useAuth();
@@ -35,7 +36,16 @@ export function AdminProfileManagement() {
   useEffect(() => {
     console.log('DEBUG: loading:', loading, 'isAuthenticated:', isAuthenticated, 'user:', user);
     console.log('DEBUG: Auth check - loading:', loading, 'isAuthenticated:', isAuthenticated, 'isAdmin:', isAdmin, 'user role:', user?.role);
-    if (!isAuthenticated) return; // Only fetch if authenticated
+    
+    // Ensure authAPI has the token before making requests
+    const token = authAPI.getToken();
+    console.log('DEBUG: Auth token present:', !!token);
+    console.log('DEBUG: Token preview:', token ? token.substring(0, 20) + '...' : 'none');
+    
+    if (!isAuthenticated || !token) {
+      console.log('DEBUG: Not authenticated or no token available');
+      return;
+    }
 
     const isSuperAdmin = user?.role === 'super_admin';
     const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
