@@ -113,6 +113,12 @@ if (!function_exists('logError')) {
     }
 }
 
+// Add base64url_encode helper function
+if (!function_exists('base64url_encode')) {
+    function base64url_encode($data) {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+}
 // JWT Token Generation
 if (!function_exists('generateJwtToken')) {
     function generateJwtToken($userId, $email, $role) {
@@ -128,9 +134,9 @@ if (!function_exists('generateJwtToken')) {
             'role' => $role
         ];
         
-        $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
-        $payload = base64_encode(json_encode($payload));
-        $signature = base64_encode(hash_hmac('sha256', "$header.$payload", 'cabzilla_secret_key_2024', true));
+        $header = base64url_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+        $payload = base64url_encode(json_encode($payload));
+        $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", 'cabzilla_secret_key_2024', true));
         
         return "$header.$payload.$signature";
     }

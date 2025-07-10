@@ -6,11 +6,12 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+// Debug: Log request method and input for troubleshooting
 file_put_contents(__DIR__ . '/debug_login.log', "----\n" . date('c') . "\n", FILE_APPEND);
-$rawInput = file_get_contents('php://input');
-file_put_contents(__DIR__ . '/debug_login.log', "RAW: " . $rawInput . "\n", FILE_APPEND);
-file_put_contents(__DIR__ . '/debug_login.log', "POST: " . print_r($_POST, true) . "\n", FILE_APPEND);
+file_put_contents(__DIR__ . '/debug_login.log', "REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
 file_put_contents(__DIR__ . '/debug_login.log', "HEADERS: " . print_r(getallheaders(), true) . "\n", FILE_APPEND);
+file_put_contents(__DIR__ . '/debug_login.log', "RAW INPUT: " . file_get_contents('php://input') . "\n", FILE_APPEND);
+file_put_contents(__DIR__ . '/debug_login.log', "POST: " . print_r($_POST, true) . "\n", FILE_APPEND);
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);

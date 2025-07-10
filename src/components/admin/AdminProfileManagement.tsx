@@ -12,7 +12,7 @@ import { AdminProfile, CreateAdminProfileRequest, UpdateAdminProfileRequest } fr
 import { adminProfileAPI } from '@/services/api/adminProfileAPI';
 
 export function AdminProfileManagement() {
-  const { user } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
   const { isSuperAdmin, isAdmin } = usePrivileges();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [myProfile, setMyProfile] = useState<AdminProfile | null>(null);
@@ -34,12 +34,16 @@ export function AdminProfileManagement() {
   });
 
   useEffect(() => {
+    console.log('DEBUG: loading:', loading, 'isAuthenticated:', isAuthenticated, 'user:', user);
+    if (loading) return; // Wait for auth to finish
+    if (!isAuthenticated) return; // Only fetch if authenticated
+
     if (isSuperAdmin()) {
       fetchAllProfiles();
     } else if (isAdmin()) {
       fetchMyProfile();
     }
-  }, []);
+  }, [loading, isAuthenticated, user]);
 
   const fetchAllProfiles = async () => {
     try {
@@ -59,8 +63,7 @@ export function AdminProfileManagement() {
       
       // Check if it's an auth error
       if (error.response?.status === 401) {
-        console.log('DEBUG: Authentication failed - clearing token');
-        localStorage.removeItem('auth_token');
+        console.log('DEBUG: Authentication failed');
         toast.error('Authentication failed. Please log in again.');
       } else {
         toast.error('Failed to load admin profiles');

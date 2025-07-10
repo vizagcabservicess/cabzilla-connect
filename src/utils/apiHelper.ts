@@ -278,13 +278,19 @@ export const directVehicleOperation = async (endpoint: string, method: string = 
         console.log('Sending payload to', endpoint, options.body);
       }
     }
+    // Inject Authorization header if token exists
+    const token = localStorage.getItem('auth_token');
+    const headers = {
+      ...(options.headers || {}),
+      'Accept': 'application/json',
+      ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {})
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
       method: method,
-      headers: {
-        ...(options.headers || {}),
-        'Accept': 'application/json',
-        ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {})
-      },
+      headers,
       body: fetchBody,
       cache: 'no-store'
     });

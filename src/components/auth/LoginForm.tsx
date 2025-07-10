@@ -27,14 +27,6 @@ export function LoginForm() {
     const url = import.meta.env.VITE_API_BASE_URL || '';
     setApiUrl(url);
     
-    // Clear any stale tokens on login page load
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('pooling_user');
-    localStorage.removeItem('pooling_auth_token');
-    
     // Only test connection on component mount if we have an API URL
     if (url) {
       testApiConnection();

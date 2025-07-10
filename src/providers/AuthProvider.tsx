@@ -25,6 +25,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (storedUser) {
           setUser(JSON.parse(storedUser));
         }
+        // Restore token to authAPI instance
+        const storedToken = localStorage.getItem('auth_token');
+        if (storedToken) {
+          authAPI.token = storedToken;
+          console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken);
+        }
         if (authAPI.isAuthenticated()) {
           const userData = await authAPI.getCurrentUser();
           if (userData) {
@@ -46,12 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await authAPI.login({ email, password });
+      console.log('DEBUG: Login response', response);
       if (response.user) {
         setUser(response.user);
       }
       if (response.token) {
         localStorage.setItem('auth_token', response.token);
       }
+      // Debug: Check localStorage after login
+      console.log('DEBUG: localStorage["auth_token"] after login:', localStorage.getItem('auth_token'));
+      console.log('DEBUG: localStorage["user"] after login:', localStorage.getItem('user'));
     } catch (error) {
       console.error('Login error:', error);
       throw error;

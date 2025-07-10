@@ -6,10 +6,18 @@ import {
   UpdateAdminProfileRequest, 
   OperatorCard 
 } from '@/types/adminProfile';
+import { authAPI } from '@/services/api/authAPI';
 
-// Helper to get token from localStorage
+// Helper to get token from authAPI
 function getAuthToken() {
-  return localStorage.getItem('auth_token');
+  const token = authAPI.getToken();
+  const localToken = localStorage.getItem('auth_token');
+  if (!token) {
+    console.warn('[adminProfileAPI] No auth_token found in authAPI! localStorage:', localToken);
+  } else {
+    console.log('[adminProfileAPI] Using auth_token from authAPI:', token);
+  }
+  return token;
 }
 
 export const adminProfileAPI = {
@@ -32,8 +40,10 @@ export const adminProfileAPI = {
   getAllAdminProfiles: async (): Promise<AdminProfile[]> => {
     try {
       const token = getAuthToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[adminProfileAPI] Request headers (getAllAdminProfiles):', headers);
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
       });
       return response.data.success ? response.data.data : [];
     } catch (error) {
@@ -48,8 +58,10 @@ export const adminProfileAPI = {
   getAdminProfile: async (adminId: number): Promise<AdminProfile | null> => {
     try {
       const token = getAuthToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[adminProfileAPI] Request headers (getAdminProfile):', headers);
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=${adminId}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
       });
       return response.data.success ? response.data.data : null;
     } catch (error) {
@@ -64,14 +76,16 @@ export const adminProfileAPI = {
   createAdminProfile: async (profileData: CreateAdminProfileRequest): Promise<{ id: number }> => {
     try {
       const token = getAuthToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+      console.log('[adminProfileAPI] Request headers (createAdminProfile):', headers);
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/admin-profiles.php`,
         profileData,
         {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers,
         }
       );
       
@@ -92,14 +106,16 @@ export const adminProfileAPI = {
   updateAdminProfile: async (profileData: UpdateAdminProfileRequest): Promise<void> => {
     try {
       const token = getAuthToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+      console.log('[adminProfileAPI] Request headers (updateAdminProfile):', headers);
       const response = await axios.put(
         `${API_BASE_URL}/api/admin/admin-profiles.php`,
         profileData,
         {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers,
         }
       );
       
@@ -118,10 +134,12 @@ export const adminProfileAPI = {
   deleteAdminProfile: async (profileId: number): Promise<void> => {
     try {
       const token = getAuthToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[adminProfileAPI] Request headers (deleteAdminProfile):', headers);
       const response = await axios.delete(
         `${API_BASE_URL}/api/admin/admin-profiles.php?id=${profileId}`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers,
         }
       );
       
@@ -140,8 +158,10 @@ export const adminProfileAPI = {
   getMyProfile: async (): Promise<AdminProfile | null> => {
     try {
       const token = getAuthToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[adminProfileAPI] Request headers (getMyProfile):', headers);
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php?admin_id=me`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
       });
       return response.data.success ? response.data.data : null;
     } catch (error) {
