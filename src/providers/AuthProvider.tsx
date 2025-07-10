@@ -55,17 +55,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const devToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTIxNTAzNzAsImV4cCI6MTc1MjE1Mzk3MCwidXNlcl9pZCI6OSwiZW1haWwiOiJqb2VsbmFnaXJlZGR5QGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlcl9hZG1pbiJ9.Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI';
       const devUser = {
         id: 9,
+        name: "Super Admin",
         email: "joelnagireddy@gmail.com",
-        role: "super_admin"
+        phone: "+91 9876543210",
+        role: "super_admin" as const,
+        is_active: true
       };
       
-      localStorage.setItem('auth_token', devToken);
-      localStorage.setItem('user', JSON.stringify(devUser));
-      authAPI.setToken(devToken);
-      setUser(devUser);
-      console.log('DEBUG: Dev mode - Set token and user');
+      // Only set if not already authenticated
+      if (!isAuthenticated) {
+        localStorage.setItem('auth_token', devToken);
+        localStorage.setItem('user', JSON.stringify(devUser));
+        authAPI.setToken(devToken);
+        setUser(devUser);
+        console.log('DEBUG: Dev mode - Set token and user');
+      }
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const login = async (email: string, password: string) => {
     try {
