@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       
       // Only set if not already authenticated
-      if (!isAuthenticated) {
+      if (!user) {
         localStorage.setItem('auth_token', devToken);
         localStorage.setItem('user', JSON.stringify(devUser));
         authAPI.setToken(devToken);
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('DEBUG: Dev mode - Set token and user');
       }
     }
-  }, [isAuthenticated]);
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     try {
