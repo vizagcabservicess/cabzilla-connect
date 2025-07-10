@@ -42,22 +42,40 @@ export const adminProfileAPI = {
   getAllAdminProfiles: async (): Promise<AdminProfile[]> => {
     try {
       const token = getAuthToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      console.log('[adminProfileAPI] Request headers (getAllAdminProfiles):', headers);
+      console.log('[adminProfileAPI] Token being used:', token ? token.substring(0, 30) + '...' : 'null');
+      
+      // Try multiple authentication approaches
+      const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'X-Auth-Token': token,
+        'Content-Type': 'application/json',
+      };
+      
+      console.log('[adminProfileAPI] Request headers:', authHeaders);
       console.log('[adminProfileAPI] Making request to:', `${API_BASE_URL}/api/admin/admin-profiles.php`);
       
       const response = await axios.get(`${API_BASE_URL}/api/admin/admin-profiles.php`, {
-        headers,
+        headers: authHeaders,
+        withCredentials: true, // Include cookies for session-based auth
       });
+      
       console.log('[adminProfileAPI] Response received:', response.data);
       return response.data.success ? response.data.data : [];
     } catch (error) {
       console.error('Error fetching admin profiles:', error);
+      
       if (error.response) {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
         console.error('Response headers:', error.response.headers);
+        
+        // If authentication fails, try to re-authenticate
+        if (error.response.status === 401) {
+          console.log('[adminProfileAPI] 401 error - authentication failed');
+          // Don't throw immediately, let the component handle it
+        }
       }
+      
       throw error;
     }
   },

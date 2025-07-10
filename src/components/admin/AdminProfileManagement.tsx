@@ -79,10 +79,13 @@ export function AdminProfileManagement() {
       
       // Check if it's an auth error
       if (error.response?.status === 401) {
-        console.log('DEBUG: Authentication failed');
-        toast.error('Authentication failed. Please log in again.');
+        console.log('DEBUG: 401 Authentication failed - the token may be invalid or expired');
+        toast.error('Authentication failed. The session may have expired. Please log in again.');
+        
+        // Try to refresh the page or redirect to login
+        // For now, just show a more helpful message
       } else {
-        toast.error('Failed to load admin profiles');
+        toast.error('Failed to load admin profiles. Please check your connection and try again.');
       }
     } finally {
       setIsLoading(false);
