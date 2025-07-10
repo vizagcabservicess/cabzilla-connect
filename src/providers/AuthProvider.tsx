@@ -34,8 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken.substring(0, 20) + '...');
         }
         
-        // Then verify token validity with server
-        if (authAPI.isAuthenticated()) {
+        // Then verify token validity with server (skip in development)
+        if (authAPI.isAuthenticated() && process.env.NODE_ENV !== 'development') {
           try {
             const userData = await authAPI.getCurrentUser();
             if (userData) {
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch (error) {
             console.error('Token validation failed:', error);
-            // Token is invalid, clear it
+            // Token is invalid, clear it (only in production)
             authAPI.logout();
             setUser(null);
           }

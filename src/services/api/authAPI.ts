@@ -116,7 +116,10 @@ class AuthAPI {
       return null;
     } catch (error) {
       console.error('Get current user error:', error);
-      this.logout();
+      // DON'T logout on error in development mode - just return null
+      if (process.env.NODE_ENV !== 'development') {
+        this.logout();
+      }
       return null;
     }
   }
