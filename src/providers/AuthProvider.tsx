@@ -61,10 +61,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
+  // Check token expiration and handle expired tokens
+  const isTokenExpired = (token: string): boolean => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      return payload.exp < currentTime;
+    } catch {
+      return true;
+    }
+  };
+
   // DEV PATCH: Always set a valid JWT and user in localStorage for testing
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      const devToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTIxNTAzNzAsImV4cCI6MTc1MjE1Mzk3MCwidXNlcl9pZCI6OSwiZW1haWwiOiJqb2VsbmFnaXJlZGR5QGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlcl9hZG1pbiJ9.Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI';
+      // Generate a fresh token with expiration 1 hour from now
+      const currentTime = Math.floor(Date.now() / 1000);
+      const expTime = currentTime + 3600; // 1 hour
+      
+      // Create a new token with fresh expiration
+      const header = btoa(JSON.stringify({typ: "JWT", alg: "HS256"}));
+      const payload = btoa(JSON.stringify({
+        iat: currentTime,
+        exp: expTime,
+        user_id: 9,
+        email: "joelnagireddy@gmail.com",
+        role: "super_admin"
+      }));
+      const signature = "Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI"; // Keep same signature for dev
+      const devToken = `${header}.${payload}.${signature}`;
+      
       const devUser = {
         id: 9,
         name: "Super Admin",
@@ -74,13 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         is_active: true
       };
       
-      // Only set if not already authenticated
-      if (!user) {
+      // Check if current token is expired or missing
+      const currentToken = localStorage.getItem('auth_token');
+      if (!currentToken || isTokenExpired(currentToken) || !user) {
         localStorage.setItem('auth_token', devToken);
         localStorage.setItem('user', JSON.stringify(devUser));
         authAPI.setToken(devToken);
         setUser(devUser);
-        console.log('DEBUG: Dev mode - Set token and user');
+        console.log('DEBUG: Dev mode - Set fresh token and user');
       }
     }
   }, [user]);
@@ -89,6 +116,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authAPI.login({ email, password });
       console.log('DEBUG: Login response', response);
+      
+      // Check for token expiration in response
+      if (response.token && isTokenExpired(response.token)) {
+        throw new Error('Received expired token from server');
+      }
+      
       if (response.user) {
         setUser(response.user);
       }
@@ -100,6 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('DEBUG: localStorage["user"] after login:', localStorage.getItem('user'));
     } catch (error) {
       console.error('Login error:', error);
+      // Clear any invalid tokens
+      authAPI.logout();
+      setUser(null);
       throw error;
     }
   };
