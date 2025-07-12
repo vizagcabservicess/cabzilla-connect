@@ -79,27 +79,35 @@ export function LocationInput({
   // Initialize input value from either value or location only on first render
   // or when value/location changes from external sources
   useEffect(() => {
-    // Skip if the value hasn't actually changed to avoid loops
-    if (valueRef.current === value && locationRef.current === location) {
-      return;
-    }
-    
-    // Update refs
-    valueRef.current = value;
-    locationRef.current = location;
-    
-    // Set input value based on value or location
+    // Compute the new value to set
+    let newValue = "";
     if (typeof value === 'string') {
-      setInputValue(value);
+      newValue = value;
     } else if (value && typeof value === 'object') {
-      setInputValue(value.name || value.address || "");
+      if (isPickupLocation) {
+        newValue = value.name || value.address || "";
+      } else {
+        newValue = value.address || value.name || "";
+      }
     } else if (location) {
-      setInputValue(location.name || location.address || "");
+      if (isPickupLocation) {
+        newValue = location.name || location.address || "";
+      } else {
+        newValue = location.address || location.name || "";
+      }
     }
-    
-    // Mark as initialized
-    initializedRef.current = true;
-  }, [value, location]);
+    if (inputValue !== newValue) {
+      setInputValue(newValue);
+    }
+  }, [
+    typeof value === 'object' ? value?.id : value,
+    typeof value === 'object' ? value?.address : value,
+    typeof value === 'object' ? value?.name : value,
+    typeof location === 'object' ? location?.id : location,
+    typeof location === 'object' ? location?.address : location,
+    typeof location === 'object' ? location?.name : location,
+    isPickupLocation
+  ]);
   
   // Filter suggestions based on input value
   useEffect(() => {
