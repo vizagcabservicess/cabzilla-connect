@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard, ArrowRight, DollarSign } from 'lucide-react';
+import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard, ArrowRight, DollarSign, Edit, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
 import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Separator } from '@/components/ui/separator';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { OutstationOnlyWidget } from '@/components/OutstationOnlyWidget';
 
 interface BookingDetails {
   pickupLocation: Location;
@@ -65,10 +67,12 @@ const mapBackendBookingToFrontend = (backendBooking: any, fallbackBooking?: any)
 });
 
 const BookingConfirmation = () => {
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [bookingId, setBookingId] = useState<string>('');
   const [latestBooking, setLatestBooking] = useState<BookingDetails | null>(null);
-  const navigate = useNavigate();
+  const [showEditForm, setShowEditForm] = useState(false);
 
   useEffect(() => {
     // Retrieve booking details from sessionStorage
@@ -117,7 +121,63 @@ const BookingConfirmation = () => {
     <div className="min-h-screen bg-cabGray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 pt-24 pb-16">
+      {/* Mobile Edit Form Overlay */}
+      {isMobile && showEditForm && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowEditForm(false)}
+              className="text-gray-600"
+            >
+              <X className="w-5 h-5 mr-2" />
+              Cancel
+            </Button>
+            <h2 className="font-semibold text-lg">Edit Booking</h2>
+            <div className="w-16"></div> {/* Spacer for center alignment */}
+          </div>
+          
+          <div className="p-4">
+            <div className="mb-4 bg-blue-50 p-3 rounded-lg">
+              <div className="flex items-center space-x-4 text-sm">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="tripMode"
+                    value="one-way"
+                    defaultChecked={!bookingToShow.tripMode || bookingToShow.tripMode === 'one-way'}
+                    className="mr-2"
+                  />
+                  One Way
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="tripMode"
+                    value="round-trip"
+                    defaultChecked={bookingToShow.tripMode === 'round-trip'}
+                    className="mr-2"
+                  />
+                  Round Trip
+                </label>
+              </div>
+            </div>
+            
+            <OutstationOnlyWidget
+              initialPickup={bookingToShow.pickupLocation?.name || ''}
+              initialDrop={bookingToShow.dropLocation?.name || ''}
+              onSearch={(searchData) => {
+                console.log('Updated booking search:', searchData);
+                setShowEditForm(false);
+                // Handle the search data - this would typically update the booking
+              }}
+            />
+          </div>
+        </div>
+      )}
+      
+      <div className="container mx-auto px-4 pt-24 pb-16" style={{ display: isMobile && showEditForm ? 'none' : 'block' }}>
         <div className="max-w-3xl mx-auto">
           <div className="bg-white rounded-xl shadow-card border border-cabGray-100 overflow-hidden animate-fade-in">
             <div className="bg-cabBlue-500 text-white p-8 text-center">
@@ -150,7 +210,18 @@ const BookingConfirmation = () => {
               <Separator className="my-6" />
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="font-semibold text-cabGray-800 mb-3">Trip Details</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-cabGray-800">Trip Details</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowEditForm(true)}
+                      className="text-cabBlue-600 hover:text-cabBlue-700"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                   <div className="space-y-3">
                     <div className="flex items-start">
                       <MapPin className="w-5 h-5 text-cabBlue-500 mt-0.5 mr-2" />
@@ -269,7 +340,7 @@ const BookingConfirmation = () => {
 
 export default BookingConfirmation;
 
-// Helper functions (copied from ReceiptPage)
+// Helper functions
 const formatDate = (dateString: string) => {
   if (!dateString) return 'N/A';
   try {
@@ -310,4 +381,8 @@ const formatTripType = (tripType?: string, tripMode?: string) => {
     return `${type} (${formattedMode})`;
   }
   return type;
+};
+
+const formatPrice = (amount: number) => {
+  return `₹${amount.toLocaleString('en-IN')}`;
 };
