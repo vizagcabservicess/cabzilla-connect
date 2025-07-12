@@ -13,11 +13,12 @@ import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
-import { ChevronRight, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
 import GoogleMapComponent from './GoogleMapComponent';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -45,6 +46,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   
   const loadFromSessionStorage = () => {
@@ -127,6 +129,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState<boolean>(false);
+  const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
 
   console.log('PREFILL:', { pickupLocation, dropLocation });
 
@@ -638,6 +641,156 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
 
   return (
     <div className="relative">
+      {/* Mobile Edit Form Overlay */}
+      {isMobile && showMobileEditForm && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMobileEditForm(false)}
+              className="text-gray-600"
+            >
+              <X className="w-5 h-5 mr-2" />
+              Cancel
+            </Button>
+            <h2 className="font-semibold text-lg">Edit Booking</h2>
+            <div className="w-16"></div> {/* Spacer for center alignment */}
+          </div>
+          
+          <div className="p-4">
+            <div className="mb-4 bg-blue-50 p-3 rounded-lg">
+              <div className="flex items-center space-x-4 text-sm">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="tripMode"
+                    value="one-way"
+                    checked={tripMode === 'one-way'}
+                    onChange={() => setTripMode('one-way')}
+                    className="mr-2"
+                  />
+                  One Way
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="tripMode"
+                    value="round-trip"
+                    checked={tripMode === 'round-trip'}
+                    onChange={() => setTripMode('round-trip')}
+                    className="mr-2"
+                  />
+                  Round Trip
+                </label>
+              </div>
+            </div>
+            
+            {/* Trip Type Selector */}
+            <div className="w-full mb-6">
+              <TabTripSelector
+                selectedTab={ensureCustomerTripType(tripType)}
+                tripMode={tripMode}
+                onTabChange={handleTabChange}
+                onTripModeChange={setTripMode}
+              />
+            </div>
+
+            {/* Main Booking Container */}
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
+              <div className="flex flex-col items-stretch gap-0">
+                {/* From Location */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 p-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">From</div>
+                      <LocationInput
+                        key="pickup-mobile"
+                        label=""
+                        placeholder="Pickup location"
+                        value={pickupLocation ? { ...pickupLocation } : undefined}
+                        onLocationChange={handlePickupLocationChange}
+                        isPickupLocation={true}
+                        isAirportTransfer={tripType === 'airport'}
+                        className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* To Location */}
+                {(tripType === 'outstation' || tripType === 'airport') && (
+                  <div className="flex-1 min-w-0 border-t border-gray-200">
+                    <div className="flex items-center gap-2 p-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 uppercase mb-1">To</div>
+                        <LocationInput
+                          key="drop-mobile"
+                          label=""
+                          placeholder="Drop location"
+                          value={dropLocation ? { ...dropLocation } : undefined}
+                          onLocationChange={handleDropLocationChange}
+                          isPickupLocation={false}
+                          isAirportTransfer={tripType === 'airport'}
+                          className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Date Picker */}
+                <div className="flex-1 min-w-0 border-t border-gray-200">
+                  <div className="flex items-center gap-2 p-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">Date of Journey</div>
+                      <DateTimePicker
+                        date={pickupDate}
+                        onDateChange={setPickupDate}
+                        minDate={new Date()}
+                        className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Return Date for Round Trip */}
+                {tripType === 'outstation' && tripMode === 'round-trip' && (
+                  <div className="flex-1 min-w-0 border-t border-gray-200">
+                    <div className="flex items-center gap-2 p-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 uppercase mb-1">Return Date</div>
+                        <DateTimePicker
+                          date={returnDate}
+                          onDateChange={setReturnDate}
+                          minDate={pickupDate}
+                          disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                          className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Update Button */}
+            <div className="flex justify-center">
+              <Button
+                onClick={() => {
+                  setShowMobileEditForm(false);
+                  setCurrentStep(2);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg rounded-xl"
+                disabled={!isFormValid}
+              >
+                Update Search
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Hero Banner Section - Only show when not in search mode */}
       {!isSearchActive && currentStep === 1 && (
         <section className="hidden sm:block relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
@@ -859,7 +1012,12 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         <div className="bg-white rounded-xl shadow-card p-6">
                           <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-semibold text-left">Trip Details</h3>
-                            <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)} className="mobile-button">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)} 
+                              className="mobile-button"
+                            >
                               Edit
                             </Button>
                           </div>
