@@ -28,6 +28,8 @@ import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
+import { QuickActionBar } from './QuickActionBar';
+import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -48,6 +50,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
+  const { isLoaded } = useGoogleMaps();
   
   const loadFromSessionStorage = () => {
     try {
@@ -111,7 +114,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [dropLocation, setDropLocation] = useState<Location | null>(savedData.dropLocation);
   const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate);
   const [returnDate, setReturnDate] = useState<Date | null>(savedData.returnDate);
-  const [selectedCab, setSelectedCab] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
+  const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
@@ -263,20 +266,11 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     setPickupLocation(location);
   };
   
-  const handleDropLocationChange = (location: Location | null) => {
-    // Allow clearing the drop location
-    if (!location) {
-      setDropLocation(null);
-      // Re-evaluate trip type logic when drop location is cleared
-      if (tripType === 'airport' || tripType === 'outstation') {
-        // If pickup is in Vizag, allow switching to Airport tab
-        if (pickupLocation && isLocationInVizag(pickupLocation)) {
-          setTripType('airport');
-        }
-      }
+  const handleDropLocationChange = (location: Location) => {
+    if (!location || !location.name) {
+      setDropLocation(undefined);
       return;
     }
-    // Make sure isInVizag is determined if not already set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
@@ -631,6 +625,16 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     }
   };
 
+  // Add a wrapper to setSelectedCab that also scrolls to summary
+  const setSelectedCab = (cab: CabType) => {
+    setSelectedCabState(cab);
+    setTimeout(() => {
+      if (bookingSummaryRef.current) {
+        bookingSummaryRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
   useEffect(() => {
     if (isSearchActive) {
       setCurrentStep(2);
@@ -639,12 +643,33 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     }
   }, [isSearchActive]);
 
+  useEffect(() => {
+    if (
+      isMobile &&
+      isLoaded && // Only run when Google Maps API is loaded
+      (tripType === 'outstation' || tripType === 'airport') &&
+      pickupLocation &&
+      dropLocation
+    ) {
+      setIsCalculatingDistance(true);
+      calculateDistanceMatrix(pickupLocation, dropLocation)
+        .then(result => {
+          if (result.status === 'OK') {
+            setDistance(result.distance);
+            setDuration(result.duration);
+          }
+        })
+        .finally(() => setIsCalculatingDistance(false));
+    }
+    // Only run when these change
+  }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation]);
+
   return (
-    <div className="relative">
+    <div className="relative bg-[#f2f2f8]">
       {/* Mobile Edit Form Overlay */}
       {isMobile && showMobileEditForm && (
         <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <div className=" top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
             <Button
               variant="ghost"
               size="sm"
@@ -659,32 +684,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
           </div>
           
           <div className="p-4">
-            <div className="mb-4 bg-blue-50 p-3 rounded-lg">
-              <div className="flex items-center space-x-4 text-sm">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="tripMode"
-                    value="one-way"
-                    checked={tripMode === 'one-way'}
-                    onChange={() => setTripMode('one-way')}
-                    className="mr-2"
-                  />
-                  One Way
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="tripMode"
-                    value="round-trip"
-                    checked={tripMode === 'round-trip'}
-                    onChange={() => setTripMode('round-trip')}
-                    className="mr-2"
-                  />
-                  Round Trip
-                </label>
-              </div>
-            </div>
+           
             
             {/* Trip Type Selector */}
             <div className="w-full mb-6">
@@ -823,8 +823,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-1 sm:pb-12 sm:pt-4'
         } w-full px-0 sm:px-0`}>
-        <div className="container mx-auto px-0 sm:px-4">
-          <div className="max-w-6xl mx-auto">
+        <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
+          <div className="w-full sm:max-w-6xl sm:mx-auto">
             <div className="bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8">
               
               
@@ -881,7 +881,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                     key={dropLocation?.id || dropLocation?.name || 'drop'}
                                     label=""
                                     placeholder="Drop location"
-                                    value={dropLocation ? { ...dropLocation } : undefined}
+                                    value={dropLocation ? { ...dropLocation } : ""}
                                     onLocationChange={handleDropLocationChange}
                                     isPickupLocation={false}
                                     isAirportTransfer={tripType === 'airport'}
@@ -984,8 +984,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 text-lg font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300"
-                          style={{ minHeight: '56px' }}
+                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 text-base font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300"
+                          style={{ minHeight: '40px' }}
                         >
                           {isLoading ? (
                             <div className="flex items-center">
@@ -1007,116 +1007,158 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
 
                   {/* Step 2 - Cab Selection */}
                   {currentStep === 2 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-                      <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-white rounded-xl shadow-card p-6">
-                          <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-semibold text-left">Trip Details</h3>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)} 
-                              className="mobile-button"
-                            >
-                              Edit
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                            <div>
-                              <p className="text-xs text-left">PICKUP LOCATION</p>
-                              <p className="font-medium text-left">{pickupLocation?.name}</p>
-                            </div>
-                            {(tripType === 'outstation' || tripType === 'airport') && (
-                              <div>
-                                <p className="text-xs text-left">DROP LOCATION</p>
-                                <p className="font-medium text-left">{dropLocation?.name}</p>
-                              </div>
-                            )}
-                            {tripType === 'local' && (
-                              <div>
-                                <p className="text-xs text-left">PACKAGE</p>
-                                <p className="font-medium text-left">
-                                  {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
-                                </p>
-                              </div>
-                            )}
-                            <div className="col-span-2 border-t pt-3 mt-2 flex justify-between">
-                              <div>
-                                <p className="text-xs text-left">PICKUP DATE & TIME</p>
-                                <p className="font-medium text-left">{pickupDate?.toLocaleString()}</p>
-                              </div>
-                              {tripMode === 'round-trip' && returnDate && (
-                                <div>
-                                  <p className="text-xs text-left">RETURN DATE & TIME</p>
-                                  <p className="font-medium text-left">{returnDate?.toLocaleString()}</p>
-                                </div>
-                              )}
+                    <>
+                      {/* Trip Summary Bar */}
+                      <div className="mb-4 bg-[#f8faf5] border border-[#e0e7d9] rounded-xl w-full max-w-full overflow-hidden flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between px-4 pr-12 py-3 shadow-sm">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 w-full min-w-0 overflow-hidden">
+                            <button onClick={() => setCurrentStep(1)} className="text-gray-700 hover:text-blue-600 focus:outline-none mr-1">
+                              <ArrowLeft className="w-5 h-5" />
+                            </button>
+                            <div className="relative flex items-center w-full min-w-0 overflow-hidden">
+                              <span className="font-bold text-sm sm:text-base text-gray-900 truncate overflow-hidden whitespace-nowrap flex-1 min-w-0 block">
+                                {pickupLocation?.name || 'Pickup'}
+                                {pickupLocation && dropLocation && (
+                                  <>
+                                    <ChevronRight className="inline w-4 h-4 mx-1 text-gray-400" />
+                                    <span className="truncate max-w-[calc(100%-2.5rem)] align-middle inline-block">{dropLocation?.name || 'Drop'}</span>
+                                  </>
+                                )}
+                              </span>
+                              <button
+                                onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)}
+                                className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600 focus:outline-none w-8 h-8 flex items-center justify-center"
+                                style={{ background: 'white' }} // for debug, remove later
+                              >
+                                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-edit"><path d="M11 4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
                             </div>
                           </div>
-                          
-                          {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
-                            <div className="mt-6 app-card">
-                              <GoogleMapComponent
-                                key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
-                                pickupLocation={pickupLocation}
-                                dropLocation={dropLocation}
-                                tripType={tripType}
-                                onDistanceCalculated={handleDistanceCalculated}
-                              />
-                            </div>
-                          )}
-                          
-                          <CabOptions 
-                            cabTypes={cabTypes} 
-                            selectedCab={selectedCab} 
-                            onSelectCab={setSelectedCab} 
-                            distance={distance} 
-                            tripType={tripType} 
-                            tripMode={tripMode}
-                            hourlyPackage={hourlyPackage}
-                            pickupDate={pickupDate}
-                            returnDate={returnDate}
-                            isCalculatingFares={false}
-                          />
-                        </div>
-                      </div>
-                      <div className="lg:col-span-1">
-                        <div ref={bookingSummaryRef} id="booking-summary">
-                          <BookingSummary 
-                            pickupLocation={pickupLocation!} 
-                            dropLocation={dropLocation} 
-                            pickupDate={pickupDate} 
-                            returnDate={returnDate} 
-                            selectedCab={selectedCab!} 
-                            distance={distance} 
-                            tripType={tripType} 
-                            tripMode={tripMode} 
-                            totalPrice={totalPrice}
-                            hourlyPackage={hourlyPackage}
-                            onFinalTotalChange={setFinalTotal}
-                          />
+                          <div className="text-xs text-gray-500 font-medium mb-2">
+                            {pickupDate && (
+                              <span>{pickupDate.toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            )}
+                          </div>
                         </div>
                         
-                        <Button 
-                          onClick={handleBookNow}
-                          className="w-full mt-4 py-6 text-base mobile-button"
-                          disabled={!isFormValid || !selectedCab || isLoading}
-                        >
-                          {isLoading ? (
-                            <div className="flex items-center justify-center">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              <span>Processing...</span>
-                            </div>
-                          ) : `Book Now - ${formatPrice(finalTotal)}`}
-                        </Button>
                       </div>
-                    </div>
+                      {/* Step 2 Main Grid */}
+                      <div className="grid grid-cols-1 lg:[grid-template-columns:65%_35%] gap-6 animate-fade-in text-xs lg:text-[12px]">
+                        <div className="lg:col-span-1 space-y-6">
+                          <div className="bg-white rounded-xl shadow-card p-2">
+                            <div className="flex items-center justify-between mb-2">
+                              {/* <h3 className="text-xs lg:text-[16px] font-semibold text-left">Trip Details</h3> */}
+                              {/* <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)} 
+                                className="mobile-button text-xs lg:text-[11px]"
+                              >
+                                Edit
+                              </Button> */}
+                            </div>
+                            {/* Hide this section on mobile, show only on desktop/tablet */}
+                            {/*
+                            <div className="hidden md:block">
+                              <div className="grid grid-cols-2 gap-y-1 gap-x-3">
+                                <div>
+                                  <p className="text-[10px] text-left">PICKUP LOCATION</p>
+                                  <p className="font-medium text-left text-xs lg:text-[12px]">{pickupLocation?.name}</p>
+                                </div>
+                                {(tripType === 'outstation' || tripType === 'airport') && (
+                                  <div>
+                                    <p className="text-[10px] text-left">DROP LOCATION</p>
+                                    <p className="font-medium text-left text-xs lg:text-[12px]">{dropLocation?.name}</p>
+                                  </div>
+                                )}
+                                {tripType === 'local' && (
+                                  <div>
+                                    <p className="text-[10px] text-left">PACKAGE</p>
+                                    <p className="font-medium text-left text-xs lg:text-[12px]">
+                                      {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="col-span-2 border-t pt-1 mt-1 flex justify-between">
+                                  <div>
+                                    <p className="text-[10px] text-left">PICKUP DATE & TIME</p>
+                                    <p className="font-medium text-left text-xs lg:text-[12px]">{pickupDate?.toLocaleString()}</p>
+                                  </div>
+                                  {tripMode === 'round-trip' && returnDate && (
+                                    <div>
+                                      <p className="text-[10px] text-left">RETURN DATE & TIME</p>
+                                      <p className="font-medium text-left text-xs lg:text-[12px]">{returnDate?.toLocaleString()}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            */}
+                            {!isMobile && (tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
+                              <div className="mt-3 app-card">
+                                <GoogleMapComponent
+                                  key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
+                                  pickupLocation={pickupLocation}
+                                  dropLocation={dropLocation}
+                                  tripType={tripType}
+                                  onDistanceCalculated={handleDistanceCalculated}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs lg:text-[12px]">
+                            <CabOptions 
+                              cabTypes={cabTypes} 
+                              selectedCab={selectedCab} 
+                              onSelectCab={setSelectedCab} 
+                              distance={distance} 
+                              tripType={tripType} 
+                              tripMode={tripMode}
+                              hourlyPackage={hourlyPackage}
+                              pickupDate={pickupDate}
+                              returnDate={returnDate}
+                              isCalculatingFares={false}
+                            />
+                          </div>
+                        </div>
+                        <div className="lg:col-span-1 text-xs lg:text-[14px]">
+                          <div ref={bookingSummaryRef} id="booking-summary" className="text-xs lg:text-[12px]">
+                            <BookingSummary 
+                              pickupLocation={pickupLocation!} 
+                              dropLocation={dropLocation} 
+                              pickupDate={pickupDate} 
+                              returnDate={returnDate} 
+                              selectedCab={selectedCab!} 
+                              distance={distance} 
+                              tripType={tripType} 
+                              tripMode={tripMode} 
+                              totalPrice={totalPrice}
+                              hourlyPackage={hourlyPackage}
+                              onFinalTotalChange={setFinalTotal}
+                            />
+                          </div>
+                          <Button 
+                            onClick={handleBookNow}
+                            className="w-full mt-2 py-3 text-base mobile-button text-xs lg:text-[16px]"
+                            disabled={!isFormValid || !selectedCab || isLoading}
+                          >
+                            {isLoading ? (
+                              <div className="flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                <span>Processing...</span>
+                              </div>
+                            ) : `Book Now - ${formatPrice(finalTotal)}`}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </>
               ) : (
-                <div className="grid md:grid-cols-2 gap-6 animate-fade-in">
-                  <div>
-                    <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in w-full px-2 sm:px-0">
+                  {/* Guest Details Form - Centered on mobile, normal on md+ */}
+                  <div className="w-full flex justify-center md:block">
+                    <div className="bg-white rounded-xl md:shadow-card md:border md:p-6 mb-4 w-full max-w-md md:max-w-full p-0 shadow-none border-none">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold">Complete Your Booking</h3>
                       </div>
@@ -1131,7 +1173,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                     </div>
                   </div>
                   
-                  <div>
+                  <div className="w-full">
                     <BookingSummary
                       pickupLocation={pickupLocation!}
                       dropLocation={dropLocation}
@@ -1152,9 +1194,9 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
           </div>
         </div>
       </section>
-      
       {/* Mobile Navigation Bar */}
       <MobileNavigation />
+      <QuickActionBar />
     </div>
   );
 }

@@ -75,7 +75,7 @@ const VehicleDetailPage = () => {
           overview: foundVehicle.description,
           inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
           exclusions: foundVehicle.exclusions || ['Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'],
-          features: foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point', 'Water']
+          features: foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point']
         };
 
         setVehicle(vehicleData);

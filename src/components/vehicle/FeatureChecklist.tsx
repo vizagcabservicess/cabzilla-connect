@@ -10,7 +10,7 @@ interface FeatureChecklistProps {
 
 const FeatureChecklist: React.FC<FeatureChecklistProps> = ({ 
   features = [
-    "AC", "Music System", "Charging Point", "Water", "Bottle Water", 
+    "AC", "Music System", "Charging Point", "Bottle Water", 
     "Extra Legroom", "WiFi", "Entertainment System"
   ] 
 }) => {

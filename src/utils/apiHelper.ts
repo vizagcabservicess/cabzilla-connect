@@ -212,7 +212,7 @@ export const directVehicleOperation = async (endpoint: string, method: string = 
           basePrice: 6000,
           pricePerKm: 20,
           image: '/cars/sedan.png',
-          amenities: ['AC', 'Water'],
+          amenities: ['AC', 'Bottle Water'],
           description: 'The Toyota Innova Hycross is known for its comfort.',
           ac: true,
           nightHaltCharge: 700,

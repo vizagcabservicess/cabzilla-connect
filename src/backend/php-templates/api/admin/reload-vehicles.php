@@ -130,7 +130,7 @@ if ($conn) {
                 // Convert database row to vehicle object
                 $amenities = json_decode($row['amenities'], true);
                 if (!is_array($amenities)) {
-                    $amenities = ['AC', 'Water'];
+                    $amenities = ['AC', 'Bottle Water'];
                 }
                 
                 $vehicle = [

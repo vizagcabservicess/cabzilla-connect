@@ -4,7 +4,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag } from 'lucide-react';
+import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
@@ -852,185 +852,169 @@ export const BookingSummary = ({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 relative">
-      <h2 className="text-xl font-bold mb-4 text-left">Booking Summary</h2>
+    <div className="text-[14px] md:text-[14px]">
+      <div className="bg-white rounded-lg shadow-md p-4 md:p-5 relative">
+        <h2 className="text-[14px] md:text-[15px] font-semibold mb-3 text-left">Booking Summary</h2>
 
-      <div className="space-y-4">
-        <div className="border-b pb-4">
-          <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">TRIP TYPE</p>
-              <p className="font-medium capitalize text-left">
-                {tripType === 'outstation' ? `${tripType} (${tripMode})` : tripType}
-                {tripType === 'local' && ` - ${hourlyPackage}`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 mb-3">
-            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">{(tripType === 'outstation' && tripMode === 'round-trip') ? 'ACTUAL DISTANCE' : 'TOTAL DISTANCE'}</p>
-              <p className="font-medium text-left">
-                {(tripType === 'outstation' && tripMode === 'round-trip')
-                  ? `${distance * 2} KM`
-                  : (tripType === 'outstation' || tripType === 'airport') && distance === 0 && pickupLocation && dropLocation
-                    ? <span className="text-blue-500 animate-pulse">Calculating...</span>
-                    : `${distance} KM`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 mb-3">
-            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-left">
-              <p className="text-sm text-gray-500 text-left">PICKUP</p>
-              <p className="font-medium text-left">{pickupLocation.address || pickupLocation.name}</p>
-            </div>
-          </div>
-
-          {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
-            <div className="flex items-start gap-2 mb-3">
-              <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+        <div className="space-y-3">
+          <div className="border-b pb-3">
+            <div className="flex items-start gap-2 mb-2">
+              <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
               <div className="text-left">
-                <p className="text-sm text-gray-500 text-left">DROP-OFF</p>
-                <p className="font-medium text-left">{dropLocation.address || dropLocation.name}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-start gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm text-gray-500 text-left">PICKUP DATE</p>
-              <p className="font-medium">
-                {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
-              </p>
-            </div>
-          </div>
-
-          {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
-            <div className="flex items-start gap-2 mb-3">
-              <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-gray-500">RETURN DATE</p>
-                <p className="font-medium">
-                  {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
+                <p className="text-[12px] text-gray-500 text-left">TRIP TYPE</p>
+                <p className="font-semibold text-[14px] capitalize text-left">
+                  {tripType === 'outstation' ? `${tripType} (${tripMode})` : tripType}
+                  {tripType === 'local' && ` - ${hourlyPackage}`}
                 </p>
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="border-b pb-4">
-          <div className="flex items-center gap-2">
-            <Car className="h-5 w-5 text-blue-500" />
-            <p className="font-medium">{selectedCab.name}</p>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-500" />
-            <p className="text-sm text-gray-500">{selectedCab.capacity} persons</p>
-          </div>
-        </div>
-
-        <div>
-          {tripType === 'local' ? (
-            <>
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-600">Base fare</p>
-                <p className="font-medium">{formatPrice(breakdown.basePrice || 0)}</p>
+            <div className="flex items-start gap-2 mb-2">
+              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-[12px] text-gray-500 text-left">{(tripType === 'outstation' && tripMode === 'round-trip') ? 'ACTUAL DISTANCE' : 'TOTAL DISTANCE'}</p>
+                <p className="font-semibold text-left text-[14px]">
+                  {(tripType === 'outstation' && tripMode === 'round-trip')
+                    ? `${distance * 2} KM`
+                    : (tripType === 'outstation' || tripType === 'airport') && distance === 0 && pickupLocation && dropLocation
+                      ? <span className="text-blue-500 animate-pulse">Calculating...</span>
+                      : `${distance} KM`}
+                </p>
               </div>
-              {extraKmFare > 0 && (
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Extra km charges</p>
-                  <p>{formatPrice(extraKmFare)}</p>
-                </div>
-              )}
-              {extraHourFare > 0 && (
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Extra hour charges</p>
-                  <p>{formatPrice(extraHourFare)}</p>
-                </div>
-              )}
-              <Separator className="my-3" />
-              <div className="flex justify-between items-center">
-                <p className="font-semibold">Total Price</p>
-                <p className="font-bold text-lg">{formatPrice(localTotal)}</p>
-              </div>
-            </>
-          ) : tripType === 'tour' ? (
-            <>
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-600">Base fare</p>
-                <p className="font-medium">{formatPrice(tourBaseFare)}</p>
-              </div>
-              <Separator className="my-3" />
-              <div className="flex justify-between items-center">
-                <p className="font-semibold">Total Price</p>
-                <p className="font-bold text-lg">{formatPrice(tourBaseFare)}</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-gray-600">Base fare</p>
-                <p className="font-medium">{formatPrice(summaryBaseFare)}</p>
-              </div>
-              {summaryDriverAllowance > 0 && (
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Driver allowance</p>
-                  <p className="font-medium">{formatPrice(summaryDriverAllowance)}</p>
-                </div>
-              )}
-              {summaryNightAllowance > 0 && (
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-gray-600">Night allowance</p>
-                  <p>{formatPrice(summaryNightAllowance)}</p>
-                </div>
-              )}
-              {summaryExtraDistanceCharges > 0 && (
-                <div className="flex justify-between items-center mb-2 group">
-                  <div className="flex items-center gap-1">
-                    <p className="text-gray-600">Extra distance charges</p>
-                  </div>
-                  <p>{formatPrice(summaryExtraDistanceCharges)}</p>
-                </div>
-              )}
-              <Separator className="my-3" />
-              <div className="flex justify-between items-center">
-                <p className="font-semibold">Total Price</p>
-                <p className="font-bold text-lg">{formatPrice(summaryTotal)}</p>
-              </div>
-            </>
-          )}
-          {isLoading && (
-            <div className="mt-3 text-center">
-              <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
             </div>
-          )}
-        </div>
 
-        {tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown && (
-          <div className="mt-4 border rounded bg-gray-50 p-3">
-            <div className="font-semibold mb-2">Fare Breakdown</div>
-            <table className="w-full text-sm">
-              <tbody>
-                <tr><td>Calendar Days</td><td>{outstationBreakdown.calendarDays}</td></tr>
-                <tr><td>Included KM</td><td>{outstationBreakdown.includedKM}</td></tr>
-                <tr><td>Actual KM (2-way)</td><td>{outstationBreakdown.actualDistance}</td></tr>
-                <tr><td>Extra KM</td><td>{outstationBreakdown.extraDistance}</td></tr>
-                <tr><td>Extra KM Charges</td><td>{formatPrice(outstationBreakdown.extraDistanceCharges)}</td></tr>
-                <tr><td>Base Fare</td><td>{formatPrice(outstationBreakdown.baseFare)}</td></tr>
-                <tr><td>Night Allowance</td><td>{formatPrice(outstationBreakdown.nightAllowance)}</td></tr>
-                <tr><td>Driver Allowance</td><td>{formatPrice(outstationBreakdown.driverAllowance)}</td></tr>
-                <tr className="font-bold"><td>Total Fare</td><td>{formatPrice(outstationBreakdown.totalFare)}</td></tr>
-              </tbody>
-            </table>
+            <div className="flex items-start gap-2 mb-2">
+              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="text-left">
+                <p className="text-[12px] text-gray-500 text-left">PICKUP</p>
+                <p className="font-semibold text-left text-[14px]">{pickupLocation.address || pickupLocation.name}</p>
+              </div>
+            </div>
+
+            {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
+              <div className="flex items-start gap-2">
+                <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="text-left">
+                  <p className="text-[12px] text-gray-500 text-left">DROP-OFF</p>
+                  <p className="font-semibold text-left text-[14px]">{dropLocation.address || dropLocation.name}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start gap-2 mt-3">
+              <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[12px] text-gray-500 text-left">PICKUP DATE</p>
+                <p className="font-semibold text-[14px]">
+                  {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+                </p>
+              </div>
+            </div>
+
+            {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
+              <div className="flex items-start gap-2">
+                <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-[12px] text-gray-500">RETURN DATE</p>
+                  <p className="font-semibold text-[14px]">
+                    {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        <div className="text-xs text-gray-500 mt-2">Parking and tolls fees are extra.</div>
+          <div className="border-b pb-3">
+            <div className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-blue-500" />
+              <p className="font-semibold text-[14px]">{selectedCab.name}</p>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Users className="h-4 w-4 text-gray-500" />
+                <span className="text-[14px] text-gray-600">{selectedCab.capacity} Seats</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {tripType === 'local' ? (
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-gray-600 text-[14px]">Base fare</p>
+                  <p className="font-semibold text-[14px]">{formatPrice(breakdown.basePrice || 0)}</p>
+                </div>
+                {extraKmFare > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-gray-600 text-[14px]">Extra km charges</p>
+                    <p className="text-[14px]">{formatPrice(extraKmFare)}</p>
+                  </div>
+                )}
+                {extraHourFare > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-gray-600 text-[14px]">Extra hour charges</p>
+                    <p className="text-[14px]">{formatPrice(extraHourFare)}</p>
+                  </div>
+                )}
+                <Separator className="my-3" />
+                <div className="flex justify-between items-center">
+                  <p className="font-semibold text-[14px]">Total Price</p>
+                  <p className="font-bold text-[14px]">{formatPrice(localTotal)}</p>
+                </div>
+              </>
+            ) : tripType === 'tour' ? (
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-gray-600 text-[14px]">Base fare</p>
+                  <p className="font-semibold text-[14px]">{formatPrice(tourBaseFare)}</p>
+                </div>
+                <Separator className="my-3" />
+                <div className="flex justify-between items-center">
+                  <p className="font-semibold text-[14px]">Total Price</p>
+                  <p className="font-bold text-[14px]">{formatPrice(tourBaseFare)}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-gray-600 text-[14px]">Base fare</p>
+                  <p className="font-semibold text-[14px]">{formatPrice(summaryBaseFare)}</p>
+                </div>
+                {summaryDriverAllowance > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-gray-600 text-[14px]">Driver allowance</p>
+                    <p className="font-semibold text-[14px]">{formatPrice(summaryDriverAllowance)}</p>
+                  </div>
+                )}
+                {summaryNightAllowance > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-gray-600 text-[14px]">Night allowance</p>
+                    <p className="text-[14px]">{formatPrice(summaryNightAllowance)}</p>
+                  </div>
+                )}
+                {summaryExtraDistanceCharges > 0 && (
+                  <div className="flex justify-between items-center mb-2 group">
+                    <div className="flex items-center gap-1">
+                      <p className="text-gray-600 text-[14px]">Extra distance charges</p>
+                    </div>
+                    <p className="text-[14px]">{formatPrice(summaryExtraDistanceCharges)}</p>
+                  </div>
+                )}
+                <Separator className="my-3" />
+                <div className="flex justify-between items-center">
+                  <p className="font-semibold text-[14px]">Total Price</p>
+                  <p className="font-bold text-[14px]">{formatPrice(summaryTotal)}</p>
+                </div>
+              </>
+            )}
+            {isLoading && (
+              <div className="mt-3 text-center">
+                <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
+              </div>
+            )}
+          </div>
+          <div className="text-[12px] text-gray-500 mt-2">Parking and tolls fees are extra.</div>
+        </div>
       </div>
     </div>
   );

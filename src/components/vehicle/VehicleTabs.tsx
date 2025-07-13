@@ -44,7 +44,7 @@ const VehicleTabs: React.FC<VehicleTabsProps> = ({
     "Additional sightseeing",
     "Shopping expenses"
   ],
-  features = ['AC', 'Music System', 'Charging Point', 'Water'],
+  features = ['AC', 'Music System', 'Charging Point'],
   tags = []
 }) => {
   return (
