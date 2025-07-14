@@ -778,96 +778,115 @@ export function AdminBookingsList() {
       )}
 
       {filteredBookings.length > 0 ? (
-        <div className="relative w-full overflow-x-auto max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[1200px]">
-            <TableHeader>
-              <TableRow className="text-xs">
-                <TableHead className="text-xs">Booking #</TableHead>
-                <TableHead className="text-xs">Passenger</TableHead>
-                <TableHead className="text-xs">Route</TableHead>
-                <TableHead className="text-xs">Pickup Date & Time</TableHead>
-                <TableHead className="text-xs">Vehicle & Trip Type</TableHead>
-                <TableHead className="text-xs">Amount</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Payment Status</TableHead>
-                <TableHead className="text-xs">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBookings.map((booking) => (
-                <TableRow key={booking.id} className="text-sm">
-                  <TableCell>{booking.bookingNumber}</TableCell>
-                  <TableCell className="font-medium">
-                    {booking.passengerName}
-                    {booking.passengerPhone && (
-                      <div className="flex items-center text-xs text-gray-500 mt-1">
-                        <Phone className="h-3 w-3 mr-1" />
-                        {booking.passengerPhone}
+        <div className="bg-card rounded-lg border shadow-sm">
+          <div className="overflow-x-auto">
+            <Table className="min-w-full">
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold text-sm w-32">Booking #</TableHead>
+                  <TableHead className="font-semibold text-sm min-w-[200px]">Passenger</TableHead>
+                  <TableHead className="font-semibold text-sm min-w-[300px]">Route</TableHead>
+                  <TableHead className="font-semibold text-sm min-w-[160px]">Pickup Date & Time</TableHead>
+                  <TableHead className="font-semibold text-sm min-w-[180px]">Vehicle & Trip Type</TableHead>
+                  <TableHead className="font-semibold text-sm w-28">Amount</TableHead>
+                  <TableHead className="font-semibold text-sm w-24">Status</TableHead>
+                  <TableHead className="font-semibold text-sm w-28">Payment Status</TableHead>
+                  <TableHead className="font-semibold text-sm w-20">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredBookings.map((booking) => (
+                  <TableRow key={booking.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-medium text-primary">
+                      {booking.bookingNumber}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium">{booking.passengerName}</div>
+                        {booking.passengerPhone && (
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <Phone className="h-3 w-3 mr-1.5" />
+                            {booking.passengerPhone}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div
-                      className="flex items-center gap-1 max-w-lg whitespace-normal"
-                      title={`${booking.pickupLocation} → ${booking.dropLocation}`}
-                      style={{ whiteSpace: 'normal' }}
-                    >
-                      <MapPin className="h-3 w-3 text-gray-400" />
-                      <span className="whitespace-normal break-words">{booking.pickupLocation}</span>
-                      <span className="mx-1 text-gray-400">→</span>
-                      <MapPin className="h-3 w-3 text-gray-400" />
-                      <span className="whitespace-normal break-words">{booking.dropLocation}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                      {formatDateTime(booking.pickupDate)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Car className="h-4 w-4 text-gray-400" />
-                      <span>{booking.cabType}</span>
-                      <span className="text-gray-500">({booking.tripType})</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center font-medium">
-                      <IndianRupee className="h-3.5 w-3.5 mr-1" />
-                      {formatPrice(booking.totalAmount)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      className={getStatusColorClass(booking.status)}
-                    >
-                      {booking.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        (booking.payment_status || booking.status) === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }
-                    >
-                      {(booking.payment_status || booking.status) === 'paid'
-                        ? 'Paid'
-                        : 'Pending'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end">
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm leading-relaxed">
+                            <div className="text-sm">{booking.pickupLocation}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="w-4 h-px bg-border"></div>
+                          <span className="text-xs">to</span>
+                          <div className="w-4 h-px bg-border"></div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm leading-relaxed">
+                            <div className="text-sm">{booking.dropLocation}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        <div className="text-sm">
+                          {formatDateTime(booking.pickupDate)}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Car className="h-4 w-4 text-orange-600" />
+                          <span className="font-medium">{booking.cabType}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full inline-block">
+                          {booking.tripType}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center font-semibold text-lg">
+                        <IndianRupee className="h-4 w-4 mr-1" />
+                        {formatPrice(booking.totalAmount)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        className={`${getStatusColorClass(booking.status)} capitalize`}
+                      >
+                        {booking.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={(booking.payment_status || booking.status) === 'paid' ? 'default' : 'secondary'}
+                        className={
+                          (booking.payment_status || booking.status) === 'paid'
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                        }
+                      >
+                        {(booking.payment_status || booking.status) === 'paid'
+                          ? 'Paid'
+                          : 'Pending'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                             <span className="sr-only">Open menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => handleViewDetails(booking)}>
                             View details
@@ -885,12 +904,12 @@ export function AdminBookingsList() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       ) : (
         <div className="text-center py-10">
