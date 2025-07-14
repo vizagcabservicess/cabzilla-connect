@@ -10,7 +10,7 @@ interface OutstationHeroWidgetProps {
 
 // Lookup for known cities
 
-const CITY_LOOKUP: Record<string, { city: string; state: string; lat: number; lng: number }> = {
+export const CITY_LOOKUP: Record<string, { city: string; state: string; lat: number; lng: number }> = {
   'Visakhapatnam': { city: 'Visakhapatnam', state: 'Andhra Pradesh', lat: 17.7243, lng: 83.3052 },
   'Annavaram': { city: 'Annavaram', state: 'Andhra Pradesh', lat: 17.2817, lng: 82.3977 },
   'Kakinada': { city: 'Kakinada', state: 'Andhra Pradesh', lat: 16.9891, lng: 82.2475 },

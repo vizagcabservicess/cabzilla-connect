@@ -11,7 +11,6 @@ import { FleetShowcase } from '@/components/FleetShowcase';
 import { popularRoutes } from '@/lib/routeData';
 import { slugify } from '@/lib/utils';
 import { OutstationHeroWidget } from "@/components/OutstationHeroWidget";
-import { Page } from "@/components/Page";
 
 export function OutstationTaxiPage() {
   const features = [

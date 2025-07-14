@@ -75,6 +75,7 @@ export function LocationInput({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const autocompleteInitializedRef = useRef(false);
   const initializationAttemptsRef = useRef(0);
+  const [isFocused, setIsFocused] = useState(false);
   
   // Initialize input value from either value or location only on first render
   // or when value/location changes from external sources
@@ -243,27 +244,35 @@ export function LocationInput({
   
   return (
     <div className={`relative ${className}`}>
-      {label && (
-        <div className="mb-2">
-          <Label htmlFor={id} className="block font-medium text-gray-700 text-left mobile-label text-xs">
-            {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
-          </Label>
-        </div>
+      {/* Floating label implementation: only show when focused or has value */}
+      {label && (isFocused || inputValue) && (
+        <label
+          htmlFor={id}
+          className={`absolute left-10 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200`}
+          style={{
+            background: 'white',
+            paddingLeft: '0.25rem',
+            paddingRight: '0.25rem',
+            zIndex: 10,
+          }}
+        >
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
       )}
       <div className="ios-search-input-wrapper relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
         <Input
           id={id}
           ref={inputRef}
           value={inputValue}
           onChange={handleInputChange}
-          placeholder={placeholder}
+          placeholder={!isFocused && !inputValue ? label : ''}
           disabled={disabled}
           readOnly={readOnly}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pl-10 pr-10 ios-search-input text-sm"
-          onFocus={() => inputValue.length > 0 && setShowSuggestions(true)}
-          onBlur={handleInputBlur}
+          style={{ fontSize: '1.2rem', height: '3.5rem' }}
+          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10 ios-search-input"
+          onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
+          onBlur={e => { handleInputBlur(); setIsFocused(false); }}
         />
         {inputValue && !readOnly && (
           <button

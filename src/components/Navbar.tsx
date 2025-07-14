@@ -33,6 +33,7 @@ import {
   Plane,
   Calendar
 } from 'lucide-react';
+import { CITY_LOOKUP } from './OutstationHeroWidget';
 
 interface NavLink {
   to: string;
@@ -178,7 +179,25 @@ export function Navbar() {
         </div>
         {/* Right column: Submenu for selected category */}
         <div className="flex-1 py-8 px-8">
-          {right[activeLeftIndex] && (
+          {/* If Services > Outstation is selected, show dynamic city links */}
+          {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
+            <div>
+              <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
+              <div className="grid grid-cols-1 gap-2" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                {Object.keys(CITY_LOOKUP)
+                  .filter(city => city !== 'Visakhapatnam')
+                  .map(city => (
+                    <Link
+                      key={city}
+                      to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
+                      className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors"
+                    >
+                      {city}
+                    </Link>
+                  ))}
+              </div>
+            </div>
+          ) : right[activeLeftIndex] && (
             <div>
               <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
               <div className="grid grid-cols-1 gap-2">

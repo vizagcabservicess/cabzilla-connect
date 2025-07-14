@@ -995,7 +995,7 @@ export const BookingSummary = ({
                 {summaryExtraDistanceCharges > 0 && (
                   <div className="flex justify-between items-center mb-2 group">
                     <div className="flex items-center gap-1">
-                      <p className="text-gray-600 text-[14px]">Extra distance charges</p>
+                      <p className="text-gray-600 text-[14px]">Extra distance charges{typeof extraDistance === 'number' && extraDistance > 0 ? ` (${extraDistance} KM)` : ''}</p>
                     </div>
                     <p className="text-[14px]">{formatPrice(summaryExtraDistanceCharges)}</p>
                   </div>

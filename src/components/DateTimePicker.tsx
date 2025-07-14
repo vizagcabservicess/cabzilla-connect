@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -23,13 +23,15 @@ export function DateTimePicker({
   onDateChange, 
   minDate, 
   className,
-  label,
+  label = 'Date of journey',
   disabled = false
 }: DateTimePickerProps) {
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const [isFocused, setIsFocused] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     // Always set to current date/time if no date is provided (even after refresh)
@@ -107,29 +109,43 @@ export function DateTimePicker({
   };
 
   return (
-    <div className="space-y-2">
-      {label && (
-        <label className="text-xs font-medium text-gray-600 mb-1 text-left block">
+    <div className="relative w-full">
+      {/* Floating label implementation: only show when focused or has value */}
+      {label && (isFocused || date) && (
+        <label
+          className="absolute left-4 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
+          style={{
+            background: 'white',
+            paddingLeft: '0.25rem',
+            paddingRight: '0.25rem',
+            zIndex: 10,
+          }}
+        >
           {label}
         </label>
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            ref={buttonRef}
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal h-[50px] bg-white",
+              "w-full justify-start text-left font-normal bg-white",
               "border-gray-200 hover:bg-gray-50",
               !date && "text-gray-400",
               disabled && "opacity-60 cursor-not-allowed pointer-events-none",
-              "md:h-[42px]"
+              "h-[3.5rem]",
+              "text-[1.2rem]",
+              "relative"
             )}
             disabled={disabled}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full">
               <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-sm">
-                {date ? format(date, "PPP, hh:mm a") : "Select date and time"}
+              <span className="truncate w-full" style={{ fontSize: '1.2rem' }}>
+                {date ? format(date, "PPP, hh:mm a") : (isFocused ? '' : label)}
               </span>
             </div>
           </Button>

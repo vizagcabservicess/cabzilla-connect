@@ -133,6 +133,16 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState<boolean>(false);
   const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
+  const [isPackageFocused, setIsPackageFocused] = useState<boolean>(false);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
+
+  useEffect(() => {
+    function handleResize() {
+      setIsDesktop(window.innerWidth >= 1024);
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   console.log('PREFILL:', { pickupLocation, dropLocation });
 
@@ -703,10 +713,9 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 p-4">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">From</div>
                       <LocationInput
                         key="pickup-mobile"
-                        label=""
+                        label="Pickup location"
                         placeholder="Pickup location"
                         value={pickupLocation ? { ...pickupLocation } : undefined}
                         onLocationChange={handlePickupLocationChange}
@@ -723,10 +732,9 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                   <div className="flex-1 min-w-0 border-t border-gray-200">
                     <div className="flex items-center gap-2 p-4">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-500 uppercase mb-1">To</div>
                         <LocationInput
                           key="drop-mobile"
-                          label=""
+                          label="Drop location"
                           placeholder="Drop location"
                           value={dropLocation ? { ...dropLocation } : undefined}
                           onLocationChange={handleDropLocationChange}
@@ -743,7 +751,6 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 <div className="flex-1 min-w-0 border-t border-gray-200">
                   <div className="flex items-center gap-2 p-4">
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium text-gray-500 uppercase mb-1">Date of Journey</div>
                       <DateTimePicker
                         date={pickupDate}
                         onDateChange={setPickupDate}
@@ -759,7 +766,6 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                   <div className="flex-1 min-w-0 border-t border-gray-200">
                     <div className="flex items-center gap-2 p-4">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-500 uppercase mb-1">Return Date</div>
                         <DateTimePicker
                           date={returnDate}
                           onDateChange={setReturnDate}
@@ -850,10 +856,9 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                             <div className="flex items-center gap-2 p-4">
                               
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium text-gray-500 uppercase mb-1">From</div>
                                 <LocationInput
                                   key="pickup"
-                                  label=""
+                                  label="Pickup location"
                                   placeholder="Pickup location"
                                   value={pickupLocation ? { ...pickupLocation } : undefined}
                                   onLocationChange={handlePickupLocationChange}
@@ -876,10 +881,9 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               <div className="flex items-center gap-2 p-4">
                                 
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-medium text-gray-500 uppercase mb-1">To</div>
                                   <LocationInput
                                     key={dropLocation?.id || dropLocation?.name || 'drop'}
-                                    label=""
+                                    label="Drop location"
                                     placeholder="Drop location"
                                     value={dropLocation ? { ...dropLocation } : ""}
                                     onLocationChange={handleDropLocationChange}
@@ -897,27 +901,45 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                             <>
                               <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 p-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-gray-500 uppercase mb-1">Package</div>
-                                    <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                      <SelectTrigger className="relative h-auto border border-gray-300 bg-white rounded-lg px-4 py-3 text-sm font-semibold text-gray-900 shadow-none focus:ring-2 focus:ring-blue-500 pl-10">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                          </svg>
-                                        </span>
-                                        <SelectValue placeholder="Select package" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {hourlyPackageOptions.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                <div className="flex items-center relative w-full h-full p-4">
+                                  {(isPackageFocused || hourlyPackage) && (
+                                    <label
+                                      className="absolute left-4 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
+                                      style={{
+                                        background: 'white',
+                                        paddingLeft: '0.5rem',
+                                        paddingRight: '0.25rem',
+                                        zIndex: 10,
+                                        top: '0.6rem', // Fine-tuned for alignment
+                                        marginLeft: '0.75rem',
+                                      }}
+                                    >
+                                      Package
+                                    </label>
+                                  )}
+                                  <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                                    <SelectTrigger
+                                      className="h-[3.5rem] pl-4 text-[1.2rem] flex items-center border border-gray-300 bg-white font-semibold"
+                                      style={{
+                                        alignItems: 'center',
+                                        paddingTop: 0,
+                                        paddingBottom: 0,
+                                        lineHeight: '1.2',
+                                        marginTop: isDesktop ? '-18.5px' : '0px',
+                                      }}
+                                      onFocus={() => setIsPackageFocused(true)}
+                                      onBlur={() => setIsPackageFocused(false)}
+                                    >
+                                      <SelectValue placeholder="Package" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {hourlyPackageOptions.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                               </div>
                             </>
@@ -931,7 +953,6 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                             <div className="flex items-center gap-2 p-4">
                              
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium text-gray-500 uppercase mb-1">Date of Journey</div>
                                 <DateTimePicker
                                   date={pickupDate}
                                   onDateChange={setPickupDate}
@@ -950,7 +971,6 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                 <div className="flex items-center gap-2 p-4">
                                   
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-gray-500 uppercase mb-1">Return Date</div>
                                     <DateTimePicker
                                       date={returnDate}
                                       onDateChange={setReturnDate}
@@ -1200,3 +1220,10 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     </div>
   );
 }
+
+<style>
+{`
+.package-select-lg-margin { margin-top: 0; }
+@media (min-width: 1024px) { .package-select-lg-margin { margin-top: -18.5px; } }
+`}
+</style>
