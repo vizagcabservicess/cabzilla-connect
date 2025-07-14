@@ -708,9 +708,9 @@ export function AdminBookingsList() {
   }
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="grid gap-2 md:w-60">
+    <div className="w-full space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="grid gap-2 lg:w-80">
           <Label htmlFor="search">Search</Label>
           <Input
             id="search"
@@ -719,8 +719,8 @@ export function AdminBookingsList() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 md:self-end">
-          <div className="grid gap-2 md:w-48">
+        <div className="flex flex-col sm:flex-row gap-2 lg:self-end">
+          <div className="grid gap-2 sm:w-48">
             <Label htmlFor="status">Status</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger id="status">
@@ -739,7 +739,7 @@ export function AdminBookingsList() {
           <Button 
             variant="outline" 
             onClick={handleRetry}
-            className="md:self-end h-10 mt-auto"
+            className="lg:self-end h-10 mt-auto"
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />

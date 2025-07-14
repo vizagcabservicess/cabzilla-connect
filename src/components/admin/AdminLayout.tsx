@@ -12,11 +12,11 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
   };
 
   return (
-    <div className="flex flex-col md:flex-row bg-gray-100 min-h-screen">
+    <div className="flex flex-col md:flex-row bg-background min-h-screen">
       {/* Mobile header with menu toggle */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b shadow-sm">
+      <div className="md:hidden flex items-center justify-between p-4 bg-card border-b shadow-sm sticky top-0 z-50">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg text-white">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-lg text-primary-foreground">
             VT
           </div>
           <span className="font-bold text-lg">Vizag Taxi Hub</span>
@@ -26,15 +26,25 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
         </Button>
       </div>
 
-      {/* Sidebar - hidden on mobile by default, shown when toggled */}
-      <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block`}>
+      {/* Sidebar - sticky positioned, hidden on mobile by default */}
+      <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block md:sticky md:top-0 md:h-screen md:overflow-y-auto`}>
         <EnhancedAdminSidebar activeTab={tab} setActiveTab={setTab} />
       </div>
 
+      {/* Mobile overlay when sidebar is open */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden" 
+          onClick={toggleMobileSidebar}
+        />
+      )}
+
       {/* Main content */}
-      <main className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-auto">{children}</div>
-        <footer className="w-full py-4 text-center text-gray-400 bg-gray-100 border-t">
+      <main className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 p-4 md:p-6 overflow-x-hidden">
+          {children}
+        </div>
+        <footer className="w-full py-4 text-center text-muted-foreground bg-card border-t">
           © {new Date().getFullYear()} Vizag Taxi Hub
         </footer>
       </main>
