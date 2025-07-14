@@ -76,6 +76,15 @@ export function LocationInput({
   const autocompleteInitializedRef = useRef(false);
   const initializationAttemptsRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
+  
+  useEffect(() => {
+    function handleResize() {
+      setIsDesktop(window.innerWidth >= 1024);
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Initialize input value from either value or location only on first render
   // or when value/location changes from external sources
@@ -269,7 +278,7 @@ export function LocationInput({
           placeholder={!isFocused && !inputValue ? label : ''}
           disabled={disabled}
           readOnly={readOnly}
-          style={{ fontSize: '1.2rem', height: '3.5rem' }}
+          style={{ fontSize: isDesktop ? '1.2rem' : '1rem', height: '3.5rem' }}
           className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10 ios-search-input"
           onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
           onBlur={e => { handleInputBlur(); setIsFocused(false); }}

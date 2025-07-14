@@ -135,7 +135,7 @@ export function DateTimePicker({
               !date && "text-gray-400",
               disabled && "opacity-60 cursor-not-allowed pointer-events-none",
               "h-[3.5rem]",
-              "text-[1.2rem]",
+              "text-[1rem]",
               "relative"
             )}
             disabled={disabled}
@@ -144,7 +144,7 @@ export function DateTimePicker({
           >
             <div className="flex items-center gap-2 w-full">
               <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="truncate w-full" style={{ fontSize: '1.2rem' }}>
+              <span className="truncate w-full" style={{ fontSize: '1rem' }}>
                 {date ? format(date, "PPP, hh:mm a") : (isFocused ? '' : label)}
               </span>
             </div>

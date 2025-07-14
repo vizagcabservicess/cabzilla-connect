@@ -13,7 +13,7 @@ import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
-import { ChevronRight, ArrowLeft, ArrowRight, X } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -712,16 +712,17 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 {/* From Location */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 p-4">
+                    <span className="flex items-center text-gray-400 mr-2"><MapPin className="w-5 h-5 mr-1" />Enter</span>
                     <div className="flex-1 min-w-0">
                       <LocationInput
                         key="pickup-mobile"
                         label="Pickup location"
-                        placeholder="Pickup location"
+                        placeholder=" Pickup location"
                         value={pickupLocation ? { ...pickupLocation } : undefined}
                         onLocationChange={handlePickupLocationChange}
                         isPickupLocation={true}
                         isAirportTransfer={tripType === 'airport'}
-                        className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                        className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
                       />
                     </div>
                   </div>
@@ -731,16 +732,17 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 {(tripType === 'outstation' || tripType === 'airport') && (
                   <div className="flex-1 min-w-0 border-t border-gray-200">
                     <div className="flex items-center gap-2 p-4">
+                      <span className="flex items-center text-gray-400 mr-2"><MapPin className="w-5 h-5 mr-1" />Enter</span>
                       <div className="flex-1 min-w-0">
                         <LocationInput
                           key="drop-mobile"
                           label="Drop location"
-                          placeholder="Drop location"
+                          placeholder="Enter Drop location"
                           value={dropLocation ? { ...dropLocation } : undefined}
                           onLocationChange={handleDropLocationChange}
                           isPickupLocation={false}
                           isAirportTransfer={tripType === 'airport'}
-                          className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                          className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
                         />
                       </div>
                     </div>
@@ -755,7 +757,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         date={pickupDate}
                         onDateChange={setPickupDate}
                         minDate={new Date()}
-                        className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                        className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                       />
                     </div>
                   </div>
@@ -771,7 +773,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           onDateChange={setReturnDate}
                           minDate={pickupDate}
                           disabled={!isReturnTimeEnabled || isCheckingTravelTime}
-                          className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                          className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
+                          label="Return date of journey"
                         />
                       </div>
                     </div>
@@ -859,12 +862,12 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                 <LocationInput
                                   key="pickup"
                                   label="Pickup location"
-                                  placeholder="Pickup location"
+                                  placeholder="Enter Pickup location"
                                   value={pickupLocation ? { ...pickupLocation } : undefined}
                                   onLocationChange={handlePickupLocationChange}
                                   isPickupLocation={true}
                                   isAirportTransfer={tripType === 'airport'}
-                                  className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                                  className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
                                 />
                               </div>
                             </div>
@@ -884,12 +887,12 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                   <LocationInput
                                     key={dropLocation?.id || dropLocation?.name || 'drop'}
                                     label="Drop location"
-                                    placeholder="Drop location"
+                                    placeholder="Enter Drop location"
                                     value={dropLocation ? { ...dropLocation } : ""}
                                     onLocationChange={handleDropLocationChange}
                                     isPickupLocation={false}
                                     isAirportTransfer={tripType === 'airport'}
-                                    className="border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                                    className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
                                   />
                                 </div>
                               </div>
@@ -919,7 +922,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                   )}
                                   <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
                                     <SelectTrigger
-                                      className="h-[3.5rem] pl-4 text-[1.2rem] flex items-center border border-gray-300 bg-white font-semibold"
+                                      className="h-[3.5rem] pl-4 text-[1rem] lg:text-[1.2rem] flex items-center border border-gray-300 bg-white font-semibold"
                                       style={{
                                         alignItems: 'center',
                                         paddingTop: 0,
@@ -957,7 +960,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                   date={pickupDate}
                                   onDateChange={setPickupDate}
                                   minDate={new Date()}
-                                  className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                                  className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                                 />
                               </div>
                             </div>
@@ -976,7 +979,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                       onDateChange={setReturnDate}
                                       minDate={pickupDate}
                                       disabled={!isReturnTimeEnabled || isCheckingTravelTime}
-                                      className="h-auto border-0 bg-transparent p-0 text-sm font-semibold text-gray-900 focus:ring-0"
+                                      className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                                     />
                                   </div>
                                 </div>
@@ -1004,7 +1007,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 text-base font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300"
+                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 text-base font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300 mb-6"
                           style={{ minHeight: '40px' }}
                         >
                           {isLoading ? (
