@@ -4,7 +4,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X } from 'lucide-react';
+import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
@@ -24,6 +24,8 @@ interface BookingSummaryProps {
   tripMode?: 'one-way' | 'round-trip';
   hourlyPackage: string;
   onFinalTotalChange?: (total: number) => void;
+  onEditPickupLocation?: () => void;
+  onEditPickupDate?: () => void;
 }
 
 export const BookingSummary = ({
@@ -37,7 +39,9 @@ export const BookingSummary = ({
   tripType,
   tripMode = 'one-way',
   hourlyPackage,
-  onFinalTotalChange
+  onFinalTotalChange,
+  onEditPickupLocation,
+  onEditPickupDate
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
@@ -885,10 +889,19 @@ export const BookingSummary = ({
 
             <div className="flex items-start gap-2 mb-2">
               <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="text-left">
+              <div className="text-left flex-1">
                 <p className="text-[12px] text-gray-500 text-left">PICKUP</p>
                 <p className="font-semibold text-left text-[14px]">{pickupLocation.address || pickupLocation.name}</p>
               </div>
+              {onEditPickupLocation && (
+                <button
+                  onClick={onEditPickupLocation}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                  title="Edit pickup location"
+                >
+                  <Edit2 className="h-4 w-4 text-gray-500 hover:text-blue-500" />
+                </button>
+              )}
             </div>
 
             {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
@@ -903,12 +916,21 @@ export const BookingSummary = ({
 
             <div className="flex items-start gap-2 mt-3">
               <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="text-[12px] text-gray-500 text-left">PICKUP DATE</p>
                 <p className="font-semibold text-[14px]">
                   {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
                 </p>
               </div>
+              {onEditPickupDate && (
+                <button
+                  onClick={onEditPickupDate}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                  title="Edit pickup date"
+                >
+                  <Edit2 className="h-4 w-4 text-gray-500 hover:text-blue-500" />
+                </button>
+              )}
             </div>
 
             {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (

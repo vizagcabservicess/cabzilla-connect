@@ -135,6 +135,17 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
   const [isPackageFocused, setIsPackageFocused] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
+  
+  // Edit handlers for booking summary
+  const handleEditPickupLocation = () => {
+    setCurrentStep(1);
+    setShowGuestDetailsForm(false);
+  };
+
+  const handleEditPickupDate = () => {
+    setCurrentStep(1);
+    setShowGuestDetailsForm(false);
+  };
 
   useEffect(() => {
     function handleResize() {
@@ -1172,6 +1183,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               totalPrice={totalPrice}
                               hourlyPackage={hourlyPackage}
                               onFinalTotalChange={setFinalTotal}
+                              onEditPickupLocation={handleEditPickupLocation}
+                              onEditPickupDate={handleEditPickupDate}
                             />
                           </div>
                           <Button 
@@ -1223,6 +1236,8 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                       tripMode={tripMode}
                       hourlyPackage={hourlyPackage}
                       onFinalTotalChange={setFinalTotal}
+                      onEditPickupLocation={handleEditPickupLocation}
+                      onEditPickupDate={handleEditPickupDate}
                     />
                   </div>
                 </div>
