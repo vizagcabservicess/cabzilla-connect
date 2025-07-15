@@ -13,7 +13,7 @@ import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
-import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -527,6 +527,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   };
 
   let totalPrice = calculatePrice();
+  const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
@@ -1052,37 +1053,28 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                                   </>
                                 )}
                               </div>
-                              {/* Distance and Time Info */}
-                              {(tripType === 'outstation' || tripType === 'airport') && distance > 0 && duration > 0 && (
-                                <div className="text-xs text-gray-500 font-medium mt-1">
-                                  Rates for {distance} Kms approx distance | {Math.round(duration / 60)} hr(s) approx time
-                                </div>
-                              )}
                             </div>
                           </div>
-                          
                           {/* Always Visible Edit Button */}
                           <button
                             onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)}
                             className="text-blue-600 hover:text-blue-700 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
                             title="Edit booking details"
                           >
-                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-edit">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>
-                              <path d="M18.5 2.5a2.121 2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
+                            <Edit className="w-5 h-5" />
                           </button>
                         </div>
-                        
-                        {/* Date and Time */}
+                         {/* Date and Time */}
                         <div className="text-xs text-gray-500 font-medium">
                           {pickupDate && (
+                          <div className="text-xs text-gray-500 font-medium mb-2">
                             <span>{pickupDate.toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                          )}
+                          </div>)}
+                                          
                         </div>
                       </div>
                       {/* Step 2 Main Grid */}
-                      <div className="grid grid-cols-1 lg:[grid-template-columns:65%_35%] gap-6 animate-fade-in text-xs lg:text-[12px]">
+                      <div className="grid grid-cols-1 lg:[grid-template-columns:62%_38%] gap-8 animate-fade-in text-xs lg:text-[12px]">
                         <div className="lg:col-span-1 space-y-6">
                           <div className="bg-white rounded-xl shadow-card p-2">
                             <div className="flex items-center justify-between mb-2">
@@ -1133,6 +1125,12 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                               </div>
                             </div>
                             */}
+                               {/* Distance and Time Info - moved below edit module */}
+                        {(tripType === 'outstation' || tripType === 'airport') && distance > 0 && duration > 0 && (
+                          <div className="text-xs text-gray-500 font-medium">
+                            Rates for {displayDistance} Kms approx distance | {Math.round(duration / 60)} hr(s) approx time
+                          </div>
+                        )}
                             {!isMobile && (tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
                               <div className="mt-3 app-card">
                                 <GoogleMapComponent
@@ -1160,7 +1158,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                             />
                           </div>
                         </div>
-                        <div className="lg:col-span-1 text-xs lg:text-[14px]">
+                        <div className="lg:col-span-1 text-xs lg:text-[14px] pr-6 max-w-md">
                           <div ref={bookingSummaryRef} id="booking-summary" className="text-xs lg:text-[12px]">
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 
@@ -1178,7 +1176,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           </div>
                           <Button 
                             onClick={handleBookNow}
-                            className="w-full mt-2 py-3 text-base mobile-button text-xs lg:text-[16px]"
+                            className="w-full mt-2 py-3 text-base mobile-button text-lg lg:text-[16px]"
                             disabled={!isFormValid || !selectedCab || isLoading}
                           >
                             {isLoading ? (

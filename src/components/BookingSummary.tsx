@@ -912,7 +912,7 @@ export const BookingSummary = ({
             </div>
 
             {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 mt-4">
                 <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-[12px] text-gray-500">RETURN DATE</p>
