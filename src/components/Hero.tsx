@@ -712,7 +712,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 {/* From Location */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 p-4">
-                    <span className="flex items-center text-gray-400 mr-2"><MapPin className="w-5 h-5 mr-1" />Enter</span>
+                    {/* Removed icon and 'Enter' text */}
                     <div className="flex-1 min-w-0">
                       <LocationInput
                         key="pickup-mobile"
@@ -732,7 +732,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 {(tripType === 'outstation' || tripType === 'airport') && (
                   <div className="flex-1 min-w-0 border-t border-gray-200">
                     <div className="flex items-center gap-2 p-4">
-                      <span className="flex items-center text-gray-400 mr-2"><MapPin className="w-5 h-5 mr-1" />Enter</span>
+                      {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                         <LocationInput
                           key="drop-mobile"
@@ -857,7 +857,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           {/* From Location */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 p-4">
-                              
+                              {/* Removed icon and 'Enter' text */}
                               <div className="flex-1 min-w-0">
                                 <LocationInput
                                   key="pickup"
@@ -882,7 +882,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           {(tripType === 'outstation' || tripType === 'airport') && (
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 p-4">
-                                
+                                {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                   <LocationInput
                                     key={dropLocation?.id || dropLocation?.name || 'drop'}
