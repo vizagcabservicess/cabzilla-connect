@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
@@ -48,6 +48,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   const { isLoaded } = useGoogleMaps();
@@ -110,7 +111,14 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   
   const savedData = loadFromSessionStorage();
   
-  const [pickupLocation, setPickupLocation] = useState<Location | null>(savedData.pickupLocation);
+  // Handle navigation state from edit functionality
+  const navigationState = location.state as any;
+  const editModeData = navigationState && navigationState.tripType === 'tour' ? {
+    pickupLocation: navigationState.pickupLocation ? { name: navigationState.pickupLocation, isInVizag: true } : savedData.pickupLocation,
+    tripType: 'tour' as TripType
+  } : {};
+  
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(editModeData.pickupLocation || savedData.pickupLocation);
   const [dropLocation, setDropLocation] = useState<Location | null>(savedData.dropLocation);
   const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate);
   const [returnDate, setReturnDate] = useState<Date | null>(savedData.returnDate);
@@ -119,7 +127,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
   const [duration, setDuration] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
-  const [tripType, setTripType] = useState<TripType>(savedData.tripType);
+  const [tripType, setTripType] = useState<TripType>(editModeData.tripType || savedData.tripType);
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
@@ -178,6 +186,17 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
     window.addEventListener('routePrefill', handleRoutePrefill as EventListener);
     return () => window.removeEventListener('routePrefill', handleRoutePrefill as EventListener);
   }, []);
+
+  // Handle navigation state when coming from edit mode
+  useEffect(() => {
+    if (navigationState && navigationState.tripType === 'tour') {
+      // Set trip type to tour if coming from tour edit
+      setTripType('tour');
+      
+      // Clear the navigation state after processing
+      window.history.replaceState({}, document.title);
+    }
+  }, [navigationState]);
 
   // Always keep pickupDate enabled and default to now on mount/refresh
   useEffect(() => {
