@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookingSummary } from '@/components/BookingSummary';
 import { GuestDetailsForm } from '@/components/GuestDetailsForm';
 import { TourGallery } from '@/components/tour/TourGallery';
+import { TourEditModule } from '@/components/tour/TourEditModule';
 import { TourVehicleSelection } from '@/components/tour/TourVehicleSelection';
 import { useToast } from '@/components/ui/use-toast';
 import { 
@@ -42,8 +43,20 @@ const TourDetailPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Mock pickup details for booking
-  const [pickupLocation] = useState({ name: 'Visakhapatnam', isInVizag: true });
-  const [pickupDate] = useState(new Date());
+  const [pickupLocation, setPickupLocation] = useState({ name: 'Visakhapatnam', isInVizag: true });
+  const [pickupDate, setPickupDate] = useState(new Date());
+  
+  // Edit functionality
+  const handleEditTrip = () => {
+    // Navigate back to main booking page with tour context
+    navigate('/', { 
+      state: { 
+        tripType: 'tour',
+        pickupLocation: pickupLocation.name,
+        tourId: tourId 
+      } 
+    });
+  };
 
   // Helper: Get the actual tour fare for the selected vehicle using correct DB column names.
   const getTourFare = (
@@ -216,6 +229,15 @@ const TourDetailPage = () => {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Tours
         </Button>
+
+        
+        {/* Edit Module */}
+        <TourEditModule
+          pickupLocation={pickupLocation.name}
+          destinationLocation={tour.tourName}
+          pickupDate={pickupDate}
+          onEdit={handleEditTrip}
+        />
 
         {!showBookingForm ? (
           <div className="grid lg:grid-cols-3 gap-4">
