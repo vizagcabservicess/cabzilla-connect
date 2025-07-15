@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import { BookingRequest } from '@/types/api';
 const TourDetailPage = () => {
   const { tourId } = useParams<{ tourId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [tour, setTour] = useState<TourDetail | null>(null);
@@ -42,9 +43,38 @@ const TourDetailPage = () => {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Mock pickup details for booking
-  const [pickupLocation, setPickupLocation] = useState({ name: 'Visakhapatnam', isInVizag: true });
-  const [pickupDate, setPickupDate] = useState(new Date());
+  // Load pickup details from session storage or navigation state
+  const loadPickupData = () => {
+    try {
+      // Check navigation state first (when coming from Hero component)
+      const navigationState = location.state as any;
+      if (navigationState && navigationState.pickupLocation) {
+        return {
+          location: { name: navigationState.pickupLocation, isInVizag: true },
+          date: navigationState.pickupDate ? new Date(navigationState.pickupDate) : new Date()
+        };
+      }
+      
+      // Fallback to session storage
+      const pickupLocationData = sessionStorage.getItem('pickupLocation');
+      const pickupDateData = sessionStorage.getItem('pickupDate');
+      
+      return {
+        location: pickupLocationData ? JSON.parse(pickupLocationData) : { name: 'Visakhapatnam', isInVizag: true },
+        date: pickupDateData ? new Date(JSON.parse(pickupDateData)) : new Date()
+      };
+    } catch (error) {
+      console.error('Error loading pickup data:', error);
+      return {
+        location: { name: 'Visakhapatnam', isInVizag: true },
+        date: new Date()
+      };
+    }
+  };
+
+  const pickupData = loadPickupData();
+  const [pickupLocation, setPickupLocation] = useState(pickupData.location);
+  const [pickupDate, setPickupDate] = useState(pickupData.date);
   
   // Edit functionality
   const handleEditTrip = () => {
