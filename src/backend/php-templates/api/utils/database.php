@@ -25,7 +25,7 @@ function connectToDatabase() {
     return $mysqli;
 }
 
-// Get a database connection with error handling and retry mechanism
+if (!function_exists('getDbConnection')) {
 function getDbConnection() {
     static $db = null;
     
@@ -41,6 +41,7 @@ function getDbConnection() {
     }
     
     return $db;
+}
 }
 
 if (!function_exists('getDbConnectionWithRetry')) {
