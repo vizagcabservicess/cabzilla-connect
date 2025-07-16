@@ -22,19 +22,24 @@ import {
   ArrowLeft,
   Check,
   X,
-  Loader2
+  Loader2,
+  Download
 } from 'lucide-react';
 import { TourDetail } from '@/types/tour';
 import { VehicleWithPricing } from '@/types/vehicle';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
+import { usePrivileges } from '@/hooks/usePrivileges';
+import { usePDFExport } from '@/hooks/usePDFExport';
 
 const TourDetailPage = () => {
   const { tourId } = useParams<{ tourId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { isSuperAdmin } = usePrivileges();
+  const { generateAndDownloadPDF, isGenerating } = usePDFExport();
   
   const [tour, setTour] = useState<TourDetail | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithPricing | null>(null);
@@ -163,6 +168,62 @@ const TourDetailPage = () => {
     setShowBookingForm(true);
   };
 
+  // PDF Export functionality (Super Admin only)
+  const handleExportPDF = async () => {
+    if (!tour) return;
+
+    try {
+      // Prepare vehicle fares data for PDF
+      const vehicleFares = Object.entries(tour.pricing).map(([vehicleType, fare]) => ({
+        vehicleType: vehicleType.charAt(0).toUpperCase() + vehicleType.slice(1),
+        fare: Number(fare),
+        seatingCapacity: getSeatingCapacity(vehicleType)
+      })).filter(v => v.fare > 0);
+
+      const result = await generateAndDownloadPDF({
+        tour: {
+          ...tour,
+          name: tour.tourName
+        },
+        pickupLocation: pickupLocation.name,
+        pickupDate: pickupDate,
+        vehicleFares
+      });
+
+      if (result.success) {
+        toast({
+          title: "PDF Generated!",
+          description: `Quotation PDF downloaded as ${result.fileName}`,
+        });
+      } else {
+        toast({
+          title: "PDF Generation Failed",
+          description: result.error || "Failed to generate PDF",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export PDF quotation",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Helper function to get seating capacity based on vehicle type
+  const getSeatingCapacity = (vehicleType: string): number => {
+    const capacityMap: Record<string, number> = {
+      sedan: 4,
+      ertiga: 6,
+      innova: 7,
+      tempo: 12,
+      luxury: 4
+    };
+    return capacityMap[vehicleType.toLowerCase()] || 4;
+  };
+
   const handleBookingSubmit = async (guestDetails: any) => {
     if (!tour || !selectedVehicle) return;
     
@@ -261,13 +322,35 @@ const TourDetailPage = () => {
         </Button>
 
         
-        {/* Edit Module */}
-        <TourEditModule
-          pickupLocation={pickupLocation.name}
-          destinationLocation={tour.tourName}
-          pickupDate={pickupDate}
-          onEdit={handleEditTrip}
-        />
+        {/* Edit Module with PDF Export for Super Admin */}
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex-1">
+            <TourEditModule
+              pickupLocation={pickupLocation.name}
+              destinationLocation={tour.tourName}
+              pickupDate={pickupDate}
+              onEdit={handleEditTrip}
+            />
+          </div>
+          
+          {/* PDF Export Button - Super Admin Only */}
+          {isSuperAdmin() && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
+              disabled={isGenerating}
+              className="flex items-center gap-2 px-3 py-2 text-sm"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isGenerating ? 'Generating...' : 'Export PDF'}
+            </Button>
+          )}
+        </div>
 
         {!showBookingForm ? (
           <div className="grid lg:grid-cols-3 gap-4">
