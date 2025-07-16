@@ -224,6 +224,27 @@ const TourDetailPage = () => {
     return capacityMap[vehicleType.toLowerCase()] || 4;
   };
 
+  // Helper to map VehicleWithPricing to CabType (minimal, for BookingSummary)
+  function vehicleWithPricingToCabType(vehicle: VehicleWithPricing | null) {
+    if (!vehicle) return null;
+    return {
+      id: vehicle.id || vehicle.vehicle_id,
+      name: vehicle.name,
+      capacity: vehicle.capacity,
+      luggageCapacity: 0, // or a sensible default or from vehicle if available
+      image: vehicle.image || '',
+      amenities: [], // or from vehicle if available
+      description: '', // or from vehicle if available
+      ac: true, // or from vehicle if available
+      price: vehicle.price,
+      pricePerKm: vehicle.pricePerKm,
+      nightHaltCharge: vehicle.nightHaltCharge,
+      driverAllowance: vehicle.driverAllowance,
+      vehicleId: vehicle.vehicle_id || vehicle.id,
+      vehicleType: vehicle.type || '',
+    };
+  }
+
   const handleBookingSubmit = async (guestDetails: any) => {
     if (!tour || !selectedVehicle) return;
     
@@ -243,7 +264,6 @@ const TourDetailPage = () => {
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
-        tourId: tour.tourId
       };
       
       const response = await bookingAPI.createBooking(bookingData);
@@ -439,14 +459,13 @@ const TourDetailPage = () => {
                               Day {day.day}: {day.title}
                             </h4>
                             <p className="text-gray-700 mb-2 text-xs">{day.description}</p>
-                            <ul className="space-y-1">
-                              {day.activities.map((activity, actIndex) => (
-                                <li key={actIndex} className="flex items-start gap-2 text-[12px]">
-                                  <Check className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
-                                  {activity}
-                                </li>
-                              ))}
-                            </ul>
+                            {day.activities && day.activities.length > 0 && (
+                              <ul className="pl-4 list-disc">
+                                {day.activities.map((activity, actIdx) => (
+                                  <li key={actIdx} className="text-xs text-gray-700">{activity}</li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -514,7 +533,7 @@ const TourDetailPage = () => {
                     pickupLocation={pickupLocation}
                     dropLocation={null}
                     pickupDate={pickupDate}
-                    selectedCab={selectedVehicle}
+                    selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                     distance={tour.distance}
                     // FIX: Pass the price already on the selected vehicle
                     totalPrice={selectedVehicle.price}
@@ -548,7 +567,7 @@ const TourDetailPage = () => {
                   pickupLocation={pickupLocation}
                   dropLocation={null}
                   pickupDate={pickupDate}
-                  selectedCab={selectedVehicle}
+                  selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                   distance={tour.distance}
                   // FIX: Pass selected vehicle's price
                   totalPrice={selectedVehicle.price}

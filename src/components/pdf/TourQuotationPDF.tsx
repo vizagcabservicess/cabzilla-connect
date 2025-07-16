@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { TourDetail } from '@/types/tour';
+import { cabTypes } from '@/lib/cabData';
 
 interface TourQuotationPDFProps {
   tour: TourDetail;
@@ -28,7 +29,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   companyName: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
   },
@@ -170,12 +171,26 @@ export const TourQuotationPDF: React.FC<TourQuotationPDFProps> = ({
     <Page size="A4" style={styles.page}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.companyName}>VizagTours</Text>
+        <Text style={styles.companyName}>Vizag Taxi Hub | www.vizagtaxihub.com | +91 9966363662</Text>
         <Text style={styles.companyTagline}>Your Gateway to Amazing Experiences</Text>
       </View>
-
+      {/* Watermark - now after header, before main content */}
+      <View fixed style={{
+        position: 'absolute',
+        top: '40%',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        opacity: 0.12,
+        zIndex: 1,
+        transform: 'rotate(-40deg)'
+      }}>
+        <Text style={{ fontSize: 40, fontWeight: 'bold', color: '#1a365d', letterSpacing: 4 }}>
+          VIZAG TAXI HUB
+        </Text>
+      </View>
       {/* Tour Title */}
-      <Text style={styles.tourTitle}>Tour Quotation - {tour.name}</Text>
+      <Text style={styles.tourTitle}>Tour Quotation - {tour.tourName}</Text>
 
       {/* Trip Details */}
       <View style={styles.section}>
@@ -195,11 +210,12 @@ export const TourQuotationPDF: React.FC<TourQuotationPDFProps> = ({
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Duration:</Text>
-          <Text style={styles.value}>{tour.duration}</Text>
+          <Text style={styles.value}>{tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}</Text>
         </View>
+      
         <View style={styles.row}>
-          <Text style={styles.label}>Distance:</Text>
-          <Text style={styles.value}>{tour.distance} km</Text>
+          <Text style={styles.label}>KM Limit:</Text>
+          <Text style={styles.value}>{tour.distance} km included</Text>
         </View>
       </View>
 
@@ -217,6 +233,13 @@ export const TourQuotationPDF: React.FC<TourQuotationPDFProps> = ({
             <View key={index} style={styles.itineraryDay}>
               <Text style={styles.dayTitle}>Day {day.day}: {day.title}</Text>
               <Text style={styles.dayDescription}>{day.description}</Text>
+              {day.activities && day.activities.length > 0 && (
+                <View style={{ marginTop: 6, marginLeft: 10 }}>
+                  {day.activities.map((activity, actIdx) => (
+                    <Text key={actIdx} style={styles.listItem}>• {activity}</Text>
+                  ))}
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -231,13 +254,30 @@ export const TourQuotationPDF: React.FC<TourQuotationPDFProps> = ({
             <Text style={styles.tableHeaderCell}>Seating Capacity</Text>
             <Text style={styles.tableHeaderCell}>Price</Text>
           </View>
-          {vehicleFares.map((vehicle, index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.tableCell}>{vehicle.vehicleType}</Text>
-              <Text style={styles.tableCell}>{vehicle.seatingCapacity} Seater</Text>
-              <Text style={styles.priceCell}>₹{vehicle.fare.toLocaleString('en-IN')}</Text>
-            </View>
-          ))}
+          {vehicleFares.map((vehicle, index) => {
+            // Try to find the cabType by id or name (case-insensitive)
+            const cab = cabTypes.find(c =>
+              c.id.toLowerCase() === vehicle.vehicleType.toLowerCase() ||
+              c.name.toLowerCase() === vehicle.vehicleType.toLowerCase()
+            );
+            const seating = cab ? cab.capacity : vehicle.seatingCapacity;
+            return (
+              <View key={index} style={styles.tableRow}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  {cab && cab.image && (
+                    <Image src={cab.image} style={{ width: 40, height: 24, marginRight: 8 }} />
+                  )}
+                  <Text style={[styles.tableCell, { fontWeight: 'bold', fontSize: 11, textAlign: 'left' }]}> 
+                    {cab && cab.name ? cab.name : vehicle.vehicleType}
+                  </Text>
+                </View>
+                <Text style={styles.tableCell}>{seating} Seater</Text>
+                <Text style={[styles.priceCell, { paddingLeft: 8 }]}> 
+                  {"Rs "}{vehicle.fare.toLocaleString('en-IN')}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </View>
 
@@ -264,10 +304,10 @@ export const TourQuotationPDF: React.FC<TourQuotationPDFProps> = ({
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={styles.contactInfo}>
-          Contact: +91 9876543210 | Email: info@vizagtours.com | Website: www.vizagtours.com
+          Contact: +91 9966363662 | Email: info@vizagtaxihub.com | Website: www.vizagtaxihub.com
         </Text>
         <Text style={styles.contactInfo}>
-          Office: 123 Beach Road, Visakhapatnam, Andhra Pradesh - 530001
+          Office: 44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram, Visakhapatnam, Andhra Pradesh 530024
         </Text>
         <Text style={styles.disclaimer}>
           * Prices are subject to availability and may vary based on season and demand. 
