@@ -71,151 +71,151 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Invoice - {booking.booking_id}
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="border-b border-border pb-4">
+          <DialogTitle className="text-2xl font-bold text-center">
+            INVOICE
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-8 py-6">
           {/* Invoice Header */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h1 className="text-2xl font-bold text-primary">VizagUp Taxi</h1>
-                  <p className="text-muted-foreground">Your trusted travel partner</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Invoice Number</p>
-                  <p className="font-mono text-lg">{booking.booking_id}</p>
-                  <p className="text-sm text-muted-foreground mt-2">Date</p>
-                  <p>{new Date().toLocaleDateString()}</p>
-                </div>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-primary mb-2">Vizag Cab Services</h1>
+              <p className="text-muted-foreground">Your trusted travel partner</p>
+            </div>
+            <div className="text-right">
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <p className="text-sm font-medium text-muted-foreground">Invoice Number</p>
+                <p className="text-xl font-bold">#{booking.booking_id}</p>
+                <p className="text-sm font-medium text-muted-foreground mt-3">Date</p>
+                <p className="text-lg font-semibold">{new Date().toLocaleDateString('en-GB')}</p>
+                <p className="text-sm font-medium text-muted-foreground mt-3">Booking #</p>
+                <p className="text-sm font-mono">{booking.booking_id}</p>
               </div>
+            </div>
+          </div>
 
-              {/* Customer Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Customer Details
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <p><span className="font-medium">Name:</span> {booking.guest_name}</p>
-                    <p className="flex items-center gap-2">
-                      <Phone className="h-3 w-3" />
-                      {booking.guest_phone}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Mail className="h-3 w-3" />
-                      {booking.guest_email}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Trip Details
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <p><span className="font-medium">From:</span> {booking.pickup_location}</p>
-                    <p><span className="font-medium">To:</span> {booking.drop_location}</p>
-                    <p className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(booking.pickup_date).toLocaleDateString()} at {booking.pickup_time}
-                    </p>
-                    <p><span className="font-medium">Vehicle:</span> {booking.vehicle_type}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Billing Details */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold mb-4">Billing Details</h3>
-              
+          {/* Customer and Trip Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Customer Details</h3>
               <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Base Fare</span>
-                  <span>₹{subtotal.toLocaleString()}</span>
+                <div>
+                  <span className="font-semibold text-sm">Name:</span>
+                  <p className="text-base">{booking.guest_name}</p>
                 </div>
-
-                {booking.extra_charges && booking.extra_charges.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <p className="font-medium text-sm">Extra Charges</p>
-                      {booking.extra_charges.map((charge, index) => (
-                        <div key={index} className="flex justify-between text-sm pl-4">
-                          <span className="text-muted-foreground">
-                            {charge.type}: {charge.description}
-                          </span>
-                          <span>₹{charge.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                <Separator />
-                <div className="flex justify-between">
-                  <span>GST (18%)</span>
-                  <span>₹{taxes.toLocaleString()}</span>
+                <div>
+                  <span className="font-semibold text-sm">Phone:</span>
+                  <p className="text-base">{booking.guest_phone}</p>
                 </div>
-
-                <Separator />
-                <div className="flex justify-between font-semibold text-lg">
-                  <span>Total Amount</span>
-                  <span>₹{totalWithTaxes.toLocaleString()}</span>
+                <div>
+                  <span className="font-semibold text-sm">Email:</span>
+                  <p className="text-base">{booking.guest_email}</p>
                 </div>
-
-                {booking.payment_method && (
-                  <>
-                    <Separator />
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Payment Method
-                      </span>
-                      <span className="capitalize">{booking.payment_method}</span>
-                    </div>
-                  </>
-                )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Company Details */}
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold mb-3">Company Information</h3>
-              <div className="text-sm text-muted-foreground space-y-1">
-                <p>VizagUp Taxi Services</p>
-                <p>Visakhapatnam, Andhra Pradesh</p>
-                <p>Phone: +91-XXX-XXX-XXXX</p>
-                <p>Email: info@vizagup.com</p>
-                <p>Website: www.vizagup.com</p>
+            <div>
+              <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Trip Summary</h3>
+              <div className="space-y-3">
+                <div>
+                  <span className="font-semibold text-sm">Trip Type:</span>
+                  <p className="text-base">Outstation (One-way)</p>
+                </div>
+                <div>
+                  <span className="font-semibold text-sm">Date:</span>
+                  <p className="text-base">
+                    {new Date(booking.pickup_date).toLocaleDateString('en-GB')} at {booking.pickup_time}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-semibold text-sm">Vehicle:</span>
+                  <p className="text-base">{booking.vehicle_type}</p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
+          {/* Trip Details Section */}
+          <div>
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Trip Details</h3>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <span className="font-semibold text-sm">Pickup:</span>
+                <p className="text-base">{booking.pickup_location}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-sm">Drop:</span>
+                <p className="text-base">{booking.drop_location}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-sm">Pickup Time:</span>
+                <p className="text-base">
+                  {new Date(booking.pickup_date).toLocaleDateString('en-GB')}, {booking.pickup_time}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Fare Breakdown */}
+          <div>
+            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Fare Breakdown</h3>
+            <div className="bg-muted/20 rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 font-semibold">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-border/50">
+                    <td className="py-3 px-4">Base Fare</td>
+                    <td className="py-3 px-4 text-right">₹ {subtotal.toLocaleString()}</td>
+                  </tr>
+                  
+                  {booking.extra_charges && booking.extra_charges.length > 0 && 
+                    booking.extra_charges.map((charge, index) => (
+                      <tr key={index} className="border-b border-border/50">
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {charge.type}: {charge.description}
+                        </td>
+                        <td className="py-3 px-4 text-right">₹ {charge.amount.toLocaleString()}</td>
+                      </tr>
+                    ))
+                  }
+                  
+                  <tr className="border-b border-border font-semibold text-lg bg-muted/30">
+                    <td className="py-4 px-4">Total Amount (including tax)</td>
+                    <td className="py-4 px-4 text-right">₹ {totalWithTaxes.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Footer with company info */}
+          <div className="text-center border-t border-border pt-6 mt-8">
+            <p className="text-lg font-semibold mb-2">Thank you for choosing Vizag Cab Services!</p>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
+              <p>Generated on: {new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString('en-GB', { hour12: false })}</p>
+            </div>
+          </div>
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div className="flex gap-3 pt-6 border-t border-border">
             <Button 
               onClick={generatePDF} 
               disabled={isGeneratingPDF}
-              className="flex-1"
+              className="flex-1 bg-primary hover:bg-primary/90"
             >
               <Download className="h-4 w-4 mr-2" />
               {isGeneratingPDF ? 'Generating...' : 'Download PDF'}
             </Button>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} className="px-8">
               Close
             </Button>
           </div>
