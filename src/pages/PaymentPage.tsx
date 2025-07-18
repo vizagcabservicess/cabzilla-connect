@@ -126,11 +126,12 @@ const PaymentPage = () => {
   const handlePaymentSuccess = async (response: RazorpayResponse) => {
     setPaymentResponse(response);
     try {
-      // Verify payment with backend
+      // Verify payment with backend - pass the bookingId
       const verified = await verifyRazorpayPayment(
         response.razorpay_payment_id,
         response.razorpay_order_id,
-        response.razorpay_signature
+        response.razorpay_signature,
+        bookingDetails.bookingId
       );
 
       if (verified) {

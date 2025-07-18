@@ -1,7 +1,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../utils/auth.php';
+require_once __DIR__ . '/../utils/auth.php';
 
 // Set response headers
 header('Content-Type: application/json');
