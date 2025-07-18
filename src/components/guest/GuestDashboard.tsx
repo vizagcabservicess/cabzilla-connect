@@ -46,87 +46,58 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
   const [showInvoice, setShowInvoice] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
-  // Mock data for demonstration - replace with actual API call
+  // Fetch real bookings from API
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         setIsLoading(true);
-        // Mock bookings data
-        const mockBookings: Booking[] = [
-          {
-            id: 'BK001',
-            bookingNumber: 'BK001',
-            pickupLocation: 'Bengaluru International Airport',
-            dropLocation: 'Koramangala 5th Block',
-            pickupDate: '2024-07-20T10:30:00Z',
-            returnDate: null,
-            cabType: 'Sedan',
-            vehicleType: 'Sedan',
-            totalAmount: 850,
-            status: 'confirmed',
-            payment_status: 'paid',
-            driverName: 'Rajesh Kumar',
-            driverPhone: '+91 9876543210',
-            vehicleNumber: 'KA 01 AB 1234',
-            extraCharges: {
-              tolls: 50,
-              parking: 20,
-              driverAllowance: 100
-            },
-            createdAt: '2024-07-18T08:00:00Z',
-            updatedAt: '2024-07-18T08:00:00Z'
-          },
-          {
-            id: 'BK002',
-            bookingNumber: 'BK002',
-            pickupLocation: 'MG Road Metro Station',
-            dropLocation: 'Electronic City Phase 1',
-            pickupDate: '2024-07-15T14:00:00Z',
-            returnDate: null,
-            cabType: 'SUV',
-            vehicleType: 'SUV',
-            totalAmount: 1200,
-            status: 'completed',
-            payment_status: 'paid',
-            driverName: 'Suresh Reddy',
-            driverPhone: '+91 9876543211',
-            vehicleNumber: 'KA 02 CD 5678',
-            extraCharges: {
-              tolls: 80,
-              parking: 30
-            },
-            createdAt: '2024-07-12T10:00:00Z',
-            updatedAt: '2024-07-15T16:00:00Z'
-          },
-          {
-            id: 'BK003',
-            bookingNumber: 'BK003',
-            pickupLocation: 'Indiranagar',
-            dropLocation: 'Whitefield ITPL',
-            pickupDate: '2024-07-10T09:00:00Z',
-            returnDate: null,
-            cabType: 'Hatchback',
-            vehicleType: 'Hatchback',
-            totalAmount: 650,
-            status: 'cancelled',
-            payment_status: 'refunded',
-            createdAt: '2024-07-08T15:00:00Z',
-            updatedAt: '2024-07-09T10:00:00Z'
-          }
-        ];
         
-        setBookings(mockBookings);
-        setFilteredBookings(mockBookings);
+        if (!user?.id) {
+          console.warn('No user ID available');
+          setBookings([]);
+          setFilteredBookings([]);
+          return;
+        }
+
+        // Fetch user bookings from API
+        const userBookings = await bookingAPI.getUserBookings(user.id);
+        
+        // Transform API response to match component expectations
+        const transformedBookings = userBookings.map((booking: any) => ({
+          id: booking.id || booking.booking_id,
+          bookingNumber: booking.booking_number || booking.bookingNumber || booking.id,
+          pickupLocation: booking.pickup_location || booking.pickupLocation,
+          dropLocation: booking.drop_location || booking.dropLocation,
+          pickupDate: booking.pickup_date || booking.pickupDate,
+          returnDate: booking.return_date || booking.returnDate,
+          cabType: booking.cab_type || booking.cabType || booking.vehicle_type || booking.vehicleType,
+          vehicleType: booking.vehicle_type || booking.vehicleType || booking.cab_type || booking.cabType,
+          totalAmount: booking.total_amount || booking.totalAmount || booking.fare || 0,
+          status: booking.status,
+          payment_status: booking.payment_status || booking.paymentStatus || 'pending',
+          driverName: booking.driver_name || booking.driverName,
+          driverPhone: booking.driver_phone || booking.driverPhone,
+          vehicleNumber: booking.vehicle_number || booking.vehicleNumber,
+          extraCharges: booking.extra_charges || booking.extraCharges || {},
+          createdAt: booking.created_at || booking.createdAt,
+          updatedAt: booking.updated_at || booking.updatedAt
+        }));
+        
+        setBookings(transformedBookings);
+        setFilteredBookings(transformedBookings);
       } catch (error) {
         console.error('Error fetching bookings:', error);
         toast.error('Failed to load bookings');
+        // Set empty arrays on error
+        setBookings([]);
+        setFilteredBookings([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchBookings();
-  }, []);
+  }, [user?.id]);
 
   // Filter bookings based on search and status
   useEffect(() => {

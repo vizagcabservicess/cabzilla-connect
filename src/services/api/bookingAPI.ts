@@ -69,7 +69,7 @@ export const bookingAPI = {
   },
   
   /**
-   * Get user bookings
+   * Get user bookings with authentication
    */
   getUserBookings: async (userId: number) => {
     try {
@@ -78,6 +78,12 @@ export const bookingAPI = {
         'X-Force-Refresh': 'true',
         'Content-Type': 'application/json'
       };
+      
+      // Add authorization token if available
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       
       // First try direct path
       try {
@@ -142,14 +148,22 @@ export const bookingAPI = {
   },
   
   /**
-   * Create a new booking
+   * Create a new booking with authentication
    */
   createBooking: async (bookingData: BookingRequest) => {
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authorization token if available for authenticated users
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await axios.post(`${API_BASE_URL}/api/admin/bookings.php`, bookingData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
       return response.data;
     } catch (error) {
