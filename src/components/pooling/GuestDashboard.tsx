@@ -20,6 +20,7 @@ import { ProviderChat } from './ProviderChat';
 import { RatingSystem } from './RatingSystem';
 import { NotificationCenter } from './NotificationCenter';
 import GoogleMapComponent from '@/components/GoogleMapComponent';
+import { BookingList } from '@/components/guest/BookingList';
 
 interface SearchParams {
   type: string;
@@ -463,6 +464,11 @@ export default function GuestDashboard() {
               </Card>
             )}
 
+            {/* Enhanced Booking Management Section */}
+            <div className="mt-8">
+              <BookingList />
+            </div>
+
             {/* Ride Requests Section */}
             <div className="mt-8">
               <h2 className="text-lg font-semibold mb-2">My Ride Requests</h2>
@@ -594,12 +600,16 @@ export default function GuestDashboard() {
               transactions={transactions} 
               onTransactionUpdate={loadUserData} 
             />
-            <EnhancedBookings 
-              bookings={bookings}
-              onViewDetails={(booking) => {
-                trackInteraction('booking_details_viewed', { bookingId: booking.id });
-              }}
-            />
+            {/* Enhanced Booking List - Now replaced with comprehensive booking management */}
+            <div className="xl:hidden">
+              {/* Mobile booking summary - detailed view in main content */}
+              <EnhancedBookings 
+                bookings={bookings}
+                onViewDetails={(booking) => {
+                  trackInteraction('booking_details_viewed', { bookingId: booking.id });
+                }}
+              />
+            </div>
             
             {/* Quick Actions */}
             <Card>
