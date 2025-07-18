@@ -6,43 +6,53 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Copy, Share, MessageCircle, Mail, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Booking {
-  id: number;
-  booking_id: string;
-  pickup_location: string;
-  drop_location: string;
-  pickup_date: string;
-  pickup_time: string;
-  vehicle_type: string;
-  status: string;
-  total_amount: number;
-  guest_name: string;
-  guest_phone: string;
-}
-
 interface BookingShareProps {
-  booking: Booking;
+  booking: any; // Use the actual Booking type from GuestDashboard
+  isOpen?: boolean;
   onClose: () => void;
 }
 
-export function BookingShare({ booking, onClose }: BookingShareProps) {
+export function BookingShare({ booking, isOpen = true, onClose }: BookingShareProps) {
   const [copied, setCopied] = useState(false);
+
+  // Helper function to safely get booking data
+  const getBookingId = () => booking?.bookingNumber || booking?.booking_id || booking?.id || 'N/A';
+  const getPassengerName = () => booking?.passengerName || booking?.guest_name || 'Guest';
+  const getPassengerPhone = () => booking?.passengerPhone || booking?.guest_phone || '';
+  const getPickupLocation = () => booking?.pickupLocation || booking?.pickup_location || 'Location not specified';
+  const getDropLocation = () => booking?.dropLocation || booking?.drop_location || 'Destination not specified';
+  const getPickupDate = () => {
+    const date = booking?.pickupDate || booking?.pickup_date;
+    if (!date) return 'Date not specified';
+    try {
+      return new Date(date).toLocaleDateString();
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+  const getPickupTime = () => booking?.pickup_time || 'Time not specified';
+  const getVehicleType = () => booking?.vehicleType || booking?.vehicle_type || booking?.cabType || booking?.cab_type || 'Vehicle not specified';
+  const getTotalAmount = () => {
+    const amount = booking?.totalAmount || booking?.total_amount || booking?.fare || 0;
+    return isNaN(amount) ? 0 : amount;
+  };
+  const getStatus = () => booking?.status || 'pending';
 
   const shareText = `🚗 Booking Confirmation - VizagUp Taxi
 
-📋 Booking ID: ${booking.booking_id}
-👤 Passenger: ${booking.guest_name}
-📞 Contact: ${booking.guest_phone}
+📋 Booking ID: ${getBookingId()}
+👤 Passenger: ${getPassengerName()}
+${getPassengerPhone() ? `📞 Contact: ${getPassengerPhone()}` : ''}
 
 🗓️ Trip Details:
-📅 Date: ${new Date(booking.pickup_date).toLocaleDateString()}
-⏰ Time: ${booking.pickup_time}
-📍 From: ${booking.pickup_location}
-📍 To: ${booking.drop_location}
-🚙 Vehicle: ${booking.vehicle_type}
+📅 Date: ${getPickupDate()}
+${getPickupTime() !== 'Time not specified' ? `⏰ Time: ${getPickupTime()}` : ''}
+📍 From: ${getPickupLocation()}
+📍 To: ${getDropLocation()}
+🚙 Vehicle: ${getVehicleType()}
 
-💰 Total Amount: ₹${booking.total_amount?.toLocaleString()}
-✅ Status: ${booking.status.toUpperCase()}
+💰 Total Amount: ₹${getTotalAmount().toLocaleString()}
+✅ Status: ${getStatus().toUpperCase()}
 
 Book your ride at: www.vizagup.com`;
 
@@ -64,7 +74,7 @@ Book your ride at: www.vizagup.com`;
   };
 
   const shareViaEmail = () => {
-    const subject = encodeURIComponent(`Booking Confirmation - ${booking.booking_id}`);
+    const subject = encodeURIComponent(`Booking Confirmation - ${getBookingId()}`);
     const body = encodeURIComponent(shareText);
     const emailUrl = `mailto:?subject=${subject}&body=${body}`;
     window.location.href = emailUrl;
@@ -74,7 +84,7 @@ Book your ride at: www.vizagup.com`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Booking Confirmation - ${booking.booking_id}`,
+          title: `Booking Confirmation - ${getBookingId()}`,
           text: shareText,
         });
       } catch (error) {
@@ -88,7 +98,7 @@ Book your ride at: www.vizagup.com`;
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -106,12 +116,12 @@ Book your ride at: www.vizagup.com`;
                   🚗 Booking Confirmation - VizagUp Taxi
                 </div>
                 <div className="space-y-1 text-muted-foreground">
-                  <div>📋 Booking ID: {booking.booking_id}</div>
-                  <div>👤 Passenger: {booking.guest_name}</div>
-                  <div>📅 Date: {new Date(booking.pickup_date).toLocaleDateString()}</div>
-                  <div>⏰ Time: {booking.pickup_time}</div>
-                  <div>📍 {booking.pickup_location} → {booking.drop_location}</div>
-                  <div>💰 Amount: ₹{booking.total_amount?.toLocaleString()}</div>
+                  <div>📋 Booking ID: {getBookingId()}</div>
+                  <div>👤 Passenger: {getPassengerName()}</div>
+                  <div>📅 Date: {getPickupDate()}</div>
+                  {getPickupTime() !== 'Time not specified' && <div>⏰ Time: {getPickupTime()}</div>}
+                  <div>📍 {getPickupLocation()} → {getDropLocation()}</div>
+                  <div>💰 Amount: ₹{getTotalAmount().toLocaleString()}</div>
                 </div>
               </div>
             </CardContent>
