@@ -38,23 +38,25 @@ interface BookingInvoiceProps {
 export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const subtotal = booking.total_amount - (booking.extra_charges?.reduce((sum, charge) => sum + charge.amount, 0) || 0);
+  // Calculate amounts properly
   const extraChargesTotal = booking.extra_charges?.reduce((sum, charge) => sum + charge.amount, 0) || 0;
-  const taxes = Math.round(subtotal * 0.18); // 18% GST
-  const totalWithTaxes = subtotal + extraChargesTotal + taxes;
+  const subtotal = booking.total_amount || 0;
+  const taxes = Math.round((subtotal + extraChargesTotal) * 0.18); // 18% GST on total before tax
+  const baseFare = subtotal - extraChargesTotal;
+  const totalWithTaxes = subtotal + taxes;
 
   const generatePDF = async () => {
     try {
       setIsGeneratingPDF(true);
       
       const blob = await pdf(
-        InvoicePDF({
-          booking,
-          subtotal,
-          extraChargesTotal,
-          taxes,
-          totalWithTaxes,
-        })
+        <InvoicePDF
+          booking={booking}
+          subtotal={baseFare}
+          extraChargesTotal={extraChargesTotal}
+          taxes={taxes}
+          totalWithTaxes={totalWithTaxes}
+        />
       ).toBlob();
 
       const fileName = `Invoice_${booking.booking_id}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -82,16 +84,16 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           {/* Invoice Header */}
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-primary mb-2">Vizag Cab Services</h1>
+              <h1 className="text-3xl font-bold text-blue-600 mb-2">VizagUp Taxi</h1>
               <p className="text-muted-foreground">Your trusted travel partner</p>
             </div>
             <div className="text-right">
               <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm font-medium text-muted-foreground">Invoice Number</p>
+                <p className="text-sm font-medium text-muted-foreground">Invoice Number:</p>
                 <p className="text-xl font-bold">#{booking.booking_id}</p>
-                <p className="text-sm font-medium text-muted-foreground mt-3">Date</p>
+                <p className="text-sm font-medium text-muted-foreground mt-3">Date:</p>
                 <p className="text-lg font-semibold">{new Date().toLocaleDateString('en-GB')}</p>
-                <p className="text-sm font-medium text-muted-foreground mt-3">Booking #</p>
+                <p className="text-sm font-medium text-muted-foreground mt-3">Booking #:</p>
                 <p className="text-sm font-mono">{booking.booking_id}</p>
               </div>
             </div>
@@ -173,13 +175,13 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
                 <tbody>
                   <tr className="border-b border-border/50">
                     <td className="py-3 px-4">Base Fare</td>
-                    <td className="py-3 px-4 text-right">₹ {subtotal.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right">₹ {baseFare.toLocaleString()}</td>
                   </tr>
                   
                   {booking.extra_charges && booking.extra_charges.length > 0 && 
                     booking.extra_charges.map((charge, index) => (
                       <tr key={index} className="border-b border-border/50">
-                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                        <td className="py-3 px-4 text-sm">
                           {charge.type}: {charge.description}
                         </td>
                         <td className="py-3 px-4 text-right">₹ {charge.amount.toLocaleString()}</td>
@@ -187,18 +189,41 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
                     ))
                   }
                   
+                  <tr className="border-b border-border/50">
+                    <td className="py-3 px-4">GST (18%)</td>
+                    <td className="py-3 px-4 text-right">₹ {taxes.toLocaleString()}</td>
+                  </tr>
+                  
                   <tr className="border-b border-border font-semibold text-lg bg-muted/30">
-                    <td className="py-4 px-4">Total Amount (including tax)</td>
+                    <td className="py-4 px-4">Total Amount</td>
                     <td className="py-4 px-4 text-right">₹ {totalWithTaxes.toLocaleString()}</td>
                   </tr>
+
+                  {booking.payment_method && (
+                    <tr className="border-b border-border/50">
+                      <td className="py-3 px-4">Payment Method</td>
+                      <td className="py-3 px-4 text-right capitalize">{booking.payment_method}</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Footer with company info */}
+          {/* Company Information */}
+          <div className="bg-muted/20 p-6 rounded-lg">
+            <h3 className="text-lg font-bold mb-3">Company Information</h3>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>VizagUp Taxi Services</p>
+              <p>Visakhapatnam, Andhra Pradesh</p>
+              <p>Phone: +91-XXX-XXX-XXXX</p>
+              <p>Email: info@vizagup.com</p>
+              <p>Website: www.vizagup.com</p>
+            </div>
+          </div>
+
           <div className="text-center border-t border-border pt-6 mt-8">
-            <p className="text-lg font-semibold mb-2">Thank you for choosing Vizag Cab Services!</p>
+            <p className="text-lg font-semibold text-blue-600 mb-2">Thank you for choosing VizagUp Taxi!</p>
             <div className="text-sm text-muted-foreground space-y-1">
               <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
               <p>Generated on: {new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString('en-GB', { hour12: false })}</p>

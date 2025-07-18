@@ -197,7 +197,7 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
       {/* Billing Details */}
       <View style={styles.billingSection}>
         <Text style={styles.sectionTitle}>Billing Details</Text>
-        <View style={styles.billingTable}>
+          <View style={styles.billingTable}>
           <View style={styles.billingRow}>
             <Text>Base Fare</Text>
             <Text>₹{subtotal.toLocaleString()}</Text>
