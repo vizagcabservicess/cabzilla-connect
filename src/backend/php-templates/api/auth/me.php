@@ -1,5 +1,6 @@
 <?php
 require_once '../common/db_helper.php';
+require_once '../utils/auth.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -27,23 +28,33 @@ if (!$token) {
 }
 
 try {
+    // Verify JWT token
+    $payload = verifyJwtToken($token);
+    
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or expired token']);
+        exit();
+    }
+    
+    $user_id = $payload['user_id'];
+    
     $conn = getDbConnectionWithRetry();
     
-    // Get user from session
+    // Get user from database using user_id from JWT
     $stmt = $conn->prepare("
-        SELECT u.id, u.name, u.email, u.phone, u.role, u.is_active 
-        FROM users u 
-        JOIN user_sessions s ON u.id = s.user_id 
-        WHERE s.token = ? AND s.expires_at > NOW()
+        SELECT id, name, email, phone, role, is_active 
+        FROM users 
+        WHERE id = ? AND is_active = 1
     ");
-    $stmt->bind_param("s", $token);
+    $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     
     if (!$user) {
         http_response_code(401);
-        echo json_encode(['error' => 'Invalid or expired token']);
+        echo json_encode(['error' => 'User not found or inactive']);
         exit();
     }
 
