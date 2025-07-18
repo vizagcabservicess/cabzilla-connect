@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -326,24 +326,13 @@ export default function DashboardPage() {
     return null;
   }
 
-  // If user is a guest, show a message and skip booking fetch
+  // If user is a guest, show enhanced guest dashboard
   if (user.role === 'guest') {
+    const GuestDashboard = React.lazy(() => import('@/components/guest/GuestDashboard'));
     return (
-      <div className="container mx-auto py-8">
-        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-        <h2 className="text-xl font-semibold mb-4">
-          Welcome back, {user.name}
-        </h2>
-        <div className="mb-4 text-gray-600">Role: Guest</div>
-        <div className="flex flex-col md:flex-row gap-2 mb-8">
-          <Button onClick={() => navigate('/')}>Create Booking</Button>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-1" />
-            Logout
-          </Button>
-        </div>
-        <div className="mt-8 text-gray-500">Guests do not have bookings.</div>
-      </div>
+      <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+        <GuestDashboard user={user} onLogout={handleLogout} />
+      </React.Suspense>
     );
   }
 
