@@ -61,14 +61,19 @@ export const initRazorpay = async (): Promise<boolean> => {
 };
 
 // Create a Razorpay order
-export const createRazorpayOrder = async (amount: number): Promise<RazorpayOrderResponse | null> => {
+export const createRazorpayOrder = async (amount: number, bookingId?: string): Promise<RazorpayOrderResponse | null> => {
   try {
+    const requestBody: any = { amount: amount * 100 }; // Convert to paise
+    if (bookingId) {
+      requestBody.booking_id = bookingId;
+    }
+    
     const response = await fetch("/api/create-razorpay-order.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ amount: amount * 100 }), // Convert to paise
+      body: JSON.stringify(requestBody),
     });
     
     if (!response.ok) {
@@ -117,7 +122,7 @@ export const verifyRazorpayPayment = async (
   bookingId?: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch("/api/admin/verify-razorpay-payment.php", {
+    const response = await fetch("/api/verify-razorpay-payment.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

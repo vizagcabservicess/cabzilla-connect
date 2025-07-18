@@ -73,9 +73,9 @@ const PaymentPage = () => {
 
     setIsLoading(true);
     try {
-      // Create a Razorpay order
+      // Create a Razorpay order with booking ID
       const amount = bookingDetails.totalPrice;
-      const order = await createRazorpayOrder(amount);
+      const order = await createRazorpayOrder(amount, bookingDetails.bookingId);
       
       if (!order) {
         throw new Error('Failed to create payment order');

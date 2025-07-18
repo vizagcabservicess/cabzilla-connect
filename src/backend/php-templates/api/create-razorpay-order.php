@@ -30,6 +30,9 @@ if (!isset($data['amount']) || !is_numeric($data['amount'])) {
     exit;
 }
 
+// Get booking_id if provided
+$booking_id = isset($data['booking_id']) ? $data['booking_id'] : null;
+
 // Include database connection and helper functions
 require_once __DIR__ . '/utils/database.php';
 
@@ -93,10 +96,15 @@ try {
     $conn = getDbConnection();
     
     // Use prepared statements to prevent SQL injection
-    $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) 
-                           VALUES (?, ?, ?, NOW(), ?)");
-                            
-    $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
+    if ($booking_id) {
+        $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, booking_id, created_at, status) 
+                               VALUES (?, ?, ?, ?, NOW(), ?)");
+        $stmt->bind_param("sisss", $order['id'], $order['amount'], $receipt_id, $booking_id, $order['status']);
+    } else {
+        $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) 
+                               VALUES (?, ?, ?, NOW(), ?)");
+        $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
+    }
     $stmt->execute();
     
     if ($stmt->error) {

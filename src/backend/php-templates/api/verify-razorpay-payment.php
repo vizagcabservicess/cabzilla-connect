@@ -51,8 +51,8 @@ try {
     if ($generated_signature == $razorpay_signature) {
         $conn = getDbConnection();
         
-        // Get order details
-        $stmt = $conn->prepare("SELECT amount FROM razorpay_orders WHERE order_id = ?");
+        // Get order details and booking_id from razorpay_orders table
+        $stmt = $conn->prepare("SELECT amount, booking_id FROM razorpay_orders WHERE order_id = ?");
         if (!$stmt) {
             file_put_contents(__DIR__ . '/debug.log', 'Prepare failed: ' . $conn->error . PHP_EOL, FILE_APPEND);
             echo json_encode(['error' => 'DB prepare failed: ' . $conn->error]);
@@ -70,6 +70,13 @@ try {
         }
         $order = $result->fetch_assoc();
         $amount = $order['amount'] / 100; // Convert from paise to rupees
+        $db_booking_id = $order['booking_id']; // Get booking_id from database
+        
+        // Use booking_id from database if not provided in request
+        if (!$booking_id && $db_booking_id) {
+            $booking_id = $db_booking_id;
+            file_put_contents(__DIR__ . '/debug.log', 'Using booking_id from database: ' . $booking_id . PHP_EOL, FILE_APPEND);
+        }
         
         // Record the payment
         $stmt = $conn->prepare("INSERT INTO payments 
