@@ -1,6 +1,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../utils/auth.php';
 
 // Set response headers
 header('Content-Type: application/json');
@@ -40,10 +41,21 @@ if (!$conn) {
 }
 
 try {
+    // Extract user_id from JWT token if present
+    $user_id = null;
+    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!empty($auth_header) && strpos($auth_header, 'Bearer ') === 0) {
+        $token = substr($auth_header, 7);
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $user_id = $payload['user_id'];
+        }
+    }
+    
     // Generate unique booking number
     $bookingNumber = 'VTH' . date('ymd') . strtoupper(substr(uniqid(), -6));
     
-    // Prepare SQL query
+    // Prepare SQL query - including user_id
     $sql = "INSERT INTO bookings (
                 booking_number, 
                 pickup_location, 
@@ -65,8 +77,9 @@ try {
                 discount_type,
                 discount_value,
                 is_paid,
-                created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                created_by,
+                user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     // Set default values
     $status = 'pending';
@@ -87,9 +100,9 @@ try {
         throw new Exception("Failed to prepare statement: " . $conn->error);
     }
     
-    // Bind parameters
+    // Bind parameters - including user_id at the end
     $stmt->bind_param(
-        "ssssssdssdsssssdidsis",
+        "ssssssdssdsssssdidsisi",
         $bookingNumber,
         $requestData['pickupLocation'],
         $dropLocation,
@@ -110,7 +123,8 @@ try {
         $discountType,
         $discountValue,
         $isPaid,
-        $createdBy
+        $createdBy,
+        $user_id
     );
     
     // Execute query
