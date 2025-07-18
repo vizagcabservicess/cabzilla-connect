@@ -40,10 +40,10 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
 
   // Calculate amounts properly
   const extraChargesTotal = booking.extra_charges?.reduce((sum, charge) => sum + charge.amount, 0) || 0;
-  const subtotal = booking.total_amount || 0;
-  const taxes = Math.round((subtotal + extraChargesTotal) * 0.18); // 18% GST on total before tax
-  const baseFare = subtotal - extraChargesTotal;
-  const totalWithTaxes = subtotal + taxes;
+  const totalBeforeTax = booking.total_amount || 0;
+  const baseFare = totalBeforeTax - extraChargesTotal;
+  const taxes = Math.round((totalBeforeTax) * 0.18); // 18% GST on total before tax
+  const totalWithTaxes = totalBeforeTax + taxes;
 
   const generatePDF = async () => {
     try {
