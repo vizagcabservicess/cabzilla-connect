@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
     width: '40%',
     fontWeight: 'bold',
     color: '#4B5563',
-    fontSize: 9,
+    fontSize: 8,
   },
   value: {
     width: '60%',
     color: '#1F2937',
-    fontSize: 9,
+    fontSize: 8,
   },
   billingSection: {
     marginTop: 15,
