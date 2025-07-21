@@ -44,13 +44,13 @@ const styles = StyleSheet.create({
     width: '45%',
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 6,
     color: '#374151',
     borderBottom: 1,
     borderBottomColor: '#E5E7EB',
-    paddingBottom: 3,
+    paddingBottom: 2,
   },
   detailRow: {
     flexDirection: 'row',
@@ -60,10 +60,12 @@ const styles = StyleSheet.create({
     width: '40%',
     fontWeight: 'bold',
     color: '#4B5563',
+    fontSize: 9,
   },
   value: {
     width: '60%',
     color: '#1F2937',
+    fontSize: 9,
   },
   billingSection: {
     marginTop: 15,
