@@ -84,9 +84,12 @@ export function BookingInvoice({
             setCustomInvoiceNumber(data.invoice.invoice_number || '');
             setIncludeTax(!!data.invoice.include_tax);
             setIsIGST(!!data.invoice.is_igst);
-            // Optionally set htmlContent if you want to show the HTML preview
-            if (data.invoice.invoice_html) setHtmlContent(data.invoice.invoice_html);
+            // Set htmlContent if available
+            if (data.invoice.invoice_html) {
+              setHtmlContent(data.invoice.invoice_html);
+            }
           } else {
+            // No existing invoice found, will generate new one with default settings
             setInvoiceData(null);
           }
         } catch (e) {
@@ -97,15 +100,16 @@ export function BookingInvoice({
       }
     }
     fetchLatestInvoice();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booking]);
+  }, [booking.id]);
 
+  // Separate effect to handle initial invoice generation
   useEffect(() => {
-    if (booking && booking.id) {
+    if (booking && booking.id && !loading && !invoiceData) {
+      // Only generate if we don't have existing invoice data
       handleGenerateInvoice();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booking]);
+  }, [booking.id, loading, invoiceData]);
 
   const validateGSTDetails = () => {
     if (gstEnabled) {
