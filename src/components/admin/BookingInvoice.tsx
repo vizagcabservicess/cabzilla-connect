@@ -71,13 +71,10 @@ export function BookingInvoice({
       if (booking && booking.id) {
         try {
           setLoading(true);
-          console.log('Fetching latest invoice for booking:', booking.id);
           const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
           const data = await resp.json();
-          console.log('Invoice fetch response:', data);
           
           if (data.status === 'success' && data.invoice) {
-            console.log('Setting invoice data and form values from fetched invoice:', data.invoice);
             setInvoiceData(data.invoice);
             
             // Update all form state from the fetched invoice
@@ -90,14 +87,6 @@ export function BookingInvoice({
             const fetchedInvoiceNumber = data.invoice.invoice_number || '';
             const fetchedIncludeTax = !!data.invoice.include_tax;
             const fetchedIsIGST = !!data.invoice.is_igst;
-            
-            console.log('Setting form values:', {
-              gstEnabled: fetchedGstEnabled,
-              gstDetails: fetchedGstDetails,
-              customInvoiceNumber: fetchedInvoiceNumber,
-              includeTax: fetchedIncludeTax,
-              isIGST: fetchedIsIGST
-            });
             
             setGstEnabled(fetchedGstEnabled);
             setGstDetails(fetchedGstDetails);
@@ -459,7 +448,7 @@ export function BookingInvoice({
 
   const renderInvoiceSettings = () => {
     return (
-      <div className="p-4 border rounded-md space-y-4">
+      <div className="p-4 border rounded-md space-y-4" key={`invoice-settings-${invoiceData?.id || 'new'}`}>
         <div>
           <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
           <Input 
@@ -754,7 +743,7 @@ export function BookingInvoice({
               <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="settings">
+            <TabsContent value="settings" key={`settings-${invoiceData?.id || 'new'}-${gstEnabled}-${customInvoiceNumber}`}>
               {renderInvoiceSettings()}
             </TabsContent>
             
