@@ -90,12 +90,7 @@ export function LocationInput({
   // or when value/location changes from external sources
   useEffect(() => {
     // Skip if the value hasn't actually changed to avoid loops
-    const currentValue = JSON.stringify(value);
-    const currentLocation = JSON.stringify(location);
-    const prevValue = JSON.stringify(valueRef.current);
-    const prevLocation = JSON.stringify(locationRef.current);
-    
-    if (prevValue === currentValue && prevLocation === currentLocation) {
+    if (valueRef.current === value && locationRef.current === location) {
       return;
     }
     

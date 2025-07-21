@@ -628,40 +628,6 @@ try {
             logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Continue and return the invoice even if saving to DB fails
         }
-        
-        // Update booking with GST details
-        try {
-            $updateBookingStmt = $conn->prepare("
-                UPDATE bookings SET 
-                    gst_enabled = ?, 
-                    gst_number = ?, 
-                    company_name = ?, 
-                    company_address = ?,
-                    gst_details = ?,
-                    updated_at = NOW()
-                WHERE id = ?
-            ");
-            
-            $gstDetailsJson = $gstEnabled ? json_encode($gstDetails) : null;
-            $updateBookingStmt->bind_param(
-                "issssi",
-                $gstEnabled ? 1 : 0,
-                $gstDetails['gstNumber'] ?? null,
-                $gstDetails['companyName'] ?? null,
-                $gstDetails['companyAddress'] ?? null,
-                $gstDetailsJson,
-                $bookingId
-            );
-            
-            if ($updateBookingStmt->execute()) {
-                logInvoiceError("Booking updated with GST details", ['bookingId' => $bookingId]);
-            } else {
-                logInvoiceError("Failed to update booking with GST details", ['error' => $updateBookingStmt->error]);
-            }
-            
-        } catch (Exception $e) {
-            logInvoiceError("Error updating booking with GST details", ['error' => $e->getMessage()]);
-        }
     }
     
     // Send invoice data response
