@@ -67,6 +67,40 @@ export function BookingInvoice({
   const baseFare = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - extraChargesTotal;
 
   useEffect(() => {
+    async function fetchLatestInvoice() {
+      if (booking && booking.id) {
+        try {
+          setLoading(true);
+          const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
+          const data = await resp.json();
+          if (data.status === 'success' && data.invoice) {
+            setInvoiceData(data.invoice);
+            setGstEnabled(!!data.invoice.gst_enabled);
+            setGstDetails({
+              gstNumber: data.invoice.gst_number || '',
+              companyName: data.invoice.company_name || '',
+              companyAddress: data.invoice.company_address || ''
+            });
+            setCustomInvoiceNumber(data.invoice.invoice_number || '');
+            setIncludeTax(!!data.invoice.include_tax);
+            setIsIGST(!!data.invoice.is_igst);
+            // Optionally set htmlContent if you want to show the HTML preview
+            if (data.invoice.invoice_html) setHtmlContent(data.invoice.invoice_html);
+          } else {
+            setInvoiceData(null);
+          }
+        } catch (e) {
+          setInvoiceData(null);
+        } finally {
+          setLoading(false);
+        }
+      }
+    }
+    fetchLatestInvoice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking]);
+
+  useEffect(() => {
     if (booking && booking.id) {
       handleGenerateInvoice();
     }
@@ -466,27 +500,23 @@ export function BookingInvoice({
                 placeholder="Enter company address"
               />
             </div>
-            
-            <div className="mt-4">
-              <Label>GST Type</Label>
-              <RadioGroup 
-                value={isIGST ? "igst" : "cgst-sgst"} 
-                onValueChange={(value) => setIsIGST(value === "igst")}
-                className="mt-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
-                  <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="igst" id="igst" />
-                  <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
-                </div>
-              </RadioGroup>
-            </div>
+            <Label>GST Type</Label>
+            <RadioGroup 
+              value={isIGST ? "igst" : "cgst-sgst"} 
+              onValueChange={(value) => setIsIGST(value === "igst")}
+              className="mt-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="cgst-sgst" id="cgst-sgst" />
+                <Label htmlFor="cgst-sgst">Intra-state (CGST 6% + SGST 6%)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="igst" id="igst" />
+                <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
+              </div>
+            </RadioGroup>
           </div>
         )}
-        
         <div>
           <Button 
             variant="outline" 

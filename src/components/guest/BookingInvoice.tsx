@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
@@ -61,6 +61,34 @@ interface BookingInvoiceProps {
 
 export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [invoiceHtml, setInvoiceHtml] = useState<string | null>(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchLatestInvoice() {
+      if (booking && booking.id) {
+        setLoadingInvoice(true);
+        setInvoiceError(null);
+        try {
+          const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
+          const data = await resp.json();
+          if (data.status === 'success' && data.invoice && data.invoice.invoice_html) {
+            setInvoiceHtml(data.invoice.invoice_html);
+          } else {
+            setInvoiceHtml(null);
+            setInvoiceError('No invoice found for this booking.');
+          }
+        } catch (e) {
+          setInvoiceHtml(null);
+          setInvoiceError('Failed to load invoice.');
+        } finally {
+          setLoadingInvoice(false);
+        }
+      }
+    }
+    fetchLatestInvoice();
+  }, [booking]);
 
   console.log('BookingInvoice - booking data:', booking);
 
@@ -156,6 +184,57 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const getPaymentMethod = () => booking.payment_method || booking.paymentMethod || 'N/A';
   const getTripType = () => booking.tripType || 'N/A';
   const getTripMode = () => booking.tripMode || '';
+
+  // Render the invoice HTML if available
+  if (loadingInvoice) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="border-b border-border pb-4">
+            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 text-center text-lg">Loading invoice...</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  if (invoiceHtml) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="border-b border-border pb-4">
+            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <iframe
+              srcDoc={invoiceHtml}
+              title="Invoice Preview"
+              className="w-full min-h-[700px] border rounded"
+              style={{ border: 'none', minHeight: 700 }}
+            />
+          </div>
+          <div className="flex gap-3 pt-6 border-t border-border">
+            <Button variant="outline" onClick={onClose} className="px-8">Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  if (invoiceError) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="border-b border-border pb-4">
+            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 text-center text-lg text-red-500">{invoiceError}</div>
+          <div className="flex gap-3 pt-6 border-t border-border">
+            <Button variant="outline" onClick={onClose} className="px-8">Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={true} onOpenChange={onClose}>

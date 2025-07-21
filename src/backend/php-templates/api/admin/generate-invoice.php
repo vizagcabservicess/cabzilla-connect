@@ -512,8 +512,8 @@ try {
             $checkResult = $checkStmt->get_result();
             
             if ($checkResult->num_rows > 0) {
-                // Update existing invoice
                 $invoiceRow = $checkResult->fetch_assoc();
+                // Update existing invoice
                 $stmt = $conn->prepare("
                     UPDATE invoices SET 
                         invoice_number = ?,
@@ -528,23 +528,25 @@ try {
                         company_name = ?,
                         company_address = ?,
                         invoice_html = ?,
+                        gst_amount = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ");
-                
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
                 $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
-                
+                $gstNumberVal = $gstDetails && isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
+                $companyNameVal = $gstDetails && isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
+                $companyAddressVal = $gstDetails && isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
+                $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                // 14 params: s = string, d = double, i = int
                 $stmt->bind_param(
-                    "ssdddiiiisssi",
+                    "ssdddiiiisssdi",
                     $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
-                    $taxAmount,
+                    $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,
                     $isIgstInt,
@@ -553,6 +555,7 @@ try {
                     $companyNameVal,
                     $companyAddressVal,
                     $invoiceHtml,
+                    $gstAmountVal,
                     $invoiceRow['id']
                 );
                 
@@ -578,25 +581,25 @@ try {
                     INSERT INTO invoices (
                         booking_id, invoice_number, invoice_date, base_amount, 
                         tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
-                        gst_number, company_name, company_address, invoice_html
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        gst_number, company_name, company_address, invoice_html, gst_amount
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
-                
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
                 $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-                $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-                $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
-                
-                // Fix: Corrected the bind_param type string to match all 13 parameters
+                $gstNumberVal = $gstDetails && isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
+                $companyNameVal = $gstDetails && isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
+                $companyAddressVal = $gstDetails && isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
+                $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                // 14 params: i = int, s = string, d = double
                 $stmt->bind_param(
-                    "issdddiiiisss",
+                    "issdddiiiisssd",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
                     $baseAmountBeforeTax,
-                    $taxAmount,
+                    $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,
                     $isIgstInt,
@@ -604,7 +607,8 @@ try {
                     $gstNumberVal, 
                     $companyNameVal,
                     $companyAddressVal,
-                    $invoiceHtml
+                    $invoiceHtml,
+                    $gstAmountVal
                 );
                 
                 $success = $stmt->execute();
@@ -627,6 +631,85 @@ try {
         } catch (Exception $e) {
             logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Continue and return the invoice even if saving to DB fails
+        }
+        // Also update the bookings table with the latest invoice settings
+        try {
+            logInvoiceError("Attempting to update bookings table with invoice settings", [
+                'booking_id' => $booking['id'],
+                'gst_enabled' => $gstEnabled,
+                'gst_number' => $gstNumberVal,
+                'company_name' => $companyNameVal,
+                'company_address' => $companyAddressVal
+            ]);
+            $updateBookingStmt = $conn->prepare("
+                UPDATE bookings SET
+                    gst_enabled = ?,
+                    gst_number = ?,
+                    company_name = ?,
+                    company_address = ?
+                WHERE id = ?
+            ");
+            $gstEnabledInt = $gstEnabled ? 1 : 0;
+            $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
+            $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
+            $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
+            $updateBookingStmt->bind_param(
+                "isssi",
+                $gstEnabledInt,
+                $gstNumberVal,
+                $companyNameVal,
+                $companyAddressVal,
+                $booking['id']
+            );
+            $success = $updateBookingStmt->execute();
+            if (!$success || $updateBookingStmt->error) {
+                logInvoiceError("Error executing bookings update", [
+                    'error' => $updateBookingStmt->error,
+                    'success' => $success ? 'true' : 'false',
+                    'booking_id' => $booking['id']
+                ]);
+            } else {
+                logInvoiceError("Bookings table updated successfully", [
+                    'booking_id' => $booking['id'],
+                    'rows_affected' => $updateBookingStmt->affected_rows
+                ]);
+            }
+            // Now update the price/total_amount in the bookings table
+            try {
+                logInvoiceError("Attempting to update booking price", [
+                    'booking_id' => $booking['id'],
+                    'total_amount' => $finalTotal
+                ]);
+                $updatePriceStmt = $conn->prepare("
+                    UPDATE bookings SET
+                        total_amount = ?
+                    WHERE id = ?
+                ");
+                $updatePriceStmt->bind_param(
+                    "di",
+                    $finalTotal,
+                    $booking['id']
+                );
+                $successPrice = $updatePriceStmt->execute();
+                if (!$successPrice || $updatePriceStmt->error) {
+                    logInvoiceError('Error updating booking price', [
+                        'error' => $updatePriceStmt->error,
+                        'success' => $successPrice ? 'true' : 'false',
+                        'booking_id' => $booking['id'],
+                        'total_amount' => $finalTotal
+                    ]);
+                } else {
+                    logInvoiceError('Booking price updated successfully', [
+                        'booking_id' => $booking['id'],
+                        'total_amount' => $finalTotal,
+                        'rows_affected' => $updatePriceStmt->affected_rows
+                    ]);
+                }
+            } catch (Exception $e) {
+                logInvoiceError('Error updating booking price', ['error' => $e->getMessage()]);
+            }
+        } catch (Exception $e) {
+            logInvoiceError("Error updating booking with invoice settings", ['error' => $e->getMessage()]);
         }
     }
     
