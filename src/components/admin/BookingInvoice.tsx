@@ -447,13 +447,17 @@ export function BookingInvoice({
   }
 
   const renderInvoiceSettings = () => {
+    // Force re-render when state changes
+    const forceRenderKey = `${invoiceData?.id || 'new'}-${gstEnabled}-${customInvoiceNumber}-${gstDetails.gstNumber}-${gstDetails.companyName}-${gstDetails.companyAddress}`;
+    
     return (
-      <div className="p-4 border rounded-md space-y-4" key={`invoice-settings-${invoiceData?.id || 'new'}`}>
+      <div className="p-4 border rounded-md space-y-4" key={forceRenderKey}>
         <div>
           <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
           <Input 
             id="custom-invoice"
-            value={customInvoiceNumber}
+            key={`custom-invoice-${forceRenderKey}`}
+            value={customInvoiceNumber || ''}
             onChange={(e) => setCustomInvoiceNumber(e.target.value)}
             placeholder="Optional - Leave blank for auto-generated number"
           />
@@ -465,6 +469,7 @@ export function BookingInvoice({
         <div className="flex items-center space-x-2">
           <Switch 
             id="gst-toggle"
+            key={`gst-toggle-${forceRenderKey}`}
             checked={gstEnabled}
             onCheckedChange={handleGstToggle}
           />
@@ -474,6 +479,7 @@ export function BookingInvoice({
         <div className="flex items-center space-x-2">
           <Switch 
             id="tax-toggle"
+            key={`tax-toggle-${forceRenderKey}`}
             checked={includeTax}
             onCheckedChange={setIncludeTax}
           />
@@ -481,13 +487,14 @@ export function BookingInvoice({
         </div>
         
         {gstEnabled && (
-          <div className="space-y-3">
+          <div className="space-y-3" key={`gst-section-${forceRenderKey}`}>
             <div>
               <Label htmlFor="gstNumber">GST Number<span className="text-red-500">*</span></Label>
               <Input 
                 id="gstNumber"
                 name="gstNumber"
-                value={gstDetails.gstNumber}
+                key={`gstNumber-${forceRenderKey}`}
+                value={gstDetails.gstNumber || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter GST number"
                 required
@@ -498,7 +505,8 @@ export function BookingInvoice({
               <Input 
                 id="companyName"
                 name="companyName"
-                value={gstDetails.companyName}
+                key={`companyName-${forceRenderKey}`}
+                value={gstDetails.companyName || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter company name"
                 required
@@ -509,13 +517,15 @@ export function BookingInvoice({
               <Input 
                 id="companyAddress"
                 name="companyAddress"
-                value={gstDetails.companyAddress}
+                key={`companyAddress-${forceRenderKey}`}
+                value={gstDetails.companyAddress || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter company address"
               />
             </div>
             <Label>GST Type</Label>
             <RadioGroup 
+              key={`gst-type-${forceRenderKey}`}
               value={isIGST ? "igst" : "cgst-sgst"} 
               onValueChange={(value) => setIsIGST(value === "igst")}
               className="mt-2"
