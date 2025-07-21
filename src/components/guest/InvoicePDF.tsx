@@ -1,65 +1,60 @@
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 
-// Register font for better text rendering
-Font.register({
-  family: 'Roboto',
-  src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff2',
-});
+import React from 'react';
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: 'Roboto',
-    fontSize: 11,
+    fontFamily: 'Helvetica',
+    fontSize: 10,
     padding: 30,
     backgroundColor: '#ffffff',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 30,
-    borderBottom: 2,
+    marginBottom: 20,
+    borderBottom: 1,
     borderBottomColor: '#3B82F6',
-    paddingBottom: 15,
+    paddingBottom: 10,
   },
   logo: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#3B82F6',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#6B7280',
-    marginTop: 5,
+    marginTop: 3,
   },
   invoiceInfo: {
     textAlign: 'right',
   },
   invoiceTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 3,
   },
   detailsSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   detailsColumn: {
     width: '45%',
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 8,
     color: '#374151',
     borderBottom: 1,
     borderBottomColor: '#E5E7EB',
-    paddingBottom: 5,
+    paddingBottom: 3,
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: 5,
+    marginBottom: 3,
   },
   label: {
     width: '40%',
@@ -71,8 +66,8 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   billingSection: {
-    marginTop: 20,
-    marginBottom: 20,
+    marginTop: 15,
+    marginBottom: 15,
   },
   billingTable: {
     borderTop: 1,
@@ -81,49 +76,49 @@ const styles = StyleSheet.create({
   billingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderBottom: 1,
     borderBottomColor: '#F3F4F6',
   },
   billingRowTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     backgroundColor: '#F9FAFB',
     fontWeight: 'bold',
-    fontSize: 12,
+    fontSize: 11,
   },
   extraChargeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 5,
-    paddingHorizontal: 20,
-    fontSize: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    fontSize: 9,
     color: '#6B7280',
   },
   footer: {
-    marginTop: 30,
-    padding: 15,
+    marginTop: 20,
+    padding: 10,
     backgroundColor: '#F9FAFB',
-    borderRadius: 5,
+    borderRadius: 3,
   },
   footerTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 5,
     color: '#374151',
   },
   footerText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#6B7280',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   thankYou: {
     textAlign: 'center',
-    marginTop: 30,
-    fontSize: 14,
+    marginTop: 20,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#3B82F6',
   },
@@ -182,143 +177,178 @@ interface InvoicePDFProps {
 }
 
 export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalWithTaxes }: InvoicePDFProps) => {
-  // Helper functions to safely access booking data (support both guest and admin/booking API field names)
-  const getBookingId = () => (booking?.booking_id || booking?.bookingNumber || booking?.id || '-').toString();
-  const getGuestName = () => booking?.guest_name || booking?.passenger_name || booking?.passengerName || booking?.name || '-';
-  const getGuestPhone = () => booking?.guest_phone || booking?.passenger_phone || booking?.passengerPhone || '-';
-  const getGuestEmail = () => booking?.guest_email || booking?.passenger_email || booking?.passengerEmail || '-';
-  const getPickupLocation = () => booking?.pickup_location || booking?.pickupLocation || '-';
-  const getDropLocation = () => booking?.drop_location || booking?.dropLocation || '-';
+  // Helper functions to safely access booking data
+  const getBookingId = () => {
+    const id = booking?.booking_id || booking?.bookingNumber || booking?.id;
+    return id ? String(id) : 'N/A';
+  };
+  
+  const getGuestName = () => {
+    return booking?.guest_name || booking?.passenger_name || booking?.passengerName || booking?.name || 'N/A';
+  };
+  
+  const getGuestPhone = () => {
+    return booking?.guest_phone || booking?.passenger_phone || booking?.passengerPhone || 'N/A';
+  };
+  
+  const getGuestEmail = () => {
+    return booking?.guest_email || booking?.passenger_email || booking?.passengerEmail || 'N/A';
+  };
+  
+  const getPickupLocation = () => {
+    return booking?.pickup_location || booking?.pickupLocation || 'N/A';
+  };
+  
+  const getDropLocation = () => {
+    return booking?.drop_location || booking?.dropLocation || 'N/A';
+  };
+  
   const getPickupDate = () => {
     try {
-      if (booking?.pickup_date) return new Date(booking.pickup_date).toLocaleDateString();
-      if (booking?.pickupDate) return new Date(booking.pickupDate).toLocaleDateString();
-      return '-';
+      const date = booking?.pickup_date || booking?.pickupDate;
+      if (!date) return 'N/A';
+      return new Date(date).toLocaleDateString('en-GB');
     } catch {
-      return '-';
+      return 'N/A';
     }
   };
+  
   const getPickupTime = () => {
-    if (booking?.pickup_time) return booking.pickup_time;
-    if (booking?.pickupTime) return booking.pickupTime;
-    if (booking?.pickup_date) return new Date(booking.pickup_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    if (booking?.pickupDate) return new Date(booking.pickupDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    return '-';
+    try {
+      const time = booking?.pickup_time || booking?.pickupTime;
+      if (time) return time;
+      
+      const date = booking?.pickup_date || booking?.pickupDate;
+      if (date) {
+        return new Date(date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+      return 'N/A';
+    } catch {
+      return 'N/A';
+    }
   };
-  const getVehicleType = () => booking?.vehicle_type || booking?.cab_type || booking?.cabType || '-';
-  const getPaymentMethod = () => booking?.payment_method || booking?.paymentMethod || '-';
+  
+  const getVehicleType = () => {
+    return booking?.vehicle_type || booking?.cab_type || booking?.cabType || 'N/A';
+  };
+  
+  const getPaymentMethod = () => {
+    return booking?.payment_method || booking?.paymentMethod || 'N/A';
+  };
 
-  // For extra charges, support both camelCase and snake_case
-  const extraChargesArr = booking.extraCharges || booking.extra_charges || [];
+  // Get extra charges array
+  const extraChargesArr = booking?.extraCharges || booking?.extra_charges || [];
+
+  // Safe number formatting
+  const formatAmount = (amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0';
+    return amount.toLocaleString('en-IN');
+  };
 
   return (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.logo}>VizagUp Taxi</Text>
-          <Text style={styles.subtitle}>Your trusted travel partner</Text>
-        </View>
-        <View style={styles.invoiceInfo}>
-          <Text style={styles.invoiceTitle}>INVOICE</Text>
-          <Text>Invoice #: {getBookingId()}</Text>
-          <Text>Date: {new Date().toLocaleDateString()}</Text>
-        </View>
-      </View>
-
-      {/* Customer and Trip Details */}
-      <View style={styles.detailsSection}>
-        <View style={styles.detailsColumn}>
-          <Text style={styles.sectionTitle}>Customer Details</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{getGuestName() || '-'}</Text>
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.logo}>VizagUp Taxi</Text>
+            <Text style={styles.subtitle}>Your trusted travel partner</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Phone:</Text>
-            <Text style={styles.value}>{getGuestPhone() || '-'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Email:</Text>
-            <Text style={styles.value}>{getGuestEmail() || '-'}</Text>
+          <View style={styles.invoiceInfo}>
+            <Text style={styles.invoiceTitle}>INVOICE</Text>
+            <Text>Invoice #: {getBookingId()}</Text>
+            <Text>Date: {new Date().toLocaleDateString('en-GB')}</Text>
           </View>
         </View>
 
-        <View style={styles.detailsColumn}>
-          <Text style={styles.sectionTitle}>Trip Details</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>From:</Text>
-            <Text style={styles.value}>{getPickupLocation() || '-'}</Text>
+        {/* Customer and Trip Details */}
+        <View style={styles.detailsSection}>
+          <View style={styles.detailsColumn}>
+            <Text style={styles.sectionTitle}>Customer Details</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Name:</Text>
+              <Text style={styles.value}>{getGuestName()}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Phone:</Text>
+              <Text style={styles.value}>{getGuestPhone()}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Email:</Text>
+              <Text style={styles.value}>{getGuestEmail()}</Text>
+            </View>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>To:</Text>
-            <Text style={styles.value}>{getDropLocation() || '-'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Date:</Text>
-            <Text style={styles.value}>
-              {getPickupDate()} at {getPickupTime() || '-'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.label}>Vehicle:</Text>
-            <Text style={styles.value}>{getVehicleType() || '-'}</Text>
+
+          <View style={styles.detailsColumn}>
+            <Text style={styles.sectionTitle}>Trip Details</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>From:</Text>
+              <Text style={styles.value}>{getPickupLocation()}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>To:</Text>
+              <Text style={styles.value}>{getDropLocation()}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Date:</Text>
+              <Text style={styles.value}>{getPickupDate()} at {getPickupTime()}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Vehicle:</Text>
+              <Text style={styles.value}>{getVehicleType()}</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Billing Details */}
-      <View style={styles.billingSection}>
-        <Text style={styles.sectionTitle}>Billing Details</Text>
+        {/* Billing Details */}
+        <View style={styles.billingSection}>
+          <Text style={styles.sectionTitle}>Billing Details</Text>
           <View style={styles.billingTable}>
-          <View style={styles.billingRow}>
-            <Text>Base Fare</Text>
-            <Text>₹{subtotal.toLocaleString()}</Text>
-          </View>
+            <View style={styles.billingRow}>
+              <Text>Base Fare</Text>
+              <Text>₹{formatAmount(subtotal)}</Text>
+            </View>
 
-          {extraChargesArr.length > 0 && (
-            <>
-              {extraChargesArr.map((charge: any, index: number) => (
-                <View key={index} style={styles.extraChargeRow}>
-                  <Text>{(charge.type || '-') + ': ' + (charge.description || '-')}</Text>
-                  <Text>₹{typeof charge.amount === 'number' ? charge.amount.toLocaleString() : '-'}</Text>
-                </View>
-              ))}
-            </>
-          )}
+            {Array.isArray(extraChargesArr) && extraChargesArr.length > 0 && (
+              <>
+                {extraChargesArr.map((charge: any, index: number) => (
+                  <View key={index} style={styles.extraChargeRow}>
+                    <Text>{charge?.type || 'Extra Charge'}: {charge?.description || 'Additional service'}</Text>
+                    <Text>₹{formatAmount(charge?.amount || 0)}</Text>
+                  </View>
+                ))}
+              </>
+            )}
 
-          <View style={styles.billingRow}>
-            <Text>GST (18%)</Text>
-            <Text>₹{taxes.toLocaleString()}</Text>
-          </View>
+            <View style={styles.billingRow}>
+              <Text>GST (18%)</Text>
+              <Text>₹{formatAmount(taxes)}</Text>
+            </View>
 
-          <View style={styles.billingRowTotal}>
-            <Text>Total Amount</Text>
-            <Text>₹{totalWithTaxes.toLocaleString()}</Text>
-          </View>
+            <View style={styles.billingRowTotal}>
+              <Text>Total Amount</Text>
+              <Text>₹{formatAmount(totalWithTaxes)}</Text>
+            </View>
 
-          {getPaymentMethod() && (
             <View style={styles.billingRow}>
               <Text>Payment Method</Text>
-              <Text style={{ textTransform: 'capitalize' }}>{getPaymentMethod() || '-'}</Text>
+              <Text style={{ textTransform: 'capitalize' }}>{getPaymentMethod()}</Text>
             </View>
-          )}
+          </View>
         </View>
-      </View>
 
-      {/* Company Information */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>Company Information</Text>
-        <Text style={styles.footerText}>VizagUp Taxi Services</Text>
-        <Text style={styles.footerText}>Visakhapatnam, Andhra Pradesh</Text>
-        <Text style={styles.footerText}>Phone: +91-XXX-XXX-XXXX</Text>
-        <Text style={styles.footerText}>Email: info@vizagup.com</Text>
-        <Text style={styles.footerText}>Website: www.vizagup.com</Text>
-      </View>
+        {/* Company Information */}
+        <View style={styles.footer}>
+          <Text style={styles.footerTitle}>Company Information</Text>
+          <Text style={styles.footerText}>VizagUp Taxi Services</Text>
+          <Text style={styles.footerText}>Visakhapatnam, Andhra Pradesh</Text>
+          <Text style={styles.footerText}>Phone: +91 9876543210</Text>
+          <Text style={styles.footerText}>Email: info@vizagup.com</Text>
+          <Text style={styles.footerText}>Website: www.vizagup.com</Text>
+        </View>
 
-      <Text style={styles.thankYou}>Thank you for choosing VizagUp Taxi!</Text>
-    </Page>
-  </Document>
+        <Text style={styles.thankYou}>Thank you for choosing VizagUp Taxi!</Text>
+      </Page>
+    </Document>
   );
 };
