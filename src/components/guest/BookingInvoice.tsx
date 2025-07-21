@@ -170,7 +170,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           {/* Invoice Header */}
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-blue-600 mb-2">VizagUp Taxi</h1>
+              <h1 className="text-3xl font-bold text-blue-600 mb-2">Vizag Taxi Hub</h1>
               <p className="text-muted-foreground">Your trusted travel partner</p>
             </div>
             <div className="text-right">
@@ -292,18 +292,18 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           <div className="bg-muted/20 p-6 rounded-lg">
             <h3 className="text-lg font-bold mb-3">Company Information</h3>
             <div className="text-sm text-muted-foreground space-y-1">
-              <p>VizagUp Taxi Services</p>
+              <p>Vizag Taxi Hub</p>
               <p>Visakhapatnam, Andhra Pradesh</p>
               <p>Phone: +91 9876543210</p>
-              <p>Email: info@vizagup.com</p>
-              <p>Website: www.vizagup.com</p>
+              <p>Email: info@vizagtaxihub.com</p>
+              <p>Website: www.vizagtaxihub.com</p>
             </div>
           </div>
 
           <div className="text-center border-t border-border pt-6 mt-8">
-            <p className="text-lg font-semibold text-blue-600 mb-2">Thank you for choosing VizagUp Taxi!</p>
+            <p className="text-lg font-semibold text-blue-600 mb-2">Thank you for choosing Vizag Taxi Hub!</p>
             <div className="text-sm text-muted-foreground space-y-1">
-              <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
+              <p>For inquiries, please contact: info@vizagtaxihub.com | +91 9966363662</p>
               <p>Generated on: {new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString('en-GB', { hour12: false })}</p>
             </div>
           </div>

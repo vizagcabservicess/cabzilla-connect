@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   billingTable: {
-    borderTop: 1,
+    borderTop: 0,
     borderTopColor: '#E5E7EB',
   },
   billingRow: {
@@ -166,6 +166,8 @@ interface Booking {
     amount: number;
     description: string;
   }>;
+  gstEnabled?: boolean;
+  gstAmount?: number;
 }
 
 interface InvoicePDFProps {
@@ -245,13 +247,16 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
     return amount.toLocaleString('en-IN');
   };
 
+  // GST applicability
+  const gstEnabled = booking?.gstEnabled || (typeof taxes === 'number' && taxes > 0);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.logo}>VizagUp Taxi</Text>
+            <Text style={styles.logo}>Vizag Taxi Hub</Text>
             <Text style={styles.subtitle}>Your trusted travel partner</Text>
           </View>
           <View style={styles.invoiceInfo}>
@@ -320,10 +325,12 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
               </>
             )}
 
-            <View style={styles.billingRow}>
-              <Text>GST (18%)</Text>
-              <Text>₹{formatAmount(taxes)}</Text>
-            </View>
+            {gstEnabled && (
+              <View style={styles.billingRow}>
+                <Text>GST (18%)</Text>
+                <Text>₹{formatAmount(taxes)}</Text>
+              </View>
+            )}
 
             <View style={styles.billingRowTotal}>
               <Text>Total Amount</Text>
@@ -340,14 +347,14 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
         {/* Company Information */}
         <View style={styles.footer}>
           <Text style={styles.footerTitle}>Company Information</Text>
-          <Text style={styles.footerText}>VizagUp Taxi Services</Text>
+          <Text style={styles.footerText}>Vizag Taxi Hub</Text>
           <Text style={styles.footerText}>Visakhapatnam, Andhra Pradesh</Text>
-          <Text style={styles.footerText}>Phone: +91 9876543210</Text>
-          <Text style={styles.footerText}>Email: info@vizagup.com</Text>
-          <Text style={styles.footerText}>Website: www.vizagup.com</Text>
+          <Text style={styles.footerText}>Phone: +91 9966363662</Text>
+          <Text style={styles.footerText}>Email: info@vizagtaxihub.com</Text>
+          <Text style={styles.footerText}>Website: www.vizagtaxihub.com</Text>
         </View>
 
-        <Text style={styles.thankYou}>Thank you for choosing VizagUp Taxi!</Text>
+        <Text style={styles.thankYou}>Thank you for choosing Vizag Taxi Hub!</Text>
       </Page>
     </Document>
   );
