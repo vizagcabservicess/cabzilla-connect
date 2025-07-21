@@ -10,24 +10,53 @@ import { toast } from 'sonner';
 import { InvoicePDF } from './InvoicePDF';
 
 interface Booking {
+  // Guest/legacy fields
   id: number;
-  booking_id: string;
-  pickup_location: string;
-  drop_location: string;
-  pickup_date: string;
-  pickup_time: string;
-  vehicle_type: string;
-  status: string;
-  total_amount: number;
+  booking_id?: string;
+  pickup_location?: string;
+  drop_location?: string;
+  pickup_date?: string;
+  pickup_time?: string;
+  vehicle_type?: string;
+  status?: string;
+  total_amount?: number;
   extra_charges?: Array<{
     type: string;
     amount: number;
     description: string;
   }>;
   payment_method?: string;
-  guest_name: string;
-  guest_phone: string;
-  guest_email: string;
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+
+  // Admin/API/camelCase fields
+  bookingNumber?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupDate?: string;
+  pickupTime?: string;
+  cab_type?: string;
+  cabType?: string;
+  passenger_name?: string;
+  passengerName?: string;
+  name?: string;
+  passenger_phone?: string;
+  passengerPhone?: string;
+  passenger_email?: string;
+  passengerEmail?: string;
+  totalAmount?: number;
+  paymentMethod?: string;
+  tripType?: string;
+  tripMode?: string;
+  // Add camelCase for extra charges
+  extraCharges?: Array<{
+    type: string;
+    amount: number;
+    description: string;
+  }>;
+  gstEnabled?: boolean;
+  gstAmount?: number;
 }
 
 interface BookingInvoiceProps {
@@ -41,27 +70,21 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   // Add debugging
   console.log('BookingInvoice - booking data:', booking);
 
-  // Safely handle booking data with proper fallbacks
-  const safeBooking = {
-    ...booking,
-    total_amount: booking.total_amount || 0,
-    pickup_date: booking.pickup_date || new Date().toISOString(),
-    pickup_time: booking.pickup_time || '00:00',
-    guest_name: booking.guest_name || 'N/A',
-    guest_phone: booking.guest_phone || 'N/A', 
-    guest_email: booking.guest_email || 'N/A',
-    pickup_location: booking.pickup_location || 'N/A',
-    drop_location: booking.drop_location || 'N/A',
-    vehicle_type: booking.vehicle_type || 'N/A',
-    booking_id: booking.booking_id || 'N/A',
-    extra_charges: booking.extra_charges || []
-  };
-
   // Calculate amounts properly
-  const extraChargesTotal = safeBooking.extra_charges.reduce((sum, charge) => sum + (charge.amount || 0), 0);
-  const totalBeforeTax = safeBooking.total_amount;
+  let extraChargesArr: any[] = [];
+  if (Array.isArray(booking.extraCharges)) {
+    extraChargesArr = booking.extraCharges;
+  } else if (Array.isArray(booking.extra_charges)) {
+    extraChargesArr = booking.extra_charges;
+  } else {
+    extraChargesArr = [];
+  }
+  const extraChargesTotal = extraChargesArr.reduce((sum, charge) => sum + (charge.amount || 0), 0);
+  const totalBeforeTax = booking.totalAmount || booking.total_amount || 0;
   const baseFare = Math.max(0, totalBeforeTax - extraChargesTotal);
-  const taxes = Math.round(totalBeforeTax * 0.18); // 18% GST on total amount
+  // GST logic
+  const gstEnabled = booking.gstEnabled || booking.gstAmount !== undefined;
+  const taxes = gstEnabled ? Math.round(totalBeforeTax * 0.18) : 0; // 18% GST if enabled
   const totalWithTaxes = totalBeforeTax + taxes;
 
   console.log('Invoice calculations:', {
@@ -78,7 +101,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       
       const blob = await pdf(
         <InvoicePDF
-          booking={safeBooking}
+          booking={booking}
           subtotal={baseFare}
           extraChargesTotal={extraChargesTotal}
           taxes={taxes}
@@ -86,7 +109,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
         />
       ).toBlob();
 
-      const fileName = `Invoice_${safeBooking.booking_id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Invoice_${booking.bookingNumber || booking.id}_${new Date().toISOString().split('T')[0]}.pdf`;
       saveAs(blob, fileName);
       
       toast.success('Invoice downloaded successfully');
@@ -117,11 +140,11 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
             <div className="text-right">
               <div className="bg-muted/30 p-4 rounded-lg">
                 <p className="text-sm font-medium text-muted-foreground">Invoice Number:</p>
-                <p className="text-xl font-bold">#{safeBooking.booking_id}</p>
+                <p className="text-xl font-bold">#{booking.bookingNumber || booking.id}</p>
                 <p className="text-sm font-medium text-muted-foreground mt-3">Date:</p>
-                <p className="text-lg font-semibold">{new Date().toLocaleDateString('en-GB')}</p>
+                <p className="text-lg font-semibold">{booking.pickupDate ? new Date(booking.pickupDate).toLocaleDateString('en-GB') : ''}</p>
                 <p className="text-sm font-medium text-muted-foreground mt-3">Booking #:</p>
-                <p className="text-sm font-mono">{safeBooking.booking_id}</p>
+                <p className="text-sm font-mono">{booking.bookingNumber || booking.id}</p>
               </div>
             </div>
           </div>
@@ -133,15 +156,15 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
               <div className="space-y-3">
                 <div>
                   <span className="font-semibold text-sm">Name:</span>
-                  <p className="text-base">{safeBooking.guest_name}</p>
+                  <p className="text-base">{booking.passengerName || ''}</p>
                 </div>
                 <div>
                   <span className="font-semibold text-sm">Phone:</span>
-                  <p className="text-base">{safeBooking.guest_phone}</p>
+                  <p className="text-base">{booking.passengerPhone || ''}</p>
                 </div>
                 <div>
                   <span className="font-semibold text-sm">Email:</span>
-                  <p className="text-base">{safeBooking.guest_email}</p>
+                  <p className="text-base">{booking.passengerEmail || ''}</p>
                 </div>
               </div>
             </div>
@@ -151,17 +174,17 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
               <div className="space-y-3">
                 <div>
                   <span className="font-semibold text-sm">Trip Type:</span>
-                  <p className="text-base">Outstation (One-way)</p>
+                  <p className="text-base">{booking.tripType || ''} {booking.tripMode ? `(${booking.tripMode})` : ''}</p>
                 </div>
                 <div>
                   <span className="font-semibold text-sm">Date:</span>
                   <p className="text-base">
-                    {new Date(safeBooking.pickup_date).toLocaleDateString('en-GB')} at {safeBooking.pickup_time}
+                    {booking.pickupDate ? new Date(booking.pickupDate).toLocaleDateString('en-GB') : ''} {booking.pickupTime || ''}
                   </p>
                 </div>
                 <div>
                   <span className="font-semibold text-sm">Vehicle:</span>
-                  <p className="text-base">{safeBooking.vehicle_type}</p>
+                  <p className="text-base">{booking.cabType || ''}</p>
                 </div>
               </div>
             </div>
@@ -173,17 +196,21 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
             <div className="grid grid-cols-1 gap-3">
               <div>
                 <span className="font-semibold text-sm">Pickup:</span>
-                <p className="text-base">{safeBooking.pickup_location}</p>
+                <p className="text-base">{booking.pickupLocation || ''}</p>
               </div>
               <div>
                 <span className="font-semibold text-sm">Drop:</span>
-                <p className="text-base">{safeBooking.drop_location}</p>
+                <p className="text-base">{booking.dropLocation || ''}</p>
               </div>
               <div>
                 <span className="font-semibold text-sm">Pickup Time:</span>
-                <p className="text-base">
-                  {new Date(safeBooking.pickup_date).toLocaleDateString('en-GB')}, {safeBooking.pickup_time}
-                </p>
+                <p className="text-base">{
+                  booking.pickupTime ||
+                  booking.pickup_time ||
+                  (booking.pickupDate
+                    ? new Date(booking.pickupDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                    : '-')
+                }</p>
               </div>
             </div>
           </div>
@@ -204,9 +231,8 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
                     <td className="py-3 px-4">Base Fare</td>
                     <td className="py-3 px-4 text-right">₹ {baseFare.toLocaleString()}</td>
                   </tr>
-                  
-                  {safeBooking.extra_charges && safeBooking.extra_charges.length > 0 && 
-                    safeBooking.extra_charges.map((charge, index) => (
+                  {extraChargesArr.length > 0 && 
+                    extraChargesArr.map((charge, index) => (
                       <tr key={index} className="border-b border-border/50">
                         <td className="py-3 px-4 text-sm">
                           {charge.type}: {charge.description}
@@ -215,21 +241,21 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
                       </tr>
                     ))
                   }
-                  
-                  <tr className="border-b border-border/50">
-                    <td className="py-3 px-4">GST (18%)</td>
-                    <td className="py-3 px-4 text-right">₹ {taxes.toLocaleString()}</td>
-                  </tr>
-                  
+                  {/* GST row only if GST is enabled */}
+                  {gstEnabled && (
+                    <tr className="border-b border-border/50">
+                      <td className="py-3 px-4">GST (18%)</td>
+                      <td className="py-3 px-4 text-right">₹ {taxes.toLocaleString()}</td>
+                    </tr>
+                  )}
                   <tr className="border-b border-border font-semibold text-lg bg-muted/30">
                     <td className="py-4 px-4">Total Amount</td>
                     <td className="py-4 px-4 text-right">₹ {totalWithTaxes.toLocaleString()}</td>
                   </tr>
-
-                  {safeBooking.payment_method && (
+                  {booking.paymentMethod && (
                     <tr className="border-b border-border/50">
                       <td className="py-3 px-4">Payment Method</td>
-                      <td className="py-3 px-4 text-right capitalize">{safeBooking.payment_method}</td>
+                      <td className="py-3 px-4 text-right capitalize">{booking.paymentMethod}</td>
                     </tr>
                   )}
                 </tbody>

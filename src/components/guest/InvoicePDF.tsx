@@ -129,24 +129,52 @@ const styles = StyleSheet.create({
   },
 });
 
+interface Booking {
+  id: number;
+  booking_id?: string;
+  pickup_location?: string;
+  drop_location?: string;
+  pickup_date?: string;
+  pickup_time?: string;
+  vehicle_type?: string;
+  status?: string;
+  total_amount?: number;
+  extra_charges?: Array<{
+    type: string;
+    amount: number;
+    description: string;
+  }>;
+  payment_method?: string;
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+  bookingNumber?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupDate?: string;
+  pickupTime?: string;
+  cab_type?: string;
+  cabType?: string;
+  passenger_name?: string;
+  passengerName?: string;
+  name?: string;
+  passenger_phone?: string;
+  passengerPhone?: string;
+  passenger_email?: string;
+  passengerEmail?: string;
+  totalAmount?: number;
+  paymentMethod?: string;
+  tripType?: string;
+  tripMode?: string;
+  extraCharges?: Array<{
+    type: string;
+    amount: number;
+    description: string;
+  }>;
+}
+
 interface InvoicePDFProps {
-  booking: {
-    booking_id: string;
-    guest_name: string;
-    guest_phone: string;
-    guest_email: string;
-    pickup_location: string;
-    drop_location: string;
-    pickup_date: string;
-    pickup_time: string;
-    vehicle_type: string;
-    extra_charges?: Array<{
-      type: string;
-      amount: number;
-      description: string;
-    }>;
-    payment_method?: string;
-  };
+  booking: Booking;
   subtotal: number;
   extraChargesTotal: number;
   taxes: number;
@@ -154,23 +182,34 @@ interface InvoicePDFProps {
 }
 
 export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalWithTaxes }: InvoicePDFProps) => {
-  // Helper functions to safely access booking data
-  const getBookingId = () => booking?.booking_id || 'N/A';
-  const getGuestName = () => booking?.guest_name || 'Guest';
-  const getGuestPhone = () => booking?.guest_phone || '';
-  const getGuestEmail = () => booking?.guest_email || '';
-  const getPickupLocation = () => booking?.pickup_location || 'Location not specified';
-  const getDropLocation = () => booking?.drop_location || 'Destination not specified';
+  // Helper functions to safely access booking data (support both guest and admin/booking API field names)
+  const getBookingId = () => (booking?.booking_id || booking?.bookingNumber || booking?.id || '-').toString();
+  const getGuestName = () => booking?.guest_name || booking?.passenger_name || booking?.passengerName || booking?.name || '-';
+  const getGuestPhone = () => booking?.guest_phone || booking?.passenger_phone || booking?.passengerPhone || '-';
+  const getGuestEmail = () => booking?.guest_email || booking?.passenger_email || booking?.passengerEmail || '-';
+  const getPickupLocation = () => booking?.pickup_location || booking?.pickupLocation || '-';
+  const getDropLocation = () => booking?.drop_location || booking?.dropLocation || '-';
   const getPickupDate = () => {
     try {
-      return booking?.pickup_date ? new Date(booking.pickup_date).toLocaleDateString() : new Date().toLocaleDateString();
+      if (booking?.pickup_date) return new Date(booking.pickup_date).toLocaleDateString();
+      if (booking?.pickupDate) return new Date(booking.pickupDate).toLocaleDateString();
+      return '-';
     } catch {
-      return new Date().toLocaleDateString();
+      return '-';
     }
   };
-  const getPickupTime = () => booking?.pickup_time || '00:00';
-  const getVehicleType = () => booking?.vehicle_type || 'Not specified';
-  const getPaymentMethod = () => booking?.payment_method || '';
+  const getPickupTime = () => {
+    if (booking?.pickup_time) return booking.pickup_time;
+    if (booking?.pickupTime) return booking.pickupTime;
+    if (booking?.pickup_date) return new Date(booking.pickup_date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    if (booking?.pickupDate) return new Date(booking.pickupDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return '-';
+  };
+  const getVehicleType = () => booking?.vehicle_type || booking?.cab_type || booking?.cabType || '-';
+  const getPaymentMethod = () => booking?.payment_method || booking?.paymentMethod || '-';
+
+  // For extra charges, support both camelCase and snake_case
+  const extraChargesArr = booking.extraCharges || booking.extra_charges || [];
 
   return (
   <Document>
@@ -194,15 +233,15 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
           <Text style={styles.sectionTitle}>Customer Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{getGuestName()}</Text>
+            <Text style={styles.value}>{getGuestName() || '-'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.label}>Phone:</Text>
-            <Text style={styles.value}>{getGuestPhone()}</Text>
+            <Text style={styles.value}>{getGuestPhone() || '-'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.label}>Email:</Text>
-            <Text style={styles.value}>{getGuestEmail()}</Text>
+            <Text style={styles.value}>{getGuestEmail() || '-'}</Text>
           </View>
         </View>
 
@@ -210,21 +249,21 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
           <Text style={styles.sectionTitle}>Trip Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.label}>From:</Text>
-            <Text style={styles.value}>{getPickupLocation()}</Text>
+            <Text style={styles.value}>{getPickupLocation() || '-'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.label}>To:</Text>
-            <Text style={styles.value}>{getDropLocation()}</Text>
+            <Text style={styles.value}>{getDropLocation() || '-'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.label}>Date:</Text>
             <Text style={styles.value}>
-              {getPickupDate()} at {getPickupTime()}
+              {getPickupDate()} at {getPickupTime() || '-'}
             </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.label}>Vehicle:</Text>
-            <Text style={styles.value}>{getVehicleType()}</Text>
+            <Text style={styles.value}>{getVehicleType() || '-'}</Text>
           </View>
         </View>
       </View>
@@ -238,12 +277,12 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
             <Text>₹{subtotal.toLocaleString()}</Text>
           </View>
 
-          {booking.extra_charges && booking.extra_charges.length > 0 && (
+          {extraChargesArr.length > 0 && (
             <>
-              {booking.extra_charges.map((charge: any, index: number) => (
+              {extraChargesArr.map((charge: any, index: number) => (
                 <View key={index} style={styles.extraChargeRow}>
-                  <Text>{charge.type}: {charge.description}</Text>
-                  <Text>₹{charge.amount.toLocaleString()}</Text>
+                  <Text>{(charge.type || '-') + ': ' + (charge.description || '-')}</Text>
+                  <Text>₹{typeof charge.amount === 'number' ? charge.amount.toLocaleString() : '-'}</Text>
                 </View>
               ))}
             </>
@@ -262,7 +301,7 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
           {getPaymentMethod() && (
             <View style={styles.billingRow}>
               <Text>Payment Method</Text>
-              <Text style={{ textTransform: 'capitalize' }}>{getPaymentMethod()}</Text>
+              <Text style={{ textTransform: 'capitalize' }}>{getPaymentMethod() || '-'}</Text>
             </View>
           )}
         </View>
