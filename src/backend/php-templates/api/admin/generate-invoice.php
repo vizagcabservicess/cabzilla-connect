@@ -632,8 +632,34 @@ try {
             logInvoiceError("Error saving invoice to database", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Continue and return the invoice even if saving to DB fails
         }
+        // First ensure the required columns exist in bookings table
+        try {
+            // Check and add GST columns if they don't exist
+            $gstColumns = [
+                'gst_enabled' => "TINYINT(1) DEFAULT 0",
+                'gst_number' => "VARCHAR(20) DEFAULT ''",
+                'company_name' => "VARCHAR(100) DEFAULT ''", 
+                'company_address' => "TEXT DEFAULT ''"
+            ];
+            
+            foreach ($gstColumns as $column => $definition) {
+                $checkColumn = $conn->query("SHOW COLUMNS FROM bookings LIKE '$column'");
+                if (!$checkColumn || $checkColumn->num_rows === 0) {
+                    $conn->query("ALTER TABLE bookings ADD COLUMN $column $definition");
+                    logInvoiceError("Added missing column $column to bookings table");
+                }
+            }
+        } catch (Exception $e) {
+            logInvoiceError("Error ensuring booking columns exist", ['error' => $e->getMessage()]);
+        }
+        
         // Also update the bookings table with the latest invoice settings
         try {
+            $gstEnabledInt = $gstEnabled ? 1 : 0;
+            $gstNumberVal = ($gstEnabled && $gstDetails && isset($gstDetails['gstNumber'])) ? $gstDetails['gstNumber'] : '';
+            $companyNameVal = ($gstEnabled && $gstDetails && isset($gstDetails['companyName'])) ? $gstDetails['companyName'] : '';
+            $companyAddressVal = ($gstEnabled && $gstDetails && isset($gstDetails['companyAddress'])) ? $gstDetails['companyAddress'] : '';
+            
             logInvoiceError("Attempting to update bookings table with invoice settings", [
                 'booking_id' => $booking['id'],
                 'gst_enabled' => $gstEnabled,
@@ -641,6 +667,7 @@ try {
                 'company_name' => $companyNameVal,
                 'company_address' => $companyAddressVal
             ]);
+            
             $updateBookingStmt = $conn->prepare("
                 UPDATE bookings SET
                     gst_enabled = ?,
@@ -649,10 +676,7 @@ try {
                     company_address = ?
                 WHERE id = ?
             ");
-            $gstEnabledInt = $gstEnabled ? 1 : 0;
-            $gstNumberVal = ($gstEnabled && $gstDetails) ? $gstDetails['gstNumber'] : null;
-            $companyNameVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyName'] : null;
-            $companyAddressVal = ($gstEnabled && $gstDetails) ? $gstDetails['companyAddress'] : null;
+            
             $updateBookingStmt->bind_param(
                 "isssi",
                 $gstEnabledInt,
@@ -661,6 +685,7 @@ try {
                 $companyAddressVal,
                 $booking['id']
             );
+            
             $success = $updateBookingStmt->execute();
             if (!$success || $updateBookingStmt->error) {
                 logInvoiceError("Error executing bookings update", [
