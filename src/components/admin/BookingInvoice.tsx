@@ -71,28 +71,50 @@ export function BookingInvoice({
       if (booking && booking.id) {
         try {
           setLoading(true);
+          console.log('Fetching latest invoice for booking:', booking.id);
           const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
           const data = await resp.json();
+          console.log('Invoice fetch response:', data);
+          
           if (data.status === 'success' && data.invoice) {
+            console.log('Setting invoice data and form values from fetched invoice:', data.invoice);
             setInvoiceData(data.invoice);
-            setGstEnabled(!!data.invoice.gst_enabled);
-            setGstDetails({
+            
+            // Update all form state from the fetched invoice
+            const fetchedGstEnabled = !!data.invoice.gst_enabled;
+            const fetchedGstDetails = {
               gstNumber: data.invoice.gst_number || '',
               companyName: data.invoice.company_name || '',
               companyAddress: data.invoice.company_address || ''
+            };
+            const fetchedInvoiceNumber = data.invoice.invoice_number || '';
+            const fetchedIncludeTax = !!data.invoice.include_tax;
+            const fetchedIsIGST = !!data.invoice.is_igst;
+            
+            console.log('Setting form values:', {
+              gstEnabled: fetchedGstEnabled,
+              gstDetails: fetchedGstDetails,
+              customInvoiceNumber: fetchedInvoiceNumber,
+              includeTax: fetchedIncludeTax,
+              isIGST: fetchedIsIGST
             });
-            setCustomInvoiceNumber(data.invoice.invoice_number || '');
-            setIncludeTax(!!data.invoice.include_tax);
-            setIsIGST(!!data.invoice.is_igst);
-            // Set htmlContent if available
+            
+            setGstEnabled(fetchedGstEnabled);
+            setGstDetails(fetchedGstDetails);
+            setCustomInvoiceNumber(fetchedInvoiceNumber);
+            setIncludeTax(fetchedIncludeTax);
+            setIsIGST(fetchedIsIGST);
+            
+            // Set HTML content if available
             if (data.invoice.invoice_html) {
               setHtmlContent(data.invoice.invoice_html);
             }
           } else {
-            // No existing invoice found, will generate new one with default settings
+            console.log('No existing invoice found, using default settings');
             setInvoiceData(null);
           }
         } catch (e) {
+          console.error('Error fetching invoice:', e);
           setInvoiceData(null);
         } finally {
           setLoading(false);
@@ -102,13 +124,12 @@ export function BookingInvoice({
     fetchLatestInvoice();
   }, [booking.id]);
 
-  // Separate effect to handle initial invoice generation
+  // Only generate new invoice if we don't have existing data and we're not loading
   useEffect(() => {
-    if (booking && booking.id && !loading && !invoiceData) {
-      // Only generate if we don't have existing invoice data
+    if (booking && booking.id && !loading && invoiceData === null) {
+      console.log('No existing invoice found, generating new one with current settings');
       handleGenerateInvoice();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id, loading, invoiceData]);
 
   const validateGSTDetails = () => {
