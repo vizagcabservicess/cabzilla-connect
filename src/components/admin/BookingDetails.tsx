@@ -34,18 +34,39 @@ export function BookingDetails({
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
   
-  // Lift invoice state up to persist across tab changes
-  const [invoiceState, setInvoiceState] = useState({
-    gstEnabled: false,
-    isIGST: false,
-    includeTax: true,
-    customInvoiceNumber: '',
-    gstDetails: {
-      gstNumber: '',
-      companyName: '',
-      companyAddress: ''
+  // Lift invoice state up to persist across tab changes and browser sessions
+  const getStoredInvoiceState = () => {
+    try {
+      const stored = localStorage.getItem(`invoice-settings-${booking.id}`);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error('Error loading stored invoice settings:', error);
     }
-  });
+    return {
+      gstEnabled: false,
+      isIGST: false,
+      includeTax: true,
+      customInvoiceNumber: '',
+      gstDetails: {
+        gstNumber: '',
+        companyName: '',
+        companyAddress: ''
+      }
+    };
+  };
+
+  const [invoiceState, setInvoiceState] = useState(getStoredInvoiceState);
+
+  // Save invoice state to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(`invoice-settings-${booking.id}`, JSON.stringify(invoiceState));
+    } catch (error) {
+      console.error('Error saving invoice settings:', error);
+    }
+  }, [invoiceState, booking.id]);
 
   useEffect(() => {
     console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
