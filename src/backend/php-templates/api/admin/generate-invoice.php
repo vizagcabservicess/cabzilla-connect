@@ -66,6 +66,7 @@ try {
     $isIGST = false;
     $includeTax = true;
     $customInvoiceNumber = '';
+    $lockedBaseFare = null;
     
     // Handle both GET and POST methods
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -94,6 +95,10 @@ try {
         
         if (isset($data['gstDetails'])) {
             $gstDetails = $data['gstDetails'];
+        }
+        
+        if (isset($data['lockedBaseFare'])) {
+            $lockedBaseFare = floatval($data['lockedBaseFare']);
         }
     } 
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -125,6 +130,10 @@ try {
                 'companyAddress' => isset($_GET['companyAddress']) ? $_GET['companyAddress'] : '',
             ];
         }
+        
+        if (isset($_GET['lockedBaseFare'])) {
+            $lockedBaseFare = floatval($_GET['lockedBaseFare']);
+        }
     }
     
     logInvoiceError("Generate invoice request", [
@@ -132,7 +141,8 @@ try {
         'gstEnabled' => $gstEnabled ? "true" : "false",
         'isIGST' => $isIGST ? "true" : "false",
         'includeTax' => $includeTax ? "true" : "false",
-        'customInvoiceNumber' => $customInvoiceNumber
+        'customInvoiceNumber' => $customInvoiceNumber,
+        'lockedBaseFare' => $lockedBaseFare
     ]);
     
     if (!$bookingId && !$demoMode) {
@@ -269,9 +279,17 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
+    // Use locked base fare if provided, otherwise use booking total amount
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
+    } else {
+        $totalAmount = (float)$booking['total_amount'];
+        $baseFare = $totalAmount;
+        logInvoiceError("Using booking total amount as base fare", ['total_amount' => $totalAmount]);
+    }
+    
     // Add extra charges to base fare before tax
-    $totalAmount = (float)$booking['total_amount'];
-    $baseFare = $totalAmount;
     if ($totalExtraCharges > 0) {
         $baseFare += $totalExtraCharges;
     }
@@ -418,7 +436,7 @@ try {
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format((float)$booking['total_amount'], 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
                 </tr>';
     // Add extra charges as line items
     if (!empty($extraChargesArr)) {
