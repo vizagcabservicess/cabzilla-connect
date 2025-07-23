@@ -83,31 +83,35 @@ export function BookingInvoice({
           if (data.status === 'success' && data.invoice) {
             setInvoiceData(data.invoice);
             
-            // Update all form state from the fetched invoice
-            const fetchedGstEnabled = !!data.invoice.gst_enabled;
-            const fetchedGstDetails = {
-              gstNumber: data.invoice.gst_number || '',
-              companyName: data.invoice.company_name || '',
-              companyAddress: data.invoice.company_address || ''
-            };
-            const fetchedInvoiceNumber = data.invoice.invoice_number || '';
-            const fetchedIncludeTax = !!data.invoice.include_tax;
-            const fetchedIsIGST = !!data.invoice.is_igst;
-            
-            onInvoiceStateChange({
-              gstEnabled: fetchedGstEnabled,
-              gstDetails: fetchedGstDetails,
-              customInvoiceNumber: fetchedInvoiceNumber,
-              includeTax: fetchedIncludeTax,
-              isIGST: fetchedIsIGST
-            });
+            // Only update state if there's no stored state in localStorage
+            const hasStoredState = localStorage.getItem(`invoice-settings-${booking.id}`);
+            if (!hasStoredState) {
+              // Update form state from the fetched invoice only if no localStorage data exists
+              const fetchedGstEnabled = !!data.invoice.gst_enabled;
+              const fetchedGstDetails = {
+                gstNumber: data.invoice.gst_number || '',
+                companyName: data.invoice.company_name || '',
+                companyAddress: data.invoice.company_address || ''
+              };
+              const fetchedInvoiceNumber = data.invoice.invoice_number || '';
+              const fetchedIncludeTax = !!data.invoice.include_tax;
+              const fetchedIsIGST = !!data.invoice.is_igst;
+              
+              onInvoiceStateChange({
+                gstEnabled: fetchedGstEnabled,
+                gstDetails: fetchedGstDetails,
+                customInvoiceNumber: fetchedInvoiceNumber,
+                includeTax: fetchedIncludeTax,
+                isIGST: fetchedIsIGST
+              });
+            }
             
             // Set HTML content if available
             if (data.invoice.invoice_html) {
               setHtmlContent(data.invoice.invoice_html);
             }
           } else {
-            console.log('No existing invoice found, using default settings');
+            console.log('No existing invoice found, using stored settings');
             setInvoiceData(null);
           }
         } catch (e) {
@@ -119,7 +123,7 @@ export function BookingInvoice({
       }
     }
     fetchLatestInvoice();
-  }, [booking.id]);
+  }, [booking.id, onInvoiceStateChange]);
 
   // Only generate new invoice if we don't have existing data and we're not loading
   useEffect(() => {
