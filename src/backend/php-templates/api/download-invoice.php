@@ -427,7 +427,7 @@ try {
             <div class="invoice-header">
                 <div>
                     <h1>INVOICE</h1>
-                    <p style="margin-top: 5px; color: #777;">Vizag Cab Services</p>
+                    <p style="margin-top: 5px; color: #777;">Vizag Taxi Hub</p>
                 </div>
                 <div class="company-info">
                     <h2>#'.$invoiceNumber.'</h2>
@@ -552,8 +552,8 @@ try {
             </div>
             
             <div class="footer">
-                <p>Thank you for choosing Vizag Cab Services!</p>
-                <p>For inquiries, please contact: info@vizagcabs.com | +91 9876543210</p>
+                <p>Thank you for choosing Vizag Taxi Hub</p>
+                <p>For inquiries, please contact: info@vizagtaxihub.com | +91 9966363662</p>
                 <p>Generated on: '.date('d M Y H:i:s').'</p>
             </div>
         </div>

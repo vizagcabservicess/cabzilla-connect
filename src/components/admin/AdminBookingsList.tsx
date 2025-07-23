@@ -853,7 +853,6 @@ export function AdminBookingsList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center font-semibold text-lg">
-                        <IndianRupee className="h-4 w-4 mr-1" />
                         {formatPrice(booking.totalAmount)}
                       </div>
                     </TableCell>

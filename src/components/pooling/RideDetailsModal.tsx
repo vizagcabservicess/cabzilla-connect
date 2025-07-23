@@ -51,7 +51,7 @@ export function RideDetailsModal({ ride, open, onClose, onBook }: RideDetailsMod
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
+          <DialogTitle className="flex items-center space-x-2 text-base font-semibold">
             {getRideTypeIcon()}
             <span>{ride.fromLocation} → {ride.toLocation}</span>
           </DialogTitle>

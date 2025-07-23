@@ -136,7 +136,7 @@ export function BookingDetails({
           <Card className="p-6">
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold mb-2 text-gray-700">Customer Details</h3>
+                <h3 className="text-base font-medium mb-2 text-gray-700">Customer Details</h3>
                 <p><span className="font-medium">Name:</span> {booking.passengerName}</p>
                 <p><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
                 <p><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
@@ -146,7 +146,7 @@ export function BookingDetails({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-2 text-gray-700">Trip Details</h3>
+                <h3 className="text-base font-medium mb-2 text-gray-700">Trip Details</h3>
                 <p><span className="font-medium">Trip Type:</span> {booking.tripType} {booking.tripMode && `(${booking.tripMode})`}</p>
                 <p><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
                 {booking.dropLocation && <p><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
@@ -157,7 +157,7 @@ export function BookingDetails({
 
             {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
               <div className="mt-6 border-t pt-4">
-                <h3 className="font-semibold mb-2 text-gray-700">Driver Details</h3>
+                <h3 className="text-base font-medium mb-2 text-gray-700">Driver Details</h3>
                 {booking.driverName && <p><span className="font-medium">Name:</span> {booking.driverName}</p>}
                 {booking.driverPhone && <p><span className="font-medium">Phone:</span> {booking.driverPhone}</p>}
                 {booking.vehicleNumber && <p><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>}

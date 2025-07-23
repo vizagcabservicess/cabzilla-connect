@@ -191,7 +191,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b border-border pb-4">
-            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
           </DialogHeader>
           <div className="py-8 text-center text-lg">Loading invoice...</div>
         </DialogContent>
@@ -203,7 +203,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b border-border pb-4">
-            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <iframe
@@ -225,7 +225,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b border-border pb-4">
-            <DialogTitle className="text-2xl font-bold text-center">INVOICE</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
           </DialogHeader>
           <div className="py-8 text-center text-lg text-red-500">{invoiceError}</div>
           <div className="flex gap-3 pt-6 border-t border-border">
@@ -240,7 +240,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="border-b border-border pb-4">
-          <DialogTitle className="text-2xl font-bold text-center">
+          <DialogTitle className="text-base font-semibold text-center">
             INVOICE
           </DialogTitle>
         </DialogHeader>
@@ -249,7 +249,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           {/* Invoice Header */}
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-blue-600 mb-2">Vizag Taxi Hub</h1>
+              <h1 className="text-base font-medium text-blue-600 mb-2">Vizag Taxi Hub</h1>
               <p className="text-muted-foreground">Your trusted travel partner</p>
             </div>
             <div className="text-right">
