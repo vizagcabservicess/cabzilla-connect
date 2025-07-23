@@ -7,10 +7,11 @@ const Table = React.forwardRef<
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
   <div 
-    className="relative w-full overflow-x-auto overflow-y-visible" 
+    className="relative w-full overflow-x-scroll overflow-y-visible" 
     style={{
       scrollbarWidth: 'thin',
-      scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))'
+      scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))',
+      scrollbarGutter: 'stable'
     }}
   >
     <table
