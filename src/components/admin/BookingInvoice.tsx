@@ -23,7 +23,7 @@ interface InvoiceState {
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string) => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
@@ -213,18 +213,30 @@ export function BookingInvoice({
         return;
       }
       
-      console.log('Generating invoice for booking:', booking.id, 
-                 'with GST:', gstEnabled, 
-                 'IGST:', isIGST, 
-                 'Include Tax:', includeTax, 
-                 'Custom Invoice Number:', customInvoiceNumber,
-                 'LOCKED BASE FARE:', baseFare);
-                 
+      console.log('🔥 INVOICE GENERATION DEBUG:');
+      console.log('Booking ID:', booking.id);
+      console.log('Booking object:', booking);
+      console.log('Locked Base Fare (frontend):', baseFare);
+      console.log('Booking totalAmount:', booking.totalAmount);
+      console.log('Booking fare:', booking.fare);
+      console.log('Extra charges total:', extraChargesTotal);
+      console.log('GST Settings:', { gstEnabled, isIGST, includeTax });
+      
       // CRITICAL: Pass the locked base fare to prevent backend recalculation
       const extendedGstDetails = gstEnabled ? {
         ...gstDetails,
-        lockedBaseFare: baseFare  // Include the locked base fare
-      } : undefined;
+        lockedBaseFare: baseFare,  // Include the locked base fare
+        originalTotalAmount: booking.totalAmount, // For comparison
+        originalFare: booking.fare, // Original fare field
+        extraChargesTotal: extraChargesTotal // Extra charges
+      } : {
+        lockedBaseFare: baseFare,
+        originalTotalAmount: booking.totalAmount,
+        originalFare: booking.fare,
+        extraChargesTotal: extraChargesTotal
+      };
+      
+      console.log('Extended GST Details being sent:', extendedGstDetails);
                  
       const result = await onGenerateInvoice(
         gstEnabled, 
@@ -234,7 +246,8 @@ export function BookingInvoice({
         customInvoiceNumber.trim() || undefined
       );
       
-      console.log('Invoice generation result:', result);
+      console.log('📨 Invoice generation result received:', result);
+      console.log('📊 Result data structure:', result?.data);
       
       if (result && result.data) {
         setInvoiceData(result.data);
@@ -612,19 +625,35 @@ export function BookingInvoice({
                 <Label htmlFor="igst">Inter-state (IGST 12%)</Label>
               </div>
             </RadioGroup>
-          </div>
-        )}
-        <div>
-          <Button 
-            variant="outline" 
-            onClick={handleRegenerateInvoice}
-            disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
-            className="w-full"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
-            Regenerate Invoice with Current Settings
-          </Button>
-        </div>
+           </div>
+         )}
+         <div className="space-y-2">
+           <Button 
+             variant="outline" 
+             onClick={handleRegenerateInvoice}
+             disabled={loading || isSubmitting || regenerating || (gstEnabled && (!gstDetails.gstNumber || !gstDetails.companyName))}
+             className="w-full"
+           >
+             <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+             Regenerate Invoice with Current Settings
+           </Button>
+           
+           {/* Debug button to reset base fare cache */}
+           <Button 
+             variant="destructive" 
+             size="sm"
+             onClick={() => {
+               resetBaseFare();
+               toast({
+                 title: "Base Fare Cache Cleared",
+                 description: "The locked base fare has been reset. Please regenerate the invoice."
+               });
+             }}
+             className="w-full"
+           >
+             🔧 Reset Base Fare Cache (Debug)
+           </Button>
+         </div>
       </div>
     );
   };

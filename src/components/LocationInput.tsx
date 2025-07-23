@@ -94,22 +94,27 @@ export function LocationInput({
       return;
     }
     
-    // Update refs
-    valueRef.current = value;
-    locationRef.current = location;
-    
-    // Set input value based on value or location
-    if (typeof value === 'string') {
-      setInputValue(value);
-    } else if (value && typeof value === 'object') {
-      setInputValue(value.name || value.address || "");
-    } else if (location) {
-      setInputValue(location.name || location.address || "");
+    // Only update if we haven't initialized yet or if there's a real change
+    if (!initializedRef.current || 
+        (valueRef.current !== value || locationRef.current !== location)) {
+      
+      // Update refs
+      valueRef.current = value;
+      locationRef.current = location;
+      
+      // Set input value based on value or location (without triggering onChange)
+      if (typeof value === 'string') {
+        setInputValue(value);
+      } else if (value && typeof value === 'object') {
+        setInputValue(value.name || value.address || "");
+      } else if (location) {
+        setInputValue(location.name || location.address || "");
+      }
+      
+      // Mark as initialized
+      initializedRef.current = true;
     }
-    
-    // Mark as initialized
-    initializedRef.current = true;
-  }, [value, location]);
+  }, [value, location]); // Keep dependencies but add better loop prevention
   
   // Filter suggestions based on input value
   useEffect(() => {
