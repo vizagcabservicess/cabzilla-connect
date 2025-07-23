@@ -49,15 +49,32 @@ export function BookingAdvancedSettings({
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Calculate base amount (total - discount - extra charges)
+  // Calculate totals
   const extraChargesTotal = extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
-  const baseAmount = formData.totalAmount - formData.discountAmount - extraChargesTotal;
+  
+  // Recalculate total amount when extra charges change
+  useEffect(() => {
+    const originalTotal = booking.totalAmount || 0;
+    const newTotal = originalTotal + extraChargesTotal - formData.discountAmount;
+    
+    if (Math.abs(newTotal - formData.totalAmount) > 0.01) { // Use small threshold to avoid float precision issues
+      setFormData(prev => ({ ...prev, totalAmount: Math.max(0, newTotal) }));
+    }
+  }, [extraChargesTotal]); // Only depend on extraChargesTotal to avoid infinite loops
+
+  // For display purposes - calculate what the base service amount would be
+  const baseAmount = booking.totalAmount || 0;
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    const newFormData = { ...formData, [field]: value };
+    
+    // If total amount is manually changed, recalculate discount if it's percentage-based
+    if (field === 'totalAmount' && formData.discountType === 'percentage' && formData.discountValue > 0) {
+      const originalTotal = booking.totalAmount || 0;
+      newFormData.discountAmount = Math.round((originalTotal * formData.discountValue) / 100);
+    }
+    
+    setFormData(newFormData);
     
     // Clear error when user starts typing
     if (errors[field]) {
@@ -73,12 +90,18 @@ export function BookingAdvancedSettings({
     
     // Auto-calculate discount amount based on type and value
     if (field === 'discountType' || field === 'discountValue') {
+      // Use the original booking total as base for percentage calculations
+      const originalTotal = booking.totalAmount || 0;
+      
       if (newFormData.discountType === 'percentage') {
         const discountPercent = Math.min(Math.max(newFormData.discountValue, 0), 100);
-        newFormData.discountAmount = Math.round((baseAmount * discountPercent) / 100);
+        newFormData.discountAmount = Math.round((originalTotal * discountPercent) / 100);
       } else {
         newFormData.discountAmount = Math.max(newFormData.discountValue, 0);
       }
+      
+      // Recalculate total amount: original + extra charges - discount
+      newFormData.totalAmount = originalTotal + extraChargesTotal - newFormData.discountAmount;
     }
     
     setFormData(newFormData);
