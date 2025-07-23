@@ -217,11 +217,18 @@ export function BookingInvoice({
                  'with GST:', gstEnabled, 
                  'IGST:', isIGST, 
                  'Include Tax:', includeTax, 
-                 'Custom Invoice Number:', customInvoiceNumber);
+                 'Custom Invoice Number:', customInvoiceNumber,
+                 'LOCKED BASE FARE:', baseFare);
+                 
+      // CRITICAL: Pass the locked base fare to prevent backend recalculation
+      const extendedGstDetails = gstEnabled ? {
+        ...gstDetails,
+        lockedBaseFare: baseFare  // Include the locked base fare
+      } : undefined;
                  
       const result = await onGenerateInvoice(
         gstEnabled, 
-        gstEnabled ? gstDetails : undefined, 
+        extendedGstDetails, 
         isIGST,
         includeTax,
         customInvoiceNumber.trim() || undefined
@@ -316,6 +323,7 @@ export function BookingInvoice({
       includeTax: includeTax ? '1' : '0',
       format: htmlFormat ? 'html' : 'pdf',
       direct_download: directDownload ? '1' : '0',
+      lockedBaseFare: baseFare.toString(),  // CRITICAL: Pass locked base fare
       v: downloadCount.toString(),
       t: timestamp.toString(),
       r: randomPart
