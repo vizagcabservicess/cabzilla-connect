@@ -66,59 +66,56 @@ export function BookingInvoice({
     'Cash', 'Credit Card', 'Current Account', 'Overdraft account', 'PhonePe'
   ];
 
-  // CRITICAL FIX: Calculate base fare correctly - ALWAYS USE ORIGINAL AMOUNT
+  // CRITICAL FIX: Use original fare field - NEVER use totalAmount for base fare calculation
   const extraChargesTotal = Array.isArray(booking.extraCharges)
     ? booking.extraCharges.reduce((sum, c) => sum + (c.amount || 0), 0)
     : 0;
   
   // Generate keys for storing original values
   const originalBaseFareKey = `original-base-fare-${booking.id}`;
-  const originalTotalKey = `original-total-${booking.id}`;
   
   let baseFare = 0;
   
   // Check if we have a stored original base fare
   const storedBaseFare = localStorage.getItem(originalBaseFareKey);
-  const storedOriginalTotal = localStorage.getItem(originalTotalKey);
   
   if (storedBaseFare && !isNaN(parseFloat(storedBaseFare))) {
     // Use the stored original base fare (never changes)
     baseFare = parseFloat(storedBaseFare);
     console.log(`Using locked base fare for booking ${booking.id}: ₹${baseFare}`);
   } else {
-    // This is the first time - calculate the original base fare from booking data
-    // If booking.totalAmount seems to already include GST (suspiciously high), try to reverse it
-    const rawTotal = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0);
+    // CRITICAL: Use booking.fare (original fare) instead of totalAmount which may include GST
+    const originalFare = (typeof booking.fare === 'number' ? booking.fare : 0);
     
-    // Store the original total amount for reference
-    localStorage.setItem(originalTotalKey, rawTotal.toString());
-    
-    // Calculate base fare as: original total - extra charges
-    baseFare = rawTotal - extraChargesTotal;
-    
-    // If the base fare seems unusually high (likely includes GST), try to extract the pre-GST amount
-    // This handles cases where booking.totalAmount already had GST applied
-    if (baseFare > 15000) { // Threshold check - adjust as needed
-      // Check if this might be a GST-inclusive amount by seeing if dividing by 1.12 makes sense
-      const possiblePreGstAmount = baseFare / 1.12;
-      console.log(`Base fare seems high (₹${baseFare}), checking if it includes GST. Pre-GST would be: ₹${possiblePreGstAmount}`);
+    if (originalFare > 0) {
+      // Use the original fare from booking record
+      baseFare = originalFare;
+      console.log(`Using booking.fare as base fare for booking ${booking.id}: ₹${baseFare}`);
+    } else {
+      // Fallback: Calculate from totalAmount but subtract extra charges
+      // This handles legacy bookings that might not have the fare field populated
+      const rawTotal = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0);
+      baseFare = rawTotal - extraChargesTotal;
       
-      // If the difference is reasonable, use the pre-GST amount
-      if (possiblePreGstAmount > 1000 && possiblePreGstAmount < baseFare * 0.95) {
-        baseFare = Math.round(possiblePreGstAmount);
-        console.log(`Using reverse-calculated base fare: ₹${baseFare}`);
+      // If this seems to include GST (high amount), try to reverse it
+      if (baseFare > 15000) {
+        const possiblePreGstAmount = baseFare / 1.12;
+        if (possiblePreGstAmount > 1000 && possiblePreGstAmount < baseFare * 0.95) {
+          baseFare = Math.round(possiblePreGstAmount);
+          console.log(`Reverse-calculated base fare from totalAmount: ₹${baseFare}`);
+        }
       }
+      console.log(`Calculated base fare for booking ${booking.id}: ₹${baseFare}`);
     }
     
     // Store the calculated original base fare (this never changes)
     localStorage.setItem(originalBaseFareKey, baseFare.toString());
-    console.log(`Calculated and locked original base fare for booking ${booking.id}: ₹${baseFare}`);
+    console.log(`Locked original base fare for booking ${booking.id}: ₹${baseFare}`);
   }
   
   // Function to reset base fare if needed (for development/debugging)
   const resetBaseFare = () => {
     localStorage.removeItem(originalBaseFareKey);
-    localStorage.removeItem(originalTotalKey);
     console.log(`Base fare reset for booking ${booking.id}`);
   };
 
