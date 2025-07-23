@@ -66,11 +66,32 @@ export function BookingInvoice({
     'Cash', 'Credit Card', 'Current Account', 'Overdraft account', 'PhonePe'
   ];
 
-  // PATCH: Calculate base fare and extra charges correctly
+  // PATCH: Calculate base fare and extra charges correctly - LOCK THE BASE FARE
   const extraChargesTotal = Array.isArray(booking.extraCharges)
     ? booking.extraCharges.reduce((sum, c) => sum + (c.amount || 0), 0)
     : 0;
-  const baseFare = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - extraChargesTotal;
+  
+  // Store the original base fare in localStorage to prevent it from changing
+  const originalBaseFareKey = `original-base-fare-${booking.id}`;
+  let baseFare = 0;
+  
+  // Check if we have a stored original base fare
+  const storedBaseFare = localStorage.getItem(originalBaseFareKey);
+  if (storedBaseFare && !isNaN(parseFloat(storedBaseFare))) {
+    baseFare = parseFloat(storedBaseFare);
+    console.log(`Using stored base fare for booking ${booking.id}: ₹${baseFare}`);
+  } else {
+    // Calculate and store the original base fare ONLY once
+    baseFare = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0) - extraChargesTotal;
+    localStorage.setItem(originalBaseFareKey, baseFare.toString());
+    console.log(`Calculated and stored new base fare for booking ${booking.id}: ₹${baseFare}`);
+  }
+  
+  // Function to reset base fare if needed (for development/debugging)
+  const resetBaseFare = () => {
+    localStorage.removeItem(originalBaseFareKey);
+    console.log(`Base fare reset for booking ${booking.id}`);
+  };
 
   useEffect(() => {
     async function fetchLatestInvoice() {
