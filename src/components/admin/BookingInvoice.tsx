@@ -13,12 +13,22 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+interface InvoiceState {
+  gstEnabled: boolean;
+  isIGST: boolean;
+  includeTax: boolean;
+  customInvoiceNumber: string;
+  gstDetails: GSTDetails;
+}
+
 interface BookingInvoiceProps {
   booking: Booking;
   onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: GSTDetails, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
+  invoiceState: InvoiceState;
+  onInvoiceStateChange: (state: InvoiceState) => void;
 }
 
 interface GSTDetails {
@@ -32,21 +42,17 @@ export function BookingInvoice({
   onGenerateInvoice,
   onClose,
   isSubmitting,
-  pdfUrl
+  pdfUrl,
+  invoiceState,
+  onInvoiceStateChange
 }: BookingInvoiceProps) {
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [gstEnabled, setGstEnabled] = useState(false);
-  const [isIGST, setIsIGST] = useState(false);
-  const [includeTax, setIncludeTax] = useState(true);
-  const [customInvoiceNumber, setCustomInvoiceNumber] = useState('');
-  const [gstDetails, setGstDetails] = useState<GSTDetails>({
-    gstNumber: '',
-    companyName: '',
-    companyAddress: ''
-  });
+  
+  // Use lifted state from props
+  const { gstEnabled, isIGST, includeTax, customInvoiceNumber, gstDetails } = invoiceState;
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<string>("html");
@@ -88,11 +94,13 @@ export function BookingInvoice({
             const fetchedIncludeTax = !!data.invoice.include_tax;
             const fetchedIsIGST = !!data.invoice.is_igst;
             
-            setGstEnabled(fetchedGstEnabled);
-            setGstDetails(fetchedGstDetails);
-            setCustomInvoiceNumber(fetchedInvoiceNumber);
-            setIncludeTax(fetchedIncludeTax);
-            setIsIGST(fetchedIsIGST);
+            onInvoiceStateChange({
+              gstEnabled: fetchedGstEnabled,
+              gstDetails: fetchedGstDetails,
+              customInvoiceNumber: fetchedInvoiceNumber,
+              includeTax: fetchedIncludeTax,
+              isIGST: fetchedIsIGST
+            });
             
             // Set HTML content if available
             if (data.invoice.invoice_html) {
@@ -385,9 +393,12 @@ export function BookingInvoice({
   };
 
   const handleGstToggle = (checked: boolean) => {
-    setGstEnabled(checked);
+    onInvoiceStateChange({
+      ...invoiceState,
+      gstEnabled: checked,
+      includeTax: checked ? true : invoiceState.includeTax
+    });
     if (checked && !includeTax) {
-      setIncludeTax(true);
       toast({
         title: "Tax Inclusion Enabled",
         description: "Enabling GST defaults to include tax in the price"
@@ -397,10 +408,13 @@ export function BookingInvoice({
 
   const handleGstDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setGstDetails(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    onInvoiceStateChange({
+      ...invoiceState,
+      gstDetails: {
+        ...invoiceState.gstDetails,
+        [name]: value
+      }
+    });
   };
 
   const handleRegenerateInvoice = () => {
@@ -458,7 +472,7 @@ export function BookingInvoice({
             id="custom-invoice"
             key={`custom-invoice-${forceRenderKey}`}
             value={customInvoiceNumber || ''}
-            onChange={(e) => setCustomInvoiceNumber(e.target.value)}
+            onChange={(e) => onInvoiceStateChange({...invoiceState, customInvoiceNumber: e.target.value})}
             placeholder="Optional - Leave blank for auto-generated number"
           />
           <p className="text-xs text-gray-500 mt-1">
@@ -481,7 +495,7 @@ export function BookingInvoice({
             id="tax-toggle"
             key={`tax-toggle-${forceRenderKey}`}
             checked={includeTax}
-            onCheckedChange={setIncludeTax}
+            onCheckedChange={(checked) => onInvoiceStateChange({...invoiceState, includeTax: checked})}
           />
           <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
         </div>
@@ -527,7 +541,7 @@ export function BookingInvoice({
             <RadioGroup 
               key={`gst-type-${forceRenderKey}`}
               value={isIGST ? "igst" : "cgst-sgst"} 
-              onValueChange={(value) => setIsIGST(value === "igst")}
+              onValueChange={(value) => onInvoiceStateChange({...invoiceState, isIGST: value === "igst"})}
               className="mt-2"
             >
               <div className="flex items-center space-x-2">

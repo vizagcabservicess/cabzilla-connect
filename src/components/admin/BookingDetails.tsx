@@ -33,6 +33,19 @@ export function BookingDetails({
   isSubmitting
 }: BookingDetailsProps) {
   const [activeTab, setActiveTab] = useState('details');
+  
+  // Lift invoice state up to persist across tab changes
+  const [invoiceState, setInvoiceState] = useState({
+    gstEnabled: false,
+    isIGST: false,
+    includeTax: true,
+    customInvoiceNumber: '',
+    gstDetails: {
+      gstNumber: '',
+      companyName: '',
+      companyAddress: ''
+    }
+  });
 
   useEffect(() => {
     console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
@@ -208,6 +221,8 @@ export function BookingDetails({
             onClose={() => handleTabChange('details')}
             isSubmitting={isSubmitting}
             pdfUrl={pdfUrl}
+            invoiceState={invoiceState}
+            onInvoiceStateChange={setInvoiceState}
           />
         </TabsContent>
 
