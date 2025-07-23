@@ -255,6 +255,15 @@ try {
         $totalExtraCharges = 150;
     }
 
+    // At the top, after POST/GET handling, set gstDetails to default if not set
+    if (!is_array($gstDetails)) {
+        $gstDetails = [
+            'gstNumber' => '',
+            'companyName' => '',
+            'companyAddress' => ''
+        ];
+    }
+
     // Current date for invoice generation
     $currentDate = date('Y-m-d');
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
@@ -535,11 +544,23 @@ try {
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
                 $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = $gstDetails && isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
-                $companyNameVal = $gstDetails && isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
-                $companyAddressVal = $gstDetails && isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
+                // Extract GST/company details safely
+                $gstNumberVal = isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
+                $companyNameVal = isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
+                $companyAddressVal = isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
                 $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                // Add debug logging before SQL
+                logInvoiceError('Invoice SQL values', [
+                    'gstEnabledInt' => $gstEnabledInt,
+                    'isIgstInt' => $isIgstInt,
+                    'includeTaxInt' => $includeTaxInt,
+                    'gstNumberVal' => $gstNumberVal,
+                    'companyNameVal' => $companyNameVal,
+                    'companyAddressVal' => $companyAddressVal,
+                    'taxAmountVal' => $taxAmountVal,
+                    'gstAmountVal' => $gstAmountVal
+                ]);
                 // 14 params: s = string, d = double, i = int
                 $stmt->bind_param(
                     "ssdddiiiisssdi",
@@ -587,9 +608,10 @@ try {
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
                 $includeTaxInt = $includeTax ? 1 : 0;
-                $gstNumberVal = $gstDetails && isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
-                $companyNameVal = $gstDetails && isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
-                $companyAddressVal = $gstDetails && isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
+                // Extract GST/company details safely
+                $gstNumberVal = isset($gstDetails['gstNumber']) ? $gstDetails['gstNumber'] : '';
+                $companyNameVal = isset($gstDetails['companyName']) ? $gstDetails['companyName'] : '';
+                $companyAddressVal = isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
                 $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 // 14 params: i = int, s = string, d = double
