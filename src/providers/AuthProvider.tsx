@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: 9,
         name: "Super Admin",
         email: "joelnagireddy@gmail.com",
-        phone: "+91 9966363662",
+        phone: "+91 9876543210",
         role: "super_admin" as const,
         is_active: true
       };

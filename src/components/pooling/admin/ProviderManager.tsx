@@ -43,7 +43,7 @@ const ProviderManager = () => {
     {
       id: 1,
       name: 'Rajesh Kumar',
-      phone: '+91 9966363662',
+      phone: '+91 9876543210',
       email: 'rajesh@example.com',
       rating: 4.8,
       totalRides: 156,

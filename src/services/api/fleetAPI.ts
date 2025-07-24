@@ -91,7 +91,7 @@ const mockDrivers = [
   {
     id: "d-001",
     name: "Rajesh Kumar",
-    phone: "+91 9966363662",
+    phone: "9876543210",
     license_number: "DL123456789012",
     status: "available"
   },

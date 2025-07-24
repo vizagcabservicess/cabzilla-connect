@@ -13,7 +13,7 @@ const mockRides: PoolingRide[] = [
     type: 'car',
     providerId: 1,
     providerName: 'Ravi Kumar',
-    providerPhone: '+91 9966363662',
+    providerPhone: '+91 9876543210',
     providerRating: 4.5,
     fromLocation: 'Hyderabad',
     toLocation: 'Vijayawada',

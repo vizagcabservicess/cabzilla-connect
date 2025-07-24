@@ -26,7 +26,7 @@ export function CustomerManagement() {
     { 
       id: 1, 
       name: 'Anil Kumar', 
-      phone: '9966363662', 
+      phone: '9876543210', 
       email: 'anil@example.com',
       totalRides: 45, 
       totalSpent: 38000, 

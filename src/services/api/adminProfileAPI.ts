@@ -67,10 +67,10 @@ export const adminProfileAPI = {
         return [
           {
             id: 1,
-            businessName: 'Vizag Taxi Hub',
+            businessName: 'Vizag Cabs Ltd',
             displayName: 'Vizag Express',
-            businessPhone: '+91 9966363662',
-            businessEmail: 'info@vizagtaxihub.com',
+            businessPhone: '+91 9876543210',
+            businessEmail: 'contact@vizagcabs.com',
             businessAddress: 'Beach Road, Vizag, AP 530017',
             description: 'Premium cab services in Vizag city',
             startingFare: 150,
@@ -82,8 +82,7 @@ export const adminProfileAPI = {
             isActive: true,
             vehicleCount: 25,
             bookingCount: 450,
-            adminUser: { name: 'Admin User', email: 'admin@example.com', phone: '+91 9966363662' },
-            adminUserId: 1,
+            adminUser: { id: 1, name: 'Admin User', email: 'admin@example.com' },
             createdAt: '2024-01-01T00:00:00Z',
             updatedAt: '2024-01-15T00:00:00Z'
           }
@@ -125,10 +124,10 @@ export const adminProfileAPI = {
           return [
             {
               id: 1,
-              businessName: 'Vizag Taxi Hub',
+              businessName: 'Vizag Cabs Ltd',
               displayName: 'Vizag Express',
-              businessPhone: '+91 9966363662',
-              businessEmail: 'info@vizagtaxihub.com',
+              businessPhone: '+91 9876543210',
+              businessEmail: 'contact@vizagcabs.com',
               businessAddress: 'Beach Road, Vizag, AP 530017',
               description: 'Premium cab services in Vizag city',
               startingFare: 150,
@@ -140,8 +139,7 @@ export const adminProfileAPI = {
               isActive: true,
               vehicleCount: 25,
               bookingCount: 450,
-              adminUser: { name: 'Admin User', email: 'admin@example.com', phone: '+91 9966363662' },
-              adminUserId: 1,
+              adminUser: { id: 1, name: 'Admin User', email: 'admin@example.com' },
               createdAt: '2024-01-01T00:00:00Z',
               updatedAt: '2024-01-15T00:00:00Z'
             }
@@ -153,10 +151,10 @@ export const adminProfileAPI = {
         return [
           {
             id: 1,
-            businessName: 'Vizag Taxi Hub',
+            businessName: 'Vizag Cabs Ltd',
             displayName: 'Vizag Express',
-            businessPhone: '+91 9966363662',
-            businessEmail: 'info@vizagtaxihub.com',
+            businessPhone: '+91 9876543210',
+            businessEmail: 'contact@vizagcabs.com',
             businessAddress: 'Beach Road, Vizag, AP 530017',
             description: 'Premium cab services in Vizag city',
             startingFare: 150,
@@ -168,8 +166,7 @@ export const adminProfileAPI = {
             isActive: true,
             vehicleCount: 25,
             bookingCount: 450,
-            adminUser: { name: 'Admin User', email: 'admin@example.com', phone: '+91 9966363662' },
-            adminUserId: 1,
+            adminUser: { id: 1, name: 'Admin User', email: 'admin@example.com' },
             createdAt: '2024-01-01T00:00:00Z',
             updatedAt: '2024-01-15T00:00:00Z'
           }

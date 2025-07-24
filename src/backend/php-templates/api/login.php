@@ -124,7 +124,7 @@ try {
                 'id' => 999,
                 'name' => 'Demo User',
                 'email' => $email,
-                'phone' => '9966363662',
+                'phone' => '9876543210',
                 'role' => 'user'
             ];
             

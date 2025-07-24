@@ -295,10 +295,10 @@ try {
                     <p>Booking #: {$booking['booking_number']}</p>
                 </div>
                 <div class='company-info'>
-                    <h2>Vizag Taxi Hub</h2>
+                    <h2>BE Rides</h2>
                     <p>Vizag, Andhra Pradesh, India</p>
-                    <p>Phone: +91 9966363662</p>
-                    <p>Email: info@vizagtaxihub.com</p>
+                    <p>Phone: +91-7093864511</p>
+                    <p>Email: info@berides.in</p>
                 </div>
             </div>
             

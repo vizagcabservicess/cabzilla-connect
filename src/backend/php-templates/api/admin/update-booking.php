@@ -137,7 +137,7 @@ try {
                 'id' => $bookingId,
                 'booking_number' => 'TEST' . str_pad($bookingId, 8, '0', STR_PAD_LEFT),
                 'passenger_name' => $data['passengerName'] ?? 'Test User',
-                'passenger_phone' => $data['passengerPhone'] ?? '9966363662',
+                'passenger_phone' => $data['passengerPhone'] ?? '9876543210',
                 'passenger_email' => $data['passengerEmail'] ?? 'test@example.com',
                 'billing_address' => $data['billingAddress'] ?? null,
                 'pickup_location' => $data['pickupLocation'] ?? 'Test Pickup',

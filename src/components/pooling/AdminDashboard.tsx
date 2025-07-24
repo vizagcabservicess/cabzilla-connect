@@ -56,7 +56,7 @@ export function AdminDashboard() {
       id: 1,
       name: 'John Doe',
       email: 'john@example.com',
-      phone: '+91 9966363662',
+      phone: '+91 9876543210',
       role: 'provider',
       isActive: true,
       rating: 4.5,

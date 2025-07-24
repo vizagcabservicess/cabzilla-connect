@@ -15,7 +15,7 @@ export function AdminNotifications() {
       id: 1,
       type: 'emergency',
       title: 'Driver Rajesh reported an accident',
-      description: 'Location: Near Gachibowli Flyover. Contact: 9966363662',
+      description: 'Location: Near Gachibowli Flyover. Contact: 9876543210',
       time: '10 minutes ago',
       read: false
     },

@@ -241,7 +241,7 @@ try {
             'booking_number' => 'CB' . rand(1000000000, 9999999999),
             'passenger_name' => 'John Demo',
             'passenger_email' => 'john@example.com',
-            'passenger_phone' => '9966363662',
+            'passenger_phone' => '9876543210',
             'trip_type' => 'local',
             'trip_mode' => 'outstation',
             'pickup_location' => 'Visakhapatnam Airport',
@@ -250,7 +250,7 @@ try {
             'cab_type' => 'Innova Crysta',
             'total_amount' => 3500,
             'driver_name' => 'Rajesh Kumar',
-            'driver_phone' => '9966363662',
+            'driver_phone' => '9876543210',
             'vehicle_number' => 'AP 31 AB 1234',
             'status' => 'confirmed',
             'extra_charges' => json_encode([
@@ -384,7 +384,7 @@ try {
         <div class="invoice-header">
             <div>
                 <h1 style="margin: 0; color: #333;">INVOICE</h1>
-                <p style="margin-top: 5px; color: #777;">Vizag Taxi Hub</p>
+                <p style="margin-top: 5px; color: #777;">Vizag Taxi hub</p>
             </div>
             <div class="company-info">
                 <h2 style="margin: 0;">#' . $invoiceNumber . '</h2>
@@ -466,7 +466,7 @@ try {
         
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub.</p>
-            <p>For any questions regarding this invoice, please contact info@vizagtaxihub.com</p>
+            <p>For any questions regarding this invoice, please contact support@vizagtaxihub.com</p>
         </div>
     </div>
 </body>
