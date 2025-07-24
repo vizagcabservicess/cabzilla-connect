@@ -315,16 +315,16 @@ try {
     // Only calculate if we don't have existing values
     if (!isset($calculationDone)) {
         // Use locked base fare if provided
-        if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
-            $baseFare = $lockedBaseFare;
-            logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
-        } else {
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
+    } else {
             // First try to use booking fare if available
             $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
             
             // If no fare field, calculate base fare from total_amount by backing out GST and extra charges
             if ($baseFare <= 0 && isset($booking['total_amount']) && $booking['total_amount'] > 0) {
-                $totalAmount = (float)$booking['total_amount'];
+        $totalAmount = (float)$booking['total_amount'];
                 
                 // If GST is enabled, the total_amount includes GST, so we need to back it out
                 if ($gstEnabled) {
@@ -352,14 +352,14 @@ try {
     
     // Only calculate tax if we don't already have it from existing invoice
     if (!isset($calculationDone)) {
-        // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-        $gstRate = $gstEnabled ? 0.12 : 0;
-        if (!is_numeric($baseFare)) {
-            $baseFare = floatval($baseFare);
-        }
-        if ($baseFare <= 0) {
-            $baseFare = 0;
-        }
+    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+    $gstRate = $gstEnabled ? 0.12 : 0; 
+    if (!is_numeric($baseFare)) {
+        $baseFare = floatval($baseFare);
+    }
+    if ($baseFare <= 0) {
+        $baseFare = 0;
+    }
         // Calculate GST on (base fare + extra charges)
         $taxableAmount = $baseFare + $totalExtraCharges;
         $taxAmount = $gstEnabled ? round($taxableAmount * $gstRate, 2) : 0;
@@ -392,6 +392,49 @@ try {
     // Ensure final total adds up correctly after rounding
     $finalTotal = $baseFare + $totalExtraCharges + $taxAmount; // Include base fare, extra charges, and GST
     $finalTotal = round($finalTotal, 2);
+    
+    // Always use pre-GST value for base fare in breakdown
+    $gstRate = 0.12; // 12% GST (6% CGST + 6% SGST)
+    if (isset($finalTotal) && (!isset($baseFare) || $baseFare <= 0 || $baseFare > $finalTotal * 0.99)) {
+        // If baseFare is missing or suspiciously high (matches total), back out GST
+        $baseFare = round($finalTotal / (1 + $gstRate), 2);
+        $taxAmount = round($baseFare * $gstRate, 2);
+        $finalTotal = $baseFare + $taxAmount;
+        logInvoiceError("Backed out GST from total to get pre-GST base fare", [
+            'corrected_base_fare' => $baseFare,
+            'corrected_tax_amount' => $taxAmount,
+            'corrected_total' => $finalTotal
+        ]);
+    }
+    // Now use $baseFare for the breakdown, and calculate GST and total from it
+    
+    // --- PATCH: Use the same base fare logic as frontend top summary ---
+    $safeNumber = function($value) {
+        if (is_numeric($value)) return floatval($value);
+        if (is_string($value)) {
+            $num = floatval($value);
+            return is_nan($num) ? 0 : $num;
+        }
+        return 0;
+    };
+    $totalAmount = $safeNumber($booking['total_amount']);
+    $extraChargesTotal = 0;
+    if (!empty($extraChargesArr)) {
+        foreach ($extraChargesArr as $charge) {
+            if (isset($charge['amount'])) {
+                $extraChargesTotal += $safeNumber($charge['amount']);
+            }
+        }
+    }
+    if ($gstEnabled) {
+        $baseFare = round(($totalAmount - $extraChargesTotal) / 1.12, 2);
+        $taxAmount = round(($totalAmount - $extraChargesTotal) - $baseFare, 2);
+    } else {
+        $baseFare = max(0, $totalAmount - $extraChargesTotal);
+        $taxAmount = 0;
+    }
+    $finalTotal = $totalAmount;
+    // --- END PATCH ---
     
     // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
