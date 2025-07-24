@@ -7,7 +7,6 @@ import { DriverAssignment } from './DriverAssignment';
 import { FleetVehicleAssignment } from './FleetVehicleAssignment';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingDetailsWhatsApp } from './BookingDetailsWhatsApp';
-import { BookingAdvancedSettings } from './BookingAdvancedSettings';
 import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
@@ -127,7 +126,6 @@ export function BookingDetails({
         <TabsList className="w-full border-b justify-start">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
-          <TabsTrigger value="advanced" disabled={isEditDisabled}>Advanced Settings</TabsTrigger>
           <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Fleet Vehicle</TabsTrigger>
           <TabsTrigger value="driver" disabled={isAssignmentDisabled}>Assign Driver</TabsTrigger>
           <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
@@ -211,18 +209,6 @@ export function BookingDetails({
             key={booking.updatedAt || booking.id}
             booking={booking}
             onSubmit={async (updatedData) => {
-              await onEdit(updatedData);
-              setActiveTab('details');
-            }}
-            onCancel={() => handleTabChange('details')}
-            isSubmitting={isSubmitting}
-          />
-        </TabsContent>
-
-        <TabsContent value="advanced" className="py-4">
-          <BookingAdvancedSettings
-            booking={booking}
-            onSave={async (updatedData) => {
               await onEdit(updatedData);
               setActiveTab('details');
             }}
