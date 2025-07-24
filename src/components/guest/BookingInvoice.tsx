@@ -64,20 +64,33 @@ function extractInvoiceValues(html: string): { baseFare?: number, extraCharges?:
   let baseFare;
   let extraCharges;
   try {
-    // Extract base fare (first occurrence of 'Base Fare' followed by a number)
-    const baseFareMatch = html.match(/Base Fare<\/td>\s*<td[^>]*>₹\s*([\d,]+\.?\d*)/i);
+    // Extract base fare - match both with and without "(excluding tax)" text
+    const baseFareMatch = html.match(/Base Fare[^<]*<\/td>\s*<td[^>]*>₹\s*([\d,]+\.?\d*)/i);
     if (baseFareMatch) {
       baseFare = parseFloat(baseFareMatch[1].replace(/,/g, ''));
     }
-    // Extract extra charges (sum all rows under 'Extra Charges' section)
-    const extraChargesSection = html.split('Extra Charges')[1];
-    if (extraChargesSection) {
-      const chargeMatches = [...extraChargesSection.matchAll(/<td[^>]*>₹\s*([\d,]+\.?\d*)<\/td>/g)];
-      if (chargeMatches.length > 0) {
-        extraCharges = chargeMatches.reduce((sum, m) => sum + parseFloat(m[1].replace(/,/g, '')), 0);
+    
+    // Extract extra charges by looking for individual charge rows (not the base fare row)
+    const rows = html.split('<tr>');
+    extraCharges = 0;
+    for (const row of rows) {
+      // Skip base fare, GST, and total rows
+      if (row.includes('Base Fare') || row.includes('GST') || row.includes('IGST') || 
+          row.includes('CGST') || row.includes('SGST') || row.includes('Total Amount') ||
+          row.includes('No extra charges')) {
+        continue;
+      }
+      // Look for amount pattern in remaining rows
+      const amountMatch = row.match(/>₹\s*([\d,]+\.?\d*)<\/td>/);
+      if (amountMatch) {
+        extraCharges += parseFloat(amountMatch[1].replace(/,/g, ''));
       }
     }
-  } catch (e) { /* ignore parse errors */ }
+    
+    console.log('Extracted invoice values:', { baseFare, extraCharges });
+  } catch (e) { 
+    console.error('Error parsing invoice HTML:', e);
+  }
   return { baseFare, extraCharges };
 }
 
