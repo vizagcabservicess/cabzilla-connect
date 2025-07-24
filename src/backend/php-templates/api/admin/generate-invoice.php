@@ -279,52 +279,93 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
-    // Use locked base fare if provided, otherwise calculate from total_amount
-    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
-        $baseFare = $lockedBaseFare;
-        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
-    } else {
-        // First try to use booking fare if available
-        $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
-        
-        // If no fare field, calculate base fare from total_amount by backing out GST and extra charges
-        if ($baseFare <= 0 && isset($booking['total_amount']) && $booking['total_amount'] > 0) {
-            $totalAmount = (float)$booking['total_amount'];
+    // Check if invoice already exists and use its base_amount if available
+    $baseFare = 0;
+    $taxAmount = 0;
+    
+    if (!$demoMode && isset($conn)) {
+        try {
+            // Check if invoice already exists for this booking
+            $checkStmt = $conn->prepare("SELECT base_amount, tax_amount FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+            $checkStmt->bind_param("i", $booking['id']);
+            $checkStmt->execute();
+            $checkResult = $checkStmt->get_result();
             
-            // If GST is enabled, the total_amount includes GST, so we need to back it out
-            if ($gstEnabled) {
-                // total_amount = (base_fare + extra_charges) * 1.12
-                // So: base_fare = (total_amount / 1.12) - extra_charges
-                $baseFare = round(($totalAmount / 1.12) - $totalExtraCharges, 2);
-            } else {
-                // No GST, so base_fare = total_amount - extra_charges
-                $baseFare = $totalAmount - $totalExtraCharges;
+            if ($checkResult->num_rows > 0) {
+                $existingInvoice = $checkResult->fetch_assoc();
+                
+                // Use existing base_amount if no locked base fare is provided
+                if ($lockedBaseFare === null || $lockedBaseFare <= 0) {
+                    $baseFare = (float)$existingInvoice['base_amount'];
+                    $taxAmount = (float)$existingInvoice['tax_amount'];
+                    logInvoiceError("Using existing invoice base_amount and tax_amount", [
+                        'existing_base_amount' => $baseFare,
+                        'existing_tax_amount' => $taxAmount
+                    ]);
+                    
+                    // Skip further calculation since we have the correct values
+                    $calculationDone = true;
+                }
             }
-            
-            // Ensure base fare is not negative
-            $baseFare = max(0, $baseFare);
-            logInvoiceError("Calculated base fare from total_amount", [
-                'total_amount' => $totalAmount,
-                'extra_charges' => $totalExtraCharges,
-                'calculated_base_fare' => $baseFare,
-                'gst_enabled' => $gstEnabled
-            ]);
-        } else {
-            logInvoiceError("Using booking fare as base fare", ['fare' => $baseFare]);
+        } catch (Exception $e) {
+            logInvoiceError("Error checking existing invoice", ['error' => $e->getMessage()]);
         }
     }
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0;
-    if (!is_numeric($baseFare)) {
-        $baseFare = floatval($baseFare);
+    
+    // Only calculate if we don't have existing values
+    if (!isset($calculationDone)) {
+        // Use locked base fare if provided
+        if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+            $baseFare = $lockedBaseFare;
+            logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
+        } else {
+            // First try to use booking fare if available
+            $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
+            
+            // If no fare field, calculate base fare from total_amount by backing out GST and extra charges
+            if ($baseFare <= 0 && isset($booking['total_amount']) && $booking['total_amount'] > 0) {
+                $totalAmount = (float)$booking['total_amount'];
+                
+                // If GST is enabled, the total_amount includes GST, so we need to back it out
+                if ($gstEnabled) {
+                    // total_amount = (base_fare + extra_charges) * 1.12
+                    // So: base_fare = (total_amount / 1.12) - extra_charges
+                    $baseFare = round(($totalAmount / 1.12) - $totalExtraCharges, 2);
+                } else {
+                    // No GST, so base_fare = total_amount - extra_charges
+                    $baseFare = $totalAmount - $totalExtraCharges;
+                }
+                
+                // Ensure base fare is not negative
+                $baseFare = max(0, $baseFare);
+                logInvoiceError("Calculated base fare from total_amount", [
+                    'total_amount' => $totalAmount,
+                    'extra_charges' => $totalExtraCharges,
+                    'calculated_base_fare' => $baseFare,
+                    'gst_enabled' => $gstEnabled
+                ]);
+            } else {
+                logInvoiceError("Using booking fare as base fare", ['fare' => $baseFare]);
+            }
+        }
     }
-    if ($baseFare <= 0) {
-        $baseFare = 0;
+    
+    // Only calculate tax if we don't already have it from existing invoice
+    if (!isset($calculationDone)) {
+        // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
+        $gstRate = $gstEnabled ? 0.12 : 0;
+        if (!is_numeric($baseFare)) {
+            $baseFare = floatval($baseFare);
+        }
+        if ($baseFare <= 0) {
+            $baseFare = 0;
+        }
+        // Calculate GST on (base fare + extra charges)
+        $taxableAmount = $baseFare + $totalExtraCharges;
+        $taxAmount = $gstEnabled ? round($taxableAmount * $gstRate, 2) : 0;
     }
-    // Calculate GST on (base fare + extra charges)
-    $taxableAmount = $baseFare + $totalExtraCharges;
-    $taxAmount = $gstEnabled ? round($taxableAmount * $gstRate, 2) : 0;
-    $finalTotal = $taxableAmount + $taxAmount;
+    
+    $finalTotal = $baseFare + $totalExtraCharges + $taxAmount;
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
