@@ -119,6 +119,10 @@ export interface Booking {
     description: string;
   }>;
   paymentStatus?: string;
+  discountAmount?: number;
+  discountType?: string;
+  discountValue?: number;
+  adminNotes?: string;
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';

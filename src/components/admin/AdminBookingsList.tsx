@@ -495,12 +495,22 @@ export function AdminBookingsList() {
         isIGST: !!isIGST,
         includeTax: includeTax !== false, // default true
       };
+      
+      // CRITICAL: Extract lockedBaseFare from gstDetails if present
+      if (gstDetails && gstDetails.lockedBaseFare !== undefined) {
+        requestData.lockedBaseFare = gstDetails.lockedBaseFare;
+        console.log(`🔒 Using locked base fare: ₹${gstDetails.lockedBaseFare} for booking ${selectedBooking.id}`);
+      }
+      
       if (gstEnabled && gstDetails) {
         requestData.gstDetails = gstDetails;
       }
       if (customInvoiceNumber) {
         requestData.invoiceNumber = customInvoiceNumber;
       }
+      
+      console.log('📤 Sending invoice request:', requestData);
+      
       const apiUrl = getApiUrl('/api/admin/generate-invoice.php');
       const response = await fetch(apiUrl, {
         method: 'POST',

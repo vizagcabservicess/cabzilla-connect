@@ -26,8 +26,8 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
         </Button>
       </div>
 
-      {/* Sidebar - sticky positioned, hidden on mobile by default */}
-      <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block md:sticky md:top-0 md:h-screen md:overflow-y-auto`}>
+      {/* Sidebar - fixed positioned, hidden on mobile by default */}
+      <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block md:fixed md:left-0 md:top-0 md:h-screen md:w-64 md:overflow-y-auto md:z-30`}>
         <EnhancedAdminSidebar activeTab={tab} setActiveTab={setTab} />
       </div>
 
@@ -40,7 +40,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
       )}
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 md:ml-64">
         <div className="flex-1 p-4 md:p-6 overflow-x-hidden">
           {children}
         </div>
