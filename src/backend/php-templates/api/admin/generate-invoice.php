@@ -282,16 +282,17 @@ try {
     // Use locked base fare if provided, otherwise use booking total amount
     if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
         $baseFare = $lockedBaseFare;
-        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
+        logInvoiceError("Using locked base fare for booking {$booking['id']}", ['lockedBaseFare' => $lockedBaseFare]);
+        // CRITICAL: Do NOT add extra charges to locked base fare - it's already calculated correctly in frontend
     } else {
         $totalAmount = (float)$booking['total_amount'];
         $baseFare = $totalAmount;
         logInvoiceError("Using booking total amount as base fare", ['total_amount' => $totalAmount]);
-    }
-    
-    // Add extra charges to base fare before tax
-    if ($totalExtraCharges > 0) {
-        $baseFare += $totalExtraCharges;
+        
+        // Only add extra charges when not using locked base fare
+        if ($totalExtraCharges > 0) {
+            $baseFare += $totalExtraCharges;
+        }
     }
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
     $gstRate = $gstEnabled ? 0.12 : 0; 
