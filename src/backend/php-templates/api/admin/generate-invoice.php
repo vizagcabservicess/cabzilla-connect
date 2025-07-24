@@ -279,50 +279,30 @@ try {
     $invoiceNumber = generateInvoiceNumber($booking['id'], $customInvoiceNumber);
     
     // Calculate tax components based on includeTax setting
-    // Use locked base fare if provided, otherwise use booking total amount
+    // Use locked base fare if provided, otherwise use booking fare (never total_amount)
     if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
         $baseFare = $lockedBaseFare;
-        logInvoiceError("Using locked base fare for booking {$booking['id']}", ['lockedBaseFare' => $lockedBaseFare]);
-        // CRITICAL: Do NOT add extra charges to locked base fare - it's already calculated correctly in frontend
+        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
     } else {
-        $totalAmount = (float)$booking['total_amount'];
-        $baseFare = $totalAmount;
-        logInvoiceError("Using booking total amount as base fare", ['total_amount' => $totalAmount]);
-        
-        // Only add extra charges when not using locked base fare
-        if ($totalExtraCharges > 0) {
-            $baseFare += $totalExtraCharges;
+        $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
+        if ($baseFare <= 0) {
+            logInvoiceError("Base fare missing or zero for booking", ['booking_id' => $booking['id'], 'fare' => $baseFare]);
+            $baseFare = 0;
         }
+        logInvoiceError("Using booking fare as base fare", ['fare' => $baseFare]);
     }
     // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
-    // Convert string to number if needed
+    $gstRate = $gstEnabled ? 0.12 : 0;
     if (!is_numeric($baseFare)) {
         $baseFare = floatval($baseFare);
     }
-    // Ensure we have a valid amount
     if ($baseFare <= 0) {
         $baseFare = 0;
     }
-    if ($includeTax && $gstEnabled) {
-        // If tax is included in total amount (default)
-        // We need to calculate: baseAmount = baseFare / (1 + gstRate)
-        $baseAmountBeforeTax = $baseFare / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2); // Round to 2 decimal places
-        $taxAmount = $baseFare - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-    } else if (!$includeTax && $gstEnabled) {
-        // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $baseFare;
-        $taxAmount = $baseFare * $gstRate;
-        $taxAmount = round($taxAmount, 2); // Round to 2 decimal places
-        $baseFare = $baseAmountBeforeTax + $taxAmount;
-        $baseFare = round($baseFare, 2); // Round to ensure consistency
-    } else {
-        // No tax case
-        $baseAmountBeforeTax = $baseFare;
-        $taxAmount = 0;
-    }
+    // Calculate GST on (base fare + extra charges)
+    $taxableAmount = $baseFare + $totalExtraCharges;
+    $taxAmount = $gstEnabled ? round($taxableAmount * $gstRate, 2) : 0;
+    $finalTotal = $taxableAmount + $taxAmount;
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
@@ -347,7 +327,7 @@ try {
     }
     
     // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseAmountBeforeTax + $cgstAmount + $sgstAmount + $igstAmount;
+    $finalTotal = $baseFare + $taxAmount; // Recalculate finalTotal to include GST
     $finalTotal = round($finalTotal, 2);
     
     // Create HTML content for invoice
@@ -437,7 +417,7 @@ try {
                 </tr>
                 <tr>
                     <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($baseAmountBeforeTax, 2) . '</td>
+                    <td style="text-align: right;">₹ ' . number_format($baseFare, 2) . '</td>
                 </tr>';
     // Add extra charges as line items
     if (!empty($extraChargesArr)) {
@@ -449,13 +429,11 @@ try {
     } else {
         $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
     }
-    
-    $invoiceHtml .= '
-                <tr class="total-row">
-                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>
-                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>
-                </tr>
-            </table>';
+    // GST row
+    if ($gstEnabled) {
+        $invoiceHtml .= '\n                <tr>\n                    <td>' . ($isIGST ? 'IGST (12%)' : 'GST (12%)') . '</td>\n                    <td style="text-align: right;">₹ ' . number_format($taxAmount, 2) . '</td>\n                </tr>';
+    }
+    $invoiceHtml .= '\n                <tr class="total-row">\n                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>\n                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>\n                </tr>\n            </table>';
             
     if (!$includeTax && $gstEnabled) {
         $invoiceHtml .= '
@@ -483,7 +461,7 @@ try {
             'bookingNumber' => $booking['booking_number'],
             'passengerName' => $booking['passenger_name'],
             'totalAmount' => $finalTotal,
-            'baseAmount' => $baseAmountBeforeTax,
+            'baseAmount' => $baseFare,
             'taxAmount' => $taxAmount,
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
@@ -585,7 +563,7 @@ try {
                     "ssdddiiiisssdi",
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmountBeforeTax,
+                    $baseFare,
                     $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,
@@ -639,7 +617,7 @@ try {
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
-                    $baseAmountBeforeTax,
+                    $baseFare,
                     $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,

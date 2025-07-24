@@ -59,6 +59,28 @@ interface BookingInvoiceProps {
   onClose: () => void;
 }
 
+// Utility to extract base fare and extra charges from backend invoice HTML
+function extractInvoiceValues(html: string): { baseFare?: number, extraCharges?: number } {
+  let baseFare;
+  let extraCharges;
+  try {
+    // Extract base fare (first occurrence of 'Base Fare' followed by a number)
+    const baseFareMatch = html.match(/Base Fare<\/td>\s*<td[^>]*>₹\s*([\d,]+\.?\d*)/i);
+    if (baseFareMatch) {
+      baseFare = parseFloat(baseFareMatch[1].replace(/,/g, ''));
+    }
+    // Extract extra charges (sum all rows under 'Extra Charges' section)
+    const extraChargesSection = html.split('Extra Charges')[1];
+    if (extraChargesSection) {
+      const chargeMatches = [...extraChargesSection.matchAll(/<td[^>]*>₹\s*([\d,]+\.?\d*)<\/td>/g)];
+      if (chargeMatches.length > 0) {
+        extraCharges = chargeMatches.reduce((sum, m) => sum + parseFloat(m[1].replace(/,/g, '')), 0);
+      }
+    }
+  } catch (e) { /* ignore parse errors */ }
+  return { baseFare, extraCharges };
+}
+
 export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [invoiceHtml, setInvoiceHtml] = useState<string | null>(null);
@@ -111,12 +133,19 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   }, 0);
 
   const totalBeforeTax = safeNumber(booking.totalAmount || booking.total_amount);
-  const baseFare = Math.max(0, totalBeforeTax - extraChargesTotal);
   
-  // GST calculation (18% if enabled)
+  // GST calculation (12% if enabled)
   const gstEnabled = booking.gstEnabled || booking.gstAmount !== undefined;
-  const taxes = gstEnabled ? Math.round(totalBeforeTax * 0.18) : 0;
-  const totalWithTaxes = totalBeforeTax + taxes;
+  let baseFare = 0;
+  let taxes = 0;
+  if (gstEnabled) {
+    baseFare = Math.round((totalBeforeTax - extraChargesTotal) / 1.12);
+    taxes = (totalBeforeTax - extraChargesTotal) - baseFare;
+  } else {
+    baseFare = Math.max(0, totalBeforeTax - extraChargesTotal);
+    taxes = 0;
+  }
+  const totalWithTaxes = totalBeforeTax;
 
   console.log('Invoice calculations:', {
     extraChargesTotal,
@@ -185,8 +214,17 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const getTripType = () => booking.tripType || 'N/A';
   const getTripMode = () => booking.tripMode || '';
 
-  // Render the invoice HTML if available
-  if (loadingInvoice) {
+  // If invoiceHtml is available, parse values for summary
+  let summaryBaseFare = undefined;
+  let summaryExtraCharges = undefined;
+  if (invoiceHtml) {
+    const parsed = extractInvoiceValues(invoiceHtml);
+    if (typeof parsed.baseFare === 'number') summaryBaseFare = parsed.baseFare;
+    if (typeof parsed.extraCharges === 'number') summaryExtraCharges = parsed.extraCharges;
+  }
+
+  // Only render summary after backend invoice HTML is loaded and parsed
+  if (!invoiceHtml) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -198,44 +236,9 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       </Dialog>
     );
   }
-  if (invoiceHtml) {
-    return (
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="border-b border-border pb-4">
-            <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <iframe
-              srcDoc={invoiceHtml}
-              title="Invoice Preview"
-              className="w-full min-h-[700px] border rounded"
-              style={{ border: 'none', minHeight: 700 }}
-            />
-          </div>
-          <div className="flex gap-3 pt-6 border-t border-border">
-            <Button variant="outline" onClick={onClose} className="px-8">Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-  if (invoiceError) {
-    return (
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="border-b border-border pb-4">
-            <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
-          </DialogHeader>
-          <div className="py-8 text-center text-lg text-red-500">{invoiceError}</div>
-          <div className="flex gap-3 pt-6 border-t border-border">
-            <Button variant="outline" onClick={onClose} className="px-8">Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
+  // --- Top summary section ---
+  // Use the parsed summaryBaseFare and summaryExtraCharges if available
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -244,24 +247,18 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
             INVOICE
           </DialogTitle>
         </DialogHeader>
-
         <div className="space-y-8 py-6">
-          {/* Invoice Header */}
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-base font-medium text-blue-600 mb-2">Vizag Taxi Hub</h1>
-              <p className="text-muted-foreground">Your trusted travel partner</p>
+          <div className="flex flex-col gap-1 mb-2">
+            <div className="flex justify-between">
+              <span>Base Fare</span>
+              <span className="font-semibold text-lg text-yellow-700">₹{typeof summaryBaseFare === 'number' ? summaryBaseFare.toLocaleString('en-IN') : '--'}</span>
             </div>
-            <div className="text-right">
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm font-medium text-muted-foreground">Invoice Number:</p>
-                <p className="text-xl font-bold">#{getBookingId()}</p>
-                <p className="text-sm font-medium text-muted-foreground mt-3">Date:</p>
-                <p className="text-lg font-semibold">{getPickupDate()}</p>
-                <p className="text-sm font-medium text-muted-foreground mt-3">Booking #:</p>
-                <p className="text-sm font-mono">{getBookingId()}</p>
+            {typeof summaryExtraCharges === 'number' && summaryExtraCharges > 0 && (
+              <div className="flex justify-between">
+                <span>Extra Charges</span>
+                <span className="font-semibold text-lg text-yellow-700">₹{summaryExtraCharges.toLocaleString('en-IN')}</span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Customer and Trip Details */}
