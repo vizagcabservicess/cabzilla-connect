@@ -65,7 +65,7 @@ try {
         // Add sample data
         $conn->query("INSERT INTO drivers (name, phone, email, license_no, status, total_rides, earnings, rating, location, vehicle) 
                       VALUES 
-                      ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Hyderabad Central', 'Sedan - AP 31 XX 1234'),
+                      ('Rajesh Kumar', '9966363662', 'rajesh@example.com', 'DL-1234567890', 'available', 352, 120000, 4.8, 'Hyderabad Central', 'Sedan - AP 31 XX 1234'),
                       ('Pavan Reddy', '8765432109', 'pavan@example.com', 'DL-0987654321', 'busy', 215, 85500, 4.6, 'Gachibowli', 'SUV - AP 32 XX 5678'),
                       ('Suresh Verma', '7654321098', 'suresh@example.com', 'DL-5678901234', 'offline', 180, 72000, 4.5, 'Offline', 'Sedan - AP 33 XX 9012')");
     } else {

@@ -64,7 +64,7 @@ function fixDriversSchema($conn) {
             $sampleDrivers = [
                 [
                     'name' => 'Vijay Kumar',
-                    'phone' => '9876543210',
+                    'phone' => '9966363662',
                     'email' => 'vijay@example.com',
                     'license_no' => 'DL98765432',
                     'status' => 'available',

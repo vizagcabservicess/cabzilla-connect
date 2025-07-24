@@ -373,7 +373,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
             <div className="text-sm text-muted-foreground space-y-1">
               <p>Vizag Taxi Hub</p>
               <p>Visakhapatnam, Andhra Pradesh</p>
-              <p>Phone: +91 9876543210</p>
+              <p>Phone: +91 9966363662</p>
               <p>Email: info@vizagtaxihub.com</p>
               <p>Website: www.vizagtaxihub.com</p>
             </div>

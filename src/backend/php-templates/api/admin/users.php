@@ -85,7 +85,7 @@ try {
             'id' => 101,
             'name' => 'Rahul Sharma',
             'email' => 'rahul@example.com',
-            'phone' => '9876543210',
+            'phone' => '9966363662',
             'role' => 'user',
             'createdAt' => date('Y-m-d H:i:s', strtotime('-1 month'))
         ],

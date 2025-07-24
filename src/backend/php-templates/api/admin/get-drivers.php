@@ -113,7 +113,7 @@ try {
             $insertSampleData = "
                 INSERT INTO drivers (name, phone, email, license_no, status, location, vehicle) 
                 VALUES 
-                ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'AP12345678901234', 'available', 'Visakhapatnam', 'Sedan'),
+                ('Rajesh Kumar', '9966363662', 'rajesh@example.com', 'AP12345678901234', 'available', 'Visakhapatnam', 'Sedan'),
                 ('Suresh Reddy', '8765432109', 'suresh@example.com', 'AP98765432109876', 'busy', 'Visakhapatnam', 'SUV'),
                 ('Mahesh Babu', '7654321098', 'mahesh@example.com', 'AP45678901234567', 'available', 'Visakhapatnam', 'Hatchback')
             ";

@@ -235,7 +235,7 @@ export function PaymentGateway({ totalAmount, onPaymentComplete, bookingDetails 
               <Label htmlFor="upi-id">UPI ID</Label>
               <Input 
                 id="upi-id" 
-                placeholder="e.g. 9876543210@upi" 
+                placeholder="e.g. 9966363662@upi" 
                 value={upiId}
                 onChange={(e) => setUpiId(e.target.value)}
               />
