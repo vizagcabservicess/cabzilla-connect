@@ -333,7 +333,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
                 <tbody>
                   <tr className="border-b border-border/50">
                     <td className="py-3 px-4">Base Fare</td>
-                    <td className="py-3 px-4 text-right">₹ {baseFare.toLocaleString('en-IN')}</td>
+                    <td className="py-3 px-4 text-right">₹ {(typeof summaryBaseFare === 'number' ? summaryBaseFare : baseFare).toLocaleString('en-IN')}</td>
                   </tr>
                   {extraChargesArr.length > 0 && 
                     extraChargesArr.map((charge, index) => (
