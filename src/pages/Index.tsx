@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from '@/components/Hero';
+import { EnhancedHeroSection } from '@/components/EnhancedHeroSection';
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
 import { TourSlider } from "@/components/TourSlider";
@@ -23,11 +24,15 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero
-        key={isSearch ? 'search' : 'home'}
-        onSearch={() => setSearchParams({ search: '1' })}
-        isSearchActive={isSearch}
-      />
+      {!isSearch ? (
+        <EnhancedHeroSection />
+      ) : (
+        <Hero
+          key={isSearch ? 'search' : 'home'}
+          onSearch={() => setSearchParams({ search: '1' })}
+          isSearchActive={isSearch}
+        />
+      )}
       
       {/* Main Content with Optimized Spacing */}
       {!isSearch && (

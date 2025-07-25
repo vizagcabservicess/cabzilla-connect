@@ -52,19 +52,25 @@ export function ServicesShowcase() {
   ];
 
   return (
-    <section className="px-0 py-2 pb-2 mb-6 md:px-4 md:py-4 md:mb-0 bg-white">
-      <div className="mx-auto md:container md:max-w-6xl px-0 md:px-4">
+    <section className="px-0 py-8 pb-2 mb-6 md:px-4 md:py-16 md:mb-0 bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-20 left-10 w-64 h-64 bg-gradient-to-r from-blue-400/5 to-purple-400/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-r from-purple-400/5 to-pink-400/5 rounded-full blur-3xl"></div>
+      </div>
+      
+      <div className="mx-auto md:container md:max-w-6xl px-0 md:px-4 relative z-10">
         {/* Header */}
-        <div className="text-center mb-2 md:mb-4">
-          <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
-            <Car className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-600">OUR SERVICES</span>
+        <div className="text-center mb-8 md:mb-12">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200/30 px-6 py-3 rounded-full mb-6 shadow-sm backdrop-blur-sm">
+            <Car className="h-5 w-5 text-blue-600 animate-pulse" />
+            <span className="text-sm font-semibold text-blue-700 tracking-wide">OUR PREMIUM SERVICES</span>
           </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-1 leading-tight">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4 leading-tight">
             Your Journey, Our Priority
           </h2>
-          <p className="text-gray-600 px-4 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
-            From local city trips to outstation travel, we provide reliable and comfortable transportation solutions for all your needs.
+          <p className="text-gray-600 px-4 text-base md:text-lg max-w-3xl mx-auto leading-relaxed">
+            From local city trips to outstation travel, we provide reliable and comfortable transportation solutions crafted for your comfort and convenience.
           </p>
         </div>
 
@@ -83,22 +89,24 @@ export function ServicesShowcase() {
             >
               {services.map((service, index) => (
                 <SwiperSlide key={index}>
-                  <div className="rounded-2xl shadow-lg bg-gradient-to-b from-blue-50 to-white p-6 flex flex-col items-center text-center min-h-[340px] relative">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${service.bgColor}`}>
-                      <service.icon className={`h-7 w-7 ${service.iconColor}`} />
+                  <div className="rounded-3xl shadow-xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 backdrop-blur-sm border border-white/50 p-6 flex flex-col items-center text-center min-h-[380px] relative hover:transform hover:scale-105 transition-all duration-300 group">
+                    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 ${service.bgColor} shadow-lg group-hover:shadow-xl transition-shadow duration-300 group-hover:scale-110`}>
+                      <service.icon className={`h-8 w-8 ${service.iconColor} group-hover:rotate-12 transition-transform duration-300`} />
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
-                    <p className="text-gray-600 text-base mb-4 leading-relaxed">{service.description}</p>
-                    <ul className="text-gray-500 text-sm space-y-1 mb-2">
+                    <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-700 transition-colors">{service.title}</h3>
+                    <p className="text-gray-600 text-base mb-6 leading-relaxed">{service.description}</p>
+                    <ul className="text-gray-500 text-sm space-y-2 mb-4 flex-grow">
                       {service.features.map((feature, idx) => (
                         <li key={idx} className="flex items-center justify-center gap-2">
-                          <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                          <span className="w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full"></span>
                           {feature}
                         </li>
                       ))}
                     </ul>
-                    <div className="absolute bottom-4 left-0 w-full flex justify-center">
-                      <button className="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold shadow-md text-sm">Book Now</button>
+                    <div className="absolute bottom-6 left-0 w-full flex justify-center">
+                      <button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-full font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-sm">
+                        Book Now
+                      </button>
                     </div>
                   </div>
                 </SwiperSlide>
