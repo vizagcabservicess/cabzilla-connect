@@ -9,6 +9,8 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
+import { EventsPromotion } from "@/components/EventsPromotion";
+import { ClientsWeServe } from "@/components/ClientsWeServe";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
@@ -32,9 +34,11 @@ const Index = () => {
         <div className="space-y-8 md:space-y-12">
           <ServicesShowcase />
           <FleetShowcase />
+          <EventsPromotion />
           <TourSlider />
           <WhyChooseUs />
           <PopularRoutes />
+          <ClientsWeServe />
           <EnhancedCTA />
           <TestimonialsSection />
           <VideoTestimonials />
