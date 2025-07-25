@@ -85,25 +85,19 @@ export function FleetShowcase() {
       });
 
   return (
-    <section className="px-4 py-8 pb-2 md:py-16 bg-gradient-to-br from-gray-50 via-white to-blue-50/30 relative overflow-hidden">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-32 right-20 w-72 h-72 bg-gradient-to-r from-blue-400/10 to-purple-400/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-32 left-20 w-96 h-96 bg-gradient-to-r from-purple-400/10 to-pink-400/10 rounded-full blur-3xl"></div>
-      </div>
-      
-      <div className="container mx-auto max-w-6xl relative z-10">
+    <section className="px-4 py-4 pb-2 md:py-12 bg-gray-50">
+      <div className="container mx-auto max-w-6xl">
         {/* Header */}
-        <div className="text-center mb-8 md:mb-12">
-          <div className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200/30 px-6 py-3 rounded-full mb-6 shadow-sm backdrop-blur-sm">
-            <Car className="h-5 w-5 text-blue-600 animate-pulse" />
-            <span className="text-sm font-semibold text-blue-700 tracking-wide">PREMIUM FLEET</span>
+        <div className="text-center mb-4 md:mb-10">
+          <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
+            <Car className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-600">OUR FLEET</span>
           </div>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4 leading-tight">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-3 leading-tight">
             Choose Your Perfect Ride
           </h2>
-          <p className="text-gray-600 text-base md:text-lg max-w-3xl mx-auto leading-relaxed mb-8">
-            From economy to luxury, discover the perfect vehicle for your journey with our meticulously maintained and premium fleet.
+          <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed mb-6">
+            From economy to luxury, find the perfect vehicle for your journey with our well-maintained fleet.
           </p>
           {/* Category Filter (not functional, just UI) */}
           <div className="flex flex-wrap justify-center gap-2 mb-4 md:mb-8">

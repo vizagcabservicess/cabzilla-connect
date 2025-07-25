@@ -1,6 +1,5 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from '@/components/Hero';
-import { EnhancedHeroSection } from '@/components/EnhancedHeroSection';
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
 import { TourSlider } from "@/components/TourSlider";
@@ -10,8 +9,6 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
-import { EventsPromotion } from "@/components/EventsPromotion";
-import { ClientsWeServe } from "@/components/ClientsWeServe";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
@@ -24,26 +21,20 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      {!isSearch ? (
-        <EnhancedHeroSection />
-      ) : (
-        <Hero
-          key={isSearch ? 'search' : 'home'}
-          onSearch={() => setSearchParams({ search: '1' })}
-          isSearchActive={isSearch}
-        />
-      )}
+      <Hero
+        key={isSearch ? 'search' : 'home'}
+        onSearch={() => setSearchParams({ search: '1' })}
+        isSearchActive={isSearch}
+      />
       
       {/* Main Content with Optimized Spacing */}
       {!isSearch && (
         <div className="space-y-8 md:space-y-12">
           <ServicesShowcase />
           <FleetShowcase />
-          <EventsPromotion />
           <TourSlider />
           <WhyChooseUs />
           <PopularRoutes />
-          <ClientsWeServe />
           <EnhancedCTA />
           <TestimonialsSection />
           <VideoTestimonials />
