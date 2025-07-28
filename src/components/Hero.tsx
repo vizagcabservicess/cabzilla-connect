@@ -82,12 +82,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs }: { onSearch?: (se
       const hourlyPkgData = sessionStorage.getItem('hourlyPackage');
       const cabData = sessionStorage.getItem('selectedCab');
       
+      // Determine default trip type based on visibleTabs
+      let defaultTripType: TripType = 'outstation';
+      if (visibleTabs && visibleTabs.length === 1) {
+        defaultTripType = visibleTabs[0] as TripType;
+      }
+      
       return {
         pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
         dropLocation: dropData ? JSON.parse(dropData) as Location : null,
         pickupDate: pickupDateStr ? new Date(JSON.parse(pickupDateStr)) : new Date(),
         returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
-        tripType: tripTypeData as TripType || 'outstation',
+        tripType: tripTypeData as TripType || defaultTripType,
         tripMode: tripModeData as TripMode || 'one-way',
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
         selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
@@ -95,12 +101,19 @@ export function Hero({ onSearch, isSearchActive, visibleTabs }: { onSearch?: (se
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
+      
+      // Determine default trip type based on visibleTabs
+      let defaultTripType: TripType = 'outstation';
+      if (visibleTabs && visibleTabs.length === 1) {
+        defaultTripType = visibleTabs[0] as TripType;
+      }
+      
       return {
         pickupLocation: null,
         dropLocation: null,
         pickupDate: new Date(),
         returnDate: null,
-        tripType: 'outstation' as TripType,
+        tripType: defaultTripType,
         tripMode: 'one-way' as TripMode,
         hourlyPackage: hourlyPackageOptions[0].value,
         selectedCab: null,
