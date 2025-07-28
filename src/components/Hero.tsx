@@ -44,7 +44,7 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'> }) {
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -734,6 +734,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                 tripMode={tripMode}
                 onTabChange={handleTabChange}
                 onTripModeChange={setTripMode}
+                visibleTabs={visibleTabs}
               />
             </div>
 
@@ -879,6 +880,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                           tripMode={tripMode}
                           onTabChange={handleTabChange}
                           onTripModeChange={setTripMode}
+                          visibleTabs={visibleTabs}
                         />
                       </div>
 
@@ -1188,7 +1190,7 @@ export function Hero({ onSearch, isSearchActive }: { onSearch?: (searchData: any
                             />
                           </div>
                         </div>
-                        <div className="lg:col-span-1 text-xs lg:text-[14px] pr-6 max-w-md">
+                        <div className="lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md">
                           <div ref={bookingSummaryRef} id="booking-summary" className="text-xs lg:text-[12px]">
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 

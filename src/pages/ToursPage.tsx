@@ -13,6 +13,7 @@ import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
 import { TourCard } from "@/components/tour/TourCard";
+import { Hero } from "@/components/Hero";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -189,7 +190,7 @@ const ToursPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
+      {/* Only show the Tour tab in the Hero for tours */}
       <div className="container mx-auto px-4 py-6 pb-20">
         <div className="max-w-7xl mx-auto">
           {!searchInitiated ? (

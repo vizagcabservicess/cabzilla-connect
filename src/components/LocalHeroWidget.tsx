@@ -52,15 +52,7 @@ export function LocalHeroWidget({ initialPickup, initialDrop }: LocalHeroWidgetP
 
   return (
     <div>
-      <style>
-        {`
-          /* Hide all tabs except Local tab */
-          #tab-trip-selector > .mb-4 {
-            display: none !important;
-          }
-        `}
-      </style>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} />
+      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['local']} />
     </div>
   );
 } 

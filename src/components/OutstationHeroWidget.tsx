@@ -143,15 +143,7 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch }: O
 
   return (
     <div>
-      <style>
-        {`
-          /* Hide only the trip type tab bar, not the trip mode selector */
-          #tab-trip-selector > .mb-4 > div:first-child {
-            display: none !important;
-          }
-        `}
-      </style>
-      <Hero key={`hero-${pickup || 'none'}-${drop || 'none'}`} onSearch={onSearch} />
+      <Hero key={`hero-${pickup || 'none'}-${drop || 'none'}`} onSearch={onSearch} visibleTabs={['outstation']} />
     </div>
   );
 } 

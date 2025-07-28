@@ -52,15 +52,7 @@ export function AirportHeroWidget({ initialPickup, initialDrop }: AirportHeroWid
 
   return (
     <div>
-      <style>
-        {`
-          /* Hide all tabs except Airport tab */
-          #tab-trip-selector > .mb-4 {
-            display: none !important;
-          }
-        `}
-      </style>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} />
+      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['airport']} />
     </div>
   );
 } 

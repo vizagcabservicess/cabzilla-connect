@@ -13,6 +13,7 @@ interface TabTripSelectorProps {
   onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
   onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
   onClearLocations?: () => void;
+  visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; // <-- new prop
 }
 
 export function TabTripSelector({ 
@@ -20,7 +21,8 @@ export function TabTripSelector({
   tripMode, 
   onTabChange, 
   onTripModeChange, 
-  onClearLocations
+  onClearLocations,
+  visibleTabs
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -164,12 +166,13 @@ export function TabTripSelector({
   };
   
   // Convert trip types to tab format - REMOVED pooling
-  const tabs = [
+  const allTabs = [
     { id: 'outstation', label: 'Outstation' },
     { id: 'local', label: 'Local' },
     { id: 'airport', label: 'Airport' },
     { id: 'tour', label: 'Tour' }
   ];
+  const tabs = visibleTabs ? allTabs.filter(tab => visibleTabs.includes(tab.id as any)) : allTabs;
   
   return (
     <div className="space-y-2 sm:space-y-4" id="tab-trip-selector">
