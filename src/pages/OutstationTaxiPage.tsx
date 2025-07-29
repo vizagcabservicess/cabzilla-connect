@@ -1,19 +1,21 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
-import { OutstationHero } from '@/components/OutstationHero';
+import { OutstationHeroWidget } from "@/components/OutstationHeroWidget";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Map, Shield, Star, Phone, Car, ArrowRight, Clock, Users, CreditCard, MapPin } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { FleetShowcase } from '@/components/FleetShowcase';
-import { popularRoutes } from '@/lib/routeData';
-import { slugify } from '@/lib/utils';
-import { OutstationHeroWidget } from "@/components/OutstationHeroWidget";
+import { StickyHeader } from '@/components/ui/sticky-header';
+import { PageTransition } from '@/components/ui/page-transition';
+import { SectionReveal } from '@/components/ui/section-reveal';
+import { FareTable } from '@/components/ui/fare-table';
+import { useFareData } from '@/hooks/useFareData';
+import { Map, Shield, Star, Phone, Car, ArrowRight, Clock, Users, CreditCard, MapPin, CheckCircle } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 
 export function OutstationTaxiPage() {
+  const { fareData, loading, error } = useFareData('outstation');
   const features = [
     { icon: <Star />, title: 'Transparent Pricing', description: 'No hidden charges. Pay for what you see.' },
     { icon: <Car />, title: 'Wide Range of Cars', description: 'Choose from Sedans, SUVs, and more.' },
@@ -94,7 +96,7 @@ export function OutstationTaxiPage() {
   };
 
   return (
-    <>
+    <PageTransition>
       <Helmet>
         <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
@@ -105,25 +107,62 @@ export function OutstationTaxiPage() {
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <OutstationHeroWidget />
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <StickyHeader />
         
-        {/* About Outstation Service */}
-        <section className="py-16 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h1 className="text-4xl font-bold text-gray-900 mb-6">
-                Professional Outstation Taxi Service in Visakhapatnam
-              </h1>
-              <p className="text-lg text-gray-700 leading-relaxed">
-                Experience hassle-free outstation travel with Vizag Taxi Hub's premium cab booking service. 
-                We offer one way and round trip taxi services from Visakhapatnam to all major cities across India. 
-                Our fleet includes well-maintained vehicles with experienced drivers ensuring safe and comfortable journeys.
-              </p>
-            </div>
+        {/* Hero Section */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-blue-50 to-gray-50 pt-16 pb-20">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmMGY5ZmYiIGZpbGwtb3BhY2l0eT0iMC40Ij48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
+          
+          <div className="container mx-auto px-4 relative z-10">
+            <OutstationHeroWidget />
           </div>
         </section>
+        
+        {/* About Outstation Service */}
+        <SectionReveal>
+          <section className="py-20 bg-white">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto text-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  viewport={{ once: true }}
+                >
+                  <h1 className="text-5xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-8">
+                    Professional Outstation Taxi Service in Visakhapatnam
+                  </h1>
+                  <p className="text-xl text-gray-700 leading-relaxed mb-8">
+                    Experience hassle-free outstation travel with Vizag Taxi Hub's premium cab booking service. 
+                    We offer one way and round trip taxi services from Visakhapatnam to all major cities across India. 
+                    Our fleet includes well-maintained vehicles with experienced drivers ensuring safe and comfortable journeys.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+                    {[
+                      { icon: <CheckCircle className="text-green-500" />, text: "1000+ Happy Customers" },
+                      { icon: <CheckCircle className="text-green-500" />, text: "24/7 Available Service" },
+                      { icon: <CheckCircle className="text-green-500" />, text: "All India Permit" }
+                    ].map((item, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.2, duration: 0.5 }}
+                        viewport={{ once: true }}
+                        className="flex items-center justify-center space-x-3"
+                      >
+                        {item.icon}
+                        <span className="text-gray-700 font-medium">{item.text}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </section>
+        </SectionReveal>
 
         {/* Popular Outstation Routes */}
         <section className="py-16 bg-white">
@@ -157,39 +196,81 @@ export function OutstationTaxiPage() {
         </section>
 
         {/* Fare Breakdown */}
-        <section className="py-16 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-              Outstation Taxi Fare Structure
-            </h2>
-            <div className="max-w-4xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {fareBreakdown.map((fare, index) => (
-                  <Card key={index} className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <h3 className="font-semibold text-lg mb-3">{fare.vehicle}</h3>
-                      <div className="space-y-2">
-                        <p className="text-2xl font-bold text-primary">{fare.rate}</p>
-                        <p><strong>Capacity:</strong> {fare.capacity}</p>
-                        <p><strong>Features:</strong> {fare.features}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              <div className="mt-8 p-6 bg-blue-50 rounded-lg">
-                <h3 className="font-semibold text-lg mb-3">Additional Charges:</h3>
-                <ul className="space-y-2 text-sm">
-                  <li>• Driver allowance: ₹400 per day</li>
-                  <li>• Night charges: ₹200 per night (10 PM - 6 AM)</li>
-                  <li>• Toll charges: As applicable</li>
-                  <li>• Parking charges: As applicable</li>
-                  <li>• State permit charges: As applicable</li>
-                </ul>
+        <SectionReveal delay={0.2}>
+          <section className="py-20 bg-gradient-to-br from-gray-50 to-blue-50/30">
+            <div className="container mx-auto px-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                viewport={{ once: true }}
+                className="text-center mb-16"
+              >
+                <h2 className="text-4xl font-bold text-gray-900 mb-4">
+                  Live Outstation Taxi Fare Structure
+                </h2>
+                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                  Transparent pricing with real-time rates. No hidden charges, pay exactly what you see.
+                </p>
+              </motion.div>
+              
+              <div className="max-w-6xl mx-auto">
+                <FareTable 
+                  fareData={fareData}
+                  loading={loading}
+                  error={error}
+                  serviceType="outstation"
+                />
+                
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4, duration: 0.6 }}
+                  viewport={{ once: true }}
+                  className="mt-12 p-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100"
+                >
+                  <h3 className="font-semibold text-xl mb-6 text-gray-900">Additional Charges & Information:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-3">Charges</h4>
+                      <ul className="space-y-2 text-sm text-gray-700">
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Driver allowance: ₹400 per day</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Night charges: ₹200 per night (10 PM - 6 AM)</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Toll charges: As applicable</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-3">Inclusions</h4>
+                      <ul className="space-y-2 text-sm text-gray-700">
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Fuel & maintenance included</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Professional driver</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>24/7 customer support</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </SectionReveal>
 
         {/* Why Choose Us */}
         <section className="py-16 bg-white">
@@ -266,6 +347,6 @@ export function OutstationTaxiPage() {
 
         <MobileNavigation />
       </div>
-    </>
+    </PageTransition>
   );
 }
