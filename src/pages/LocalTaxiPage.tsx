@@ -1,88 +1,50 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { Navbar } from '@/components/Navbar';
-import { MobileNavigation } from '@/components/MobileNavigation';
 import { Hero } from '@/components/Hero';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { StickyHeader } from '@/components/ui/sticky-header';
-import { PageTransition } from '@/components/ui/page-transition';
-import { SectionReveal } from '@/components/ui/section-reveal';
-import { FareTable } from '@/components/ui/fare-table';
-import { useFareData } from '@/hooks/useFareData';
-import { Map, Shield, Star, Phone, Car, ArrowRight, Clock, Users, CreditCard, MapPin, CheckCircle, Navigation } from 'lucide-react';
+import { Map, Shield, Star, Phone, Car, ArrowRight, Clock, MapPin, Navigation } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 
 export function LocalTaxiPage() {
-  const { fareData, loading, error } = useFareData('local');
-
-  const whyChooseUs = [
+  const features = [
     { icon: <Clock />, title: 'Quick Booking', description: 'Book instantly via call or app' },
-    { icon: <Users />, title: 'Local Drivers', description: 'Experienced local drivers who know the city' },
-    { icon: <CreditCard />, title: 'Flexible Payment', description: 'Cash, UPI, and card payment options' },
-    { icon: <MapPin />, title: 'Live Tracking', description: 'Track your ride in real-time' }
+    { icon: <Car />, title: 'Local Expertise', description: 'Drivers who know the city inside out' },
+    { icon: <MapPin />, title: 'Live Tracking', description: 'Track your ride in real-time' },
+    { icon: <Star />, title: 'Fixed Rates', description: 'No surge pricing or hidden charges' }
   ];
 
-  const localServices = [
+  const services = [
     { 
-      service: 'Point to Point', 
-      description: 'Direct travel between two locations within the city',
-      price: '₹150 minimum',
-      duration: 'As per distance',
+      name: 'Point to Point', 
+      description: 'Direct travel within the city',
+      price: '₹150',
       icon: <Navigation className="w-6 h-6" />
     },
     { 
-      service: 'Hourly Rental', 
-      description: 'Book taxi for multiple hours with driver waiting',
-      price: '₹200/hour',
-      duration: 'Minimum 4 hours',
+      name: 'Hourly Rental', 
+      description: 'Multiple hours with waiting',
+      price: '₹200/hr',
       icon: <Clock className="w-6 h-6" />
     },
     { 
-      service: 'Half Day Package', 
-      description: 'Local sightseeing and city tours',
-      price: '₹1,500 (4 hours)',
-      duration: '4 hours / 40 km',
+      name: 'Half Day', 
+      description: 'City tours and sightseeing',
+      price: '₹1,500',
       icon: <Map className="w-6 h-6" />
     },
     { 
-      service: 'Full Day Package', 
-      description: 'Complete day rental for city exploration',
-      price: '₹2,500 (8 hours)',
-      duration: '8 hours / 80 km',
+      name: 'Full Day', 
+      description: 'Complete day city exploration',
+      price: '₹2,500',
       icon: <Car className="w-6 h-6" />
     }
   ];
 
-  const popularLocalRoutes = [
-    { from: 'Visakhapatnam Railway Station', to: 'RK Beach', distance: '8 km', price: '₹150', time: '20 min' },
-    { from: 'Vizag Airport', to: 'City Center', distance: '12 km', price: '₹200', time: '25 min' },
-    { from: 'Bus Stand', to: 'Kailasagiri', distance: '15 km', price: '₹250', time: '35 min' },
-    { from: 'Beach Road', to: 'Rushikonda Beach', distance: '20 km', price: '₹300', time: '40 min' }
-  ];
-
-  const faqs = [
-    {
-      question: 'What is the minimum fare for local taxi in Visakhapatnam?',
-      answer: 'Minimum fare is ₹150 for distances up to 5 km within the city limits.'
-    },
-    {
-      question: 'Do you provide waiting charges for local trips?',
-      answer: 'Yes, waiting charges apply at ₹2-3 per minute after first 5 minutes depending on vehicle type.'
-    },
-    {
-      question: 'Can I book local taxi for multiple stops?',
-      answer: 'Yes, you can book hourly packages or pay per km for multiple stops within the city.'
-    },
-    {
-      question: 'Are local taxis available 24/7?',
-      answer: 'Yes, our local taxi service is available 24 hours a day, 7 days a week.'
-    },
-    {
-      question: 'What areas do you cover in local taxi service?',
-      answer: 'We cover entire Visakhapatnam city including Rushikonda, Kailasagiri, Beach Road, and surrounding areas.'
-    }
+  const popularRoutes = [
+    { from: 'Railway Station', to: 'RK Beach', distance: '8 km', price: '₹150' },
+    { from: 'Airport', to: 'City Center', distance: '12 km', price: '₹200' },
+    { from: 'Bus Stand', to: 'Kailasagiri', distance: '15 km', price: '₹250' },
+    { from: 'Beach Road', to: 'Rushikonda', distance: '20 km', price: '₹300' }
   ];
 
   const structuredData = {
@@ -114,205 +76,145 @@ export function LocalTaxiPage() {
   };
 
   return (
-    <PageTransition>
+    <div className="min-h-screen bg-white">
       <Helmet>
         <title>Local Taxi Service Visakhapatnam | Book Cabs in Vizag | City Taxi Booking</title>
         <meta name="description" content="Book local taxi in Visakhapatnam for city travel, hourly rentals, and point-to-point trips. Best rates for Vizag local cab service. Available 24/7." />
         <meta name="keywords" content="local taxi visakhapatnam, vizag cab booking, local cab service vizag, taxi in visakhapatnam, city taxi booking, hourly cab rental vizag" />
         <link rel="canonical" href="https://www.vizagup.com/local-taxi" />
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
       </Helmet>
       
-      <div className="min-h-screen bg-white">
-        <StickyHeader />
-        
-        {/* Hero Section */}
-        <section className="pt-24 pb-16 bg-white">
-          <div className="container mx-auto px-6 max-w-7xl">
-            <div className="text-center mb-16">
-              <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-4xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight"
-              >
-                Local Taxi Service
-                <span className="block text-primary">in Visakhapatnam</span>
-              </motion.h1>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-xl text-gray-600 max-w-2xl mx-auto mb-12"
-              >
-                Quick and reliable city travel with point-to-point rides, hourly rentals, 
-                and day packages. Your trusted local taxi partner.
-              </motion.p>
-              
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-gray-50 rounded-3xl p-8 max-w-4xl mx-auto"
-              >
-                <Hero />
-              </motion.div>
-            </div>
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="font-bold text-xl text-gray-900">Vizag Taxi Hub</div>
+          <Button onClick={() => window.open(`tel:+91-9966363662`)}>
+            <Phone className="w-4 h-4 mr-2" />
+            Call Now
+          </Button>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="px-6 py-24">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-8 tracking-tight">
+            Local Taxi Service
+          </h1>
+          <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Quick and reliable city travel with point-to-point rides, hourly rentals, 
+            and day packages. Your trusted local taxi partner.
+          </p>
+          
+          <div className="bg-gray-50 rounded-2xl p-8 mb-16">
+            <Hero />
           </div>
-        </section>
-        
-        {/* Local Services */}
-        <section className="py-20 bg-gray-50">
-          <div className="container mx-auto px-6 max-w-7xl">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Services</h2>
-              <p className="text-gray-600">Choose the perfect service for your local travel needs</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {localServices.map((service, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  className="bg-white rounded-2xl p-6 hover:shadow-lg transition-all"
-                >
-                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-6">
-                    <div className="text-primary">{service.icon}</div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="px-6 py-20 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why choose us</h2>
+            <p className="text-gray-600">Quick, reliable city travel solutions</p>
+          </div>
+          
+          <div className="grid md:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="text-center">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                  <div className="text-gray-900">{feature.icon}</div>
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-3">{feature.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Services */}
+      <section className="px-6 py-20">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our services</h2>
+            <p className="text-gray-600">Choose the perfect service for your local travel needs</p>
+          </div>
+          
+          <div className="grid md:grid-cols-4 gap-6">
+            {services.map((service, index) => (
+              <div key={index} className="border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-6">
+                  <div className="text-gray-900">{service.icon}</div>
+                </div>
+                
+                <h3 className="font-semibold text-gray-900 mb-2">{service.name}</h3>
+                <p className="text-gray-600 text-sm mb-4">{service.description}</p>
+                
+                <p className="text-2xl font-bold text-gray-900 mb-4">{service.price}</p>
+                
+                <Button variant="outline" className="w-full">
+                  Book Now
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Popular Routes */}
+      <section className="px-6 py-20 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Popular routes</h2>
+            <p className="text-gray-600">Common destinations within Visakhapatnam</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {popularRoutes.map((route, index) => (
+              <div key={index} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-gray-900 rounded-full"></div>
+                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                    <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
                   </div>
-                  
-                  <h3 className="font-semibold text-gray-900 mb-2">{service.service}</h3>
-                  <p className="text-gray-600 text-sm mb-4 leading-relaxed">{service.description}</p>
-                  
-                  <div className="mb-4">
-                    <p className="text-2xl font-bold text-primary mb-1">{service.price}</p>
-                    <p className="text-sm text-gray-500">{service.duration}</p>
-                  </div>
-                  
-                  <Button variant="outline" className="w-full" size="sm">
-                    Book Now
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
+                  <Badge variant="outline" className="text-xs">{route.distance}</Badge>
+                </div>
+                
+                <h3 className="font-medium text-gray-900 mb-3 text-sm">
+                  {route.from} → {route.to}
+                </h3>
+                
+                <p className="text-2xl font-bold text-gray-900 mb-4">{route.price}</p>
+                
+                <Button variant="outline" className="w-full">
+                  Book Now
+                </Button>
+              </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Popular Routes */}
-        <section className="py-20 bg-white">
-          <div className="container mx-auto px-6 max-w-7xl">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Popular Local Routes</h2>
-              <p className="text-gray-600">Common destinations within Visakhapatnam</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {popularLocalRoutes.map((route, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-all hover:border-primary/20"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-primary rounded-full"></div>
-                      <ArrowRight className="w-4 h-4 text-gray-400" />
-                      <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">{route.distance}</Badge>
-                  </div>
-                  
-                  <h3 className="font-semibold text-gray-900 mb-2 text-sm">
-                    {route.from} → {route.to}
-                  </h3>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 mb-4">
-                    <p>Time: {route.time}</p>
-                    <p className="text-2xl font-bold text-primary">{route.price}</p>
-                  </div>
-                  
-                  <Button variant="outline" className="w-full" size="sm">
-                    Book Now
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Fare Structure */}
-        <section className="py-20 bg-gray-50">
-          <div className="container mx-auto px-6 max-w-7xl">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Live Fare Structure</h2>
-              <p className="text-gray-600">Transparent pricing for all vehicle types</p>
-            </div>
-            
-            <div className="max-w-4xl mx-auto">
-              <FareTable 
-                fareData={fareData}
-                loading={loading}
-                error={error}
-                serviceType="local"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* FAQs */}
-        <section className="py-20 bg-white">
-          <div className="container mx-auto px-6 max-w-4xl">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
-              <p className="text-gray-600">Everything you need to know about our local service</p>
-            </div>
-            
-            <div className="space-y-4">
-              {faqs.map((faq, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition-shadow"
-                >
-                  <h3 className="font-semibold text-gray-900 mb-3">{faq.question}</h3>
-                  <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-20 bg-primary text-white">
-          <div className="container mx-auto px-6 text-center">
-            <h2 className="text-3xl font-bold mb-4">Need a Local Ride?</h2>
-            <p className="text-xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-              Book your local taxi now for quick, reliable city travel 
-              with transparent pricing and professional drivers.
-            </p>
-            <Button 
-              size="lg" 
-              variant="secondary" 
-              className="bg-white text-primary hover:bg-gray-50"
-              onClick={() => window.open(`tel:+91-9966363662`)}
-            >
-              <Phone className="w-5 h-5 mr-2" />
-              Call Now: +91-9966363662
-            </Button>
-          </div>
-        </section>
-
-        <MobileNavigation />
-      </div>
-    </PageTransition>
+      {/* CTA */}
+      <section className="px-6 py-20 bg-gray-900 text-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold mb-6">Need a local ride?</h2>
+          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+            Book your local taxi now for quick, reliable city travel with transparent pricing.
+          </p>
+          <Button 
+            size="lg" 
+            className="bg-white text-gray-900 hover:bg-gray-100"
+            onClick={() => window.open(`tel:+91-9966363662`)}
+          >
+            <Phone className="w-5 h-5 mr-2" />
+            Call Now: +91-9966363662
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
