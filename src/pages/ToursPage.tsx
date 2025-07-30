@@ -14,6 +14,7 @@ import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
 import { TourCard } from "@/components/tour/TourCard";
 import { Hero } from "@/components/Hero";
+import Footer from "@/components/Footer";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -213,6 +214,7 @@ const ToursPage = () => {
         </div>
       </div>
       
+      <Footer />
       <MobileNavigation />
     </div>
   );

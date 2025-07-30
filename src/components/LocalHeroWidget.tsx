@@ -52,7 +52,7 @@ export function LocalHeroWidget({ initialPickup, initialDrop }: LocalHeroWidgetP
 
   return (
     <div>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['local']} />
+      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['local']} hideBackground={true} />
     </div>
   );
 } 

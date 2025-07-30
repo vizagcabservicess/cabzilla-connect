@@ -52,7 +52,7 @@ export function AirportHeroWidget({ initialPickup, initialDrop }: AirportHeroWid
 
   return (
     <div>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['airport']} />
+      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['airport']} hideBackground={true} />
     </div>
   );
 } 

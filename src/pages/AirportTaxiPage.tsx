@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plane, Phone, ArrowRight, Clock, MapPin, Luggage, Navigation, Shield, CheckCircle, Car } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 export function AirportTaxiPage() {
   const features = [
@@ -104,6 +106,7 @@ export function AirportTaxiPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Navbar />
       <Helmet>
         <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
         <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
@@ -111,45 +114,27 @@ export function AirportTaxiPage() {
         <link rel="canonical" href="https://www.vizagup.com/local-taxi/airport-taxi" />
       </Helmet>
       
-      {/* Header */}
-      <motion.header 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-50 bg-white border-b border-gray-100"
-      >
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="font-bold text-2xl text-gray-900">
-            Vizag Taxi Hub
-          </div>
-          <Button 
-            onClick={() => window.open(`tel:+91-9966363662`)}
-            className="bg-sky-500 hover:bg-sky-600 text-white rounded-full px-6"
-          >
-            <Phone className="w-4 h-4 mr-2" />
-            Call Now
-          </Button>
-        </div>
-      </motion.header>
+     
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-sky-50 to-white pt-16 pb-24">
-        <div className="max-w-7xl mx-auto px-6">
+      <section className="relative bg-gradient-to-br from-sky-50 to-white pt-8 md:pt-16 pb-12 md:pb-24">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-16"
+            className="text-center mb-8 md:mb-16"
           >
-            <div className="inline-flex items-center px-4 py-2 rounded-full bg-sky-100 text-sky-700 text-sm font-medium mb-6">
-              <CheckCircle className="w-4 h-4 mr-2" />
+            <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-sky-100 text-sky-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
+              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
               Trusted Airport Transfer Service
             </div>
-            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+            <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-6 leading-tight">
               Fly With
               <br />
               <span className="text-sky-500">Confidence</span>
             </h1>
-            <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
+            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-12 max-w-2xl mx-auto">
               Hassle-free airport transfers with flight tracking, meet & greet service, and guaranteed on-time pickup and drop to Vizag Airport.
             </p>
           </motion.div>
@@ -158,7 +143,7 @@ export function AirportTaxiPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100"
+            className="rounded-xl md:rounded-2xl p-4 md:p-8"
           >
             <AirportHeroWidget />
           </motion.div>
@@ -315,6 +300,35 @@ export function AirportTaxiPage() {
           </div>
         </div>
       </section>
+       {/* CTA */}
+       <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-sky-600/20 to-blue-600/20"></div>
+        <div className="relative max-w-4xl mx-auto text-center px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">Flying Soon?</h2>
+            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+              Book your airport transfer now for stress-free travel with flight tracking, meet & greet service, and guaranteed punctual service.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Button 
+                size="lg" 
+                className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-8 py-4 rounded-xl"
+                onClick={() => window.open(`tel:+91-9966363662`)}
+              >
+                <Phone className="w-5 h-5 mr-2" />
+                Call Now: +91-9966363662
+              </Button>
+              <div className="text-gray-400 text-sm">
+                24/7 Available • Flight Tracking • Fixed Rates
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
 
       {/* Service Features */}
       <section className="py-20 bg-white">
@@ -354,36 +368,9 @@ export function AirportTaxiPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-sky-600/20 to-blue-600/20"></div>
-        <div className="relative max-w-4xl mx-auto text-center px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">Flying Soon?</h2>
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Book your airport transfer now for stress-free travel with flight tracking, meet & greet service, and guaranteed punctual service.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                size="lg" 
-                className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-8 py-4 rounded-xl"
-                onClick={() => window.open(`tel:+91-9966363662`)}
-              >
-                <Phone className="w-5 h-5 mr-2" />
-                Call Now: +91-9966363662
-              </Button>
-              <div className="text-gray-400 text-sm">
-                24/7 Available • Flight Tracking • Fixed Rates
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
+     
 
+      <Footer />
       <script type="application/ld+json">
         {JSON.stringify(structuredData)}
       </script>

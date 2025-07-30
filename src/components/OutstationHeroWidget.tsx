@@ -143,7 +143,7 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch }: O
 
   return (
     <div>
-      <Hero key={`hero-${pickup || 'none'}-${drop || 'none'}`} onSearch={onSearch} visibleTabs={['outstation']} />
+      <Hero key={`hero-${pickup || 'none'}-${drop || 'none'}`} onSearch={onSearch} visibleTabs={['outstation']} hideBackground={true} />
     </div>
   );
 } 

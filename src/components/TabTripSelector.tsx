@@ -176,27 +176,29 @@ export function TabTripSelector({
   
   return (
     <div className="space-y-2 sm:space-y-4" id="tab-trip-selector">
-      {/* Tab bar with top border/line */}
-      <div className="mb-2 sm:mb-4">
-        <div className="relative w-full flex justify-center">
-          <div className="flex w-full bg-gray-50 sm:bg-gray-100 rounded-lg sm:rounded-full p-0.5 sm:p-1 border border-gray-200" style={{boxShadow: 'none'}}>
-            {tabs.map((tab, idx) => {
-              const isActive = selectedTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  ref={el => tabRefs.current[idx] = el}
-                  className={`flex-1 min-w-0 py-2.5 sm:py-2 px-2 sm:px-4 flex items-center justify-center rounded-md sm:rounded-full font-bold sm:font-medium transition-colors duration-200 text-sm sm:text-sm text-center focus:outline-none ${isActive ? "bg-white border border-blue-600 shadow-sm z-10 text-blue-700 font-bold" : "bg-transparent text-gray-600 font-semibold sm:font-medium"}`}
-                  onClick={() => handleTabChange(tab.id)}
-                  style={{ zIndex: isActive ? 2 : 1 }}
-                >
-                  <span className="leading-tight font-bold sm:font-medium">{tab.label}</span>
-                </button>
-              );
-            })}
+      {/* Tab bar with top border/line - Hidden when only one tab is visible */}
+      {(!visibleTabs || visibleTabs.length > 1) && (
+        <div className="mb-2 sm:mb-4">
+          <div className="relative w-full flex justify-center">
+            <div className="flex w-full bg-gray-50 sm:bg-gray-100 rounded-lg sm:rounded-full p-0.5 sm:p-1 border border-gray-200" style={{boxShadow: 'none'}}>
+              {tabs.map((tab, idx) => {
+                const isActive = selectedTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    ref={el => tabRefs.current[idx] = el}
+                    className={`flex-1 min-w-0 py-2.5 sm:py-2 px-2 sm:px-4 flex items-center justify-center rounded-md sm:rounded-full font-bold sm:font-medium transition-colors duration-200 text-sm sm:text-sm text-center focus:outline-none ${isActive ? "bg-white border border-blue-600 shadow-sm z-10 text-blue-700 font-bold" : "bg-transparent text-gray-600 font-semibold sm:font-medium"}`}
+                    onClick={() => handleTabChange(tab.id)}
+                    style={{ zIndex: isActive ? 2 : 1 }}
+                  >
+                    <span className="leading-tight font-bold sm:font-medium">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
       {/* Trip mode radio group */}
       {selectedTab === 'outstation' && (
         <motion.div 

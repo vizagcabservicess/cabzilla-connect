@@ -44,7 +44,7 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero({ onSearch, isSearchActive, visibleTabs }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'> }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean }) {
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -846,7 +846,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs }: { onSearch?: (se
       )}
       
       {/* Hero Banner Section - Only show when not in search mode */}
-      {!isSearchActive && currentStep === 1 && (
+      {!isSearchActive && currentStep === 1 && !hideBackground && (
         <section className="hidden sm:block relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
         {/* Background Video/Image */}
         <div className="absolute inset-0 z-0">
