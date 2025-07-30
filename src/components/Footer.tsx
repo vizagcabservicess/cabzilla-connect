@@ -1,5 +1,6 @@
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -24,10 +25,18 @@ const Footer = () => {
           <div>
             <h3 className="font-medium text-white mb-4 text-lg">Services</h3>
             <ul className="space-y-3 text-gray-300">
-              <li className="hover:text-white transition-colors cursor-pointer">Local Trips</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Outstation</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Airport Transfer</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Tour Packages</li>
+              <li>
+                <Link to="/local-taxi" className="hover:text-white transition-colors block">Local Taxi</Link>
+              </li>
+              <li>
+                <Link to="/outstation-taxi" className="hover:text-white transition-colors block">Outstation</Link>
+              </li>
+              <li>
+                <Link to="/airport-taxi" className="hover:text-white transition-colors block">Airport Transfer</Link>
+              </li>
+              <li>
+                <Link to="/tours" className="hover:text-white transition-colors block">Tour Packages</Link>
+              </li>
             </ul>
           </div>
           <div>

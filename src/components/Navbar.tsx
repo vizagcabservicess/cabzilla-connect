@@ -43,10 +43,10 @@ interface NavLink {
 const megaMenuData = {
   Services: {
     left: [
-      { label: 'Local Trips', to: '/local-trips' },
-      { label: 'Outstation', to: '/outstation' },
-      { label: 'Airport Transfer', to: '/airport-transfer' },
-      { label: 'Tour Packages', to: '/tour-packages' },
+      { label: 'Local Taxi', to: '/local-taxi' },
+      { label: 'Outstation', to: '/outstation-taxi' },
+      { label: 'Airport Transfer', to: '/airport-taxi' },
+      { label: 'Tour Packages', to: '/tours' },
     ],
     right: [
       { label: 'Hourly Packages', items: ['8hrs/80km', '10hrs/100km', 'Professional drivers'] },
@@ -166,15 +166,16 @@ export function Navbar() {
         {/* Left column: Categories */}
         <div className="w-1/3 py-8 px-6 border-r border-gray-100 bg-gray-50 rounded-l-xl">
           {left.map((item, idx) => (
-            <button
+            <Link
               key={item.label}
+              to={item.to}
               className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
               onMouseEnter={() => setActiveLeftIndex(idx)}
-              onClick={e => e.preventDefault()}
+              onClick={() => setMegaMenuOpen(null)}
             >
               {item.label}
               <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
-            </button>
+            </Link>
           ))}
         </div>
         {/* Right column: Submenu for selected category */}
@@ -316,6 +317,18 @@ export function Navbar() {
                   <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Home className="h-5 w-5" />
                     <span>Home</span>
+                  </Link>
+                  <Link to="/local-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Car className="h-5 w-5" />
+                    <span>Local Taxi</span>
+                  </Link>
+                  <Link to="/outstation-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <MapPin className="h-5 w-5" />
+                    <span>Outstation</span>
+                  </Link>
+                  <Link to="/airport-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Plane className="h-5 w-5" />
+                    <span>Airport Transfer</span>
                   </Link>
                   <Link to="/about" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Info className="h-5 w-5" />

@@ -9,6 +9,14 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 export function LocalTaxiPage() {
+  const widgetRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToWidget = () => {
+    widgetRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
   const features = [
     { 
       icon: <Zap className="w-6 h-6" />, 
@@ -37,19 +45,28 @@ export function LocalTaxiPage() {
   ];
 
   const serviceAreas = [
-    { area: 'MVP Colony', distance: '2 km', time: '3-5 min' },
-    { area: 'Dwaraka Nagar', distance: '4 km', time: '5-8 min' },
-    { area: 'Gajuwaka', distance: '12 km', time: '15-20 min' },
-    { area: 'Madhurawada', distance: '15 km', time: '20-25 min' },
-    { area: 'Beach Road', distance: '3 km', time: '5-7 min' },
-    { area: 'Rushikonda', distance: '8 km', time: '10-15 min' },
+    { area: 'MVP Colony', distance: '2 km', time: '30 min' },
+    { area: 'Dwaraka Nagar', distance: '4 km', time: '30 min' },
+    { area: 'Gajuwaka', distance: '12 km', time: '40 min' },
+    { area: 'Madhurawada', distance: '15 km', time: '45 min' },
+    { area: 'Beach Road', distance: '3 km', time: '30 min' },
+    { area: 'Rushikonda', distance: '8 km', time: '45 min' },
   ];
 
-  const vehicleOptions = [
-    { type: 'Mini', capacity: '4', rate: '₹10/km', features: ['AC', 'Music'] },
-    { type: 'Sedan', capacity: '4', rate: '₹12/km', features: ['AC', 'Music', 'Premium'] },
-    { type: 'SUV', capacity: '6', rate: '₹16/km', features: ['AC', 'Music', 'Spacious'] },
-  ];
+  const [selectedDuration, setSelectedDuration] = React.useState('08hrs');
+
+  const vehicleOptions = {
+    '08hrs': [
+      { type: 'Innova Crysta (7+1)', capacity: '7+1', rate: '₹4,000', features: ['AC', 'Music', 'Spacious', 'Premium'], extraTime: '₹450/hr', extraKm: '₹20/km' },
+      { type: 'Ertiga (6+1)', capacity: '6+1', rate: '₹3,500', features: ['AC', 'Music', 'Comfortable'], extraTime: '₹400/hr', extraKm: '₹18/km' },
+      { type: 'Sedan (4+1)', capacity: '4+1', rate: '₹2,400', features: ['AC', 'Music', 'Economical'], extraTime: '₹300/hr', extraKm: '₹14/km' },
+    ],
+    '10hrs': [
+      { type: 'Innova Crysta (7+1)', capacity: '7+1', rate: '₹4,500', features: ['AC', 'Music', 'Spacious', 'Premium'], extraTime: '₹450/hr', extraKm: '₹20/km' },
+      { type: 'Ertiga (6+1)', capacity: '6+1', rate: '₹4,000', features: ['AC', 'Music', 'Comfortable'], extraTime: '₹400/hr', extraKm: '₹18/km' },
+      { type: 'Sedan (4+1)', capacity: '4+1', rate: '₹3,000', features: ['AC', 'Music', 'Economical'], extraTime: '₹300/hr', extraKm: '₹14/km' },
+    ]
+  };
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -113,6 +130,7 @@ export function LocalTaxiPage() {
           </motion.div>
           
           <motion.div 
+            ref={widgetRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -170,8 +188,27 @@ export function LocalTaxiPage() {
             <p className="text-xl text-gray-600">Perfect vehicle for every journey</p>
           </motion.div>
           
+          {/* Duration Tabs */}
+          <div className="flex justify-center mb-8">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {['08hrs', '10hrs'].map((duration) => (
+                <button
+                  key={duration}
+                  onClick={() => setSelectedDuration(duration)}
+                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
+                    selectedDuration === duration
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {duration}
+                </button>
+              ))}
+            </div>
+          </div>
+          
           <div className="grid md:grid-cols-3 gap-8">
-            {vehicleOptions.map((vehicle, index) => (
+            {vehicleOptions[selectedDuration].map((vehicle, index) => (
               <motion.div 
                 key={index} 
                 initial={{ opacity: 0, y: 30 }}
@@ -186,13 +223,20 @@ export function LocalTaxiPage() {
                 </div>
                 <div className="text-sm text-gray-600 mb-2">{vehicle.capacity} Seater</div>
                 <div className="text-2xl font-bold text-blue-500 mb-4">{vehicle.rate}</div>
-                <div className="space-y-2">
+                <div className="space-y-2 mb-4">
                   {vehicle.features.map((feature, i) => (
                     <div key={i} className="flex items-center text-sm text-gray-600">
                       <CheckCircle className="w-4 h-4 text-blue-500 mr-2" />
                       {feature}
                     </div>
                   ))}
+                </div>
+                <div className="border-t pt-4">
+                  <div className="text-xs text-gray-500 mb-2">Extra charges:</div>
+                  <div className="text-sm text-gray-600">
+                    <div>Time: {vehicle.extraTime}</div>
+                    <div>Distance: {vehicle.extraKm}</div>
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -299,7 +343,7 @@ export function LocalTaxiPage() {
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-4">Point to Point</h3>
               <p className="text-gray-600 mb-6">Quick rides to your destination with meter-based pricing</p>
-              <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+              <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={scrollToWidget}>
                 Book Now
               </Button>
             </motion.div>
@@ -316,7 +360,7 @@ export function LocalTaxiPage() {
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-4">Hourly Rental</h3>
               <p className="text-gray-600 mb-6">Rent a cab for multiple stops and shopping trips</p>
-              <Button className="bg-green-500 hover:bg-green-600 text-white">
+              <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={scrollToWidget}>
                 Book Now
               </Button>
             </motion.div>

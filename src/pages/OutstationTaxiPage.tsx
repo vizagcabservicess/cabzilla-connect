@@ -9,6 +9,14 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 export function OutstationTaxiPage() {
+  const widgetRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToWidget = () => {
+    widgetRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
   const features = [
     { 
       icon: <Zap className="w-6 h-6" />, 
@@ -37,16 +45,16 @@ export function OutstationTaxiPage() {
   ];
 
   const popularRoutes = [
-    { from: 'Visakhapatnam', to: 'Hyderabad', distance: '625 km', price: '₹8,500', duration: '8-9 hrs' },
-    { from: 'Visakhapatnam', to: 'Chennai', distance: '780 km', price: '₹10,200', duration: '10-11 hrs' },
-    { from: 'Visakhapatnam', to: 'Bangalore', distance: '950 km', price: '₹12,500', duration: '12-13 hrs' },
-    { from: 'Visakhapatnam', to: 'Araku Valley', distance: '115 km', price: '₹2,800', duration: '3-4 hrs' },
+    { from: 'Visakhapatnam', to: 'Hyderabad', distance: '625 km', price: '₹17,000', duration: '16-18 hrs' },
+    { from: 'Visakhapatnam', to: 'Chennai', distance: '780 km', price: '₹23,200', duration: '16-18 hrs' },
+    { from: 'Visakhapatnam', to: 'Annavaram', distance: '130 km', price: '₹4,500', duration: '3-4 hrs' },
+    { from: 'Visakhapatnam', to: 'Araku Valley', distance: '115 km', price: '₹5,000', duration: '3-4 hrs' },
   ];
 
   const vehicleTypes = [
-    { name: 'Sedan', seats: '4+1', price: '₹12/km', features: ['AC', 'Music', 'GPS'] },
-    { name: 'SUV', seats: '6+1', price: '₹16/km', features: ['AC', 'Music', 'GPS', 'Extra Space'] },
-    { name: 'Luxury', seats: '4+1', price: '₹25/km', features: ['Premium AC', 'Premium Music', 'GPS', 'Leather Seats'] },
+    { name: 'Sedan', seats: '4+1', price: '₹14/km', features: ['AC', 'Music', 'GPS'] },
+    { name: 'SUV', seats: '6+1', price: '₹18/km', features: ['AC', 'Music', 'GPS', 'Extra Space'] },
+    { name: 'Luxury', seats: '7+1', price: '₹22/km', features: ['Premium AC', 'Premium Music', 'GPS', 'Leather Seats'] },
   ];
 
   const structuredData = {
@@ -72,7 +80,7 @@ export function OutstationTaxiPage() {
     "serviceType": "Outstation Taxi Service",
     "offers": {
       "@type": "Offer",
-      "priceRange": "₹12-25 per km",
+      "priceRange": "₹14-35 per km",
       "availability": "https://schema.org/InStock"
     }
   };
@@ -111,6 +119,7 @@ export function OutstationTaxiPage() {
           </motion.div>
         
           <motion.div 
+            ref={widgetRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -279,7 +288,7 @@ export function OutstationTaxiPage() {
                   </div>
                 </div>
                 
-                <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg">
+                <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg" onClick={scrollToWidget}>
                   Book Now
                 </Button>
               </motion.div>

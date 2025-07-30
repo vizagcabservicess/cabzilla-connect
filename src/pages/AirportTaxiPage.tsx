@@ -9,6 +9,14 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 export function AirportTaxiPage() {
+  const widgetRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToWidget = () => {
+    widgetRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
   const features = [
     { 
       icon: <Plane className="w-6 h-6" />, 
@@ -40,40 +48,40 @@ export function AirportTaxiPage() {
     { 
       name: 'Airport Pickup', 
       description: 'From airport to your destination',
-      price: '₹350',
+      price: '₹850',
       icon: <Plane className="w-6 h-6" />
     },
     { 
       name: 'Airport Drop', 
       description: 'From your location to airport',
-      price: '₹350',
+      price: '₹850',
       icon: <Navigation className="w-6 h-6" />
     },
     { 
       name: 'Round Trip', 
       description: 'Complete transfer solution',
-      price: '₹600',
+      price: '₹1400',
       icon: <ArrowRight className="w-6 h-6" />
     },
     { 
       name: 'Corporate', 
       description: 'Business travel transfers',
-      price: '₹500',
+      price: '₹850',
       icon: <Luggage className="w-6 h-6" />
     }
   ];
 
   const popularRoutes = [
-    { from: 'Airport', to: 'Railway Station', distance: '12 km', price: '₹350', time: '20 min' },
-    { from: 'Airport', to: 'Beach Road', distance: '15 km', price: '₹400', time: '25 min' },
-    { from: 'Airport', to: 'Rushikonda', distance: '25 km', price: '₹500', time: '35 min' },
-    { from: 'Airport', to: 'Kailasagiri', distance: '18 km', price: '₹450', time: '28 min' }
+    { from: 'Airport', to: 'Railway Station', distance: '12 km', price: '₹840', time: '20 min' },
+    { from: 'Airport', to: 'Beach Road', distance: '15 km', price: '₹940', time: '30 min' },
+    { from: 'Airport', to: 'Rushikonda', distance: '25 km', price: '₹1500', time: '50 min' },
+    { from: 'Airport', to: 'Kailasagiri', distance: '18 km', price: '₹1200', time: '35 min' }
   ];
 
   const fleetOptions = [
-    { type: 'Sedan', capacity: '3-4', luggage: '2-3 bags', price: '₹350' },
-    { type: 'SUV', capacity: '6-7', luggage: '4-5 bags', price: '₹450' },
-    { type: 'Luxury', capacity: '4', luggage: '3-4 bags', price: '₹650' },
+    { type: 'Sedan', capacity: '3-4', luggage: '2-3 bags', price: '₹850 onwards' },
+    { type: 'SUV', capacity: '6-7', luggage: '3-4 bags', price: '₹1250 onwards' },
+    { type: 'Luxury', capacity: '4', luggage: '3-4 bags', price: '₹1550 onwards' },
   ];
 
   const structuredData = {
@@ -140,6 +148,7 @@ export function AirportTaxiPage() {
           </motion.div>
           
           <motion.div 
+            ref={widgetRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -292,7 +301,7 @@ export function AirportTaxiPage() {
                   </div>
                 </div>
                 
-                <Button className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                <Button className="w-full bg-sky-500 hover:bg-sky-600 text-white rounded-lg" onClick={scrollToWidget}>
                   Book Now
                 </Button>
               </motion.div>
@@ -359,7 +368,7 @@ export function AirportTaxiPage() {
                 <h3 className="text-xl font-bold text-gray-900 mb-3">{service.name}</h3>
                 <p className="text-gray-600 mb-6">{service.description}</p>
                 <div className="text-3xl font-bold text-sky-500 mb-6">{service.price}</div>
-                <Button className="bg-sky-500 hover:bg-sky-600 text-white">
+                <Button className="bg-sky-500 hover:bg-sky-600 text-white" onClick={scrollToWidget}>
                   Book Now
                 </Button>
               </motion.div>
