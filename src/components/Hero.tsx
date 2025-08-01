@@ -218,6 +218,78 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
     }
   }, []);
 
+  // Handle autoTriggerSearch functionality
+  useEffect(() => {
+    if (savedData.autoTriggerSearch && pickupLocation && dropLocation && isFormValid) {
+      // Auto-trigger search after a short delay to ensure all state is properly set
+      const timer = setTimeout(() => {
+        setCurrentStep(2);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [savedData.autoTriggerSearch, pickupLocation, dropLocation, isFormValid]);
+
+  // Clear routePrefillData after processing to prevent stale data
+  useEffect(() => {
+    const routePrefillData = sessionStorage.getItem('routePrefillData');
+    if (routePrefillData) {
+      // Clear the prefill data after a short delay to ensure it's been processed
+      const timer = setTimeout(() => {
+        sessionStorage.removeItem('routePrefillData');
+      }, 200);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Handle visibleTabs changes to ensure proper tab selection
+  useEffect(() => {
+    if (visibleTabs && visibleTabs.length === 1) {
+      const singleTab = visibleTabs[0] as TripType;
+      if (tripType !== singleTab) {
+        setTripType(singleTab);
+        // Clear locations when switching trip types to ensure fresh state
+        setPickupLocation(null);
+        setDropLocation(null);
+        sessionStorage.removeItem('pickupLocation');
+        sessionStorage.removeItem('dropLocation');
+      }
+    }
+  }, [visibleTabs, tripType]);
+
+  // Clear stale sessionStorage data on mount to ensure fresh state
+  useEffect(() => {
+    // Clear any stale prefill data that might interfere with current navigation
+    const routePrefillData = sessionStorage.getItem('routePrefillData');
+    if (routePrefillData) {
+      try {
+        const data = JSON.parse(routePrefillData);
+        // Only clear if the data is for a different trip type than what's currently visible
+        if (visibleTabs && visibleTabs.length === 1 && data.tripType !== visibleTabs[0]) {
+          sessionStorage.removeItem('routePrefillData');
+        }
+      } catch (error) {
+        // If parsing fails, clear the data
+        sessionStorage.removeItem('routePrefillData');
+      }
+    }
+  }, [visibleTabs]);
+
+  // Force reset when component mounts to ensure fresh state
+  useEffect(() => {
+    // Reset to step 1 when component mounts
+    setCurrentStep(1);
+    setShowGuestDetailsForm(false);
+    
+    // Clear any existing search state
+    setIsLoading(false);
+    setValidationError(null);
+    
+    // Reset form validation
+    setIsFormValid(false);
+  }, []);
+
   // Reset/disable returnDate and errors when locations change
   useEffect(() => {
     if (tripType === 'outstation' && tripMode === 'round-trip') {
@@ -665,16 +737,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
     setTripType(type);
     setDistance(0);
     setDuration(0);
-    // Always clear drop location for Local and Tour
-    if (type === 'local' || type === 'tour') {
-      console.log('Clearing dropLocation due to tab change to:', type);
-      setDropLocation(null);
-    }
-    // For airport, clear drop location if pickup is not in Vizag
-    if (type === 'airport') {
-      if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
-        console.log('Clearing dropLocation due to airport tab and pickup not in Vizag');
+    
+    // Only clear drop location if we're not in a single-tab mode (Hero widgets)
+    // This prevents clearing locations when navigating between pages
+    if (!visibleTabs || visibleTabs.length > 1) {
+      // Always clear drop location for Local and Tour
+      if (type === 'local' || type === 'tour') {
+        console.log('Clearing dropLocation due to tab change to:', type);
         setDropLocation(null);
+      }
+      // For airport, clear drop location if pickup is not in Vizag
+      if (type === 'airport') {
+        if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
+          console.log('Clearing dropLocation due to airport tab and pickup not in Vizag');
+          setDropLocation(null);
+        }
       }
     }
   };

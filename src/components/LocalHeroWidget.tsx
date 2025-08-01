@@ -48,11 +48,22 @@ export function LocalHeroWidget({ initialPickup, initialDrop }: LocalHeroWidgetP
       // Clear any previous prefill data if no locations are provided
       sessionStorage.removeItem('routePrefillData');
     }
+
+    // Clean up on unmount or when props change
+    return () => {
+      // Don't clear immediately, let the Hero component handle the cleanup
+      // This prevents race conditions between widget cleanup and Hero initialization
+    };
   }, [initialPickup, initialDrop]);
 
   return (
     <div>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['local']} hideBackground={true} />
+      <Hero 
+        key="local-hero" 
+        onSearch={() => { /* The hero component handles navigation */ }} 
+        visibleTabs={['local']} 
+        hideBackground={true} 
+      />
     </div>
   );
 } 

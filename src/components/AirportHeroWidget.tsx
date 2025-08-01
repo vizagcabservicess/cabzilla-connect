@@ -48,11 +48,22 @@ export function AirportHeroWidget({ initialPickup, initialDrop }: AirportHeroWid
       // Clear any previous prefill data if no locations are provided
       sessionStorage.removeItem('routePrefillData');
     }
+
+    // Clean up on unmount or when props change
+    return () => {
+      // Don't clear immediately, let the Hero component handle the cleanup
+      // This prevents race conditions between widget cleanup and Hero initialization
+    };
   }, [initialPickup, initialDrop]);
 
   return (
     <div>
-      <Hero onSearch={() => { /* The hero component handles navigation */ }} visibleTabs={['airport']} hideBackground={true} />
+      <Hero 
+        key="airport-hero" 
+        onSearch={() => { /* The hero component handles navigation */ }} 
+        visibleTabs={['airport']} 
+        hideBackground={true} 
+      />
     </div>
   );
 } 

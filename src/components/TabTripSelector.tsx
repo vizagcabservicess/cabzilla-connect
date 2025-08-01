@@ -157,11 +157,17 @@ export function TabTripSelector({
   const handleTabChange = (value: string) => {
     clearFormState();
     clearCacheData();
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupCoordinates');
-    sessionStorage.removeItem('dropCoordinates');
-    if (onClearLocations) onClearLocations();
+    
+    // Only clear locations if we're not in a single-tab mode (Hero widgets)
+    // This prevents clearing locations when navigating between pages
+    if (!visibleTabs || visibleTabs.length > 1) {
+      sessionStorage.removeItem('pickupLocation');
+      sessionStorage.removeItem('dropLocation');
+      sessionStorage.removeItem('pickupCoordinates');
+      sessionStorage.removeItem('dropCoordinates');
+      if (onClearLocations) onClearLocations();
+    }
+    
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
   };
   

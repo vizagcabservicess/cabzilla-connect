@@ -137,13 +137,19 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch }: O
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      sessionStorage.removeItem('routePrefillData');
+      // Don't clear immediately, let the Hero component handle the cleanup
+      // This prevents race conditions between widget cleanup and Hero initialization
     };
   }, [location.pathname, location.search]);
 
   return (
     <div>
-      <Hero key={`hero-${pickup || 'none'}-${drop || 'none'}`} onSearch={onSearch} visibleTabs={['outstation']} hideBackground={true} />
+      <Hero 
+        key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}`} 
+        onSearch={onSearch} 
+        visibleTabs={['outstation']} 
+        hideBackground={true} 
+      />
     </div>
   );
 } 
