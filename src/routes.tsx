@@ -53,6 +53,11 @@ import { OutstationTaxiPrefilledPage } from './pages/OutstationTaxiPrefilledPage
 import { AirportTaxiPage } from './pages/AirportTaxiPage';
 import { AirportTaxiPrefilledPage } from './pages/AirportTaxiPrefilledPage';
 import RentalsPage from './pages/RentalsPage';
+import { SupportPage } from './pages/SupportPage';
+import { HelpCenterPage } from './pages/HelpCenterPage';
+import { ContactUsPage } from './pages/ContactUsPage';
+import { TermsConditionsPage } from './pages/TermsConditionsPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import TourDetailPage from './pages/TourDetailPage';
 import SedanPage from './pages/SedanPage';
 import SUVPage from './pages/SUVPage';
@@ -249,6 +254,26 @@ const router = createBrowserRouter([
   {
     path: '/contact',
     element: <ContactPage />,
+  },
+  {
+    path: '/support',
+    element: <SupportPage />,
+  },
+  {
+    path: '/help-center',
+    element: <HelpCenterPage />,
+  },
+  {
+    path: '/contact-us',
+    element: <ContactUsPage />,
+  },
+  {
+    path: '/terms-conditions',
+    element: <TermsConditionsPage />,
+  },
+  {
+    path: '/privacy-policy',
+    element: <PrivacyPolicyPage />,
   },
   {
     path: '/services',
