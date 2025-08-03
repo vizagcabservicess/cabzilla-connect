@@ -81,14 +81,17 @@ const megaMenuData = {
   },
   Support: {
     left: [
-      { label: 'Help Center', to: '/help' },
-      { label: 'Terms & Conditions', to: '/terms' },
-      { label: 'Privacy Policy', to: '/privacy' },
-      { label: 'Refund Policy', to: '/refund' },
+      { label: 'Support', to: '/support' },
+      { label: 'Help Center', to: '/help-center' },
+      { label: 'Contact Us', to: '/contact-us' },
+      { label: 'Terms & Conditions', to: '/terms-conditions' },
+      { label: 'Privacy Policy', to: '/privacy-policy' },
     ],
     right: [
-      { label: 'Support', items: ['FAQs', 'Customer Care', 'Live Chat'] },
-      { label: 'Policies', items: ['Terms & Conditions', 'Privacy Policy', 'Refund Policy'] },
+      { label: 'Support', items: ['24/7 Customer Support', 'Multiple Contact Channels', 'Live Chat'] },
+      { label: 'Help & FAQ', items: ['Search Functionality', 'Common Questions', 'Troubleshooting'] },
+      { label: 'Contact Information', items: ['Complete Contact Form', 'Email Support', 'Phone Support'] },
+      { label: 'Legal', items: ['Terms of Service', 'Privacy Policy', 'Data Protection'] },
     ],
   },
 };
@@ -445,6 +448,26 @@ export function Navbar() {
                   <Link to="/contact" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Phone className="h-5 w-5" />
                     <span>Contact</span>
+                  </Link>
+                  <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Phone className="h-5 w-5" />
+                    <span>Support</span>
+                  </Link>
+                  <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Info className="h-5 w-5" />
+                    <span>Help Center</span>
+                  </Link>
+                  <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Phone className="h-5 w-5" />
+                    <span>Contact Us</span>
+                  </Link>
+                  <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Info className="h-5 w-5" />
+                    <span>Terms & Conditions</span>
+                  </Link>
+                  <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <Info className="h-5 w-5" />
+                    <span>Privacy Policy</span>
                   </Link>
                   {user ? (
                     <>
