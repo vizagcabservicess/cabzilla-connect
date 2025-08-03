@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/AuthProvider';
 import { Logo } from './Logo';
@@ -34,6 +35,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { CITY_LOOKUP } from './OutstationHeroWidget';
+import { tourAPI } from '@/services/api/tourAPI';
 
 interface NavLink {
   to: string;
@@ -107,6 +109,7 @@ export function Navbar() {
   const [megaMenuOpen, setMegaMenuOpen] = useState(null);
   const [activeCategory, setActiveCategory] = useState('Services');
   const [activeLeftIndex, setActiveLeftIndex] = useState(0);
+  const [tourData, setTourData] = useState([]);
   const megaMenuRef = useRef(null);
   const buttonRefs = {
     Services: useRef(null),
@@ -144,23 +147,109 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [megaMenuOpen]);
 
-  // Helper to render a mega menu for a given category
+  // Handle window resize to reposition menu
+  useEffect(() => {
+    function handleResize() {
+      if (megaMenuOpen) {
+        // Force re-render of mega menu to recalculate position
+        setMegaMenuOpen(null);
+        setTimeout(() => setMegaMenuOpen(activeCategory), 10);
+      }
+    }
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [megaMenuOpen, activeCategory]);
+
+  // Load tour data
+  useEffect(() => {
+    const loadTourData = async () => {
+      try {
+        const tours = await tourAPI.getTourFares();
+        setTourData(tours);
+      } catch (error) {
+        console.error('Error loading tour data:', error);
+        setTourData([]);
+      }
+    };
+    
+    loadTourData();
+  }, []);
+
+  // Position menu after it's rendered to prevent overflow
+  useEffect(() => {
+    if (megaMenuOpen && megaMenuRef.current) {
+      const menu = megaMenuRef.current;
+      const button = buttonRefs[megaMenuOpen].current;
+      
+      if (button) {
+        const buttonRect = button.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Check if this is the outstation menu (wider)
+        const isOutstation = megaMenuOpen === 'Services' && activeLeftIndex === 1; // Outstation is at index 1
+        
+        // Calculate horizontal position
+        let left = buttonRect.left + buttonRect.width / 2 - menuRect.width / 2;
+        
+        // For outstation menu, ensure it doesn't go off screen
+        if (isOutstation) {
+          // Ensure menu stays within viewport bounds with more margin for wider menu
+          if (left < 40) {
+            left = 40;
+          } else if (left + menuRect.width > viewportWidth - 40) {
+            left = viewportWidth - menuRect.width - 40;
+          }
+        } else {
+          // Regular positioning for other menus
+          if (left < 20) {
+            left = 20;
+          } else if (left + menuRect.width > viewportWidth - 20) {
+            left = viewportWidth - menuRect.width - 20;
+          }
+        }
+        
+        // Calculate vertical position
+        let top = buttonRect.bottom + 16;
+        const menuHeight = menuRect.height;
+        
+        // If menu would overflow below viewport, position it above the button
+        if (top + menuHeight > viewportHeight - 20) {
+          top = buttonRect.top - menuHeight - 16;
+        }
+        
+        // Apply positioning
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.transform = 'none';
+      }
+    }
+  }, [megaMenuOpen, activeLeftIndex]);
+
+      // Helper to render a mega menu for a given category
   function renderMegaMenu(category) {
     const left = megaMenuData[category].left;
     const right = megaMenuData[category].right;
-    // Get button position for arrow
-    // const buttonRect = buttonRefs[category].current?.getBoundingClientRect();
-    // const menuRect = megaMenuRef.current?.getBoundingClientRect();
-    // let arrowLeft = 40;
-    // if (buttonRect && menuRect) {
-    //   arrowLeft = buttonRect.left - menuRect.left + buttonRect.width / 2 - 10;
-    // }
+    
+         // Set different widths based on category
+     const isOutstation = category === 'Services' && left[activeLeftIndex]?.label === 'Outstation';
+     const menuWidth = isOutstation ? '1000px' : '800px';
+    
     return (
       <div
         ref={megaMenuRef}
-        className="absolute left-1/2 -translate-x-1/2 top-full w-[700px] bg-white text-gray-900 shadow-2xl rounded-xl mt-4 p-0 flex z-50 border border-gray-200"
+        className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-50 border border-gray-200"
         tabIndex={-1}
-        style={{ minHeight: 260 }}
+                 style={{ 
+           minHeight: isOutstation ? 400 : 260,
+           width: menuWidth,
+           maxWidth: '95vw',
+           left: '50%',
+           top: '50%',
+           transform: 'translateX(-50%) translateY(-50%)'
+         }}
       >
         {/* Up arrow removed */}
         {/* Left column: Categories */}
@@ -178,27 +267,46 @@ export function Navbar() {
             </Link>
           ))}
         </div>
-        {/* Right column: Submenu for selected category */}
-        <div className="flex-1 py-8 px-8">
-          {/* If Services > Outstation is selected, show dynamic city links */}
-          {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
-            <div>
-              <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
-              <div className="grid grid-cols-1 gap-2" style={{ maxHeight: 300, overflowY: 'auto' }}>
-                {Object.keys(CITY_LOOKUP)
-                  .filter(city => city !== 'Visakhapatnam')
-                  .map(city => (
-                    <Link
-                      key={city}
-                      to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
-                      className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors"
-                    >
-                      {city}
-                    </Link>
-                  ))}
-              </div>
-            </div>
-          ) : right[activeLeftIndex] && (
+                 {/* Right column: Submenu for selected category */}
+         <div className="flex-1 py-6 px-6 md:px-8 lg:px-10">
+                                {/* If Services > Outstation is selected, show dynamic city links */}
+           {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
+             <div>
+               <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
+               <div className="grid grid-cols-4 gap-2 max-h-[500px] overflow-y-auto">
+                 {Object.keys(CITY_LOOKUP)
+                   .filter(city => city !== 'Visakhapatnam')
+                   .sort((a, b) => a.localeCompare(b))
+                   .map(city => (
+                                           <Link
+                        key={city}
+                        to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
+                        className="block py-2 px-3 rounded hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                      >
+                        {city}
+                      </Link>
+                   ))}
+               </div>
+             </div>
+           ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tour Packages' ? (
+             <div>
+               <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
+               <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                 {tourData
+                   .filter(tour => tour.tourName)
+                   .sort((a, b) => a.tourName.localeCompare(b.tourName))
+                   .map(tour => (
+                                           <Link
+                        key={tour.tourId}
+                        to={`/tours/${tour.tourId}`}
+                        className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                      >
+                        {tour.tourName}
+                      </Link>
+                   ))}
+               </div>
+             </div>
+           ) : right[activeLeftIndex] && (
             <div>
               <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
               <div className="grid grid-cols-1 gap-2">
@@ -245,7 +353,7 @@ export function Navbar() {
                     <ChevronDown className="ml-1 h-4 w-4" />
                   )}
                 </button>
-                {megaMenuOpen === cat && renderMegaMenu(cat)}
+                                 {megaMenuOpen === cat && createPortal(renderMegaMenu(cat), document.body)}
               </div>
             ))}
 
