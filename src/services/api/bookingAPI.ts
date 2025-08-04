@@ -178,8 +178,8 @@ export const bookingAPI = {
   updateBookingStatus: async (bookingId: number | string, status: BookingStatus) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/api/update-booking-status.php`,
-        { booking_id: bookingId, status },
+        `${API_BASE_URL}/api/admin/update-booking.php`,
+        { bookingId: bookingId, status },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -199,8 +199,8 @@ export const bookingAPI = {
   updateBooking: async (bookingId: number | string, data: Partial<Booking>) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/api/update-booking.php`,
-        { booking_id: bookingId, ...data },
+        `${API_BASE_URL}/api/admin/update-booking.php`,
+        { bookingId: bookingId, ...data },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -220,8 +220,8 @@ export const bookingAPI = {
   cancelBooking: async (bookingId: number | string) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/api/cancel-booking.php`,
-        { booking_id: bookingId },
+        `${API_BASE_URL}/api/admin/cancel-booking.php`,
+        { bookingId: bookingId },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -241,8 +241,8 @@ export const bookingAPI = {
   deleteBooking: async (bookingId: number | string) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/api/delete-booking.php`,
-        { booking_id: bookingId },
+        `${API_BASE_URL}/api/admin/delete-booking.php`,
+        { bookingId: bookingId },
         {
           headers: {
             'Content-Type': 'application/json',

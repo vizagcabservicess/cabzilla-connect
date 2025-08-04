@@ -372,11 +372,11 @@ export const fleetAPI = {
       
       // If API calls failed but didn't throw, try one more approach
       try {
-        const apiUrl = `${API_BASE_URL}/api/update-booking.php`;
+        const apiUrl = `${API_BASE_URL}/api/admin/update-booking.php`;
         console.log("Trying booking update endpoint:", apiUrl);
         
         const response = await axios.post(apiUrl, {
-          booking_id: bookingId,
+          bookingId: bookingId,
           vehicleNumber: vehicleId,
           status: "confirmed"
         }, {
