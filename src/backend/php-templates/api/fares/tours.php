@@ -34,10 +34,6 @@ try {
         $tourId = $row['tour_id'];
         
         $duration = $row['time_duration'] ?? '';
-        // FORCED DEBUGGING: To prove the data pipeline is working.
-        if ($tourId === 'araku') {
-            $duration = '13 hours (Debug)';
-        }
 
         $tours[$tourId] = [
             'id' => intval($row['id']),

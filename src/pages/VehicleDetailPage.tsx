@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import { MobileNavigation } from '@/components/MobileNavigation';
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import RateCardPanel from '@/components/vehicle/RateCardPanel';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
@@ -117,41 +120,55 @@ const VehicleDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading vehicle details...</p>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading vehicle details...</p>
+          </div>
         </div>
+        <MobileNavigation />
       </div>
     );
   }
   
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-red-500 mb-4">{error}</p>
-          <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-red-500 mb-4">{error}</p>
+            <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+          </div>
         </div>
+        <MobileNavigation />
       </div>
     );
   }
   
   if (!vehicle) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-4">Vehicle not found</p>
-          <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 mb-4">Vehicle not found</p>
+            <Link to="/" className="text-blue-600 hover:underline">← Back to Vehicles</Link>
+          </div>
         </div>
+        <MobileNavigation />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <Link 
           to="/" 
@@ -206,15 +223,18 @@ const VehicleDetailPage = () => {
             <RateCard vehicleId={vehicle.id} />
 
             <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
-
-            <SimilarVehicles vehicles={similarVehicles} />
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
+            
+            <SimilarVehicles vehicles={similarVehicles} />
           </div>
         </div>
       </div>
+      
+      <Footer />
+      <MobileNavigation />
     </div>
   );
 };

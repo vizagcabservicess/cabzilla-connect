@@ -93,8 +93,8 @@ export function TourSlider() {
           if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.start();
         }}
       >
-        {/* Arrows absolutely positioned at top right of slider */}
-        <div className="absolute right-0 top-0 z-10 flex gap-2 mt-[7rem] mr-2">
+                 {/* Arrows absolutely positioned at top right of slider - hidden on mobile */}
+         <div className="absolute right-0 top-0 z-10 flex gap-2 mt-24 md:mt-[7rem] mr-2 hidden md:flex">
           <button
             className={`tour-slider-prev bg-white rounded-full shadow-lg p-2 transition duration-200 flex items-center justify-center ${isBeginning ? 'opacity-100 cursor-not-allowed' : 'cursor-pointer'}`}
             aria-label="Previous"
@@ -114,8 +114,8 @@ export function TourSlider() {
             </svg>
           </button>
         </div>
-        {/* Heading and subtitle centered below arrows */}
-        <div className="mb-8 text-center flex flex-col items-center justify-center">
+                 {/* Heading and subtitle centered below arrows */}
+         <div className="mb-8 text-center flex flex-col items-center justify-center">
           <div className="inline-flex items-center gap-2 bg-orange-50 px-6 py-2 rounded-2xl mb-4" style={{ position: 'relative', left: 0, right: 0, margin: '0 auto' }}>
             <MapPin className="h-5 w-5 text-orange-500" />
             <span className="text-base font-medium text-orange-500 tracking-wide">TOUR PACKAGES</span>

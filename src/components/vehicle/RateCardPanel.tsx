@@ -192,9 +192,64 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     }
   }, [vehicleId]);
 
+  const handleTripTypeClick = (rate: VehicleRate) => {
+    setSelectedRate(rate);
+    
+    // Navigate based on booking type
+    if (rate.bookingType === 'tour' && rate.tourId) {
+      navigate(`/tours/${rate.tourId}`);
+    } else if (rate.bookingType === 'outstation') {
+      navigate('/', { 
+        state: { 
+          tripType: 'outstation',
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
+    } else if (rate.bookingType === 'airport') {
+      navigate('/', { 
+        state: { 
+          tripType: 'airport',
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
+    } else if (rate.bookingType === 'local') {
+      navigate('/', { 
+        state: { 
+          tripType: 'local',
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
+    }
+  };
+
   const handleBooking = () => {
     if (selectedRate && selectedRate.bookingType === 'tour' && selectedRate.tourId) {
       navigate(`/tours/${selectedRate.tourId}`);
+    } else if (selectedRate && selectedRate.bookingType === 'outstation') {
+      navigate('/outstation-taxi', { 
+        state: { 
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
+    } else if (selectedRate && selectedRate.bookingType === 'airport') {
+      navigate('/airport-taxi', { 
+        state: { 
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
+    } else if (selectedRate && selectedRate.bookingType === 'local') {
+      navigate('/', { 
+        state: { 
+          tripType: 'local',
+          selectedVehicle: vehicleId,
+          vehicleName: vehicleName
+        } 
+      });
     } else {
       navigate('/');
     }

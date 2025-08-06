@@ -173,7 +173,6 @@ export function FleetShowcase() {
                             <div className="text-base font-medium text-gray-900">{vehicle.name}</div>
                             <CheckCircle className="h-4 w-4 text-green-500" />
                           </div>
-                          <p className="text-sm text-gray-600 mb-2">{getDescription(vehicle)}</p>
                         </div>
                       </div>
                       {/* Pricing */}

@@ -5,64 +5,64 @@ import { MapPin, Clock, TrendingUp, Star } from 'lucide-react';
 export function PopularRoutes() {
   const routes = [
     {
-      destination: "Hyderabad",
-      distance: "620 km",
+      destination: "Annavaram",
+      distance: "260 km",
       duration: "8-9 hours",
-      startingPrice: "₹8,680",
-      description: "Business capital of Telangana",
+      startingPrice: "₹4,500",
+      description: "Famous for Satyanarayana Swamy Temple",
       popularity: "Most Popular",
       gradient: "from-blue-500 to-indigo-600",
-      savings: "Save 15%"
+      savings: "Sedan"
     },
     {
-      destination: "Chennai",
-      distance: "780 km", 
-      duration: "10-11 hours",
-      startingPrice: "₹10,920",
-      description: "Gateway to South India",
+      destination: "Srikakulam",
+      distance: "260 km", 
+      duration: "8-9 hours",
+      startingPrice: "₹4,500",
+      description: "Famous for Arasavalli & Srikurmam",
       popularity: "Trending",
       gradient: "from-green-500 to-emerald-600",
-      savings: "Save 10%"
+      savings: "Sedan"
     },
     {
-      destination: "Bangalore",
-      distance: "860 km",
+      destination: "Pitapuram",
+      distance: "320 km",
       duration: "11-12 hours", 
-      startingPrice: "₹12,040",
-      description: "Silicon Valley of India",
-      popularity: "Popular",
-      gradient: "from-purple-500 to-violet-600",
-      savings: "Save 12%"
-    },
-    {
-      destination: "Tirupati",
-      distance: "550 km",
-      duration: "7-8 hours",
-      startingPrice: "₹7,700",
+      startingPrice: "₹5,000",
       description: "Holy pilgrimage destination",
       popularity: "Spiritual",
-      gradient: "from-orange-500 to-red-600",
-      savings: "Save 8%"
+      gradient: "from-purple-500 to-violet-600",
+      savings: "Sedan"
     },
     {
-      destination: "Vijayawada", 
-      distance: "350 km",
-      duration: "5-6 hours",
-      startingPrice: "₹4,900",
-      description: "Commercial hub of Andhra Pradesh",
-      popularity: "Business",
+      destination: "Lambasingi",
+      distance: "300 km",
+      duration: "12-13 hours",
+      startingPrice: "₹5,000",
+      description: "Known as Kashmir of Andhra",
+      popularity: "Weekend Favorite",
+      gradient: "from-orange-500 to-red-600",
+      savings: "Sedan"
+    },
+    {
+      destination: "Vanajangi", 
+      distance: "260 km",
+      duration: "11-12 hours",
+      startingPrice: "₹5,000",
+      description: "Known for its sunrises",
+      popularity: "Weekend Favorite",
       gradient: "from-teal-500 to-cyan-600",
-      savings: "Save 20%"
+      savings: "Sedan"
     },
     {
       destination: "Araku Valley",
-      distance: "120 km",
-      duration: "3-4 hours",
-      startingPrice: "₹1,680",
+      distance: "260 km",
+      duration: "12-13 hours",
+      startingPrice: "₹5,000",
       description: "Hill station getaway",
       popularity: "Weekend Favorite",
       gradient: "from-emerald-500 to-green-600",
-      savings: "Save 25%"
+      savings: "Sedan"
     }
   ];
 
@@ -138,7 +138,7 @@ export function PopularRoutes() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
-                    <span>One-way starting price</span>
+                    <span>Two-way starting price</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <div className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></div>

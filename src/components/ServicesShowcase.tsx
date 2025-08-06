@@ -3,10 +3,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation } from 'swiper/modules';
+import { useNavigate } from 'react-router-dom';
 import 'swiper/css';
 import 'swiper/css/navigation';
 
 export function ServicesShowcase() {
+  const navigate = useNavigate();
+  
   const services = [
     {
       icon: Clock,
@@ -14,7 +17,8 @@ export function ServicesShowcase() {
       description: "Hourly packages perfect for city exploration",
       features: ["8hrs/80km - ₹2,400", "10hrs/100km - ₹3,000", "Professional drivers"],
       bgColor: "bg-blue-100",
-      iconColor: "text-blue-600"
+      iconColor: "text-blue-600",
+      link: "/local-taxi"
     },
     {
       icon: MapPin,
@@ -22,7 +26,8 @@ export function ServicesShowcase() {
       description: "Comfortable long-distance journeys",
       features: ["Hyderabad - 620km", "Chennai - 780km", "Bangalore - 860km"],
       bgColor: "bg-green-100",
-      iconColor: "text-green-600"
+      iconColor: "text-green-600",
+      link: "/outstation-taxi"
     },
     {
       icon: Car,
@@ -30,7 +35,8 @@ export function ServicesShowcase() {
       description: "Reliable airport connectivity",
       features: ["On-time guarantee", "Flight tracking", "Fixed rates"],
       bgColor: "bg-purple-100",
-      iconColor: "text-purple-600"
+      iconColor: "text-purple-600",
+      link: "/airport-taxi"
     },
     {
       icon: Users,
@@ -38,7 +44,8 @@ export function ServicesShowcase() {
       description: "Share rides, save money",
       features: ["Eco-friendly travel", "Meet new people", "Affordable rates"],
       bgColor: "bg-orange-100",
-      iconColor: "text-orange-600"
+      iconColor: "text-orange-600",
+      link: "/pooling"
     }
   ];
 
@@ -83,7 +90,10 @@ export function ServicesShowcase() {
             >
               {services.map((service, index) => (
                 <SwiperSlide key={index}>
-                  <div className="rounded-2xl shadow-lg bg-gradient-to-b from-blue-50 to-white p-6 flex flex-col items-center text-center min-h-[340px] relative">
+                  <div 
+                    className="rounded-2xl shadow-lg bg-gradient-to-b from-blue-50 to-white p-6 flex flex-col items-center text-center min-h-[340px] relative cursor-pointer"
+                    onClick={() => navigate(service.link)}
+                  >
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${service.bgColor}`}>
                       <service.icon className={`h-7 w-7 ${service.iconColor}`} />
                     </div>
@@ -98,7 +108,15 @@ export function ServicesShowcase() {
                       ))}
                     </ul>
                     <div className="absolute bottom-4 left-0 w-full flex justify-center">
-                      <button className="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold shadow-md text-sm">Book Now</button>
+                      <button 
+                        className="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold shadow-md text-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(service.link);
+                        }}
+                      >
+                        Book Now
+                      </button>
                     </div>
                   </div>
                 </SwiperSlide>
@@ -117,7 +135,11 @@ export function ServicesShowcase() {
         {/* Desktop Grid */}
         <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           {services.map((service, index) => (
-            <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden">
+            <Card 
+              key={index} 
+              className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer"
+              onClick={() => navigate(service.link)}
+            >
               <CardContent className="p-6 text-center">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ${service.bgColor}`}>
                   <service.icon className={`h-8 w-8 ${service.iconColor}`} />
