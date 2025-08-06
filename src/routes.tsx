@@ -66,6 +66,12 @@ import TempoTravellerPage from './pages/TempoTravellerPage';
 import RoutePage from './pages/RoutePage';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import OperatorProfilesPage from '@/pages/OperatorProfilesPage';
+import FleetPage from './pages/FleetPage';
+import CareersPage from './pages/CareersPage';
+import OurStoryPage from './pages/OurStoryPage';
+import VisionMissionPage from './pages/VisionMissionPage';
+import LeadershipPage from './pages/LeadershipPage';
+import HireDriverPage from './pages/HireDriverPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
 import { useAuth } from './providers/AuthProvider';
@@ -359,6 +365,30 @@ const router = createBrowserRouter([
       {
         path: 'vehicle/:vehicleId',
         element: <VehicleDetailPage />,
+      },
+      {
+        path: 'fleet',
+        element: <FleetPage />,
+      },
+      {
+        path: 'careers',
+        element: <CareersPage />,
+      },
+      {
+        path: 'our-story',
+        element: <OurStoryPage />,
+      },
+      {
+        path: 'vision-mission',
+        element: <VisionMissionPage />,
+      },
+      {
+        path: 'leadership',
+        element: <LeadershipPage />,
+      },
+      {
+        path: 'hire-driver',
+        element: <HireDriverPage />,
       },
       // Catch-all route for 404s
       {
