@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Car, Phone, MessageCircle, Calendar, MapPin, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { FaWhatsapp } from 'react-icons/fa';
 
 export function EnhancedCTA() {
   const features = [
@@ -33,7 +34,6 @@ export function EnhancedCTA() {
           <p className="px-4 text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
             Experience hassle-free travel with Vizag Taxi Hub. Professional service guaranteed.
           </p>
-          
           {/* Features */}
           <div className="flex flex-wrap justify-center gap-6 mb-12">
             {features.map((feature, index) => (
@@ -50,7 +50,6 @@ export function EnhancedCTA() {
               </motion.div>
             ))}
           </div>
-          
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button 
@@ -60,7 +59,6 @@ export function EnhancedCTA() {
               <Car className="mr-3 h-6 w-6" />
               Book Your Taxi Now
             </Button>
-            
             <div className="flex gap-3">
               <Button 
                 variant="outline" 
@@ -70,18 +68,17 @@ export function EnhancedCTA() {
                 <Phone className="mr-2 h-5 w-5" />
                 Call Now
               </Button>
-              
               <Button 
                 variant="outline" 
                 size="lg"
                 className="bg-green-600 border-2 border-green-500 text-white hover:bg-green-500 px-8 py-4 rounded-2xl font-semibold transition-all duration-300"
+                onClick={() => window.open('https://wa.me/919966363662?text=Hi! I need help with my taxi booking.', '_blank')}
               >
-                <MessageCircle className="mr-2 h-5 w-5" />
+                <FaWhatsapp className="mr-2 h-5 w-5" />
                 WhatsApp
               </Button>
             </div>
           </div>
-          
           <div className="mt-8 text-blue-200 text-sm">
             ⭐ Rated 4.8/5 by 500+ satisfied customers
           </div>

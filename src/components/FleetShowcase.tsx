@@ -142,9 +142,6 @@ export function FleetShowcase() {
                           <Users className="h-3 w-3 mr-1" />
                           {getCapacity(vehicle)}
                         </Badge>
-                        <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
-                          {getCategory(vehicle)}
-                        </Badge>
                       </div>
                       {/* Vehicle Image or Icon */}
                       {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
@@ -182,7 +179,8 @@ export function FleetShowcase() {
                           <span className="text-sm text-blue-500 ml-1">/ per KM</span>
                         </div>
                         <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">
-                          {getCategory(vehicle)}
+                          <Users className="h-3 w-3 mr-1" />
+                          {getCapacity(vehicle)}
                         </Badge>
                       </div>
                       {/* Features */}

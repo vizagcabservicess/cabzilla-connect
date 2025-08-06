@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { Button, ButtonProps } from "@/components/ui/button";
-import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FaWhatsapp } from "react-icons/fa";
 import { formatPhoneNumber } from '@/services/whatsappService';
 
 interface WhatsAppButtonProps extends ButtonProps {
@@ -50,7 +50,7 @@ export function WhatsAppButton({
       )}
       {...props}
     >
-      {icon && <MessageCircle className="w-4 h-4 mr-2" />}
+      {icon && <FaWhatsapp className="w-4 h-4 mr-2" />}
       {children || "Share via WhatsApp"}
     </Button>
   );

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import router from './routes'; // Only for original approach
 import Index from "./pages/Index";
 import AdminDashboard from "./pages/AdminDashboardPage";

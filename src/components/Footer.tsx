@@ -42,10 +42,18 @@ const Footer = () => {
           <div>
             <h3 className="font-medium text-white mb-4 text-lg">Popular Routes</h3>
             <ul className="space-y-3 text-gray-300">
-              <li className="hover:text-white transition-colors cursor-pointer">Hyderabad</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Chennai</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Bangalore</li>
-              <li className="hover:text-white transition-colors cursor-pointer">Araku Valley</li>
+              <li>
+                <Link to="/outstation-taxi/visakhapatnam-to-hyderabad" className="hover:text-white transition-colors block">Hyderabad</Link>
+              </li>
+              <li>
+                <Link to="/outstation-taxi/visakhapatnam-to-chennai" className="hover:text-white transition-colors block">Chennai</Link>
+              </li>
+              <li>
+                <Link to="/outstation-taxi/visakhapatnam-to-bangalore" className="hover:text-white transition-colors block">Bangalore</Link>
+              </li>
+              <li>
+                <Link to="/outstation-taxi/visakhapatnam-to-araku-valley" className="hover:text-white transition-colors block">Araku Valley</Link>
+              </li>
             </ul>
           </div>
           <div>

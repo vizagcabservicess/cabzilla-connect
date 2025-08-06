@@ -5,7 +5,8 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Phone, Mail, MessageSquare, Clock, CheckCircle, Headphones } from 'lucide-react';
+import { Phone, Mail, Clock, CheckCircle, Headphones } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 export function SupportPage() {
   const supportChannels = [
@@ -15,15 +16,17 @@ export function SupportPage() {
       description: "Speak directly with our support team",
       action: "Call +91-9966363662",
       available: "24/7 Available",
-      color: "bg-green-500"
+      color: "bg-green-500",
+      link: "tel:+91-9966363662"
     },
     {
-      icon: <MessageSquare className="w-6 h-6" />,
+      icon: <FaWhatsapp className="w-6 h-6" />,
       title: "WhatsApp Chat",
       description: "Quick responses via WhatsApp",
       action: "Chat Now",
       available: "Response in < 5 mins",
-      color: "bg-green-600"
+      color: "bg-green-600",
+      link: "https://wa.me/919966363662?text=Hi! I need help with my taxi booking."
     },
     {
       icon: <Mail className="w-6 h-6" />,
@@ -31,7 +34,8 @@ export function SupportPage() {
       description: "Detailed support via email",
       action: "Send Email",
       available: "Response in < 2 hours",
-      color: "bg-blue-500"
+      color: "bg-blue-500",
+      link: "mailto:support@vizagtaxihub.com"
     }
   ];
 
@@ -107,7 +111,10 @@ export function SupportPage() {
                       <Clock className="w-4 h-4 mr-2" />
                       {channel.available}
                     </div>
-                    <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white">
+                    <Button 
+                      className="w-full bg-gray-900 hover:bg-gray-800 text-white"
+                      onClick={() => window.open(channel.link, '_blank')}
+                    >
                       {channel.action}
                     </Button>
                   </CardContent>

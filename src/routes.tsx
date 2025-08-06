@@ -1,4 +1,5 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { ScrollToTop } from './components/ScrollToTop';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
@@ -70,285 +71,301 @@ import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
 import { useAuth } from './providers/AuthProvider';
 import { UserRole, EnhancedUser } from '@/types/privileges';
 
+// Root component that includes ScrollToTop
+function Root() {
+  return (
+    <>
+      <ScrollToTop />
+      <Outlet />
+    </>
+  );
+}
+
 const router = createBrowserRouter([
   {
     path: '/',
-    element: <Index />,
-  },
-  {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/signup',
-    element: <SignupPage />,
-  },
-  {
-    path: '/dashboard',
-    element: <DashboardPage />,
-  },
-  // Main admin routes
-  {
-    path: '/admin',
-    element: <AdminProtectedRoute />,
+    element: <Root />,
     children: [
       {
         index: true,
-        element: <AdminDashboardPage />,
+        element: <Index />,
       },
       {
-        path: 'database',
-        element: <AdminDatabasePage />,
+        path: 'login',
+        element: <LoginPage />,
       },
       {
-        path: 'reports',
-        element: <ReportsPage />,
+        path: 'signup',
+        element: <SignupPage />,
       },
       {
-        path: 'fleet',
-        element: <FleetManagementPage />,
+        path: 'dashboard',
+        element: <DashboardPage />,
+      },
+      // Main admin routes
+      {
+        path: 'admin',
+        element: <AdminProtectedRoute />,
+        children: [
+          {
+            index: true,
+            element: <AdminDashboardPage />,
+          },
+          {
+            path: 'database',
+            element: <AdminDatabasePage />,
+          },
+          {
+            path: 'reports',
+            element: <ReportsPage />,
+          },
+          {
+            path: 'fleet',
+            element: <FleetManagementPage />,
+          },
+          {
+            path: 'fuel',
+            element: <FuelManagementPage />,
+          },
+          {
+            path: 'maintenance',
+            element: <VehicleMaintenancePage />,
+          },
+          {
+            path: 'ledger',
+            element: <LedgerPage />,
+          },
+          {
+            path: 'expenses',
+            element: <ExpensesPage />,
+          },
+          {
+            path: 'payroll',
+            element: <PayrollPage />,
+          },
+          {
+            path: 'payments',
+            element: <PaymentsManagementPage />,
+          },
+          {
+            path: 'commission',
+            element: <CommissionManagementPage />,
+          },
+          {
+            path: 'create-booking',
+            element: <AdminBookingCreationPage />,
+          },
+          {
+            path: 'privileges',
+            element: <PrivilegeManagementWrapper />,
+          },
+          {
+            path: 'pooling',
+            element: <PoolingDashboard />,
+          },
+          {
+            path: 'pooling-enhanced',
+            element: <PoolingAdminDashboard />,
+          },
+          {
+            path: 'operator-profiles',
+            element: <OperatorProfilesPage />,
+          },
+        ]
+      },
+      // Booking routes
+      {
+        path: 'booking/:bookingId/confirmation',
+        element: <BookingConfirmationPage />,
       },
       {
-        path: 'fuel',
-        element: <FuelManagementPage />,
+        path: 'booking-confirmation',
+        element: <BookingConfirmationPage />,
       },
       {
-        path: 'maintenance',
-        element: <VehicleMaintenancePage />,
+        path: 'booking/:bookingId/edit',
+        element: <BookingEditPage />,
       },
       {
-        path: 'ledger',
-        element: <LedgerPage />,
+        path: 'receipt/:bookingId',
+        element: <ReceiptPage />,
+      },
+      // Service routes
+      {
+        path: 'cabs',
+        element: <CabsPage />,
       },
       {
-        path: 'expenses',
-        element: <ExpensesPage />,
+        path: 'cabs/:tripType',
+        element: <CabsPage />,
       },
       {
-        path: 'payroll',
-        element: <PayrollPage />,
+        path: 'tours',
+        element: <ToursPage />,
       },
       {
-        path: 'payments',
-        element: <PaymentsManagementPage />,
+        path: 'tours/:tourId',
+        element: <TourDetailPage />,
       },
       {
-        path: 'commission',
-        element: <CommissionManagementPage />,
+        path: 'payment',
+        element: <PaymentPage />,
+      },
+      // New service pages
+      {
+        path: 'local-taxi',
+        element: <LocalTaxiPage />,
       },
       {
-        path: 'create-booking',
-        element: <AdminBookingCreationPage />,
+        path: 'local-taxi/:from-to-:to',
+        element: <LocalTaxiPrefilledPage />,
       },
       {
-        path: 'privileges',
-        element: <PrivilegeManagementWrapper />,
+        path: 'outstation-taxi',
+        element: <OutstationTaxiPage />,
       },
+      {
+        path: 'outstation-taxi/:from-to-:to',
+        element: <OutstationTaxiPrefilledPage />,
+      },
+      {
+        path: 'outstation-taxi/:slug',
+        element: <RoutePage />,
+      },
+      {
+        path: 'airport-taxi',
+        element: <AirportTaxiPage />,
+      },
+      {
+        path: 'airport-taxi/:from-to-:to',
+        element: <AirportTaxiPrefilledPage />,
+      },
+      {
+        path: 'rentals',
+        element: <RentalsPage />,
+      },
+      // Pooling routes
       {
         path: 'pooling',
-        element: <PoolingDashboard />,
+        element: <PoolingPage />,
       },
       {
-        path: 'pooling-enhanced',
-        element: <PoolingAdminDashboard />,
+        path: 'pooling/book/:rideId',
+        element: <PoolingBookingPage />,
       },
       {
-        path: 'operator-profiles',
-        element: <OperatorProfilesPage />,
+        path: 'pooling/create',
+        element: <CreateRidePage />,
       },
-    ]
-  },
-  // Booking routes
-  {
-    path: '/booking/:bookingId/confirmation',
-    element: <BookingConfirmationPage />,
-  },
-  {
-    path: '/booking-confirmation',
-    element: <BookingConfirmationPage />,
-  },
-  {
-    path: '/booking/:bookingId/edit',
-    element: <BookingEditPage />,
-  },
-  {
-    path: '/receipt/:bookingId',
-    element: <ReceiptPage />,
-  },
-  // Service routes
-  {
-    path: '/cabs',
-    element: <CabsPage />,
-  },
-  {
-    path: '/cabs/:tripType',
-    element: <CabsPage />,
-  },
-  {
-    path: '/tours',
-    element: <ToursPage />,
-  },
-  {
-    path: '/tours/:tourId',
-    element: <TourDetailPage />,
-  },
-  {
-    path: '/payment',
-    element: <PaymentPage />,
-  },
-  // New service pages
-  {
-    path: '/local-taxi',
-    element: <LocalTaxiPage />,
-  },
-  {
-    path: '/local-taxi/:from-to-:to',
-    element: <LocalTaxiPrefilledPage />,
-  },
-  {
-    path: '/outstation-taxi',
-    element: <OutstationTaxiPage />,
-  },
-  {
-    path: '/outstation-taxi/:from-to-:to',
-    element: <OutstationTaxiPrefilledPage />,
-  },
-  {
-    path: '/outstation-taxi/:slug',
-    element: <RoutePage />,
-  },
-  {
-    path: '/airport-taxi',
-    element: <AirportTaxiPage />,
-  },
-  {
-    path: '/airport-taxi/:from-to-:to',
-    element: <AirportTaxiPrefilledPage />,
-  },
-  {
-    path: '/rentals',
-    element: <RentalsPage />,
-  },
-  // Pooling routes
-  {
-    path: '/pooling',
-    element: <PoolingPage />,
-  },
-  {
-    path: '/pooling/book/:rideId',
-    element: <PoolingBookingPage />,
-  },
-  {
-    path: '/pooling/create',
-    element: <CreateRidePage />,
-  },
-  {
-    path: '/pooling/guest',
-    element: <GuestDashboardPage />,
-  },
-  // Static pages
-  {
-    path: '/about',
-    element: <AboutPage />,
-  },
-  {
-    path: '/contact',
-    element: <ContactPage />,
-  },
-  {
-    path: '/support',
-    element: <SupportPage />,
-  },
-  {
-    path: '/help-center',
-    element: <HelpCenterPage />,
-  },
-  {
-    path: '/contact-us',
-    element: <ContactUsPage />,
-  },
-  {
-    path: '/terms-conditions',
-    element: <TermsConditionsPage />,
-  },
-  {
-    path: '/privacy-policy',
-    element: <PrivacyPolicyPage />,
-  },
-  {
-    path: '/services',
-    element: <ServicesPage />,
-  },
-  {
-    path: '/terms',
-    element: <TermsPage />,
-  },
-  {
-    path: '/privacy',
-    element: <PrivacyPage />,
-  },
-  {
-    path: '/refunds',
-    element: <RefundsPage />,
-  },
-  {
-    path: '/blog',
-    element: <BlogPage />,
-  },
-  {
-    path: '/faq',
-    element: <FAQPage />,
-  },
-  { path: '/bookings', element: <BookingsPage /> },
-  { path: '/fares', element: <FaresPage /> },
-  { path: '/vehicles', element: <VehiclesPage /> },
-  { path: '/drivers', element: <DriversPage /> },
-  { path: '/users', element: <UserManagementPage /> },
-  { path: '/admin/bookings', element: <BookingsPage /> },
-  { path: '/admin/fares', element: <FaresPage /> },
-  { path: '/admin/vehicles', element: <VehiclesPage /> },
-  { path: '/admin/drivers', element: <DriversPage /> },
-  { path: '/admin/users', element: <UserManagementPage /> },
-  {
-    path: '/customer',
-    element: <CustomerDashboard />,
-  },
-  {
-    path: '/driver',
-    element: <DriverDashboard />,
-  },
-  {
-    path: '/pooling/login',
-    element: <PoolingLoginPage />,
-  },
-  {
-    path: '/pooling/provider',
-    element: <PoolingProviderPage />,
-  },
-  {
-    path: '/pooling/admin',
-    element: <PoolingAdminPage />,
-  },
-  {
-    path: '/sedan',
-    element: <SedanPage />,
-  },
-  {
-    path: '/suv',
-    element: <SUVPage />,
-  },
-  {
-    path: '/tempotraveller',
-    element: <TempoTravellerPage />,
-  },
-  {
-    path: '/vehicle/:vehicleId',
-    element: <VehicleDetailPage />,
-  },
-  // Catch-all route for 404s
-  {
-    path: '*',
-    element: <NotFound />,
+      {
+        path: 'pooling/guest',
+        element: <GuestDashboardPage />,
+      },
+      // Static pages
+      {
+        path: 'about',
+        element: <AboutPage />,
+      },
+      {
+        path: 'contact',
+        element: <ContactPage />,
+      },
+      {
+        path: 'support',
+        element: <SupportPage />,
+      },
+      {
+        path: 'help-center',
+        element: <HelpCenterPage />,
+      },
+      {
+        path: 'contact-us',
+        element: <ContactUsPage />,
+      },
+      {
+        path: 'terms-conditions',
+        element: <TermsConditionsPage />,
+      },
+      {
+        path: 'privacy-policy',
+        element: <PrivacyPolicyPage />,
+      },
+      {
+        path: 'services',
+        element: <ServicesPage />,
+      },
+      {
+        path: 'terms',
+        element: <TermsPage />,
+      },
+      {
+        path: 'privacy',
+        element: <PrivacyPage />,
+      },
+      {
+        path: 'refunds',
+        element: <RefundsPage />,
+      },
+      {
+        path: 'blog',
+        element: <BlogPage />,
+      },
+      {
+        path: 'faq',
+        element: <FAQPage />,
+      },
+      { path: 'bookings', element: <BookingsPage /> },
+      { path: 'fares', element: <FaresPage /> },
+      { path: 'vehicles', element: <VehiclesPage /> },
+      { path: 'drivers', element: <DriversPage /> },
+      { path: 'users', element: <UserManagementPage /> },
+      { path: 'admin/bookings', element: <BookingsPage /> },
+      { path: 'admin/fares', element: <FaresPage /> },
+      { path: 'admin/vehicles', element: <VehiclesPage /> },
+      { path: 'admin/drivers', element: <DriversPage /> },
+      { path: 'admin/users', element: <UserManagementPage /> },
+      {
+        path: 'customer',
+        element: <CustomerDashboard />,
+      },
+      {
+        path: 'driver',
+        element: <DriverDashboard />,
+      },
+      {
+        path: 'pooling/login',
+        element: <PoolingLoginPage />,
+      },
+      {
+        path: 'pooling/provider',
+        element: <PoolingProviderPage />,
+      },
+      {
+        path: 'pooling/admin',
+        element: <PoolingAdminPage />,
+      },
+      {
+        path: 'sedan',
+        element: <SedanPage />,
+      },
+      {
+        path: 'suv',
+        element: <SUVPage />,
+      },
+      {
+        path: 'tempotraveller',
+        element: <TempoTravellerPage />,
+      },
+      {
+        path: 'vehicle/:vehicleId',
+        element: <VehicleDetailPage />,
+      },
+      // Catch-all route for 404s
+      {
+        path: '*',
+        element: <NotFound />,
+      },
+    ],
   },
 ]);
 

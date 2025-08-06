@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { MessageCircle } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import { Booking } from '@/types/api';
 import { formatPhoneNumber, generateBookingConfirmationMessage } from '@/services/whatsappService';
 
@@ -43,7 +43,7 @@ export function WhatsAppShareButton({
       onClick={handleShare}
       className={`${className} ${fullWidth ? 'w-full' : ''}`}
     >
-      <MessageCircle className="mr-2 h-4 w-4" />
+      <FaWhatsapp className="mr-2 h-4 w-4" />
       {children || 'Share via WhatsApp'}
     </Button>
   );

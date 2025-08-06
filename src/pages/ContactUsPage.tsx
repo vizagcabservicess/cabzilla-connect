@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Phone, Mail, MapPin, Clock, MessageSquare, Send } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Send } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 export function ContactUsPage() {
   const contactInfo = [
@@ -33,7 +34,7 @@ export function ContactUsPage() {
       color: "bg-purple-500"
     },
     {
-      icon: <MessageSquare className="w-6 h-6" />,
+      icon: <FaWhatsapp className="w-6 h-6" />,
       title: "WhatsApp Chat",
       details: ["+91-9966363662"],
       subtitle: "Quick responses",
@@ -221,7 +222,7 @@ export function ContactUsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center mb-4">
                     <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center mr-4 text-white">
-                      <MessageSquare className="w-6 h-6" />
+                      <FaWhatsapp className="w-6 h-6" />
                     </div>
                     <div>
                       <h4 className="font-bold text-gray-900">WhatsApp Chat</h4>
