@@ -69,13 +69,15 @@ const megaMenuData = {
   },
   Company: {
     left: [
-      { label: 'About Us', to: '/about' },
-      { label: 'Contact', to: '/contact' },
+      { label: 'Our Story', to: '/our-story' },
+      { label: 'Vision & Mission', to: '/vision-mission' },
       { label: 'Fleet', to: '/fleet' },
       { label: 'Careers', to: '/careers' },
+      { label: 'Hire Driver', to: '/hire-driver' },
     ],
     right: [
-      { label: 'Company Info', items: ['Our Story', 'Leadership', 'Vision & Mission'] },
+      { label: 'Company Info', items: ['Our Story', 'Vision & Mission'] },
+      { label: 'Services', items: ['Fleet Management', 'Driver Hiring', 'Career Opportunities'] },
       { label: 'Contact', items: ['Email: info@vizagtaxihub.com', 'Phone: 9966363662'] },
     ],
   },
@@ -113,6 +115,12 @@ export function Navbar() {
   const [activeCategory, setActiveCategory] = useState('Services');
   const [activeLeftIndex, setActiveLeftIndex] = useState(0);
   const [tourData, setTourData] = useState([]);
+  const [mobileMenuSections, setMobileMenuSections] = useState({
+    services: false,
+    company: false,
+    support: false,
+    legal: false
+  });
   const megaMenuRef = useRef(null);
   const buttonRefs = {
     Services: useRef(null),
@@ -129,6 +137,13 @@ export function Navbar() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const toggleMobileMenuSection = (section: string) => {
+    setMobileMenuSections(prev => ({
+      ...prev,
+      [section]: !prev[section as keyof typeof prev]
+    }));
   };
 
   // Close mega menu on outside click
@@ -236,92 +251,114 @@ export function Navbar() {
     const left = megaMenuData[category].left;
     const right = megaMenuData[category].right;
     
-         // Set different widths based on category
-     const isOutstation = category === 'Services' && left[activeLeftIndex]?.label === 'Outstation';
-     const menuWidth = isOutstation ? '1000px' : '800px';
+    // Set different widths based on category
+    const isOutstation = category === 'Services' && left[activeLeftIndex]?.label === 'Outstation';
+    const isCompany = category === 'Company';
+    const isSupport = category === 'Support';
+    const menuWidth = isOutstation ? '1000px' : (isCompany || isSupport) ? '400px' : '800px';
     
     return (
       <div
         ref={megaMenuRef}
         className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-50 border border-gray-200"
         tabIndex={-1}
-                 style={{ 
-           minHeight: isOutstation ? 400 : 260,
-           width: menuWidth,
-           maxWidth: '95vw',
-           left: '50%',
-           top: '50%',
-           transform: 'translateX(-50%) translateY(-50%)'
-         }}
+        style={{ 
+          minHeight: isOutstation ? 400 : (isCompany || isSupport) ? 200 : 260,
+          width: menuWidth,
+          maxWidth: '95vw',
+          left: '50%',
+          top: '50%',
+          transform: 'translateX(-50%) translateY(-50%)'
+        }}
       >
-        {/* Up arrow removed */}
-        {/* Left column: Categories */}
-        <div className="w-1/3 py-8 px-6 border-r border-gray-100 bg-gray-50 rounded-l-xl">
-          {left.map((item, idx) => (
-            <Link
-              key={item.label}
-              to={item.to}
-              className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
-              onMouseEnter={() => setActiveLeftIndex(idx)}
-              onClick={() => setMegaMenuOpen(null)}
-            >
-              {item.label}
-              <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
-            </Link>
-          ))}
-        </div>
-                 {/* Right column: Submenu for selected category */}
-         <div className="flex-1 py-6 px-6 md:px-8 lg:px-10">
-                                {/* If Services > Outstation is selected, show dynamic city links */}
-           {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
-             <div>
-               <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
-               <div className="grid grid-cols-4 gap-2 max-h-[500px] overflow-y-auto">
-                 {Object.keys(CITY_LOOKUP)
-                   .filter(city => city !== 'Visakhapatnam')
-                   .sort((a, b) => a.localeCompare(b))
-                   .map(city => (
-                                           <Link
-                        key={city}
-                        to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
-                        className="block py-2 px-3 rounded hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
-                      >
-                        {city}
-                      </Link>
-                   ))}
-               </div>
-             </div>
-           ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tour Packages' ? (
-             <div>
-               <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
-               <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
-                 {tourData
-                   .filter(tour => tour.tourName)
-                   .sort((a, b) => a.tourName.localeCompare(b.tourName))
-                   .map(tour => (
-                                           <Link
-                        key={tour.tourId}
-                        to={`/tours/${tour.tourId}`}
-                        className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
-                      >
-                        {tour.tourName}
-                      </Link>
-                   ))}
-               </div>
-             </div>
-           ) : right[activeLeftIndex] && (
-            <div>
-              <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
-              <div className="grid grid-cols-1 gap-2">
-                {right[activeLeftIndex].items.map((sub, i) => (
-                  <Link key={i} to="#" className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors">
-                    {sub}
-                  </Link>
-                ))}
-              </div>
+        {/* Company/Support Menu - Single Column Layout */}
+        {(isCompany || isSupport) ? (
+          <div className="w-full py-8 px-6">
+            <div className="font-semibold text-gray-800 mb-4 text-lg">{category}</div>
+            <div className="space-y-2">
+              {left.map((item, idx) => (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  className="flex items-center w-full text-left px-3 py-3 rounded-lg font-medium transition-colors hover:bg-blue-50 hover:text-blue-700 text-gray-700"
+                  onClick={() => setMegaMenuOpen(null)}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* Left column: Categories */}
+            <div className="w-1/3 py-8 px-6 border-r border-gray-100 bg-gray-50 rounded-l-xl">
+              {left.map((item, idx) => (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
+                  onMouseEnter={() => setActiveLeftIndex(idx)}
+                  onClick={() => setMegaMenuOpen(null)}
+                >
+                  {item.label}
+                  <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
+                </Link>
+              ))}
+            </div>
+            {/* Right column: Submenu for selected category */}
+            <div className="flex-1 py-6 px-6 md:px-8 lg:px-10">
+              {/* If Services > Outstation is selected, show dynamic city links */}
+              {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
+                <div>
+                  <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
+                  <div className="grid grid-cols-4 gap-2 max-h-[500px] overflow-y-auto">
+                    {Object.keys(CITY_LOOKUP)
+                      .filter(city => city !== 'Visakhapatnam')
+                      .sort((a, b) => a.localeCompare(b))
+                      .map(city => (
+                        <Link
+                          key={city}
+                          to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
+                          className="block py-2 px-3 rounded hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                        >
+                          {city}
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+              ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tour Packages' ? (
+                <div>
+                  <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
+                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                    {tourData
+                      .filter(tour => tour.tourName)
+                      .sort((a, b) => a.tourName.localeCompare(b.tourName))
+                      .map(tour => (
+                        <Link
+                          key={tour.tourId}
+                          to={`/tours/${tour.tourId}`}
+                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                        >
+                          {tour.tourName}
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+              ) : right[activeLeftIndex] && (
+                <div>
+                  <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {right[activeLeftIndex].items.map((sub, i) => (
+                      <Link key={i} to="#" className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors">
+                        {sub}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -425,63 +462,140 @@ export function Navbar() {
                   </SheetDescription>
                 </SheetHeader>
                 <div className="grid gap-4 py-4">
+                  {/* Home */}
                   <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Home className="h-5 w-5" />
                     <span>Home</span>
                   </Link>
-                  <Link to="/local-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Car className="h-5 w-5" />
-                    <span>Local Taxi</span>
-                  </Link>
-                  <Link to="/outstation-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <MapPin className="h-5 w-5" />
-                    <span>Outstation</span>
-                  </Link>
-                  <Link to="/airport-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Plane className="h-5 w-5" />
-                    <span>Airport Transfer</span>
-                  </Link>
-                  <Link to="/about" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Info className="h-5 w-5" />
-                    <span>About</span>
-                  </Link>
-                  <Link to="/contact" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Phone className="h-5 w-5" />
-                    <span>Contact</span>
-                  </Link>
-                  <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Phone className="h-5 w-5" />
-                    <span>Support</span>
-                  </Link>
-                  <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Info className="h-5 w-5" />
-                    <span>Help Center</span>
-                  </Link>
-                  <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Phone className="h-5 w-5" />
-                    <span>Contact Us</span>
-                  </Link>
-                  <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Info className="h-5 w-5" />
-                    <span>Terms & Conditions</span>
-                  </Link>
-                  <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
-                    <Info className="h-5 w-5" />
-                    <span>Privacy Policy</span>
-                  </Link>
+
+                  {/* Services Section */}
+                  <div className="space-y-2">
+                    <div 
+                      className="flex items-center justify-between py-2 px-4 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => toggleMobileMenuSection('services')}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Car className="h-5 w-5" />
+                        <span className="font-medium">Services</span>
+                      </div>
+                      {mobileMenuSections.services ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                    {mobileMenuSections.services && (
+                      <div className="ml-6 space-y-1">
+                        <Link to="/local-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Car className="h-4 w-4" />
+                          <span>Local Taxi</span>
+                        </Link>
+                        <Link to="/outstation-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <MapPin className="h-4 w-4" />
+                          <span>Outstation</span>
+                        </Link>
+                        <Link to="/airport-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Plane className="h-4 w-4" />
+                          <span>Airport Transfer</span>
+                        </Link>
+                        <Link to="/tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Calendar className="h-4 w-4" />
+                          <span>Tour Packages</span>
+                        </Link>
+                        <Link to="/rentals" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Car className="h-4 w-4" />
+                          <span>Car Rentals</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Company Section - Direct Links */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 py-2 px-4">
+                      <Info className="h-5 w-5" />
+                      <span className="font-medium">Company</span>
+                    </div>
+                    <div className="ml-6 space-y-1">
+                      <Link to="/our-story" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Info className="h-4 w-4" />
+                        <span>Our Story</span>
+                      </Link>
+                      <Link to="/vision-mission" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Info className="h-4 w-4" />
+                        <span>Vision & Mission</span>
+                      </Link>
+                      <Link to="/fleet" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Car className="h-4 w-4" />
+                        <span>Fleet</span>
+                      </Link>
+                      <Link to="/careers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <User className="h-4 w-4" />
+                        <span>Careers</span>
+                      </Link>
+                      <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <User className="h-4 w-4" />
+                        <span>Hire Driver</span>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Support Section - Direct Links */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 py-2 px-4">
+                      <Phone className="h-5 w-5" />
+                      <span className="font-medium">Support</span>
+                    </div>
+                    <div className="ml-6 space-y-1">
+                      <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Phone className="h-4 w-4" />
+                        <span>Support</span>
+                      </Link>
+                      <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Info className="h-4 w-4" />
+                        <span>Help Center</span>
+                      </Link>
+                      <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Phone className="h-4 w-4" />
+                        <span>Contact Us</span>
+                      </Link>
+                      <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Info className="h-4 w-4" />
+                        <span>Terms & Conditions</span>
+                      </Link>
+                      <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Info className="h-4 w-4" />
+                        <span>Privacy Policy</span>
+                      </Link>
+                    </div>
+                  </div>
+
+
+
+                  {/* Contact Information */}
+                  <div className="border-t pt-4">
+                    <div className="flex items-center space-x-2 py-2 px-4">
+                      <Phone className="h-5 w-5 text-blue-600" />
+                      <a href="tel:+919966363662" className="text-blue-600 font-medium">
+                        9966363662
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Auth Section */}
                   {user ? (
-                    <>
-                      <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={handleDashboard}>
+                    <div className="border-t pt-4 space-y-2">
+                      <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors w-full justify-start" onClick={handleDashboard}>
                         <User className="h-5 w-5" />
                         <span>Dashboard</span>
                       </Button>
-                      <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={handleLogout}>
+                      <Button variant="ghost" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors w-full justify-start" onClick={handleLogout}>
                         <LogOut className="h-5 w-5" />
                         <span>Logout</span>
                       </Button>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="border-t pt-4 space-y-2">
                       <Link to="/login" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                         <User className="h-5 w-5" />
                         <span>Login</span>
@@ -490,7 +604,7 @@ export function Navbar() {
                         <UserPlus className="h-5 w-5" />
                         <span>Sign Up</span>
                       </Link>
-                    </>
+                    </div>
                   )}
                 </div>
               </SheetContent>

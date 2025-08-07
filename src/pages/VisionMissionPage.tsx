@@ -1,5 +1,7 @@
 import { Eye, Target, Compass, Lightbulb, Shield, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const goals = [
   {
@@ -36,6 +38,7 @@ const principles = [
 export default function VisionMissionPage() {
   return (
     <div className="min-h-screen bg-background">
+      <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
         <div className="container mx-auto px-4 text-center">
@@ -184,6 +187,7 @@ export default function VisionMissionPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

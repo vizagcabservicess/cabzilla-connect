@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const services = [
   {
@@ -84,6 +86,7 @@ export default function HireDriverPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
         <div className="container mx-auto px-4 text-center">
@@ -310,6 +313,7 @@ export default function HireDriverPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

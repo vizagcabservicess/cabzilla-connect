@@ -255,3 +255,59 @@ html, body {
   padding-left: 0 !important;
   padding-right: 0 !important;
 }
+
+/* Fix Select dropdown layout shifts */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+[data-radix-select-content] {
+  z-index: 9999 !important;
+}
+
+/* Prevent layout shifts when dropdowns open */
+body {
+  overflow-x: hidden;
+}
+
+/* Ensure form containers don't shift */
+.form-container {
+  position: relative;
+  overflow: visible;
+}
+
+/* Additional fixes for Select components */
+[data-radix-select-trigger] {
+  position: relative;
+}
+
+[data-radix-select-viewport] {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Prevent any scrollbar changes from affecting layout */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Prevent layout shifts from scrollbar changes */
+body {
+  overflow-x: hidden;
+  overflow-y: scroll;
+}
+
+/* Ensure the page doesn't shift when dropdowns open */
+.page-container {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Ensure dropdowns are positioned correctly */
+[data-radix-select-content] {
+  position: absolute !important;
+  top: 100% !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin-top: 4px !important;
+}

@@ -70,7 +70,7 @@ import FleetPage from './pages/FleetPage';
 import CareersPage from './pages/CareersPage';
 import OurStoryPage from './pages/OurStoryPage';
 import VisionMissionPage from './pages/VisionMissionPage';
-import LeadershipPage from './pages/LeadershipPage';
+
 import HireDriverPage from './pages/HireDriverPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
@@ -382,10 +382,7 @@ const router = createBrowserRouter([
         path: 'vision-mission',
         element: <VisionMissionPage />,
       },
-      {
-        path: 'leadership',
-        element: <LeadershipPage />,
-      },
+
       {
         path: 'hire-driver',
         element: <HireDriverPage />,

@@ -1,5 +1,7 @@
 import { Calendar, Users, MapPin, Award, Heart, Target } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 const milestones = [
   {
@@ -60,6 +62,7 @@ const values = [
 export default function OurStoryPage() {
   return (
     <div className="min-h-screen bg-background">
+      <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
         <div className="container mx-auto px-4 text-center">
@@ -180,6 +183,7 @@ export default function OurStoryPage() {
           </p>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
