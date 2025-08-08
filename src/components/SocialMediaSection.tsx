@@ -10,35 +10,31 @@ export function SocialMediaSection() {
       name: 'Facebook',
       url: 'https://www.facebook.com/vizagtaxihub',
       color: 'from-blue-600 to-blue-700',
-      followers: '2.5K+',
       icon: FaFacebook
     },
     {
       name: 'Instagram', 
       url: 'https://www.instagram.com/vizagtaxihub/',
       color: 'from-pink-500 to-purple-600',
-      followers: '1.8K+',
       icon: FaInstagram
     },
     {
       name: 'YouTube',
       url: 'https://www.youtube.com/channel/UC2-jFwKuTHB357sBeIY4Urg',
       color: 'from-red-600 to-red-700', 
-      followers: '850+',
       icon: FaYoutube
     },
     {
-      name: 'X (formerly Twitter)',
+      name: 'X',
       url: 'https://twitter.com/vizagtaxihub',
       color: 'from-gray-900 to-black',
-      followers: '1.2K+',
       icon: SiX
     }
   ];
 
   return (
     <section className="px-4 py-4 pb-2 md:py-12 bg-white">
-      <div className="container mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="text-center mb-4 md:mb-8">
           <div className="inline-flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-full mb-4">
@@ -62,7 +58,7 @@ export function SocialMediaSection() {
                   <social.icon className="text-3xl text-white" />
                 </div>
                 <h3 className="font-medium text-gray-900 mb-1">{social.name}</h3>
-                <p className="text-sm text-gray-600 mb-3">{social.followers} followers</p>
+               
                 <a
                   href={social.url}
                   target="_blank"
@@ -84,7 +80,7 @@ export function SocialMediaSection() {
                 <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <span className="font-bold text-gray-900">4.8/5</span>
+            <span className="font-bold text-gray-900">4.9/5</span>
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Love Our Service?</h3>
           <p className="text-gray-600 mb-4">Share your experience and help others discover great taxi service</p>

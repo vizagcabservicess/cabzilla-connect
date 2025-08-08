@@ -41,7 +41,7 @@ export function TestimonialsSection() {
 
   return (
       <section className="px-4 py-4 pb-2 md:py-12 bg-white">
-      <div className="container mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl">
 
         {/* Header */}
         <div className="text-center mb-4 md:mb-8">
@@ -105,7 +105,7 @@ export function TestimonialsSection() {
             {/* Quick Stats */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-medium">4.8★</div>
+                <div className="text-2xl md:text-3xl font-medium">4.9★</div>
                 <div className="text-sm opacity-80">Average Rating</div>
               </div>
               <div className="text-center">

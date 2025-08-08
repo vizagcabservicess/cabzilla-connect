@@ -32,7 +32,7 @@ export function VideoTestimonials() {
 
   return (
     <section className="px-4 py-8 md:py-12 bg-gray-50">
-      <div className="container mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 bg-red-50 px-4 py-2 rounded-full mb-4">
