@@ -123,7 +123,7 @@ export function OutstationTaxiPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl p-4 md:p-8"
+            className="rounded-xl md:rounded-2xl  md:p-8"
           >
             <OutstationHeroWidget />
           </motion.div>
@@ -139,7 +139,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose Our Service</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Our Service</h2>
             <p className="text-xl text-gray-600">Premium features for your comfort and safety</p>
           </motion.div>
           
@@ -173,7 +173,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Choose Your Vehicle</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Vehicle</h2>
             <p className="text-xl text-gray-600">Select from our premium fleet</p>
           </motion.div>
           
@@ -216,7 +216,7 @@ export function OutstationTaxiPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">Ready for Your Journey?</h2>
+            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Ready for Your Journey?</h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Join thousands of satisfied customers who trust us for their outstation travel. 
               Book now and experience the difference.
@@ -247,7 +247,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Popular Routes</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Popular Routes</h2>
             <p className="text-xl text-gray-600">Most traveled destinations from Visakhapatnam</p>
           </motion.div>
           

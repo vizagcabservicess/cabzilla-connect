@@ -13,34 +13,27 @@ import Footer from '@/components/Footer';
 const services = [
   {
     id: 1,
-    title: 'Personal Driver - Daily',
-    duration: '8-12 hours',
-    price: '₹2,500/day',
-    features: ['Professional driver', 'Your own vehicle', 'Flexible timing', 'Local area coverage'],
+    title: 'Personal Driver - Local',
+    duration: '8 hours',
+    price: '₹1,000/day',
+    features: ['Professional driver', 'Your own vehicle', 'Flexible timing', 'Local area coverage', 'Transport Excluded'],
     popular: true
   },
   {
     id: 2,
     title: 'Outstation Driver',
-    duration: 'Multi-day trips',
-    price: '₹3,000/day',
-    features: ['Experienced in long drives', 'Route planning', 'Overnight stays covered', 'Interstate expertise'],
+    duration: '12 hours',
+    price: '₹1,500/day',
+    features: ['Experienced in long drives', 'Route planning', 'Overnight stays not covered', 'Interstate expertise', 'Transport Excluded','Upto 200 kms limit'],
     popular: false
   },
-  {
-    id: 3,
-    title: 'Corporate Driver',
-    duration: 'Monthly contract',
-    price: '₹45,000/month',
-    features: ['Dedicated driver', 'Professional appearance', 'Corporate etiquette', 'Flexible schedule'],
-    popular: false
-  },
+
   {
     id: 4,
     title: 'Event Driver',
     duration: 'Special occasions',
     price: '₹1,500/event',
-    features: ['Wedding ceremonies', 'Special events', 'Formal attire', 'Punctual service'],
+    features: ['Wedding ceremonies', 'Special events', 'Formal attire', 'Punctual service', 'Transport Excluded'],
     popular: false
   }
 ];
@@ -89,7 +82,7 @@ export default function HireDriverPage() {
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Hire a Professional Driver
           </h1>
@@ -105,7 +98,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Benefits Section */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Why Choose Our Drivers?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {benefits.map((benefit, index) => (
@@ -122,9 +115,9 @@ export default function HireDriverPage() {
 
       {/* Services Grid */}
       <div className="bg-muted/30 py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Driver Services</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {services.map((service) => (
               <Card key={service.id} className="relative hover:shadow-lg transition-shadow">
                 {service.popular && (
@@ -148,7 +141,7 @@ export default function HireDriverPage() {
                     ))}
                   </ul>
                   
-                  <Button className="w-full rounded-full">Select Service</Button>
+                 
                 </CardContent>
               </Card>
             ))}
@@ -157,7 +150,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Booking Form */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="max-w-2xl mx-auto">
           <Card>
             <CardHeader>
@@ -256,7 +249,7 @@ export default function HireDriverPage() {
 
       {/* Process Section */}
       <div className="bg-muted/30 py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="text-center">
@@ -296,7 +289,7 @@ export default function HireDriverPage() {
 
       {/* CTA Section */}
       <div className="bg-primary text-primary-foreground py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h2 className="text-3xl font-bold mb-4">Need Immediate Assistance?</h2>
           <p className="text-lg mb-8 opacity-90">
             Our customer support team is available 24/7 to help you find the perfect driver

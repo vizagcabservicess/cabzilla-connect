@@ -56,7 +56,7 @@ export function EnhancedHero() {
             <span className="text-sm font-medium">Available 24/7</span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-medium mb-6 leading-tight">
+          <h1 className="text-2xl md:text-4xl lg:text-6xl xl:text-7xl font-medium mb-6 leading-tight">
             Your Journey,
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
               Our Priority

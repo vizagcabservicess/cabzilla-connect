@@ -152,7 +152,7 @@ export function AirportTaxiPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl p-4 md:p-8"
+            className="rounded-xl md:rounded-2xl md:p-8"
           >
             <AirportHeroWidget />
           </motion.div>
@@ -202,7 +202,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Choose Your Transfer</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Transfer</h2>
             <p className="text-xl text-gray-600">Perfect vehicle for your airport journey</p>
           </motion.div>
           
@@ -260,7 +260,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Popular Routes</h2>
+            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">Popular Routes</h2>
             <p className="text-xl text-gray-600">Most traveled destinations from Vizag Airport</p>
           </motion.div>
           
@@ -318,7 +318,7 @@ export function AirportTaxiPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">Flying Soon?</h2>
+            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Flying Soon?</h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Book your airport transfer now for stress-free travel with flight tracking, meet & greet service, and guaranteed punctual service.
             </p>
@@ -348,7 +348,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Airport Services</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Our Airport Services</h2>
             <p className="text-xl text-gray-600">Complete transfer solutions for all your needs</p>
           </motion.div>
           

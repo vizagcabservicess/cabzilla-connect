@@ -57,14 +57,12 @@ const megaMenuData = {
       { label: 'Tour Options', items: ['Vizag-Araku', 'Vizag-Lambasingi', 'Vizag-Borra Caves'] },
     ],
   },
-  Destinations: {
+  'Tour Packages': {
     left: [
       { label: 'Popular', to: '#' },
-      { label: 'Other', to: '#' },
     ],
     right: [
       { label: 'Popular Destinations', items: ['Hyderabad', 'Chennai', 'Bangalore', 'Araku Valley'] },
-      { label: 'Other Destinations', items: ['Tirupati', 'Vijayawada'] },
     ],
   },
   Company: {
@@ -102,7 +100,6 @@ const serviceLinks = [
   { name: 'Local Taxi', href: '/local-taxi', description: 'City tours and local trips' },
   { name: 'Outstation', href: '/outstation-taxi', description: 'Inter-city travel' },
   { name: 'Airport Transfer', href: '/airport-taxi', description: 'Airport pickup & drop' },
-  { name: 'Car Rentals', href: '/rentals', description: 'Daily, weekly & monthly rentals' },
   { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' },
   { name: 'Cab Booking', href: '/cabs', description: 'Quick cab booking' }
 ];
@@ -124,7 +121,7 @@ export function Navbar() {
   const megaMenuRef = useRef(null);
   const buttonRefs = {
     Services: useRef(null),
-    Destinations: useRef(null),
+    'Tour Packages': useRef(null),
     Company: useRef(null),
     Support: useRef(null),
   };
@@ -344,6 +341,24 @@ export function Navbar() {
                       ))}
                   </div>
                 </div>
+              ) : category === 'Tour Packages' ? (
+                <div>
+                  <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
+                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                    {tourData
+                      .filter(tour => tour.tourName)
+                      .sort((a, b) => a.tourName.localeCompare(b.tourName))
+                      .map(tour => (
+                        <Link
+                          key={tour.tourId}
+                          to={`/tours/${tour.tourId}`}
+                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                        >
+                          {tour.tourName}
+                        </Link>
+                      ))}
+                  </div>
+                </div>
               ) : right[activeLeftIndex] && (
                 <div>
                   <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
@@ -375,7 +390,7 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-8">
             {/* Mega Menu Triggers */}
-            {['Services', 'Destinations', 'Company', 'Support'].map((cat) => (
+            {['Services', 'Tour Packages', 'Company', 'Support'].map((cat) => (
               <div key={cat} className="relative">
                 <button
                   ref={buttonRefs[cat]}
@@ -502,72 +517,92 @@ export function Navbar() {
                           <Calendar className="h-4 w-4" />
                           <span>Tour Packages</span>
                         </Link>
-                        <Link to="/rentals" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Company Section - Toggle */}
+                  <div className="space-y-2">
+                    <div 
+                      className="flex items-center justify-between py-2 px-4 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => toggleMobileMenuSection('company')}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Info className="h-5 w-5" />
+                        <span className="font-medium">Company</span>
+                      </div>
+                      {mobileMenuSections.company ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                    {mobileMenuSections.company && (
+                      <div className="ml-6 space-y-1">
+                        <Link to="/our-story" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Our Story</span>
+                        </Link>
+                        <Link to="/vision-mission" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Vision & Mission</span>
+                        </Link>
+                        <Link to="/fleet" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
                           <Car className="h-4 w-4" />
-                          <span>Car Rentals</span>
+                          <span>Fleet</span>
+                        </Link>
+                        <Link to="/careers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <User className="h-4 w-4" />
+                          <span>Careers</span>
+                        </Link>
+                        <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <User className="h-4 w-4" />
+                          <span>Hire Driver</span>
                         </Link>
                       </div>
                     )}
                   </div>
 
-                  {/* Company Section - Direct Links */}
+                  {/* Support Section - Toggle */}
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2 py-2 px-4">
-                      <Info className="h-5 w-5" />
-                      <span className="font-medium">Company</span>
+                    <div 
+                      className="flex items-center justify-between py-2 px-4 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => toggleMobileMenuSection('support')}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-5 w-5" />
+                        <span className="font-medium">Support</span>
+                      </div>
+                      {mobileMenuSections.support ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
                     </div>
-                    <div className="ml-6 space-y-1">
-                      <Link to="/our-story" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Info className="h-4 w-4" />
-                        <span>Our Story</span>
-                      </Link>
-                      <Link to="/vision-mission" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Info className="h-4 w-4" />
-                        <span>Vision & Mission</span>
-                      </Link>
-                      <Link to="/fleet" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Car className="h-4 w-4" />
-                        <span>Fleet</span>
-                      </Link>
-                      <Link to="/careers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <User className="h-4 w-4" />
-                        <span>Careers</span>
-                      </Link>
-                      <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <User className="h-4 w-4" />
-                        <span>Hire Driver</span>
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Support Section - Direct Links */}
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2 py-2 px-4">
-                      <Phone className="h-5 w-5" />
-                      <span className="font-medium">Support</span>
-                    </div>
-                    <div className="ml-6 space-y-1">
-                      <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Phone className="h-4 w-4" />
-                        <span>Support</span>
-                      </Link>
-                      <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Info className="h-4 w-4" />
-                        <span>Help Center</span>
-                      </Link>
-                      <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Phone className="h-4 w-4" />
-                        <span>Contact Us</span>
-                      </Link>
-                      <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Info className="h-4 w-4" />
-                        <span>Terms & Conditions</span>
-                      </Link>
-                      <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                        <Info className="h-4 w-4" />
-                        <span>Privacy Policy</span>
-                      </Link>
-                    </div>
+                    {mobileMenuSections.support && (
+                      <div className="ml-6 space-y-1">
+                        <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Phone className="h-4 w-4" />
+                          <span>Support</span>
+                        </Link>
+                        <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Help Center</span>
+                        </Link>
+                        <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Phone className="h-4 w-4" />
+                          <span>Contact Us</span>
+                        </Link>
+                        <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Terms & Conditions</span>
+                        </Link>
+                        <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Privacy Policy</span>
+                        </Link>
+                      </div>
+                    )}
                   </div>
 
 

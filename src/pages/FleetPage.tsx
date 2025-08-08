@@ -88,7 +88,7 @@ export default function FleetPage() {
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Our Fleet
           </h1>
@@ -124,7 +124,7 @@ export default function FleetPage() {
       </div>
 
       {/* Fleet Grid */}
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-12">
         {loading ? (
           <div className="flex justify-center py-10">
             <Car className="h-8 w-8 animate-spin text-gray-400" />
@@ -225,7 +225,7 @@ export default function FleetPage() {
 
       {/* CTA Section */}
       <div className="bg-primary text-primary-foreground py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h2 className="text-3xl font-bold mb-4">Need a Custom Solution?</h2>
           <p className="text-lg mb-8 opacity-90">
             Contact us for special requirements or long-term rental options
@@ -238,7 +238,7 @@ export default function FleetPage() {
 
       {/* Safety Info Section */}
       <div className="bg-gray-50 py-8">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Safety Guaranteed</span>

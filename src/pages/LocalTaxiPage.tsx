@@ -134,7 +134,7 @@ export function LocalTaxiPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl p-4 md:p-8"
+            className="rounded-xl md:rounded-2xl md:p-8"
           >
             <LocalHeroWidget />
           </motion.div>
@@ -150,7 +150,7 @@ export function LocalTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose Our Local Service</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Our Local Service</h2>
             <p className="text-xl text-gray-600">Designed for the modern city traveler</p>
           </motion.div>
           
@@ -184,7 +184,7 @@ export function LocalTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Choose Your Ride</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Ride</h2>
             <p className="text-xl text-gray-600">Perfect vehicle for every journey</p>
           </motion.div>
           
@@ -253,7 +253,7 @@ export function LocalTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Service Areas</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Service Areas</h2>
             <p className="text-xl text-gray-600">Quick pickups across Visakhapatnam</p>
           </motion.div>
           
@@ -297,7 +297,7 @@ export function LocalTaxiPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">Need a Ride Right Now?</h2>
+            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Need a Ride Right Now?</h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Quick pickups, safe rides, and fair pricing. Your trusted local taxi service in Visakhapatnam.
             </p>
@@ -327,7 +327,7 @@ export function LocalTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Services</h2>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Our Services</h2>
             <p className="text-xl text-gray-600">Flexible options for every need</p>
           </motion.div>
           

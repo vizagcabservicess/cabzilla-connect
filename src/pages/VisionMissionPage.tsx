@@ -41,19 +41,18 @@ export default function VisionMissionPage() {
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Vision & Mission
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Our guiding principles and aspirations that drive us to deliver exceptional 
-            transportation services every single day.
+            Our commitment to excellence and customer satisfaction drives everything we do
           </p>
         </div>
       </div>
 
       {/* Vision & Mission Cards */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
           {/* Vision Card */}
           <Card className="h-full">
@@ -65,7 +64,7 @@ export default function VisionMissionPage() {
               <div className="space-y-4">
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   To become the most trusted and preferred transportation service provider 
-                  in Andhra Pradesh, setting new standards for reliability, safety, and 
+                  in Visakhapatnam, setting new standards for reliability, safety, and 
                   customer satisfaction.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
@@ -105,7 +104,7 @@ export default function VisionMissionPage() {
 
       {/* Strategic Goals */}
       <div className="bg-muted/30 py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Strategic Goals</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {goals.map((goal, index) => (
@@ -122,7 +121,7 @@ export default function VisionMissionPage() {
       </div>
 
       {/* Core Principles */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <Lightbulb className="h-16 w-16 text-primary mx-auto mb-4" />
@@ -145,7 +144,7 @@ export default function VisionMissionPage() {
 
       {/* Commitment Section */}
       <div className="bg-primary text-primary-foreground py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h2 className="text-3xl font-bold mb-6">Our Commitment</h2>
           <div className="max-w-4xl mx-auto space-y-6">
             <p className="text-lg opacity-90">
@@ -163,7 +162,7 @@ export default function VisionMissionPage() {
       </div>
 
       {/* Future Outlook */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-6">Looking Forward</h2>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
@@ -171,20 +170,7 @@ export default function VisionMissionPage() {
             but our core commitment remains constant: to serve our customers with 
             integrity, innovation, and excellence.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-2xl font-bold text-primary mb-2">2025</div>
-              <p className="text-sm text-muted-foreground">Expand to 5 major cities</p>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-primary mb-2">2026</div>
-              <p className="text-sm text-muted-foreground">100% electric fleet transition</p>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-primary mb-2">2027</div>
-              <p className="text-sm text-muted-foreground">AI-powered journey optimization</p>
-            </div>
-          </div>
+        
         </div>
       </div>
       <Footer />

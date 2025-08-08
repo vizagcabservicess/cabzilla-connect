@@ -97,9 +97,7 @@ const SedanPage = () => {
         <div className="container mx-auto px-4 py-8 pb-20">
           {/* Hero Section */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Sedan Car Rental in Visakhapatnam
-            </h1>
+            <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Sedan Car Rental Services</h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Choose from our premium fleet of sedan cars perfect for business trips, family outings, and comfortable city travel. Starting from ₹14 per kilometer.
             </p>

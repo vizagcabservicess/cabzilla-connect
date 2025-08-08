@@ -5,34 +5,34 @@ import Footer from '@/components/Footer';
 
 const milestones = [
   {
-    year: '2018',
+    year: '2020',
     title: 'The Beginning',
     description: 'Started with just 2 vehicles and a dream to provide reliable taxi services in Vizag'
   },
   {
-    year: '2019',
-    title: 'Fleet Expansion',
-    description: 'Expanded to 15 vehicles and introduced outstation services'
-  },
-  {
-    year: '2020',
-    title: 'Digital Transformation',
-    description: 'Launched online booking platform and mobile app during the pandemic'
-  },
-  {
     year: '2021',
+    title: 'Fleet Expansion',
+    description: 'Expanded the vehicles and introduced outstation services'
+  },
+  {
+    year: '2022',
+    title: 'Corporate Engagement',
+    description: 'Recognized by corporate clients and began offering event transportation services'
+  },
+  {
+    year: '2023',
     title: 'Service Excellence',
     description: 'Achieved 95% customer satisfaction rate and expanded to airport services'
   },
   {
-    year: '2022',
+    year: '2024',
     title: 'Regional Growth',
     description: 'Extended services to neighboring cities and introduced luxury vehicle options'
   },
   {
-    year: '2023',
-    title: 'Industry Leader',
-    description: 'Became the leading taxi service provider in Vizag with 50+ vehicles'
+    year: '2025',
+    title: 'Top Rated',
+    description: 'Became the leading taxi service provider in Vizag'
   }
 ];
 
@@ -65,7 +65,7 @@ export default function OurStoryPage() {
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Our Story
           </h1>
@@ -77,12 +77,12 @@ export default function OurStoryPage() {
       </div>
 
       {/* Story Content */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="max-w-4xl mx-auto">
           <div className="prose prose-lg max-w-none mb-16">
             <h2 className="text-3xl font-bold mb-6">The Journey Begins</h2>
             <p className="text-muted-foreground leading-relaxed mb-6">
-              In 2018, with just two vehicles and an unwavering commitment to providing 
+              In 2020, with just two vehicles and an unwavering commitment to providing 
               reliable transportation services, Vizag Taxi Hub was born. Our founder, 
               driven by the vision of transforming the local transportation landscape, 
               started this journey with a simple yet powerful belief: every journey 
@@ -111,7 +111,7 @@ export default function OurStoryPage() {
 
       {/* Timeline */}
       <div className="bg-muted/30 py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Journey Timeline</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {milestones.map((milestone, index) => (
@@ -131,7 +131,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Values Section */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Our Core Values</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {values.map((value, index) => (
@@ -148,23 +148,23 @@ export default function OurStoryPage() {
 
       {/* Stats Section */}
       <div className="bg-primary text-primary-foreground py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Impact in Numbers</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center">
-              <div className="text-4xl font-bold mb-2">50+</div>
-              <div className="text-sm opacity-90">Vehicles</div>
+              <div className="text-2xl md:text-4xl font-bold mb-2">4.9 ★</div>
+              <div className="text-sm opacity-90">Google Reviews</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold mb-2">10,000+</div>
+              <div className="text-2xl md:text-4xl font-bold mb-2">10,000+</div>
               <div className="text-sm opacity-90">Happy Customers</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold mb-2">5+</div>
+              <div className="text-2xl md:text-4xl font-bold mb-2">5+</div>
               <div className="text-sm opacity-90">Years of Service</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-bold mb-2">24/7</div>
+              <div className="text-2xl md:text-4xl font-bold mb-2">24/7</div>
               <div className="text-sm opacity-90">Availability</div>
             </div>
           </div>
@@ -172,7 +172,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Future Vision */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-6">Looking Ahead</h2>
           <p className="text-lg text-muted-foreground leading-relaxed">

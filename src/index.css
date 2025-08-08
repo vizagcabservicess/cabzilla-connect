@@ -251,10 +251,10 @@ html, body {
 }
 
 /* Remove left and right padding from all .container globally */
-.container {
+/* .container {
   padding-left: 0 !important;
   padding-right: 0 !important;
-}
+} */
 
 /* Fix Select dropdown layout shifts */
 [data-radix-popper-content-wrapper] {

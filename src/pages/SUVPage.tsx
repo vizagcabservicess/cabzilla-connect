@@ -97,9 +97,7 @@ const SUVPage = () => {
         <div className="container mx-auto px-4 py-8 pb-20">
           {/* Hero Section */}
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              SUV Car Rental in Visakhapatnam
-            </h1>
+            <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">SUV Rental Services</h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Travel in comfort with our spacious SUV fleet. Perfect for families, groups, and long journeys. Choose from 6-7 seater premium vehicles starting from ₹18 per kilometer.
             </p>

@@ -28,7 +28,7 @@ export function EnhancedCTA() {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-4xl md:text-5xl font-medium mb-4">
+          <h2 className="text-2xl md:text-4xl lg:text-5xl font-medium mb-4">
             Ready to Book Your Ride?
           </h2>
           <p className="px-4 text-xl mb-8 text-blue-100 max-w-2xl mx-auto">

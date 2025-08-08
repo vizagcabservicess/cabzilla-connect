@@ -58,7 +58,7 @@ export function TourSlider() {
             <MapPin className="h-4 w-4 text-orange-600" />
             <span className="text-sm font-medium text-orange-600">TOUR PACKAGES</span>
           </div>
-          <h2 className="text-3xl md:text-4xl font-medium text-gray-900 mb-4">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-4">
             Explore Amazing Destinations
           </h2>
           <p className="text-gray-600 max-w-2xl mx-auto text-lg mb-8">
@@ -85,7 +85,7 @@ export function TourSlider() {
   return (
     <section className="py-4 md:py-4  px-4">
       <div
-        className="container mx-auto max-w-6xl relative"
+        className=" mx-auto max-w-6xl relative"
         onMouseEnter={() => {
           if (swiperRef.current && swiperRef.current.autoplay) swiperRef.current.autoplay.stop();
         }}

@@ -153,7 +153,7 @@ export default function CareersPage() {
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Join Our Team
           </h1>
@@ -168,7 +168,7 @@ export default function CareersPage() {
       </div>
 
       {/* Benefits Section */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Why Work With Us?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {benefits.map((benefit, index) => (
@@ -185,7 +185,7 @@ export default function CareersPage() {
 
       {/* Job Application Form */}
       <div className="bg-muted/30 py-16">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4">Job Application Form</h2>
@@ -532,7 +532,7 @@ export default function CareersPage() {
       </div>
 
       {/* Application Process */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
         <h2 className="text-3xl font-bold text-center mb-12">Application Process</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           <div className="text-center">
@@ -563,7 +563,7 @@ export default function CareersPage() {
 
       {/* Contact Section */}
       <div className="bg-primary text-primary-foreground py-16">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h2 className="text-3xl font-bold mb-4">Need Help?</h2>
           <p className="text-lg mb-8 opacity-90">
             Contact our HR team for more information about career opportunities
