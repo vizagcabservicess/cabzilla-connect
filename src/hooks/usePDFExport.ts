@@ -38,7 +38,8 @@ export const usePDFExport = () => {
       ).toBlob();
 
       // Generate filename with tour name and date
-      const fileName = `${tour.name.replace(/[^a-zA-Z0-9]/g, '_')}_Quotation_${pickupDate.toISOString().split('T')[0]}.pdf`;
+      const tourFileName = (tour.tourName || (tour as any).name || 'Tour').replace(/[^a-zA-Z0-9]/g, '_');
+      const fileName = `${tourFileName}_Quotation_${pickupDate.toISOString().split('T')[0]}.pdf`;
 
       // Download PDF
       saveAs(blob, fileName);

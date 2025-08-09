@@ -70,14 +70,13 @@ export default function OurStoryPage() {
             Our Story
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            From humble beginnings to becoming Vizag's most trusted taxi service provider. 
-            Discover our journey of growth, commitment, and dedication to excellence.
+          In 2020, two cars, one dream, and a city in motion - that’s how Vizag Taxi Hub began
           </p>
         </div>
       </div>
 
       {/* Story Content */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="prose prose-lg max-w-none mb-16">
             <h2 className="text-3xl font-bold mb-6">The Journey Begins</h2>
@@ -110,7 +109,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Timeline */}
-      <div className="bg-muted/30 py-16">
+      <div className="bg-muted/30 py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Journey Timeline</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -131,7 +130,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Values Section */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
         <h2 className="text-3xl font-bold text-center mb-12">Our Core Values</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {values.map((value, index) => (
@@ -147,7 +146,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Stats Section */}
-      <div className="bg-primary text-primary-foreground py-16">
+      <div className="bg-primary text-primary-foreground py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Impact in Numbers</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -172,7 +171,7 @@ export default function OurStoryPage() {
       </div>
 
       {/* Future Vision */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-6">Looking Ahead</h2>
           <p className="text-lg text-muted-foreground leading-relaxed">

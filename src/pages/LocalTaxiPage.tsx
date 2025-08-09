@@ -45,12 +45,12 @@ export function LocalTaxiPage() {
   ];
 
   const serviceAreas = [
-    { area: 'MVP Colony', distance: '2 km', time: '30 min' },
-    { area: 'Dwaraka Nagar', distance: '4 km', time: '30 min' },
+    { area: 'MVP Colony', distance: '10 km', time: '30 min' },
+    { area: 'Dwaraka Nagar', distance: '7 km', time: '30 min' },
     { area: 'Gajuwaka', distance: '12 km', time: '40 min' },
     { area: 'Madhurawada', distance: '15 km', time: '45 min' },
-    { area: 'Beach Road', distance: '3 km', time: '30 min' },
-    { area: 'Rushikonda', distance: '8 km', time: '45 min' },
+    { area: 'Beach Road', distance: '12 km', time: '30 min' },
+    { area: 'Rushikonda', distance: '20 km', time: '45 min' },
   ];
 
   const [selectedDuration, setSelectedDuration] = React.useState('08hrs');
@@ -107,13 +107,13 @@ export function LocalTaxiPage() {
       </Helmet>
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-50 to-white pt-8 md:pt-16 pb-12 md:pb-24">
+      <section className="relative bg-gradient-to-br from-blue-50 to-white pt-8 md:pt-20 pb-12 md:pb-28">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-8 md:mb-16"
+            className="text-center mb-8 md:mb-24"
           >
             <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-blue-100 text-blue-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
               <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
@@ -124,7 +124,7 @@ export function LocalTaxiPage() {
               <br />
               <span className="text-blue-500">Your Ride</span>
             </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-12 max-w-2xl mx-auto">
+            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-2xl mx-auto">
               Quick, safe, and affordable local taxi service across Visakhapatnam. Available 24/7 for all your city travel needs.
             </p>
           </motion.div>

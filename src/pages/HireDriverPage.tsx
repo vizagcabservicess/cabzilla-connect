@@ -81,7 +81,7 @@ export default function HireDriverPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Hire a Professional Driver
@@ -98,7 +98,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Benefits Section */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
         <h2 className="text-3xl font-bold text-center mb-12">Why Choose Our Drivers?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {benefits.map((benefit, index) => (
@@ -114,7 +114,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Services Grid */}
-      <div className="bg-muted/30 py-16">
+      <div className="bg-muted/30 py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">Our Driver Services</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -150,7 +150,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Booking Form */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-16">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
         <div className="max-w-2xl mx-auto">
           <Card>
             <CardHeader>
@@ -248,7 +248,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* Process Section */}
-      <div className="bg-muted/30 py-16">
+      <div className="bg-muted/30 py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -288,7 +288,7 @@ export default function HireDriverPage() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-primary text-primary-foreground py-16">
+      <div className="bg-primary text-primary-foreground py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h2 className="text-3xl font-bold mb-4">Need Immediate Assistance?</h2>
           <p className="text-lg mb-8 opacity-90">

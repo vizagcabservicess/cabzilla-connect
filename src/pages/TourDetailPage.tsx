@@ -181,10 +181,7 @@ const TourDetailPage = () => {
       })).filter(v => v.fare > 0);
 
       const result = await generateAndDownloadPDF({
-        tour: {
-          ...tour,
-          name: tour.tourName
-        },
+        tour,
         pickupLocation: pickupLocation.name,
         pickupDate: pickupDate,
         vehicleFares
@@ -231,15 +228,15 @@ const TourDetailPage = () => {
       id: vehicle.id || vehicle.vehicle_id,
       name: vehicle.name,
       capacity: vehicle.capacity,
-      luggageCapacity: 0, // or a sensible default or from vehicle if available
+      luggageCapacity: 0,
       image: vehicle.image || '',
-      amenities: [], // or from vehicle if available
-      description: '', // or from vehicle if available
-      ac: true, // or from vehicle if available
+      amenities: [],
+      description: '',
+      ac: true,
       price: vehicle.price,
-      pricePerKm: vehicle.pricePerKm,
-      nightHaltCharge: vehicle.nightHaltCharge,
-      driverAllowance: vehicle.driverAllowance,
+      pricePerKm: undefined,
+      nightHaltCharge: undefined,
+      driverAllowance: undefined,
       vehicleId: vehicle.vehicle_id || vehicle.id,
       vehicleType: vehicle.type || '',
     };
@@ -256,6 +253,7 @@ const TourDetailPage = () => {
         dropLocation: '',
         pickupDate: pickupDate.toISOString(),
         returnDate: null,
+        vehicleType: selectedVehicle.type,
         cabType: selectedVehicle.name,
         distance: tour.distance,
         tripType: 'tour',
@@ -334,7 +332,7 @@ const TourDetailPage = () => {
     <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
       <Navbar />
       
-      <div className="container mx-auto px-3 py-4 pb-20 max-w-5xl">
+      <div className="container mx-auto px-3 py-4 pb-20 max-w-8xl">
         {/* Back Button */}
         <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm py-2 px-3">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -426,7 +424,7 @@ const TourDetailPage = () => {
                       <CardTitle className="text-sm">About This Tour</CardTitle>
                     </CardHeader>
                     <CardContent className="px-3 py-2">
-                      <p className="text-gray-700 mb-2 text-xs">
+                      <p className="text-gray-700 mb-2 text-sm">
                         {tour.description || 'No description available.'}
                       </p>
                       <div className="grid md:grid-cols-3 gap-2">
@@ -438,7 +436,7 @@ const TourDetailPage = () => {
                               {highlight.icon === 'coffee' && <Coffee className="h-5 w-5 text-blue-600" />}
                             </div>
                             <h4 className="font-semibold mb-0.5 text-xs">{highlight.title}</h4>
-                            <p className="text-[11px] text-gray-600">{highlight.description}</p>
+                            <p className="text-[13px] text-gray-600">{highlight.description}</p>
                           </div>
                         ))}
                       </div>
@@ -458,11 +456,11 @@ const TourDetailPage = () => {
                             <h4 className="font-semibold text-xs md:text-sm mb-1">
                               Day {day.day}: {day.title}
                             </h4>
-                            <p className="text-gray-700 mb-2 text-xs">{day.description}</p>
+                            <p className="text-gray-700 mb-2 text-sm">{day.description}</p>
                             {day.activities && day.activities.length > 0 && (
                               <ul className="pl-4 list-disc">
                                 {day.activities.map((activity, actIdx) => (
-                                  <li key={actIdx} className="text-xs text-gray-700">{activity}</li>
+                                  <li key={actIdx} className="text-sm text-gray-700">{activity}</li>
                                 ))}
                               </ul>
                             )}
