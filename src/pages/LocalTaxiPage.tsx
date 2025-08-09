@@ -150,7 +150,7 @@ export function LocalTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Our Local Service</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Why Choose Our Local Service</h2>
             <p className="text-xl text-gray-600">Designed for the modern city traveler</p>
           </motion.div>
           
@@ -167,7 +167,7 @@ export function LocalTaxiPage() {
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
                   {feature.icon}
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <h4 className="font-semibold text-gray-900 mb-2">{feature.title}</h4>
                 <p className="text-gray-600 text-sm">{feature.description}</p>
               </motion.div>
             ))}
@@ -176,15 +176,15 @@ export function LocalTaxiPage() {
       </section>
 
       {/* Vehicle Options */}
-      <section className="py-20 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-4"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Ride</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Choose Your Ride</h2>
             <p className="text-xl text-gray-600">Perfect vehicle for every journey</p>
           </motion.div>
           
@@ -245,15 +245,15 @@ export function LocalTaxiPage() {
       </section>
 
       {/* Service Areas */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-4"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Service Areas</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Service Areas</h2>
             <p className="text-xl text-gray-600">Quick pickups across Visakhapatnam</p>
           </motion.div>
           
@@ -269,7 +269,7 @@ export function LocalTaxiPage() {
               >
                 <div className="flex items-center mb-4">
                   <MapPin className="w-5 h-5 text-blue-500 mr-2" />
-                  <h3 className="font-bold text-gray-900">{area.area}</h3>
+                  <h5 className="font-bold text-gray-900">{area.area}</h5>
                 </div>
                 
                 <div className="space-y-2">
@@ -291,13 +291,13 @@ export function LocalTaxiPage() {
       {/* CTA */}
       <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20"></div>
-        <div className="relative max-w-4xl mx-auto text-center px-6">
+        <div className="relative max-w-3xl mx-auto text-center px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Need a Ride Right Now?</h2>
+            <h2 className="text-2xl md:text-3xl lg:text-5xl font-bold mb-6">Need a Ride Right Now?</h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Quick pickups, safe rides, and fair pricing. Your trusted local taxi service in Visakhapatnam.
             </p>
@@ -319,15 +319,15 @@ export function LocalTaxiPage() {
       </section>
 
       {/* Service Types */}
-      <section className="py-20 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-4"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Our Services</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Our Services</h2>
             <p className="text-xl text-gray-600">Flexible options for every need</p>
           </motion.div>
           

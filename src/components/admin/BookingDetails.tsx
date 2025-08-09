@@ -40,20 +40,36 @@ export function BookingDetails({
     try {
       const stored = localStorage.getItem(`invoice-settings-${booking.id}`);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        // If stored is effectively empty/false, but booking has GST info from guest submission, merge it in
+        const storedEmpty = !parsed?.gstEnabled && (!parsed?.gstDetails || (!parsed.gstDetails.gstNumber && !parsed.gstDetails.companyName && !parsed.gstDetails.companyAddress));
+        const bookingHasGst = (booking as any).gstEnabled || ((booking as any).gstDetails && ((booking as any).gstDetails.gstNumber || (booking as any).gstDetails.companyName || (booking as any).gstDetails.companyAddress));
+        if (storedEmpty && bookingHasGst) {
+          return {
+            ...parsed,
+            gstEnabled: Boolean((booking as any).gstEnabled),
+            gstDetails: {
+              gstNumber: (booking as any).gstDetails?.gstNumber || '',
+              companyName: (booking as any).gstDetails?.companyName || '',
+              companyAddress: (booking as any).gstDetails?.companyAddress || ''
+            }
+          };
+        }
+        return parsed;
       }
     } catch (error) {
       console.error('Error loading stored invoice settings:', error);
     }
+    // Default initial state; prefill from booking if available
     return {
-      gstEnabled: false,
+      gstEnabled: Boolean((booking as any).gstEnabled) || false,
       isIGST: false,
       includeTax: true,
       customInvoiceNumber: '',
       gstDetails: {
-        gstNumber: '',
-        companyName: '',
-        companyAddress: ''
+        gstNumber: (booking as any).gstDetails?.gstNumber || '',
+        companyName: (booking as any).gstDetails?.companyName || '',
+        companyAddress: (booking as any).gstDetails?.companyAddress || ''
       }
     };
   };

@@ -77,61 +77,9 @@ export function AdminBookingsList() {
       let responseSource = '';
       
       try {
+        // Prefer the rich admin bookings API (includes GST fields)
         setApiAttempt(1);
-        // Try the direct-booking-data.php endpoint first
-        console.log('Attempting to fetch via direct-booking-data.php');
-        const directResponse = await fetch(`/api/admin/direct-booking-data.php?_t=${timestamp}`, {
-          headers: {
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (directResponse.ok) {
-          const contentType = directResponse.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const directData = await directResponse.json();
-            
-            if (Array.isArray(directData)) {
-              data = directData.map((booking: any) => ({
-                ...booking,
-                status: booking.status as BookingStatus
-              }));
-              console.log('Admin: Bookings received from direct endpoint:', data);
-              responseSource = 'direct_api';
-            } else if (directData && Array.isArray(directData.bookings)) {
-              data = directData.bookings.map((booking: any) => ({
-                ...booking,
-                status: booking.status as BookingStatus
-              }));
-              responseSource = 'direct_api_bookings_property';
-            } else if (directData && Array.isArray(directData.data)) {
-              data = directData.data.map((booking: any) => ({
-                ...booking,
-                status: booking.status as BookingStatus
-              }));
-              responseSource = 'direct_api_data_property';
-            }
-            
-            if (data.length > 0) {
-              setBookings(data);
-              applyFilters(data, searchTerm, statusFilter);
-              toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
-                id: 'bookings-loaded',
-              });
-              setIsLoading(false);
-              setIsRefreshing(false);
-              return;
-            }
-          } else {
-            console.warn('Direct API returned non-JSON response:', await directResponse.text());
-          }
-        }
-        
-        // If direct fetch failed, try using the bookingAPI
-        setApiAttempt(2);
-        console.log('Direct fetch failed, trying bookingAPI.getAllBookings()');
+        console.log('Fetching via bookingAPI.getAllBookings()');
         const apiData = await bookingAPI.getAllBookings();
         
         if (Array.isArray(apiData)) {
@@ -151,8 +99,37 @@ export function AdminBookingsList() {
           throw new Error('Invalid data format from booking API');
         }
       } catch (apiError) {
-        console.error('API attempts failed:', apiError);
-        throw new Error('Failed to load bookings from API');
+        console.warn('bookingAPI attempt failed, trying direct-booking-data.php as fallback:', apiError);
+        setApiAttempt(2);
+        // Fallback to direct-booking-data (may be sample, fewer fields)
+        try {
+          const directResponse = await fetch(`/api/admin/direct-booking-data.php?_t=${timestamp}`, {
+            headers: {
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          });
+          if (directResponse.ok) {
+            const contentType = directResponse.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const directData = await directResponse.json();
+              if (Array.isArray(directData)) {
+                data = directData.map((booking: any) => ({ ...booking, status: booking.status as BookingStatus }));
+                responseSource = 'direct_api';
+              } else if (directData && Array.isArray(directData.bookings)) {
+                data = directData.bookings.map((booking: any) => ({ ...booking, status: booking.status as BookingStatus }));
+                responseSource = 'direct_api_bookings_property';
+              } else if (directData && Array.isArray(directData.data)) {
+                data = directData.data.map((booking: any) => ({ ...booking, status: booking.status as BookingStatus }));
+                responseSource = 'direct_api_data_property';
+              }
+            }
+          }
+        } catch (directErr) {
+          console.error('Fallback direct endpoint failed:', directErr);
+          throw new Error('Failed to load bookings from API');
+        }
       }
       
       if (Array.isArray(data) && data.length > 0) {

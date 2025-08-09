@@ -34,6 +34,14 @@ export interface BookingRequest {
   discountValue?: number;
   isPaid?: boolean;
   createdBy?: string;
+  // Optional GST details captured during guest form submission
+  gstEnabled?: boolean;
+  gstDetails?: {
+    gstNumber?: string;
+    companyName?: string;
+    companyAddress?: string;
+    companyEmail?: string;
+  };
 }
 
 export interface AuthResponse {
@@ -123,6 +131,14 @@ export interface Booking {
   discountType?: string;
   discountValue?: number;
   adminNotes?: string;
+  // GST fields (optional)
+  gstEnabled?: boolean;
+  gstDetails?: {
+    gstNumber?: string;
+    companyName?: string;
+    companyAddress?: string;
+    companyEmail?: string;
+  };
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';

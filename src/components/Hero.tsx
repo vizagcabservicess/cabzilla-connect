@@ -666,6 +666,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
+        // pass GST details if captured
+        gstEnabled: !!guestDetails.gstEnabled,
+        gstDetails: guestDetails.gstEnabled ? {
+          gstNumber: guestDetails.gstNumber,
+          companyName: guestDetails.companyName,
+          companyAddress: guestDetails.companyAddress,
+          companyEmail: guestDetails.companyEmail,
+        } : undefined,
         hourlyPackage: tripType === 'local' ? hourlyPackage : null
       };
 

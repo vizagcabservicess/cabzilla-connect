@@ -126,6 +126,26 @@ try {
     // Create an array of bookings
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
+        // Parse GST details if present
+        $parsedGstDetails = null;
+        if (isset($row['gst_details']) && !empty($row['gst_details'])) {
+            $decoded = json_decode($row['gst_details'], true);
+            if (is_array($decoded)) {
+                $parsedGstDetails = [
+                    'gstNumber' => $decoded['gstNumber'] ?? ($row['gst_number'] ?? ''),
+                    'companyName' => $decoded['companyName'] ?? ($row['company_name'] ?? ''),
+                    'companyAddress' => $decoded['companyAddress'] ?? ($row['company_address'] ?? ''),
+                    'companyEmail' => $decoded['companyEmail'] ?? ''
+                ];
+            }
+        } else if (isset($row['gst_number']) || isset($row['company_name']) || isset($row['company_address'])) {
+            $parsedGstDetails = [
+                'gstNumber' => $row['gst_number'] ?? '',
+                'companyName' => $row['company_name'] ?? '',
+                'companyAddress' => $row['company_address'] ?? '',
+            ];
+        }
+
         $booking = [
             'id' => (int)$row['id'],
             'userId' => isset($row['user_id']) ? (int)$row['user_id'] : null,
@@ -151,7 +171,10 @@ try {
             'payment_status' => $row['payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
             'createdAt' => $row['created_at'],
-            'updatedAt' => $row['updated_at'] ?? $row['created_at']
+            'updatedAt' => $row['updated_at'] ?? $row['created_at'],
+            // Prefill GST info
+            'gstEnabled' => !empty($row['gst_enabled']) || (!empty($row['gst_number'])),
+            'gstDetails' => $parsedGstDetails
         ];
         $bookings[] = $booking;
     }

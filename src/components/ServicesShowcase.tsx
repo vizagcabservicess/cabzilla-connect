@@ -59,7 +59,7 @@ export function ServicesShowcase() {
   ];
 
   return (
-    <section className="px-0 py-2 pb-2 mb-6 md:px-4 md:py-4 md:mb-0 bg-white">
+    <section className="px-0 py-2 pb-2 mb-6 md:px-4 md:py-16 md:mb-0 bg-white">
       <div className="mx-auto md:container md:max-w-6xl px-0 md:px-4">
         {/* Header */}
         <div className="text-center mb-2 md:mb-4">

@@ -54,7 +54,7 @@ export function OutstationTaxiPage() {
   const vehicleTypes = [
     { name: 'Sedan', seats: '4+1', price: '₹14/km', features: ['AC', 'Music', 'GPS'] },
     { name: 'SUV', seats: '6+1', price: '₹18/km', features: ['AC', 'Music', 'GPS', 'Extra Space'] },
-    { name: 'Luxury', seats: '7+1', price: '₹22/km', features: ['Premium AC', 'Premium Music', 'GPS', 'Leather Seats'] },
+    { name: 'Luxury', seats: '7+1', price: '₹20/km', features: ['Premium AC', 'Premium Music', 'GPS', 'Leather Seats'] },
   ];
 
   const structuredData = {
@@ -139,7 +139,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Our Service</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Why Choose Our Service</h2>
             <p className="text-xl text-gray-600">Premium features for your comfort and safety</p>
           </motion.div>
           
@@ -165,7 +165,7 @@ export function OutstationTaxiPage() {
       </section>
 
       {/* Vehicle Types */}
-      <section className="py-20 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -173,7 +173,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Vehicle</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Choose Your Vehicle</h2>
             <p className="text-xl text-gray-600">Select from our premium fleet</p>
           </motion.div>
           
@@ -210,13 +210,13 @@ export function OutstationTaxiPage() {
        {/* CTA */}
        <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 to-blue-600/20"></div>
-        <div className="relative max-w-4xl mx-auto text-center px-6">
+        <div className="relative max-w-3xl mx-auto text-center px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Ready for Your Journey?</h2>
+            <h2 className="text-2xl md:text-3xl lg:text-5xl font-bold mb-6">Ready for Your Journey?</h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Join thousands of satisfied customers who trust us for their outstation travel. 
               Book now and experience the difference.
@@ -239,7 +239,7 @@ export function OutstationTaxiPage() {
       </section>
 
       {/* Popular Routes */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -247,7 +247,7 @@ export function OutstationTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Popular Routes</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Popular Routes</h2>
             <p className="text-xl text-gray-600">Most traveled destinations from Visakhapatnam</p>
           </motion.div>
           
@@ -269,9 +269,9 @@ export function OutstationTaxiPage() {
                   <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                 </div>
                 
-                <h3 className="font-bold text-gray-900 mb-2">
+                <h5 className="font-bold text-gray-900 mb-2">
                   {route.from} → {route.to}
-                </h3>
+                </h5>
                 
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">

@@ -136,6 +136,37 @@ try {
     // Get inserted booking ID
     $bookingId = $conn->insert_id;
     
+    // Optional: Persist GST details if provided from guest submission
+    try {
+        $gstEnabled = isset($requestData['gstEnabled']) && $requestData['gstEnabled'] ? 1 : 0;
+        $hasGstDetails = isset($requestData['gstDetails']) && is_array($requestData['gstDetails']);
+        if ($gstEnabled || $hasGstDetails) {
+            $gstNumber = $hasGstDetails && isset($requestData['gstDetails']['gstNumber']) ? $requestData['gstDetails']['gstNumber'] : '';
+            $companyName = $hasGstDetails && isset($requestData['gstDetails']['companyName']) ? $requestData['gstDetails']['companyName'] : '';
+            $companyAddress = $hasGstDetails && isset($requestData['gstDetails']['companyAddress']) ? $requestData['gstDetails']['companyAddress'] : '';
+            $companyEmail = $hasGstDetails && isset($requestData['gstDetails']['companyEmail']) ? $requestData['gstDetails']['companyEmail'] : '';
+            $gstDetailsJson = json_encode([
+                'gstNumber' => $gstNumber,
+                'companyName' => $companyName,
+                'companyAddress' => $companyAddress,
+                'companyEmail' => $companyEmail
+            ]);
+            
+            // Attempt to update bookings table with both JSON and column fields when available
+            // JSON field (gst_details)
+            $updateSql = "UPDATE bookings SET gst_enabled = ?, gst_number = COALESCE(?, gst_number), company_name = COALESCE(?, company_name), company_address = COALESCE(?, company_address), gst_details = ? WHERE id = ?";
+            $up = $conn->prepare($updateSql);
+            if ($up) {
+                $up->bind_param('issssi', $gstEnabled, $gstNumber, $companyName, $companyAddress, $gstDetailsJson, $bookingId);
+                $up->execute();
+                $up->close();
+            }
+        }
+    } catch (Throwable $persistGstEx) {
+        // Do not fail booking creation if GST persistence fails
+        error_log('create-booking.php GST persist warning: ' . $persistGstEx->getMessage());
+    }
+    
     // Fetch the created booking
     $selectStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $selectStmt->bind_param("i", $bookingId);

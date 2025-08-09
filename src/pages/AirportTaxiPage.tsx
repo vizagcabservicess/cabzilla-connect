@@ -80,8 +80,8 @@ export function AirportTaxiPage() {
 
   const fleetOptions = [
     { type: 'Sedan', capacity: '3-4', luggage: '2-3 bags', price: '₹850 onwards' },
-    { type: 'SUV', capacity: '6-7', luggage: '3-4 bags', price: '₹1250 onwards' },
-    { type: 'Luxury', capacity: '4', luggage: '3-4 bags', price: '₹1550 onwards' },
+    { type: 'SUV', capacity: '6', luggage: '3-4 bags', price: '₹1250 onwards' },
+    { type: 'Luxury', capacity: '7', luggage: '3-4 bags', price: '₹1550 onwards' },
   ];
 
   const structuredData = {
@@ -142,7 +142,7 @@ export function AirportTaxiPage() {
               <br />
               <span className="text-sky-500">Confidence</span>
             </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-2xl mx-auto">
+            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-3xl mx-auto">
               Hassle-free airport transfers with flight tracking, meet & greet service, and guaranteed on-time pickup and drop to Vizag Airport.
             </p>
           </motion.div>
@@ -152,7 +152,7 @@ export function AirportTaxiPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl md:p-8"
+            className="rounded-xl md:rounded-3xl md:p-8"
           >
             <AirportHeroWidget />
           </motion.div>
@@ -168,7 +168,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Travelers Trust Us</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Travelers Trust Us</h2>
             <p className="text-xl text-gray-600">Professional airport transfer service designed for your peace of mind</p>
           </motion.div>
           
@@ -194,7 +194,7 @@ export function AirportTaxiPage() {
       </section>
 
       {/* Fleet Options */}
-      <section className="py-20 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -202,7 +202,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Choose Your Transfer</h2>
+            <h2 className="text-3xl md:text-3xl font-bold text-gray-900 mb-4">Choose Your Transfer</h2>
             <p className="text-xl text-gray-600">Perfect vehicle for your airport journey</p>
           </motion.div>
           
@@ -230,7 +230,7 @@ export function AirportTaxiPage() {
                     <span className="font-medium">{vehicle.luggage}</span>
                   </div>
                 </div>
-                <div className="text-2xl font-bold text-sky-500 mb-4">{vehicle.price}</div>
+                <div className="text-3xl font-bold text-sky-500 mb-4">{vehicle.price}</div>
                 <div className="space-y-2">
                   <div className="flex items-center text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-sky-500 mr-2" />
@@ -252,7 +252,7 @@ export function AirportTaxiPage() {
       </section>
 
       {/* Popular Routes */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -260,7 +260,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">Popular Routes</h2>
+            <h2 className="text-3xl md:text-3xl lg:text-3xl font-bold text-gray-900 mb-4">Popular Routes</h2>
             <p className="text-xl text-gray-600">Most traveled destinations from Vizag Airport</p>
           </motion.div>
           
@@ -282,9 +282,9 @@ export function AirportTaxiPage() {
                   <div className="w-3 h-3 bg-sky-500 rounded-full"></div>
                 </div>
                 
-                <h3 className="font-bold text-gray-900 mb-4">
+                <h5 className="font-bold text-gray-900 mb-4">
                   {route.from} → {route.to}
-                </h3>
+                </h5>
                 
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">
@@ -312,14 +312,14 @@ export function AirportTaxiPage() {
        {/* CTA */}
        <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-sky-600/20 to-blue-600/20"></div>
-        <div className="relative max-w-4xl mx-auto text-center px-6">
+        <div className="relative max-w-3xl mx-auto text-center px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-2xl md:text-4xl lg:text-5xl font-bold mb-6">Flying Soon?</h2>
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-3xl lg:text-5xl font-bold mb-6">Flying Soon?</h2>
+            <p className="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
               Book your airport transfer now for stress-free travel with flight tracking, meet & greet service, and guaranteed punctual service.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -340,7 +340,7 @@ export function AirportTaxiPage() {
       </section>
 
       {/* Service Features */}
-      <section className="py-20 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -348,7 +348,7 @@ export function AirportTaxiPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Our Airport Services</h2>
+            <h2 className="text-3xl md:text-3xl font-bold text-gray-900 mb-4">Our Airport Services</h2>
             <p className="text-xl text-gray-600">Complete transfer solutions for all your needs</p>
           </motion.div>
           

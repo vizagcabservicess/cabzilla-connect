@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, ArrowRight, User, Phone, Mail, CreditCard } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
 import { motion } from 'framer-motion';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface GuestDetailsFormProps {
   onSubmit: (data: GuestDetails) => void;
@@ -22,6 +24,11 @@ export interface GuestDetails {
   phone: string;
   email: string;
   totalPrice: number;
+  gstEnabled?: boolean;
+  gstNumber?: string;
+  companyName?: string;
+  companyAddress?: string;
+  companyEmail?: string;
 }
 
 export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({ 
@@ -31,13 +38,18 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   isLoading = false,
   paymentEnabled = true
 }) => {
-  const { register, handleSubmit, formState: { errors, isValid }, watch } = useForm<GuestDetails>({
+  const { register, handleSubmit, formState: { errors, isValid }, watch, setValue } = useForm<GuestDetails>({
     mode: 'onChange',
     defaultValues: {
       name: sessionStorage.getItem('guestName') || '',
       phone: sessionStorage.getItem('guestPhone') || '',
       email: sessionStorage.getItem('guestEmail') || '',
-      totalPrice: totalPrice
+      totalPrice: totalPrice,
+      gstEnabled: sessionStorage.getItem('gstEnabled') === 'true' || false,
+      gstNumber: sessionStorage.getItem('gstNumber') || '',
+      companyName: sessionStorage.getItem('companyName') || '',
+      companyAddress: sessionStorage.getItem('companyAddress') || '',
+      companyEmail: sessionStorage.getItem('companyEmail') || ''
     }
   });
   
@@ -48,6 +60,13 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     sessionStorage.setItem('guestName', data.name);
     sessionStorage.setItem('guestPhone', data.phone);
     sessionStorage.setItem('guestEmail', data.email);
+    sessionStorage.setItem('gstEnabled', String(!!data.gstEnabled));
+    if (data.gstEnabled) {
+      sessionStorage.setItem('gstNumber', data.gstNumber || '');
+      sessionStorage.setItem('companyName', data.companyName || '');
+      sessionStorage.setItem('companyAddress', data.companyAddress || '');
+      sessionStorage.setItem('companyEmail', data.companyEmail || '');
+    }
     
     onSubmit({ ...data, totalPrice });
   };
@@ -161,6 +180,89 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   <span className="w-1 h-1 bg-red-500 rounded-full"></span>
                   {errors.email.message}
                 </motion.p>
+              )}
+            </div>
+
+            {/* GST Billing Details (Optional) */}
+            <div className="mt-2 border rounded-xl p-4 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">I have a GST number</p>
+                  <p className="text-sm text-gray-500">Optional</p>
+                </div>
+                <Switch
+                  checked={!!watchedValues.gstEnabled}
+                  onCheckedChange={(checked) => setValue('gstEnabled', checked, { shouldDirty: true, shouldValidate: true })}
+                  aria-label="Toggle GST details"
+                />
+              </div>
+
+              {watchedValues.gstEnabled && (
+                <div className="mt-4 space-y-4">
+                  <Input
+                    id="gstNumber"
+                    placeholder="GSTIN"
+                    className={`h-11 ${errors.gstNumber ? 'border-red-300' : ''}`}
+                    {...register('gstNumber', {
+                      required: watchedValues.gstEnabled ? 'GSTIN is required' : false,
+                      pattern: watchedValues.gstEnabled
+                        ? {
+                            // Basic GSTIN validation pattern for India
+                            value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                            message: 'Enter a valid GSTIN'
+                          }
+                        : undefined,
+                    })}
+                  />
+                  {errors.gstNumber && (
+                    <p className="text-sm text-red-500">{String(errors.gstNumber.message)}</p>
+                  )}
+
+                  <Input
+                    id="companyName"
+                    placeholder="Business Name"
+                    className={`h-11 ${errors.companyName ? 'border-red-300' : ''}`}
+                    {...register('companyName', {
+                      required: watchedValues.gstEnabled ? 'Business name is required' : false,
+                    })}
+                  />
+                  {errors.companyName && (
+                    <p className="text-sm text-red-500">{String(errors.companyName.message)}</p>
+                  )}
+
+                  <Input
+                    id="companyAddress"
+                    placeholder="Business Address"
+                    className="h-11"
+                    {...register('companyAddress')}
+                  />
+
+                  <Input
+                    id="companyEmail"
+                    placeholder="Business Email"
+                    type="email"
+                    inputMode="email"
+                    className={`h-11 ${errors.companyEmail ? 'border-red-300' : ''}`}
+                    {...register('companyEmail', {
+                      required: watchedValues.gstEnabled ? 'Business email is required' : false,
+                      pattern: watchedValues.gstEnabled
+                        ? {
+                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                            message: 'Enter a valid email'
+                          }
+                        : undefined,
+                    })}
+                  />
+                  {errors.companyEmail && (
+                    <p className="text-sm text-red-500">{String(errors.companyEmail.message)}</p>
+                  )}
+
+                  <Alert className="bg-orange-50 border-orange-200 text-orange-800">
+                    <AlertDescription>
+                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking
+                    </AlertDescription>
+                  </Alert>
+                </div>
               )}
             </div>
             

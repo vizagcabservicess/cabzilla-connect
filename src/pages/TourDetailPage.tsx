@@ -262,6 +262,14 @@ const TourDetailPage = () => {
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
+        // Include GST details from guest form if provided
+        gstEnabled: !!guestDetails.gstEnabled,
+        gstDetails: guestDetails.gstEnabled ? {
+          gstNumber: guestDetails.gstNumber,
+          companyName: guestDetails.companyName,
+          companyAddress: guestDetails.companyAddress,
+          companyEmail: guestDetails.companyEmail,
+        } : undefined,
       };
       
       const response = await bookingAPI.createBooking(bookingData);
@@ -332,7 +340,7 @@ const TourDetailPage = () => {
     <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
       <Navbar />
       
-      <div className="container mx-auto px-3 py-4 pb-20 max-w-8xl">
+      <div className="container mx-auto px-3 py-4 pb-20 max-w-6xl">
         {/* Back Button */}
         <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm py-2 px-3">
           <ArrowLeft className="mr-2 h-4 w-4" />

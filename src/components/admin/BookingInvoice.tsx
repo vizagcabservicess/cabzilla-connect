@@ -158,7 +158,23 @@ export function BookingInvoice({
               setHtmlContent(data.invoice.invoice_html);
             }
           } else {
-            console.log('No existing invoice found, using stored settings');
+            // Prefill from booking → guest GST details
+            const prefillGstEnabled = Boolean((booking as any).gstEnabled);
+            const prefillGstDetails = (booking as any).gstDetails || null;
+            if (!localStorage.getItem(`invoice-settings-${booking.id}`) && (prefillGstEnabled || prefillGstDetails)) {
+              onInvoiceStateChange({
+                gstEnabled: prefillGstEnabled,
+                isIGST: false,
+                includeTax: true,
+                customInvoiceNumber: '',
+                gstDetails: {
+                  gstNumber: prefillGstDetails?.gstNumber || '',
+                  companyName: prefillGstDetails?.companyName || '',
+                  companyAddress: prefillGstDetails?.companyAddress || ''
+                }
+              });
+            }
+            console.log('No existing invoice found, using stored/booking settings');
             setInvoiceData(null);
           }
         } catch (e) {
