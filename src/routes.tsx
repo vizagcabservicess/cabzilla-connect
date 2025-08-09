@@ -30,6 +30,7 @@ import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import RefundsPage from './pages/RefundsPage';
 import BlogPage from './pages/BlogPage';
+import CancellationRefundPolicyPage from './pages/CancellationRefundPolicyPage';
 import FAQPage from './pages/FAQPage';
 import PoolingPage from './pages/PoolingPage';
 import PoolingBookingPage from './pages/PoolingBookingPage';
@@ -311,6 +312,10 @@ const router = createBrowserRouter([
       {
         path: 'refunds',
         element: <RefundsPage />,
+      },
+      {
+        path: 'cancellation-refund-policy',
+        element: <CancellationRefundPolicyPage />,
       },
       {
         path: 'blog',

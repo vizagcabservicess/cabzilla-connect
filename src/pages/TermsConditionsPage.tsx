@@ -26,7 +26,7 @@ export function TermsConditionsPage() {
     },
     {
       title: "5. Cancellation Policy",
-      content: "Cancellations must be made by calling our support team. Cancellation charges may apply: Free cancellation up to 1 hour before pickup for local rides, up to 4 hours for outstation trips. Late cancellations may incur charges up to 25% of the fare."
+      content: "Cancellations must be made by calling our support team. Cancellation charges may apply: Refer to our Cancellation Refund Policy Page for more details."
     },
     {
       title: "6. Driver and Vehicle Standards",
@@ -85,7 +85,7 @@ export function TermsConditionsPage() {
               Please read these terms carefully before using our taxi services.
             </p>
             <div className="text-sm text-gray-500">
-              Last updated: January 2024
+              Last updated: August 2025
             </div>
           </motion.div>
         </div>

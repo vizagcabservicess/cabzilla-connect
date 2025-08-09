@@ -71,7 +71,6 @@ const megaMenuData = {
       { label: 'Vision & Mission', to: '/vision-mission' },
       { label: 'Fleet', to: '/fleet' },
       { label: 'Careers', to: '/careers' },
-      { label: 'Hire Driver', to: '/hire-driver' },
     ],
     right: [
       { label: 'Company Info', items: ['Our Story', 'Vision & Mission'] },
@@ -86,6 +85,7 @@ const megaMenuData = {
       { label: 'Contact Us', to: '/contact-us' },
       { label: 'Terms & Conditions', to: '/terms-conditions' },
       { label: 'Privacy Policy', to: '/privacy-policy' },
+      { label: 'Cancellation & Refund Policy', to: '/cancellation-refund-policy' },
     ],
     right: [
       { label: 'Support', items: ['24/7 Customer Support', 'Multiple Contact Channels', 'Live Chat'] },
@@ -412,6 +412,14 @@ export function Navbar() {
               </div>
             ))}
 
+            {/* Standalone: Hire Driver */}
+            <Link
+              to="/hire-driver"
+              className={`transition-colors font-medium ${megaMenuOpen === 'Hire Driver' ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
+            >
+              Hire Driver
+            </Link>
+
             {/* Contact Information */}
             <div className="flex items-center space-x-4 text-sm">
               <a 
@@ -481,6 +489,12 @@ export function Navbar() {
                   <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
                     <Home className="h-5 w-5" />
                     <span>Home</span>
+                  </Link>
+
+                  {/* Hire Driver - Standalone */}
+                  <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                    <User className="h-5 w-5" />
+                    <span>Hire Driver</span>
                   </Link>
 
                   {/* Services Section */}
@@ -555,10 +569,6 @@ export function Navbar() {
                           <User className="h-4 w-4" />
                           <span>Careers</span>
                         </Link>
-                        <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
-                          <User className="h-4 w-4" />
-                          <span>Hire Driver</span>
-                        </Link>
                       </div>
                     )}
                   </div>
@@ -600,6 +610,10 @@ export function Navbar() {
                         <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
                           <Info className="h-4 w-4" />
                           <span>Privacy Policy</span>
+                        </Link>
+                        <Link to="/cancellation-refund-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                          <Info className="h-4 w-4" />
+                          <span>Cancellation & Refund Policy</span>
                         </Link>
                       </div>
                     )}
