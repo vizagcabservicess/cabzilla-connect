@@ -20,8 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
-file_put_contents(__DIR__ . '/order_debug.log', 'INPUT: ' . json_encode($data) . PHP_EOL, FILE_APPEND);
+$rawInput = file_get_contents('php://input');
+$data = json_decode($rawInput, true);
+file_put_contents(__DIR__ . '/order_debug.log', 'INPUT: ' . $rawInput . PHP_EOL, FILE_APPEND);
 
 if (!isset($data['amount']) || !is_numeric($data['amount'])) {
     file_put_contents(__DIR__ . '/order_debug.log', 'ERROR: Invalid amount' . PHP_EOL, FILE_APPEND);
@@ -33,8 +34,14 @@ if (!isset($data['amount']) || !is_numeric($data['amount'])) {
 // Get booking_id if provided
 $booking_id = isset($data['booking_id']) ? $data['booking_id'] : null;
 
-// Include database connection and helper functions
-require_once __DIR__ . '/utils/database.php';
+// Include database connection and helper functions (optional - do not hard fail on DB)
+$dbAvailable = false;
+try {
+    require_once __DIR__ . '/utils/database.php';
+    $dbAvailable = true;
+} catch (Throwable $e) {
+    file_put_contents(__DIR__ . '/order_debug.log', 'WARN: DB utils not available: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+}
 
 // Load Razorpay API keys
 $key_id = "rzp_test_41fJeGiVFyU9OQ"; // Test key (fixed to match working modules)
@@ -42,6 +49,13 @@ $key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH"; // Test secret (fixed to match working
 
 // Generate a unique receipt ID
 $receipt_id = 'rcpt_' . time() . '_' . substr(md5(mt_rand()), 0, 8);
+
+// Normalize amount → Razorpay expects paise
+$inputAmount = (int)$data['amount'];
+// Heuristic: if value looks like rupees, convert to paise
+// (most of our app sends rupees; paise would usually be ≥ 100000 for typical fares)
+$amountPaise = ($inputAmount < 100000) ? ($inputAmount * 100) : $inputAmount;
+file_put_contents(__DIR__ . '/order_debug.log', 'AMOUNT_NORMALIZED: input=' . $inputAmount . ' paise=' . $amountPaise . PHP_EOL, FILE_APPEND);
 
 try {
     // Initialize Razorpay API
@@ -57,7 +71,7 @@ try {
         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         CURLOPT_CUSTOMREQUEST => "POST",
         CURLOPT_POSTFIELDS => json_encode([
-            'amount' => $data['amount'],
+            'amount' => $amountPaise,
             'currency' => 'INR',
             'receipt' => $receipt_id,
             'payment_capture' => 1  // Auto capture
@@ -92,28 +106,28 @@ try {
         exit;
     }
     
-    // Store the order in the database
-    $conn = getDbConnection();
-    
-    // Use prepared statements to prevent SQL injection
-    if ($booking_id) {
-        $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, booking_id, created_at, status) 
-                               VALUES (?, ?, ?, ?, NOW(), ?)");
-        $stmt->bind_param("sisss", $order['id'], $order['amount'], $receipt_id, $booking_id, $order['status']);
-    } else {
-        $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) 
-                               VALUES (?, ?, ?, NOW(), ?)");
-        $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
+    // Store the order in the database (best-effort)
+    if ($dbAvailable) {
+        try {
+            $conn = getDbConnection();
+            if ($booking_id) {
+                $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, booking_id, created_at, status) VALUES (?, ?, ?, ?, NOW(), ?)");
+                $stmt->bind_param("sisss", $order['id'], $order['amount'], $receipt_id, $booking_id, $order['status']);
+            } else {
+                $stmt = $conn->prepare("INSERT INTO razorpay_orders (order_id, amount, receipt, created_at, status) VALUES (?, ?, ?, NOW(), ?)");
+                $stmt->bind_param("siss", $order['id'], $order['amount'], $receipt_id, $order['status']);
+            }
+            $stmt->execute();
+            if ($stmt->error) {
+                file_put_contents(__DIR__ . '/order_debug.log', 'DB ERROR: ' . $stmt->error . PHP_EOL, FILE_APPEND);
+            }
+            $stmt->close();
+            $conn->close();
+        } catch (Throwable $e) {
+            file_put_contents(__DIR__ . '/order_debug.log', 'DB EXCEPTION: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+            // Do not fail the API if DB write fails
+        }
     }
-    $stmt->execute();
-    
-    if ($stmt->error) {
-        file_put_contents(__DIR__ . '/order_debug.log', 'DB ERROR: ' . $stmt->error . PHP_EOL, FILE_APPEND);
-        error_log("Database Error: " . $stmt->error);
-    }
-    
-    $stmt->close();
-    $conn->close();
     
     // Return the created order to the frontend
     echo json_encode([

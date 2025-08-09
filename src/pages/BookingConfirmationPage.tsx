@@ -93,6 +93,31 @@ function BookingConfirmationPage() {
     }
   };
 
+  // Poll the booking briefly to catch status flip after returning from Razorpay
+  useEffect(() => {
+    const idToPoll = booking?.id || (sessionStorage.getItem('bookingDetails') ? JSON.parse(sessionStorage.getItem('bookingDetails') as string).bookingId : null);
+    if (!idToPoll) return;
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      try {
+        const b = await bookingAPI.getBookingById(idToPoll as any);
+        const normalized = mapBackendBooking(b);
+        setBooking(normalized);
+        if ((normalized.paymentStatus || normalized.status)?.toLowerCase() === 'paid') {
+          clearInterval(interval);
+        }
+        if (attempts >= 6) {
+          clearInterval(interval);
+        }
+      } catch (e) {
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking?.id]);
+
   const copyBookingId = () => {
     if (booking?.bookingNumber) {
       navigator.clipboard.writeText(booking.bookingNumber);
@@ -262,9 +287,10 @@ function BookingConfirmationPage() {
                       <p className="text-sm text-gray-500">Pickup Date & Time</p>
                       <p className="font-medium">
                         {booking?.pickupDate ? (
-                          <>
-                            {formatDate(new Date(booking.pickupDate))} at {formatTime(new Date(booking.pickupDate))}
-                          </>
+                          (() => {
+                            const d = new Date(booking.pickupDate);
+                            return `${formatDate(d)} at ${formatTime(d)}`;
+                          })()
                         ) : 'Not specified'}
                       </p>
                     </div>

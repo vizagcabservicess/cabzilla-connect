@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { BookingRequest } from "@/types/api";
+import { getApiUrl, apiBaseUrl } from "@/config/api";
 
 // Razorpay types
 export interface RazorpayOptions {
@@ -63,20 +64,61 @@ export const initRazorpay = async (): Promise<boolean> => {
 // Create a Razorpay order
 export const createRazorpayOrder = async (amount: number, bookingId?: string): Promise<RazorpayOrderResponse | null> => {
   try {
-    const requestBody: any = { amount: amount * 100 }; // Convert to paise
-    if (bookingId) {
-      requestBody.booking_id = bookingId;
+    const primaryUrl = getApiUrl("/api/create-razorpay-order");
+    const fallbackUrl = `https://www.vizagup.com/api/create-razorpay-order.php`;
+
+    const buildBody = (amt: number) => {
+      const body: any = { amount: Math.round(amt) };
+      if (bookingId) body.booking_id = bookingId;
+      return body;
+    };
+
+    const doPost = async (url: string, body: any) => fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      mode: 'cors'
+    });
+
+    let response: Response | null = null;
+    let lastError: any = null;
+
+    // Try primary (rupees)
+    try {
+      response = await doPost(primaryUrl, buildBody(amount));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) {
+      lastError = e;
+    }
+
+    // If primary failed, try primary (paise)
+    if (!response || !response.ok) {
+      try {
+        response = await doPost(primaryUrl, buildBody(amount * 100));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    // If still failed, try fallback (rupees)
+    if (!response || !response.ok) {
+      try {
+        response = await doPost(fallbackUrl, buildBody(amount));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    // If still failed, try fallback (paise)
+    if (!response || !response.ok) {
+      response = await doPost(fallbackUrl, buildBody(amount * 100));
     }
     
-    const response = await fetch("/api/create-razorpay-order.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-    
     if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.error('Razorpay order error body:', text);
       throw new Error("Failed to create order");
     }
     
@@ -122,7 +164,9 @@ export const verifyRazorpayPayment = async (
   bookingId?: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch("/api/verify-razorpay-payment.php", {
+    const primaryUrl = getApiUrl("/api/verify-razorpay-payment");
+    const fallbackUrl = `https://www.vizagup.com/api/verify-razorpay-payment.php`;
+    const doPost = async (url: string) => fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -133,7 +177,15 @@ export const verifyRazorpayPayment = async (
         razorpay_signature: signature,
         booking_id: bookingId
       }),
+      mode: 'cors'
     });
+    let response: Response;
+    try {
+      response = await doPost(primaryUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) {
+      response = await doPost(fallbackUrl);
+    }
     
     if (!response.ok) {
       throw new Error("Payment verification failed");

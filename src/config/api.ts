@@ -1,9 +1,13 @@
 // API configuration
 
-// Base API URL - use localhost for development, vizagup.com for production
-export const apiBaseUrl = window.location.hostname.includes('localhost')
-  ? ''
-  : 'https://www.vizagup.com';
+// Base API URL
+// - Use VITE_API_BASE_URL when provided
+// - Fallback to '' on localhost (relative paths/proxy)
+// - Fallback to https://www.vizagup.com in production if no env is set
+const ENV_BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? '';
+export const apiBaseUrl = (ENV_BASE !== ''
+  ? ENV_BASE
+  : 'https://www.vizagup.com').replace(/\/$/, '');
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string = ''): string => {

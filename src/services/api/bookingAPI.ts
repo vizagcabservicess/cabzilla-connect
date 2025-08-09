@@ -177,16 +177,17 @@ export const bookingAPI = {
    */
   updateBookingStatus: async (bookingId: number | string, status: BookingStatus) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/update-booking.php`,
-        { bookingId: bookingId, status },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
+      const payload = { bookingId: bookingId, status };
+      const headers = { 'Content-Type': 'application/json' };
+      // Try non-admin endpoint first
+      try {
+        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers });
+        return r1.data;
+      } catch (e1) {
+        // Fallback to admin endpoint
+        const r2 = await axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers });
+        return r2.data;
+      }
     } catch (error) {
       console.error('Error updating booking status:', error);
       throw error;
@@ -198,16 +199,17 @@ export const bookingAPI = {
    */
   updateBooking: async (bookingId: number | string, data: Partial<Booking>) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/update-booking.php`,
-        { bookingId: bookingId, ...data },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
+      const headers = { 'Content-Type': 'application/json' };
+      const payload = { bookingId: bookingId, ...data } as any;
+      // Try non-admin endpoint first
+      try {
+        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers });
+        return r1.data;
+      } catch (e1) {
+        // Fallback to admin endpoint
+        const r2 = await axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers });
+        return r2.data;
+      }
     } catch (error) {
       console.error('Error updating booking:', error);
       throw error;

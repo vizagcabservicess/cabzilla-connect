@@ -7,8 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { bookingAPI } from "@/services/api";
 import { MapPin, Calendar, Car, ArrowRight, DollarSign, Printer } from "lucide-react";
-import { BookingStatusManager } from "@/components/BookingStatusManager";
-import { BookingStatus } from "@/types/api";
+// Removed BookingStatusManager controls from receipt header
 import { format, parseISO, isValid } from "date-fns";
 
 const ReceiptPage = () => {
@@ -64,7 +63,8 @@ const ReceiptPage = () => {
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute, second] = timePart.split(':').map(Number);
         
-        const date = new Date(year, month - 1, day, hour, minute, second);
+        // Interpret stored time as UTC to avoid local timezone shifts
+        const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
         if (isNaN(date.getTime())) {
           throw new Error("Invalid date");
         }
@@ -158,17 +158,12 @@ const ReceiptPage = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-8">
         <Card className="max-w-3xl mx-auto">
-          <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
+          <div className="bg-blue-600 p-3 text-white flex justify-between items-center">
             <div>
-              <h1 className="text-xl font-medium">Booking Receipt</h1>
-              <p className="text-sm mt-1">#{booking?.bookingNumber}</p>
+              <h1 className="text-lg font-medium">Booking Receipt</h1>
+              <p className="text-xs mt-1">#{booking?.bookingNumber}</p>
             </div>
             <div className="flex gap-2">
-              <BookingStatusManager
-                currentStatus={booking?.status as BookingStatus}
-                onStatusChange={async () => {}}
-                isAdmin={false}
-              />
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -181,17 +176,17 @@ const ReceiptPage = () => {
             </div>
           </div>
           
-          <div className="p-6">
+          <div className="p-4">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-medium text-gray-800">
+                <h2 className="text-xl font-medium text-gray-800">
                   Booking #{booking?.bookingNumber}
                 </h2>
-                <p className="text-gray-500">ID: {booking?.id}</p>
+                <p className="text-gray-500 text-sm">ID: {booking?.id}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-500">Booking Date</p>
-                <p className="font-medium">
+                <p className="text-xs text-gray-500">Booking Date</p>
+                <p className="font-medium text-sm">
                   {booking?.createdAt ? formatDate(booking.createdAt) : "N/A"}
                 </p>
               </div>
@@ -201,13 +196,13 @@ const ReceiptPage = () => {
             
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <h3 className="font-semibold text-gray-800 mb-3">Trip Details</h3>
+                <h3 className="font-semibold text-gray-800 mb-2 text-sm">Trip Details</h3>
                 <div className="space-y-3">
                   <div className="flex items-start">
                     <MapPin className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
                     <div>
                       <p className="text-xs text-gray-500">PICKUP LOCATION</p>
-                      <p className="font-medium">{booking?.pickupLocation || "N/A"}</p>
+                      <p className="font-medium text-sm">{booking?.pickupLocation || "N/A"}</p>
                     </div>
                   </div>
                   
@@ -216,7 +211,7 @@ const ReceiptPage = () => {
                       <MapPin className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
                       <div>
                         <p className="text-xs text-gray-500">DROP LOCATION</p>
-                        <p className="font-medium">{booking.dropLocation}</p>
+                        <p className="font-medium text-sm">{booking.dropLocation}</p>
                       </div>
                     </div>
                   )}
@@ -225,7 +220,7 @@ const ReceiptPage = () => {
                     <Calendar className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
                     <div>
                       <p className="text-xs text-gray-500">PICKUP DATE & TIME</p>
-                      <p className="font-medium">
+                      <p className="font-medium text-sm">
                         {booking?.pickupDate ? formatDate(booking.pickupDate) : "N/A"}
                       </p>
                     </div>
@@ -236,7 +231,7 @@ const ReceiptPage = () => {
                       <Calendar className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
                       <div>
                         <p className="text-xs text-gray-500">RETURN DATE & TIME</p>
-                        <p className="font-medium">{formatDate(booking.returnDate)}</p>
+                        <p className="font-medium text-sm">{formatDate(booking.returnDate)}</p>
                       </div>
                     </div>
                   )}
@@ -245,7 +240,7 @@ const ReceiptPage = () => {
                     <Car className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
                     <div>
                       <p className="text-xs text-gray-500">CAB TYPE</p>
-                      <p className="font-medium">{booking?.cabType || "N/A"}</p>
+                      <p className="font-medium text-sm">{booking?.cabType || "N/A"}</p>
                     </div>
                   </div>
                   
@@ -253,7 +248,7 @@ const ReceiptPage = () => {
                     <ArrowRight className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
                     <div>
                       <p className="text-xs text-gray-500">TRIP TYPE</p>
-                      <p className="font-medium">
+                      <p className="font-medium text-sm">
                         {formatTripType(booking?.tripType, booking?.tripMode)}
                       </p>
                     </div>
@@ -262,8 +257,8 @@ const ReceiptPage = () => {
               </div>
               
               <div>
-                <h3 className="font-semibold text-gray-800 mb-3">Payment Details</h3>
-                <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-gray-800 mb-2 text-sm">Payment Details</h3>
+                <div className="bg-gray-50 p-3 rounded-lg text-sm">
                   {booking.driverAllowance > 0 && (
                     <div className="flex justify-between mb-2">
                       <span>Driver Allowance</span>
@@ -289,32 +284,32 @@ const ReceiptPage = () => {
                     </div>
                   )}
                   <Separator className="my-2" />
-                  <div className="flex justify-between font-medium">
+                  <div className="flex justify-between font-medium text-base">
                     <span>Total Amount</span>
                     <span>{formatCurrency(totalAmount)}</span>
                   </div>
-                  <div className={`mt-3 text-sm font-medium ${paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>
+                  <div className={`mt-2 text-sm font-medium ${paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>
                     <DollarSign className="w-4 h-4 inline mr-1" />
                     Payment Status: {paymentStatus === "paid" ? "Paid" : "Pending"}
                   </div>
                 </div>
 
                 <div className="mt-6">
-                  <h3 className="font-semibold text-gray-800 mb-3">
+                  <h3 className="font-semibold text-gray-800 mb-2 text-sm">
                     Passenger Details
                   </h3>
                   <div className="space-y-2">
                     <div>
                       <p className="text-xs text-gray-500">NAME</p>
-                      <p className="font-medium">{booking?.passengerName || "N/A"}</p>
+                      <p className="font-medium text-sm">{booking?.passengerName || "N/A"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">PHONE</p>
-                      <p className="font-medium">{booking?.passengerPhone || "N/A"}</p>
+                      <p className="font-medium text-sm">{booking?.passengerPhone || "N/A"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">EMAIL</p>
-                      <p className="font-medium">{booking?.passengerEmail || "N/A"}</p>
+                      <p className="font-medium text-sm">{booking?.passengerEmail || "N/A"}</p>
                     </div>
                   </div>
                 </div>
