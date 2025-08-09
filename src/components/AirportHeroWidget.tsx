@@ -4,9 +4,12 @@ import { Hero } from './Hero';
 interface AirportHeroWidgetProps {
   initialPickup?: string;
   initialDrop?: string;
+  onSearch?: (searchData: any) => void;
+  onStepChange?: (step: number) => void;
+  onEditStart?: () => void;
 }
 
-export function AirportHeroWidget({ initialPickup, initialDrop }: AirportHeroWidgetProps) {
+export function AirportHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: AirportHeroWidgetProps) {
   useEffect(() => {
     // On mount, clear previous locations to ensure Hero validation runs correctly
     sessionStorage.removeItem('pickupLocation');
@@ -60,7 +63,9 @@ export function AirportHeroWidget({ initialPickup, initialDrop }: AirportHeroWid
     <div>
       <Hero 
         key="airport-hero" 
-        onSearch={() => { /* The hero component handles navigation */ }} 
+        onSearch={onSearch} 
+        onEditStart={onEditStart} 
+        onStepChange={onStepChange}
         visibleTabs={['airport']} 
         hideBackground={true} 
       />

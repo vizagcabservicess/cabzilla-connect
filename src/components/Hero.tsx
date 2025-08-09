@@ -44,7 +44,7 @@ function areBothLocationsInVizag(location1?: Location | null, location2?: Locati
     isLocationInVizag(location2));
 }
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
   console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -161,11 +161,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
   const handleEditPickupLocation = () => {
     setCurrentStep(1);
     setShowGuestDetailsForm(false);
+    if (onEditStart) onEditStart();
+    if (onStepChange) onStepChange(1);
   };
 
   const handleEditPickupDate = () => {
     setCurrentStep(1);
     setShowGuestDetailsForm(false);
+    if (onEditStart) onEditStart();
+    if (onStepChange) onStepChange(1);
   };
 
   useEffect(() => {
@@ -554,10 +558,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
     }
     
     // For other trip types, continue with existing flow
+    // Immediately switch to step 2 (hide banner), then finish any animations
+    setCurrentStep(2);
+    if (onStepChange) onStepChange(2);
     setTimeout(() => {
-      setCurrentStep(2);
       setIsLoading(false);
-    }, 500); // Add a slight delay for animation effect
+    }, 300);
   };
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
@@ -737,6 +743,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
   function handleBackToSelection() {
     setShowGuestDetailsForm(false);
     setCurrentStep(2);
+    if (onStepChange) onStepChange(2);
   };
 
   // Custom handler for tab (trip type) changes
@@ -781,6 +788,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
       setCurrentStep(1);
     }
   }, [isSearchActive]);
+
+  // Notify parent on initial step as well
+  useEffect(() => {
+    if (onStepChange) onStepChange(currentStep);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   useEffect(() => {
     if (
@@ -960,7 +973,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
       <section id="booking-widget" className={`
         ${!isSearchActive && currentStep === 1 
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
-          : 'relative z-20 py-1 sm:pb-12 sm:pt-4'
+          : 'relative z-20 py-0 sm:py-0'
         } w-full px-0 sm:px-0`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
@@ -1187,7 +1200,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground }: 
                           </div>
                           {/* Always Visible Edit Button */}
                           <button
-                            onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)}
+                            onClick={() => {
+                              if (isMobile) {
+                                setShowMobileEditForm(true);
+                              } else {
+                                setCurrentStep(1);
+                              }
+                              if (onEditStart) onEditStart();
+                            }}
                             className="text-blue-600 hover:text-blue-700 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
                             title="Edit booking details"
                           >

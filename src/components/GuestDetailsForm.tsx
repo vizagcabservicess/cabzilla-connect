@@ -76,7 +76,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="max-w-md mx-auto"
+      className="mx-auto"
     >
       <Card className="shadow-lg border-0 bg-white">
         <CardHeader className="pb-4">
@@ -259,7 +259,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
 
                   <Alert className="bg-orange-50 border-orange-200 text-orange-800">
                     <AlertDescription>
-                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking
+                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking. Additional 12% GST will be charged on the total amount.
                     </AlertDescription>
                   </Alert>
                 </div>

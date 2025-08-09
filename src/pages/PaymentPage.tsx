@@ -21,6 +21,7 @@ const PaymentPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
+  const [paymentMode, setPaymentMode] = useState<'partial' | 'full'>('partial');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'failed'>('pending');
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
 
@@ -73,8 +74,10 @@ const PaymentPage = () => {
 
     setIsLoading(true);
     try {
-      // Create a Razorpay order with booking ID
-      const amount = bookingDetails.totalPrice;
+      // Amount based on selection: partial (30%) or full
+      const amount = paymentMode === 'partial'
+        ? Math.round((bookingDetails.totalPrice || 0) * 0.3)
+        : (bookingDetails.totalPrice || 0);
       const order = await createRazorpayOrder(amount, bookingDetails.bookingId);
       
       if (!order) {
@@ -87,7 +90,7 @@ const PaymentPage = () => {
         amount: order.amount,
         currency: order.currency,
         name: 'Cab Booking',
-        description: `Booking for ${bookingDetails.tripType} trip`,
+          description: `Booking for ${bookingDetails.tripType} trip (${paymentMode === 'partial' ? '30% advance' : 'full payment'})`,
         order_id: order.id,
         handler: (response: RazorpayResponse) => {
           handlePaymentSuccess(response);
@@ -138,9 +141,10 @@ const PaymentPage = () => {
         // Update booking with payment information (multi-endpoint fallback inside API)
         try {
           await bookingAPI.updateBooking(bookingDetails.bookingId, {
-            payment_status: 'paid',
-            status: 'confirmed',
+            payment_status: paymentMode === 'partial' ? 'payment_pending' : 'paid',
+            status: paymentMode === 'partial' ? 'confirmed' : 'confirmed',
             payment_method: 'razorpay',
+            advance_paid_amount: paymentMode === 'partial' ? Math.round((bookingDetails.totalPrice || 0) * 0.3) : (bookingDetails.totalPrice || 0),
             razorpay_payment_id: response.razorpay_payment_id,
             razorpay_order_id: response.razorpay_order_id,
             razorpay_signature: response.razorpay_signature
@@ -237,8 +241,43 @@ const PaymentPage = () => {
                 
                 <div className="flex flex-col items-center p-6 border rounded-md">
                   <CreditCard size={48} className="text-blue-500 mb-3" />
-                  <h3 className="text-xl font-semibold mb-1">Ready to Pay</h3>
-                  <p className="text-gray-600 mb-6 text-center">Click the button below to proceed with Razorpay secure payment</p>
+                  <h3 className="text-xl font-semibold mb-1">Payment Options</h3>
+                  <div className="w-full max-w-md mx-auto mb-4">
+                    <div className="border rounded-lg divide-y">
+                      <label className="flex items-center justify-between p-3 cursor-pointer">
+                        <span className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="paymode"
+                            checked={paymentMode === 'partial'}
+                            onChange={() => setPaymentMode('partial')}
+                            className="mt-1"
+                          />
+                          <span>
+                            <span className="font-medium">Part Pay</span>
+                            <div className="text-xs text-gray-500">Pay 30% now, rest to the driver</div>
+                          </span>
+                        </span>
+                        <span className="font-semibold">{formatPrice(Math.round((bookingDetails.totalPrice || 0) * 0.3))}</span>
+                      </label>
+                      <label className="flex items-center justify-between p-3 cursor-pointer">
+                        <span className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="paymode"
+                            checked={paymentMode === 'full'}
+                            onChange={() => setPaymentMode('full')}
+                            className="mt-1"
+                          />
+                          <span>
+                            <span className="font-medium">Full Pay</span>
+                            <div className="text-xs text-gray-500">Pay total amount</div>
+                          </span>
+                        </span>
+                        <span className="font-semibold">{formatPrice(bookingDetails.totalPrice || 0)}</span>
+                      </label>
+                    </div>
+                  </div>
                   
                   <Button 
                     onClick={handlePayment} 
@@ -252,7 +291,7 @@ const PaymentPage = () => {
                         <span>Processing...</span>
                       </div>
                     ) : (
-                      <span>Pay Now - {formatPrice(bookingDetails.totalPrice || 0)}</span>
+                      <span>Pay Now - {formatPrice(paymentMode === 'partial' ? Math.round((bookingDetails.totalPrice || 0) * 0.3) : (bookingDetails.totalPrice || 0))}</span>
                     )}
                   </Button>
                 </div>

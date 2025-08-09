@@ -205,8 +205,8 @@ export function TabTripSelector({
           </div>
         </div>
       )}
-      {/* Trip mode radio group */}
-      {selectedTab === 'outstation' && (
+      {/* Trip mode radio group (Outstation and Tour) */}
+      {(selectedTab === 'outstation' || selectedTab === 'tour') && (
         <motion.div 
           className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center"
           initial={{ opacity: 0, y: 10 }}

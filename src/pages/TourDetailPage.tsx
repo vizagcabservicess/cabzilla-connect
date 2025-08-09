@@ -32,6 +32,7 @@ import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
+import { DateTimePicker } from '@/components/DateTimePicker';
 
 const TourDetailPage = () => {
   const { tourId } = useParams<{ tourId: string }>();
@@ -47,6 +48,8 @@ const TourDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
+  const [returnDate, setReturnDate] = useState<Date | null>(null);
   
   // Load pickup details from session storage or navigation state
   const loadPickupData = () => {
@@ -248,17 +251,21 @@ const TourDetailPage = () => {
     try {
       setIsSubmitting(true);
       
+      const computedTotal = tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price;
+      const computedDistance = tripMode === 'round-trip' ? tour.distance * 2 : tour.distance;
+      const retDateIso = tripMode === 'round-trip' && returnDate ? returnDate.toISOString() : null;
+
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
         dropLocation: '',
         pickupDate: pickupDate.toISOString(),
-        returnDate: null,
+        returnDate: retDateIso || null,
         vehicleType: selectedVehicle.type,
         cabType: selectedVehicle.name,
-        distance: tour.distance,
+        distance: computedDistance,
         tripType: 'tour',
-        tripMode: 'one-way',
-        totalAmount: selectedVehicle.price,
+        tripMode: tripMode,
+        totalAmount: computedTotal,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
@@ -278,10 +285,11 @@ const TourDetailPage = () => {
         tourId: tour.tourId,
         tourName: tour.tourName,
         pickupLocation: pickupLocation,
-        tourDistance: tour.distance,
+        tourDistance: computedDistance,
         pickupDate: pickupDate.toISOString(),
+        returnDate: retDateIso,
         selectedCab: selectedVehicle,
-        totalPrice: selectedVehicle.price,
+        totalPrice: computedTotal,
         guestDetails,
         bookingType: 'tour',
         bookingId: response.id,
@@ -535,15 +543,32 @@ const TourDetailPage = () => {
               ) : (
                 // Show Booking Summary and "Book Now" at bottom
                 <div>
+                  {/* Trip mode selector for tours */}
+                  <div className="bg-white rounded-lg border p-3 mb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium">Trip Mode</div>
+                      <div className="flex gap-2">
+                        <Button variant={tripMode === 'one-way' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('one-way')}>One-way</Button>
+                        <Button variant={tripMode === 'round-trip' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('round-trip')}>Round-trip</Button>
+                      </div>
+                    </div>
+                    {tripMode === 'round-trip' && (
+                      <div className="mt-3">
+                        <DateTimePicker label="Return Date & Time" date={returnDate || pickupDate} onDateChange={setReturnDate} minDate={pickupDate} />
+                      </div>
+                    )}
+                  </div>
                   <BookingSummary
                     pickupLocation={pickupLocation}
                     dropLocation={null}
                     pickupDate={pickupDate}
+                    returnDate={tripMode === 'round-trip' ? (returnDate || null) : null}
                     selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
-                    distance={tour.distance}
-                    // FIX: Pass the price already on the selected vehicle
-                    totalPrice={selectedVehicle.price}
+                    distance={tripMode === 'round-trip' ? tour.distance * 2 : tour.distance}
+                    // Pass computed price considering trip mode
+                    totalPrice={tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price}
                     tripType="tour"
+                    tripMode={tripMode}
                     hourlyPackage="tour"
                   />
                   <Button
@@ -561,8 +586,8 @@ const TourDetailPage = () => {
             <div>
               <GuestDetailsForm
                 onSubmit={handleBookingSubmit}
-                // FIX: Pass selected vehicle's price
-                totalPrice={selectedVehicle ? selectedVehicle.price : 0}
+                // Pass computed price
+                totalPrice={selectedVehicle ? (tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price) : 0}
                 isLoading={isSubmitting}
                 onBack={() => setShowBookingForm(false)}
               />
@@ -573,11 +598,13 @@ const TourDetailPage = () => {
                   pickupLocation={pickupLocation}
                   dropLocation={null}
                   pickupDate={pickupDate}
+                  returnDate={tripMode === 'round-trip' ? (returnDate || null) : null}
                   selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
-                  distance={tour.distance}
-                  // FIX: Pass selected vehicle's price
-                  totalPrice={selectedVehicle.price}
+                  distance={tripMode === 'round-trip' ? tour.distance * 2 : tour.distance}
+                  // Pass computed price
+                  totalPrice={tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price}
                   tripType="tour"
+                  tripMode={tripMode}
                   hourlyPackage="tour"
                 />
               )}

@@ -4,9 +4,12 @@ import { Hero } from './Hero';
 interface LocalHeroWidgetProps {
   initialPickup?: string;
   initialDrop?: string;
+  onSearch?: (searchData: any) => void;
+  onStepChange?: (step: number) => void;
+  onEditStart?: () => void;
 }
 
-export function LocalHeroWidget({ initialPickup, initialDrop }: LocalHeroWidgetProps) {
+export function LocalHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: LocalHeroWidgetProps) {
   useEffect(() => {
     // On mount, clear previous locations to ensure Hero validation runs correctly
     sessionStorage.removeItem('pickupLocation');
@@ -60,7 +63,9 @@ export function LocalHeroWidget({ initialPickup, initialDrop }: LocalHeroWidgetP
     <div>
       <Hero 
         key="local-hero" 
-        onSearch={() => { /* The hero component handles navigation */ }} 
+        onSearch={onSearch} 
+        onEditStart={onEditStart}
+        onStepChange={onStepChange}
         visibleTabs={['local']} 
         hideBackground={true} 
       />

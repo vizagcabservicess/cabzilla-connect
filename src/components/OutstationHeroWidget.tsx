@@ -6,6 +6,8 @@ interface OutstationHeroWidgetProps {
   initialPickup?: string;
   initialDrop?: string;
   onSearch?: (searchData: any) => void;
+  onStepChange?: (step: number) => void;
+  onEditStart?: () => void;
 }
 
 // Lookup for known cities
@@ -58,7 +60,7 @@ function getLocationData(name: string) {
   return { city: key, state: 'Unknown', lat: 0, lng: 0 };
 }
 
-export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch }: OutstationHeroWidgetProps) {
+export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: OutstationHeroWidgetProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -147,6 +149,8 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch }: O
       <Hero 
         key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}`} 
         onSearch={onSearch} 
+        onEditStart={onEditStart}
+        onStepChange={onStepChange}
         visibleTabs={['outstation']} 
         hideBackground={true} 
       />

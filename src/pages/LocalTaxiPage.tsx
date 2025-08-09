@@ -10,6 +10,12 @@ import Footer from '@/components/Footer';
 
 export function LocalTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
+  const [isSearchActive, setIsSearchActive] = React.useState(false);
+  const scrollWithOffset = (el: HTMLElement | null, offset: number = 120) => {
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.pageYOffset - offset;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  };
 
   const scrollToWidget = () => {
     widgetRef.current?.scrollIntoView({ 
@@ -107,8 +113,9 @@ export function LocalTaxiPage() {
       </Helmet>
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-50 to-white pt-8 md:pt-20 pb-12 md:pb-28">
+      <section className={`relative bg-gradient-to-br from-blue-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-8 md:pt-20 pb-12 md:pb-28'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
+          {!isSearchActive && (
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -128,6 +135,7 @@ export function LocalTaxiPage() {
               Quick, safe, and affordable local taxi service across Visakhapatnam. Available 24/7 for all your city travel needs.
             </p>
           </motion.div>
+          )}
           
           <motion.div 
             ref={widgetRef}
@@ -136,12 +144,37 @@ export function LocalTaxiPage() {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="rounded-xl md:rounded-2xl md:p-8"
           >
-            <LocalHeroWidget />
+            <LocalHeroWidget 
+              onSearch={() => {
+                setIsSearchActive(true);
+                setTimeout(() => scrollWithOffset(widgetRef.current, 120), 50);
+              }}
+              onStepChange={(step) => {
+                // Reduce top/bottom spacing when we're firmly in step 2
+                if (step === 2) {
+                  const section = document.querySelector('section.relative.bg-gradient-to-br.from-blue-50.to-white');
+                  if (section) {
+                    (section as HTMLElement).style.paddingTop = '24px';
+                    (section as HTMLElement).style.paddingBottom = '24px';
+                  }
+                }
+              }}
+              onEditStart={() => {
+                // Ensure enough top offset before scroll when opening edit
+                const section = document.querySelector('section.relative.bg-gradient-to-br.from-blue-50.to-white');
+                if (section) {
+                  (section as HTMLElement).style.paddingTop = '120px';
+                  (section as HTMLElement).style.paddingBottom = '120px';
+                }
+                setTimeout(() => scrollWithOffset(widgetRef.current, 140), 50);
+              }}
+            />
           </motion.div>
         </div>
       </section>
 
       {/* Features */}
+      {!isSearchActive && (
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -174,8 +207,10 @@ export function LocalTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Vehicle Options */}
+      {!isSearchActive && (
       <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -243,8 +278,10 @@ export function LocalTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Service Areas */}
+      {!isSearchActive && (
       <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -287,8 +324,10 @@ export function LocalTaxiPage() {
           </div>
         </div>
       </section>
+      )}
       
       {/* CTA */}
+      {!isSearchActive && (
       <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20"></div>
         <div className="relative max-w-3xl mx-auto text-center px-6">
@@ -317,8 +356,10 @@ export function LocalTaxiPage() {
           </motion.div>
         </div>
       </section>
+      )}
 
       {/* Service Types */}
+      {!isSearchActive && (
       <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -384,6 +425,7 @@ export function LocalTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
 
       <Footer />

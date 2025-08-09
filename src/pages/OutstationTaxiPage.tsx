@@ -10,6 +10,12 @@ import Footer from '@/components/Footer';
 
 export function OutstationTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
+  const [isSearchActive, setIsSearchActive] = React.useState(false);
+  const scrollWithOffset = (el: HTMLElement | null, offset: number = 120) => {
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.pageYOffset - offset;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  };
 
   const scrollToWidget = () => {
     widgetRef.current?.scrollIntoView({ 
@@ -96,8 +102,9 @@ export function OutstationTaxiPage() {
       </Helmet>
 
                                                                                                                      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-emerald-50 to-white pt-8 md:pt-20 pb-12 md:pb-28">
+      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-8 md:pt-20 pb-12 md:pb-28'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
+          {!isSearchActive && (
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -117,6 +124,7 @@ export function OutstationTaxiPage() {
               Professional outstation taxi service connecting you to every corner of India with comfort and reliability.
             </p>
           </motion.div>
+          )}
         
           <motion.div 
             ref={widgetRef}
@@ -125,12 +133,35 @@ export function OutstationTaxiPage() {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="rounded-xl md:rounded-2xl  md:p-8"
           >
-            <OutstationHeroWidget />
+            <OutstationHeroWidget 
+              onSearch={() => {
+                setIsSearchActive(true);
+                setTimeout(() => scrollWithOffset(widgetRef.current, 120), 50);
+              }}
+              onStepChange={(step) => {
+                if (step === 2) {
+                  const section = document.querySelector('section.relative.bg-gradient-to-br.from-emerald-50.to-white');
+                  if (section) {
+                    (section as HTMLElement).style.paddingTop = '24px';
+                    (section as HTMLElement).style.paddingBottom = '24px';
+                  }
+                }
+              }}
+              onEditStart={() => {
+                const section = document.querySelector('section.relative.bg-gradient-to-br.from-emerald-50.to-white');
+                if (section) {
+                  (section as HTMLElement).style.paddingTop = '120px';
+                  (section as HTMLElement).style.paddingBottom = '120px';
+                }
+                setTimeout(() => scrollWithOffset(widgetRef.current, 140), 50);
+              }}
+            />
           </motion.div>
         </div>
       </section>
 
       {/* Features */}
+      {!isSearchActive && (
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -163,8 +194,10 @@ export function OutstationTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Vehicle Types */}
+      {!isSearchActive && (
       <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -206,8 +239,10 @@ export function OutstationTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
        {/* CTA */}
+       {!isSearchActive && (
        <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 to-blue-600/20"></div>
         <div className="relative max-w-3xl mx-auto text-center px-6">
@@ -237,8 +272,10 @@ export function OutstationTaxiPage() {
           </motion.div>
         </div>
       </section>
+      )}
 
       {/* Popular Routes */}
+      {!isSearchActive && (
       <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -296,6 +333,7 @@ export function OutstationTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
      
 
