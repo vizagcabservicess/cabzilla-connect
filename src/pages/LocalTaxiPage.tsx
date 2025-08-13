@@ -7,6 +7,7 @@ import { Car, Shield, Star, Phone, Clock, Users, MapPin, Zap, CheckCircle, Arrow
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function LocalTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -18,10 +19,15 @@ export function LocalTaxiPage() {
   };
 
   const scrollToWidget = () => {
-    widgetRef.current?.scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    });
+    if (widgetRef.current) {
+      widgetRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    } else {
+      // Fallback: scroll to top of page
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
   const features = [
     { 
@@ -103,8 +109,9 @@ export function LocalTaxiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
+      <main className="flex-1">
       <Helmet>
         <title>Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
@@ -428,7 +435,9 @@ export function LocalTaxiPage() {
       )}
 
 
+      </main>
       <Footer />
+      <MobileNavigation />
       <script type="application/ld+json">
         {JSON.stringify(structuredData)}
       </script>

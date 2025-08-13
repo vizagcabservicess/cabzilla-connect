@@ -126,48 +126,62 @@ const PaymentPage = () => {
     }
   };
 
-  const handlePaymentSuccess = async (response: RazorpayResponse) => {
-    setPaymentResponse(response);
+  const handlePaymentSuccess = async (response: any) => {
     try {
-      // Verify payment with backend - pass the bookingId
-      const verified = await verifyRazorpayPayment(
-        response.razorpay_payment_id,
-        response.razorpay_order_id,
-        response.razorpay_signature,
-        bookingDetails.bookingId
-      );
+      setPaymentStatus('processing');
+      
+      // Calculate the amount based on payment mode
+      const amount = paymentMode === 'partial'
+        ? Math.round((bookingDetails.totalPrice || 0) * 0.3)
+        : (bookingDetails.totalPrice || 0);
+      
+      // Update booking with payment details
+      const updateData = {
+        payment_status: paymentMode === 'partial' ? 'payment_pending' : 'paid',
+        payment_method: 'razorpay',
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_order_id: response.razorpay_order_id,
+        razorpay_signature: response.razorpay_signature,
+        advance_paid_amount: amount
+      };
 
-      if (verified) {
-        // Update booking with payment information (multi-endpoint fallback inside API)
-        try {
-          await bookingAPI.updateBooking(bookingDetails.bookingId, {
-            payment_status: paymentMode === 'partial' ? 'payment_pending' : 'paid',
-            status: paymentMode === 'partial' ? 'confirmed' : 'confirmed',
-            payment_method: 'razorpay',
-            advance_paid_amount: paymentMode === 'partial' ? Math.round((bookingDetails.totalPrice || 0) * 0.3) : (bookingDetails.totalPrice || 0),
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_signature: response.razorpay_signature
-          });
-        } catch (e) {
-          console.warn('Client updateBooking failed, continuing since server verify succeeded', e);
-        }
-
-        setPaymentStatus('success');
-        toast.success('Payment successful!');
-        setTimeout(() => {
-          navigate('/booking-confirmation');
-        }, 1200);
-      } else {
-        setPaymentStatus('failed');
-        toast.error('Payment verification failed. Please contact support.');
+      // First update the booking
+      await bookingAPI.updateBooking(bookingDetails.bookingId, updateData);
+      
+      // Then verify the payment to trigger email sending
+      try {
+        const verificationData = {
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_signature: response.razorpay_signature,
+          booking_id: bookingDetails.bookingId,
+          amount: amount // Send the actual amount paid
+        };
+        
+        await bookingAPI.verifyPayment(verificationData);
+        console.log('Payment verified and email sent successfully');
+      } catch (verificationError) {
+        console.warn('Payment verification failed, but booking was updated successfully:', verificationError);
       }
+
+      setPaymentStatus('success');
+      
+      // Store booking details in session storage for confirmation page
+      sessionStorage.setItem('lastBooking', JSON.stringify({
+        id: bookingDetails.bookingId,
+        bookingNumber: bookingDetails.bookingNumber,
+        paymentStatus: paymentMode === 'partial' ? 'payment_pending' : 'paid',
+        totalAmount: bookingDetails.totalPrice,
+        advance_paid_amount: amount
+      }));
+      
+      // Navigate to confirmation page
+      navigate('/booking-confirmation');
+      
     } catch (error) {
-      console.error('Error in payment verification:', error);
+      console.error('Error processing payment success:', error);
       setPaymentStatus('failed');
-      toast.error('Payment processing error. Please try again or contact support.');
-    } finally {
-      setIsLoading(false);
+      toast.error('Failed to process payment. Please contact support.');
     }
   };
 

@@ -588,16 +588,27 @@ export function AdminBookingsList() {
     }
   };
 
-  // Helper to format date and time nicely
+  // Helper to format date and time consistently with frontend
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      day: 'numeric',
-      month: 'short',
-      year: '2-digit',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    if (!dateString) return 'N/A';
+    
+    try {
+      // Treat SQL datetime as UTC and convert to local time
+      const date = new Date(dateString + 'Z');
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = date.toLocaleString('en-US', { month: 'short' });
+      const year = date.getFullYear();
+      const hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      
+      // Format: "13 Aug 2025 at 12:31 PM" (same as frontend)
+      return `${day} ${month} ${year} at ${displayHours}:${minutes} ${ampm}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
   };
 
   // Sync scroll positions

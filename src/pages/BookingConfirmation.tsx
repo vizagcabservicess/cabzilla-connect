@@ -11,6 +11,7 @@ import { Booking } from '@/types/api';
 import { Separator } from '@/components/ui/separator';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { OutstationOnlyWidget } from '@/components/OutstationOnlyWidget';
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
 
 interface BookingDetails {
   pickupLocation: Location;
@@ -244,7 +245,7 @@ const BookingConfirmation = () => {
                       <div>
                         <p className="text-xs text-cabGray-500">PICKUP DATE & TIME</p>
                         <p className="font-medium">
-                          {bookingToShow.pickupDate ? formatDate(bookingToShow.pickupDate) : 'N/A'}
+                          {bookingToShow.pickupDate ? formatDateTime(bookingToShow.pickupDate) : 'N/A'}
                         </p>
                       </div>
                     </div>
@@ -341,25 +342,6 @@ const BookingConfirmation = () => {
 export default BookingConfirmation;
 
 // Helper functions
-const formatDate = (dateString: string) => {
-  if (!dateString) return 'N/A';
-  try {
-    if (dateString.includes(' ')) {
-      const [datePart, timePart] = dateString.split(' ');
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hour, minute, second] = timePart.split(':').map(Number);
-      const date = new Date(year, month - 1, day, hour, minute, second);
-      if (isNaN(date.getTime())) throw new Error('Invalid date');
-      return format(date, 'PPpp');
-    }
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) throw new Error('Invalid date');
-    return format(date, 'PPpp');
-  } catch {
-    return 'Invalid Date';
-  }
-};
-
 const calculatePriceBreakdown = (totalAmount: number) => {
   if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
     return { baseFare: 0, taxes: 0 };

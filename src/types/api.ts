@@ -108,6 +108,7 @@ export interface Booking {
   status: BookingStatus;
   payment_status: string;
   payment_method?: string;
+  advance_paid_amount?: number;
   vehicleId?: string;
   vehicleNumber?: string;
   created_at: string;

@@ -165,9 +165,70 @@ export const bookingAPI = {
       const response = await axios.post(`${API_BASE_URL}/api/admin/bookings.php`, bookingData, {
         headers,
       });
+      
+      // Note: Email confirmation is now sent only after successful payment verification
+      // This prevents sending confirmation emails for failed payments
+      
       return response.data;
     } catch (error) {
       console.error('Error creating booking:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Send booking confirmation email with payment details
+   */
+  sendBookingConfirmationEmail: async (bookingId: number | string) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/send-booking-confirmation.php`, {
+        booking_id: bookingId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error sending booking confirmation email:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Verify Razorpay payment and trigger email sending
+   */
+  verifyPayment: async (paymentData: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+    booking_id: number | string;
+    amount?: number;
+  }) => {
+    try {
+      console.log('Verifying payment with data:', paymentData);
+      
+      // Try direct path first
+      try {
+        const response = await axios.post(`/api/verify-razorpay-payment.php`, paymentData, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
+        console.log('Payment verification successful:', response.data);
+        return response.data;
+      } catch (directError) {
+        console.warn('Direct payment verification failed:', directError);
+        
+        // Try with API_BASE_URL
+        const response = await axios.post(`${API_BASE_URL}/api/verify-razorpay-payment.php`, paymentData, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
+        console.log('Payment verification successful with API_BASE_URL:', response.data);
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error verifying payment:', error);
       throw error;
     }
   },

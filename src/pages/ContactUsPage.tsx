@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
@@ -7,10 +7,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Phone, Mail, MapPin, Clock, Send } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Send, Loader2 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
+import { useToast } from '@/components/ui/use-toast';
+import { contactAPI } from '@/services/api/contactAPI';
 
 export function ContactUsPage() {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    subject: '',
+    message: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const contactInfo = [
     {
       icon: <Phone className="w-6 h-6" />,
@@ -42,10 +54,75 @@ export function ContactUsPage() {
     }
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Form submitted');
+    
+    // Validate required fields
+    if (!formData.name || !formData.email || !formData.phone || !formData.subject || !formData.message) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate phone number format
+    if (!/^\d{10}$/.test(formData.phone)) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid 10-digit phone number.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const response = await contactAPI.submitContactForm(formData);
+      
+      if (response.status === 'success') {
+        toast({
+          title: "Message Sent!",
+          description: response.message,
+        });
+        
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: ''
+        });
+      } else {
+        toast({
+          title: "Failed to Send",
+          description: response.message || "Failed to send message. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -132,40 +209,56 @@ export function ContactUsPage() {
                 <CardContent className="p-8">
                   <h3 className="text-2xl font-bold text-gray-900 mb-6">Send us a Message</h3>
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          First Name
-                        </label>
-                        <Input type="text" required className="w-full" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Last Name
-                        </label>
-                        <Input type="text" required className="w-full" />
-                      </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Full Name
+                      </label>
+                      <Input 
+                        type="text" 
+                        required 
+                        className="w-full"
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      />
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Email
                       </label>
-                      <Input type="email" required className="w-full" />
+                      <Input 
+                        type="email" 
+                        required 
+                        className="w-full"
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      />
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number
                       </label>
-                      <Input type="tel" required className="w-full" />
+                      <Input 
+                        type="tel" 
+                        required 
+                        className="w-full"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      />
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Subject
                       </label>
-                      <Input type="text" required className="w-full" />
+                      <Input 
+                        type="text" 
+                        required 
+                        className="w-full"
+                        value={formData.subject}
+                        onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                      />
                     </div>
                     
                     <div>
@@ -177,12 +270,27 @@ export function ContactUsPage() {
                         required 
                         className="w-full" 
                         placeholder="Tell us how we can help you..."
+                        value={formData.message}
+                        onChange={(e) => setFormData({...formData, message: e.target.value})}
                       />
                     </div>
                     
-                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3">
-                      <Send className="w-4 h-4 mr-2" />
-                      Send Message
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <span>Sending...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Send Message
+                        </>
+                      )}
                     </Button>
                   </form>
                 </CardContent>

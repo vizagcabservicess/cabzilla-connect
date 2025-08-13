@@ -27,6 +27,7 @@ const AdminBookingCreationPage = () => {
         }
       }
       const response = await bookingAPI.createBooking(apiData);
+      
       toast({
         title: "Booking Created Successfully",
         description: `Booking #${response.data.bookingNumber} has been created`,

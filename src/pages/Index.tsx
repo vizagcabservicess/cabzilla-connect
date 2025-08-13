@@ -20,28 +20,30 @@ const Index = () => {
   const isSearch = searchParams.get('search') === '1';
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <Hero
-        key={isSearch ? 'search' : 'home'}
-        onSearch={() => setSearchParams({ search: '1' })}
-        isSearchActive={isSearch}
-      />
-      
-      {/* Main Content with Optimized Spacing */}
-      {!isSearch && (
-        <div className="space-y-8 md:space-y-12">
-          <ServicesShowcase />
-          <FleetShowcase />
-          <TourSlider />
-          <WhyChooseUs />
-          <PopularRoutes />
-          <EnhancedCTA />
-          <TestimonialsSection />
-          <VideoTestimonials />
-          <SocialMediaSection />
-        </div>
-      )}
+      <main className="flex-1">
+        <Hero
+          key={isSearch ? 'search' : 'home'}
+          onSearch={() => setSearchParams({ search: '1' })}
+          isSearchActive={isSearch}
+        />
+        
+        {/* Main Content with Optimized Spacing */}
+        {!isSearch && (
+          <div className="space-y-8 md:space-y-12">
+            <ServicesShowcase />
+            <FleetShowcase />
+            <TourSlider />
+            <WhyChooseUs />
+            <PopularRoutes />
+            <EnhancedCTA />
+            <TestimonialsSection />
+            <VideoTestimonials />
+            <SocialMediaSection />
+          </div>
+        )}
+      </main>
       
       <Footer />
       

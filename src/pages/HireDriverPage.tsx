@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield } from 'lucide-react';
+import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useToast } from '@/components/ui/use-toast';
+import { driverHireAPI } from '@/services/api/driverHireAPI';
 
 const services = [
   {
@@ -62,6 +64,7 @@ const benefits = [
 ];
 
 export default function HireDriverPage() {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -70,11 +73,68 @@ export default function HireDriverPage() {
     duration: '',
     requirements: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
-    // Handle form submission
+    
+    // Validate required fields
+    if (!formData.name || !formData.phone || !formData.serviceType || !formData.duration) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate phone number format
+    if (!/^\d{10}$/.test(formData.phone)) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid 10-digit phone number.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const response = await driverHireAPI.submitRequest(formData);
+      
+      if (response.status === 'success') {
+        toast({
+          title: "Request Submitted!",
+          description: response.message,
+        });
+        
+        // Reset form
+        setFormData({
+          name: '',
+          phone: '',
+          email: '',
+          serviceType: '',
+          duration: '',
+          requirements: ''
+        });
+      } else {
+        toast({
+          title: "Submission Failed",
+          description: response.message || "Failed to submit request. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -238,8 +298,20 @@ export default function HireDriverPage() {
                   />
                 </div>
                 
-                <Button type="submit" size="lg" className="w-full rounded-full">
-                  Request Driver
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  className="w-full rounded-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </div>
+                  ) : (
+                    "Request Driver"
+                  )}
                 </Button>
               </form>
             </CardContent>

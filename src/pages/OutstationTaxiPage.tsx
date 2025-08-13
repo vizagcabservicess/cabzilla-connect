@@ -7,6 +7,7 @@ import { Car, Shield, Star, Phone, Clock, Users, MapPin, Zap, CheckCircle, Arrow
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function OutstationTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -18,10 +19,15 @@ export function OutstationTaxiPage() {
   };
 
   const scrollToWidget = () => {
-    widgetRef.current?.scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    });
+    if (widgetRef.current) {
+      widgetRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    } else {
+      // Fallback: scroll to top of page
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
   const features = [
     { 
@@ -92,8 +98,9 @@ export function OutstationTaxiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
+      <main className="flex-1">
       <Helmet>
         <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
@@ -337,7 +344,9 @@ export function OutstationTaxiPage() {
 
      
 
+      </main>
       <Footer />
+      <MobileNavigation />
       <script type="application/ld+json">
         {JSON.stringify(structuredData)}
       </script>

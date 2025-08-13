@@ -7,6 +7,7 @@ import { Plane, Phone, ArrowRight, Clock, MapPin, Luggage, Navigation, Shield, C
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function AirportTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -18,10 +19,15 @@ export function AirportTaxiPage() {
   };
 
   const scrollToWidget = () => {
-    widgetRef.current?.scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    });
+    if (widgetRef.current) {
+      widgetRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    } else {
+      // Fallback: scroll to top of page
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
   const features = [
     { 
@@ -119,8 +125,9 @@ export function AirportTaxiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
+      <main className="flex-1">
       <Helmet>
         <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
         <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
@@ -417,7 +424,9 @@ export function AirportTaxiPage() {
 
      
 
+      </main>
       <Footer />
+      <MobileNavigation />
       <script type="application/ld+json">
         {JSON.stringify(structuredData)}
       </script>

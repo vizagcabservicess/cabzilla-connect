@@ -84,8 +84,9 @@ export default function FleetPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
+      <main className="flex-1">
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
@@ -248,6 +249,7 @@ export default function FleetPage() {
           </p>
         </div>
       </div>
+      </main>
       <Footer />
     </div>
   );

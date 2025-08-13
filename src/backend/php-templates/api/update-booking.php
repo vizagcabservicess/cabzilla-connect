@@ -157,7 +157,11 @@ try {
         'extra_charges' => 'TEXT',
         'gst_enabled' => 'TINYINT(1) DEFAULT 0',
         'gst_details' => 'TEXT',
-        'billing_address' => 'TEXT'
+        'billing_address' => 'TEXT',
+        'advance_paid_amount' => 'DECIMAL(10,2) DEFAULT 0.00',
+        'razorpay_payment_id' => 'VARCHAR(100) DEFAULT NULL',
+        'razorpay_order_id' => 'VARCHAR(100) DEFAULT NULL',
+        'razorpay_signature' => 'VARCHAR(255) DEFAULT NULL'
     ];
     
     foreach ($requiredColumns as $column => $type) {
@@ -194,6 +198,7 @@ try {
         'billing_address' => 'billingAddress',
         'cab_type' => 'cabType',
         'payment_method' => 'payment_method',
+        'advance_paid_amount' => 'advance_paid_amount',
         'razorpay_payment_id' => 'razorpay_payment_id',
         'razorpay_order_id' => 'razorpay_order_id',
         'razorpay_signature' => 'razorpay_signature',
@@ -352,14 +357,14 @@ try {
         'vehicleNumber' => $updatedBooking['vehicle_number'],
         'adminNotes' => $updatedBooking['admin_notes'],
         'extraCharges' => $formattedExtraCharges,
+        'billingAddress' => $updatedBooking['billing_address'],
+        'payment_status' => $updatedBooking['payment_status'] ?? 'pending',
+        'payment_method' => $updatedBooking['payment_method'] ?? '',
+        'advance_paid_amount' => (float)($updatedBooking['advance_paid_amount'] ?? 0),
         'gstEnabled' => !empty($updatedBooking['gst_enabled']),
         'gstDetails' => $formattedGstDetails,
-        'billingAddress' => $updatedBooking['billing_address'] ?? null,
         'createdAt' => $updatedBooking['created_at'],
-        'updatedAt' => $updatedBooking['updated_at'],
-        'razorpay_payment_id' => $updatedBooking['razorpay_payment_id'] ?? null,
-        'razorpay_order_id' => $updatedBooking['razorpay_order_id'] ?? null,
-        'razorpay_signature' => $updatedBooking['razorpay_signature'] ?? null,
+        'updatedAt' => $updatedBooking['updated_at']
     ];
     
     // Send success response

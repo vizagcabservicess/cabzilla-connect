@@ -114,7 +114,7 @@ export function FleetShowcase() {
       >
         <Card className="border-0 bg-white rounded-3xl overflow-hidden relative">
           {/* Vehicle Image Section */}
-          <div className={`relative h-40 md:h-48 bg-gradient-to-br ${getBgGradient(getType(vehicle))} p-6 flex items-center justify-center`}>
+                      <div className={`relative h-48 md:h-56 bg-gradient-to-br ${getBgGradient(getType(vehicle))} p-10 md:p-12 flex items-center justify-center`}>
             <div className="absolute top-4 right-4 flex flex-col gap-2">
               <Badge variant="outline" className="bg-white/90 text-blue-600 border-blue-200 text-xs font-medium">
                 <Users className="h-3 w-3 mr-1" />
@@ -201,7 +201,8 @@ export function FleetShowcase() {
           <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed mb-6">
             From economy to luxury, find the perfect vehicle for your journey with our well-maintained fleet.
           </p>
-          {/* Category Filter */}
+          {/* Category Filter - Hidden */}
+          {/* 
           <div className="flex flex-wrap justify-center gap-2 mb-4 md:mb-8">
             {categories.map((category, index) => (
               <Button
@@ -219,6 +220,7 @@ export function FleetShowcase() {
               </Button>
             ))}
           </div>
+          */}
         </div>
 
         {/* Loading State */}

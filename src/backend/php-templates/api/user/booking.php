@@ -127,6 +127,9 @@ try {
         'passengerEmail' => $booking['passenger_email'],
         'hourlyPackage' => $booking['hourly_package'],
         'tourId' => $booking['tour_id'],
+        'payment_status' => $booking['payment_status'] ?? 'pending',
+        'payment_method' => $booking['payment_method'] ?? '',
+        'advance_paid_amount' => (float)($booking['advance_paid_amount'] ?? 0),
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];

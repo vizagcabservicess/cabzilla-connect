@@ -1,6 +1,6 @@
 <?php
 /**
- * Send booking confirmation email endpoint
+ * Test script to verify payment confirmation email functionality
  */
 
 require_once __DIR__ . '/utils/database.php';
@@ -10,7 +10,7 @@ require_once __DIR__ . '/utils/email.php';
 // Set headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 // Handle preflight OPTIONS request
@@ -19,42 +19,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Only allow POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
-    exit;
-}
-
 try {
-    // Get JSON data from request
-    $jsonData = file_get_contents('php://input');
-    $data = json_decode($jsonData, true);
-    
-    // Validate required fields
-    if (!isset($data['booking_id']) || empty($data['booking_id'])) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
-    exit;
-}
-
-    $bookingId = $data['booking_id'];
-    
-    // Connect to database
+    // Connect to the database
     $db = getDbConnectionWithRetry();
     
-    // Fetch booking details
-    $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ?");
-    $stmt->bind_param("i", $bookingId);
+    // Get the latest booking for testing
+    $stmt = $db->prepare("SELECT * FROM bookings ORDER BY created_at DESC LIMIT 1");
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'No bookings found for testing'
+        ]);
         exit;
     }
     
     $booking = $result->fetch_assoc();
     
-    // Format booking data for email
+    // Format booking data for email with payment details
     $formattedBooking = [
         'id' => $booking['id'],
         'bookingNumber' => $booking['booking_number'],
@@ -67,47 +51,48 @@ try {
         'tripType' => $booking['trip_type'],
         'tripMode' => $booking['trip_mode'],
         'totalAmount' => $booking['total_amount'],
-        'status' => $booking['status'],
+        'status' => 'confirmed',
         'passengerName' => $booking['passenger_name'],
         'passengerPhone' => $booking['passenger_phone'],
         'passengerEmail' => $booking['passenger_email'],
-        'payment_status' => $booking['payment_status'],
-        'payment_method' => $booking['payment_method'],
-        'advance_paid_amount' => $booking['advance_paid_amount'],
-        'razorpay_payment_id' => $booking['razorpay_payment_id'],
-        'razorpay_order_id' => $booking['razorpay_order_id'],
-        'razorpay_signature' => $booking['razorpay_signature'],
+        'payment_status' => 'paid', // Test with full payment
+        'payment_method' => 'razorpay',
+        'advance_paid_amount' => $booking['total_amount'], // Full payment
+        'razorpay_payment_id' => 'test_payment_' . time(),
+        'razorpay_order_id' => 'test_order_' . time(),
+        'razorpay_signature' => 'test_signature_' . time(),
         'createdAt' => $booking['created_at'],
-        'updatedAt' => $booking['updated_at']
+        'updatedAt' => date('Y-m-d H:i:s')
     ];
     
-    // Send payment confirmation email (includes both customer and admin notifications)
+    // Test payment confirmation email
     $success = sendPaymentConfirmationEmail($formattedBooking);
     
     if ($success) {
         sendJsonResponse([
             'status' => 'success',
-            'message' => 'Payment confirmation email sent successfully',
+            'message' => 'Payment confirmation email test completed successfully',
             'booking_number' => $formattedBooking['bookingNumber'],
-            'payment_status' => $formattedBooking['payment_status']
+            'payment_status' => $formattedBooking['payment_status'],
+            'advance_paid_amount' => $formattedBooking['advance_paid_amount'],
+            'total_amount' => $formattedBooking['totalAmount'],
+            'customer_email' => $formattedBooking['passengerEmail'],
+            'admin_email' => 'info@vizagtaxihub.com',
+            'email_type' => 'Payment Confirmation (Full Payment)'
         ]);
     } else {
         sendJsonResponse([
-        'status' => 'error', 
-            'message' => 'Failed to send payment confirmation email',
+            'status' => 'error',
+            'message' => 'Payment confirmation email test failed',
             'booking_number' => $formattedBooking['bookingNumber']
         ], 500);
     }
     
 } catch (Exception $e) {
-    logError("Error in send-booking-confirmation endpoint", [
-        'error' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ]);
-    
     sendJsonResponse([
         'status' => 'error',
-        'message' => 'Failed to send booking confirmation email: ' . $e->getMessage()
+        'message' => 'Failed to test payment confirmation email: ' . $e->getMessage(),
+        'error' => $e->getMessage()
     ], 500);
 }
 
@@ -116,3 +101,4 @@ if (isset($db) && $db instanceof mysqli) {
     $db->close();
 }
 ?>
+

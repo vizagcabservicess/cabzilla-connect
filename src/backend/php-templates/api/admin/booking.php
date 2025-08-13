@@ -202,6 +202,9 @@ try {
                 'adminNotes' => $booking['admin_notes'] ?? null,
                 'extraCharges' => $extraCharges,
                 'billingAddress' => $booking['billing_address'] ?? null,
+                'payment_status' => $booking['payment_status'] ?? 'pending',
+                'payment_method' => $booking['payment_method'] ?? '',
+                'advance_paid_amount' => (float)($booking['advance_paid_amount'] ?? 0),
                 'createdAt' => $booking['created_at'],
                 'updatedAt' => $booking['updated_at']
             ];
@@ -323,6 +326,9 @@ try {
                         'adminNotes' => $row['admin_notes'] ?? null,
                         'extraCharges' => $extraCharges,
                         'billingAddress' => $row['billing_address'] ?? null,
+                        'payment_status' => $row['payment_status'] ?? 'pending',
+                        'payment_method' => $row['payment_method'] ?? '',
+                        'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
                         'createdAt' => $row['created_at'],
                         'updatedAt' => $row['updated_at']
                     ];

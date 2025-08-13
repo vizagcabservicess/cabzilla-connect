@@ -189,8 +189,9 @@ const ToursPage = () => {
   );
   
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
+      <main className="flex-1">
       {/* Only show the Tour tab in the Hero for tours */}
       <div className="container mx-auto px-4 py-6 pb-20">
         <div className="max-w-7xl mx-auto">
@@ -212,6 +213,7 @@ const ToursPage = () => {
         </div>
       </div>
       
+      </main>
       <Footer />
       <MobileNavigation />
     </div>

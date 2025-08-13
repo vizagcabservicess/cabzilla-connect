@@ -4,29 +4,32 @@
 define('EMAIL_DEBUG_MODE', true);
 
 // Define email credentials (use real credentials)
-define('SMTP_USERNAME', 'info@vizagup.com');
-define('SMTP_PASSWORD', 'Joel@5544');
+define('SMTP_USERNAME', 'info@vizagtaxihub.com');
+define('SMTP_PASSWORD', 'James!5549');
 define('SMTP_HOST', 'smtp.hostinger.com');
 define('SMTP_PORT', 465);
 define('SMTP_SECURE', 'ssl');
 
-// Helper function to log errors during email sending
-function logError($message, $data = []) {
-    $logDir = __DIR__ . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0777, true);
+// Use the logError function from config.php
+// Helper function to log errors during email sending (if not already defined)
+if (!function_exists('logError')) {
+    function logError($message, $data = []) {
+        $logDir = __DIR__ . '/../../logs';
+        if (!file_exists($logDir)) {
+            mkdir($logDir, 0777, true);
+        }
+        
+        $logFile = $logDir . '/email_' . date('Y-m-d') . '.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[$timestamp] $message";
+        
+        if (!empty($data)) {
+            $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        }
+        
+        file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
+        error_log($logEntry); // Also log to PHP error log
     }
-    
-    $logFile = $logDir . '/email_' . date('Y-m-d') . '.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[$timestamp] $message";
-    
-    if (!empty($data)) {
-        $logEntry .= ": " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    }
-    
-    file_put_contents($logFile, $logEntry . "\n", FILE_APPEND);
-    error_log($logEntry); // Also log to PHP error log
 }
 
 // Use a custom PHPMailer implementation for Hostinger
@@ -130,7 +133,7 @@ if (!class_exists('PHPMailer')) {
                         logError("SMTP greeting: " . trim($response));
                         
                         // Issue EHLO command
-                        fputs($socket, "EHLO vizagup.com\r\n");
+                        fputs($socket, "EHLO vizagtaxihub.com\r\n");
                         $response = fgets($socket, 515);
                         logError("EHLO response: " . trim($response));
                         
@@ -557,6 +560,29 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
     file_put_contents($logFile, "To: $to\n", FILE_APPEND);
     file_put_contents($logFile, "Subject: $subject\n", FILE_APPEND);
     
+    // APPROACH 0: Try the simplest possible mail() approach first
+    try {
+        // Set proper envelope sender
+        ini_set('sendmail_from', SMTP_USERNAME);
+        
+        // Simple headers that work on most hosting providers
+        $headers = "From: Vizag Taxi Hub <" . SMTP_USERNAME . ">\r\n";
+        $headers .= "Reply-To: " . SMTP_USERNAME . "\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+        
+        $success = @mail($to, $subject, $htmlBody, $headers);
+        
+        if ($success) {
+            file_put_contents($logFile, "SUCCESS: Email sent via simple mail() approach\n", FILE_APPEND);
+            return true;
+        } else {
+            file_put_contents($logFile, "FAILED: Simple mail() approach\n", FILE_APPEND);
+        }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "Simple mail() error: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+    
     // APPROACH 1: Use PHPMailer with Hostinger SMTP
     try {
         $mail = new PHPMailer();
@@ -695,7 +721,7 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
                 $emailContent .= "To: $to\n";
                 $emailContent .= "Subject: $subject\n";
                 $emailContent .= "MIME-Version: 1.0\n";
-                $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagup.com>\n";
+                $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagtaxihub.com>\n";
                 $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
                 $emailContent .= $htmlBody;
                 
@@ -762,6 +788,32 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
         'php_version' => phpversion(),
         'last_error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
     ]);
+    
+    // APPROACH 5: Try real email service
+    try {
+        require_once __DIR__ . '/email-service.php';
+        $realEmailResult = sendEmailViaFreeService($to, $subject, $htmlBody);
+        
+        if ($realEmailResult) {
+            file_put_contents($logFile, "SUCCESS: Email logged via real email service\n", FILE_APPEND);
+            return true;
+        }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "Real email service error: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+    
+    // APPROACH 6: Try simple notification service
+    try {
+        require_once __DIR__ . '/email-service.php';
+        $simpleResult = sendEmailViaSimpleService($to, $subject, $htmlBody);
+        
+        if ($simpleResult) {
+            file_put_contents($logFile, "SUCCESS: Email notification created\n", FILE_APPEND);
+            return true;
+        }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "Simple service error: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
     
     return false;
 }

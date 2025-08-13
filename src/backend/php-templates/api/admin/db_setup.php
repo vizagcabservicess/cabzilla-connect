@@ -244,6 +244,38 @@ try {
             file_put_contents($setupLogFile, "[$setupTimestamp] Added company_address column to bookings table\n", FILE_APPEND);
         }
         
+        // Check for and add advance_paid_amount column if it doesn't exist
+        $checkAdvancePaidAmount = $conn->query("SHOW COLUMNS FROM bookings LIKE 'advance_paid_amount'");
+        if (!$checkAdvancePaidAmount || $checkAdvancePaidAmount->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN advance_paid_amount DECIMAL(10,2) DEFAULT 0.00 AFTER payment_method";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added advance_paid_amount column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add razorpay_payment_id column if it doesn't exist
+        $checkRazorpayPaymentId = $conn->query("SHOW COLUMNS FROM bookings LIKE 'razorpay_payment_id'");
+        if (!$checkRazorpayPaymentId || $checkRazorpayPaymentId->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN razorpay_payment_id VARCHAR(100) DEFAULT NULL AFTER advance_paid_amount";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added razorpay_payment_id column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add razorpay_order_id column if it doesn't exist
+        $checkRazorpayOrderId = $conn->query("SHOW COLUMNS FROM bookings LIKE 'razorpay_order_id'");
+        if (!$checkRazorpayOrderId || $checkRazorpayOrderId->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN razorpay_order_id VARCHAR(100) DEFAULT NULL AFTER razorpay_payment_id";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added razorpay_order_id column to bookings table\n", FILE_APPEND);
+        }
+        
+        // Check for and add razorpay_signature column if it doesn't exist
+        $checkRazorpaySignature = $conn->query("SHOW COLUMNS FROM bookings LIKE 'razorpay_signature'");
+        if (!$checkRazorpaySignature || $checkRazorpaySignature->num_rows === 0) {
+            $addColumnSQL = "ALTER TABLE bookings ADD COLUMN razorpay_signature VARCHAR(255) DEFAULT NULL AFTER razorpay_order_id";
+            $conn->query($addColumnSQL);
+            file_put_contents($setupLogFile, "[$setupTimestamp] Added razorpay_signature column to bookings table\n", FILE_APPEND);
+        }
+        
         // Check for and add driver_id column if it doesn't exist
         $checkDriverId = $conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
         if (!$checkDriverId || $checkDriverId->num_rows === 0) {
@@ -272,6 +304,10 @@ try {
                 total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
                 payment_status VARCHAR(50) DEFAULT 'pending',
                 payment_method VARCHAR(50),
+                advance_paid_amount DECIMAL(10,2) DEFAULT 0.00,
+                razorpay_payment_id VARCHAR(100),
+                razorpay_order_id VARCHAR(100),
+                razorpay_signature VARCHAR(255),
                 gst_enabled TINYINT(1) DEFAULT 0,
                 gst_number VARCHAR(20),
                 company_name VARCHAR(100),

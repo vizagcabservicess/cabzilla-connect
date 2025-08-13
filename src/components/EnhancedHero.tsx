@@ -72,6 +72,7 @@ export function EnhancedHero() {
             <Button 
               size="lg" 
               className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-4 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              onClick={() => window.location.href = '/outstation-taxi'}
             >
               <Car className="mr-2 h-5 w-5" />
               Book Now
@@ -141,3 +142,5 @@ export function EnhancedHero() {
     </section>
   );
 }
+
+

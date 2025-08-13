@@ -170,6 +170,7 @@ try {
             'extraCharges' => json_decode($row['extra_charges'] ?? '[]'),
             'payment_status' => $row['payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
+            'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'] ?? $row['created_at'],
             // Prefill GST info

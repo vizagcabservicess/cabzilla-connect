@@ -55,6 +55,7 @@ export function EnhancedCTA() {
             <Button 
               size="lg" 
               className="bg-white text-blue-700 hover:bg-gray-100 px-12 py-4 text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+              onClick={() => window.location.href = '/outstation-taxi'}
             >
               <Car className="mr-3 h-6 w-6" />
               Book Your Taxi Now
