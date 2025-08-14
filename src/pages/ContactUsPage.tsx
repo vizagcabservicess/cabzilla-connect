@@ -11,6 +11,7 @@ import { Phone, Mail, MapPin, Clock, Send, Loader2 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useToast } from '@/components/ui/use-toast';
 import { contactAPI } from '@/services/api/contactAPI';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export function ContactUsPage() {
   const { toast } = useToast();
@@ -57,6 +58,11 @@ export function ContactUsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent multiple submissions
+    if (isSubmitting) {
+      return;
+    }
+    
     // Validate required fields
     if (!formData.name || !formData.email || !formData.phone || !formData.subject || !formData.message) {
       toast({
@@ -90,12 +96,16 @@ export function ContactUsPage() {
     setIsSubmitting(true);
     
     try {
+      console.log('Submitting contact form:', formData);
+      
       const response = await contactAPI.submitContactForm(formData);
       
-      if (response.status === 'success') {
+      console.log('Contact form response:', response);
+      
+      if (response && response.status === 'success') {
         toast({
-          title: "Message Sent!",
-          description: response.message,
+          title: "Message Sent Successfully!",
+          description: response.message || "Thank you for your message! We will get back to you within 2 hours.",
         });
         
         // Reset form
@@ -107,17 +117,33 @@ export function ContactUsPage() {
           message: ''
         });
       } else {
+        console.error('Contact form error response:', response);
         toast({
           title: "Failed to Send",
-          description: response.message || "Failed to send message. Please try again.",
+          description: response?.message || response?.errors?.join(', ') || "Failed to send message. Please try again.",
           variant: "destructive",
         });
       }
-    } catch (error) {
-      console.error('Error submitting form:', error);
+    } catch (error: any) {
+      console.error('Error submitting contact form:', error);
+      
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      
+      if (error.response) {
+        // Server responded with error status
+        const errorData = error.response.data;
+        errorMessage = errorData?.message || errorData?.errors?.join(', ') || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Network error
+        errorMessage = "Network error. Please check your connection and try again.";
+      } else if (error.message) {
+        // Other error
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "An unexpected error occurred. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -200,15 +226,16 @@ export function ContactUsPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Contact Form */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <Card>
-                <CardContent className="p-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Send us a Message</h3>
-                  <form onSubmit={handleSubmit} className="space-y-6">
+            <ErrorBoundary>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+              >
+                <Card>
+                  <CardContent className="p-8">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-6">Send us a Message</h3>
+                    <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Full Name
@@ -296,6 +323,7 @@ export function ContactUsPage() {
                 </CardContent>
               </Card>
             </motion.div>
+            </ErrorBoundary>
 
             {/* Quick Actions */}
             <motion.div

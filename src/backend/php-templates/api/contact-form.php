@@ -1,11 +1,11 @@
 <?php
 // contact-form.php - Handle contact form submissions
-require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/common/db_helper.php';
-require_once __DIR__ . '/utils/mailer.php';
-require_once __DIR__ . '/utils/email-templates.php';
 
-// Set headers
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Set headers first to prevent output issues
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -19,8 +19,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
+    // Clear any output buffers
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
     http_response_code($statusCode);
-    echo json_encode($data);
+    echo json_encode($data, JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -29,18 +34,50 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
 
+// Include required files with error handling
+$requiredFiles = [
+    __DIR__ . '/../config.php',
+    __DIR__ . '/common/db_helper.php',
+    __DIR__ . '/utils/mailer.php',
+    __DIR__ . '/utils/email-templates.php'
+];
+
+foreach ($requiredFiles as $file) {
+    if (!file_exists($file)) {
+        sendJsonResponse([
+            'status' => 'error', 
+            'message' => 'Required file not found: ' . basename($file)
+        ], 500);
+    }
+    
+    try {
+        require_once $file;
+    } catch (Exception $e) {
+        sendJsonResponse([
+            'status' => 'error', 
+            'message' => 'Error loading ' . basename($file) . ': ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 // Get database connection
 try {
     $conn = getDbConnectionWithRetry();
 } catch (Exception $e) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Database connection failed: ' . $e->getMessage()
+    ], 500);
 }
 
 // Get request data
 $input = json_decode(file_get_contents('php://input'), true);
 
 if (!$input) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data'], 400);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Invalid JSON data or empty request body'
+    ], 400);
 }
 
 // Validate required fields
@@ -54,7 +91,11 @@ foreach ($requiredFields as $field) {
 }
 
 if (!empty($errors)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Validation failed', 
+        'errors' => $errors
+    ], 400);
 }
 
 // Validate email format
@@ -68,7 +109,11 @@ if (!preg_match('/^\d{10}$/', $input['phone'])) {
 }
 
 if (!empty($errors)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Validation failed', 
+        'errors' => $errors
+    ], 400);
 }
 
 // Ensure the contact_messages table exists
@@ -89,11 +134,16 @@ try {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
         
-        $conn->query($createTableSql);
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create contact_messages table: " . $conn->error);
+        }
     }
 } catch (Exception $e) {
     error_log("Error checking/creating contact_messages table: " . $e->getMessage());
-    sendJsonResponse(['status' => 'error', 'message' => 'Database setup failed'], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Database setup failed: ' . $e->getMessage()
+    ], 500);
 }
 
 // Insert the contact message
@@ -123,31 +173,49 @@ try {
     // Get the created message
     $selectSql = "SELECT * FROM contact_messages WHERE id = ?";
     $selectStmt = $conn->prepare($selectSql);
+    if (!$selectStmt) {
+        throw new Exception("Failed to prepare select statement: " . $conn->error);
+    }
+    
     $selectStmt->bind_param("i", $messageId);
-    $selectStmt->execute();
+    if (!$selectStmt->execute()) {
+        throw new Exception("Failed to execute select statement: " . $selectStmt->error);
+    }
+    
     $result = $selectStmt->get_result();
     $message = $result->fetch_assoc();
     
-    // Send emails
+    if (!$message) {
+        throw new Exception("Failed to retrieve inserted message");
+    }
+    
+    // Send emails (but don't fail the request if email sending fails)
+    $emailSuccess = false;
     try {
-        // Send notification email to admin
-        $adminEmailHtml = generateContactAdminEmail($message);
-        $adminEmailSent = sendEmailAllMethods('info@vizagtaxihub.com', 'New Contact Form Message - ' . $message['subject'], $adminEmailHtml);
-        
-        if ($adminEmailSent) {
-            error_log("Admin notification email sent successfully for contact message #{$messageId}");
+        // Check if email functions exist
+        if (function_exists('generateContactAdminEmail') && function_exists('generateContactCustomerEmail') && function_exists('sendEmailAllMethods')) {
+            // Send notification email to admin
+            $adminEmailHtml = generateContactAdminEmail($message);
+            $adminEmailSent = sendEmailAllMethods('info@vizagtaxihub.com', 'New Contact Form Message - ' . $message['subject'], $adminEmailHtml);
+            
+            if ($adminEmailSent) {
+                error_log("Admin notification email sent successfully for contact message #{$messageId}");
+            } else {
+                error_log("Failed to send admin notification email for contact message #{$messageId}");
+            }
+            
+            // Send acknowledgment email to customer
+            $customerEmailHtml = generateContactCustomerEmail($message);
+            $customerEmailSent = sendEmailAllMethods($message['email'], 'Message Received - Vizag Taxi Hub', $customerEmailHtml);
+            
+            if ($customerEmailSent) {
+                error_log("Customer acknowledgment email sent successfully for contact message #{$messageId}");
+                $emailSuccess = true;
+            } else {
+                error_log("Failed to send customer acknowledgment email for contact message #{$messageId}");
+            }
         } else {
-            error_log("Failed to send admin notification email for contact message #{$messageId}");
-        }
-        
-        // Send acknowledgment email to customer
-        $customerEmailHtml = generateContactCustomerEmail($message);
-        $customerEmailSent = sendEmailAllMethods($message['email'], 'Message Received - Vizag Taxi Hub', $customerEmailHtml);
-        
-        if ($customerEmailSent) {
-            error_log("Customer acknowledgment email sent successfully for contact message #{$messageId}");
-        } else {
-            error_log("Failed to send customer acknowledgment email for contact message #{$messageId}");
+            error_log("Email template functions not found");
         }
         
     } catch (Exception $e) {
@@ -160,11 +228,26 @@ try {
         'status' => 'success',
         'message' => 'Thank you for your message! We will get back to you within 2 hours.',
         'messageId' => $messageId,
-        'message' => $message
+        'emailSent' => $emailSuccess,
+        'data' => [
+            'name' => $message['name'],
+            'email' => $message['email'],
+            'subject' => $message['subject'],
+            'created_at' => $message['created_at']
+        ]
     ]);
     
 } catch (Exception $e) {
     error_log("Error creating contact message: " . $e->getMessage());
-    sendJsonResponse(['status' => 'error', 'message' => 'Failed to send message. Please try again.'], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Failed to send message. Please try again.',
+        'debug' => $e->getMessage()
+    ], 500);
+}
+
+// Close database connection
+if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
 }
 ?>

@@ -160,6 +160,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Add new state for airport direction label
   const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
   const [isClearingLocation, setIsClearingLocation] = useState<boolean>(false);
+  const [isTabSwitching, setIsTabSwitching] = useState<boolean>(false);
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
@@ -475,6 +476,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     console.log('Airport location object:', airportLocation);
     
     setIsClearingLocation(false);
+    setIsTabSwitching(false); // Reset tab switching flag when user selects a location
     
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
@@ -483,6 +485,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   };
   
   const handleDropLocationChange = (location: Location) => {
+    console.log('=== DROP LOCATION CHANGE HANDLER CALLED ===');
+    console.log('Location received:', location);
+    console.log('Current trip type:', tripType);
+    console.log('Is airport transfer:', tripType === 'airport');
+    
     // Check if location is null, undefined, or empty (cleared)
     const isLocationCleared = !location || !location.name || location.name === '';
     
@@ -513,6 +520,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     console.log('Is airport location:', shouldTreatAsAirport(location));
     
     setIsClearingLocation(false);
+    setIsTabSwitching(false); // Reset tab switching flag when user selects a location
     
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
@@ -574,14 +582,54 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         sessionStorage.removeItem('pickupLocation');
       }
     }
-  }, [tripType, tripMode, pickupLocation, dropLocation]);
+    
+    // Only clear drop location if we're actively switching tabs
+    if (tripType === 'outstation' && isTabSwitching) {
+      // Clear drop location when switching to outstation tab
+      // Outstation tab expects both locations to be empty initially
+      if (dropLocation) {
+        console.log('Clearing drop location when switching to outstation tab');
+        // Use setTimeout to ensure this happens after the trip type change
+        setTimeout(() => {
+          setDropLocation(null);
+          sessionStorage.removeItem('dropLocation');
+          console.log('Drop location cleared for outstation tab');
+        }, 0);
+      }
+    }
+    
+    // Clear drop location when switching to airport tab
+    if (tripType === 'airport' && isTabSwitching) {
+      // Clear drop location when switching to airport tab
+      // This ensures fresh start for airport transfers with proper validation
+      if (dropLocation) {
+        console.log('Clearing drop location when switching to airport tab');
+        // Use setTimeout to ensure this happens after the trip type change
+        setTimeout(() => {
+          setDropLocation(null);
+          sessionStorage.removeItem('dropLocation');
+          console.log('Drop location cleared for airport tab');
+        }, 0);
+      }
+    }
+    
+    if (tripType === 'tour') {
+      // Don't clear drop location when switching to tour tab
+      // This allows preserving locations when switching from airport tab
+      console.log('Preserving drop location when switching to tour tab');
+    }
+  }, [tripType, tripMode, isTabSwitching]);
 
   useEffect(() => {
     if (pickupLocation) {
       sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
+    } else {
+      sessionStorage.removeItem('pickupLocation');
     }
     if (dropLocation) {
       sessionStorage.setItem('dropLocation', JSON.stringify(dropLocation));
+    } else {
+      sessionStorage.removeItem('dropLocation');
     }
     
     // Debug: Log location changes
@@ -715,6 +763,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       console.log(`Resetting distance for local trip to ${selectedPackage}km`);
     }
   }, [tripType, hourlyPackage]);
+
+
 
   function handleContinue() {
     if (!isFormValid) {
@@ -980,6 +1030,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     console.log('Pickup location:', pickupLocation?.name);
     console.log('Drop location:', dropLocation?.name);
     
+    setIsTabSwitching(true);
     setTripType(type);
     setDistance(0);
     setDuration(0);
@@ -987,19 +1038,33 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     // Only clear drop location if we're not in a single-tab mode (Hero widgets)
     // This prevents clearing locations when navigating between pages
     if (!visibleTabs || visibleTabs.length > 1) {
-      // Always clear drop location for Local and Tour
-      if (type === 'local' || type === 'tour') {
+      // Always clear drop location for Local, Tour, and Outstation
+      if (type === 'local' || type === 'tour' || type === 'outstation') {
+        console.log('=== HANDLE TAB CHANGE CLEARING ===');
+        console.log('Tab changed to:', type);
+        console.log('Current drop location before clearing:', dropLocation?.name);
         console.log('Clearing dropLocation due to tab change to:', type);
         setDropLocation(null);
+        sessionStorage.removeItem('dropLocation');
+        console.log('Drop location cleared in handleTabChange');
       }
-      // For airport, clear drop location if pickup is not in Vizag
+      // For airport, clear drop location when switching to airport tab
+      // This ensures fresh start for airport transfers with proper validation
       if (type === 'airport') {
-        if (!pickupLocation || !isLocationInVizag(pickupLocation)) {
-          console.log('Clearing dropLocation due to airport tab and pickup not in Vizag');
-          setDropLocation(null);
-        }
+        console.log('=== AIRPORT TAB CHANGE CLEARING ===');
+        console.log('Tab changed to airport');
+        console.log('Current drop location before clearing:', dropLocation?.name);
+        console.log('Clearing dropLocation due to airport tab change');
+        setDropLocation(null);
+        sessionStorage.removeItem('dropLocation');
+        console.log('Drop location cleared for airport tab');
       }
     }
+    
+    // Reset the tab switching flag after a short delay
+    setTimeout(() => {
+      setIsTabSwitching(false);
+    }, 100);
   };
 
   // Add a wrapper to setSelectedCab that also scrolls to summary
@@ -1119,7 +1184,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                         <LocationInput
-                          key="drop-mobile"
+                          key={`drop-mobile-${tripType}-${dropLocation?.id || 'empty'}`}
                           label="Drop location"
                           placeholder="Enter Drop location"
                           value={dropLocation ? { ...dropLocation } : undefined}
@@ -1280,10 +1345,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                   <LocationInput
-                                    key={dropLocation?.id || dropLocation?.name || 'drop'}
+                                    key={`drop-${tripType}-${dropLocation?.id || 'empty'}`}
                                     label="Drop location"
                                     placeholder="Enter Drop location"
-                                    value={dropLocation ? { ...dropLocation } : ""}
+                                    value={dropLocation ? { ...dropLocation } : undefined}
                                     onLocationChange={handleDropLocationChange}
                                     isPickupLocation={false}
                                     isAirportTransfer={tripType === 'airport'}
