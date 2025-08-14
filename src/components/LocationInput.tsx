@@ -9,7 +9,7 @@ import type { Location } from '@/lib/locationData';
 // Vizag coordinates
 const VIZAG_LAT = 17.6868;
 const VIZAG_LNG = 83.2185;
-const MAX_DISTANCE_KM = 30;
+const MAX_DISTANCE_KM = 35;
 
 // Helper to calculate distance between two lat/lng points (Haversine formula)
 function getDistanceFromLatLng(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -121,14 +121,14 @@ export function LocationInput({
     if (inputValue && suggestions.length > 0) {
       let filtered = suggestions.filter(suggestion => 
         (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase()) &&
-        (!isPickupLocation || isWithinVizagRange(suggestion.lat, suggestion.lng))
+        (!isPickupLocation && !isAirportTransfer || isWithinVizagRange(suggestion.lat, suggestion.lng))
       );
       
       setFilteredSuggestions(filtered);
     } else {
       setFilteredSuggestions([]);
     }
-  }, [inputValue, suggestions, isPickupLocation]);
+  }, [inputValue, suggestions, isPickupLocation, isAirportTransfer]);
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
@@ -151,7 +151,7 @@ export function LocationInput({
         types: ["geocode", "establishment"],
         componentRestrictions: { country: "in" },
         bounds: strictBounds,
-        strictBounds: isPickupLocation, // Enforce strict bounds for pickup locations
+        strictBounds: isPickupLocation || isAirportTransfer, // Enforce strict bounds for pickup locations and airport transfers
       };
       
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
@@ -169,9 +169,9 @@ export function LocationInput({
           const lat = place.geometry.location.lat();
           const lng = place.geometry.location.lng();
           
-          // Check if within range for pickup locations
-          if (isPickupLocation && !isWithinVizagRange(lat, lng)) {
-            toast("Selected location is outside the 30km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+          // Check if within range for pickup locations and airport drop locations
+          if ((isPickupLocation || isAirportTransfer) && !isWithinVizagRange(lat, lng)) {
+            toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
             setInputValue("");
             if (onChange) onChange("");
             if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
@@ -247,9 +247,9 @@ export function LocationInput({
   // Determine subtitle text based on props
   const getSubtitleText = () => {
     if (isPickupLocation) {
-      return "Please select a location within 30km of Visakhapatnam";
+      return "Please select a location within 35km of Visakhapatnam";
     } else if (isAirportTransfer) {
-      return "Please select a location in Visakhapatnam";
+      return "Please select a location within 35km of Visakhapatnam";
     }
     return "";
   };

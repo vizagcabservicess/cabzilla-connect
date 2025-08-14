@@ -94,7 +94,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="tier3Price">Tier 3 Price (21-30 KM) (₹)</Label>
+            <Label htmlFor="tier3Price">Tier 3 Price (21-35 KM) (₹)</Label>
             <Input
               id="tier3Price"
               type="number"
@@ -105,7 +105,7 @@ const AirportFareForm: React.FC<AirportFareFormProps> = ({ fareData, onChange })
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="tier4Price">Tier 4 Price (&gt;30 KM) (₹)</Label>
+            <Label htmlFor="tier4Price">Tier 4 Price (&gt;35 KM) (₹)</Label>
             <Input
               id="tier4Price"
               type="number"

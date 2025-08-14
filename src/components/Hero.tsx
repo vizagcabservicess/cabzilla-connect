@@ -404,6 +404,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     return isAirport;
   };
 
+  // Add function to check if a location should be treated as airport for current trip type
+  const shouldTreatAsAirport = (location: Location | null): boolean => {
+    if (!location) return false;
+    
+    // Only apply airport logic when on airport tab
+    if (tripType !== 'airport') {
+      return false;
+    }
+    
+    return isVizagAirport(location);
+  };
+
   // Add function to update airport direction label
   const updateAirportDirectionLabel = (pickup: Location | null, drop: Location | null) => {
     if (tripType !== 'airport') {
@@ -459,7 +471,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     console.log('=== PICKUP LOCATION CHANGE ===');
     console.log('Location selected:', location.name);
     console.log('Current trip type:', tripType);
-    console.log('Is airport location:', isVizagAirport(location));
+    console.log('Is airport location:', shouldTreatAsAirport(location));
     console.log('Airport location object:', airportLocation);
     
     setIsClearingLocation(false);
@@ -498,7 +510,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     console.log('=== DROP LOCATION CHANGE ===');
     console.log('Location selected:', location.name);
     console.log('Current trip type:', tripType);
-    console.log('Is airport location:', isVizagAirport(location));
+    console.log('Is airport location:', shouldTreatAsAirport(location));
     
     setIsClearingLocation(false);
     
@@ -539,14 +551,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       setAirportDirectionLabel('');
       
       // Clear drop location if it's the airport when switching away from airport tab
-      if (dropLocation && isVizagAirport(dropLocation)) {
+      if (dropLocation && shouldTreatAsAirport(dropLocation)) {
         console.log('Clearing airport from drop location when switching away from airport tab');
         setDropLocation(null);
         sessionStorage.removeItem('dropLocation');
       }
       
       // Clear pickup location if it's the airport when switching away from airport tab
-      if (pickupLocation && isVizagAirport(pickupLocation)) {
+      if (pickupLocation && shouldTreatAsAirport(pickupLocation)) {
         console.log('Clearing airport from pickup location when switching away from airport tab');
         setPickupLocation(null);
         sessionStorage.removeItem('pickupLocation');
@@ -591,21 +603,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       
       // Only set drop to airport if pickup is set (not empty) and drop is empty (and not clearing)
       // AND pickup is NOT an airport location
-      if (pickupLocation && pickupLocation.name && !dropLocation && !isVizagAirport(pickupLocation)) {
+      if (pickupLocation && pickupLocation.name && !dropLocation && !shouldTreatAsAirport(pickupLocation)) {
         console.log('Setting drop location to airport');
         setDropLocation(airportLocation);
         sessionStorage.setItem('dropLocation', JSON.stringify(airportLocation));
-      } else if (pickupLocation && pickupLocation.name && !dropLocation && isVizagAirport(pickupLocation)) {
+      } else if (pickupLocation && pickupLocation.name && !dropLocation && shouldTreatAsAirport(pickupLocation)) {
         console.log('SKIPPING: Pickup is airport location, not setting drop to airport');
       }
       
       // Only set pickup to airport if drop is set (not empty) and pickup is empty (and not clearing)
       // AND drop is NOT an airport location
-      if (dropLocation && dropLocation.name && !pickupLocation && !isVizagAirport(dropLocation)) {
+      if (dropLocation && dropLocation.name && !pickupLocation && !shouldTreatAsAirport(dropLocation)) {
         console.log('Setting pickup location to airport');
         setPickupLocation(airportLocation);
         sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
-      } else if (dropLocation && dropLocation.name && !pickupLocation && isVizagAirport(dropLocation)) {
+      } else if (dropLocation && dropLocation.name && !pickupLocation && shouldTreatAsAirport(dropLocation)) {
         console.log('SKIPPING: Drop is airport location, not setting pickup to airport');
       }
       
@@ -648,26 +660,26 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         console.log('Current trip type:', tripType);
         console.log('Pickup location:', pickupLocation?.name);
         console.log('Drop location:', dropLocation?.name);
-        console.log('Is pickup airport:', pickupLocation ? isVizagAirport(pickupLocation) : 'N/A');
-        console.log('Is drop airport:', dropLocation ? isVizagAirport(dropLocation) : 'N/A');
+        console.log('Is pickup airport:', pickupLocation ? shouldTreatAsAirport(pickupLocation) : 'N/A');
+        console.log('Is drop airport:', dropLocation ? shouldTreatAsAirport(dropLocation) : 'N/A');
         
         // Set drop to airport if pickup is set (not empty) and drop is empty
         // AND pickup is NOT an airport location
-        if (pickupLocation && pickupLocation.name && !dropLocation && !isVizagAirport(pickupLocation)) {
+        if (pickupLocation && pickupLocation.name && !dropLocation && !shouldTreatAsAirport(pickupLocation)) {
           console.log('Delayed: Setting drop location to airport');
           setDropLocation(airportLocation);
           sessionStorage.setItem('dropLocation', JSON.stringify(airportLocation));
-        } else if (pickupLocation && pickupLocation.name && !dropLocation && isVizagAirport(pickupLocation)) {
+        } else if (pickupLocation && pickupLocation.name && !dropLocation && shouldTreatAsAirport(pickupLocation)) {
           console.log('Delayed: SKIPPING - Pickup is airport location');
         }
         
         // Set pickup to airport if drop is set (not empty) and pickup is empty
         // AND drop is NOT an airport location
-        if (dropLocation && dropLocation.name && !pickupLocation && !isVizagAirport(dropLocation)) {
+        if (dropLocation && dropLocation.name && !pickupLocation && !shouldTreatAsAirport(dropLocation)) {
           console.log('Delayed: Setting pickup location to airport');
           setPickupLocation(airportLocation);
           sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
-        } else if (dropLocation && dropLocation.name && !pickupLocation && isVizagAirport(dropLocation)) {
+        } else if (dropLocation && dropLocation.name && !pickupLocation && shouldTreatAsAirport(dropLocation)) {
           console.log('Delayed: SKIPPING - Drop is airport location');
         }
       }, 200); // 200ms delay

@@ -12,7 +12,7 @@ const VIZAG_CENTER = {
 };
 
 // Maximum distance for a location to be considered in Vizag (in km)
-const VIZAG_RADIUS_KM = 30;
+const VIZAG_RADIUS_KM = 35;
 
 /**
  * Converts a location from the application format to the API format
@@ -49,7 +49,7 @@ export const createLocationChangeHandler = (
     // Safely extract address information
     const locationAddress = newLocation.address || newLocation.name || '';
     
-    // Calculate if the location is in Vizag based on the 30km radius
+    // Calculate if the location is in Vizag based on the 35km radius
     const isInVizag = determineIfLocationIsInVizag(newLocation);
     
     // Convert API location format to app location format with safe defaults
@@ -117,14 +117,14 @@ function determineIfLocationIsInVizag(location: ApiLocation | null | undefined):
       VIZAG_CENTER.lng
     );
     
-    // Check if within 30km radius
+    // Check if within 35km radius
     if (distance <= VIZAG_RADIUS_KM) {
       return true;
     }
   }
   
   // Check location name and address for Vizag keywords as fallback
-  const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
+  const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair'];
   
   for (const keyword of vizagKeywords) {
     if (safeIncludes(location.address, keyword) || 
@@ -138,7 +138,7 @@ function determineIfLocationIsInVizag(location: ApiLocation | null | undefined):
 
 // Add more Vizag suburbs/areas to the recognized list
 const vizagNames = [
-  'visakhapatnam', 'vizag', 'waltair', 'vizianagaram',
+  'visakhapatnam', 'vizag', 'waltair',
   'pendurthi', 'gajuwaka', 'madhurawada', 'mvp colony', 'nad junction', 'dwaraka nagar', 'akkayyapalem', 'gopalapatnam', 'kurmannapalem', 'sheela nagar', 'bhel', 'autonagar', 'simhachalam', 'bhimili', 'bhimli', 'ananthapuram', 'yendada', 'rushikonda', 'kailasagiri', 'jagadamba', 'seethammadhara', 'dondaparthi', 'railway colony', 'old gajuwaka', 'new gajuwaka', 'murali nagar', 'kancharapalem', 'chinna waltair', 'lawsons bay', 'siripuram', 'ramnagar', 'hb colony', 'marripalem', 'peda waltair', 'sagar nagar', 'kirlampudi', 'sriharipuram', 'malkapuram', 'scindia', 'gopalapatnam', 'pothinamallayya palem', 'arilova', 'bakkannapalem', 'gambhiram', 'ananthapuram', 'gopalapatnam', 'gajuwaka', 'pendurthi', 'madhurawada', 'mvp', 'nad', 'jagadamba', 'rk beach', 'beach road', 'airport', 'railway station', 'rtc complex'
 ];
 
