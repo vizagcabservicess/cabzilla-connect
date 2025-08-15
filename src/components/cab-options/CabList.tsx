@@ -123,23 +123,49 @@ const CabFareCard = ({
     isLoading = false;
   } else {
     const normalizedId = normalizeVehicleId(cab.id);
+    // For outstation trips, pass the correct packageType based on tripMode
+    const correctPackageType = tripType === 'outstation' ? tripMode : packageType;
+    
     const fareResult = useFare(
       normalizedId,
       tripType,
       distance,
-      packageType,
+      correctPackageType,
       pickupDate
     );
     fareData = fareResult.fareData;
     isLoading = fareResult.isLoading;
     const error = fareResult.error;
+    
+    console.log(`CabList: Fare result for ${cab.name}:`, {
+      fareData,
+      isLoading,
+      error,
+      tripType,
+      tripMode,
+      distance,
+      packageType
+    });
 
     if (error) {
       console.error(`Fare error for ${cab.name}:`, error);
       fareText = 'Error fetching price';
-    } else if (fareData) {
-      fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
-      fareSource = fareData.source || 'unknown';
+         } else if (fareData) {
+       // For outstation one-way trips, use the totalPrice directly from useFare
+       if (tripType === 'outstation' && (tripMode === 'one-way' || !tripMode)) {
+         fare = fareData.totalPrice;
+         console.log(`CabList: Using totalPrice for outstation one-way: ₹${fare}`);
+       } else {
+         fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
+       }
+       fareSource = fareData.source || 'unknown';
+      
+      console.log(`CabList: Calculated fare for ${cab.name}:`, {
+        fare,
+        breakdown: fareData.breakdown,
+        totalPrice: fareData.totalPrice,
+        source: fareSource
+      });
 
       if (tripType === 'local') {
         const localPackageLimits: Record<string, { km: number; hours: number }> = {

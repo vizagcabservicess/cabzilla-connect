@@ -149,12 +149,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     'capacity' => (int)$vehicle['capacity'],
                     'luggage_capacity' => (int)$vehicle['luggage_capacity'],
                     'is_active' => (bool)$vehicle['is_active'],
-                    'base_price' => 0,
-                    'price_per_km' => 0,
-                    'roundtrip_base_price' => 0,
-                    'roundtrip_price_per_km' => 0,
-                    'driver_allowance' => 250,
-                    'night_halt_charge' => 700
+                    'oneWayBasePrice' => 0,
+                    'oneWayPricePerKm' => 0,
+                    'roundTripBasePrice' => 0,
+                    'roundTripPricePerKm' => 0,
+                    'driverAllowance' => 250,
+                    'nightHaltCharge' => 700,
+                    // Default tier pricing
+                    'tier1Price' => 3500,
+                    'tier2Price' => 4200,
+                    'tier3Price' => 4900,
+                    'tier4Price' => 5600,
+                    'extraKmCharge' => 14,
+                    'tier1MinKm' => 35,
+                    'tier1MaxKm' => 50,
+                    'tier2MinKm' => 51,
+                    'tier2MaxKm' => 75,
+                    'tier3MinKm' => 76,
+                    'tier3MaxKm' => 100,
+                    'tier4MinKm' => 101,
+                    'tier4MaxKm' => 149
                 ];
             }
         }
@@ -169,6 +183,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 of.roundtrip_price_per_km,
                 of.driver_allowance,
                 of.night_halt_charge,
+                -- Tier pricing fields
+                of.tier1_price,
+                of.tier2_price,
+                of.tier3_price,
+                of.tier4_price,
+                of.extra_km_charge,
+                of.tier1_min_km,
+                of.tier1_max_km,
+                of.tier2_min_km,
+                of.tier2_max_km,
+                of.tier3_min_km,
+                of.tier3_max_km,
+                of.tier4_min_km,
+                of.tier4_max_km,
                 of.updated_at
             FROM 
                 outstation_fares of
@@ -182,12 +210,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 
                 // If we have the vehicle in our list, update its fare data
                 if (isset($vehicles[$vehicleId])) {
-                    $vehicles[$vehicleId]['base_price'] = (float)$fare['base_price'];
-                    $vehicles[$vehicleId]['price_per_km'] = (float)$fare['price_per_km'];
-                    $vehicles[$vehicleId]['roundtrip_base_price'] = (float)$fare['roundtrip_base_price'];
-                    $vehicles[$vehicleId]['roundtrip_price_per_km'] = (float)$fare['roundtrip_price_per_km'];
-                    $vehicles[$vehicleId]['driver_allowance'] = (float)$fare['driver_allowance'];
-                    $vehicles[$vehicleId]['night_halt_charge'] = (float)$fare['night_halt_charge'];
+                    $vehicles[$vehicleId]['oneWayBasePrice'] = (float)$fare['base_price'];
+                    $vehicles[$vehicleId]['oneWayPricePerKm'] = (float)$fare['price_per_km'];
+                    $vehicles[$vehicleId]['roundTripBasePrice'] = (float)$fare['roundtrip_base_price'];
+                    $vehicles[$vehicleId]['roundTripPricePerKm'] = (float)$fare['roundtrip_price_per_km'];
+                    $vehicles[$vehicleId]['driverAllowance'] = (float)$fare['driver_allowance'];
+                    $vehicles[$vehicleId]['nightHaltCharge'] = (float)$fare['night_halt_charge'];
+                    // Tier pricing fields - map to frontend field names
+                    $vehicles[$vehicleId]['tier1Price'] = (float)$fare['tier1_price'];
+                    $vehicles[$vehicleId]['tier2Price'] = (float)$fare['tier2_price'];
+                    $vehicles[$vehicleId]['tier3Price'] = (float)$fare['tier3_price'];
+                    $vehicles[$vehicleId]['tier4Price'] = (float)$fare['tier4_price'];
+                    $vehicles[$vehicleId]['extraKmCharge'] = (float)$fare['extra_km_charge'];
+                    $vehicles[$vehicleId]['tier1MinKm'] = (int)$fare['tier1_min_km'];
+                    $vehicles[$vehicleId]['tier1MaxKm'] = (int)$fare['tier1_max_km'];
+                    $vehicles[$vehicleId]['tier2MinKm'] = (int)$fare['tier2_min_km'];
+                    $vehicles[$vehicleId]['tier2MaxKm'] = (int)$fare['tier2_max_km'];
+                    $vehicles[$vehicleId]['tier3MinKm'] = (int)$fare['tier3_min_km'];
+                    $vehicles[$vehicleId]['tier3MaxKm'] = (int)$fare['tier3_max_km'];
+                    $vehicles[$vehicleId]['tier4MinKm'] = (int)$fare['tier4_min_km'];
+                    $vehicles[$vehicleId]['tier4MaxKm'] = (int)$fare['tier4_max_km'];
                     $vehicles[$vehicleId]['updated_at'] = $fare['updated_at'];
                 }
                 // If not in our list (unusual), add it
@@ -196,12 +238,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         'id' => $vehicleId,
                         'vehicle_id' => $vehicleId,
                         'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
-                        'base_price' => (float)$fare['base_price'],
-                        'price_per_km' => (float)$fare['price_per_km'],
-                        'roundtrip_base_price' => (float)$fare['roundtrip_base_price'],
-                        'roundtrip_price_per_km' => (float)$fare['roundtrip_price_per_km'],
-                        'driver_allowance' => (float)$fare['driver_allowance'],
-                        'night_halt_charge' => (float)$fare['night_halt_charge'],
+                        'oneWayBasePrice' => (float)$fare['base_price'],
+                        'oneWayPricePerKm' => (float)$fare['price_per_km'],
+                        'roundTripBasePrice' => (float)$fare['roundtrip_base_price'],
+                        'roundTripPricePerKm' => (float)$fare['roundtrip_price_per_km'],
+                        'driverAllowance' => (float)$fare['driver_allowance'],
+                        'nightHaltCharge' => (float)$fare['night_halt_charge'],
+                        // Tier pricing fields - map to frontend field names
+                        'tier1Price' => (float)$fare['tier1_price'],
+                        'tier2Price' => (float)$fare['tier2_price'],
+                        'tier3Price' => (float)$fare['tier3_price'],
+                        'tier4Price' => (float)$fare['tier4_price'],
+                        'extraKmCharge' => (float)$fare['extra_km_charge'],
+                        'tier1MinKm' => (int)$fare['tier1_min_km'],
+                        'tier1MaxKm' => (int)$fare['tier1_max_km'],
+                        'tier2MinKm' => (int)$fare['tier2_min_km'],
+                        'tier2MaxKm' => (int)$fare['tier2_max_km'],
+                        'tier3MinKm' => (int)$fare['tier3_min_km'],
+                        'tier3MaxKm' => (int)$fare['tier3_max_km'],
+                        'tier4MinKm' => (int)$fare['tier4_min_km'],
+                        'tier4MaxKm' => (int)$fare['tier4_max_km'],
                         'is_active' => true,
                         'updated_at' => $fare['updated_at']
                     ];
@@ -290,8 +346,24 @@ $roundTripPricePerKm = floatval($data['roundTripPricePerKm'] ?? $data['roundTrip
 $driverAllowance = floatval($data['driverAllowance'] ?? $data['driver_allowance'] ?? 250);
 $nightHaltCharge = floatval($data['nightHalt'] ?? $data['nightHaltCharge'] ?? $data['night_halt_charge'] ?? 700);
 
+// Extract tier pricing values
+$tier1Price = floatval($data['tier1Price'] ?? 3500);
+$tier2Price = floatval($data['tier2Price'] ?? 4200);
+$tier3Price = floatval($data['tier3Price'] ?? 4900);
+$tier4Price = floatval($data['tier4Price'] ?? 5600);
+$extraKmCharge = floatval($data['extraKmCharge'] ?? 14);
+$tier1MinKm = intval($data['tier1MinKm'] ?? 35);
+$tier1MaxKm = intval($data['tier1MaxKm'] ?? 50);
+$tier2MinKm = intval($data['tier2MinKm'] ?? 51);
+$tier2MaxKm = intval($data['tier2MaxKm'] ?? 75);
+$tier3MinKm = intval($data['tier3MinKm'] ?? 76);
+$tier3MaxKm = intval($data['tier3MaxKm'] ?? 100);
+$tier4MinKm = intval($data['tier4MinKm'] ?? 101);
+$tier4MaxKm = intval($data['tier4MaxKm'] ?? 149);
+
 // Log extracted fields
-error_log("Extracted fields: vehicleId=$vehicleId, oneWayBasePrice=$oneWayBasePrice, oneWayPricePerKm=$oneWayPricePerKm, roundTripBasePrice=$roundTripBasePrice, roundTripPricePerKm=$roundTripPricePerKm");
+error_log("Extracted fields: vehicleId=$vehicleId, oneWayBasePrice=$oneWayBasePrice, oneWayPricePerKm=$oneWayPricePerKm, roundTripBasePrice=$roundTripBasePrice, roundTripPricePerKm=$roundTripPricePerKm, tier1Price=$tier1Price, tier2Price=$tier2Price, tier3Price=$tier3Price, tier4Price=$tier4Price");
+error_log("Tier pricing details: tier1Price=$tier1Price, tier2Price=$tier2Price, tier3Price=$tier3Price, tier4Price=$tier4Price, extraKmCharge=$extraKmCharge");
 
 try {
     // Connect to database
@@ -326,7 +398,7 @@ try {
     // First check if outstation_fares table exists
     $checkTableStmt = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
     if ($checkTableStmt->num_rows === 0) {
-        // Table doesn't exist, create it
+        // Table doesn't exist, create it with tier pricing columns
         $createTableSql = "
             CREATE TABLE IF NOT EXISTS outstation_fares (
                 id INT(11) NOT NULL AUTO_INCREMENT,
@@ -337,6 +409,21 @@ try {
                 roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
                 driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
                 night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
+                -- Tier pricing columns for one-way trips
+                tier1_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 1 one-way trips (35-50 km)',
+                tier2_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 2 one-way trips (51-75 km)',
+                tier3_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 3 one-way trips (76-100 km)',
+                tier4_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 4 one-way trips (101-149 km)',
+                extra_km_charge DECIMAL(5,2) DEFAULT NULL COMMENT 'Extra charge per km for distances beyond tier 4',
+                -- Tier distance ranges (configurable)
+                tier1_min_km INT DEFAULT 35 COMMENT 'Minimum km for tier 1',
+                tier1_max_km INT DEFAULT 50 COMMENT 'Maximum km for tier 1',
+                tier2_min_km INT DEFAULT 51 COMMENT 'Minimum km for tier 2',
+                tier2_max_km INT DEFAULT 75 COMMENT 'Maximum km for tier 2',
+                tier3_min_km INT DEFAULT 76 COMMENT 'Minimum km for tier 3',
+                tier3_max_km INT DEFAULT 100 COMMENT 'Maximum km for tier 3',
+                tier4_min_km INT DEFAULT 101 COMMENT 'Minimum km for tier 4',
+                tier4_max_km INT DEFAULT 149 COMMENT 'Maximum km for tier 4',
                 created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
@@ -345,6 +432,31 @@ try {
         ";
         $conn->query($createTableSql);
         error_log("Created outstation_fares table");
+    } else {
+        // Table exists, check if tier columns exist and add them if missing
+        $tierColumns = [
+            'tier1_price' => "ALTER TABLE outstation_fares ADD COLUMN tier1_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 1 one-way trips (35-50 km)'",
+            'tier2_price' => "ALTER TABLE outstation_fares ADD COLUMN tier2_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 2 one-way trips (51-75 km)'",
+            'tier3_price' => "ALTER TABLE outstation_fares ADD COLUMN tier3_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 3 one-way trips (76-100 km)'",
+            'tier4_price' => "ALTER TABLE outstation_fares ADD COLUMN tier4_price DECIMAL(10,2) DEFAULT NULL COMMENT 'Price for tier 4 one-way trips (101-149 km)'",
+            'extra_km_charge' => "ALTER TABLE outstation_fares ADD COLUMN extra_km_charge DECIMAL(5,2) DEFAULT NULL COMMENT 'Extra charge per km for distances beyond tier 4'",
+            'tier1_min_km' => "ALTER TABLE outstation_fares ADD COLUMN tier1_min_km INT DEFAULT 35 COMMENT 'Minimum km for tier 1'",
+            'tier1_max_km' => "ALTER TABLE outstation_fares ADD COLUMN tier1_max_km INT DEFAULT 50 COMMENT 'Maximum km for tier 1'",
+            'tier2_min_km' => "ALTER TABLE outstation_fares ADD COLUMN tier2_min_km INT DEFAULT 51 COMMENT 'Minimum km for tier 2'",
+            'tier2_max_km' => "ALTER TABLE outstation_fares ADD COLUMN tier2_max_km INT DEFAULT 75 COMMENT 'Maximum km for tier 2'",
+            'tier3_min_km' => "ALTER TABLE outstation_fares ADD COLUMN tier3_min_km INT DEFAULT 76 COMMENT 'Minimum km for tier 3'",
+            'tier3_max_km' => "ALTER TABLE outstation_fares ADD COLUMN tier3_max_km INT DEFAULT 100 COMMENT 'Maximum km for tier 3'",
+            'tier4_min_km' => "ALTER TABLE outstation_fares ADD COLUMN tier4_min_km INT DEFAULT 101 COMMENT 'Minimum km for tier 4'",
+            'tier4_max_km' => "ALTER TABLE outstation_fares ADD COLUMN tier4_max_km INT DEFAULT 149 COMMENT 'Maximum km for tier 4'"
+        ];
+
+        foreach ($tierColumns as $columnName => $alterSql) {
+            $checkColumnStmt = $conn->query("SHOW COLUMNS FROM outstation_fares LIKE '$columnName'");
+            if ($checkColumnStmt->num_rows === 0) {
+                $conn->query($alterSql);
+                error_log("Added column $columnName to outstation_fares table");
+            }
+        }
     }
     
     // Use a transaction to ensure both inserts/updates happen atomically
@@ -354,8 +466,10 @@ try {
         // FIRST always update outstation_fares table - this is our primary source of truth
         $upsertFaresStmt = $conn->prepare("
             INSERT INTO outstation_fares 
-            (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, 
+             tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+             tier1_min_km, tier1_max_km, tier2_min_km, tier2_max_km, tier3_min_km, tier3_max_km, tier4_min_km, tier4_max_km, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_price = VALUES(base_price),
             price_per_km = VALUES(price_per_km),
@@ -363,21 +477,48 @@ try {
             roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
             driver_allowance = VALUES(driver_allowance),
             night_halt_charge = VALUES(night_halt_charge),
+            tier1_price = VALUES(tier1_price),
+            tier2_price = VALUES(tier2_price),
+            tier3_price = VALUES(tier3_price),
+            tier4_price = VALUES(tier4_price),
+            extra_km_charge = VALUES(extra_km_charge),
+            tier1_min_km = VALUES(tier1_min_km),
+            tier1_max_km = VALUES(tier1_max_km),
+            tier2_min_km = VALUES(tier2_min_km),
+            tier2_max_km = VALUES(tier2_max_km),
+            tier3_min_km = VALUES(tier3_min_km),
+            tier3_max_km = VALUES(tier3_max_km),
+            tier4_min_km = VALUES(tier4_min_km),
+            tier4_max_km = VALUES(tier4_max_km),
             updated_at = NOW()
         ");
         
-        $upsertFaresStmt->bind_param("sdddddd", 
+        $upsertFaresStmt->bind_param("sddddddddddiiiiiiii", 
             $vehicleId, 
             $oneWayBasePrice, 
             $oneWayPricePerKm, 
             $roundTripBasePrice, 
             $roundTripPricePerKm,
             $driverAllowance,
-            $nightHaltCharge
+            $nightHaltCharge,
+            $tier1Price,
+            $tier2Price,
+            $tier3Price,
+            $tier4Price,
+            $extraKmCharge,
+            $tier1MinKm,
+            $tier1MaxKm,
+            $tier2MinKm,
+            $tier2MaxKm,
+            $tier3MinKm,
+            $tier3MaxKm,
+            $tier4MinKm,
+            $tier4MaxKm
         );
         
         $upsertFaresStmt->execute();
         error_log("Updated outstation_fares table for vehicle: $vehicleId with these values: base_price=$oneWayBasePrice, price_per_km=$oneWayPricePerKm");
+        error_log("Tier pricing saved: tier1_price=$tier1Price, tier2_price=$tier2Price, tier3_price=$tier3Price, tier4_price=$tier4Price, extra_km_charge=$extraKmCharge");
         
         // Also update vehicle_pricing table for compatibility - BUT this is now secondary
         $oneWayTripType = 'outstation-one-way';

@@ -413,41 +413,124 @@ async function getOutstationFares(origin?: string, destination?: string): Promis
   }
 }
 
-// Generate default outstation fares when API fails
+// Generate default outstation fares with dynamic tier pricing
 function generateDefaultOutstationFares(): Record<string, OutstationFare> {
-  console.log('Generating default outstation fares');
+  console.log('Generating default outstation fares with tier pricing');
   return {
     'sedan': {
-      basePrice: 1500,
-      pricePerKm: 12,
-      driverAllowance: 250,
-      nightHaltCharge: 300,
-      roundTripBasePrice: 1400,
-      roundTripPricePerKm: 10
-    },
-    'ertiga': {
-      basePrice: 1800,
+      basePrice: 4200,
       pricePerKm: 14,
       driverAllowance: 250,
-      nightHaltCharge: 350,
-      roundTripBasePrice: 1700,
-      roundTripPricePerKm: 12
+      nightHaltCharge: 700,
+      roundTripBasePrice: 3780,
+      roundTripPricePerKm: 12,
+      // Dynamic tier pricing for one-way trips (35km to 149km)
+      tier1Price: 3500, // 35-50 km
+      tier2Price: 4200, // 51-75 km
+      tier3Price: 4900, // 76-100 km
+      tier4Price: 5600, // 101-149 km
+      extraKmCharge: 14, // For distances beyond 149km
+      // Configurable tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
+    },
+    'ertiga': {
+      basePrice: 5400,
+      pricePerKm: 18,
+      driverAllowance: 250,
+      nightHaltCharge: 1000,
+      roundTripBasePrice: 4860,
+      roundTripPricePerKm: 15,
+      // Dynamic tier pricing for one-way trips
+      tier1Price: 4500, // 35-50 km
+      tier2Price: 5400, // 51-75 km
+      tier3Price: 6300, // 76-100 km
+      tier4Price: 7200, // 101-149 km
+      extraKmCharge: 18,
+      // Configurable tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
     },
     'innova': {
-      basePrice: 2200,
-      pricePerKm: 16,
-      driverAllowance: 300,
-      nightHaltCharge: 400,
-      roundTripBasePrice: 2000,
-      roundTripPricePerKm: 14
+      basePrice: 6000,
+      pricePerKm: 20,
+      driverAllowance: 250,
+      nightHaltCharge: 1000,
+      roundTripBasePrice: 5400,
+      roundTripPricePerKm: 17,
+      // Dynamic tier pricing for one-way trips
+      tier1Price: 5000, // 35-50 km
+      tier2Price: 6000, // 51-75 km
+      tier3Price: 7000, // 76-100 km
+      tier4Price: 8000, // 101-149 km
+      extraKmCharge: 20,
+      // Configurable tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
     },
     'innova_crysta': {
-      basePrice: 2500,
-      pricePerKm: 18,
+      basePrice: 6500,
+      pricePerKm: 22,
       driverAllowance: 300,
-      nightHaltCharge: 400,
-      roundTripBasePrice: 2300,
-      roundTripPricePerKm: 16
+      nightHaltCharge: 1200,
+      roundTripBasePrice: 5850,
+      roundTripPricePerKm: 19,
+      // Dynamic tier pricing for one-way trips
+      tier1Price: 5500, // 35-50 km
+      tier2Price: 6500, // 51-75 km
+      tier3Price: 7500, // 76-100 km
+      tier4Price: 8500, // 101-149 km
+      extraKmCharge: 22,
+      // Configurable tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
+    },
+    'tempo': {
+      basePrice: 8000,
+      pricePerKm: 25,
+      driverAllowance: 300,
+      nightHaltCharge: 1200,
+      roundTripBasePrice: 7200,
+      roundTripPricePerKm: 21,
+      // Dynamic tier pricing for one-way trips
+      tier1Price: 6500, // 35-50 km
+      tier2Price: 7800, // 51-75 km
+      tier3Price: 9100, // 76-100 km
+      tier4Price: 10400, // 101-149 km
+      extraKmCharge: 25,
+      // Configurable tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
     }
   };
 }
@@ -550,43 +633,101 @@ async function getOutstationFaresForVehicle(vehicleId: string): Promise<Outstati
     }
 
     console.warn(`No outstation fare found for vehicle ${vehicleId}, using defaults`);
-    // Return default values based on vehicle type
+    // Return default values based on vehicle type with tier pricing
     const defaultFares = generateDefaultOutstationFares();
-    return defaultFares[normalizeVehicleId(vehicleId)] || {
-      basePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1500 : 
-                normalizeVehicleId(vehicleId).includes('ertiga') ? 1800 : 
-                normalizeVehicleId(vehicleId).includes('innova') ? 2200 : 2000,
-      pricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 12 : 
-                 normalizeVehicleId(vehicleId).includes('ertiga') ? 14 : 
-                 normalizeVehicleId(vehicleId).includes('innova') ? 16 : 15,
+    const normalizedId = normalizeVehicleId(vehicleId);
+    
+    if (defaultFares[normalizedId]) {
+      return defaultFares[normalizedId];
+    }
+    
+    // Fallback for unknown vehicle types with tier pricing
+    return {
+      basePrice: normalizedId.includes('sedan') ? 4200 : 
+                normalizedId.includes('ertiga') ? 5400 : 
+                normalizedId.includes('innova') ? 6000 : 5000,
+      pricePerKm: normalizedId.includes('sedan') ? 14 : 
+                 normalizedId.includes('ertiga') ? 18 : 
+                 normalizedId.includes('innova') ? 20 : 16,
       driverAllowance: 250,
       nightHaltCharge: 300,
-      roundTripBasePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1400 : 
-                        normalizeVehicleId(vehicleId).includes('ertiga') ? 1700 : 
-                        normalizeVehicleId(vehicleId).includes('innova') ? 2000 : 1800,
-      roundTripPricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 10 : 
-                         normalizeVehicleId(vehicleId).includes('ertiga') ? 12 : 
-                         normalizeVehicleId(vehicleId).includes('innova') ? 14 : 13
+      roundTripBasePrice: normalizedId.includes('sedan') ? 3780 : 
+                        normalizedId.includes('ertiga') ? 4860 : 
+                        normalizedId.includes('innova') ? 5400 : 4500,
+      roundTripPricePerKm: normalizedId.includes('sedan') ? 12 : 
+                         normalizedId.includes('ertiga') ? 15 : 
+                         normalizedId.includes('innova') ? 17 : 14,
+      // Default tier pricing
+      tier1Price: normalizedId.includes('sedan') ? 3500 : 
+                 normalizedId.includes('ertiga') ? 4500 : 
+                 normalizedId.includes('innova') ? 5000 : 4000,
+      tier2Price: normalizedId.includes('sedan') ? 4200 : 
+                 normalizedId.includes('ertiga') ? 5400 : 
+                 normalizedId.includes('innova') ? 6000 : 4800,
+      tier3Price: normalizedId.includes('sedan') ? 4900 : 
+                 normalizedId.includes('ertiga') ? 6300 : 
+                 normalizedId.includes('innova') ? 7000 : 5600,
+      tier4Price: normalizedId.includes('sedan') ? 5600 : 
+                 normalizedId.includes('ertiga') ? 7200 : 
+                 normalizedId.includes('innova') ? 8000 : 6400,
+      extraKmCharge: normalizedId.includes('sedan') ? 14 : 
+                    normalizedId.includes('ertiga') ? 18 : 
+                    normalizedId.includes('innova') ? 20 : 16,
+      // Default tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
     };
   } catch (error) {
     console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
 
-    // Return default values based on vehicle type
+    // Return default values based on vehicle type with tier pricing
+    const normalizedId = normalizeVehicleId(vehicleId);
     return {
-      basePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1500 : 
-                normalizeVehicleId(vehicleId).includes('ertiga') ? 1800 : 
-                normalizeVehicleId(vehicleId).includes('innova') ? 2200 : 2000,
-      pricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 12 : 
-                 normalizeVehicleId(vehicleId).includes('ertiga') ? 14 : 
-                 normalizeVehicleId(vehicleId).includes('innova') ? 16 : 15,
+      basePrice: normalizedId.includes('sedan') ? 4200 : 
+                normalizedId.includes('ertiga') ? 5400 : 
+                normalizedId.includes('innova') ? 6000 : 5000,
+      pricePerKm: normalizedId.includes('sedan') ? 14 : 
+                 normalizedId.includes('ertiga') ? 18 : 
+                 normalizedId.includes('innova') ? 20 : 16,
       driverAllowance: 250,
       nightHaltCharge: 300,
-      roundTripBasePrice: normalizeVehicleId(vehicleId).includes('sedan') ? 1400 : 
-                        normalizeVehicleId(vehicleId).includes('ertiga') ? 1700 : 
-                        normalizeVehicleId(vehicleId).includes('innova') ? 2000 : 1800,
-      roundTripPricePerKm: normalizeVehicleId(vehicleId).includes('sedan') ? 10 : 
-                         normalizeVehicleId(vehicleId).includes('ertiga') ? 12 : 
-                         normalizeVehicleId(vehicleId).includes('innova') ? 14 : 13
+      roundTripBasePrice: normalizedId.includes('sedan') ? 3780 : 
+                        normalizedId.includes('ertiga') ? 4860 : 
+                        normalizedId.includes('innova') ? 5400 : 4500,
+      roundTripPricePerKm: normalizedId.includes('sedan') ? 12 : 
+                         normalizedId.includes('ertiga') ? 15 : 
+                         normalizedId.includes('innova') ? 17 : 14,
+      // Default tier pricing
+      tier1Price: normalizedId.includes('sedan') ? 3500 : 
+                 normalizedId.includes('ertiga') ? 4500 : 
+                 normalizedId.includes('innova') ? 5000 : 4000,
+      tier2Price: normalizedId.includes('sedan') ? 4200 : 
+                 normalizedId.includes('ertiga') ? 5400 : 
+                 normalizedId.includes('innova') ? 6000 : 4800,
+      tier3Price: normalizedId.includes('sedan') ? 4900 : 
+                 normalizedId.includes('ertiga') ? 6300 : 
+                 normalizedId.includes('innova') ? 7000 : 5600,
+      tier4Price: normalizedId.includes('sedan') ? 5600 : 
+                 normalizedId.includes('ertiga') ? 7200 : 
+                 normalizedId.includes('innova') ? 8000 : 6400,
+      extraKmCharge: normalizedId.includes('sedan') ? 14 : 
+                    normalizedId.includes('ertiga') ? 18 : 
+                    normalizedId.includes('innova') ? 20 : 16,
+      // Default tier distance ranges
+      tier1MinKm: 35,
+      tier1MaxKm: 50,
+      tier2MinKm: 51,
+      tier2MaxKm: 75,
+      tier3MinKm: 76,
+      tier3MaxKm: 100,
+      tier4MinKm: 101,
+      tier4MaxKm: 149
     };
   }
 }

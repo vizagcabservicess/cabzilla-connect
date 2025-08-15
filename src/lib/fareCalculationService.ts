@@ -277,7 +277,90 @@ export const calculateAirportFare = async (cabType: CabType, distance: number): 
   }
 };
 
-// Enhanced calculateFare function with strict validation
+// Calculate outstation one-way fares with dynamic tiered pricing
+export const calculateOutstationOneWayFare = async (cabType: CabType, distance: number): Promise<number> => {
+  const cacheKey = `outstation_oneway_${cabType.id}_${distance}`;
+  
+  // Try to get existing valid fare
+  const existingFare = getFare(cacheKey, { cabType, tripType: 'outstation', distance });
+  if (existingFare) {
+    console.log(`Using existing outstation one-way fare: ₹${existingFare}`);
+    return existingFare;
+  }
+  
+  try {
+    const outstationFares = await getOutstationFaresForVehicle(cabType.id);
+    console.log(`Retrieved outstation fares for ${cabType.name}:`, outstationFares);
+    
+    if (!outstationFares || !outstationFares.basePrice) {
+      throw new Error('Invalid outstation fares retrieved');
+    }
+    
+    let basePrice = 0;
+    let driverAllowance = outstationFares.driverAllowance || 250;
+    
+    // Get tier distance ranges (with defaults)
+    const tier1Min = outstationFares.tier1MinKm || 35;
+    const tier1Max = outstationFares.tier1MaxKm || 50;
+    const tier2Min = outstationFares.tier2MinKm || 51;
+    const tier2Max = outstationFares.tier2MaxKm || 75;
+    const tier3Min = outstationFares.tier3MinKm || 76;
+    const tier3Max = outstationFares.tier3MaxKm || 100;
+    const tier4Min = outstationFares.tier4MinKm || 101;
+    const tier4Max = outstationFares.tier4MaxKm || 149;
+    
+    // Dynamic tiered pricing for one-way outstation trips
+    if (distance >= tier1Min && distance <= tier1Max) {
+      basePrice = outstationFares.tier1Price || outstationFares.basePrice;
+    } else if (distance >= tier2Min && distance <= tier2Max) {
+      basePrice = outstationFares.tier2Price || (outstationFares.basePrice * 1.2);
+    } else if (distance >= tier3Min && distance <= tier3Max) {
+      basePrice = outstationFares.tier3Price || (outstationFares.basePrice * 1.4);
+    } else if (distance >= tier4Min && distance <= tier4Max) {
+      basePrice = outstationFares.tier4Price || (outstationFares.basePrice * 1.6);
+    } else if (distance > tier4Max) {
+      // For distances beyond tier4Max, use the traditional calculation
+      basePrice = outstationFares.basePrice;
+      const extraKm = distance - tier4Max;
+      const extraKmCharge = outstationFares.extraKmCharge || outstationFares.pricePerKm;
+      const extraDistanceFare = extraKm * extraKmCharge;
+      basePrice += extraDistanceFare;
+    } else {
+      // For distances less than tier1Min, use the traditional calculation
+      basePrice = outstationFares.basePrice;
+      const extraKm = Math.max(0, distance - tier1Min);
+      const extraKmCharge = outstationFares.extraKmCharge || outstationFares.pricePerKm;
+      const extraDistanceFare = extraKm * extraKmCharge;
+      basePrice += extraDistanceFare;
+    }
+    
+    const totalFare = basePrice + driverAllowance;
+    
+    if (storeFare(cacheKey, totalFare, 'database', {
+      cabType,
+      tripType: 'outstation',
+      distance,
+      breakdown: {
+        basePrice,
+        driverAllowance,
+        extraKmCharge: outstationFares.extraKmCharge || outstationFares.pricePerKm,
+        tierUsed: distance >= tier1Min && distance <= tier4Max ? 
+          (distance <= tier1Max ? 'tier1' : 
+           distance <= tier2Max ? 'tier2' : 
+           distance <= tier3Max ? 'tier3' : 'tier4') : 'traditional'
+      }
+    })) {
+      return totalFare;
+    }
+    
+    throw new Error('Invalid fare calculated');
+  } catch (error) {
+    console.error(`Error calculating outstation one-way fare for ${cabType.name}:`, error);
+    throw error;
+  }
+};
+
+// Enhanced calculateFare function with dynamic tiered outstation pricing
 export const calculateFare = async (params: FareCalculationParams): Promise<number> => {
   const { cabType, distance, tripType, tripMode = 'one-way', hourlyPackage } = params;
   
@@ -316,28 +399,34 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       }
     }
     else if (tripType === 'outstation') {
-      const outstationFares = await getOutstationFaresForVehicle(cabType.id);
-      console.log(`Retrieved outstation fares for ${cabType.name}:`, outstationFares);
-      
-      if (!outstationFares) throw new Error('No outstation fares found');
-      
-      const minimumKm = 300;
-      let perKmRate = tripMode === 'one-way' ? outstationFares.pricePerKm : (outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85);
-      let baseFare = tripMode === 'one-way' ? outstationFares.basePrice : (outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9);
-      let driverAllowance = outstationFares.driverAllowance || 250;
-      
-      const effectiveDistance = distance * (tripMode === 'one-way' ? 2 : 2);
-      
-      if (effectiveDistance < minimumKm) {
-        calculatedFare = baseFare + driverAllowance;
+      if (tripMode === 'one-way') {
+        // Use dynamic tiered pricing for one-way outstation trips
+        calculatedFare = await calculateOutstationOneWayFare(cabType, distance);
       } else {
-        const extraDistance = effectiveDistance - minimumKm;
-        const extraDistanceFare = extraDistance * perKmRate;
-        calculatedFare = baseFare + extraDistanceFare + driverAllowance;
-      }
-      
-      if (!validateFare(calculatedFare, cabType, tripType)) {
-        throw new Error('Invalid outstation fare calculated');
+        // Use traditional calculation for round trips
+        const outstationFares = await getOutstationFaresForVehicle(cabType.id);
+        console.log(`Retrieved outstation fares for ${cabType.name}:`, outstationFares);
+        
+        if (!outstationFares) throw new Error('No outstation fares found');
+        
+        const minimumKm = 300;
+        let perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
+        let baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
+        let driverAllowance = outstationFares.driverAllowance || 250;
+        
+        const effectiveDistance = distance * 2;
+        
+        if (effectiveDistance < minimumKm) {
+          calculatedFare = baseFare + driverAllowance;
+        } else {
+          const extraDistance = effectiveDistance - minimumKm;
+          const extraDistanceFare = extraDistance * perKmRate;
+          calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+        }
+        
+        if (!validateFare(calculatedFare, cabType, tripType)) {
+          throw new Error('Invalid outstation fare calculated');
+        }
       }
     }
     

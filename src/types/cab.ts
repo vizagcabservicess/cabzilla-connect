@@ -49,6 +49,21 @@ export interface OutstationFare {
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
   nightHalt?: number;
+  // Dynamic tier pricing for one-way outstation trips (35km to 149km)
+  tier1Price?: number; // 35-50 km
+  tier2Price?: number; // 51-75 km
+  tier3Price?: number; // 76-100 km
+  tier4Price?: number; // 101-149 km
+  extraKmCharge?: number; // For distances beyond 149km
+  // Tier distance ranges (configurable)
+  tier1MinKm?: number; // Default: 35
+  tier1MaxKm?: number; // Default: 50
+  tier2MinKm?: number; // Default: 51
+  tier2MaxKm?: number; // Default: 75
+  tier3MinKm?: number; // Default: 76
+  tier3MaxKm?: number; // Default: 100
+  tier4MinKm?: number; // Default: 101
+  tier4MaxKm?: number; // Default: 149
 }
 
 export interface LocalFare {

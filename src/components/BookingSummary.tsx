@@ -49,9 +49,19 @@ export const BookingSummary = ({
     selectedCab?.id || '',
     tripType,
     distance,
-    tripType === 'local' ? hourlyPackage : undefined,
+    tripType === 'local' ? hourlyPackage : (tripType === 'outstation' ? tripMode : undefined),
     pickupDate
   );
+
+  // Debug: Log the fare data from useFare hook
+  console.log('BookingSummary: useFare hook data:', {
+    fareData,
+    isLoading,
+    tripType,
+    tripMode,
+    distance,
+    selectedCabId: selectedCab?.id
+  });
 
   const [calculatedFare, setCalculatedFare] = useState<number>(0);
   const [baseFare, setBaseFare] = useState<number>(0);
@@ -301,6 +311,8 @@ export const BookingSummary = ({
   useEffect(() => {
     if (!selectedCab || !fareData) return;
 
+    console.log('BookingSummary: Using fareData from useFare hook:', fareData);
+
     if (tripType === 'local' && fareData?.breakdown?.packageLabel) {
       setBaseFare(fareData.totalPrice);
       setDriverAllowance(0);
@@ -314,7 +326,14 @@ export const BookingSummary = ({
       setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
       setCalculatedFare(fareData.totalPrice);
     }
-  }, [fareData, selectedCab, tripType]);
+
+    // For outstation one-way trips, ensure we're using the tier pricing
+    if (tripType === 'outstation' && tripMode === 'one-way') {
+      console.log('BookingSummary: Outstation one-way trip - using tier pricing from useFare hook');
+      console.log('Tier used:', fareData.breakdown.tierUsed);
+      console.log('Base price from tier:', fareData.basePrice);
+    }
+  }, [fareData, selectedCab, tripType, tripMode]);
 
   useEffect(() => {
     if (tripType === 'local' && hourlyPackage) {
@@ -414,6 +433,17 @@ export const BookingSummary = ({
       return;
     }
 
+    // For outstation one-way trips, use the fareData from useFare hook (which has tier pricing)
+    if (tripType === 'outstation' && tripMode === 'one-way' && fareData?.totalPrice > 0) {
+      console.log('BookingSummary: Using tier pricing from useFare hook for outstation one-way:', fareData.totalPrice);
+      setCalculatedFare(fareData.totalPrice);
+      setBaseFare(fareData.basePrice || 0);
+      setDriverAllowance(fareData.breakdown.driverAllowance || 250);
+      setNightCharges(fareData.breakdown.nightCharges || 0);
+      setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
+      return;
+    }
+
     if (tripType === 'local' && fareData?.totalPrice > 0) {
       console.log('BookingSummary: Using fare from useFare hook for local package:', fareData.totalPrice, 'Package:', hourlyPackage);
       setCalculatedFare(fareData.totalPrice);
@@ -458,24 +488,74 @@ export const BookingSummary = ({
           const outstationFares = await getOutstationFaresForVehicle(normalizeVehicleId(selectedCab.id));
           console.log('BookingSummary: Retrieved outstation fares:', outstationFares);
 
-          newPerKmRate = outstationFares.pricePerKm || 15;
-          newBaseFare = outstationFares.basePrice || minimumKm * newPerKmRate;
-          newDriverAllowance = outstationFares.driverAllowance || 250;
+          if (tripMode === 'one-way') {
+            // Use dynamic tiered pricing for one-way outstation trips
+            let basePrice = 0;
+            let extraDistanceFare = 0;
+            let extraKmCharge = outstationFares.extraKmCharge || outstationFares.pricePerKm;
 
-          newEffectiveDistance = distance * 2;
+            // Get tier distance ranges (with defaults)
+            const tier1Min = outstationFares.tier1MinKm || 35;
+            const tier1Max = outstationFares.tier1MaxKm || 50;
+            const tier2Min = outstationFares.tier2MinKm || 51;
+            const tier2Max = outstationFares.tier2MaxKm || 75;
+            const tier3Min = outstationFares.tier3MinKm || 76;
+            const tier3Max = outstationFares.tier3MaxKm || 100;
+            const tier4Min = outstationFares.tier4MinKm || 101;
+            const tier4Max = outstationFares.tier4MaxKm || 149;
 
-          if (newEffectiveDistance > minimumKm) {
-            newExtraDistance = newEffectiveDistance - minimumKm;
-            newExtraDistanceFare = newExtraDistance * newPerKmRate;
+            // Dynamic tiered pricing for distances 35km to 149km
+            if (distance >= tier1Min && distance <= tier1Max) {
+              basePrice = outstationFares.tier1Price || outstationFares.basePrice;
+            } else if (distance >= tier2Min && distance <= tier2Max) {
+              basePrice = outstationFares.tier2Price || (outstationFares.basePrice * 1.2);
+            } else if (distance >= tier3Min && distance <= tier3Max) {
+              basePrice = outstationFares.tier3Price || (outstationFares.basePrice * 1.4);
+            } else if (distance >= tier4Min && distance <= tier4Max) {
+              basePrice = outstationFares.tier4Price || (outstationFares.basePrice * 1.6);
+            } else if (distance > tier4Max) {
+              // For distances beyond tier4Max, use traditional calculation
+              basePrice = outstationFares.basePrice;
+              const extraKm = distance - tier4Max;
+              extraDistanceFare = extraKm * extraKmCharge;
+            } else {
+              // For distances less than tier1Min, use traditional calculation
+              basePrice = outstationFares.basePrice;
+              const extraKm = Math.max(0, distance - tier1Min);
+              extraDistanceFare = extraKm * extraKmCharge;
+            }
+
+            newBaseFare = basePrice;
+            newExtraDistanceFare = extraDistanceFare;
+            newPerKmRate = extraKmCharge;
+            newDriverAllowance = outstationFares.driverAllowance || 250;
+
+            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+              newNightCharges = Math.round(newBaseFare * 0.1);
+            } else {
+              newNightCharges = 0;
+            }
           } else {
-            newExtraDistance = 0;
-            newExtraDistanceFare = 0;
-          }
+            // Round trip calculation (existing logic)
+            newPerKmRate = outstationFares.pricePerKm || 15;
+            newBaseFare = outstationFares.basePrice || minimumKm * newPerKmRate;
+            newDriverAllowance = outstationFares.driverAllowance || 250;
 
-          if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-            newNightCharges = Math.round(newBaseFare * 0.1);
-          } else {
-            newNightCharges = 0;
+            newEffectiveDistance = distance * 2;
+
+            if (newEffectiveDistance > minimumKm) {
+              newExtraDistance = newEffectiveDistance - minimumKm;
+              newExtraDistanceFare = newExtraDistance * newPerKmRate;
+            } else {
+              newExtraDistance = 0;
+              newExtraDistanceFare = 0;
+            }
+
+            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+              newNightCharges = Math.round(newBaseFare * 0.1);
+            } else {
+              newNightCharges = 0;
+            }
           }
         } catch (error) {
           console.error('Error fetching outstation fares:', error);
