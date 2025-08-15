@@ -29,20 +29,11 @@ interface CabOptionsProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares: boolean;
-  selectedCabBreakdown?: any;
 }
 
 // Clear the fare cache to ensure fresh data
 export const clearFareCache = () => {
-  console.log('Clearing fare cache from localStorage');
-  Object.keys(localStorage).forEach(key => {
-    if (key.startsWith('fare_')) {
-      localStorage.removeItem(key);
-    }
-  });
-  
-  // Dispatch event to notify components of cache clearing
-  window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+  window.dispatchEvent(new CustomEvent('clearFareCache', {
     detail: { timestamp: Date.now() }
   }));
 };
@@ -89,75 +80,18 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
     });
   }, []);
 
-  const handleCabSelect = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
-    onSelectCab(cab, fare, breakdown);
+  const handleCabSelect = (cab: CabType, fare: number, breakdown?: any) => {
     setHasSelectedCab(true);
-    
-    // Store the current trip type and package in localStorage for better fare syncing
-    localStorage.setItem('tripType', tripType.toString());
-    localStorage.setItem('currentPackage', hourlyPackage || '');
-    
-    // Emit event when a cab is selected, which BookingSummary will listen for
-    try {
-      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
-        detail: {
-          cabType: cab.id,
-          cabName: cab.name,
-          fare: fare,
-          fareSource: fareSource,
-          tripType: tripType,
-          tripMode: tripMode,
-          hourlyPackage: hourlyPackage,
-          timestamp: Date.now()
-        }
-      }));
-      console.log(`CabOptions: Dispatched fare update event for ${cab.id}: ${fare} (source: ${fareSource}, package: ${hourlyPackage})`);
-    } catch (error) {
-      console.error('Error dispatching cab selection event:', error);
-    }
+    onSelectCab(cab, fare, breakdown);
   };
 
-  // Scroll to booking summary when a cab is selected
+  // Clear fare cache when key parameters change
   useEffect(() => {
-    if (selectedCab && hasSelectedCab) {
-      // Wait a brief moment for UI to update before scrolling
-      setTimeout(() => {
-        const bookingSummaryElement = document.getElementById('booking-summary');
-        if (bookingSummaryElement) {
-          bookingSummaryElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          // If element not found, try to find any element with "summary" in the id or class
-          const alternativeSummaryElement = 
-            document.querySelector('[id*="summary" i], [class*="summary" i]') || 
-            document.querySelector('[id*="book" i], [class*="book" i]');
-          
-          if (alternativeSummaryElement) {
-            alternativeSummaryElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }
-        setHasSelectedCab(false); // Reset after scrolling
-      }, 100);
-    }
-  }, [selectedCab, hasSelectedCab]);
-
-  // Load initial state and listen for fare calculation events
-  useEffect(() => {
-    // Listen for fare calculation events to update loading state
-    const handleFareCalculated = () => {
-      // This is a placeholder implementation. You might want to implement this part
-      // to update the isCalculatingFares state based on the fare calculation logic
-    };
-    
-    window.addEventListener('fare-calculated', handleFareCalculated as EventListener);
-    
-    // Set a timeout to ensure we don't show the loading state forever
     const timeoutId = setTimeout(() => {
-      // This is a placeholder implementation. You might want to implement this part
-      // to update the isCalculatingFares state based on the fare calculation logic
-    }, 3000);
-    
+      clearFareCache();
+    }, 1000);
+
     return () => {
-      window.removeEventListener('fare-calculated', handleFareCalculated as EventListener);
       clearTimeout(timeoutId);
     };
   }, [cabTypes, distance, tripType, hourlyPackage]);

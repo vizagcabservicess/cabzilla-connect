@@ -1624,7 +1624,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             />
                           </div>
                         </div>
-                        <div className="lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md">
+                        <div className="lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md mobile-nav-fix">
                           <div ref={bookingSummaryRef} id="booking-summary" className="text-xs lg:text-[12px]">
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 
@@ -1644,7 +1644,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           </div>
                           <Button 
                             onClick={handleBookNow}
-                            className="w-full mt-2 py-3 text-base mobile-button text-lg lg:text-[16px]"
+                            className="w-full mt-2 py-3 text-base mobile-button hero-book-now-button text-lg lg:text-[16px]"
                             disabled={!isFormValid || !selectedCab || isLoading}
                           >
                             {isLoading ? (

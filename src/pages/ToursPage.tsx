@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Location } from "@/lib/locationData";
 import { isLocationInVizag } from "@/lib/locationUtils";
-import { MapPin, Calendar, Loader2, Search } from "lucide-react";
+import { MapPin, Calendar, Loader2, Search, ChevronUp, ChevronDown } from "lucide-react";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
@@ -34,6 +34,7 @@ const ToursPage = () => {
   const [searchInitiated, setSearchInitiated] = useState<boolean>(false);
   const [tours, setTours] = useState<TourListItem[]>([]);
   const [isLoadingTours, setIsLoadingTours] = useState<boolean>(false);
+  const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
   
   // Load tours on component mount if location state is provided
   useEffect(() => {
@@ -77,6 +78,7 @@ const ToursPage = () => {
     setIsSearching(true);
     setIsLoadingTours(true);
     setSearchInitiated(true);
+    setShowSearchForm(false); // Hide search form after successful search
     
     try {
       const toursList = await tourDetailAPI.getTours();
@@ -107,6 +109,16 @@ const ToursPage = () => {
     navigate(`/tours/${tourId}`);
   };
 
+  const handleModifySearch = () => {
+    setShowSearchForm(true);
+    // Scroll to top smoothly to show the search form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCloseSearchForm = () => {
+    setShowSearchForm(false);
+  };
+
   // Only use what is available from backend for each card
   const buildTourCardProps = (tour: TourListItem) => {
     // Use the real inclusions and sightseeingPlaces passed from props or API
@@ -121,7 +133,19 @@ const ToursPage = () => {
   const renderSearchForm = () => (
     <Card className="bg-white shadow-lg">
       <CardContent className="p-6">
-        <h2 className="text-2xl font-medium text-gray-800 mb-6">Find Available Tours</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-medium text-gray-800">Find Available Tours</h2>
+          {searchInitiated && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCloseSearchForm}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <LocationInput
@@ -165,9 +189,12 @@ const ToursPage = () => {
     <div className="bg-white rounded-2xl shadow p-5 px-7 mb-5">
       <div className="flex items-center justify-between mb-5">
         <h2 className="font-bold text-2xl text-gray-900">Available Tour Packages</h2>
-        <button className="px-3 py-1 border rounded-lg font-semibold text-sm hover:bg-blue-50 transition">
+        <Button 
+          onClick={handleModifySearch}
+          className="px-3 py-1 border rounded-lg font-semibold text-sm hover:bg-blue-50 transition bg-yellow-400 hover:bg-yellow-500 text-gray-900 border-yellow-400"
+        >
           Modify Search
-        </button>
+        </Button>
       </div>
       {/* Tour Cards Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-7">
@@ -208,7 +235,15 @@ const ToursPage = () => {
               {renderSearchForm()}
             </>
           ) : (
-            renderTourListing()
+            <>
+              {/* Collapsible Search Form */}
+              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                showSearchForm ? 'max-h-96 opacity-100 mb-6' : 'max-h-0 opacity-0'
+              }`}>
+                {renderSearchForm()}
+              </div>
+              {renderTourListing()}
+            </>
           )}
         </div>
       </div>

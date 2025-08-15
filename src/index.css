@@ -311,3 +311,64 @@ body {
   right: 0 !important;
   margin-top: 4px !important;
 }
+
+/* Mobile-specific fixes for PopularRoutes and Footer */
+@media (max-width: 767px) {
+  /* Ensure footer is visible above mobile navigation */
+  footer {
+    margin-bottom: 4rem !important;
+    padding-bottom: 2rem !important;
+  }
+  
+  /* Ensure Book Now buttons are visible */
+  .popular-routes-card {
+    min-height: auto !important;
+  }
+  
+  /* Add extra bottom padding for mobile */
+  .mobile-bottom-spacing {
+    padding-bottom: 5rem !important;
+  }
+  
+  /* Ensure proper spacing for mobile navigation */
+  .mobile-nav-spacing {
+    margin-bottom: 4rem !important;
+  }
+
+  /* Mobile Book Now button fixes */
+  .mobile-button {
+    position: relative !important;
+    z-index: 40 !important;
+    margin-bottom: 5rem !important;
+    padding: 1rem !important;
+    font-size: 1.1rem !important;
+    font-weight: 600 !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  /* Ensure booking summary and Book Now button are visible */
+  #booking-summary {
+    margin-bottom: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  /* Fix for Hero component Book Now button */
+  .hero-book-now-button {
+    position: sticky !important;
+    bottom: 5rem !important;
+    z-index: 40 !important;
+    margin: 1rem 0 !important;
+    padding: 1rem !important;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+  }
+
+  /* Ensure proper spacing for mobile navigation bar */
+  .mobile-nav-fix {
+    padding-bottom: 5rem !important;
+  }
+}
