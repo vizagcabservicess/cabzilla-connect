@@ -20,7 +20,7 @@ const Index = () => {
   const isSearch = searchParams.get('search') === '1';
 
   return (
-    <div className="min-h-screen bg-white flex flex-col pt-10">
+    <div className="min-h-screen bg-white flex flex-col pt-20">
       <Navbar />
       <main className="flex-1">
         <Hero
