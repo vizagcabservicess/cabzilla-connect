@@ -17,12 +17,12 @@ export const Logo: React.FC<LogoProps> = ({
     switch (size) {
       case 'small': return 'h-6';
       case 'large': return 'h-12';
-      default: return 'h-8';
+      default: return 'h-12';
     }
   };
 
   // Using the correct uploaded logo
-  const logoPath = '/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png';
+  const logoPath = '/uploads/vizagtaxihub-logo.png';
 
   return (
     <Link to="/" className={`block ${className}`}>

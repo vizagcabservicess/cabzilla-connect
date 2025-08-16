@@ -88,6 +88,7 @@ export function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
+      <main className="flex-1 pt-16">
       <Helmet>
         <title>Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy</title>
         <meta name="description" content="Learn how Vizag Taxi Hub protects your personal information and privacy. Comprehensive privacy policy covering data collection, usage, and your rights." />
@@ -320,6 +321,7 @@ export function PrivacyPolicyPage() {
       </section>
 
       <Footer />
+    </main>
     </div>
   );
 }

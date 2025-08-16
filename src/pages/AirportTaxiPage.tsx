@@ -12,6 +12,7 @@ import { MobileNavigation } from '@/components/MobileNavigation';
 export function AirportTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
   const [isSearchActive, setIsSearchActive] = React.useState(false);
+  const [isEditMode, setIsEditMode] = React.useState(false);
   const scrollWithOffset = (el: HTMLElement | null, offset: number = 120) => {
     if (!el) return;
     const y = el.getBoundingClientRect().top + window.pageYOffset - offset;
@@ -127,7 +128,7 @@ export function AirportTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
       <Helmet>
         <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
         <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
@@ -172,6 +173,7 @@ export function AirportTaxiPage() {
             <AirportHeroWidget 
               onSearch={() => {
                 setIsSearchActive(true);
+                setIsEditMode(false); // Reset edit mode when search is completed
                 setTimeout(() => scrollWithOffset(widgetRef.current, 120), 50);
               }}
               onStepChange={(step) => {
@@ -184,6 +186,7 @@ export function AirportTaxiPage() {
                 }
               }}
               onEditStart={() => {
+                setIsEditMode(true);
                 const section = document.querySelector('section.relative.bg-gradient-to-br.from-sky-50.to-white');
                 if (section) {
                   (section as HTMLElement).style.paddingTop = '120px';
@@ -197,7 +200,7 @@ export function AirportTaxiPage() {
       </section>
 
       {/* Features */}
-      {!isSearchActive && (
+      {!isSearchActive && !isEditMode && (
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -223,7 +226,7 @@ export function AirportTaxiPage() {
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
                   {feature.icon}
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <h4 className="font-semibold text-gray-900 mb-2">{feature.title}</h4>
                 <p className="text-gray-600 text-sm">{feature.description}</p>
               </motion.div>
             ))}
@@ -233,7 +236,7 @@ export function AirportTaxiPage() {
       )}
 
       {/* Fleet Options */}
-      {!isSearchActive && (
+      {!isSearchActive && !isEditMode && (
       <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -293,7 +296,7 @@ export function AirportTaxiPage() {
       )}
 
       {/* Popular Routes */}
-      {!isSearchActive && (
+      {!isSearchActive && !isEditMode && (
       <section className="py-8 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -353,7 +356,7 @@ export function AirportTaxiPage() {
       </section>
       )}
        {/* CTA */}
-       {!isSearchActive && (
+       {!isSearchActive && !isEditMode && (
        <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-sky-600/20 to-blue-600/20"></div>
         <div className="relative max-w-3xl mx-auto text-center px-6">
@@ -385,6 +388,7 @@ export function AirportTaxiPage() {
       )}
 
       {/* Service Features */}
+      {!isSearchActive && !isEditMode && (
       <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div 
@@ -421,6 +425,7 @@ export function AirportTaxiPage() {
           </div>
         </div>
       </section>
+      )}
 
      
 

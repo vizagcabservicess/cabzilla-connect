@@ -111,7 +111,7 @@ export function LocalTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
       <Helmet>
         <title>Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
@@ -120,7 +120,7 @@ export function LocalTaxiPage() {
       </Helmet>
 
       {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-blue-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-8 md:pt-20 pb-12 md:pb-28'}`}>
+      <section className={`relative bg-gradient-to-br from-blue-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-16 md:pt-24 pb-16 md:pb-32'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {!isSearchActive && (
           <motion.div 

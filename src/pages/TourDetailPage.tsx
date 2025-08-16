@@ -300,11 +300,12 @@ const TourDetailPage = () => {
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
       
       toast({
-        title: "Booking Confirmed!",
-        description: "Your tour has been booked successfully",
+        title: "Booking Created!",
+        description: "Please complete payment to confirm your tour booking",
       });
       
-      navigate("/booking-confirmation", { state: { newBooking: true } });
+      // Navigate to payment page instead of booking confirmation
+      navigate("/payment");
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({
@@ -358,7 +359,7 @@ const TourDetailPage = () => {
 
         
         {/* Edit Module with PDF Export for Super Admin */}
-        <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center justify-between gap-4 mb-4 py-8">
           <div className="flex-1">
             <TourEditModule
               pickupLocation={pickupLocation.name}

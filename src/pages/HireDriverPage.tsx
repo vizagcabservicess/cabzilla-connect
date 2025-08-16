@@ -138,10 +138,10 @@ export default function HireDriverPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-16">
       <Navbar />
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-8">
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background pt-16 py-8">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Hire a Professional Driver

@@ -294,7 +294,7 @@ scrollbar-gutter: stable;
 /* Prevent layout shifts from scrollbar changes */
 body {
 overflow-x: hidden;
-overflow-y: scroll;
+
 }
 
 /* Ensure the page doesn't shift when dropdowns open */

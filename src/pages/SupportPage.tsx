@@ -49,7 +49,7 @@ export function SupportPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-16">
       <Navbar />
       <Helmet>
         <title>Support - Vizag Taxi Hub | 24/7 Customer Support</title>

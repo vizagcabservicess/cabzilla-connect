@@ -317,6 +317,7 @@ export function Navbar() {
                           key={city}
                           to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
                           className="block py-2 px-3 rounded hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          onClick={() => setMegaMenuOpen(null)}
                         >
                           {city}
                         </Link>
@@ -335,6 +336,7 @@ export function Navbar() {
                           key={tour.tourId}
                           to={`/tours/${tour.tourId}`}
                           className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
                         </Link>
@@ -353,6 +355,7 @@ export function Navbar() {
                           key={tour.tourId}
                           to={`/tours/${tour.tourId}`}
                           className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
                         </Link>
@@ -364,7 +367,12 @@ export function Navbar() {
                   <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
                   <div className="grid grid-cols-1 gap-2">
                     {right[activeLeftIndex].items.map((sub, i) => (
-                      <Link key={i} to="#" className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors">
+                      <Link 
+                        key={i} 
+                        to="#" 
+                        className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors"
+                        onClick={() => setMegaMenuOpen(null)}
+                      >
                         {sub}
                       </Link>
                     ))}
@@ -379,7 +387,7 @@ export function Navbar() {
   }
 
   return (
-    <nav className="bg-white shadow-lg sticky top-0 z-50">
+    <nav className="bg-white shadow-lg fixed top-0 left-0 right-0 z-[9999] w-full">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
@@ -424,7 +432,7 @@ export function Navbar() {
             <div className="flex items-center space-x-4 text-sm">
               <a 
                 href="tel:+919966363662" 
-                className="flex items-center text-blue-600 hover:text-blue-700 transition-colors font-medium"
+                className="flex items-center bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all duration-200 font-medium px-3 py-2 rounded-lg border border-blue-200 hover:border-blue-300"
               >
                 <Phone className="h-4 w-4 mr-1" />
                 9966363662
@@ -486,13 +494,13 @@ export function Navbar() {
                 </SheetHeader>
                 <div className="grid gap-4 py-4">
                   {/* Home */}
-                  <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                  <Link to="/" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                     <Home className="h-5 w-5" />
                     <span>Home</span>
                   </Link>
 
                   {/* Hire Driver - Standalone */}
-                  <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                  <Link to="/hire-driver" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                     <User className="h-5 w-5" />
                     <span>Hire Driver</span>
                   </Link>
@@ -515,19 +523,19 @@ export function Navbar() {
                     </div>
                     {mobileMenuSections.services && (
                       <div className="ml-6 space-y-1">
-                        <Link to="/local-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/local-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Car className="h-4 w-4" />
                           <span>Local Taxi</span>
                         </Link>
-                        <Link to="/outstation-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/outstation-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <MapPin className="h-4 w-4" />
                           <span>Outstation</span>
                         </Link>
-                        <Link to="/airport-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/airport-taxi" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Plane className="h-4 w-4" />
                           <span>Airport Transfer</span>
                         </Link>
-                        <Link to="/tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Calendar className="h-4 w-4" />
                           <span>Tour Packages</span>
                         </Link>
@@ -553,19 +561,19 @@ export function Navbar() {
                     </div>
                     {mobileMenuSections.company && (
                       <div className="ml-6 space-y-1">
-                        <Link to="/our-story" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/our-story" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Our Story</span>
                         </Link>
-                        <Link to="/vision-mission" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/vision-mission" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Vision & Mission</span>
                         </Link>
-                        <Link to="/fleet" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/fleet" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Car className="h-4 w-4" />
                           <span>Fleet</span>
                         </Link>
-                        <Link to="/careers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/careers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <User className="h-4 w-4" />
                           <span>Careers</span>
                         </Link>
@@ -591,27 +599,27 @@ export function Navbar() {
                     </div>
                     {mobileMenuSections.support && (
                       <div className="ml-6 space-y-1">
-                        <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/support" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Phone className="h-4 w-4" />
                           <span>Support</span>
                         </Link>
-                        <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/help-center" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Help Center</span>
                         </Link>
-                        <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/contact-us" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Phone className="h-4 w-4" />
                           <span>Contact Us</span>
                         </Link>
-                        <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/terms-conditions" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Terms & Conditions</span>
                         </Link>
-                        <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/privacy-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Privacy Policy</span>
                         </Link>
-                        <Link to="/cancellation-refund-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm">
+                        <Link to="/cancellation-refund-policy" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Info className="h-4 w-4" />
                           <span>Cancellation & Refund Policy</span>
                         </Link>
@@ -625,7 +633,7 @@ export function Navbar() {
                   <div className="border-t pt-4">
                     <div className="flex items-center space-x-2 py-2 px-4">
                       <Phone className="h-5 w-5 text-blue-600" />
-                      <a href="tel:+919966363662" className="text-blue-600 font-medium">
+                      <a href="tel:+919966363662" className="text-blue-600 font-medium bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200">
                         9966363662
                       </a>
                     </div>
@@ -645,11 +653,11 @@ export function Navbar() {
                     </div>
                   ) : (
                     <div className="border-t pt-4 space-y-2">
-                      <Link to="/login" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                      <Link to="/login" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                         <User className="h-5 w-5" />
                         <span>Login</span>
                       </Link>
-                      <Link to="/signup" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors">
+                      <Link to="/signup" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                         <UserPlus className="h-5 w-5" />
                         <span>Sign Up</span>
                       </Link>

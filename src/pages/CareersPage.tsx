@@ -149,7 +149,7 @@ export default function CareersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background page-container">
+    <div className="min-h-screen bg-background page-container pt-16">
       <Navbar />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">

@@ -42,7 +42,7 @@ export function WhyChooseUs() {
   ];
 
   return (
-    <section className="px-4 py-4 pb-2 md:py-12 bg-gray-50">
+    <section className="px-4 py-4 pb-2 md:pt-12 bg-gray-50">
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="text-center mb-4 md:mb-10">
@@ -91,7 +91,7 @@ export function WhyChooseUs() {
         </div>
 
         {/* CTA Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 mt-8 md:mt-12 text-center">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 text-center">
           <div className="max-w-2xl mx-auto">
             <h3 className="text-xl md:text-2xl font-medium mb-2">Ready to Experience the Difference?</h3>
             <p className="mb-4 opacity-90 text-sm md:text-base">Join thousands of satisfied customers who trust Vizag Taxi Hub for their transportation needs.</p>

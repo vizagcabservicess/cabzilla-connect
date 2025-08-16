@@ -156,20 +156,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Add new state for airport direction label
   const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
   const [isTabSwitching, setIsTabSwitching] = useState<boolean>(false);
+  const [isSlidingSearch, setIsSlidingSearch] = useState<boolean>(false);
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
-    setCurrentStep(1);
+    console.log('Edit pickup location clicked - setting sliding search to true');
+    setIsSlidingSearch(true);
+    // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
-    if (onStepChange) onStepChange(1);
   };
 
   const handleEditPickupDate = () => {
-    setCurrentStep(1);
+    console.log('Edit pickup date clicked - setting sliding search to true');
+    setIsSlidingSearch(true);
+    // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
-    if (onStepChange) onStepChange(1);
   };
 
   useEffect(() => {
@@ -806,6 +809,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     // Immediately switch to step 2 (hide banner), then finish any animations
     setCurrentStep(2);
     if (onStepChange) onStepChange(2);
+    
+    // If we're in sliding search mode, hide the search widget after updating
+    if (isSlidingSearch) {
+      console.log('In sliding search mode - will hide search widget after 2 seconds');
+      setTimeout(() => {
+        console.log('Hiding search widget - setting isSlidingSearch to false');
+        setIsSlidingSearch(false);
+      }, 2000); // Increased delay to allow the search to complete and animation to be visible
+    }
+    
     setTimeout(() => {
       setIsLoading(false);
     }, 300);
@@ -1092,7 +1105,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation]);
 
   return (
-    <div className="relative bg-[#f2f2f8]">
+    <div className="relative">
       {/* Mobile Edit Form Overlay */}
       {isMobile && showMobileEditForm && (
         <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
@@ -1259,15 +1272,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         ${!isSearchActive && currentStep === 1 
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
-        } w-full px-0 sm:px-0`}>
+        } w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
-            <div className="bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8">
+            <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8`}>
               
               
               {!showGuestDetailsForm ? (
                 <>
-                  {currentStep === 1 && (
+                  {(currentStep === 1 || isSlidingSearch) && (
                     <div className="space-y-6 sm:space-y-8">
                       {/* Trip Type Selector */}
                       <div className="w-full mb-6">
@@ -1468,7 +1481,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   )}
 
                   {/* Step 2 - Cab Selection */}
-                  {currentStep === 2 && (
+                  {currentStep === 2 && !isSlidingSearch && (
                     <>
                       {/* Trip Summary Bar */}
                       <div className="mb-4 bg-[#f8faf5] border border-[#e0e7d9] rounded-xl w-full max-w-full overflow-hidden px-4 py-3 shadow-sm">
@@ -1496,10 +1509,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           {/* Always Visible Edit Button */}
                           <button
                             onClick={() => {
+                              console.log('Main edit button clicked');
                               if (isMobile) {
                                 setShowMobileEditForm(true);
                               } else {
-                                setCurrentStep(1);
+                                console.log('Setting sliding search to true from main edit button');
+                                setIsSlidingSearch(true);
+                                // Keep in step 2, don't change step
+                                setShowGuestDetailsForm(false);
                               }
                               if (onEditStart) onEditStart();
                             }}

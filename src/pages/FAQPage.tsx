@@ -174,6 +174,7 @@ const FAQPage = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
+      <main className="flex-1 pt-16">
       
       <div className="bg-blue-50">
         <div className="container mx-auto px-4 py-16">
@@ -324,6 +325,7 @@ const FAQPage = () => {
           </div>
         </div>
       </div>
+      </main>
       
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">

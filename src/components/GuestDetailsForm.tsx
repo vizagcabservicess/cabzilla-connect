@@ -194,7 +194,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             <div className="border rounded-xl p-4 bg-gray-50">
               <div className="flex items-center gap-2 mb-3">
                 <CreditCard size={20} className="text-blue-500" />
-                <h3 className="font-semibold text-gray-900">Payment Options</h3>
+                <h5 className="font-semibold text-gray-900">Payment Options</h5>
               </div>
               <div className="space-y-3">
                 <label className="flex items-center justify-between p-3 bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:border-blue-300">

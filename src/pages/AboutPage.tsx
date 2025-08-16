@@ -6,6 +6,7 @@ const AboutPage = () => {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
+      <main className="flex-1 pt-16">
       
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-3xl md:text-4xl font-bold mb-8 text-gray-800">About Vizag Taxi Hub</h1>
@@ -75,6 +76,7 @@ const AboutPage = () => {
           </p>
         </div>
       </div>
+      </main>
       
       <footer className="bg-gray-50 py-12">
         <div className="container mx-auto px-4">

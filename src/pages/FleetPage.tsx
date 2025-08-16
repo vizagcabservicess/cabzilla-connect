@@ -86,7 +86,7 @@ export default function FleetPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">
@@ -97,8 +97,8 @@ export default function FleetPage() {
             Discover our diverse range of well-maintained vehicles, perfect for every journey
           </p>
           
-          {/* Search Bar */}
-          <div className="max-w-md mx-auto relative mb-8">
+          {/* Search Bar - Hidden */}
+          {/* <div className="max-w-md mx-auto relative mb-8">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search vehicles..."
@@ -106,10 +106,10 @@ export default function FleetPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
-          </div>
+          </div> */}
 
-          {/* Category Filters */}
-          <div className="flex flex-wrap justify-center gap-2">
+          {/* Category Filters - Hidden */}
+          {/* <div className="flex flex-wrap justify-center gap-2">
             {categories.map((category) => (
               <Button
                 key={category}
@@ -120,7 +120,7 @@ export default function FleetPage() {
                 {category}
               </Button>
             ))}
-          </div>
+          </div> */}
         </div>
       </div>
 

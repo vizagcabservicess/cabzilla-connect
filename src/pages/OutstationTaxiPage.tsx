@@ -100,7 +100,7 @@ export function OutstationTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
       <Helmet>
         <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
@@ -109,7 +109,7 @@ export function OutstationTaxiPage() {
       </Helmet>
 
                                                                                                                      {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-8 md:pt-20 pb-12 md:pb-28'}`}>
+      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-16 md:pt-24 pb-16 md:pb-32'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {!isSearchActive && (
           <motion.div 
@@ -194,7 +194,7 @@ export function OutstationTaxiPage() {
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
                   {feature.icon}
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <h4 className="font-semibold text-gray-900 mb-2">{feature.title}</h4>
                 <p className="text-gray-600 text-sm">{feature.description}</p>
               </motion.div>
             ))}

@@ -87,7 +87,7 @@ export function HelpCenterPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-16">
       <Navbar />
       <Helmet>
         <title>Help Center - Vizag Taxi Hub | FAQs & Support Guide</title>
@@ -155,7 +155,7 @@ export function HelpCenterPage() {
                     <div className={`w-12 h-12 ${category.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
                       {category.icon}
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{category.title}</h3>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">{category.title}</h4>
                     <p className="text-gray-600 text-sm">{category.description}</p>
                   </CardContent>
                 </Card>
@@ -187,7 +187,7 @@ export function HelpCenterPage() {
               {filteredFaqs.map((faq, index) => (
                 <AccordionItem key={index} value={`item-${index}`} className="bg-gray-50 rounded-lg px-6">
                   <AccordionTrigger className="text-left hover:no-underline py-6">
-                    <span className="font-semibold text-gray-900">{faq.question}</span>
+                    <h4 className="font-semibold text-gray-900">{faq.question}</h4>
                   </AccordionTrigger>
                   <AccordionContent className="pb-6 text-gray-600 leading-relaxed">
                     {faq.answer}

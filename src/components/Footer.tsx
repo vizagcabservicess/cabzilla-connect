@@ -6,20 +6,6 @@ const Footer = () => {
   return (
     <footer className="bg-gray-900 text-white py-12 md:py-16 mt-auto pb-20 md:pb-16">
       <div className="container mx-auto px-8 md:px-12 lg:px-16 space-y-12">
-        {/* Company Info */}
-        <div className="text-center md:text-left">
-          <div className="flex justify-center md:justify-start mb-6">
-            <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-12 md:h-14" />
-          </div>
-          <p className="text-base md:text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto md:mx-0 mb-6">
-            Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam. We place a high priority on customer satisfaction and safety.
-          </p>
-          <div className="inline-flex items-center gap-3 bg-green-600/20 px-6 py-3 rounded-2xl border border-green-500/30">
-            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-lg font-semibold text-green-400">Available 24/7</span>
-          </div>
-        </div>
-
         {/* Quick Links Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div>
