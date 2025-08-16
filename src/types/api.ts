@@ -84,6 +84,7 @@ export interface Location {
   lng: number;
   address?: string;
   placeId?: string;
+  isInVizag?: boolean;
 }
 
 export interface Booking {

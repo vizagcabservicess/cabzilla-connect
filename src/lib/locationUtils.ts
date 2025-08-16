@@ -24,6 +24,8 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
     id: location.id || '',
     name: location.name || '',
     address: location.address || location.name || '',
+    city: location.city || 'Visakhapatnam',
+    state: location.state || 'Andhra Pradesh',
     lat: typeof location.lat === 'number' ? location.lat : 0,
     lng: typeof location.lng === 'number' ? location.lng : 0,
     isInVizag: typeof location.isInVizag === 'boolean' ? location.isInVizag : false
