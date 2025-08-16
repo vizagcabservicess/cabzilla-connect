@@ -24,6 +24,7 @@ export interface GuestDetails {
   phone: string;
   email: string;
   totalPrice: number;
+  paymentMode?: 'partial' | 'full';
   gstEnabled?: boolean;
   gstNumber?: string;
   companyName?: string;
@@ -45,6 +46,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
       phone: sessionStorage.getItem('guestPhone') || '',
       email: sessionStorage.getItem('guestEmail') || '',
       totalPrice: totalPrice,
+      paymentMode: (sessionStorage.getItem('paymentMode') as 'partial' | 'full') || 'partial',
       gstEnabled: sessionStorage.getItem('gstEnabled') === 'true' || false,
       gstNumber: sessionStorage.getItem('gstNumber') || '',
       companyName: sessionStorage.getItem('companyName') || '',
@@ -60,6 +62,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     sessionStorage.setItem('guestName', data.name);
     sessionStorage.setItem('guestPhone', data.phone);
     sessionStorage.setItem('guestEmail', data.email);
+    sessionStorage.setItem('paymentMode', data.paymentMode || 'partial');
     sessionStorage.setItem('gstEnabled', String(!!data.gstEnabled));
     if (data.gstEnabled) {
       sessionStorage.setItem('gstNumber', data.gstNumber || '');
@@ -70,6 +73,10 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     
     onSubmit({ ...data, totalPrice });
   };
+
+  // Calculate payment amounts
+  const partialAmount = Math.round(totalPrice * 0.3);
+  const fullAmount = totalPrice;
   
   return (
     <motion.div
@@ -181,6 +188,51 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   {errors.email.message}
                 </motion.p>
               )}
+            </div>
+
+            {/* Payment Options */}
+            <div className="border rounded-xl p-4 bg-gray-50">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard size={20} className="text-blue-500" />
+                <h3 className="font-semibold text-gray-900">Payment Options</h3>
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between p-3 bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:border-blue-300">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="paymentMode"
+                      value="partial"
+                      checked={watchedValues.paymentMode === 'partial'}
+                      onChange={() => setValue('paymentMode', 'partial', { shouldDirty: true, shouldValidate: true })}
+                      className="mt-1"
+                    />
+                    <div>
+                      <span className="font-medium text-gray-900">Part Pay</span>
+                      <div className="text-sm text-gray-500">Pay 30% now, rest to the driver</div>
+                    </div>
+                  </div>
+                  <span className="font-semibold text-gray-900">{formatPrice(partialAmount)}</span>
+                </label>
+                
+                <label className="flex items-center justify-between p-3 bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:border-blue-300">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="paymentMode"
+                      value="full"
+                      checked={watchedValues.paymentMode === 'full'}
+                      onChange={() => setValue('paymentMode', 'full', { shouldDirty: true, shouldValidate: true })}
+                      className="mt-1"
+                    />
+                    <div>
+                      <span className="font-medium text-gray-900">Full Pay</span>
+                      <div className="text-sm text-gray-500">Pay total amount</div>
+                    </div>
+                  </div>
+                  <span className="font-semibold text-gray-900">{formatPrice(fullAmount)}</span>
+                </label>
+              </div>
             </div>
 
             {/* GST Billing Details (Optional) */}
@@ -297,7 +349,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 ) : (
                   <>
                     <CreditCard className="h-4 w-4" />
-                    {paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - {formatPrice(totalPrice)}
+                    {paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - {formatPrice(watchedValues.paymentMode === 'partial' ? partialAmount : fullAmount)}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}

@@ -21,7 +21,6 @@ const PaymentPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
-  const [paymentMode, setPaymentMode] = useState<'partial' | 'full'>('partial');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'failed'>('pending');
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
 
@@ -74,6 +73,9 @@ const PaymentPage = () => {
 
     setIsLoading(true);
     try {
+      // Get payment mode from sessionStorage (set in GuestDetailsForm)
+      const paymentMode = sessionStorage.getItem('paymentMode') as 'partial' | 'full' || 'partial';
+      
       // Amount based on selection: partial (30%) or full
       const amount = paymentMode === 'partial'
         ? Math.round((bookingDetails.totalPrice || 0) * 0.3)
@@ -129,6 +131,9 @@ const PaymentPage = () => {
   const handlePaymentSuccess = async (response: any) => {
     try {
       setPaymentStatus('processing');
+      
+      // Get payment mode from sessionStorage
+      const paymentMode = sessionStorage.getItem('paymentMode') as 'partial' | 'full' || 'partial';
       
       // Calculate the amount based on payment mode
       const amount = paymentMode === 'partial'
@@ -201,6 +206,12 @@ const PaymentPage = () => {
     setPaymentResponse(null);
   };
 
+  // Get payment mode and calculate amounts
+  const paymentMode = sessionStorage.getItem('paymentMode') as 'partial' | 'full' || 'partial';
+  const partialAmount = Math.round((bookingDetails?.totalPrice || 0) * 0.3);
+  const fullAmount = bookingDetails?.totalPrice || 0;
+  const currentAmount = paymentMode === 'partial' ? partialAmount : fullAmount;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -255,41 +266,22 @@ const PaymentPage = () => {
                 
                 <div className="flex flex-col items-center p-6 border rounded-md">
                   <CreditCard size={48} className="text-blue-500 mb-3" />
-                  <h3 className="text-xl font-semibold mb-1">Payment Options</h3>
+                  <h3 className="text-xl font-semibold mb-1">Payment Summary</h3>
                   <div className="w-full max-w-md mx-auto mb-4">
-                    <div className="border rounded-lg divide-y">
-                      <label className="flex items-center justify-between p-3 cursor-pointer">
-                        <span className="flex items-start gap-3">
-                          <input
-                            type="radio"
-                            name="paymode"
-                            checked={paymentMode === 'partial'}
-                            onChange={() => setPaymentMode('partial')}
-                            className="mt-1"
-                          />
-                          <span>
-                            <span className="font-medium">Part Pay</span>
-                            <div className="text-xs text-gray-500">Pay 30% now, rest to the driver</div>
-                          </span>
-                        </span>
-                        <span className="font-semibold">{formatPrice(Math.round((bookingDetails.totalPrice || 0) * 0.3))}</span>
-                      </label>
-                      <label className="flex items-center justify-between p-3 cursor-pointer">
-                        <span className="flex items-start gap-3">
-                          <input
-                            type="radio"
-                            name="paymode"
-                            checked={paymentMode === 'full'}
-                            onChange={() => setPaymentMode('full')}
-                            className="mt-1"
-                          />
-                          <span>
-                            <span className="font-medium">Full Pay</span>
-                            <div className="text-xs text-gray-500">Pay total amount</div>
-                          </span>
-                        </span>
-                        <span className="font-semibold">{formatPrice(bookingDetails.totalPrice || 0)}</span>
-                      </label>
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">Payment Mode:</span>
+                        <span className="font-semibold capitalize">{paymentMode === 'partial' ? 'Part Pay (30%)' : 'Full Pay'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Amount to Pay:</span>
+                        <span className="font-semibold text-lg">{formatPrice(currentAmount)}</span>
+                      </div>
+                      {paymentMode === 'partial' && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <p>Remaining amount: {formatPrice(fullAmount - partialAmount)} (to be paid to driver)</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -305,7 +297,7 @@ const PaymentPage = () => {
                         <span>Processing...</span>
                       </div>
                     ) : (
-                      <span>Pay Now - {formatPrice(paymentMode === 'partial' ? Math.round((bookingDetails.totalPrice || 0) * 0.3) : (bookingDetails.totalPrice || 0))}</span>
+                      <span>Pay Now - {formatPrice(currentAmount)}</span>
                     )}
                   </Button>
                 </div>
