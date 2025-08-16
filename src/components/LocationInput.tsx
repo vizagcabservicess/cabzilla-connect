@@ -95,70 +95,45 @@ export function LocationInput({
       return;
     }
     
-    // Only update if we haven't initialized yet or if there's a real change
-    if (!initializedRef.current || 
-        (valueRef.current !== value || locationRef.current !== location)) {
-      
-      // Update refs
-      valueRef.current = value;
-      locationRef.current = location;
-      
-      // Set input value based on value or location (without triggering onChange)
-      if (typeof value === 'string') {
-        setInputValue(value);
-      } else if (value && typeof value === 'object') {
-        setInputValue(value.name || value.address || "");
-      } else if (location) {
-        setInputValue(location.name || location.address || "");
-      } else {
-        // Clear input when value is undefined/null
-        setInputValue("");
-      }
-      
-      // Mark as initialized
-      initializedRef.current = true;
+    // Always update when value/location changes, regardless of initialization state
+    // Update refs
+    valueRef.current = value;
+    locationRef.current = location;
+    
+    // Set input value based on value or location (without triggering onChange)
+    if (typeof value === 'string') {
+      setInputValue(value);
+    } else if (value && typeof value === 'object') {
+      setInputValue(value.name || value.address || "");
+    } else if (location) {
+      setInputValue(location.name || location.address || "");
+    } else {
+      // Clear input when value is undefined/null
+      setInputValue("");
     }
-  }, [value, location]); // Keep dependencies but add better loop prevention
+    
+    // Mark as initialized
+    initializedRef.current = true;
+  }, [value, location]); // Removed label dependency to reduce re-renders
   
      // Filter suggestions based on input value
    useEffect(() => {
-     if (inputValue && suggestions.length > 0) {
+     if (inputValue && inputValue.length >= 2 && suggestions.length > 0) {
        const isAirportTransfer = tripType === 'airport';
        const isTourTrip = tripType === 'tour';
        
-       console.log('=== FILTERING SUGGESTIONS ===');
-       console.log('Input value:', inputValue);
-       console.log('Total suggestions:', suggestions.length);
-       console.log('Is pickup location:', isPickupLocation);
-       console.log('Is airport transfer:', isAirportTransfer);
-       
+       // First filter by input match (faster than distance calculation)
        let filtered = suggestions.filter(suggestion => {
-         const matchesInput = (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase());
-         const isWithinRange = isWithinVizagRange(suggestion.lat, suggestion.lng);
-         const distance = getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, suggestion.lat, suggestion.lng);
-         
-         console.log(`Suggestion: ${suggestion.name}, Distance: ${distance}km, Within range: ${isWithinRange}, Matches input: ${matchesInput}`);
-         
-         // For pickup locations, only show locations within Vizag range
-         if (isPickupLocation) {
-           const shouldInclude = matchesInput && isWithinRange;
-           console.log(`Pickup location - Including: ${shouldInclude}`);
-           return shouldInclude;
-         }
-         
-         // For airport transfers, only show locations within Vizag range
-         if (isAirportTransfer) {
-           const shouldInclude = matchesInput && isWithinRange;
-           console.log(`Airport transfer - Including: ${shouldInclude}`);
-           return shouldInclude;
-         }
-         
-         // For outstation drop locations, show all locations
-         console.log(`Outstation drop - Including: ${matchesInput}`);
-         return matchesInput;
+         return (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase());
        });
-      
-             console.log('Filtered suggestions count:', filtered.length);
+       
+       // Then apply distance filtering only if needed
+       if (isPickupLocation || isAirportTransfer || isTourTrip) {
+         filtered = filtered.filter(suggestion => {
+           return isWithinVizagRange(suggestion.lat, suggestion.lng);
+         });
+       }
+       
        setFilteredSuggestions(filtered);
      } else {
        setFilteredSuggestions([]);
@@ -170,26 +145,26 @@ export function LocationInput({
     if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
     
     try {
-      console.log("Initializing Google Maps Autocomplete with restricted bounds");
       
       // Create a circle around Vizag city center
       const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+      
+      // Use 35km radius for autocomplete to allow all locations
+      // Distance validation will be handled separately in the place_changed listener
       const circle = new google.maps.Circle({
         center: vizagCenter,
-        radius: MAX_DISTANCE_KM * 1000, // Convert km to meters
+        radius: MAX_DISTANCE_KM * 1000, // Always use 35km for autocomplete
       });
       
       const strictBounds = circle.getBounds() as google.maps.LatLngBounds;
       
-             const isAirportTransfer = tripType === 'airport';
-       
-       // Configure Autocomplete options with strict bounds
-       const options: google.maps.places.AutocompleteOptions = {
-         types: ["geocode", "establishment"],
-         componentRestrictions: { country: "in" },
-         bounds: strictBounds,
-         strictBounds: isPickupLocation || isAirportTransfer, // Enforce strict bounds for pickup locations and airport transfers only
-       };
+      // Configure Autocomplete options with stable bounds
+      const options: google.maps.places.AutocompleteOptions = {
+        types: ["geocode", "establishment"],
+        componentRestrictions: { country: "in" },
+        bounds: strictBounds,
+        strictBounds: isPickupLocation, // Only enforce strict bounds for pickup locations
+      };
       
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
@@ -206,47 +181,32 @@ export function LocationInput({
           const lat = place.geometry.location.lat();
           const lng = place.geometry.location.lng();
           
-          // Check if within range for pickup locations and airport drop locations
-          // For outstation trips, only validate pickup locations, not drop locations
-          console.log('=== LOCATION VALIDATION ===');
-          console.log('Location selected:', place.name || place.formatted_address);
-          console.log('Coordinates:', { lat, lng });
-                     const isAirportTransfer = tripType === 'airport';
-           const isTourTrip = tripType === 'tour';
-           
-           console.log('Is pickup location:', isPickupLocation);
-           console.log('Is airport transfer:', isAirportTransfer);
-           console.log('Is tour trip:', isTourTrip);
-           console.log('Distance from Vizag:', getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng));
-           console.log('Is within range:', isWithinVizagRange(lat, lng));
-           
-           // For tour trips, pickup location must be within 15km
-           if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 15)) {
-             console.log('REJECTING: Tour pickup location outside 15km radius');
-             toast("For tour trips, pickup location must be within 15km of Visakhapatnam. Please select a location within 15km radius.");
-             setInputValue("");
-             if (onChange) onChange("");
-             if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
-             return;
-           }
-           
-           // For regular pickup locations (non-tour), validate 35km radius
-           if (isPickupLocation && !isTourTrip && !isWithinVizagRange(lat, lng)) {
-             console.log('REJECTING: Pickup location outside 35km radius');
-             toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-             setInputValue("");
-             if (onChange) onChange("");
-             if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
-             return;
-           }
-           
-           // For airport transfers, allow drop locations outside range to trigger automatic switching
-           if (isAirportTransfer && !isWithinVizagRange(lat, lng)) {
-             console.log('WARNING: Airport drop location outside 35km radius - allowing for automatic switching');
-             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
-           }
+          // Check if within range for pickup locations
+          const isAirportTransfer = tripType === 'airport';
+          const isTourTrip = tripType === 'tour';
           
-          console.log('ACCEPTING: Location is within range or validation not required');
+          // For tour trips, pickup location must be within 15km
+          if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 15)) {
+            toast("For tour trips, pickup location must be within 15km of Visakhapatnam. Please select a location within 15km radius.");
+            setInputValue("");
+            if (onChange) onChange("");
+            if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+            return;
+          }
+          
+          // For regular pickup locations (non-tour), validate 35km radius
+          if (isPickupLocation && !isTourTrip && !isWithinVizagRange(lat, lng)) {
+            toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+            setInputValue("");
+            if (onChange) onChange("");
+            if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+            return;
+          }
+          
+          // For airport transfers, allow drop locations outside range to trigger automatic switching
+          if (isAirportTransfer && !isPickupLocation && !isWithinVizagRange(lat, lng)) {
+            toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
+          }
           
           if (onLocationChange) {
             onLocationChange({
@@ -279,7 +239,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-     }, [isLoaded, google, inputRef.current, isPickupLocation, tripType, onLocationChange, onChange]);
+     }, [isLoaded, google, inputRef.current, isPickupLocation, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -290,43 +250,30 @@ export function LocationInput({
       onChange(newValue);
     }
     
-    setShowSuggestions(newValue.length > 0);
+    // Only show suggestions if there's input and we have suggestions
+    setShowSuggestions(newValue.length > 0 && suggestions.length > 0);
   };
   
      const handleSuggestionClick = (suggestion: Location) => {
      const isAirportTransfer = tripType === 'airport';
      const isTourTrip = tripType === 'tour';
      
-     console.log('=== SUGGESTION CLICK ===');
-     console.log('Suggestion clicked:', suggestion.name || suggestion.address);
-     console.log('Coordinates:', { lat: suggestion.lat, lng: suggestion.lng });
-     console.log('Is pickup location:', isPickupLocation);
-     console.log('Is airport transfer:', isAirportTransfer);
-     console.log('Is tour trip:', isTourTrip);
-     console.log('Distance from Vizag:', getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, suggestion.lat, suggestion.lng));
-     console.log('Is within range:', isWithinVizagRange(suggestion.lat, suggestion.lng));
-     
      // Validate location before accepting it
      // For tour trips, pickup location must be within 15km
      if (isTourTrip && isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng, 15)) {
-       console.log('REJECTING: Tour pickup location outside 15km radius');
        toast("For tour trips, pickup location must be within 15km of Visakhapatnam. Please select a location within 15km radius.");
        return;
      }
      
      // For regular pickup locations (non-tour), validate 35km radius
      if (isPickupLocation && !isTourTrip && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
-       console.log('REJECTING: Pickup location outside 35km radius');
        toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
        return;
      }
      
-     if (isAirportTransfer && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
-       console.log('WARNING: Airport drop location outside 35km radius - allowing for automatic switching');
+     if (isAirportTransfer && !isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
      }
-    
-    console.log('ACCEPTING: Suggestion is within range or validation not required');
     setInputValue(suggestion.name || suggestion.address || "");
     
     // Call the original onChange if provided
@@ -350,8 +297,11 @@ export function LocationInput({
      // Determine subtitle text based on props
    const getSubtitleText = () => {
      const isAirportTransfer = tripType === 'airport';
+     const isTourTrip = tripType === 'tour';
      
-     if (isPickupLocation) {
+     if (isPickupLocation && isTourTrip) {
+       return "Please select a location within 15km of Visakhapatnam";
+     } else if (isPickupLocation) {
        return "Please select a location within 35km of Visakhapatnam";
      } else if (isAirportTransfer) {
        return "Please select a location within 35km of Visakhapatnam";
@@ -401,7 +351,9 @@ export function LocationInput({
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
-              if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+              if (onLocationChange) {
+                onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+              }
               setShowSuggestions(false);
             }}
             tabIndex={-1}

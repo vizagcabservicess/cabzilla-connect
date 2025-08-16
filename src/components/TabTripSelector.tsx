@@ -158,13 +158,21 @@ export function TabTripSelector({
     clearFormState();
     clearCacheData();
     
-    // Only clear locations if we're not in a single-tab mode (Hero widgets)
-    // This prevents clearing locations when navigating between pages
+    // Clear locations when manually switching tabs
+    // This allows users to clear locations when switching between trip types
     if (!visibleTabs || visibleTabs.length > 1) {
-      sessionStorage.removeItem('pickupLocation');
-      sessionStorage.removeItem('dropLocation');
-      sessionStorage.removeItem('pickupCoordinates');
-      sessionStorage.removeItem('dropCoordinates');
+      // Clear drop location when switching from airport to outstation
+      if (value === 'outstation' && selectedTab === 'airport') {
+        sessionStorage.removeItem('dropLocation');
+        sessionStorage.removeItem('dropCoordinates');
+      }
+      // Clear drop location for local and tour tabs
+      else if (value === 'local' || value === 'tour') {
+        sessionStorage.removeItem('dropLocation');
+        sessionStorage.removeItem('dropCoordinates');
+      }
+      // For other cases, preserve locations for automatic switching
+      
       if (onClearLocations) onClearLocations();
     }
     

@@ -446,12 +446,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     if (isLocationCleared) {
       setPickupLocation(null);
       sessionStorage.removeItem('pickupLocation');
-      
-      // If clearing pickup location on airport tab, also clear drop location
-      if (tripType === 'airport' && dropLocation) {
-        setDropLocation(null);
-        sessionStorage.removeItem('dropLocation');
-      }
+      // Set a flag to prevent automatic airport location setting
+      sessionStorage.setItem('userClearedPickupLocation', 'true');
+      // Clear the flag after a short delay
+      setTimeout(() => {
+        sessionStorage.removeItem('userClearedPickupLocation');
+      }, 1000);
       return;
     }
     
@@ -470,12 +470,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     if (isLocationCleared) {
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
-      
-      // If clearing drop location on airport tab, also clear pickup location
-      if (tripType === 'airport' && pickupLocation) {
-        setPickupLocation(null);
-        sessionStorage.removeItem('pickupLocation');
-      }
+      // Set a flag to prevent automatic airport location setting
+      sessionStorage.setItem('userClearedDropLocation', 'true');
+      // Clear the flag after a short delay
+      setTimeout(() => {
+        sessionStorage.removeItem('userClearedDropLocation');
+      }, 1000);
       return;
     }
     
@@ -504,19 +504,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         const calculatedDistance = R * c;
         
         if (tripType === 'outstation' && calculatedDistance <= 35) {
+          setIsTabSwitching(true); // Set flag to prevent re-triggering
           toast({
             title: "Trip Type Updated",
             description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
             duration: 3000,
           });
           setTripType('airport');
+          // Reset flag after a short delay
+          setTimeout(() => setIsTabSwitching(false), 1000);
         } else if (tripType === 'airport' && calculatedDistance > 35) {
+          setIsTabSwitching(true); // Set flag to prevent re-triggering
           toast({
             title: "Trip Type Updated",
             description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
             duration: 3000,
           });
           setTripType('outstation');
+          // Reset flag after a short delay
+          setTimeout(() => setIsTabSwitching(false), 1000);
         }
       }
     }
@@ -577,12 +583,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Handle airport-specific logic when locations change
   useEffect(() => {
     if (tripType === 'airport' && airportLocation) {
-      if (pickupLocation && pickupLocation.name && !dropLocation && !shouldTreatAsAirport(pickupLocation)) {
+      // Check if user recently cleared locations to prevent automatic setting
+      const userClearedDropLocation = sessionStorage.getItem('userClearedDropLocation') === 'true';
+      const userClearedPickupLocation = sessionStorage.getItem('userClearedPickupLocation') === 'true';
+      
+      if (pickupLocation && pickupLocation.name && !dropLocation && !shouldTreatAsAirport(pickupLocation) && !userClearedDropLocation) {
         setDropLocation(airportLocation);
         sessionStorage.setItem('dropLocation', JSON.stringify(airportLocation));
       }
       
-      if (dropLocation && dropLocation.name && !pickupLocation && !shouldTreatAsAirport(dropLocation)) {
+      if (dropLocation && dropLocation.name && !pickupLocation && !shouldTreatAsAirport(dropLocation) && !userClearedPickupLocation) {
         setPickupLocation(airportLocation);
         sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
       }
@@ -992,12 +1002,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     
     // Only clear drop location if we're not in a single-tab mode (Hero widgets)
     if (!visibleTabs || visibleTabs.length > 1) {
-      // Only clear drop location for local and tour tabs
+      // Clear drop location for local and tour tabs
       if (type === 'local' || type === 'tour') {
         setDropLocation(null);
         sessionStorage.removeItem('dropLocation');
       }
-      // For outstation and airport, preserve drop location for automatic switching
+      // Clear drop location when manually switching from airport to outstation
+      else if (type === 'outstation' && tripType === 'airport') {
+        setDropLocation(null);
+        sessionStorage.removeItem('dropLocation');
+      }
+      // For other cases, preserve drop location for automatic switching
     }
     
     // Reset the tab switching flag immediately
@@ -1148,7 +1163,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                                                  <LocationInput
-                           key={`drop-mobile-${tripType}-${dropLocation?.id || 'empty'}`}
+                           key={`drop-mobile-${dropLocation?.id || 'empty'}`}
                            label="Drop location"
                            placeholder="Enter Drop location"
                            value={dropLocation ? { ...dropLocation } : undefined}
@@ -1309,7 +1324,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                                                      <LocationInput
-                                     key={`drop-${tripType}-${dropLocation?.id || 'empty'}`}
+                                     key={`drop-${dropLocation?.id || 'empty'}`}
                                      label="Drop location"
                                      placeholder="Enter Drop location"
                                      value={dropLocation ? { ...dropLocation } : undefined}
