@@ -163,27 +163,13 @@ if (!$userId && isset($_GET['user_id'])) {
     logMessage("Using user_id from query parameter", ['user_id' => $userId]);
 }
 
-// For admin scenarios, we still want to return data even without authentication
-if (!$userId && isset($_GET['admin_mode']) && $_GET['admin_mode'] === 'true') {
-    logMessage("Admin mode requested without authentication, providing fallback data");
-    $fallbackBookings = createFallbackBookings(1); // Default user ID
-    echo json_encode([
-        'status' => 'success', 
-        'bookings' => $fallbackBookings, 
-        'source' => 'admin_mode_fallback',
-    ]);
-    exit;
-}
-
-// If still no user ID, provide fallback data instead of error
+// Require authentication for all requests
 if (!$userId) {
-    logMessage("No user ID provided, providing fallback data");
-    $fallbackBookings = createFallbackBookings(1); // Default user ID
+    logMessage("No user ID provided, access denied");
     echo json_encode([
-        'status' => 'success', 
-        'bookings' => $fallbackBookings, 
-        'source' => 'no_auth_fallback',
-        'auth_status' => 'failed'
+        'status' => 'error', 
+        'message' => 'Authentication required',
+        'code' => 401
     ]);
     exit;
 }

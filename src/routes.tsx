@@ -159,6 +159,10 @@ const router = createBrowserRouter([
             element: <CommissionManagementPage />,
           },
           {
+            path: 'bookings',
+            element: <BookingsPage />,
+          },
+          {
             path: 'create-booking',
             element: <AdminBookingCreationPage />,
           },
@@ -325,16 +329,6 @@ const router = createBrowserRouter([
         path: 'faq',
         element: <FAQPage />,
       },
-      { path: 'bookings', element: <BookingsPage /> },
-      { path: 'fares', element: <FaresPage /> },
-      { path: 'vehicles', element: <VehiclesPage /> },
-      { path: 'drivers', element: <DriversPage /> },
-      { path: 'users', element: <UserManagementPage /> },
-      { path: 'admin/bookings', element: <BookingsPage /> },
-      { path: 'admin/fares', element: <FaresPage /> },
-      { path: 'admin/vehicles', element: <VehiclesPage /> },
-      { path: 'admin/drivers', element: <DriversPage /> },
-      { path: 'admin/users', element: <UserManagementPage /> },
       {
         path: 'customer',
         element: <CustomerDashboard />,

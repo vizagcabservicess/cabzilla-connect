@@ -2,6 +2,9 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
+// Include auth utilities for JWT verification
+require_once __DIR__ . '/../utils/auth.php';
+
 // Check if db_helper exists and include it
 if (file_exists(__DIR__ . '/../common/db_helper.php')) {
     require_once __DIR__ . '/../common/db_helper.php';
@@ -67,7 +70,30 @@ function logMessage($message, $data = null) {
     error_log($logMessage);
 }
 
-logMessage("Admin bookings request received", ['headers' => array_keys(getallheaders())]);
+// Check authentication and admin privileges
+$headers = getallheaders();
+$userId = null;
+$isAdmin = false;
+
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
+    try {
+        $payload = verifyJwtToken($token);
+        if ($payload && (isset($payload['user_id']) || isset($payload['userId']))) {
+            $userId = $payload['user_id'] ?? $payload['userId'];
+            $isAdmin = isset($payload['role']) && ($payload['role'] === 'admin' || $payload['role'] === 'super_admin');
+        }
+    } catch (Exception $e) {
+        // Log error but continue
+    }
+}
+
+if (!$isAdmin) {
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.']);
+    exit;
+}
 
 // Connect to database
 try {
@@ -97,7 +123,6 @@ try {
     // Check if bookings table exists - but don't create if missing
     $tableExists = $conn->query("SHOW TABLES LIKE 'bookings'");
     if (!$tableExists || $tableExists->num_rows === 0) {
-        logMessage("Bookings table doesn't exist");
         throw new Exception("Bookings table doesn't exist");
     }
     
@@ -105,21 +130,18 @@ try {
     $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        logMessage("Failed to prepare admin bookings query", ['error' => $conn->error]);
         throw new Exception("Failed to prepare query: " . $conn->error);
     }
     
     $success = $stmt->execute();
     
     if (!$success) {
-        logMessage("Failed to execute admin bookings query", ['error' => $stmt->error]);
         throw new Exception("Failed to execute query: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
-        logMessage("Failed to get result", ['error' => $stmt->error]);
         throw new Exception("Failed to get result: " . $stmt->error);
     }
     
@@ -180,8 +202,6 @@ try {
         $bookings[] = $booking;
     }
     
-    logMessage("Found bookings for admin", ['count' => count($bookings)]);
-    
     // Return the bookings
     echo json_encode([
         'status' => 'success', 
@@ -191,8 +211,6 @@ try {
     ]);
     
 } catch (Exception $e) {
-    logMessage("Error in admin bookings endpoint", ['error' => $e->getMessage()]);
-    
     // Return error message to client
     echo json_encode([
         'status' => 'error', 
