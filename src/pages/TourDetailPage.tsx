@@ -13,6 +13,7 @@ import { TourGallery } from '@/components/tour/TourGallery';
 import { TourEditModule } from '@/components/tour/TourEditModule';
 import { TourVehicleSelection } from '@/components/tour/TourVehicleSelection';
 import { useToast } from '@/components/ui/use-toast';
+import { Helmet } from 'react-helmet-async';
 import { 
   MapPin, 
   Calendar, 
@@ -320,246 +321,358 @@ const TourDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <>
+        <Helmet>
+          <title>Loading Tour Details - Vizag Taxi Hub</title>
+          <meta name="description" content="Loading tour details and information..." />
+        </Helmet>
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          </div>
+          <MobileNavigation />
         </div>
-        <MobileNavigation />
-      </div>
+      </>
     );
   }
 
   if (!tour) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Tour Not Found</h1>
-          <Button onClick={() => navigate('/tours')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Tours
-          </Button>
+      <>
+        <Helmet>
+          <title>Tour Not Found - Vizag Taxi Hub</title>
+          <meta name="description" content="The requested tour could not be found. Browse our available tour packages in Visakhapatnam." />
+        </Helmet>
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <div className="container mx-auto px-4 py-8 text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Tour Not Found</h1>
+            <Button onClick={() => navigate('/tours')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Tours
+            </Button>
+          </div>
+          <MobileNavigation />
         </div>
-        <MobileNavigation />
-      </div>
+      </>
     );
   }
 
+  // Generate SEO-friendly content based on tour data
+  const seoTitle = `${tour.tourName} - ${tour.duration} Tour Package | Vizag Taxi Hub`;
+  const seoDescription = `${tour.tourName} - ${tour.duration} tour package from Visakhapatnam. ${tour.description.substring(0, 120)}... Book now for the best prices and professional service.`;
+  const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
+  const tourImage = tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
+  const tourUrl = `https://vizagtaxihub.com/tour/${tour.tourId}`;
+
   return (
-    <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
-      <Navbar />
-      
-      <div className="container mx-auto px-3 py-4 pb-20 max-w-6xl">
-        {/* Back Button */}
-        <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm py-2 px-3">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Tours
-        </Button>
-
+    <>
+      <Helmet>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
+        <meta name="keywords" content={seoKeywords} />
+        <meta name="author" content="Vizag Taxi Hub" />
         
-        {/* Edit Module with PDF Export for Super Admin */}
-        <div className="flex items-center justify-between gap-4 mb-4 py-8">
-          <div className="flex-1">
-            <TourEditModule
-              pickupLocation={pickupLocation.name}
-              destinationLocation={tour.tourName}
-              pickupDate={pickupDate}
-              onEdit={handleEditTrip}
-            />
-          </div>
-          
-          {/* PDF Export Button - Super Admin Only */}
-          {isSuperAdmin() && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportPDF}
-              disabled={isGenerating}
-              className="flex items-center gap-2 px-3 py-2 text-sm"
-            >
-              {isGenerating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              {isGenerating ? 'Generating...' : 'Export PDF'}
-            </Button>
-          )}
-        </div>
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={tourUrl} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:image" content={tourImage} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content={tourUrl} />
+        <meta property="twitter:title" content={seoTitle} />
+        <meta property="twitter:description" content={seoDescription} />
+        <meta property="twitter:image" content={tourImage} />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={tourUrl} />
+        
+        {/* Tour-specific structured data */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "TouristAttraction",
+            "name": tour.tourName,
+            "description": tour.description,
+            "image": tourImage,
+            "url": tourUrl,
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+              "addressLocality": "Visakhapatnam",
+              "addressRegion": "Andhra Pradesh",
+              "postalCode": "530024",
+              "addressCountry": "IN"
+            },
+            "touristType": tour.category,
+            "duration": tour.duration,
+            "distance": `${tour.distance} km`,
+            "difficulty": tour.difficulty,
+            "provider": {
+              "@type": "Organization",
+              "name": "Vizag Taxi Hub",
+              "url": "https://vizagtaxihub.com"
+            }
+          })}
+        </script>
+      </Helmet>
+      
+      <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
+        <Navbar />
+        
+        <div className="container mx-auto px-3 py-4 pb-20 max-w-6xl">
+          {/* Back Button */}
+          <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm py-2 px-3">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Tours
+          </Button>
 
-        {!showBookingForm ? (
-          <div className="grid lg:grid-cols-3 gap-4">
-            {/* Left Section - Tour Details */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Header */}
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
-                  <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
+          
+          {/* Edit Module with PDF Export for Super Admin */}
+          <div className="flex items-center justify-between gap-4 mb-4 py-8">
+            <div className="flex-1">
+              <TourEditModule
+                pickupLocation={pickupLocation.name}
+                destinationLocation={tour.tourName}
+                pickupDate={pickupDate}
+                onEdit={handleEditTrip}
+              />
+            </div>
+            
+            {/* PDF Export Button - Super Admin Only */}
+            {isSuperAdmin() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={isGenerating}
+                className="flex items-center gap-2 px-3 py-2 text-sm"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {isGenerating ? 'Generating...' : 'Export PDF'}
+              </Button>
+            )}
+          </div>
+
+          {!showBookingForm ? (
+            <div className="grid lg:grid-cols-3 gap-4">
+              {/* Left Section - Tour Details */}
+              <div className="lg:col-span-2 space-y-4">
+                {/* Header */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
+                    <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
+                  </div>
+                  <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{tour.tourName}</h1>
+                  <div className="flex items-center gap-3 text-gray-600 text-xs">
+                    <span className="flex items-center gap-1">
+                      <MapPin size={15} />
+                      {tour.distance} km
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar size={15} />
+                      {tour.days} day{tour.days > 1 ? 's' : ''}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={15} />
+                      {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}
+                    </span>
+                  </div>
                 </div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{tour.tourName}</h1>
-                <div className="flex items-center gap-3 text-gray-600 text-xs">
-                  <span className="flex items-center gap-1">
-                    <MapPin size={15} />
-                    {tour.distance} km
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar size={15} />
-                    {tour.days} day{tour.days > 1 ? 's' : ''}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock size={15} />
-                    {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}
-                  </span>
-                </div>
+
+                {/* Image Gallery */}
+                <Card>
+                  <CardContent className="p-0">
+                    <TourGallery 
+                      gallery={tour.gallery} 
+                      tourName={tour.tourName}
+                      imageUrl={tour.imageUrl}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Tabs */}
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList>
+                    <TabsTrigger value="overview" className="text-xs md:text-sm">Overview</TabsTrigger>
+                    <TabsTrigger value="itinerary" className="text-xs md:text-sm">Itinerary</TabsTrigger>
+                    <TabsTrigger value="inclusions" className="text-xs md:text-sm">
+                      Inclusions & Exclusions
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="overview" className="space-y-3">
+                    <Card>
+                      <CardHeader className="py-2 px-3">
+                        <CardTitle className="text-sm">About This Tour</CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-3 py-2">
+                        <p className="text-gray-700 mb-2 text-sm">
+                          {tour.description || 'No description available.'}
+                        </p>
+                        <div className="grid md:grid-cols-3 gap-2">
+                          {tour.highlights.map((highlight, idx) => (
+                            <div key={idx} className="text-center">
+                              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                {highlight.icon === 'mountain' && <Mountain className="h-5 w-5 text-blue-600" />}
+                                {highlight.icon === 'camera' && <Camera className="h-5 w-5 text-blue-600" />}
+                                {highlight.icon === 'coffee' && <Coffee className="h-5 w-5 text-blue-600" />}
+                              </div>
+                              <h4 className="font-semibold mb-0.5 text-xs">{highlight.title}</h4>
+                              <p className="text-[13px] text-gray-600">{highlight.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="itinerary">
+                    <Card>
+                      <CardHeader className="py-2 px-3">
+                        <CardTitle className="text-sm">Tour Itinerary</CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-3 py-2">
+                        {tour.itinerary.length > 0 ? (
+                          tour.itinerary.map((day, idx) => (
+                            <div key={idx} className="mb-4 last:mb-0">
+                              <h4 className="font-semibold text-xs md:text-sm mb-1">
+                                Day {day.day}: {day.title}
+                              </h4>
+                              <p className="text-gray-700 mb-2 text-sm">{day.description}</p>
+                              {day.activities && day.activities.length > 0 && (
+                                <ul className="pl-4 list-disc">
+                                  {day.activities.map((activity, actIdx) => (
+                                    <li key={actIdx} className="text-sm text-gray-700">{activity}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-gray-500 text-[12px]">No itinerary information available.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="inclusions">
+                    <div className="grid md:grid-cols-2 gap-4 mt-2">
+                      {/* Included */}
+                      <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
+                        <h3 className="text-green-600 font-semibold text-sm mb-2">Included</h3>
+                        <ul className="space-y-1">
+                          {Array.isArray(tour.inclusions) && tour.inclusions.filter(i => i && i.trim() !== '').length > 0 ? (
+                            tour.inclusions.filter(i => i && i.trim() !== '').map((item, idx) => (
+                              <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                                <span className="text-green-500 text-base">✔</span>
+                                <span className="text-[13px]">{item}</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-gray-400 text-xs pl-6">No inclusions listed</li>
+                          )}
+                        </ul>
+                      </div>
+                      {/* Not Included */}
+                      <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
+                        <h3 className="text-red-600 font-semibold text-sm mb-2">Not Included</h3>
+                        <ul className="space-y-1">
+                          {Array.isArray(tour.exclusions) && tour.exclusions.filter(e => e && e.trim() !== '').length > 0 ? (
+                            tour.exclusions.filter(e => e && e.trim() !== '').map((item, idx) => (
+                              <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
+                                <span className="text-red-500 text-base">✖</span>
+                                <span className="text-[13px]">{item}</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-gray-400 text-xs pl-6">No exclusions listed</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </div>
 
-              {/* Image Gallery */}
-              <Card>
-                <CardContent className="p-0">
-                  <TourGallery 
-                    gallery={tour.gallery} 
-                    tourName={tour.tourName}
-                    imageUrl={tour.imageUrl}
+              {/* Right Section - Vehicle Selection & Booking */}
+              <div className="space-y-4">
+                {!selectedVehicle ? (
+                  <TourVehicleSelection
+                    pricing={tour.pricing}
+                    onVehicleSelect={(vehicle) => {
+                      setSelectedVehicle(vehicle);
+                      setShowBookingForm(true); // auto-navigate to summary form
+                    }}
+                    selectedVehicle={selectedVehicle}
+                    onBookNow={() => {}}
                   />
-                </CardContent>
-              </Card>
-
-              {/* Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                  <TabsTrigger value="overview" className="text-xs md:text-sm">Overview</TabsTrigger>
-                  <TabsTrigger value="itinerary" className="text-xs md:text-sm">Itinerary</TabsTrigger>
-                  <TabsTrigger value="inclusions" className="text-xs md:text-sm">
-                    Inclusions & Exclusions
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="space-y-3">
-                  <Card>
-                    <CardHeader className="py-2 px-3">
-                      <CardTitle className="text-sm">About This Tour</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-3 py-2">
-                      <p className="text-gray-700 mb-2 text-sm">
-                        {tour.description || 'No description available.'}
-                      </p>
-                      <div className="grid md:grid-cols-3 gap-2">
-                        {tour.highlights.map((highlight, idx) => (
-                          <div key={idx} className="text-center">
-                            <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                              {highlight.icon === 'mountain' && <Mountain className="h-5 w-5 text-blue-600" />}
-                              {highlight.icon === 'camera' && <Camera className="h-5 w-5 text-blue-600" />}
-                              {highlight.icon === 'coffee' && <Coffee className="h-5 w-5 text-blue-600" />}
-                            </div>
-                            <h4 className="font-semibold mb-0.5 text-xs">{highlight.title}</h4>
-                            <p className="text-[13px] text-gray-600">{highlight.description}</p>
-                          </div>
-                        ))}
+                ) : (
+                  // Show Booking Summary and "Book Now" at bottom
+                  <div>
+                    {/* Trip mode selector for tours */}
+                    <div className="bg-white rounded-lg border p-3 mb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-medium">Trip Mode</div>
+                        <div className="flex gap-2">
+                          <Button variant={tripMode === 'one-way' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('one-way')}>One-way</Button>
+                          <Button variant={tripMode === 'round-trip' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('round-trip')}>Round-trip</Button>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="itinerary">
-                  <Card>
-                    <CardHeader className="py-2 px-3">
-                      <CardTitle className="text-sm">Tour Itinerary</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-3 py-2">
-                      {tour.itinerary.length > 0 ? (
-                        tour.itinerary.map((day, idx) => (
-                          <div key={idx} className="mb-4 last:mb-0">
-                            <h4 className="font-semibold text-xs md:text-sm mb-1">
-                              Day {day.day}: {day.title}
-                            </h4>
-                            <p className="text-gray-700 mb-2 text-sm">{day.description}</p>
-                            {day.activities && day.activities.length > 0 && (
-                              <ul className="pl-4 list-disc">
-                                {day.activities.map((activity, actIdx) => (
-                                  <li key={actIdx} className="text-sm text-gray-700">{activity}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-500 text-[12px]">No itinerary information available.</p>
+                      {tripMode === 'round-trip' && (
+                        <div className="mt-3">
+                          <DateTimePicker label="Return Date & Time" date={returnDate || pickupDate} onDateChange={setReturnDate} minDate={pickupDate} />
+                        </div>
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="inclusions">
-                  <div className="grid md:grid-cols-2 gap-4 mt-2">
-                    {/* Included */}
-                    <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
-                      <h3 className="text-green-600 font-semibold text-sm mb-2">Included</h3>
-                      <ul className="space-y-1">
-                        {Array.isArray(tour.inclusions) && tour.inclusions.filter(i => i && i.trim() !== '').length > 0 ? (
-                          tour.inclusions.filter(i => i && i.trim() !== '').map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
-                              <span className="text-green-500 text-base">✔</span>
-                              <span className="text-[13px]">{item}</span>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="text-gray-400 text-xs pl-6">No inclusions listed</li>
-                        )}
-                      </ul>
                     </div>
-                    {/* Not Included */}
-                    <div className="border border-gray-200 bg-white rounded-lg p-4 min-h-[120px]">
-                      <h3 className="text-red-600 font-semibold text-sm mb-2">Not Included</h3>
-                      <ul className="space-y-1">
-                        {Array.isArray(tour.exclusions) && tour.exclusions.filter(e => e && e.trim() !== '').length > 0 ? (
-                          tour.exclusions.filter(e => e && e.trim() !== '').map((item, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm text-gray-800">
-                              <span className="text-red-500 text-base">✖</span>
-                              <span className="text-[13px]">{item}</span>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="text-gray-400 text-xs pl-6">No exclusions listed</li>
-                        )}
-                      </ul>
-                    </div>
+                    <BookingSummary
+                      pickupLocation={pickupLocation}
+                      dropLocation={null}
+                      pickupDate={pickupDate}
+                      returnDate={tripMode === 'round-trip' ? (returnDate || null) : null}
+                      selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
+                      distance={tripMode === 'round-trip' ? tour.distance * 2 : tour.distance}
+                      // Pass computed price considering trip mode
+                      totalPrice={tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price}
+                      tripType="tour"
+                      tripMode={tripMode}
+                      hourlyPackage="tour"
+                    />
+                    <Button
+                      className="w-full mt-3 mb-2"
+                      onClick={() => setShowBookingForm(true)}
+                    >
+                      Book Now
+                    </Button>
                   </div>
-                </TabsContent>
-              </Tabs>
+                )}
+              </div>
             </div>
-
-            {/* Right Section - Vehicle Selection & Booking */}
-            <div className="space-y-4">
-              {!selectedVehicle ? (
-                <TourVehicleSelection
-                  pricing={tour.pricing}
-                  onVehicleSelect={(vehicle) => {
-                    setSelectedVehicle(vehicle);
-                    setShowBookingForm(true); // auto-navigate to summary form
-                  }}
-                  selectedVehicle={selectedVehicle}
-                  onBookNow={() => {}}
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <GuestDetailsForm
+                  onSubmit={handleBookingSubmit}
+                  // Pass computed price
+                  totalPrice={selectedVehicle ? (tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price) : 0}
+                  isLoading={isSubmitting}
+                  onBack={() => setShowBookingForm(false)}
                 />
-              ) : (
-                // Show Booking Summary and "Book Now" at bottom
-                <div>
-                  {/* Trip mode selector for tours */}
-                  <div className="bg-white rounded-lg border p-3 mb-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium">Trip Mode</div>
-                      <div className="flex gap-2">
-                        <Button variant={tripMode === 'one-way' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('one-way')}>One-way</Button>
-                        <Button variant={tripMode === 'round-trip' ? 'default' : 'outline'} size="sm" onClick={() => setTripMode('round-trip')}>Round-trip</Button>
-                      </div>
-                    </div>
-                    {tripMode === 'round-trip' && (
-                      <div className="mt-3">
-                        <DateTimePicker label="Return Date & Time" date={returnDate || pickupDate} onDateChange={setReturnDate} minDate={pickupDate} />
-                      </div>
-                    )}
-                  </div>
+              </div>
+              <div>
+                {selectedVehicle && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
                     dropLocation={null}
@@ -567,57 +680,22 @@ const TourDetailPage = () => {
                     returnDate={tripMode === 'round-trip' ? (returnDate || null) : null}
                     selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                     distance={tripMode === 'round-trip' ? tour.distance * 2 : tour.distance}
-                    // Pass computed price considering trip mode
+                    // Pass computed price
                     totalPrice={tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price}
                     tripType="tour"
                     tripMode={tripMode}
                     hourlyPackage="tour"
                   />
-                  <Button
-                    className="w-full mt-3 mb-2"
-                    onClick={() => setShowBookingForm(true)}
-                  >
-                    Book Now
-                  </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <GuestDetailsForm
-                onSubmit={handleBookingSubmit}
-                // Pass computed price
-                totalPrice={selectedVehicle ? (tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price) : 0}
-                isLoading={isSubmitting}
-                onBack={() => setShowBookingForm(false)}
-              />
-            </div>
-            <div>
-              {selectedVehicle && (
-                <BookingSummary
-                  pickupLocation={pickupLocation}
-                  dropLocation={null}
-                  pickupDate={pickupDate}
-                  returnDate={tripMode === 'round-trip' ? (returnDate || null) : null}
-                  selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
-                  distance={tripMode === 'round-trip' ? tour.distance * 2 : tour.distance}
-                  // Pass computed price
-                  totalPrice={tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price}
-                  tripType="tour"
-                  tripMode={tripMode}
-                  hourlyPackage="tour"
-                />
-              )}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+        
+        <Footer />
+        <MobileNavigation />
       </div>
-      
-      <Footer />
-      <MobileNavigation />
-    </div>
+    </>
   );
 };
 

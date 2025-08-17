@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -15,6 +15,7 @@ import { tourDetailAPI } from "@/services/api/tourDetailAPI";
 import { TourCard } from "@/components/tour/TourCard";
 import { Hero } from "@/components/Hero";
 import Footer from "@/components/Footer";
+import { Helmet } from 'react-helmet-async';
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -216,42 +217,69 @@ const ToursPage = () => {
   );
   
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar />
-      <main className="flex-1 pt-16">
-      {/* Only show the Tour tab in the Hero for tours */}
-      <div className="container mx-auto px-4 py-6 pb-20">
-        <div className="max-w-7xl mx-auto">
-          {!searchInitiated ? (
-            <>
-              {/* Hero Section */}
-              <div className="text-center mb-8">
-                <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Explore Amazing Destinations</h1>
-                <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                  Explore breathtaking destinations around Visakhapatnam with our carefully crafted tour packages.
-                  From scenic hill stations to cultural experiences, find your perfect adventure.
-                </p>
-              </div>
-              {renderSearchForm()}
-            </>
-          ) : (
-            <>
-              {/* Collapsible Search Form */}
-              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                showSearchForm ? 'max-h-96 opacity-100 mb-6' : 'max-h-0 opacity-0'
-              }`}>
-                {renderSearchForm()}
-              </div>
-              {renderTourListing()}
-            </>
-          )}
-        </div>
-      </div>
+    <>
+      <Helmet>
+        <title>Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam</title>
+        <meta name="description" content="Discover exciting tour packages from Visakhapatnam to Araku Valley, Simhachalam, Borra Caves, and more. Book guided tours, sightseeing trips, and holiday packages with professional drivers. Customizable tour packages with best prices." />
+        <meta name="keywords" content="tour packages vizag, sightseeing visakhapatnam, holiday packages, guided tours vizag, tourist places around vizag, travel packages" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/tours" />
+        <meta property="og:title" content="Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam" />
+        <meta property="og:description" content="Explore amazing tour packages in and around Visakhapatnam. Book guided tours, sightseeing trips, and holiday packages with Vizag Taxi Hub." />
+        <meta property="og:image" content="/og-image.png" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/tours" />
+        <meta property="twitter:title" content="Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam" />
+        <meta property="twitter:description" content="Explore amazing tour packages in and around Visakhapatnam. Book guided tours and sightseeing trips." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/tours" />
+      </Helmet>
       
-      </main>
-      <Footer />
-      <MobileNavigation />
-    </div>
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Navbar />
+        <main className="flex-1 pt-16">
+        {/* Only show the Tour tab in the Hero for tours */}
+        <div className="container mx-auto px-4 py-6 pb-20">
+          <div className="max-w-7xl mx-auto">
+            {!searchInitiated ? (
+              <>
+                {/* Hero Section */}
+                <div className="text-center mb-8">
+                  <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Explore Amazing Destinations</h1>
+                  <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                    Explore breathtaking destinations around Visakhapatnam with our carefully crafted tour packages.
+                    From scenic hill stations to cultural experiences, find your perfect adventure.
+                  </p>
+                </div>
+                {renderSearchForm()}
+              </>
+            ) : (
+              <>
+                {/* Collapsible Search Form */}
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  showSearchForm ? 'max-h-96 opacity-100 mb-6' : 'max-h-0 opacity-0'
+                }`}>
+                  {renderSearchForm()}
+                </div>
+                {renderTourListing()}
+              </>
+            )}
+          </div>
+        </div>
+        
+        </main>
+        <Footer />
+        <MobileNavigation />
+      </div>
+    </>
   );
 };
 

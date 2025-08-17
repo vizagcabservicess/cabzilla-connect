@@ -392,6 +392,7 @@ const router = createBrowserRouter([
         path: 'hire-driver',
         element: <HireDriverPage />,
       },
+
       // Catch-all route for 404s
       {
         path: '*',

@@ -1,7 +1,9 @@
+import React from 'react';
 import { Eye, Target, Compass, Lightbulb, Shield, Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { Helmet } from 'react-helmet-async';
 
 const goals = [
   {
@@ -35,9 +37,35 @@ const principles = [
   'Continuous improvement and innovation'
 ];
 
-export default function VisionMissionPage() {
+const VisionMissionPage = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <Helmet>
+        <title>Vision & Mission - Vizag Taxi Hub | Our Goals and Values</title>
+        <meta name="description" content="Explore Vizag Taxi Hub's vision to become Visakhapatnam's most trusted transportation provider and our mission to deliver safe, reliable, and comfortable journeys. Learn about our core values and commitment to excellence." />
+        <meta name="keywords" content="vision mission vizag taxi hub, company goals, taxi service values, transportation vision, service quality commitment" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/vision-mission" />
+        <meta property="og:title" content="Vision & Mission - Vizag Taxi Hub | Our Goals and Values" />
+        <meta property="og:description" content="Learn about Vizag Taxi Hub's vision and mission. We are committed to providing safe, reliable, and comfortable transportation solutions." />
+        <meta property="og:image" content="/og-image.png" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/vision-mission" />
+        <meta property="twitter:title" content="Vision & Mission - Vizag Taxi Hub | Our Goals and Values" />
+        <meta property="twitter:description" content="Learn about Vizag Taxi Hub's vision and mission. We are committed to providing safe, reliable transportation solutions." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/vision-mission" />
+      </Helmet>
+      
+      <div className="min-h-screen bg-background">
       <Navbar />
       <main className="flex-1 pt-16">
       {/* Hero Section */}
@@ -177,5 +205,8 @@ export default function VisionMissionPage() {
       <Footer />
     </main>
     </div>
+    </>
   );
 }
+
+export default VisionMissionPage;
