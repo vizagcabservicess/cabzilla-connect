@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Search, MapPin, Calendar } from 'lucide-react';
 import { Location } from '@/types/location';
+import { formatDateForAPI } from '@/lib/dateUtils';
 
 interface OutstationOnlyWidgetProps {
   initialPickup?: string;
@@ -131,13 +132,13 @@ export function OutstationOnlyWidget({
       const params = new URLSearchParams({
         from: pickupLocation.name,
         to: dropLocation.name,
-        date: pickupDate.toISOString(),
+        date: formatDateForAPI(pickupDate),
         type: 'outstation',
         mode: tripMode
       });
       
       if (tripMode === 'round-trip' && returnDate) {
-        params.append('returnDate', returnDate.toISOString());
+        params.append('returnDate', formatDateForAPI(returnDate));
       }
       
       navigate(`/cabs?${params.toString()}`);

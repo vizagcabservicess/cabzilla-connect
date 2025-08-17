@@ -30,6 +30,7 @@ import { MobileNavigation } from './MobileNavigation';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
 import { QuickActionBar } from './QuickActionBar';
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { formatDateForAPI } from '@/lib/dateUtils';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -919,8 +920,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
         dropLocation: dropLocation?.address || dropLocation?.name || '',
-        pickupDate: pickupDate?.toISOString() || '',
-        returnDate: returnDate?.toISOString() || null,
+        pickupDate: formatDateForAPI(pickupDate) || '',
+        returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         cabType: selectedCab?.name || '',
         vehicleType: selectedCab?.name || '',
         distance: distance,
@@ -949,8 +950,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         bookingId: response.id || response.booking_id,
         pickupLocation,
         dropLocation,
-        pickupDate: pickupDate?.toISOString(),
-        returnDate: returnDate?.toISOString(),
+        pickupDate: formatDateForAPI(pickupDate),
+        returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         selectedCab,
         distance,
         totalPrice: latestTotal,

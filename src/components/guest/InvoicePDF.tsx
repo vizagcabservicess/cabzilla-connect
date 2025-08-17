@@ -222,7 +222,9 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
       
       const date = booking?.pickup_date || booking?.pickupDate;
       if (date) {
-        return new Date(date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        // Date is already in IST, just format it
+        const pickupDate = new Date(date);
+        return pickupDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       }
       return 'N/A';
     } catch {

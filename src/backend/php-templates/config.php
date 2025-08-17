@@ -30,6 +30,10 @@ ini_set('mysql.connect_timeout', '30');
 ini_set('default_socket_timeout', '30');
 ini_set('max_execution_time', '60');
 
+// CRITICAL: Set timezone to IST for all date/time operations
+date_default_timezone_set('Asia/Kolkata');
+ini_set('date.timezone', 'Asia/Kolkata');
+
 // Error Reporting Configuration
 if (APP_DEBUG) {
     error_reporting(E_ALL);
@@ -72,6 +76,10 @@ if (!function_exists('getDbConnection')) {
             throw new Exception('Connection failed: ' . $conn->connect_error);
         }
         $conn->set_charset("utf8mb4");
+        
+        // CRITICAL: Set database session timezone to IST
+        $conn->query("SET time_zone = '+05:30';");
+        
         return $conn;
     }
 }

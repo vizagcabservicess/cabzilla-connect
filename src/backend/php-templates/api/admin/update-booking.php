@@ -17,9 +17,18 @@ header('Expires: 0');
 
 // Debug mode
 $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
+error_log("[update-booking] Debug mode: " . ($debugMode ? 'true' : 'false'));
+error_log("[update-booking] HTTP_X_DEBUG: " . ($_SERVER['HTTP_X_DEBUG'] ?? 'not set'));
 
 // Log request
 error_log("Admin update-booking endpoint called: " . $_SERVER['REQUEST_METHOD']);
+
+// Force immediate output for debugging
+if (isset($_GET['debug_output'])) {
+    echo "DEBUG: update-booking.php called at " . date('Y-m-d H:i:s') . PHP_EOL;
+    echo "DEBUG: Request method: " . $_SERVER['REQUEST_METHOD'] . PHP_EOL;
+    echo "DEBUG: Request body: " . file_get_contents('php://input') . PHP_EOL;
+}
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -52,6 +61,25 @@ function logError($message, $data = []) {
     );
 }
 
+// Function to log debug info to custom file
+function logDebug($message, $data = []) {
+    $logDir = __DIR__ . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    $logFile = $logDir . '/update_booking_debug.log';
+    $logEntry = date('Y-m-d H:i:s') . " - $message";
+    if (!empty($data)) {
+        $logEntry .= " - " . json_encode($data);
+    }
+    $logEntry .= "\n";
+    file_put_contents($logFile, $logEntry, FILE_APPEND);
+    
+    // Also write to a simple test file for immediate visibility
+    $testFile = __DIR__ . '/update_test.log';
+    file_put_contents($testFile, $logEntry, FILE_APPEND);
+}
+
 try {
     // Only allow POST or PUT requests
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
@@ -63,6 +91,9 @@ try {
     $data = json_decode($jsonData, true);
     
     error_log("Update booking request data: " . print_r($data, true));
+    
+    // Force immediate debug output
+    logDebug("Request received", $data);
 
     // Validate required fields
     if (!isset($data['bookingId'])) {
@@ -130,7 +161,11 @@ try {
     $checkStmt->execute();
     $result = $checkStmt->get_result();
     
+    error_log("[update-booking] Checking if booking $bookingId exists. Found rows: " . $result->num_rows);
+    
     if ($result->num_rows === 0) {
+        error_log("[update-booking] Booking $bookingId not found in database");
+        error_log("[update-booking] Debug mode: " . ($debugMode ? 'true' : 'false'));
         // For testing, if booking doesn't exist in DB, return mock success response
         if ($debugMode) {
             $mockBooking = [
@@ -165,8 +200,18 @@ try {
     
     $booking = $result->fetch_assoc();
     
-    // Check if the booking can be updated (not cancelled or completed)
-    if (!$debugMode && ($booking['status'] === 'completed' || $booking['status'] === 'cancelled')) {
+    // Debug: Log current booking status
+    logDebug("Current booking status in DB", ['status' => $booking['status'] ?? 'NULL']);
+    logDebug("Requested status", ['status' => $data['status'] ?? 'NULL']);
+    
+    // Check if the booking can be updated (not cancelled or completed) - but allow status changes
+    $currentStatus = $booking['status'] ?? '';
+    $requestedStatus = $data['status'] ?? '';
+    $isStatusUpdate = isset($data['status']) && $requestedStatus !== $currentStatus;
+    
+    logDebug("Is status update", ['isStatusUpdate' => $isStatusUpdate]);
+    
+    if (!$debugMode && !$isStatusUpdate && ($currentStatus === 'completed' || $currentStatus === 'cancelled')) {
         sendJsonResponse(['status' => 'error', 'message' => 'Cannot update a completed or cancelled booking'], 400);
     }
     
@@ -175,8 +220,27 @@ try {
     $types = "";
     $params = [];
     
-    // Map fields from request to database columns
-    $fieldMappings = [
+
+    
+    // Log the incoming request body for debugging
+    error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
+    error_log("[update-booking] Parsed data: " . json_encode($data));
+
+    // Simple direct update approach like cancel-booking.php
+    $updateFields = [];
+    $types = "";
+    $params = [];
+    
+    // Process status update (most common case)
+    if (array_key_exists('status', $data)) {
+        logDebug("Processing status update", ['status' => $data['status']]);
+        $updateFields[] = "status = ?";
+        $types .= "s";
+        $params[] = $data['status'];
+    }
+    
+    // Process other fields if provided
+    $otherFields = [
         'passengerName' => 'passenger_name',
         'passengerPhone' => 'passenger_phone',
         'passengerEmail' => 'passenger_email',
@@ -187,20 +251,24 @@ try {
         'returnDate' => 'return_date',
         'cabType' => 'cab_type',
         'totalAmount' => 'total_amount',
-        'status' => 'status',
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
         'vehicleNumber' => 'vehicle_number',
         'adminNotes' => 'admin_notes'
     ];
     
-    // Log the incoming request body for debugging
-    error_log("[update-booking] Incoming request body: " . file_get_contents('php://input'));
-
-    // Process extra charges with standardized format
-    $receivedExtraCharges = null;
-    if (array_key_exists('extraCharges', $data)) {
-        $receivedExtraCharges = $data['extraCharges'];
+    foreach ($otherFields as $requestField => $dbField) {
+        if (array_key_exists($requestField, $data)) {
+            logDebug("Processing field", ['field' => $requestField, 'dbField' => $dbField, 'value' => $data[$requestField]]);
+            $updateFields[] = "$dbField = ?";
+            $types .= getTypeForField($data[$requestField]);
+            $params[] = $data[$requestField];
+        }
+    }
+    
+    // Process extra charges if provided
+    if (array_key_exists('extraCharges', $data) || array_key_exists('extra_charges', $data)) {
+        $receivedExtraCharges = $data['extraCharges'] ?? $data['extra_charges'] ?? [];
         
         // Standardize field names to amount and description
         $standardizedCharges = [];
@@ -213,52 +281,39 @@ try {
             $standardizedCharges[] = $standardizedCharge;
         }
         
-        $receivedExtraCharges = $standardizedCharges;
-        
-    } elseif (array_key_exists('extra_charges', $data)) {
-        $receivedExtraCharges = $data['extra_charges'];
-    }
-    
-    // Fallback: if not present in request, use value from DB or set to []
-    if ($receivedExtraCharges === null) {
-        $checkExtra = $conn->prepare("SELECT extra_charges FROM bookings WHERE id = ?");
-        $checkExtra->bind_param("i", $bookingId);
-        $checkExtra->execute();
-        $resultExtra = $checkExtra->get_result();
-        $rowExtra = $resultExtra->fetch_assoc();
-        if (!empty($rowExtra['extra_charges'])) {
-            $receivedExtraCharges = json_decode($rowExtra['extra_charges'], true);
-            if (!is_array($receivedExtraCharges)) $receivedExtraCharges = [];
-        } else {
-            $receivedExtraCharges = [];
-        }
-    }
-    
-    error_log("[update-booking] Will save extraCharges: " . json_encode($receivedExtraCharges));
-    $updateFields[] = "extra_charges = ?";
-    $types .= "s";
-    $params[] = json_encode($receivedExtraCharges);
-    
-    // Build update query dynamically
-    foreach ($fieldMappings as $requestField => $dbField) {
-        if (array_key_exists($requestField, $data)) {
-            $updateFields[] = "$dbField = ?";
-            $types .= getTypeForField($data[$requestField]);
-            $params[] = $data[$requestField];
-        }
+        error_log("[update-booking] Processing extraCharges: " . json_encode($standardizedCharges));
+        $updateFields[] = "extra_charges = ?";
+        $types .= "s";
+        $params[] = json_encode($standardizedCharges);
     }
     
     // Always add updated_at
     $updateFields[] = "updated_at = NOW()";
     
-    // If nothing to update, just return success
-    if (empty($params)) {
-        sendJsonResponse([
-            'status' => 'success', 
-            'message' => 'No fields to update',
-            'data' => $booking
-        ]);
+    // Check if there are any actual field updates (excluding updated_at)
+    $actualFieldUpdates = 0;
+    foreach ($updateFields as $field) {
+        if ($field !== "updated_at = NOW()") {
+            $actualFieldUpdates++;
+        }
     }
+    
+    logDebug("Total update fields", ['count' => count($updateFields)]);
+    logDebug("Actual field updates (excluding updated_at)", ['count' => $actualFieldUpdates]);
+    
+    // If no actual field updates (only updated_at), return success
+    if ($actualFieldUpdates === 0) {
+        $response = [
+            'status' => 'success', 
+            'message' => 'No changes to apply',
+            'data' => $booking
+        ];
+        logDebug("Sending 'No changes' response", $response);
+        sendJsonResponse($response);
+    }
+    
+    logDebug("Update fields", ['fields' => $updateFields]);
+    logDebug("Types and parameters", ['types' => $types, 'params' => $params]);
     
     // Add bookingId as the last parameter
     $types .= "i";
@@ -343,11 +398,14 @@ try {
     ];
     
     // Send success response
-    sendJsonResponse([
+    $response = [
         'status' => 'success', 
         'message' => 'Booking updated successfully',
         'data' => $formattedBooking
-    ]);
+    ];
+    
+    logDebug("Sending success response", $response);
+    sendJsonResponse($response);
 
 } catch (Exception $e) {
     logError("Exception in update-booking.php", [

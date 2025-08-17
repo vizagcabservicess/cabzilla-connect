@@ -58,6 +58,8 @@ function logInvoiceError($message, $data = []) {
     );
 }
 
+
+
 try {
     // Get booking ID
     $bookingId = null;
@@ -198,6 +200,15 @@ try {
             
             $booking = $result->fetch_assoc();
             logInvoiceError("Booking found", ['booking_id' => $booking['id'], 'amount' => $booking['total_amount']]);
+            
+            // DEBUG: Log the pickup date from database
+            logInvoiceError("DEBUG - Booking pickup date from DB", [
+                'booking_id' => $booking['id'],
+                'pickup_date_raw' => $booking['pickup_date'],
+                'pickup_date_type' => gettype($booking['pickup_date']),
+                'pickup_date_strtotime' => strtotime($booking['pickup_date']),
+                'pickup_date_formatted' => date('Y-m-d H:i:s', strtotime($booking['pickup_date']))
+            ]);
 
             // Parse extra_charges robustly from booking
             $extraChargesArr = [];
@@ -441,7 +452,10 @@ try {
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Invoice #' . $invoiceNumber . '</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Invoice #' . $invoiceNumber . ' - ' . time() . '</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
         .invoice-container { max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
@@ -504,6 +518,8 @@ try {
                 <p><strong>Pickup Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
             </div>';
             
+
+            
     if ($gstEnabled && $gstDetails) {
         $invoiceHtml .= '
             <div class="gst-details">
@@ -552,6 +568,7 @@ try {
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub.</p>
             <p>For any questions regarding this invoice, please contact support@vizagtaxihub.com</p>
+            <p style="font-size: 10px; color: #999; margin-top: 20px;">Generated on: ' . date('Y-m-d H:i:s') . ' (Timestamp: ' . time() . ')</p>
         </div>
     </div>
 </body>

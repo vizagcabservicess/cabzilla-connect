@@ -11,6 +11,7 @@ import { BookingAdvancedSettings } from './BookingAdvancedSettings';
 import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
+import { convertUTCToLocal } from '@/lib/dateUtils';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -116,17 +117,17 @@ export function BookingDetails({
 
   return (
     <div>
-      <div className="mb-6">
-        <div className="flex justify-between items-start mb-2">
+      <div className="mb-4">
+        <div className="flex justify-between items-start mb-1">
           <div>
-            <h2 className="text-2xl font-bold">Booking #{booking.bookingNumber}</h2>
-            <p className="text-gray-500">
-              {new Date(booking.pickupDate).toLocaleDateString()} · {booking.tripType} · {booking.cabType}
+            <h2 className="text-lg font-bold">Booking #{booking.bookingNumber}</h2>
+            <p className="text-sm text-gray-500">
+              {convertUTCToLocal(booking.pickupDate).toLocaleDateString()} · {booking.tripType} · {booking.cabType}
             </p>
           </div>
           <div className="text-right">
-            <p className="font-semibold">{formatPrice(booking.totalAmount)}</p>
-            <div className="inline-block px-2 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-800 mt-1">
+            <p className="font-semibold text-base">{formatPrice(booking.totalAmount)}</p>
+            <div className="inline-block px-1.5 py-0.5 text-xs font-medium rounded-md bg-gray-100 text-gray-800 mt-1">
               {booking.status.replace('_', ' ').toUpperCase()}
             </div>
           </div>
@@ -150,60 +151,61 @@ export function BookingDetails({
           <TabsTrigger value="whatsapp" disabled={isWhatsAppDisabled}>WhatsApp</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="details" className="py-4">
-          <Card className="p-6">
-            <div className="grid md:grid-cols-2 gap-6">
+        <TabsContent value="details" className="py-2">
+          <Card className="p-4">
+            <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <h3 className="text-base font-medium mb-2 text-gray-700">Customer Details</h3>
-                <p><span className="font-medium">Name:</span> {booking.passengerName}</p>
-                <p><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
-                <p><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
+                <h3 className="text-sm font-medium mb-1 text-gray-700">Customer Details</h3>
+                <p className="text-sm mb-1"><span className="font-medium">Name:</span> {booking.passengerName}</p>
+                <p className="text-sm mb-1"><span className="font-medium">Phone:</span> {booking.passengerPhone}</p>
+                <p className="text-sm mb-1"><span className="font-medium">Email:</span> {booking.passengerEmail}</p>
                 {booking.billingAddress && (
-                  <p><span className="font-medium">Billing Address:</span> {booking.billingAddress}</p>
+                  <p className="text-sm mb-1"><span className="font-medium">Billing Address:</span> {booking.billingAddress}</p>
                 )}
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-2 text-gray-700">Trip Details</h3>
-                <p><span className="font-medium">Trip Type:</span> {booking.tripType} {booking.tripMode && `(${booking.tripMode})`}</p>
-                <p><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
-                {booking.dropLocation && <p><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
-                <p><span className="font-medium">Pickup Date:</span> {new Date(booking.pickupDate).toLocaleString()}</p>
-                <p><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
+                <h3 className="text-sm font-medium mb-1 text-gray-700">Trip Details</h3>
+                <p className="text-sm mb-1"><span className="font-medium">Trip Type:</span> {booking.tripType} {booking.tripMode && `(${booking.tripMode})`}</p>
+                <p className="text-sm mb-1"><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
+                {booking.dropLocation && <p className="text-sm mb-1"><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
+                <p className="text-sm mb-1"><span className="font-medium">Pickup Date:</span> {convertUTCToLocal(booking.pickupDate).toLocaleString()}</p>
+                <p className="text-sm mb-1"><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
               </div>
             </div>
 
             {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
-              <div className="mt-6 border-t pt-4">
-                <h3 className="text-base font-medium mb-2 text-gray-700">Driver Details</h3>
-                {booking.driverName && <p><span className="font-medium">Name:</span> {booking.driverName}</p>}
-                {booking.driverPhone && <p><span className="font-medium">Phone:</span> {booking.driverPhone}</p>}
-                {booking.vehicleNumber && <p><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>}
+              <div className="mt-3 border-t pt-3">
+                <h3 className="text-sm font-medium mb-1 text-gray-700">Driver Details</h3>
+                {booking.driverName && <p className="text-sm mb-1"><span className="font-medium">Name:</span> {booking.driverName}</p>}
+                {booking.driverPhone && <p className="text-sm mb-1"><span className="font-medium">Phone:</span> {booking.driverPhone}</p>}
+                {booking.vehicleNumber && <p className="text-sm mb-1"><span className="font-medium">Vehicle Number:</span> {booking.vehicleNumber}</p>}
               </div>
             )}
 
             {booking.extraCharges && booking.extraCharges.length > 0 && (
-              <div className="mt-6 border-t pt-4">
-                <h3 className="font-semibold mb-2 text-gray-700">Extra Charges</h3>
+              <div className="mt-3 border-t pt-3">
+                <h3 className="text-sm font-semibold mb-1 text-gray-700">Extra Charges</h3>
                 {booking.extraCharges.map((charge, index) => (
-                  <div key={index} className="flex justify-between items-center py-1">
-                    <span>{charge.description || 'Additional charge'}</span>
-                    <span>{formatPrice(charge.amount)}</span>
+                  <div key={index} className="flex justify-between items-center py-0.5">
+                    <span className="text-sm">{charge.description || 'Additional charge'}</span>
+                    <span className="text-sm">{formatPrice(charge.amount)}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="mt-6 flex justify-between items-center border-t pt-4">
+            <div className="mt-3 flex justify-between items-center border-t pt-3">
               <div>
-                <p className="text-sm text-gray-500">Total Amount</p>
-                <p className="font-bold text-xl">{formatPrice(booking.totalAmount)}</p>
+                <p className="text-xs text-gray-500">Total Amount</p>
+                <p className="font-bold text-lg">{formatPrice(booking.totalAmount)}</p>
               </div>
 
               <div className="space-x-2">
                 {!isCancelled && (
                   <Button 
                     variant="destructive" 
+                    size="sm"
                     onClick={onCancel}
                     disabled={isSubmitting || isCompleted}
                   >
@@ -212,6 +214,7 @@ export function BookingDetails({
                 )}
                 <Button 
                   variant="outline" 
+                  size="sm"
                   onClick={onClose}
                   disabled={isSubmitting}
                 >
@@ -222,7 +225,7 @@ export function BookingDetails({
           </Card>
         </TabsContent>
 
-        <TabsContent value="edit" className="py-4">
+        <TabsContent value="edit" className="py-2">
           <BookingEditForm
             key={booking.updatedAt || booking.id}
             booking={booking}
@@ -235,7 +238,7 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="advanced" className="py-4">
+        <TabsContent value="advanced" className="py-2">
           <BookingAdvancedSettings
             booking={booking}
             onSave={async (updatedData) => {
@@ -247,7 +250,7 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="vehicle" className="py-4">
+        <TabsContent value="vehicle" className="py-2">
           <FleetVehicleAssignment
             booking={booking}
             onAssign={handleAssignVehicle}
@@ -255,7 +258,7 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="driver" className="py-4">
+        <TabsContent value="driver" className="py-2">
           <DriverAssignment 
             booking={booking}
             onAssign={onAssignDriver}
@@ -265,7 +268,7 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="invoice" className="py-4">
+        <TabsContent value="invoice" className="py-2">
           <BookingInvoice 
             booking={booking}
             onGenerateInvoice={onGenerateInvoice}
@@ -277,7 +280,7 @@ export function BookingDetails({
           />
         </TabsContent>
 
-        <TabsContent value="whatsapp" className="py-4">
+        <TabsContent value="whatsapp" className="py-2">
           <BookingDetailsWhatsApp 
             booking={booking}
             onClose={() => handleTabChange('details')}

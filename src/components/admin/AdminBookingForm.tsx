@@ -23,6 +23,7 @@ import { BookingRequest } from '@/types/api';
 import { useFare } from '@/hooks/useFare';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
 import { formatPrice } from '@/lib/cabData';
+import { formatDateForAPI } from '@/lib/dateUtils';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -231,8 +232,8 @@ export function AdminBookingForm() {
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
         dropLocation: dropLocation?.address || dropLocation?.name || '',
-        pickupDate: pickupDate?.toISOString() || '',
-        returnDate: returnDate?.toISOString() || null,
+        pickupDate: formatDateForAPI(pickupDate) || '',
+        returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         cabType: selectedCab?.name || '',
         distance: distance,
         tripType: tripType,

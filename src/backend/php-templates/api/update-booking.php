@@ -188,7 +188,7 @@ try {
         'passenger_name' => 'passengerName',
         'passenger_phone' => 'passengerPhone',
         'passenger_email' => 'passengerEmail',
-        'status' => 'payment_status',
+        'status' => 'status',
         'payment_status' => 'payment_status',
         'driver_name' => 'driverName',
         'driver_phone' => 'driverPhone',

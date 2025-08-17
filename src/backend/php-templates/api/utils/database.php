@@ -22,6 +22,9 @@ function connectToDatabase() {
     // Set character set to UTF-8
     $mysqli->set_charset("utf8mb4");
     
+    // CRITICAL: Set database session timezone to IST
+    $mysqli->query("SET time_zone = '+05:30';");
+    
     return $mysqli;
 }
 

@@ -13,6 +13,7 @@ import { Booking, BookingStatus } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
+import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import type { Location } from '@/lib/locationData';
 
 export default function BookingEditPage() {
@@ -105,15 +106,8 @@ export default function BookingEditPage() {
         }
         
         if (response.pickupDate) {
-          let dateObj: Date;
-          if (response.pickupDate.includes(' ')) {
-            const [datePart, timePart] = response.pickupDate.split(' ');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hour, minute, second] = timePart.split(':').map(Number);
-            dateObj = new Date(year, month - 1, day, hour, minute, second);
-          } else {
-            dateObj = new Date(response.pickupDate);
-          }
+          // Use the convertUTCToLocal function to properly handle timezone conversion
+          const dateObj = convertUTCToLocal(response.pickupDate);
           
           if (!isNaN(dateObj.getTime())) {
             setPickupDate(dateObj);
@@ -223,7 +217,7 @@ export default function BookingEditPage() {
         passengerEmail: contactDetails.email,
         pickupLocation: pickupLocation?.address || '',
         dropLocation: dropLocation?.address || '',
-        pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
+        pickupDate: pickupDate ? formatDateForAPI(pickupDate) : undefined,
         extraCharges: booking.extraCharges
       };
       const bookingIdNumber = parseInt(bookingId, 10);

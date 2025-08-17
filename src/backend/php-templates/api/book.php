@@ -189,13 +189,15 @@ try {
             throw new Exception("Failed to prepare SQL statement: " . $conn->error);
         }
         
-        // Format pickup date for database
-        $pickupDateFormatted = date('Y-m-d H:i:s', strtotime($booking['pickupDate']));
+        // Format pickup date for database - ensure IST timezone
+        $pickupDateTime = new DateTime($booking['pickupDate'], new DateTimeZone('Asia/Kolkata'));
+        $pickupDateFormatted = $pickupDateTime->format('Y-m-d H:i:s');
         
-        // Format return date if available
+        // Format return date if available - ensure IST timezone
         $returnDateFormatted = null;
         if (!empty($booking['returnDate'])) {
-            $returnDateFormatted = date('Y-m-d H:i:s', strtotime($booking['returnDate']));
+            $returnDateTime = new DateTime($booking['returnDate'], new DateTimeZone('Asia/Kolkata'));
+            $returnDateFormatted = $returnDateTime->format('Y-m-d H:i:s');
         }
         
         // Bind parameters

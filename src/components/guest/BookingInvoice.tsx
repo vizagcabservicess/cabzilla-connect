@@ -217,7 +217,12 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     if (time) return time;
     try {
       const date = booking.pickup_date || booking.pickupDate;
-      return date ? new Date(date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+      if (date) {
+        // Date is already in IST, just format it
+        const pickupDate = new Date(date);
+        return pickupDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+      return 'N/A';
     } catch {
       return 'N/A';
     }

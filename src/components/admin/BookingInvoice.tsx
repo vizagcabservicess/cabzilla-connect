@@ -320,7 +320,15 @@ export function BookingInvoice({
   const fetchHtmlInvoice = async () => {
     try {
       const htmlUrl = createPdfUrl(false, false, true);
-      const response = await fetch(htmlUrl);
+      const response = await fetch(htmlUrl, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Force-Refresh': 'true',
+          'X-Debug': 'true'
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch HTML: ${response.status} ${response.statusText}`);
@@ -340,6 +348,7 @@ export function BookingInvoice({
   const createPdfUrl = (directDownload = false, useAdminEndpoint = false, htmlFormat = false) => {
     const timestamp = new Date().getTime();
     const randomPart = Math.random().toString(36).substring(2, 8);
+    const cacheBuster = Math.random().toString(36).substring(2, 15);
     
     const endpoint = useAdminEndpoint 
       ? `/api/admin/download-invoice.php` 
@@ -355,7 +364,8 @@ export function BookingInvoice({
       lockedBaseFare: baseFare.toString(),  // CRITICAL: Pass locked base fare
       v: downloadCount.toString(),
       t: timestamp.toString(),
-      r: randomPart
+      r: randomPart,
+      cb: cacheBuster  // Additional cache buster
     });
     
     if (customInvoiceNumber.trim()) {

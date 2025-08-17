@@ -141,8 +141,8 @@ try {
             b.passenger_phone AS customer_phone,
             b.passenger_email AS customer_email,
             b.total_amount AS amount,
-            COALESCE(p.paid_amount, 0) AS paid_amount,
-            (b.total_amount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
+            (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) AS paid_amount,
+            (b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) AS remaining_amount,
             CASE
                 WHEN b.payment_status = 'payment_received' THEN 'paid'
                 WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'
@@ -203,11 +203,11 @@ try {
     $summaryQuery = "
         SELECT 
             SUM(b.total_amount) as total_amount,
-            SUM(COALESCE(p.paid_amount, 0)) as total_paid,
-            SUM(b.total_amount - COALESCE(p.paid_amount, 0)) as total_pending,
+            SUM(COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) as total_paid,
+            SUM(b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) as total_pending,
             COUNT(CASE WHEN b.payment_status = 'payment_received' THEN 1 END) as paid_count,
-            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND COALESCE(p.paid_amount, 0) > 0 THEN 1 END) as partial_count,
-            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND COALESCE(p.paid_amount, 0) = 0 THEN 1 END) as pending_count,
+            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 1 END) as partial_count,
+            COUNT(CASE WHEN b.payment_status = 'payment_pending' AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) = 0 THEN 1 END) as pending_count,
             COUNT(CASE WHEN b.status = 'cancelled' THEN 1 END) as cancelled_count
         FROM bookings b
         LEFT JOIN (
@@ -227,7 +227,7 @@ try {
     
     // Calculate overdue amount
     $overdueQuery = "
-        SELECT SUM(b.total_amount - COALESCE(p.paid_amount, 0)) as total_overdue
+        SELECT SUM(b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) as total_overdue
         FROM bookings b
         LEFT JOIN (
             SELECT 

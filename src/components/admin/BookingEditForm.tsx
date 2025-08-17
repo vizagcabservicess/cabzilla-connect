@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { CalendarIcon, Plus, X } from "lucide-react";
 import { Booking, BookingStatus } from '@/types/api';
 import { isBookingEditable } from '@/utils/bookingUtils';
+import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface BookingEditFormProps {
@@ -32,7 +33,7 @@ export function BookingEditForm({
     passengerEmail: booking.passengerEmail || '',
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
-    pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
+    pickupDate: booking.pickupDate ? convertUTCToLocal(booking.pickupDate) : new Date(),
     billingAddress: booking.billingAddress || '',
   });
 
@@ -44,7 +45,7 @@ export function BookingEditForm({
       passengerEmail: booking.passengerEmail || '',
       pickupLocation: booking.pickupLocation || '',
       dropLocation: booking.dropLocation || '',
-      pickupDate: booking.pickupDate ? new Date(booking.pickupDate) : new Date(),
+      pickupDate: booking.pickupDate ? convertUTCToLocal(booking.pickupDate) : new Date(),
       billingAddress: booking.billingAddress || '',
     });
   }, [booking]);
@@ -184,7 +185,7 @@ export function BookingEditForm({
         passengerEmail: formData.passengerEmail,
         pickupLocation: formData.pickupLocation,
         dropLocation: formData.dropLocation,
-        pickupDate: formData.pickupDate.toISOString(),
+        pickupDate: formatDateForAPI(formData.pickupDate),
         billingAddress: formData.billingAddress,
         extraCharges: displayedExtraCharges,
         totalAmount: totalAmount,

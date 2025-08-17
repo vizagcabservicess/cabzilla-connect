@@ -48,8 +48,8 @@ try {
             b.passenger_phone AS customer_phone,
             b.passenger_email AS customer_email,
             b.total_amount AS amount,
-            COALESCE(p.paid_amount, 0) AS paid_amount,
-            (b.total_amount - COALESCE(p.paid_amount, 0)) AS remaining_amount,
+            (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) AS paid_amount,
+            (b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) AS remaining_amount,
             CASE
                 WHEN b.payment_status = 'payment_received' THEN 'paid'
                 WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'

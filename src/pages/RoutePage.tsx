@@ -102,7 +102,7 @@ export const RoutePage = () => {
         <meta name="keywords" content={routeInfo.seo?.keywords || ''} />
       </Helmet>
       <ScrollToTop />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pt-16">
         <Navbar />
         
         {/* Hero Section with Route-specific Search Widget */}

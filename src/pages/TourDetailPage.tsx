@@ -35,6 +35,7 @@ import { BookingRequest } from '@/types/api';
 import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
+import { formatDateForAPI } from '@/lib/dateUtils';
 
 const TourDetailPage = () => {
   const { tourId } = useParams<{ tourId: string }>();
@@ -255,13 +256,11 @@ const TourDetailPage = () => {
       
       const computedTotal = tripMode === 'round-trip' ? selectedVehicle.price * 2 : selectedVehicle.price;
       const computedDistance = tripMode === 'round-trip' ? tour.distance * 2 : tour.distance;
-      const retDateIso = tripMode === 'round-trip' && returnDate ? returnDate.toISOString() : null;
-
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
         dropLocation: '',
-        pickupDate: pickupDate.toISOString(),
-        returnDate: retDateIso || null,
+        pickupDate: formatDateForAPI(pickupDate),
+        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
         vehicleType: selectedVehicle.type,
         cabType: selectedVehicle.name,
         distance: computedDistance,
@@ -288,8 +287,8 @@ const TourDetailPage = () => {
         tourName: tour.tourName,
         pickupLocation: pickupLocation,
         tourDistance: computedDistance,
-        pickupDate: pickupDate.toISOString(),
-        returnDate: retDateIso,
+        pickupDate: formatDateForAPI(pickupDate),
+        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
         selectedCab: selectedVehicle,
         totalPrice: computedTotal,
         guestDetails,

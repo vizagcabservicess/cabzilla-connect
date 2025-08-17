@@ -336,18 +336,19 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleCancelBooking = async () => {
-    if (!selectedBooking) return;
+  const handleCancelBooking = async (booking?: Booking) => {
+    const targetBooking = booking || selectedBooking;
+    if (!targetBooking) return;
     
     setIsSubmitting(true);
     try {
       // Try bookingAPI first
       try {
-        await bookingAPI.cancelBooking(selectedBooking.id);
+        await bookingAPI.cancelBooking(targetBooking.id);
         
         // Update the bookings list
         const updatedBookings = bookings.map(booking => 
-          booking.id === selectedBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
+          booking.id === targetBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
         );
         setBookings(updatedBookings);
         applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -369,7 +370,7 @@ export function AdminBookingsList() {
           'X-Debug': 'true'
         },
         body: JSON.stringify({
-          bookingId: selectedBooking.id,
+          bookingId: targetBooking.id,
           status: 'cancelled'
         })
       });
@@ -382,7 +383,7 @@ export function AdminBookingsList() {
       
       // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
+        booking.id === targetBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -396,18 +397,23 @@ export function AdminBookingsList() {
     }
   };
 
-  const handleStatusChange = async (newStatus: BookingStatus) => {
-    if (!selectedBooking) return;
+  const handleStatusChange = async (newStatus: BookingStatus, booking?: Booking) => {
+    const targetBooking = booking || selectedBooking;
+    if (!targetBooking) return;
+    
+    console.log('🔄 Status change requested:', { bookingId: targetBooking.id, currentStatus: targetBooking.status, newStatus });
     
     setIsSubmitting(true);
     try {
       // Try bookingAPI first
       try {
-        await bookingAPI.updateBookingStatus(selectedBooking.id, newStatus);
+        console.log('📤 Calling bookingAPI.updateBookingStatus...');
+        const response = await bookingAPI.updateBookingStatus(targetBooking.id, newStatus);
+        console.log('✅ bookingAPI response:', response);
         
         // Update the bookings list
         const updatedBookings = bookings.map(booking => 
-          booking.id === selectedBooking.id ? { ...booking, status: newStatus } : booking
+          booking.id === targetBooking.id ? { ...booking, status: newStatus } : booking
         );
         setBookings(updatedBookings);
         applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -415,10 +421,17 @@ export function AdminBookingsList() {
         toast.success(`Booking status updated to ${newStatus}`);
         return;
       } catch (apiError) {
-        console.warn('bookingAPI.updateBookingStatus failed, trying direct fetch:', apiError);
+        console.warn('❌ bookingAPI.updateBookingStatus failed, trying direct fetch:', apiError);
       }
       
       // Direct fetch for better debugging
+      console.log('📤 Trying direct fetch to /api/admin/update-booking.php...');
+      const requestBody = {
+        bookingId: targetBooking.id,
+        status: newStatus
+      };
+      console.log('📤 Request body:', requestBody);
+      
       const directResponse = await fetch('/api/admin/update-booking.php', {
         method: 'POST',
         headers: {
@@ -428,25 +441,38 @@ export function AdminBookingsList() {
           'X-Admin-Mode': 'true',
           'X-Debug': 'true'
         },
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          status: newStatus
-        })
+        body: JSON.stringify(requestBody)
       });
+      
+      console.log('📥 Direct response status:', directResponse.status);
+      console.log('📥 Direct response headers:', Object.fromEntries(directResponse.headers.entries()));
       
       if (!directResponse.ok) {
         const errorText = await directResponse.text();
-        console.error('Status update error response:', errorText);
+        console.error('❌ Status update error response:', errorText);
         throw new Error(`Failed to update status: ${directResponse.status} ${directResponse.statusText}`);
+      }
+      
+      const responseText = await directResponse.text();
+      console.log('📥 Direct response body:', responseText);
+      
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+        console.log('✅ Parsed response data:', responseData);
+      } catch (e) {
+        console.error('❌ Failed to parse response as JSON:', e);
+        throw new Error('Invalid JSON response from server');
       }
       
       // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, status: newStatus } : booking
+        booking.id === targetBooking.id ? { ...booking, status: newStatus } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
       
+      console.log('✅ Updated bookings list:', updatedBookings.find(b => b.id === targetBooking.id));
       toast.success(`Booking status updated to ${newStatus}`);
     } catch (error) {
       console.error('Error updating booking status:', error);
@@ -488,13 +514,16 @@ export function AdminBookingsList() {
       
       console.log('📤 Sending invoice request:', requestData);
       
-      const apiUrl = getApiUrl('/api/admin/generate-invoice.php');
+      const apiUrl = getApiUrl('/api/admin/generate-invoice.php?t=' + Date.now());
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Force-Refresh': 'true'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Force-Refresh': 'true',
+          'X-Debug': 'true'
         },
         body: JSON.stringify(requestData)
       });
@@ -593,8 +622,8 @@ export function AdminBookingsList() {
     if (!dateString) return 'N/A';
     
     try {
-      // Treat SQL datetime as UTC and convert to local time
-      const date = new Date(dateString + 'Z');
+      // Treat SQL datetime as IST (no timezone conversion needed)
+      const date = new Date(dateString);
       const day = date.getDate().toString().padStart(2, '0');
       const month = date.toLocaleString('en-US', { month: 'short' });
       const year = date.getFullYear();
@@ -770,7 +799,7 @@ export function AdminBookingsList() {
           onAssignDriver={handleAssignDriver}
           onCancel={handleCancelBooking}
           onGenerateInvoice={handleGenerateInvoice}
-          onStatusChange={handleStatusChange}
+          onStatusChange={(newStatus) => handleStatusChange(newStatus, selectedBooking)}
           isSubmitting={isSubmitting}
         />
       )}
@@ -890,12 +919,16 @@ export function AdminBookingsList() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {booking.status === 'pending' && (
-                            <DropdownMenuItem onClick={() => handleStatusChange('confirmed')}>
+                            <DropdownMenuItem onClick={() => {
+                              handleStatusChange('confirmed', booking);
+                            }}>
                               Confirm booking
                             </DropdownMenuItem>
                           )}
                           {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                            <DropdownMenuItem onClick={() => handleCancelBooking()}>
+                            <DropdownMenuItem onClick={() => {
+                              handleCancelBooking(booking);
+                            }}>
                               Cancel booking
                             </DropdownMenuItem>
                           )}
