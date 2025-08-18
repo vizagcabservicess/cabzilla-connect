@@ -26,7 +26,7 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
 
   useEffect(() => {
     // Use the provided API key or fallback to the production key
-    const finalApiKey = apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY' 
+    const finalApiKey = apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY' && apiKey !== ''
       ? apiKey 
       : 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4';
     

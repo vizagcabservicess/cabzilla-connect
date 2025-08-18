@@ -72,7 +72,7 @@ export function WhyChooseUs() {
         </div>
 
         {/* Reasons Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-16">
           {reasons.map((reason, index) => (
             <Card key={index} className="border-0 shadow-sm hover:shadow-xl transition-all duration-300 bg-white rounded-2xl overflow-hidden group">
               <CardContent className="p-5 md:p-6">
@@ -91,7 +91,7 @@ export function WhyChooseUs() {
         </div>
 
         {/* CTA Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 text-center">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 text-center mb-16">
           <div className="max-w-2xl mx-auto">
             <h3 className="text-xl md:text-2xl font-medium mb-2">Ready to Experience the Difference?</h3>
             <p className="mb-4 opacity-90 text-sm md:text-base">Join thousands of satisfied customers who trust Vizag Taxi Hub for their transportation needs.</p>

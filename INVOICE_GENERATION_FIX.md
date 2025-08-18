@@ -242,3 +242,4 @@ curl "https://vizagtaxihub.com/api/download-invoice.php?id=297&format=pdf&gstEna
 **Last Updated:** January 2025  
 **Version:** 1.0
 
+

@@ -167,6 +167,22 @@ const router = createBrowserRouter([
             element: <AdminBookingCreationPage />,
           },
           {
+            path: 'vehicles',
+            element: <VehiclesPage />,
+          },
+          {
+            path: 'drivers',
+            element: <DriversPage />,
+          },
+          {
+            path: 'fares',
+            element: <FaresPage />,
+          },
+          {
+            path: 'users',
+            element: <UserManagementPage />,
+          },
+          {
             path: 'privileges',
             element: <PrivilegeManagementWrapper />,
           },

@@ -25,23 +25,7 @@ const Footer = () => {
               </li>
             </ul>
           </div>
-          <div>
-            <h3 className="font-medium text-white mb-4 text-lg">Popular Routes</h3>
-            <ul className="space-y-3 text-gray-300">
-              <li>
-                <Link to="/outstation-taxi/visakhapatnam-to-hyderabad" className="hover:text-white transition-colors block">Hyderabad</Link>
-              </li>
-              <li>
-                <Link to="/outstation-taxi/visakhapatnam-to-chennai" className="hover:text-white transition-colors block">Chennai</Link>
-              </li>
-              <li>
-                <Link to="/outstation-taxi/visakhapatnam-to-bangalore" className="hover:text-white transition-colors block">Bangalore</Link>
-              </li>
-              <li>
-                <Link to="/outstation-taxi/visakhapatnam-to-araku-valley" className="hover:text-white transition-colors block">Araku Valley</Link>
-              </li>
-            </ul>
-          </div>
+          
           <div>
             <h3 className="font-medium text-white mb-4 text-lg">Support</h3>
             <ul className="space-y-3 text-gray-300">
@@ -67,8 +51,29 @@ const Footer = () => {
             <div className="space-y-3 text-gray-300">
               <p className="text-lg font-semibold text-white">+91 9966363662</p>
               <p>info@vizagtaxihub.com</p>
-              <p>Visakhapatnam, Andhra Pradesh</p>
+              <p className="text-sm">44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram, Visakhapatnam, Andhra Pradesh 530024</p>
+              
             </div>
+          </div>
+          <div>
+            <h3 className="font-medium text-white mb-4 text-lg">Location</h3>
+            <ul className="space-y-3 text-gray-300">
+              
+              {/* Google Maps Embed */}
+              <div className="mt-4">
+                <iframe 
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3800.038148638652!2d83.28638837494336!3d17.742841583206218!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a3943efb920ec45%3A0xf4d1b10d7354e72a!2sVizag%20Taxi%20Hub!5e0!3m2!1sen!2sin!4v1755514284086!5m2!1sen!2sin" 
+                  width="100%" 
+                  height="200" 
+                  style={{border: 0}} 
+                  allowFullScreen 
+                  loading="lazy" 
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="rounded-lg shadow-lg"
+                  title="Vizag Taxi Hub Location"
+                />
+              </div>
+            </ul>
           </div>
         </div>
 

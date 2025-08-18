@@ -87,6 +87,158 @@
     <priority>0.7</priority>
   </url>
 
+  <!-- OUTSTATION TAXI DESTINATION PAGES -->
+  <!-- Major Cities -->
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-hyderabad</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-chennai</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-bangalore</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Popular Tourist Destinations -->
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-araku-valley</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-annavaram</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-srikakulam</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-pitapuram</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-lambasingi</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-vanajangi</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Additional Popular Destinations -->
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-vijayawada</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-guntur</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-rajahmundry</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-kakinada</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-eluru</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-tirupati</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-nellore</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-ongole</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Tourist Attractions -->
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-borra-caves</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-simhachalam</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-yarada-beach</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://vizagtaxihub.com/outstation-taxi/visakhapatnam-to-rushikonda-beach</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
   <!-- Company Information Pages -->
   <url>
     <loc>https://vizagtaxihub.com/about</loc>
@@ -302,7 +454,6 @@
   <!-- These URLs follow the pattern: -->
   <!-- https://vizagtaxihub.com/vehicle/{vehicleId} -->
   <!-- https://vizagtaxihub.com/tours/{tourId} -->
-  <!-- https://vizagtaxihub.com/outstation-taxi/{route-slug} -->
   <!-- https://vizagtaxihub.com/local-taxi/{from}-to-{to} -->
   <!-- https://vizagtaxihub.com/airport-taxi/{from}-to-{to} -->
 </urlset>

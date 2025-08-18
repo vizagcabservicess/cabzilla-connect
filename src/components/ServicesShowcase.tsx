@@ -24,7 +24,7 @@ export function ServicesShowcase() {
       icon: MapPin,
       title: "Outstation Travel",
       description: "Comfortable long-distance journeys",
-      features: ["Hyderabad - 620km", "Chennai - 780km", "Bangalore - 860km"],
+      features: ["Hyderabad - 650km", "Chennai - 800km", "Bangalore - 1000km"],
       bgColor: "bg-green-100",
       iconColor: "text-green-600",
       link: "/outstation-taxi"
@@ -45,7 +45,7 @@ export function ServicesShowcase() {
       features: ["Eco-friendly travel", "Meet new people", "Affordable rates"],
       bgColor: "bg-orange-100",
       iconColor: "text-orange-600",
-      link: "/pooling"
+      link: "#"
     }
   ];
 
