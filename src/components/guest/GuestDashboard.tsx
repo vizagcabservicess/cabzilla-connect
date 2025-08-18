@@ -340,6 +340,7 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
                           <div className="text-2xl font-bold">₹{calculateTotal(booking).toLocaleString()}</div>
                           <div className="text-sm text-muted-foreground">
                             {booking.payment_status === 'paid' ? 'Paid' : 
+                             booking.payment_status === 'partial' ? 'Partial' :
                              booking.payment_status === 'refunded' ? 'Refunded' : 'Pending'}
                           </div>
                         </div>

@@ -214,10 +214,30 @@ try {
         exit;
     }
     
-    // Query to get bookings - modifications to handle various scenarios
+    // Query to get bookings with calculated payment status
+    $baseSql = "
+        SELECT 
+            b.*,
+            CASE
+                WHEN b.status = 'cancelled' THEN 'cancelled'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'partial'
+                ELSE 'pending'
+            END AS calculated_payment_status
+        FROM bookings b
+        LEFT JOIN (
+            SELECT 
+                booking_id,
+                SUM(amount) AS paid_amount
+            FROM payments
+            WHERE status = 'confirmed'
+            GROUP BY booking_id
+        ) p ON p.booking_id = b.id
+    ";
+    
     if ($userId && !$isAdmin) {
         // Get user's bookings if authenticated
-        $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
+        $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             logMessage("Failed to prepare user bookings query", ['error' => $conn->error]);
@@ -226,7 +246,7 @@ try {
         $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
         // Admins can see all bookings
-        $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
+        $sql = $baseSql . " ORDER BY b.created_at DESC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             logMessage("Failed to prepare admin bookings query", ['error' => $conn->error]);
@@ -234,7 +254,7 @@ try {
         }
     } else {
         // For testing/demo purposes, return some bookings even without authentication
-        $sql = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10";
+        $sql = $baseSql . " ORDER BY b.created_at DESC LIMIT 10";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             logMessage("Failed to prepare demo bookings query", ['error' => $conn->error]);
@@ -279,6 +299,9 @@ try {
             'driverName' => $row['driver_name'] ?? null,
             'driverPhone' => $row['driver_phone'] ?? null,
             'vehicleNumber' => $row['vehicle_number'] ?? null,
+            'payment_status' => $row['calculated_payment_status'] ?? 'pending',
+            'payment_method' => $row['payment_method'] ?? '',
+            'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'] ?? $row['created_at']
         ];

@@ -51,9 +51,9 @@ try {
             (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) AS paid_amount,
             (b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) AS remaining_amount,
             CASE
-                WHEN b.payment_status = 'payment_received' THEN 'paid'
-                WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'
                 WHEN b.status = 'cancelled' THEN 'cancelled'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'partial'
                 ELSE 'pending'
             END AS payment_status,
             b.payment_method,
@@ -167,10 +167,7 @@ try {
             'updatedAt' => $row['updated_at']
         ];
         
-        // Calculate partial payment status
-        if ($payment['paymentStatus'] === 'pending' && $payment['paidAmount'] > 0) {
-            $payment['paymentStatus'] = 'partial';
-        }
+        // Payment status is already calculated correctly in the SQL query above
         
         // Update summary totals
         $totalAmount += $payment['amount'];

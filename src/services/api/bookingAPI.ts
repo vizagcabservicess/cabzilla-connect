@@ -109,22 +109,20 @@ export const bookingAPI = {
    */
   getBookingById: async (id: number | string) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/bookings.php?id=${id}`, {
+      // Use the public endpoint instead of admin endpoint
+      const response = await axios.get(`${API_BASE_URL}/api/user/booking.php?id=${id}`, {
         headers: {
           'Cache-Control': 'no-cache',
         }
       });
-      // PATCH: Handle different response formats
-      if (response.data && Array.isArray(response.data.bookings) && response.data.bookings.length > 0) {
-        return response.data.bookings[0];
+      
+      // Check if the response indicates an error
+      if (response.data && response.data.status === 'error') {
+        throw new Error(response.data.message || 'Failed to fetch booking');
       }
-      if (response.data && response.data.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
-        return response.data.data[0];
-      }
-      if (response.data && response.data.data) {
-        return response.data.data;
-      }
-      return response.data;
+      
+      // Return the booking data from the data property
+      return response.data.data;
     } catch (error) {
       console.error(`Error fetching booking with id ${id}:`, error);
       throw error;

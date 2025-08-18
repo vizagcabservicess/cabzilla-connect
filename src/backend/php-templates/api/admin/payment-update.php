@@ -49,18 +49,14 @@ try {
     
     // Map API payment status to booking payment status
     $statusMap = [
-        'paid' => 'payment_received',
-        'pending' => 'payment_pending',
-        'partial' => 'payment_pending',
+        'paid' => 'paid',
+        'pending' => 'pending',
+        'partial' => 'partial',
         'cancelled' => 'cancelled'
     ];
     
-    // Force payment_status to 'payment_received' if status is 'paid'
-    if ($data['status'] === 'paid') {
-        $bookingStatus = 'payment_received';
-    } else {
-        $bookingStatus = isset($statusMap[$data['status']]) ? $statusMap[$data['status']] : 'payment_pending';
-    }
+    // Use the mapped status directly
+    $bookingStatus = isset($statusMap[$data['status']]) ? $statusMap[$data['status']] : 'pending';
     
     // Begin transaction
     $db->begin_transaction();
@@ -144,8 +140,9 @@ try {
             (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) AS paid_amount,
             (b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) AS remaining_amount,
             CASE
-                WHEN b.payment_status = 'payment_received' THEN 'paid'
-                WHEN b.payment_status IS NULL OR b.payment_status = 'payment_pending' THEN 'pending'
+                WHEN b.payment_status = 'paid' THEN 'paid'
+                WHEN b.payment_status = 'partial' THEN 'partial'
+                WHEN b.payment_status IS NULL OR b.payment_status = 'pending' THEN 'pending'
                 WHEN b.status = 'cancelled' THEN 'cancelled'
                 ELSE 'pending'
             END AS payment_status,

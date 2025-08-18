@@ -126,8 +126,27 @@ try {
         throw new Exception("Bookings table doesn't exist");
     }
     
-    // Admin sees all bookings
-    $sql = "SELECT * FROM bookings ORDER BY created_at DESC";
+    // Admin sees all bookings with calculated payment status
+    $sql = "
+        SELECT 
+            b.*,
+            CASE
+                WHEN b.status = 'cancelled' THEN 'cancelled'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
+                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'partial'
+                ELSE 'pending'
+            END AS calculated_payment_status
+        FROM bookings b
+        LEFT JOIN (
+            SELECT 
+                booking_id,
+                SUM(amount) AS paid_amount
+            FROM payments
+            WHERE status = 'confirmed'
+            GROUP BY booking_id
+        ) p ON p.booking_id = b.id
+        ORDER BY b.created_at DESC
+    ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new Exception("Failed to prepare query: " . $conn->error);
@@ -190,7 +209,7 @@ try {
             'vehicleNumber' => $row['vehicle_number'] ?? null,
             'billingAddress' => $row['billing_address'] ?? null,
             'extraCharges' => json_decode($row['extra_charges'] ?? '[]'),
-            'payment_status' => $row['payment_status'] ?? 'pending',
+            'payment_status' => $row['calculated_payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
             'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
             'createdAt' => $row['created_at'],

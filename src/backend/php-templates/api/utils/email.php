@@ -433,7 +433,7 @@ HTML;
             
             <div class="footer">
                 <p>Thank you for choosing Vizag Taxi Hub!</p>
-                <p>© 2023 Vizag Taxi Hub. All rights reserved.</p>
+                <p>© 2025 Vizag Taxi Hub. All rights reserved.</p>
             </div>
         </div>
     </div>
@@ -848,17 +848,14 @@ function formatDateTimeForEmail($dateString) {
     }
     
     // Handle SQL datetime format (YYYY-MM-DD HH:MM:SS)
-    // The times are stored in UTC, so convert to IST (UTC+5:30)
-    $timestamp = strtotime($dateString . ' UTC');
+    // The times are already stored in IST format, so no conversion needed
+    $timestamp = strtotime($dateString);
     if ($timestamp === false) {
         return 'N/A';
     }
     
-    // Convert to IST by adding 5.5 hours
-    $istTimestamp = $timestamp + (5.5 * 3600);
-    
-    // Format as "13 Aug 2025 at 12:31 PM" (IST time)
-    return date('d M Y \a\t h:i A', $istTimestamp);
+    // Format as "18 Aug 2025 at 08:29 AM" (IST time)
+    return date('d M Y \a\t h:i A', $timestamp);
 }
 
 function formatPriceForEmail($amount) {

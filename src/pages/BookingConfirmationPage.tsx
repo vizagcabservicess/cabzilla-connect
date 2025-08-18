@@ -6,35 +6,15 @@ import { Card } from '../components/ui/card';
 import { ArrowLeft, Check, Copy, Phone, Download, Star, MapPin, Calendar, Car, Clock, CreditCard } from 'lucide-react';
 import { useToast } from '../components/ui/use-toast';
 import { bookingAPI } from '../services/api/bookingAPI';
-import { Booking } from '../types/api';
+import { Booking, BookingStatus } from '../types/api';
 import { formatDate, formatTime, formatDateTime } from '../lib/dateUtils';
 import { formatPrice } from '../lib/cabData';
 // Receipt component removed - no longer needed
 import { MobileNavigation } from '../components/MobileNavigation';
 
 type NormalizedBooking = Booking & {
-  bookingNumber?: string;
-  pickupLocation?: string;
-  dropLocation?: string;
-  pickupDate?: string;
-  returnDate?: string;
-  cabType?: string;
-  distance?: number;
-  tripType?: string;
-  tripMode?: string;
-  totalAmount?: number;
-  status?: string;
-  passengerName?: string;
-  passengerPhone?: string;
-  passengerEmail?: string;
-  paymentStatus?: string;
-  paymentMethod?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  // Additional properties for frontend usage
   razorpayPaymentId?: string;
-  driverName?: string;
-  driverPhone?: string;
-  vehicleNumber?: string;
 };
 
 function BookingConfirmationPage() {
@@ -57,6 +37,8 @@ function BookingConfirmationPage() {
       console.log('Total Amount:', booking.totalAmount);
       console.log('Payment Status Check:', paymentStatus === 'payment_pending' || paymentStatus === 'pending');
       console.log('Advance Amount Check:', booking.advance_paid_amount && booking.advance_paid_amount > 0);
+      console.log('Pickup Date Raw:', booking.pickupDate);
+      console.log('Pickup Date Formatted:', booking.pickupDate ? formatDateTime(booking.pickupDate) : 'N/A');
     }
   }, [booking, paymentStatus]);
 
@@ -67,12 +49,25 @@ function BookingConfirmationPage() {
     } else {
       // Otherwise, try to get the booking from session storage
       try {
-        const bookingDetails = sessionStorage.getItem('bookingDetails');
+        // Check both 'bookingDetails' and 'lastBooking' keys
+        let bookingDetails = sessionStorage.getItem('bookingDetails');
+        let lastBooking = sessionStorage.getItem('lastBooking');
+        
+        console.log('SessionStorage bookingDetails:', bookingDetails);
+        console.log('SessionStorage lastBooking:', lastBooking);
         
         if (bookingDetails) {
           const parsedDetails = JSON.parse(bookingDetails);
           if (parsedDetails.bookingId) {
             fetchBookingById(parsedDetails.bookingId);
+          } else {
+            setError('No booking ID found in session storage');
+            setLoading(false);
+          }
+        } else if (lastBooking) {
+          const parsedLastBooking = JSON.parse(lastBooking);
+          if (parsedLastBooking.id) {
+            fetchBookingById(parsedLastBooking.id);
           } else {
             setError('No booking ID found in session storage');
             setLoading(false);
@@ -99,11 +94,117 @@ function BookingConfirmationPage() {
         console.log('Mapped booking data:', mappedBooking);
         setBooking(mappedBooking);
       } else {
-        setError('Booking not found');
+        // Fallback to sessionStorage if API returns no data
+        console.log('API returned no data, falling back to sessionStorage');
+        let sessionData = sessionStorage.getItem('bookingDetails');
+        if (!sessionData) {
+          sessionData = sessionStorage.getItem('lastBooking');
+        }
+        if (sessionData) {
+          try {
+            const parsedData = JSON.parse(sessionData);
+                         console.log('SessionStorage data:', parsedData);
+             // Map sessionStorage data to the same format
+             const mappedSessionData: NormalizedBooking = {
+               id: parsedData.bookingId || parsedData.id,
+               user_id: 0, // Default for guest bookings
+               bookingNumber: parsedData.bookingNumber || parsedData.bookingId || parsedData.id,
+               pickup_location: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
+               pickupLocation: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
+               drop_location: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+               dropLocation: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+               pickup_date: parsedData.pickupDate || '',
+               pickupDate: parsedData.pickupDate || '',
+               return_date: parsedData.returnDate || '',
+               trip_type: parsedData.tripType || '',
+               tripType: parsedData.tripType || '',
+               trip_mode: parsedData.tripMode || '',
+               tripMode: parsedData.tripMode || '',
+               vehicle_type: parsedData.selectedCab?.name || '',
+               cabType: parsedData.selectedCab?.name || '',
+               fare: parsedData.totalPrice || parsedData.totalAmount || 0,
+               totalAmount: parsedData.totalPrice || parsedData.totalAmount || 0,
+               status: 'confirmed' as BookingStatus,
+               payment_status: parsedData.paymentStatus || 'pending',
+               payment_method: '',
+               advance_paid_amount: parsedData.advance_paid_amount || 0,
+               created_at: new Date().toISOString(),
+               updated_at: new Date().toISOString(),
+               updatedAt: new Date().toISOString(),
+               passengerName: parsedData.guestDetails?.name || '',
+               passengerPhone: parsedData.guestDetails?.phone || '',
+               passengerEmail: parsedData.guestDetails?.email || '',
+               driverName: parsedData.driverName || '',
+               driverPhone: parsedData.driverPhone || '',
+               vehicleNumber: parsedData.vehicleNumber || '',
+               razorpayPaymentId: '',
+             };
+                         console.log('Mapped sessionStorage data:', mappedSessionData);
+             setBooking(mappedSessionData);
+          } catch (sessionError) {
+            console.error('Error parsing sessionStorage data:', sessionError);
+            setError('Error loading booking details');
+          }
+        } else {
+          setError('Booking not found');
+        }
       }
     } catch (error) {
       console.error('Error fetching booking details:', error);
-      setError('Error loading booking details');
+      // Fallback to sessionStorage on API error
+      console.log('API error, falling back to sessionStorage');
+      let sessionData = sessionStorage.getItem('bookingDetails');
+      if (!sessionData) {
+        sessionData = sessionStorage.getItem('lastBooking');
+      }
+      if (sessionData) {
+        try {
+          const parsedData = JSON.parse(sessionData);
+          console.log('SessionStorage data (fallback):', parsedData);
+                                // Map sessionStorage data to the same format
+            const mappedSessionData: NormalizedBooking = {
+              id: parsedData.bookingId || parsedData.id,
+              user_id: 0, // Default for guest bookings
+              bookingNumber: parsedData.bookingNumber || parsedData.bookingId || parsedData.id,
+              pickup_location: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
+              pickupLocation: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
+              drop_location: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+              dropLocation: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+              pickup_date: parsedData.pickupDate || '',
+              pickupDate: parsedData.pickupDate || '',
+              return_date: parsedData.returnDate || '',
+              trip_type: parsedData.tripType || '',
+              tripType: parsedData.tripType || '',
+              trip_mode: parsedData.tripMode || '',
+              tripMode: parsedData.tripMode || '',
+              vehicle_type: parsedData.selectedCab?.name || '',
+              cabType: parsedData.selectedCab?.name || '',
+              fare: parsedData.totalPrice || parsedData.totalAmount || 0,
+              totalAmount: parsedData.totalPrice || parsedData.totalAmount || 0,
+              status: 'confirmed' as BookingStatus,
+              payment_status: parsedData.paymentStatus || 'pending',
+              payment_method: '',
+              advance_paid_amount: parsedData.advance_paid_amount || 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              passengerName: parsedData.guestDetails?.name || '',
+              passengerPhone: parsedData.guestDetails?.phone || '',
+              passengerEmail: parsedData.guestDetails?.email || '',
+              driverName: parsedData.driverName || '',
+              driverPhone: parsedData.driverPhone || '',
+              vehicleNumber: parsedData.vehicleNumber || '',
+              razorpayPaymentId: '',
+            };
+                                             console.log('Mapped sessionStorage data (fallback):', mappedSessionData);
+             setBooking(mappedSessionData);
+        } catch (sessionError) {
+          console.error('Error parsing sessionStorage data:', sessionError);
+          setError('Error loading booking details');
+        }
+      } else {
+        setError('Error loading booking details');
+      }
     } finally {
       setLoading(false);
     }
@@ -120,13 +221,14 @@ function BookingConfirmationPage() {
         const b = await bookingAPI.getBookingById(idToPoll as any);
         const normalized = mapBackendBooking(b);
         setBooking(normalized);
-        if ((normalized.paymentStatus || normalized.status)?.toLowerCase() === 'paid') {
+        if ((normalized.payment_status || normalized.status)?.toLowerCase() === 'paid') {
           clearInterval(interval);
         }
         if (attempts >= 6) {
           clearInterval(interval);
         }
       } catch (e) {
+        console.log('Polling stopped due to error:', e);
         clearInterval(interval);
       }
     }, 2000);
@@ -146,32 +248,42 @@ function BookingConfirmationPage() {
   };
 
   // Add a mapping function to normalize backend fields to frontend usage
-  function mapBackendBooking(booking: any) {
+  function mapBackendBooking(booking: any): NormalizedBooking {
+    console.log('Mapping booking data:', booking);
+    
     return {
       id: booking.id,
-      bookingNumber: booking.bookingNumber || booking.booking_number,
-      pickupLocation: booking.pickupLocation || booking.pickup_location || 'N/A',
-      dropLocation: booking.dropLocation || booking.drop_location || 'N/A',
-      pickupDate: booking.pickupDate || booking.pickup_date || '',
-      returnDate: booking.returnDate || booking.return_date || '',
-      cabType: booking.cabType || booking.cab_type || 'N/A',
-      distance: booking.distance || 0,
-      tripType: booking.tripType || booking.trip_type || 'N/A',
-      tripMode: booking.tripMode || booking.trip_mode || 'N/A',
-      totalAmount: booking.totalAmount || booking.total_amount || 0,
-      status: booking.status,
-      passengerName: booking.passengerName || booking.passenger_name || 'N/A',
-      passengerPhone: booking.passengerPhone || booking.passenger_phone || 'N/A',
-      passengerEmail: booking.passengerEmail || booking.passenger_email || 'N/A',
-      paymentStatus: booking.payment_status || booking.status,
-      paymentMethod: booking.payment_method || '',
-      createdAt: booking.createdAt || booking.created_at || '',
-      updatedAt: booking.updatedAt || booking.updated_at || '',
-      razorpayPaymentId: booking.razorpay_payment_id || '',
-      driverName: booking.driver_name || '',
-      driverPhone: booking.driver_phone || '',
-      vehicleNumber: booking.vehicle_number || '',
+      user_id: booking.userId || 0,
+      bookingNumber: booking.bookingNumber || '',
+      pickup_location: booking.pickupLocation || '',
+      pickupLocation: booking.pickupLocation || '',
+      drop_location: booking.dropLocation || '',
+      dropLocation: booking.dropLocation || '',
+      pickup_date: booking.pickupDate || '',
+      pickupDate: booking.pickupDate || '',
+      return_date: booking.returnDate || '',
+      trip_type: booking.tripType || '',
+      tripType: booking.tripType || '',
+      trip_mode: booking.tripMode || '',
+      tripMode: booking.tripMode || '',
+      vehicle_type: booking.cabType || '',
+      cabType: booking.cabType || '',
+      fare: booking.totalAmount || 0,
+      totalAmount: booking.totalAmount || 0,
+      status: booking.status || 'confirmed',
+      payment_status: booking.payment_status || 'pending',
+      payment_method: booking.payment_method || '',
       advance_paid_amount: booking.advance_paid_amount || 0,
+      created_at: booking.createdAt || new Date().toISOString(),
+      updated_at: booking.updatedAt || new Date().toISOString(),
+      updatedAt: booking.updatedAt || new Date().toISOString(),
+      passengerName: booking.passengerName || '',
+      passengerPhone: booking.passengerPhone || '',
+      passengerEmail: booking.passengerEmail || '',
+      driverName: booking.driverName || '',
+      driverPhone: booking.driverPhone || '',
+      vehicleNumber: booking.vehicleNumber || '',
+      razorpayPaymentId: booking.razorpayPaymentId || '',
     };
   }
 
@@ -267,7 +379,7 @@ function BookingConfirmationPage() {
                       </div>
                       <div>
                         <span className="text-sm font-medium text-gray-500">Pickup Location:</span>
-                        <p className="text-gray-900">{booking.pickupLocation}</p>
+                        <p className="text-gray-900">{booking.pickupLocation || 'N/A'}</p>
                       </div>
                       {booking.dropLocation && (
                         <div>
@@ -277,25 +389,33 @@ function BookingConfirmationPage() {
                       )}
                       <div>
                         <span className="text-sm font-medium text-gray-500">Pickup Date & Time:</span>
-                        <p className="text-gray-900">{formatDateTime(booking.pickupDate)}</p>
+                        <p className="text-gray-900">
+                          {booking.pickupDate ? (
+                            <>
+                              {formatDateTime(booking.pickupDate)}
+                              <br />
+                              
+                            </>
+                          ) : 'N/A'}
+                        </p>
                       </div>
-                      {booking.returnDate && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-500">Return Date & Time:</span>
-                          <p className="text-gray-900">{formatDateTime(booking.returnDate)}</p>
-                        </div>
-                      )}
+                                             {booking.return_date && (
+                         <div>
+                           <span className="text-sm font-medium text-gray-500">Return Date & Time:</span>
+                           <p className="text-gray-900">{formatDateTime(booking.return_date)}</p>
+                         </div>
+                       )}
                       <div>
                         <span className="text-sm font-medium text-gray-500">Vehicle Type:</span>
-                        <p className="text-gray-900">{booking.cabType}</p>
+                        <p className="text-gray-900">{booking.cabType || 'N/A'}</p>
                       </div>
                       <div>
                         <span className="text-sm font-medium text-gray-500">Trip Type:</span>
-                        <p className="text-gray-900">{booking.tripType}</p>
+                        <p className="text-gray-900">{booking.tripType || 'N/A'}</p>
                       </div>
                       <div>
                         <span className="text-sm font-medium text-gray-500">Mode:</span>
-                        <p className="text-gray-900">{booking.tripMode}</p>
+                        <p className="text-gray-900">{booking.tripMode || 'N/A'}</p>
                       </div>
                     </div>
                   </div>
@@ -351,15 +471,15 @@ function BookingConfirmationPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <span className="text-sm font-medium text-gray-500">Passenger Name:</span>
-                    <p className="text-gray-900">{booking.passengerName}</p>
+                    <p className="text-gray-900">{booking.passengerName || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-sm font-medium text-gray-500">Phone Number:</span>
-                    <p className="text-gray-900">{booking.passengerPhone}</p>
+                    <p className="text-gray-900">{booking.passengerPhone || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-sm font-medium text-gray-500">Email:</span>
-                    <p className="text-gray-900">{booking.passengerEmail}</p>
+                    <p className="text-gray-900">{booking.passengerEmail || 'N/A'}</p>
                   </div>
                 </div>
               </div>
