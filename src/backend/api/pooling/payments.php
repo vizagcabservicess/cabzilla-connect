@@ -34,9 +34,9 @@ function handleCreateOrder() {
         sendError('Booking ID is required');
     }
 
-    // Razorpay API keys (test)
-    $key_id = "rzp_test_41fJeGiVFyU9OQ";
-    $key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH";
+    // Razorpay API keys (live)
+    $key_id = "rzp_live_R6nt1S648RxpNC";
+    $key_secret = "336q1h1t7sDpKyxbyqwGaNRp";
     
     try {
         // Get booking details
@@ -102,7 +102,7 @@ function handleCreateOrder() {
             'amount' => $amount, // paise, integer
             'display_amount' => $display_amount, // rupees
             'currency' => $order['currency'],
-            'key' => 'rzp_test_41fJeGiVFyU9OQ'
+            'key' => 'rzp_live_R6nt1S648RxpNC'
         ]);
         
     } catch (PDOException $e) {

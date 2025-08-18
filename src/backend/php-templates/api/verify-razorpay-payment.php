@@ -39,8 +39,8 @@ try {
 }
 
 // Load Razorpay API keys
-$key_id = "rzp_test_41fJeGiVFyU9OQ"; // Test key
-$key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH"; // Test secret
+$key_id = "rzp_live_R6nt1S648RxpNC"; // Live key
+$key_secret = "336q1h1t7sDpKyxbyqwGaNRp"; // Live secret
 
 /**
  * Get payment amount from Razorpay API

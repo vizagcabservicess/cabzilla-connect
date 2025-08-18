@@ -41,7 +41,7 @@ export function WalletManager({ wallet, transactions, userRole, onDeposit, onWit
       }
       console.log('calling openRazorpayCheckout...');
       openRazorpayCheckout({
-        key: 'rzp_test_41fJeGiVFyU9OQ', // Razorpay test key to match backend
+        key: 'rzp_live_R6nt1S648RxpNC', // Razorpay live key to match backend
         amount: order.amount,
         currency: order.currency,
         name: 'CabZilla Wallet Top-up',

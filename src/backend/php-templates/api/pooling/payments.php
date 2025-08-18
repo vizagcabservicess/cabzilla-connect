@@ -53,8 +53,8 @@ function handleCreateOrder() {
         $receipt_id = 'rcpt_' . time() . '_' . substr(md5(mt_rand()), 0, 8);
 
         // Create Razorpay order via API
-        $key_id = "rzp_test_41fJeGiVFyU9OQ";
-        $key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH";
+        $key_id = "rzp_live_R6nt1S648RxpNC";
+        $key_secret = "336q1h1t7sDpKyxbyqwGaNRp";
         $curl = curl_init();
         curl_setopt_array($curl, [
             CURLOPT_URL => "https://api.razorpay.com/v1/orders",

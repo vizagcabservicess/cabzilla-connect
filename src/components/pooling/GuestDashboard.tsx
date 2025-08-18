@@ -305,7 +305,7 @@ export default function GuestDashboard() {
 
     // 2. Open Razorpay modal
     const options = {
-      key: 'rzp_test_41fJeGiVFyU9OQ', // Your test key
+      key: 'rzp_live_R6nt1S648RxpNC', // Your live key
       amount: order_amount,
       currency,
       name: 'Cabzilla Connect',

@@ -44,8 +44,8 @@ try {
 }
 
 // Load Razorpay API keys
-$key_id = "rzp_test_41fJeGiVFyU9OQ"; // Test key (fixed to match working modules)
-$key_secret = "ZbNPHrr9CmMyMnm7TzJOJozH"; // Test secret (fixed to match working modules)
+$key_id = "rzp_live_R6nt1S648RxpNC"; // Live key
+$key_secret = "336q1h1t7sDpKyxbyqwGaNRp"; // Live secret
 
 // Generate a unique receipt ID
 $receipt_id = 'rcpt_' . time() . '_' . substr(md5(mt_rand()), 0, 8);

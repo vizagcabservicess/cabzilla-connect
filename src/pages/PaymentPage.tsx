@@ -88,7 +88,7 @@ const PaymentPage = () => {
 
       // Configure payment options
       const options = {
-        key: 'rzp_test_41fJeGiVFyU9OQ', // Your Key ID
+        key: 'rzp_live_R6nt1S648RxpNC', // Your Live Key ID
         amount: order.amount,
         currency: order.currency,
         name: 'Cab Booking',
