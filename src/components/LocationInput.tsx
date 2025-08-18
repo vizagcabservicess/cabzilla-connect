@@ -71,7 +71,7 @@ export function LocationInput({
   const valueRef = useRef<Location | string | undefined>(value);
   const locationRef = useRef(location);
   const initializedRef = useRef(false);
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded, google, error } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const autocompleteInitializedRef = useRef(false);
@@ -314,6 +314,15 @@ export function LocationInput({
   
   return (
     <div className={`relative ${className}`}>
+      {/* Show error message if Google Maps failed to load */}
+      {error && (
+        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+          <strong>Location search limited:</strong> {error.message}
+          <br />
+          <span className="text-xs">You can still type locations manually.</span>
+        </div>
+      )}
+      
       {/* Floating label implementation: only show when focused or has value */}
       {label && (isFocused || inputValue) && (
         <label

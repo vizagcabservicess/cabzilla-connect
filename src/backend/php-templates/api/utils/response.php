@@ -11,6 +11,9 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
     // Clear any previous output to prevent contamination
     if (ob_get_length()) ob_clean();
     
+    // Ensure statusCode is an integer
+    $statusCode = (int)$statusCode;
+    
     // Set HTTP response code
     http_response_code($statusCode);
     
@@ -41,6 +44,17 @@ function sendSuccessResponse($data = [], $message = 'Operation completed success
 function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $errors = []) {
     // Clear any previous output to prevent contamination
     if (ob_get_length()) ob_clean();
+    
+    // Validate and sanitize parameters
+    if (is_array($statusCode)) {
+        // If statusCode is passed as an array, it might be the errors parameter
+        // Swap the parameters to fix the order
+        $errors = $statusCode;
+        $statusCode = 400; // Default to 400
+    }
+    
+    // Ensure statusCode is an integer
+    $statusCode = (int)$statusCode;
     
     // Set HTTP response code
     http_response_code($statusCode);

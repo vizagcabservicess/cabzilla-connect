@@ -18,10 +18,15 @@ export const getApiUrl = (path: string = ''): string => {
   const apiDirectories = ['/api/pooling', '/api/admin', '/api/user'];
   const isApiDirectory = apiDirectories.some(dir => normalizedPath.startsWith(dir + '/') || normalizedPath === dir);
 
+  // If the path already has .php, don't add it again
+  if (normalizedPath.includes('.php')) {
+    const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)+/g, '$1');
+    return fullUrl;
+  }
+
   // Add .php extension if the path is an API endpoint and doesn't already have an extension, doesn't end with a slash, and is not a known API directory
   if (
     normalizedPath.includes('/api/') &&
-    !normalizedPath.includes('.php') &&
     !normalizedPath.endsWith('/') &&
     !isApiDirectory
   ) {

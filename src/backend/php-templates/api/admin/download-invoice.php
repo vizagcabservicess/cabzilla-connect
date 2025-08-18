@@ -159,7 +159,13 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+            if (!$isPdfOutput) {
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+            } else {
+                header('Content-Type: text/plain');
+                echo "Error 404: Booking not found.";
+                exit;
+            }
         }
         
         $booking = $result->fetch_assoc();

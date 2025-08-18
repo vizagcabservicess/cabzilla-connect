@@ -25,25 +25,44 @@ if (!$bookingId) {
 }
 
 try {
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    if ($conn->connect_error) {
-        throw new Exception('Database connection failed: ' . $conn->connect_error);
+    // Use the correct database connection from config.php
+    $conn = getDbConnection();
+    
+    // Check if booking exists first
+    $bookingStmt = $conn->prepare('SELECT * FROM bookings WHERE id = ?');
+    $bookingStmt->bind_param('i', $bookingId);
+    $bookingStmt->execute();
+    $bookingResult = $bookingStmt->get_result();
+    
+    if ($bookingResult->num_rows === 0) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
     }
-    $conn->set_charset('utf8mb4');
-
-    $stmt = $conn->prepare('SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1');
-    $stmt->bind_param('i', $bookingId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($result->num_rows === 0) {
-        sendJsonResponse(['status' => 'error', 'message' => 'No invoice found for this booking'], 404);
-    }
-    $invoice = $result->fetch_assoc();
-    sendJsonResponse(['status' => 'success', 'invoice' => $invoice]);
+    
+    $booking = $bookingResult->fetch_assoc();
+    
+    // Generate invoice data on-the-fly instead of looking for invoices table
+    $invoiceData = [
+        'id' => $bookingId,
+        'booking_id' => $bookingId,
+        'invoice_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
+        'booking_number' => $booking['booking_number'],
+        'passenger_name' => $booking['passenger_name'],
+        'passenger_phone' => $booking['passenger_phone'],
+        'passenger_email' => $booking['passenger_email'],
+        'pickup_location' => $booking['pickup_location'],
+        'drop_location' => $booking['drop_location'],
+        'pickup_date' => $booking['pickup_date'],
+        'total_amount' => $booking['total_amount'],
+        'advance_paid_amount' => $booking['advance_paid_amount'],
+        'payment_status' => $booking['payment_status'],
+        'status' => $booking['status'],
+        'trip_type' => $booking['trip_type'],
+        'cab_type' => $booking['cab_type'],
+        'created_at' => $booking['created_at'],
+        'updated_at' => $booking['updated_at']
+    ];
+    
+    sendJsonResponse(['status' => 'success', 'invoice' => $invoiceData]);
 } catch (Exception $e) {
     sendJsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
 } 

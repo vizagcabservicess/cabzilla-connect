@@ -93,7 +93,7 @@ try {
     // Only allow GET requests
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         if (!$isPdfOutput) {
-            sendErrorResponse('Method not allowed', [], 405);
+            sendErrorResponse('Method not allowed', 405);
         } else {
             header('Content-Type: text/plain');
             echo "Error 405: Method not allowed. Only GET requests are accepted.";
@@ -107,7 +107,7 @@ try {
     if (!$bookingId) {
         logInvoiceError("Missing booking ID", ['get_params' => $_GET]);
         if (!$isPdfOutput) {
-            sendErrorResponse('Missing booking ID', [], 400);
+            sendErrorResponse('Missing booking ID', 400);
         } else {
             header('Content-Type: text/plain');
             echo "Error 400: Missing booking ID parameter.";
@@ -203,7 +203,7 @@ try {
         
         if ($result->num_rows === 0) {
             if (!$isPdfOutput) {
-                sendErrorResponse('Booking not found', [], 404);
+                sendErrorResponse('Booking not found', 404);
             } else {
                 header('Content-Type: text/plain');
                 echo "Error 404: Booking not found.";

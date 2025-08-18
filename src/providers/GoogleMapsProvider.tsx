@@ -25,9 +25,25 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY') {
+    // Use the provided API key or fallback to the production key
+    const finalApiKey = apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY' 
+      ? apiKey 
+      : 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4';
+    
+    if (!finalApiKey) {
       setError(new Error('Google Maps API key is required'));
       return;
+    }
+
+    // Check if we're in a sandboxed iframe
+    try {
+      // Test if we can access parent window (indicates iframe)
+      const isInIframe = window !== window.parent;
+      if (isInIframe) {
+        console.warn('Google Maps detected in iframe - checking sandbox permissions');
+      }
+    } catch (e) {
+      console.warn('Google Maps may be in a sandboxed iframe');
     }
 
     // If already loaded globally, just update local state
@@ -51,9 +67,11 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
     if (!globalLoader) {
       isLoading = true;
       globalLoader = new Loader({
-        apiKey,
+        apiKey: finalApiKey,
         version: 'weekly',
-        libraries: ['places']
+        libraries: ['places'],
+        // Add additional options to handle iframe issues
+        mapIds: ['DEMO_MAP_ID'], // Optional: Add a map ID if you have one
       });
 
       globalLoader.load()
@@ -61,11 +79,23 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
           isLoadedGlobal = true;
           isLoading = false;
           setIsLoaded(true);
+          console.log('Google Maps loaded successfully');
         })
         .catch((err) => {
           isLoading = false;
-          setError(err);
-          console.error('Error loading Google Maps:', err);
+          
+          // Handle specific iframe sandbox errors
+          if (err.message && err.message.includes('sandboxed')) {
+            const sandboxError = new Error(
+              'Google Maps cannot load due to iframe sandbox restrictions. ' +
+              'Please ensure the iframe has allow-scripts permission or load the page directly.'
+            );
+            setError(sandboxError);
+            console.error('Google Maps iframe sandbox error:', err);
+          } else {
+            setError(err);
+            console.error('Error loading Google Maps:', err);
+          }
         });
     }
   }, [apiKey]);

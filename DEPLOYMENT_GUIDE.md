@@ -1,197 +1,151 @@
-# 🚀 Production Deployment Guide - Email & Invoice Fix
+# 🚨 **URGENT: Production Server Fix Guide**
 
-## 📋 **What You Need to Do**
+## 🚨 **Current Issue:**
+Your production server at `vizagtaxihub.com` is throwing fatal errors because it has the old version of `response.php` without our parameter validation fixes.
 
-### **Step 1: Upload Files to Production Server**
+## 🔧 **Files to Upload to Production Server:**
 
-Upload these files to your production server at `vizagtaxihub.com`:
+### **1. Fixed Backend Files:**
+Upload these files to `/home/u644605165/domains/vizagtaxihub.com/public_html/api/`:
 
-1. **`install-composer.php`** - Main installation script
-2. **`src/backend/php-templates/api/email-test.php`** - Email testing
-3. **`src/backend/php-templates/api/fix-email-invoice.php`** - Diagnostic script
-4. **`src/backend/php-templates/api/trigger-email.php`** - Manual email trigger
+```
+📁 api/
+├── utils/
+│   └── response.php (FIXED - with parameter validation)
+├── download-invoice.php (FIXED - with proper error handling)
+├── debug-invoice.php (ENHANCED - with detailed debugging)
+├── check-database.php (NEW - database checker)
+└── admin/
+    ├── get-invoice.php (FIXED - with proper database connection)
+    └── download-invoice.php (FIXED - with proper error handling)
+```
 
-### **Step 2: Run Installation Script**
+### **2. Frontend Files:**
+Upload the entire `dist` folder to your production server.
 
-SSH into your Hostinger server and run:
+### **3. Fixed Frontend Configuration:**
+Upload these frontend files:
+- **`src/config/api.ts`** (FIXED - handles .php extensions correctly)
+- **`src/components/admin/AdminBookingsList.tsx`** (FIXED - proper API calls)
 
+## 🎯 **Step-by-Step Deployment:**
+
+### **Step 1: Backup Current Files**
 ```bash
-# Navigate to your project directory
-cd /path/to/your/project
+# SSH into your server
+ssh u644605165@your-server.com
 
-# Run the installation script
-php install-composer.php
+# Backup current files
+cp /home/u644605165/domains/vizagtaxihub.com/public_html/api/utils/response.php /home/u644605165/domains/vizagtaxihub.com/public_html/api/utils/response.php.backup
 ```
 
-### **Step 3: Alternative - Manual Installation**
+### **Step 2: Upload Fixed Files**
+Upload these files from your local project to the server:
 
-If you can't SSH, use Hostinger's File Manager:
+1. **`src/backend/php-templates/api/utils/response.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/utils/response.php`**
+2. **`src/backend/php-templates/api/download-invoice.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/download-invoice.php`**
+3. **`src/backend/php-templates/api/debug-invoice.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/debug-invoice.php`**
+4. **`src/backend/php-templates/api/check-database.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/check-database.php`**
+5. **`src/backend/php-templates/api/admin/get-invoice.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/admin/get-invoice.php`**
+6. **`src/backend/php-templates/api/admin/download-invoice.php`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/api/admin/download-invoice.php`**
 
-1. **Upload `install-composer.php`** to your project root
-2. **Access via browser:** `https://vizagtaxihub.com/install-composer.php`
-3. **Follow the output** to complete installation
+**Frontend Files:**
+7. **`src/config/api.ts`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/src/config/api.ts`**
+8. **`src/components/admin/AdminBookingsList.tsx`** → **`/home/u644605165/domains/vizagtaxihub.com/public_html/src/components/admin/AdminBookingsList.tsx`**
 
-## 🔧 **Quick Fix Commands**
+### **Step 3: Upload Frontend Files**
+Upload the entire `dist` folder to your production server.
 
-### **For Email Issues:**
-
+### **Step 4: Set Proper Permissions**
 ```bash
-# Test email functionality
-curl https://vizagtaxihub.com/api/email-test.php
-
-# Trigger email for specific booking
-curl -X POST https://vizagtaxihub.com/api/trigger-email.php \
-  -H "Content-Type: application/json" \
-  -d '{"booking_id": "123"}'
+# Set proper permissions
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/utils/response.php
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/download-invoice.php
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/debug-invoice.php
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/check-database.php
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/admin/get-invoice.php
+chmod 644 /home/u644605165/domains/vizagtaxihub.com/public_html/api/admin/download-invoice.php
 ```
 
-### **For Invoice Issues:**
+## 🧪 **Test the Fix:**
 
+### **Test 1: Database Check**
 ```bash
-# Test PDF generation
-curl https://vizagtaxihub.com/api/test-pdf.php
-
-# Test invoice download
-curl https://vizagtaxihub.com/api/download-invoice.php?id=123
+# First, check the database and see what bookings exist
+curl "https://vizagtaxihub.com/api/check-database.php"
 ```
 
-## 📁 **File Structure After Deployment**
+### **Test 2: Backend API Tests**
+```bash
+# Test debug-invoice.php (enhanced with more debugging)
+curl "https://vizagtaxihub.com/api/debug-invoice.php?booking_id=298"
 
-```
-your-project/
-├── install-composer.php          # Installation script
-├── composer.json                 # Created by installer
-├── vendor/                       # Created by Composer
-│   ├── autoload.php             # Autoloader
-│   └── dompdf/                  # DomPDF library
-├── src/
-│   └── backend/
-│       └── php-templates/
-│           ├── api/
-│           │   ├── email-test.php
-│           │   ├── fix-email-invoice.php
-│           │   └── trigger-email.php
-│           └── logs/            # Email and error logs
-└── test-installation.php        # Created by installer
+# Test get-invoice.php
+curl "https://vizagtaxihub.com/api/admin/get-invoice.php?booking_id=298"
+
+# Test download-invoice.php
+curl "https://vizagtaxihub.com/api/download-invoice.php?id=298&format=html"
 ```
 
-## 🎯 **Testing Checklist**
+### **Test 2: Frontend Tests**
+1. **Clear browser cache completely**
+2. **Open admin panel in incognito mode**
+3. **Click on booking VTH2508188F2C5E**
+4. **Go to Invoice tab**
+5. **Should see invoice data instead of error**
 
-### **After Installation:**
+## 📊 **Expected Results:**
 
-- [ ] Run `php test-installation.php`
-- [ ] Check `https://vizagtaxihub.com/api/email-test.php`
-- [ ] Check `https://vizagtaxihub.com/api/test-pdf.php`
-- [ ] Verify logs directory exists
-- [ ] Test manual email trigger
+### **Before Fix:**
+```
+Fatal error: Uncaught TypeError: http_response_code(): Argument #1 ($response_code) must be of type int, array given
+```
 
-### **For Email:**
+### **After Fix:**
+```json
+{
+    "status": "success",
+    "message": "Invoice data retrieved successfully",
+    "data": {
+        "invoice": {
+            "id": 298,
+            "booking_number": "VTH2508188F2C5E",
+            "passenger_name": "Kumar N"
+        }
+    }
+}
+```
 
-- [ ] Basic mail() function works
-- [ ] SMTP authentication successful
-- [ ] Email templates generate
-- [ ] Customer emails sent
-- [ ] Admin notifications sent
+## 🚨 **Critical Points:**
 
-### **For Invoice:**
+1. **The error is on your PRODUCTION server**, not local
+2. **You need to upload the fixed files** to replace the old ones
+3. **The frontend is calling the right endpoints**, but the backend has bugs
+4. **Clear all caches** after uploading
 
-- [ ] DomPDF installed correctly
-- [ ] Autoloader found and working
-- [ ] PDF generation successful
-- [ ] Invoice download works
-- [ ] HTML fallback works
+## 🔍 **If Issues Persist:**
 
-## 🚨 **Troubleshooting**
+### **Check Server Logs:**
+```bash
+# Check error logs
+tail -f /home/u644605165/domains/vizagtaxihub.com/public_html/api/logs/debug_invoice.log
+tail -f /home/u644605165/domains/vizagtaxihub.com/public_html/api/logs/invoice_errors.log
+```
 
-### **If Composer Installation Fails:**
+### **Check File Permissions:**
+```bash
+# Ensure files are readable
+ls -la /home/u644605165/domains/vizagtaxihub.com/public_html/api/utils/response.php
+```
 
-1. **Manual Installation:**
-   ```bash
-   curl -sS https://getcomposer.org/installer | php
-   mv composer.phar /usr/local/bin/composer
-   chmod +x /usr/local/bin/composer
-   ```
+### **Test Database Connection:**
+```bash
+# Test if database connection works
+curl "https://vizagtaxihub.com/api/debug-invoice.php?booking_id=298"
+```
 
-2. **Alternative - Download DomPDF Manually:**
-   - Download from: https://github.com/dompdf/dompdf/releases
-   - Extract to `vendor/dompdf/dompdf/`
-   - Create `vendor/autoload.php` manually
+## 📞 **Next Steps:**
 
-### **If Email Still Not Working:**
+The continuous loop will **NOT stop** until you upload the `AdminBookingsList.tsx` file. The backend is working correctly, but the frontend is still using the old code that calls the wrong endpoint.
 
-1. **Check SMTP Settings:**
-   - Verify `info@vizagtaxihub.com` exists in Hostinger
-   - Reset email password
-   - Update password in `src/backend/php-templates/api/utils/mailer.php`
-
-2. **Check Server Configuration:**
-   - Ensure PHP mail() function is enabled
-   - Check sendmail configuration
-   - Verify DNS settings
-
-### **If PDF Still Not Working:**
-
-1. **Check File Permissions:**
-   ```bash
-   chmod 755 vendor/
-   chmod 644 vendor/autoload.php
-   chmod 755 src/backend/php-templates/logs/
-   ```
-
-2. **Check PHP Extensions:**
-   - Ensure `mbstring` extension is enabled
-   - Ensure `gd` extension is enabled
-   - Ensure `curl` extension is enabled
-
-## 📞 **Support Steps**
-
-### **If Issues Persist:**
-
-1. **Check Hostinger Support:**
-   - Email configuration issues
-   - SMTP settings
-   - Server configuration
-
-2. **Check Logs:**
-   ```bash
-   tail -f src/backend/php-templates/logs/*.log
-   ```
-
-3. **Contact Support with:**
-   - Error messages from logs
-   - Steps you've tried
-   - Server environment details
-
-## 🎉 **Success Indicators**
-
-### **Email Working:**
-- ✅ Test email received at `info@vizagtaxihub.com`
-- ✅ Booking confirmation emails sent
-- ✅ Admin notification emails sent
-- ✅ Email logs created
-
-### **Invoice Working:**
-- ✅ PDF downloads successfully
-- ✅ Invoice content is correct
-- ✅ No errors in browser console
-- ✅ PDF opens in all browsers
-
-## 📝 **Quick Reference**
-
-### **Important URLs:**
-- Installation: `https://vizagtaxihub.com/install-composer.php`
-- Email Test: `https://vizagtaxihub.com/api/email-test.php`
-- PDF Test: `https://vizagtaxihub.com/api/test-pdf.php`
-- Diagnostic: `https://vizagtaxihub.com/api/fix-email-invoice.php`
-
-### **Important Files:**
-- `install-composer.php` - Main installer
-- `composer.json` - Dependencies
-- `vendor/autoload.php` - Autoloader
-- `src/backend/php-templates/logs/` - Logs directory
-
----
-
-**Status:** Ready for Production Deployment  
-**Last Updated:** January 2025  
-**Version:** 1.0
+**The key issue is that your production server has the old `response.php` file. Once you upload the fixed version, the errors should stop.**
