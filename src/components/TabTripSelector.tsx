@@ -200,7 +200,11 @@ export function TabTripSelector({
                 return (
                   <button
                     key={tab.id}
-                    ref={el => tabRefs.current[idx] = el}
+                    ref={(element) => {
+                      if (element) {
+                        tabRefs.current[idx] = element;
+                      }
+                    }}
                     className={`flex-1 min-w-0 py-2.5 sm:py-2 px-2 sm:px-4 flex items-center justify-center rounded-md sm:rounded-full font-bold sm:font-medium transition-colors duration-200 text-sm sm:text-sm text-center focus:outline-none ${isActive ? "bg-white border border-blue-600 shadow-sm z-10 text-blue-700 font-bold" : "bg-transparent text-gray-600 font-semibold sm:font-medium"}`}
                     onClick={() => handleTabChange(tab.id)}
                     style={{ zIndex: isActive ? 2 : 1 }}

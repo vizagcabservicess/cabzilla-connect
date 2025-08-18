@@ -1,11 +1,13 @@
 
-import React, { StrictMode } from 'react';
+import React, { StrictMode, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import './index.css';
 import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
+
+// Lazy load the main App component
+const App = lazy(() => import('./App'));
 
 // DEV PATCH: Always set a valid JWT and user in localStorage for testing
 if (import.meta.env.MODE === 'development') {
@@ -26,14 +28,47 @@ if (import.meta.env.MODE === 'development') {
   });
 }
 
-const queryClient = new QueryClient();
+// Optimized QueryClient configuration
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Reduce unnecessary refetches
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (replaces cacheTime)
+      retry: 1, // Reduce retry attempts
+      refetchOnWindowFocus: false, // Disable refetch on window focus
+      refetchOnReconnect: false, // Disable refetch on reconnect
+    },
+    mutations: {
+      retry: 1, // Reduce retry attempts for mutations
+    },
+  },
+});
+
+// Loading component for Suspense
+const LoadingSpinner = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '16px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+
+// Performance optimization: Use React.lazy and Suspense
 root.render(
   <StrictMode>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <Suspense fallback={<LoadingSpinner />}>
+          <App />
+        </Suspense>
       </QueryClientProvider>
     </HelmetProvider>
   </StrictMode>

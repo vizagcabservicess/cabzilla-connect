@@ -1,82 +1,105 @@
 import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
-import Index from './pages/Index';
-import NotFound from './pages/NotFound';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import DashboardPage from './pages/DashboardPage';
-import AdminDashboardPage from './pages/AdminDashboardPage';
-import BookingConfirmationPage from './pages/BookingConfirmationPage';
-import CabsPage from './pages/CabsPage';
-import ToursPage from './pages/ToursPage';
-import BookingEditPage from './pages/BookingEditPage';
-import ReceiptPage from './pages/ReceiptPage';
-import AdminDatabasePage from './pages/AdminDatabasePage';
-import ReportsPage from './pages/ReportsPage';
-import FleetManagementPage from './pages/FleetManagementPage';
-import FuelManagementPage from './pages/FuelManagementPage';
-import VehicleMaintenancePage from './pages/VehicleMaintenancePage';
-import LedgerPage from './pages/LedgerPage';
-import ExpensesPage from './pages/ExpensesPage';
-import PayrollPage from './pages/PayrollPage';
-import PaymentsManagementPage from './pages/PaymentsManagementPage';
-import CommissionManagementPage from './pages/CommissionManagementPage';
-import AdminBookingCreationPage from './pages/AdminBookingCreationPage';
-import PaymentPage from './pages/PaymentPage';
-import AboutPage from './pages/AboutPage';
-import ContactPage from './pages/ContactPage';
-import ServicesPage from './pages/ServicesPage';
-import TermsPage from './pages/TermsPage';
-import PrivacyPage from './pages/PrivacyPage';
-import RefundsPage from './pages/RefundsPage';
-import BlogPage from './pages/BlogPage';
-import CancellationRefundPolicyPage from './pages/CancellationRefundPolicyPage';
-import FAQPage from './pages/FAQPage';
-import PoolingPage from './pages/PoolingPage';
-import PoolingBookingPage from './pages/PoolingBookingPage';
-import PoolingDashboard from './pages/admin/PoolingDashboard';
-import PoolingAdminDashboard from './pages/admin/PoolingAdminDashboard';
-import CreateRidePage from './components/pooling/CreateRidePage';
-import BookingsPage from './pages/BookingsPage';
-import FaresPage from './pages/FaresPage';
-import VehiclesPage from './pages/VehiclesPage';
-import DriversPage from './pages/DriversPage';
-import UserManagementPage from './pages/UserManagementPage';
-import CustomerDashboard from './pages/DashboardPage';
-import DriverDashboard from './pages/DriverDashboard';
-import PoolingLoginPage from './pages/PoolingLoginPage';
-import PoolingProviderPage from './pages/PoolingProviderPage';
-import PoolingAdminPage from './pages/PoolingAdminPage';
-import GuestDashboardPage from './pages/GuestDashboardPage';
-import { LocalTaxiPage } from './pages/LocalTaxiPage';
-import { LocalTaxiPrefilledPage } from './pages/LocalTaxiPrefilledPage';
-import { OutstationTaxiPage } from './pages/OutstationTaxiPage';
-import { OutstationTaxiPrefilledPage } from './pages/OutstationTaxiPrefilledPage';
-import { AirportTaxiPage } from './pages/AirportTaxiPage';
-import { AirportTaxiPrefilledPage } from './pages/AirportTaxiPrefilledPage';
-import RentalsPage from './pages/RentalsPage';
-import { SupportPage } from './pages/SupportPage';
-import { HelpCenterPage } from './pages/HelpCenterPage';
-import { ContactUsPage } from './pages/ContactUsPage';
-import { TermsConditionsPage } from './pages/TermsConditionsPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import TourDetailPage from './pages/TourDetailPage';
-import SedanPage from './pages/SedanPage';
-import SUVPage from './pages/SUVPage';
-import TempoTravellerPage from './pages/TempoTravellerPage';
-import RoutePage from './pages/RoutePage';
-import VehicleDetailPage from '@/pages/VehicleDetailPage';
-import OperatorProfilesPage from '@/pages/OperatorProfilesPage';
-import FleetPage from './pages/FleetPage';
-import CareersPage from './pages/CareersPage';
-import OurStoryPage from './pages/OurStoryPage';
-import VisionMissionPage from './pages/VisionMissionPage';
-
-import HireDriverPage from './pages/HireDriverPage';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
-import { PrivilegeManagement } from './components/admin/PrivilegeManagement';
 import { useAuth } from './providers/AuthProvider';
 import { UserRole, EnhancedUser } from '@/types/privileges';
+
+// Lazy load all pages for better performance
+const Index = lazy(() => import('./pages/Index'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
+const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
+const CabsPage = lazy(() => import('./pages/CabsPage'));
+const ToursPage = lazy(() => import('./pages/ToursPage'));
+const BookingEditPage = lazy(() => import('./pages/BookingEditPage'));
+const ReceiptPage = lazy(() => import('./pages/ReceiptPage'));
+const AdminDatabasePage = lazy(() => import('./pages/AdminDatabasePage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const FleetManagementPage = lazy(() => import('./pages/FleetManagementPage'));
+const FuelManagementPage = lazy(() => import('./pages/FuelManagementPage'));
+const VehicleMaintenancePage = lazy(() => import('./pages/VehicleMaintenancePage'));
+const LedgerPage = lazy(() => import('./pages/LedgerPage'));
+const ExpensesPage = lazy(() => import('./pages/ExpensesPage'));
+const PayrollPage = lazy(() => import('./pages/PayrollPage'));
+const PaymentsManagementPage = lazy(() => import('./pages/PaymentsManagementPage'));
+const CommissionManagementPage = lazy(() => import('./pages/CommissionManagementPage'));
+const AdminBookingCreationPage = lazy(() => import('./pages/AdminBookingCreationPage'));
+const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const ServicesPage = lazy(() => import('./pages/ServicesPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const RefundsPage = lazy(() => import('./pages/RefundsPage'));
+const BlogPage = lazy(() => import('./pages/BlogPage'));
+const CancellationRefundPolicyPage = lazy(() => import('./pages/CancellationRefundPolicyPage'));
+const FAQPage = lazy(() => import('./pages/FAQPage'));
+const PoolingPage = lazy(() => import('./pages/PoolingPage'));
+const PoolingBookingPage = lazy(() => import('./pages/PoolingBookingPage'));
+const PoolingDashboard = lazy(() => import('./pages/admin/PoolingDashboard'));
+const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashboard'));
+const CreateRidePage = lazy(() => import('./components/pooling/CreateRidePage'));
+const BookingsPage = lazy(() => import('./pages/BookingsPage'));
+const FaresPage = lazy(() => import('./pages/FaresPage'));
+const VehiclesPage = lazy(() => import('./pages/VehiclesPage'));
+const DriversPage = lazy(() => import('./pages/DriversPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const CustomerDashboard = lazy(() => import('./pages/DashboardPage'));
+const DriverDashboard = lazy(() => import('./pages/DriverDashboard'));
+const PoolingLoginPage = lazy(() => import('./pages/PoolingLoginPage'));
+const PoolingProviderPage = lazy(() => import('./pages/PoolingProviderPage'));
+const PoolingAdminPage = lazy(() => import('./pages/PoolingAdminPage'));
+const GuestDashboardPage = lazy(() => import('./pages/GuestDashboardPage'));
+const LocalTaxiPage = lazy(() => import('./pages/LocalTaxiPage').then(module => ({ default: module.LocalTaxiPage })));
+const LocalTaxiPrefilledPage = lazy(() => import('./pages/LocalTaxiPrefilledPage').then(module => ({ default: module.LocalTaxiPrefilledPage })));
+const OutstationTaxiPage = lazy(() => import('./pages/OutstationTaxiPage').then(module => ({ default: module.OutstationTaxiPage })));
+const OutstationTaxiPrefilledPage = lazy(() => import('./pages/OutstationTaxiPrefilledPage').then(module => ({ default: module.OutstationTaxiPrefilledPage })));
+const AirportTaxiPage = lazy(() => import('./pages/AirportTaxiPage').then(module => ({ default: module.AirportTaxiPage })));
+const AirportTaxiPrefilledPage = lazy(() => import('./pages/AirportTaxiPrefilledPage').then(module => ({ default: module.AirportTaxiPrefilledPage })));
+const RentalsPage = lazy(() => import('./pages/RentalsPage'));
+const SupportPage = lazy(() => import('./pages/SupportPage').then(module => ({ default: module.SupportPage })));
+const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage').then(module => ({ default: module.HelpCenterPage })));
+const ContactUsPage = lazy(() => import('./pages/ContactUsPage').then(module => ({ default: module.ContactUsPage })));
+const TermsConditionsPage = lazy(() => import('./pages/TermsConditionsPage').then(module => ({ default: module.TermsConditionsPage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(module => ({ default: module.PrivacyPolicyPage })));
+const TourDetailPage = lazy(() => import('./pages/TourDetailPage'));
+const SedanPage = lazy(() => import('./pages/SedanPage'));
+const SUVPage = lazy(() => import('./pages/SUVPage'));
+const TempoTravellerPage = lazy(() => import('./pages/TempoTravellerPage'));
+const RoutePage = lazy(() => import('./pages/RoutePage'));
+const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
+const OperatorProfilesPage = lazy(() => import('@/pages/OperatorProfilesPage'));
+const FleetPage = lazy(() => import('./pages/FleetPage'));
+const CareersPage = lazy(() => import('./pages/CareersPage'));
+const OurStoryPage = lazy(() => import('./pages/OurStoryPage'));
+const VisionMissionPage = lazy(() => import('./pages/VisionMissionPage'));
+const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
+const PrivilegeManagement = lazy(() => import('./components/admin/PrivilegeManagement').then(module => ({ default: module.PrivilegeManagement })));
+
+// Loading component for route transitions
+const RouteLoadingSpinner = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '50vh',
+    fontSize: '14px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
+
+// Wrapper component for lazy-loaded routes
+const LazyRoute = ({ component: Component }: { component: React.LazyExoticComponent<any> }) => (
+  <Suspense fallback={<RouteLoadingSpinner />}>
+    <Component />
+  </Suspense>
+);
 
 // Root component that includes ScrollToTop
 function Root() {
@@ -95,19 +118,19 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Index />,
+        element: <LazyRoute component={Index} />,
       },
       {
         path: 'login',
-        element: <LoginPage />,
+        element: <LazyRoute component={LoginPage} />,
       },
       {
         path: 'signup',
-        element: <SignupPage />,
+        element: <LazyRoute component={SignupPage} />,
       },
       {
         path: 'dashboard',
-        element: <DashboardPage />,
+        element: <LazyRoute component={DashboardPage} />,
       },
       // Main admin routes
       {

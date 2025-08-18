@@ -7,20 +7,53 @@
     <meta name="author" content="Vizag Taxi Hub" />
     <meta property="og:image" content="/og-image.png" />
     <link rel="icon" type="image/png" href="/uploads/favicon.png" />
+    
+    <!-- Critical CSS inlined to prevent render blocking -->
+    <style>
+      /* Critical CSS for above-the-fold content */
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
+      #root { min-height: 100vh; }
+      #loading-indicator { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: white; display: flex; justify-content: center; 
+        align-items: center; z-index: 9999; 
+      }
+      .loading-spinner { 
+        width: 40px; height: 40px; border: 4px solid #f3f3f3; 
+        border-top: 4px solid #3498db; border-radius: 50%; 
+        animation: spin 1s linear infinite; margin: 0 auto 16px; 
+      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    
+    <!-- Resource hints for better performance -->
+    <link rel="preconnect" href="https://maps.googleapis.com" />
+    <link rel="preconnect" href="https://maps.gstatic.com" />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://checkout.razorpay.com" />
+    <link rel="dns-prefetch" href="https://www.clarity.ms" />
+    <link rel="dns-prefetch" href="https://analytics.google.com" />
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/src/main.tsx" as="script" type="module" />
+    <link rel="preload" href="/src/index.css" as="style" />
+    
     <!-- Content Security Policy to allow Google Maps and Razorpay -->
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://q.clarity.ms https://c.clarity.ms;">
-    <!-- Google Maps API with necessary libraries -->
     
-    <!-- Google Analytics -->
+    <!-- Google Analytics - Load asynchronously with reduced impact -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-68BN0C389S');
+      gtag('config', 'G-68BN0C389S', {
+        send_page_view: false, // Disable automatic page view to reduce initial load
+        transport_type: 'beacon' // Use beacon for better performance
+      });
     </script>
     
-    <!-- Microsoft Clarity -->
+    <!-- Microsoft Clarity - Load asynchronously -->
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -32,9 +65,59 @@
 
   <body>
     <div id="root"></div>
+    
+    <!-- Loading indicator for better UX -->
+    <div id="loading-indicator">
+      <div style="text-align: center;">
+        <div class="loading-spinner"></div>
+        <p style="color: #666; font-family: Arial, sans-serif;">Loading Vizag Taxi Hub...</p>
+      </div>
+    </div>
+    
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    
+    <!-- Main application script -->
     <script type="module" src="/src/main.tsx"></script>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    
+    <!-- Razorpay script - Load only when needed -->
+    <script>
+      // Load Razorpay script only when payment functionality is needed
+      window.loadRazorpay = function() {
+        if (!window.Razorpay) {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.async = true;
+          document.head.appendChild(script);
+        }
+      };
+    </script>
+    
+    <!-- Hide loading indicator when app is ready -->
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const loadingIndicator = document.getElementById('loading-indicator');
+          if (loadingIndicator) {
+            loadingIndicator.style.opacity = '0';
+            loadingIndicator.style.transition = 'opacity 0.3s ease';
+            setTimeout(function() {
+              loadingIndicator.style.display = 'none';
+            }, 300);
+          }
+        }, 1000);
+      });
+    </script>
+    
+    <!-- Defer non-critical CSS -->
+    <script>
+      // Load non-critical CSS after page load
+      window.addEventListener('load', function() {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/src/index.css';
+        document.head.appendChild(link);
+      });
+    </script>
   </body>
 </html>

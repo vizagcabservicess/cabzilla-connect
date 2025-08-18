@@ -1,40 +1,57 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 import router from './routes'; // Only for original approach
-import Index from "./pages/Index";
-import AdminDashboard from "./pages/AdminDashboardPage";
-import CustomerDashboard from "./pages/DashboardPage";
-import DriverDashboard from "./pages/DriverDashboard";
-import PoolingPage from "./pages/PoolingPage";
-import PoolingLoginPage from "./pages/PoolingLoginPage";
-import PoolingProviderPage from "./pages/PoolingProviderPage";
-import PoolingAdminPage from "./pages/PoolingAdminPage";
-import GuestDashboardPage from "./pages/GuestDashboardPage";
 
-const queryClient = new QueryClient();
+// Lazy load pages for better performance
+const Index = lazy(() => import("./pages/Index"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboardPage"));
+const CustomerDashboard = lazy(() => import("./pages/DashboardPage"));
+const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));
+const PoolingPage = lazy(() => import("./pages/PoolingPage"));
+const PoolingLoginPage = lazy(() => import("./pages/PoolingLoginPage"));
+const PoolingProviderPage = lazy(() => import("./pages/PoolingProviderPage"));
+const PoolingAdminPage = lazy(() => import("./pages/PoolingAdminPage"));
+const GuestDashboardPage = lazy(() => import("./pages/GuestDashboardPage"));
+
+// Loading component for route transitions
+const RouteLoadingSpinner = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '50vh',
+    fontSize: '14px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
+
 const USE_ORIGINAL_APP = true; // Toggle this to switch approaches
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AuthProvider>
-        <PoolingAuthProvider>
-          {USE_ORIGINAL_APP ? (
-            <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
-              <RouterProvider router={router} />
-            </GoogleMapsProvider>
-          ) : (
-            <BrowserRouter>
+  <TooltipProvider>
+    <Toaster />
+    <Sonner />
+    <AuthProvider>
+      <PoolingAuthProvider>
+        {USE_ORIGINAL_APP ? (
+          <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
+            <RouterProvider router={router} />
+          </GoogleMapsProvider>
+        ) : (
+          <BrowserRouter>
+            <ScrollToTop />
+            <Suspense fallback={<RouteLoadingSpinner />}>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/admin" element={<AdminDashboard />} />
@@ -46,12 +63,13 @@ const App = () => (
                 <Route path="/pooling/admin" element={<PoolingAdminPage />} />
                 <Route path="/pooling/guest" element={<GuestDashboardPage />} />
               </Routes>
-            </BrowserRouter>
-          )}
-        </PoolingAuthProvider>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+            </Suspense>
+          </BrowserRouter>
+        )}
+      </PoolingAuthProvider>
+    </AuthProvider>
+    <PerformanceMonitor showInProduction={false} />
+  </TooltipProvider>
 );
 
 export default App;
