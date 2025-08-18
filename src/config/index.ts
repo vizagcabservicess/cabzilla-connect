@@ -1,5 +1,5 @@
 // Configuration constants for the application
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.vizagup.com';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.vizagtaxihub.com';
 
 // Application settings
 export const APP_CONFIG = {

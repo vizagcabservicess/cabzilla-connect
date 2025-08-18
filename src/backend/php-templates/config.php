@@ -15,15 +15,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 
 // Application Configuration
 define('APP_NAME', 'Vizag Taxi Hub');
-define('APP_URL', 'https://vizagup.com');
+define('APP_URL', 'https://vizagtaxihub.com');
 define('APP_VERSION', '1.0.0');
-define('APP_DEBUG', true);
+define('APP_DEBUG', false); // Set to false for production
 
 // Database Configuration
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'u644605165_db_be');
-define('DB_USER', 'u644605165_usr_be');
-define('DB_PASS', 'Vizag@1213');
+define('DB_NAME', 'u644605165_vth_db');
+define('DB_USER', 'u644605165_vth_usr');
+define('DB_PASS', 'Ub^Ghg]Hip4#');
 
 // Database Connection Settings - Increased timeouts for stability
 ini_set('mysql.connect_timeout', '30');

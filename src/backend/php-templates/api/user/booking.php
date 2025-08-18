@@ -75,8 +75,9 @@ try {
         $params = [$bookingId, $userId];
         $types = "ii";
     } else {
-        // Unauthenticated users can only access public bookings (guest bookings)
-        $sql = "SELECT * FROM bookings WHERE id = ? AND user_id IS NULL";
+        // Unauthenticated users can access any booking (for guest bookings and email triggers)
+        // This allows email triggering to work for all bookings
+        $sql = "SELECT * FROM bookings WHERE id = ?";
         $params = [$bookingId];
         $types = "i";
     }

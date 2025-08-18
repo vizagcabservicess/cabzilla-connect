@@ -116,7 +116,7 @@ export function LocalTaxiPage() {
         <title>Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
         <meta name="keywords" content="local taxi visakhapatnam, city cab vizag, local cab booking visakhapatnam, vizag city taxi, point to point taxi vizag" />
-        <link rel="canonical" href="https://www.vizagup.com/local-taxi" />
+        <link rel="canonical" href="https://www.vizagtaxihub.com/local-taxi" />
       </Helmet>
 
       {/* Hero Section */}

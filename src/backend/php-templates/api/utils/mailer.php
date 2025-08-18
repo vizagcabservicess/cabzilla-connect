@@ -354,7 +354,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
                 logError("SMTP greeting: " . trim($response));
                 
                 // Issue EHLO command
-                fputs($socket, "EHLO vizagup.com\r\n");
+                fputs($socket, "EHLO vizagtaxihub.com\r\n");
                 $response = fgets($socket, 515);
                 
                 // Flush additional EHLO responses
@@ -429,7 +429,7 @@ function testDirectMailFunction($to, $subject, $htmlBody) {
             $emailContent .= "To: $to\n";
             $emailContent .= "Subject: $subject\n";
             $emailContent .= "MIME-Version: 1.0\n";
-            $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagup.com>\n";
+            $emailContent .= "Message-ID: <" . time() . rand(1000,9999) . "@vizagtaxihub.com>\n";
             $emailContent .= "Content-type: text/html; charset=UTF-8\n\n";
             $emailContent .= $htmlBody;
             
@@ -636,7 +636,7 @@ function sendEmailAllMethods($to, $subject, $htmlBody) {
                 $response = fgets($socket, 515);
                 
                 // Issue EHLO command
-                fputs($socket, "EHLO vizagup.com\r\n");
+                fputs($socket, "EHLO vizagtaxihub.com\r\n");
                 $response = fgets($socket, 515);
                 
                 // Flush additional EHLO responses

@@ -65,7 +65,7 @@ export const initRazorpay = async (): Promise<boolean> => {
 export const createRazorpayOrder = async (amount: number, bookingId?: string): Promise<RazorpayOrderResponse | null> => {
   try {
     const primaryUrl = getApiUrl("/api/create-razorpay-order");
-    const fallbackUrl = `https://www.vizagup.com/api/create-razorpay-order.php`;
+    const fallbackUrl = `https://www.vizagtaxihub.com/api/create-razorpay-order.php`;
 
     const buildBody = (amt: number) => {
       const body: any = { amount: Math.round(amt) };
@@ -165,7 +165,7 @@ export const verifyRazorpayPayment = async (
 ): Promise<boolean> => {
   try {
     const primaryUrl = getApiUrl("/api/verify-razorpay-payment");
-    const fallbackUrl = `https://www.vizagup.com/api/verify-razorpay-payment.php`;
+    const fallbackUrl = `https://www.vizagtaxihub.com/api/verify-razorpay-payment.php`;
     const doPost = async (url: string) => fetch(url, {
       method: "POST",
       headers: {

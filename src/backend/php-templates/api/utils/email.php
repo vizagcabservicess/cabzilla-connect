@@ -28,7 +28,7 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     }
     
     // Original implementation as fallback
-    $from = 'info@vizagup.com'; // Updated domain email
+    $from = 'info@vizagtaxihub.com'; // Updated domain email
     $fromName = 'Vizag Taxi Hub';
     
     // Log email sending attempt with more details
@@ -792,7 +792,7 @@ function sendBookingConfirmationEmail($booking) {
 
 function sendAdminNotificationEmail($booking) {
     // Send to multiple admin emails for reliability
-    $adminEmails = ['info@vizagtaxihub.com', 'info@vizagup.com'];
+    $adminEmails = ['info@vizagtaxihub.com'];
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
@@ -1284,7 +1284,7 @@ function sendPaymentConfirmationEmail($booking) {
  * Send email with attachment
  */
 function sendEmailWithAttachment($to, $subject, $htmlBody, $attachmentPath, $attachmentName) {
-    $from = 'info@vizagup.com';
+    $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
     // Generate boundary for multipart message

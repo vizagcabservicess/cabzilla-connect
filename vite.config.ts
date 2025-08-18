@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'https://vizagup.com',
+        target: 'https://vizagtaxihub.com',
         changeOrigin: true,
         secure: false,
       },

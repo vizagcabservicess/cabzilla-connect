@@ -15,7 +15,7 @@ export function FixDatabaseButton() {
       // Determine API base URL based on environment
       const apiBaseUrl = window.location.hostname.includes('localhost') 
         ? `${window.location.protocol}//${window.location.host}`
-        : 'https://vizagup.com';
+        : 'https://vizagtaxihub.com';
       
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();

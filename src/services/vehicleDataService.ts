@@ -155,7 +155,7 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
   try {
     // First, try direct database endpoints with updated domain
     const endpoints = [
-      // Prioritize direct database endpoints with www.vizagup.com domain
+      // Prioritize direct database endpoints with www.vizagtaxihub.com domain
       `${API_BASE_URL}/api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
       `${API_BASE_URL}/api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
       `${API_BASE_URL}/api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`,

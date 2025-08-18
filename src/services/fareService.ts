@@ -104,7 +104,7 @@ function getForcedRequestConfig() {
 // Initialize database tables - useful for admin operations
 async function initializeDatabase(forceRecreate = false) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
     const params = new URLSearchParams();
 
     if (forceRecreate) {
@@ -128,7 +128,7 @@ async function initializeDatabase(forceRecreate = false) {
 // Direct method to update fares with sync option
 async function directFareUpdate(tripType: string, vehicleId: string, data: any) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
     let endpoint = '';
 
     // Construct the appropriate endpoint based on trip type
@@ -199,7 +199,7 @@ async function directFareUpdate(tripType: string, vehicleId: string, data: any) 
 // Sync outstation fares - safer implementation with fallback to local API
 async function syncOutstationFares(vehicleId?: string) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
     console.log('Syncing outstation_fares with vehicle_pricing' + (vehicleId ? ` for vehicle ${vehicleId}` : ''));
 
     // Construct the URL with parameters
@@ -272,7 +272,7 @@ async function syncLocalFareTables(): Promise<boolean> {
   try {
     console.log('Syncing local fare tables...');
     const bypassHeaders = getBypassHeaders();
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
 
     // Call the sync-local-fares.php API endpoint
     const response = await fetch(`${baseUrl}/admin/sync-local-fares.php`, {
@@ -324,7 +324,7 @@ function getFaresByTripType(tripType: TripType, vehicleId?: string) {
 
 // Helper function to build a fallback URL when outstation-fares.php is not available
 function getFallbackOutstationUrl() {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
   // Try to use the vehicle_pricing table directly as a fallback
   return `${baseUrl}/api/vehicle-pricing.php?trip_type=outstation`;
 }
@@ -333,7 +333,7 @@ function getFallbackOutstationUrl() {
 async function getOutstationFares(origin?: string, destination?: string): Promise<Record<string, OutstationFare>> {
   try {
     // Always force a refresh of fares by skipping cache
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
     const timestamp = Date.now();
 
     console.log('Fetching outstation fares with timestamp:', timestamp);
@@ -539,7 +539,7 @@ function generateDefaultOutstationFares(): Record<string, OutstationFare> {
 async function getOutstationFaresForVehicle(vehicleId: string): Promise<OutstationFare> {
   try {
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagtaxihub.com';
     const now = Date.now();
 
     console.log(`Fetching outstation fares for vehicle ${vehicleId} with timestamp:`, now);

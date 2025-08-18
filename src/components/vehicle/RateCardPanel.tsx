@@ -91,7 +91,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
 
         // Add outstation rates - fetch from the pricing API
         try {
-          const outstationResponse = await fetch(`https://www.vizagup.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
+          const outstationResponse = await fetch(`https://www.vizagtaxihub.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
           if (outstationResponse.ok) {
             const outstationData = await outstationResponse.json();
             console.log('Outstation data:', outstationData);

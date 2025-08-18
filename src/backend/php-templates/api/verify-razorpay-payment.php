@@ -31,11 +31,11 @@ if (!isset($data['razorpay_payment_id']) || !isset($data['razorpay_order_id']) |
 // Include database connection and helper functions (best-effort)
 $dbAvailable = false;
 try {
-    require_once __DIR__ . '/utils/database.php';
+    // Use config.php database connection instead of database.php to avoid credential conflicts
     require_once __DIR__ . '/utils/email.php';
     $dbAvailable = true;
 } catch (Throwable $e) {
-    file_put_contents(__DIR__ . '/debug.log', 'WARN: DB utils not available: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+    file_put_contents(__DIR__ . '/debug.log', 'WARN: Email utils not available: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
 }
 
 // Load Razorpay API keys
@@ -101,6 +101,7 @@ try {
     
     if ($dbAvailable) {
         try {
+            // Use the database connection from config.php (correct credentials)
             $conn = getDbConnection();
             
             // Since razorpay_orders table might not have booking_id column, 
@@ -231,13 +232,51 @@ try {
                         'updatedAt' => date('Y-m-d H:i:s')
                     ];
                     
-                    // Send payment confirmation email only (with PDF receipt)
+                    // Send payment confirmation email with enhanced error handling
                     try {
                         file_put_contents(__DIR__ . '/debug.log', 'Attempting to send payment confirmation email for booking: ' . $booking_id . ' with amount: ' . $payAmount . PHP_EOL, FILE_APPEND);
+                        
+                        // First try the payment confirmation email
                         $paymentEmailSuccess = sendPaymentConfirmationEmail($formattedBooking);
                         file_put_contents(__DIR__ . '/debug.log', 'Payment confirmation email result: ' . ($paymentEmailSuccess ? 'success' : 'failed') . ' for amount: ' . $payAmount . ' at ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND);
+                        
+                        // If payment email fails, try booking confirmation email as fallback
+                        if (!$paymentEmailSuccess) {
+                            file_put_contents(__DIR__ . '/debug.log', 'Payment email failed, trying booking confirmation email as fallback' . PHP_EOL, FILE_APPEND);
+                            $bookingEmailSuccess = sendBookingConfirmationEmail($formattedBooking);
+                            file_put_contents(__DIR__ . '/debug.log', 'Booking confirmation email fallback result: ' . ($bookingEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
+                        }
+                        
+                        // If both fail, try basic email function
+                        if (!$paymentEmailSuccess && !$bookingEmailSuccess) {
+                            file_put_contents(__DIR__ . '/debug.log', 'Both email functions failed, trying basic email function' . PHP_EOL, FILE_APPEND);
+                            
+                            $to = $formattedBooking['passengerEmail'];
+                            $subject = "Payment Confirmed - Booking #" . $formattedBooking['bookingNumber'];
+                            $body = "<h1>Payment Confirmed!</h1><p>Your payment of ₹" . number_format($payAmount, 2) . " has been received for booking #" . $formattedBooking['bookingNumber'] . "</p>";
+                            
+                            $basicEmailSuccess = sendEmail($to, $subject, $body);
+                            file_put_contents(__DIR__ . '/debug.log', 'Basic email function result: ' . ($basicEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
+                        }
+                        
                     } catch (Exception $emailEx) {
                         file_put_contents(__DIR__ . '/debug.log', 'Email sending failed at ' . date('Y-m-d H:i:s') . ': ' . $emailEx->getMessage() . ' - Trace: ' . $emailEx->getTraceAsString() . PHP_EOL, FILE_APPEND);
+                        
+                        // Try one more time with basic mail function
+                        try {
+                            $to = $formattedBooking['passengerEmail'];
+                            $subject = "Payment Confirmed - Booking #" . $formattedBooking['bookingNumber'];
+                            $body = "<h1>Payment Confirmed!</h1><p>Your payment has been received.</p>";
+                            
+                            $headers = "From: Vizag Taxi Hub <info@vizagtaxihub.com>\r\n";
+                            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+                            
+                            ini_set('sendmail_from', 'info@vizagtaxihub.com');
+                            $finalEmailSuccess = @mail($to, $subject, $body, $headers);
+                            file_put_contents(__DIR__ . '/debug.log', 'Final email attempt result: ' . ($finalEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
+                        } catch (Exception $finalEx) {
+                            file_put_contents(__DIR__ . '/debug.log', 'Final email attempt also failed: ' . $finalEx->getMessage() . PHP_EOL, FILE_APPEND);
+                        }
                     }
                 }
             }

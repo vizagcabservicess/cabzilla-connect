@@ -54,7 +54,7 @@ ${getPickupTime() !== 'Time not specified' ? `⏰ Time: ${getPickupTime()}` : ''
 💰 Total Amount: ₹${getTotalAmount().toLocaleString()}
 ✅ Status: ${getStatus().toUpperCase()}
 
-Book your ride at: www.vizagup.com`;
+Book your ride at: www.vizagtaxihub.com`;
 
   const copyToClipboard = async () => {
     try {

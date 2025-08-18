@@ -58,7 +58,7 @@ export function DriverManagement() {
       return `${protocol}//${currentDomain}${window.location.port ? `:${window.location.port}` : ''}`;
     }
     
-    return 'https://vizagup.com';
+    return 'https://vizagtaxihub.com';
   };
 
   const fetchDrivers = async () => {

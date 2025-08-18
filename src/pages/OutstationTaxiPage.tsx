@@ -105,7 +105,7 @@ export function OutstationTaxiPage() {
         <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
         <meta name="keywords" content="outstation taxi visakhapatnam, one way cab from vizag, vizag to hyderabad taxi, vizag to chennai cab, outstation cab booking visakhapatnam, vizag taxi service" />
-        <link rel="canonical" href="https://www.vizagup.com/outstation-taxi" />
+        <link rel="canonical" href="https://www.vizagtaxihub.com/outstation-taxi" />
       </Helmet>
 
                                                                                                                      {/* Hero Section */}
