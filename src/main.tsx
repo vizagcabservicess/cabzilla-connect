@@ -45,19 +45,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading component for Suspense
-const LoadingSpinner = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    fontSize: '16px',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-);
+// Minimal loading for faster initial render
+const MinimalLoader = () => null;
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 
@@ -66,7 +55,7 @@ root.render(
   <StrictMode>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <Suspense fallback={<LoadingSpinner />}>
+        <Suspense fallback={<MinimalLoader />}>
           <App />
         </Suspense>
       </QueryClientProvider>

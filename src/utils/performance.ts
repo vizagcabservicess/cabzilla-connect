@@ -116,8 +116,10 @@ export const cleanupMemory = () => {
   }
 };
 
-// Performance budget monitoring
+// Performance budget monitoring (disabled in production)
 export const checkPerformanceBudget = () => {
+  if (import.meta.env.PROD) return; // Skip in production
+  
   const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
   if (navigation) {
     const loadTime = navigation.loadEventEnd - navigation.loadEventStart;
