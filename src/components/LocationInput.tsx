@@ -114,7 +114,7 @@ export function LocationInput({
     
     // Mark as initialized
     initializedRef.current = true;
-  }, []); // Empty dependency array - only run once on mount
+  }, [value, location]); // Removed label dependency to reduce re-renders
   
      // Filter suggestions based on input value
    useEffect(() => {
@@ -239,7 +239,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-     }, [isLoaded, google, isPickupLocation]); // Removed functions from deps to prevent infinite loops
+     }, [isLoaded, google, inputRef.current, isPickupLocation, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;

@@ -37,63 +37,46 @@ export default defineConfig(({ mode }) => ({
     minify: 'esbuild',
     cssMinify: true,
     reportCompressedSize: false,
-    chunkSizeWarningLimit: 2000,
-    sourcemap: false,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Core React libraries - highest priority
+          // Core React libraries
           if (id.includes('react') || id.includes('react-dom')) {
             return 'react-core';
           }
           
-          // Critical UI components
-          if (id.includes('src/components/ui/') || id.includes('@radix-ui')) {
-            return 'ui-core';
+          // UI libraries
+          if (id.includes('@radix-ui') || id.includes('lucide-react') || id.includes('framer-motion')) {
+            return 'ui-libs';
           }
           
-          // Pages - split each major page
-          if (id.includes('src/pages/Index')) {
-            return 'page-index';
-          }
-          if (id.includes('src/pages/Admin')) {
-            return 'page-admin';
-          }
-          if (id.includes('src/pages/Dashboard')) {
-            return 'page-dashboard';
+          // Form libraries
+          if (id.includes('react-hook-form') || id.includes('@hookform/resolvers') || id.includes('zod')) {
+            return 'form-libs';
           }
           
-          // Admin components - separate chunk
-          if (id.includes('src/components/admin/')) {
-            return 'admin-components';
+          // Utility libraries
+          if (id.includes('axios') || id.includes('date-fns') || id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'utils';
           }
           
-          // Form and validation libraries
-          if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-            return 'forms';
-          }
-          
-          // Maps - load separately
+          // Maps and location
           if (id.includes('@react-google-maps') || id.includes('maps.googleapis.com')) {
             return 'maps';
           }
           
-          // Heavy libraries - defer loading
+          // Payment and analytics
+          if (id.includes('razorpay') || id.includes('@tanstack/react-query')) {
+            return 'external';
+          }
+          
+          // Large dependencies
           if (id.includes('recharts') || id.includes('swiper') || id.includes('@react-pdf')) {
             return 'heavy-libs';
           }
           
-          // Utilities and helpers
-          if (id.includes('src/utils/') || id.includes('src/lib/') || id.includes('src/hooks/')) {
-            return 'utils';
-          }
-          
-          // Third party APIs and external services
-          if (id.includes('razorpay') || id.includes('axios') || id.includes('@tanstack')) {
-            return 'external';
-          }
-          
-          // All other vendor dependencies
+          // Vendor dependencies
           if (id.includes('node_modules')) {
             return 'vendor';
           }
@@ -102,15 +85,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', '@radix-ui/react-slot', 'clsx', 'tailwind-merge'],
+    include: ['react', 'react-dom'],
     exclude: ['recharts', 'swiper', '@react-pdf/renderer'],
-    force: true,
-  },
-  esbuild: {
-    logOverride: { 'this-is-undefined-in-esm': 'silent' },
-    drop: mode === 'production' ? ['console', 'debugger'] : [],
-  },
-  define: {
-    __DEV__: mode === 'development',
   },
 }));
