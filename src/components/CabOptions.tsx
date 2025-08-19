@@ -50,7 +50,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
   pickupDate,
   returnDate,
   isCalculatingFares,
-  selectedCabBreakdown,
+  // selectedCabBreakdown prop removed as it's not in the interface
 }) => {
   const isMobile = useIsMobile();
   const [hasSelectedCab, setHasSelectedCab] = useState(false);
@@ -108,7 +108,7 @@ export const CabOptions: React.FC<CabOptionsProps> = ({
       packageType={hourlyPackage}
       pickupDate={pickupDate}
       returnDate={returnDate}
-      selectedCabBreakdown={selectedCabBreakdown}
+      // selectedCabBreakdown removed
     />
   );
 };

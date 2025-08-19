@@ -8,7 +8,8 @@ import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import router from './routes'; // Only for original approach
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import router from './routes';
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -21,55 +22,45 @@ const PoolingProviderPage = lazy(() => import("./pages/PoolingProviderPage"));
 const PoolingAdminPage = lazy(() => import("./pages/PoolingAdminPage"));
 const GuestDashboardPage = lazy(() => import("./pages/GuestDashboardPage"));
 
-// Loading component for route transitions
-const RouteLoadingSpinner = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '50vh',
-    fontSize: '14px',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-);
+// Ultra-minimal loading component for instant app start
+const RouteLoadingSpinner = () => null;
 
 const USE_ORIGINAL_APP = true; // Toggle this to switch approaches
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const App = () => (
-  <TooltipProvider>
-    <Toaster />
-    <Sonner />
-    <AuthProvider>
-      <PoolingAuthProvider>
-        {USE_ORIGINAL_APP ? (
-          <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
-            <RouterProvider router={router} />
-          </GoogleMapsProvider>
-        ) : (
-          <BrowserRouter>
-            <ScrollToTop />
-            <Suspense fallback={<RouteLoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/customer" element={<CustomerDashboard />} />
-                <Route path="/driver" element={<DriverDashboard />} />
-                <Route path="/pooling" element={<PoolingPage />} />
-                <Route path="/pooling/login" element={<PoolingLoginPage />} />
-                <Route path="/pooling/provider" element={<PoolingProviderPage />} />
-                <Route path="/pooling/admin" element={<PoolingAdminPage />} />
-                <Route path="/pooling/guest" element={<GuestDashboardPage />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        )}
-      </PoolingAuthProvider>
-    </AuthProvider>
-    <PerformanceMonitor showInProduction={false} />
-  </TooltipProvider>
+  <ErrorBoundary fallback={<div>Loading...</div>}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <AuthProvider>
+        <PoolingAuthProvider>
+          {USE_ORIGINAL_APP ? (
+            <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
+              <RouterProvider router={router} />
+            </GoogleMapsProvider>
+          ) : (
+            <BrowserRouter>
+              <ScrollToTop />
+              <Suspense fallback={<RouteLoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/customer" element={<CustomerDashboard />} />
+                  <Route path="/driver" element={<DriverDashboard />} />
+                  <Route path="/pooling" element={<PoolingPage />} />
+                  <Route path="/pooling/login" element={<PoolingLoginPage />} />
+                  <Route path="/pooling/provider" element={<PoolingProviderPage />} />
+                  <Route path="/pooling/admin" element={<PoolingAdminPage />} />
+                  <Route path="/pooling/guest" element={<GuestDashboardPage />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          )}
+        </PoolingAuthProvider>
+      </AuthProvider>
+    </TooltipProvider>
+  </ErrorBoundary>
 );
 
 export default App;

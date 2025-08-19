@@ -175,7 +175,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                                 hourlyPackage={tripDetails.package}
                                 pickupDate={tripDetails.pickupDate ? new Date(tripDetails.pickupDate) : undefined}
                                 returnDate={tripDetails.returnDate ? new Date(tripDetails.returnDate) : undefined}
-                                selectedCabBreakdown={fareBreakdown}
+                                // selectedCabBreakdown prop removed
                             />
                         </Suspense>
                     </ErrorBoundary>
