@@ -2,11 +2,10 @@
 import React, { StrictMode, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 
-// Lazy load the main App component
+// Lazy load the main App component with preload
 const App = lazy(() => import('./App'));
 
 // DEV PATCH: Always set a valid JWT and user in localStorage for testing
