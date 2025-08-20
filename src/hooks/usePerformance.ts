@@ -43,17 +43,29 @@ export const useThrottle = <T extends (...args: any[]) => any>(
   return useCallback(throttle(callback, limit), [callback, limit]);
 };
 
-// Hook for performance monitoring (disabled in production)
+// Hook for performance monitoring
 export const usePerformanceMonitor = (componentName: string) => {
+  const startTime = useRef(performance.now());
+
   useEffect(() => {
-    if (import.meta.env.PROD) return;
+    const endTime = performance.now();
+    const renderTime = endTime - startTime.current;
     
-    const start = performance.now();
-    return () => {
+    console.log(`${componentName} render time: ${renderTime.toFixed(2)}ms`);
+    
+    if (renderTime > 16) { // 60fps threshold
+      console.warn(`${componentName} render time exceeds 16ms (${renderTime.toFixed(2)}ms)`);
+    }
+  });
+
+  return {
+    measureRender: useCallback((name: string, fn: () => void) => {
+      const start = performance.now();
+      fn();
       const end = performance.now();
-      console.log(`${componentName} render time: ${end - start}ms`);
-    };
-  }, [componentName]);
+      console.log(`${name} took ${(end - start).toFixed(2)}ms`);
+    }, [])
+  };
 };
 
 // Hook for memory management

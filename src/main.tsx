@@ -2,10 +2,11 @@
 import React, { StrictMode, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 
-// Lazy load the main App component with preload
+// Lazy load the main App component
 const App = lazy(() => import('./App'));
 
 // DEV PATCH: Always set a valid JWT and user in localStorage for testing
@@ -44,8 +45,19 @@ const queryClient = new QueryClient({
   },
 });
 
-// Minimal loading for faster initial render
-const MinimalLoader = () => null;
+// Loading component for Suspense
+const LoadingSpinner = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '16px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 
@@ -54,7 +66,7 @@ root.render(
   <StrictMode>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <Suspense fallback={<MinimalLoader />}>
+        <Suspense fallback={<LoadingSpinner />}>
           <App />
         </Suspense>
       </QueryClientProvider>

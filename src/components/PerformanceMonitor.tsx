@@ -18,8 +18,8 @@ const PerformanceMonitor: React.FC<{ showInProduction?: boolean }> = ({
   const { isOnline, connectionType } = useNetworkStatus();
 
   useEffect(() => {
-    // Disable in production for better performance
-    if (import.meta.env.PROD) {
+    // Only show in development or if explicitly enabled
+    if (import.meta.env.PROD && !showInProduction) {
       return;
     }
 
@@ -68,8 +68,7 @@ const PerformanceMonitor: React.FC<{ showInProduction?: boolean }> = ({
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  // Always hidden in production for better performance
-  if (import.meta.env.PROD || !isVisible) {
+  if (!isVisible && import.meta.env.PROD && !showInProduction) {
     return null;
   }
 
