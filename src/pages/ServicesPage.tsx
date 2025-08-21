@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { Car, Clock, MapPin, Plane, Calendar, Shield, Award, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 
 const ServicesPage = () => {
   const services = [
@@ -19,7 +20,7 @@ const ServicesPage = () => {
         '24/7 availability',
         'Fixed rates'
       ],
-      link: '/cabs/airport'
+      link: '/airport-taxi'
     },
     {
       id: 'local',
@@ -34,7 +35,7 @@ const ServicesPage = () => {
         'Clean and sanitized vehicles',
         'Multiple stops allowed'
       ],
-      link: '/cabs/local'
+      link: '/local-taxi'
     },
     {
       id: 'outstation',
@@ -49,7 +50,7 @@ const ServicesPage = () => {
         'Free stops en route',
         'All-inclusive pricing'
       ],
-      link: '/cabs/outstation'
+      link: '/outstation-taxi'
     },
     {
       id: 'rentals',
@@ -64,7 +65,7 @@ const ServicesPage = () => {
         'Transparent pricing',
         'Corporate accounts'
       ],
-      link: '/cabs/local'
+      link: '/local-taxi'
     },
     {
       id: 'tours',
@@ -122,154 +123,181 @@ const ServicesPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
-      <Navbar />
+    <>
+      <Helmet>
+        <title>Our Services - Vizag Taxi Hub | Airport, Local, Outstation & Tour Services</title>
+        <meta name="description" content="Explore Vizag Taxi Hub's comprehensive taxi services including airport transfers, local packages, outstation trips, car rentals, tour packages, and corporate services in Visakhapatnam." />
+        <meta name="keywords" content="taxi services vizag, airport transfer, local taxi, outstation trips, car rental, tour packages, corporate taxi" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/services" />
+        <meta property="og:title" content="Our Services - Vizag Taxi Hub | Airport, Local, Outstation & Tour Services" />
+        <meta property="og:description" content="Explore Vizag Taxi Hub's comprehensive taxi services including airport transfers, local packages, outstation trips, and more." />
+        <meta property="og:image" content="/og-image.png" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/services" />
+        <meta property="twitter:title" content="Our Services - Vizag Taxi Hub | Airport, Local, Outstation & Tour Services" />
+        <meta property="twitter:description" content="Explore Vizag Taxi Hub's comprehensive taxi services including airport transfers, local packages, outstation trips, and more." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/services" />
+      </Helmet>
       
-      <div className="bg-blue-600 text-white">
-        <div className="container mx-auto px-4 py-16">
-          <h1 className="text-3xl md:text-4xl font-medium mb-4">Our Services</h1>
-          <p className="text-xl opacity-90 max-w-2xl">
-            Comprehensive transportation solutions for every need - from airport transfers to multi-day tours
-          </p>
-        </div>
-      </div>
-      
-      <div className="container mx-auto px-4 py-12 -mt-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {benefits.map((benefit, index) => (
-            <div key={index} className="bg-white shadow-md rounded-lg p-6 flex items-start space-x-4">
-              <div className="bg-gray-100 rounded-full p-3">{benefit.icon}</div>
-              <div>
-                <h3 className="font-medium text-lg mb-1">{benefit.title}</h3>
-                <p className="text-gray-600">{benefit.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="container mx-auto px-4 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-medium mb-4">Transportation Services We Offer</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
-            Whether you're traveling for business or leisure, our comprehensive range of transportation services ensures a comfortable and convenient journey.
-          </p>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        
+        <div className="bg-blue-600 text-white">
+          <div className="container mx-auto px-4 py-16">
+            <h1 className="text-3xl md:text-4xl font-medium mb-4">Our Services</h1>
+            <p className="text-xl opacity-90 max-w-2xl">
+              Comprehensive transportation solutions for every need - from airport transfers to multi-day tours
+            </p>
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {services.map((service) => (
-            <div key={service.id} className={`rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-all hover:shadow-md ${service.color}`}>
-              <div className="p-6">
-                <div className="bg-white p-3 rounded-full inline-block mb-4">
-                  {service.icon}
+        <div className="container mx-auto px-4 py-12 -mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {benefits.map((benefit, index) => (
+              <div key={index} className="bg-white shadow-md rounded-lg p-6 flex items-start space-x-4">
+                <div className="bg-gray-100 rounded-full p-3">{benefit.icon}</div>
+                <div>
+                  <h3 className="font-medium text-lg mb-1">{benefit.title}</h3>
+                  <p className="text-gray-600">{benefit.description}</p>
                 </div>
-                <h3 className="text-xl font-medium mb-3">{service.title}</h3>
-                <p className="text-gray-600 mb-4">{service.description}</p>
-                <ul className="space-y-2 mb-6">
-                  {service.features.map((feature, index) => (
-                    <li key={index} className="flex items-center text-sm">
-                      <svg className="h-4 w-4 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Link to={service.link}>
-                  <Button className="w-full">Book Now</Button>
-                </Link>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="bg-gray-50 py-12">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-medium mb-2">Need a Custom Solution?</h2>
-            <p className="text-gray-600">Contact us for tailored transportation services designed for your specific requirements.</p>
-          </div>
-          
-          <div className="flex justify-center">
-            <Link to="/contact">
-              <Button variant="outline" size="lg">Get in Touch</Button>
-            </Link>
+            ))}
           </div>
         </div>
-      </div>
-      
-      <footer className="bg-gray-50 py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-            {/* Footer content similar to Index.tsx */}
-            <div className="md:col-span-4">
-              <div className="mb-6">
-                <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-12 mb-4" />
-              </div>
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam.
-              </p>
-              <p className="text-gray-600 text-sm">
-                <span className="font-semibold">Monday - Sunday:</span> <span className="text-blue-600 font-semibold">24hrs</span>
-              </p>
-            </div>
-
-            <div className="md:col-span-2 md:ml-auto">
-              <h3 className="text-gray-800 font-semibold mb-4">Helpful links</h3>
-              <ul className="space-y-2">
-                <li><a href="/terms" className="text-gray-600 hover:text-blue-600 text-sm">Terms & Conditions</a></li>
-                <li><a href="/refunds" className="text-gray-600 hover:text-blue-600 text-sm">Refunds Policy</a></li>
-                <li><a href="/privacy" className="text-gray-600 hover:text-blue-600 text-sm">Privacy Policy</a></li>
-              </ul>
-            </div>
-
-            <div className="md:col-span-3">
-              <h3 className="text-gray-800 font-semibold mb-4">Contacts Info</h3>
-              <ul className="space-y-3">
-                <li className="flex items-start space-x-3">
-                  <span className="text-gray-600 text-sm">Mail:</span>
-                  <a href="mailto:info@vizagtaxihub.com" className="text-gray-600 hover:text-blue-600 text-sm">info@vizagtaxihub.com</a>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <span className="text-gray-600 text-sm">Address:</span>
-                  <span className="text-gray-600 text-sm">44-66-22/4, Singalammapuram, Kailasapuram, Visakhapatnam - 530024</span>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <span className="text-gray-600 text-sm">Phone:</span>
-                  <a href="tel:+919966363662" className="text-gray-600 hover:text-blue-600 text-sm">+91 9966363662</a>
-                </li>
-              </ul>
-            </div>
-
-            <div className="md:col-span-3">
-              <h3 className="text-gray-800 font-semibold mb-4">Our Location</h3>
-              <iframe 
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3800.3270296460007!2d83.2983!3d17.7384!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a39431389e6973f%3A0x92d9c20395498b86!2sVizag%20Taxi%20Hub!5e0!3m2!1sen!2sin!4v1650123456789!5m2!1sen!2sin"
-                width="100%"
-                height="200"
-                style={{ border: 0 }}
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="rounded-lg"
-              ></iframe>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-200 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-600 text-sm">
-              © Vizag Taxi Hub {new Date().getFullYear()} - {new Date().getFullYear() + 1}. All rights reserved.
+        
+        <div className="container mx-auto px-4 py-12">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-medium mb-4">Transportation Services We Offer</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Whether you're traveling for business or leisure, our comprehensive range of transportation services ensures a comfortable and convenient journey.
             </p>
-            <div className="flex space-x-4 mt-4 md:mt-0">
-              <a href="/terms" className="text-gray-600 hover:text-blue-600">Terms & Conditions</a>
-              <a href="/refunds" className="text-gray-600 hover:text-blue-600">Refunds Policy</a>
-              <a href="/privacy" className="text-gray-600 hover:text-blue-600">Privacy Policy</a>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {services.map((service) => (
+              <div key={service.id} className={`rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-all hover:shadow-md ${service.color}`}>
+                <div className="p-6">
+                  <div className="bg-white p-3 rounded-full inline-block mb-4">
+                    {service.icon}
+                  </div>
+                  <h3 className="text-xl font-medium mb-3">{service.title}</h3>
+                  <p className="text-gray-600 mb-4">{service.description}</p>
+                  <ul className="space-y-2 mb-6">
+                    {service.features.map((feature, index) => (
+                      <li key={index} className="flex items-center text-sm">
+                        <svg className="h-4 w-4 text-green-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to={service.link}>
+                    <Button className="w-full">Book Now</Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 py-12">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-medium mb-2">Need a Custom Solution?</h2>
+              <p className="text-gray-600">Contact us for tailored transportation services designed for your specific requirements.</p>
+            </div>
+            
+            <div className="flex justify-center">
+              <Link to="/contact">
+                <Button variant="outline" size="lg">Get in Touch</Button>
+              </Link>
             </div>
           </div>
         </div>
-      </footer>
-    </div>
+        
+        <footer className="bg-gray-50 py-12">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+              {/* Footer content similar to Index.tsx */}
+              <div className="md:col-span-4">
+                <div className="mb-6">
+                  <img src="/lovable-uploads/f403bba2-a984-4a7c-8f77-04dc15363aa8.png" alt="Vizag Taxi Hub" className="h-12 mb-4" />
+                </div>
+                <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                  Vizag Taxi Hub provides you with the most comfortable and affordable outstation, local & hourly taxi services in Visakhapatnam.
+                </p>
+                <p className="text-gray-600 text-sm">
+                  <span className="font-semibold">Monday - Sunday:</span> <span className="text-blue-600 font-semibold">24hrs</span>
+                </p>
+              </div>
+
+              <div className="md:col-span-2 md:ml-auto">
+                <h3 className="text-gray-800 font-semibold mb-4">Helpful links</h3>
+                <ul className="space-y-2">
+                  <li><a href="/terms" className="text-gray-600 hover:text-blue-600 text-sm">Terms & Conditions</a></li>
+                  <li><a href="/refunds" className="text-gray-600 hover:text-blue-600 text-sm">Refunds Policy</a></li>
+                  <li><a href="/privacy" className="text-gray-600 hover:text-blue-600 text-sm">Privacy Policy</a></li>
+                </ul>
+              </div>
+
+              <div className="md:col-span-3">
+                <h3 className="text-gray-800 font-semibold mb-4">Contacts Info</h3>
+                <ul className="space-y-3">
+                  <li className="flex items-start space-x-3">
+                    <span className="text-gray-600 text-sm">Mail:</span>
+                    <a href="mailto:info@vizagtaxihub.com" className="text-gray-600 hover:text-blue-600 text-sm">info@vizagtaxihub.com</a>
+                  </li>
+                  <li className="flex items-start space-x-3">
+                    <span className="text-gray-600 text-sm">Address:</span>
+                    <span className="text-gray-600 text-sm">44-66-22/4, Singalammapuram, Kailasapuram, Visakhapatnam - 530024</span>
+                  </li>
+                  <li className="flex items-start space-x-3">
+                    <span className="text-gray-600 text-sm">Phone:</span>
+                    <a href="tel:+919966363662" className="text-gray-600 hover:text-blue-600 text-sm">+91 9966363662</a>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="md:col-span-3">
+                <h3 className="text-gray-800 font-semibold mb-4">Our Location</h3>
+                <iframe 
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3800.3270296460007!2d83.2983!3d17.7384!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a39431389e6973f%3A0x92d9c20395498b86!2sVizag%20Taxi%20Hub!5e0!3m2!1sen!2sin!4v1650123456789!5m2!1sen!2sin"
+                  width="100%"
+                  height="200"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="rounded-lg"
+                ></iframe>
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-200 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+              <p className="text-gray-600 text-sm">
+                © Vizag Taxi Hub {new Date().getFullYear()} - {new Date().getFullYear() + 1}. All rights reserved.
+              </p>
+              <div className="flex space-x-4 mt-4 md:mt-0">
+                <a href="/terms" className="text-gray-600 hover:text-blue-600">Terms & Conditions</a>
+                <a href="/refunds" className="text-gray-600 hover:text-blue-600">Refunds Policy</a>
+                <a href="/privacy" className="text-gray-600 hover:text-blue-600">Privacy Policy</a>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 };
 

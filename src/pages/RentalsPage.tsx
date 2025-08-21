@@ -245,9 +245,14 @@ const RentalsPage = () => {
                     Get Rental Quote
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600"
+                  onClick={() => window.open('tel:+919966363662', '_self')}
+                >
                   <Phone className="mr-2 h-5 w-5" />
-                  Call: +91 9440440440
+                  Call: +91 9966363662
                 </Button>
               </div>
             </CardContent>

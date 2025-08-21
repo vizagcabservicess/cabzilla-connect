@@ -314,7 +314,7 @@ function BookingConfirmationPage() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Home
               </Button>
-              <Button onClick={() => navigate('/cabs')}>
+              <Button onClick={() => navigate('/local-taxi')}>
                 Book a New Ride
               </Button>
             </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 import { TourQuotationPDF } from '@/components/pdf/TourQuotationPDF';
@@ -28,14 +28,14 @@ export const usePDFExport = () => {
       setIsGenerating(true);
       
       // Generate PDF
-      const blob = await pdf(
-        TourQuotationPDF({
-          tour,
-          pickupLocation,
-          pickupDate,
-          vehicleFares,
-        })
-      ).toBlob();
+      const pdfElement = TourQuotationPDF({
+        tour,
+        pickupLocation,
+        pickupDate,
+        vehicleFares,
+      });
+      
+      const blob = await pdf(pdfElement as React.ReactElement).toBlob();
 
       // Generate filename with tour name and date
       const tourFileName = (tour.tourName || (tour as any).name || 'Tour').replace(/[^a-zA-Z0-9]/g, '_');

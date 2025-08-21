@@ -65,6 +65,7 @@ export function EnhancedCTA() {
                 variant="outline" 
                 size="lg"
                 className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-blue-700 px-8 py-4 rounded-2xl font-semibold transition-all duration-300"
+                onClick={() => window.open('tel:+919966363662', '_self')}
               >
                 <Phone className="mr-2 h-5 w-5" />
                 Call Now

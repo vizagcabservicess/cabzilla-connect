@@ -71,7 +71,7 @@ const SUVPage = () => {
         <meta property="og:title" content="SUV Car Rental in Visakhapatnam - 6-7 Seater Vehicles" />
         <meta property="og:description" content="Rent spacious SUVs in Vizag. Innova Crysta ₹20/km, Ertiga ₹18/km. Perfect for families and groups." />
         <meta property="og:image" content="https://images.unsplash.com/photo-1606611264161-c26b7fa52667?w=1200&h=630&fit=crop" />
-        <link rel="canonical" href="/suv" />
+        <link rel="canonical" href="https://vizagtaxihub.com/suv" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
@@ -146,7 +146,7 @@ const SUVPage = () => {
                         </Badge>
                       ))}
                     </div>
-                    <Link to="/cabs">
+                    <Link to="/local-taxi">
                       <Button className="w-full">Book Now</Button>
                     </Link>
                   </CardContent>
@@ -247,15 +247,20 @@ const SUVPage = () => {
               <h2 className="text-2xl font-bold mb-4">Book Your SUV Today</h2>
               <p className="mb-6">Perfect for families and groups - spacious, comfortable, and reliable</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/cabs">
+                <Link to="/local-taxi">
                   <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                     <Car className="mr-2 h-5 w-5" />
                     Book SUV Now
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-purple-600">
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-purple-600"
+                  onClick={() => window.open('tel:+919966363662', '_self')}
+                >
                   <Phone className="mr-2 h-5 w-5" />
-                  Call: +91 9440440440
+                  Call: +91 9966363662
                 </Button>
               </div>
             </CardContent>

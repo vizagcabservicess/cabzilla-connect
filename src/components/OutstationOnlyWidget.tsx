@@ -141,7 +141,7 @@ export function OutstationOnlyWidget({
         params.append('returnDate', formatDateForAPI(returnDate));
       }
       
-      navigate(`/cabs?${params.toString()}`);
+      navigate(`/outstation-taxi?${params.toString()}`);
     }
   };
 

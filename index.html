@@ -7,6 +7,7 @@
     <meta name="author" content="Vizag Taxi Hub" />
     <meta property="og:image" content="/og-image.png" />
     <link rel="icon" type="image/png" href="/uploads/favicon.png" />
+    <link rel="canonical" href="https://vizagtaxihub.com/" />
     
     <!-- Critical CSS inlined to prevent render blocking -->
     <style>
@@ -39,7 +40,7 @@
     <link rel="preload" href="/src/index.css" as="style" />
     
     <!-- Content Security Policy to allow Google Maps and Razorpay -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://q.clarity.ms https://c.clarity.ms;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://q.clarity.ms https://c.clarity.ms;">
     
     <!-- Google Analytics - Load asynchronously with reduced impact -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
@@ -109,15 +110,6 @@
       });
     </script>
     
-    <!-- Defer non-critical CSS -->
-    <script>
-      // Load non-critical CSS after page load
-      window.addEventListener('load', function() {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = '/src/index.css';
-        document.head.appendChild(link);
-      });
-    </script>
+
   </body>
 </html>

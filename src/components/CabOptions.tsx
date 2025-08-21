@@ -29,6 +29,7 @@ interface CabOptionsProps {
   pickupDate?: Date;
   returnDate?: Date | null;
   isCalculatingFares: boolean;
+  selectedCabBreakdown?: any;
 }
 
 // Clear the fare cache to ensure fresh data

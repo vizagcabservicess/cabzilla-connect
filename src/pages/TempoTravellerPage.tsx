@@ -96,7 +96,7 @@ const TempoTravellerPage = () => {
         <meta property="og:title" content="Tempo Traveller Rental in Visakhapatnam - Group Travel" />
         <meta property="og:description" content="Rent Tempo Traveller in Vizag. 12-20 seater vehicles for groups. Starting ₹30/km. Perfect for events and tours." />
         <meta property="og:image" content="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1200&h=630&fit=crop" />
-        <link rel="canonical" href="/tempo-traveller" />
+        <link rel="canonical" href="https://vizagtaxihub.com/tempotraveller" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
@@ -171,7 +171,7 @@ const TempoTravellerPage = () => {
                         </Badge>
                       ))}
                     </div>
-                    <Link to="/cabs">
+                    <Link to="/local-taxi">
                       <Button className="w-full">Book Now</Button>
                     </Link>
                   </CardContent>
@@ -286,15 +286,20 @@ const TempoTravellerPage = () => {
               <h2 className="text-2xl font-bold mb-4">Book Your Tempo Traveller Today</h2>
               <p className="mb-6">Perfect for group travel - comfortable, spacious, and affordable</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/cabs">
+                <Link to="/local-taxi">
                   <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                     <Bus className="mr-2 h-5 w-5" />
                     Book Tempo Traveller
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-green-600">
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-green-600"
+                  onClick={() => window.open('tel:+919966363662', '_self')}
+                >
                   <Phone className="mr-2 h-5 w-5" />
-                  Call: +91 9440440440
+                  Call: +91 9966363662
                 </Button>
               </div>
             </CardContent>

@@ -83,6 +83,7 @@ export function EnhancedHero() {
                 variant="outline" 
                 size="lg"
                 className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30 px-6 py-4 rounded-xl"
+                onClick={() => window.open('tel:+919966363662', '_self')}
               >
                 <Phone className="mr-2 h-5 w-5" />
                 Call Now
@@ -92,6 +93,7 @@ export function EnhancedHero() {
                 variant="outline" 
                 size="lg"
                 className="bg-green-600/80 backdrop-blur-sm border-green-500/30 text-white hover:bg-green-600 px-6 py-4 rounded-xl"
+                onClick={() => window.open('https://wa.me/919966363662?text=Hi! I need help with my taxi booking.', '_blank')}
               >
                 <MessageCircle className="mr-2 h-5 w-5" />
                 WhatsApp

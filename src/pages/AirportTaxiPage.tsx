@@ -133,7 +133,7 @@ export function AirportTaxiPage() {
         <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
         <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
         <meta name="keywords" content="airport taxi visakhapatnam, vizag airport cab, airport transfer service, visakhapatnam airport pickup, airport drop vizag, taxi to airport" />
-        <link rel="canonical" href="https://www.vizagtaxihub.com/local-taxi/airport-taxi" />
+        <link rel="canonical" href="https://vizagtaxihub.com/local-taxi/airport-taxi" />
       </Helmet>
       
      

@@ -71,7 +71,7 @@ const SedanPage = () => {
         <meta property="og:title" content="Sedan Car Rental in Visakhapatnam - Book Online" />
         <meta property="og:description" content="Rent sedan cars in Vizag. Swift Dzire ₹14/km, Honda City ₹16/km. 24/7 service, professional drivers." />
         <meta property="og:image" content="https://images.unsplash.com/photo-1549924231-f129b911e442?w=1200&h=630&fit=crop" />
-        <link rel="canonical" href="/sedan" />
+        <link rel="canonical" href="https://vizagtaxihub.com/sedan" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
@@ -146,7 +146,7 @@ const SedanPage = () => {
                         </Badge>
                       ))}
                     </div>
-                    <Link to="/cabs">
+                    <Link to="/local-taxi">
                       <Button className="w-full">Book Now</Button>
                     </Link>
                   </CardContent>
@@ -247,15 +247,20 @@ const SedanPage = () => {
               <h2 className="text-2xl font-bold mb-4">Book Your Sedan Today</h2>
               <p className="mb-6">Professional drivers, competitive rates, and 24/7 service</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/cabs">
+                <Link to="/local-taxi">
                   <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                     <Car className="mr-2 h-5 w-5" />
                     Book Sedan Now
                   </Button>
                 </Link>
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600">
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full sm:w-auto bg-transparent border-white text-white hover:bg-white hover:text-blue-600"
+                  onClick={() => window.open('tel:+919966363662', '_self')}
+                >
                   <Phone className="mr-2 h-5 w-5" />
-                  Call: +91 9440440440
+                  Call: +91 9966363662
                 </Button>
               </div>
             </CardContent>

@@ -1,28 +1,39 @@
 User-agent: *
 Allow: /
 
-# Sitemap location
+# Sitemap
 Sitemap: https://vizagtaxihub.com/sitemap.xml
-
-# Allow crawling of all pages
-Allow: /outstation-taxi/
-Allow: /local-taxi/
-Allow: /airport-taxi/
-Allow: /tours/
-Allow: /fleet/
-Allow: /services/
-Allow: /about/
-Allow: /contact/
 
 # Disallow admin and private areas
 Disallow: /admin/
+Disallow: /dashboard/
 Disallow: /customer/
 Disallow: /driver/
-Disallow: /pooling/admin/
-Disallow: /pooling/provider/
+Disallow: /pooling/
 Disallow: /api/
 Disallow: /backend/
-Disallow: /src/
 
-# Crawl delay (optional - helps with server load)
+# Allow important pages
+Allow: /local-taxi
+Allow: /outstation-taxi
+Allow: /airport-taxi
+Allow: /tours
+Allow: /fleet
+Allow: /sedan
+Allow: /suv
+Allow: /tempotraveller
+Allow: /rentals
+Allow: /hire-driver
+Allow: /our-story
+Allow: /vision-mission
+Allow: /careers
+Allow: /contact
+Allow: /faq
+Allow: /support
+Allow: /help-center
+Allow: /terms-conditions
+Allow: /privacy-policy
+Allow: /cancellation-refund-policy
+
+# Crawl delay
 Crawl-delay: 1

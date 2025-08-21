@@ -61,28 +61,7 @@ const VehicleTabs: React.FC<VehicleTabsProps> = ({
             <div className="space-y-4">
               <p className="text-gray-700 leading-relaxed">{overview}</p>
               
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-                <div className="flex items-center text-blue-600">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Push-back seats</span>
-                </div>
-                <div className="flex items-center text-blue-600">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Good legroom</span>
-                </div>
-                <div className="flex items-center text-blue-600">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">USB charging ports</span>
-                </div>
-                <div className="flex items-center text-blue-600">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Roof A/C</span>
-                </div>
-                <div className="flex items-center text-blue-600">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">UBB c3</span>
-                </div>
-              </div>
+              
             </div>
           </TabsContent>
           

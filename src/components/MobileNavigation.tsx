@@ -27,7 +27,7 @@ export const MobileNavigation = () => {
     {
       icon: <Car size={20} />,
       label: 'Book',
-      href: '/cabs'
+      href: '/local-taxi'
     },
     {
       icon: <Clock size={20} />,

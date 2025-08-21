@@ -100,8 +100,7 @@ const serviceLinks = [
   { name: 'Local Taxi', href: '/local-taxi', description: 'City tours and local trips' },
   { name: 'Outstation', href: '/outstation-taxi', description: 'Inter-city travel' },
   { name: 'Airport Transfer', href: '/airport-taxi', description: 'Airport pickup & drop' },
-  { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' },
-  { name: 'Cab Booking', href: '/cabs', description: 'Quick cab booking' }
+  { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' }
 ];
 
 export function Navbar() {

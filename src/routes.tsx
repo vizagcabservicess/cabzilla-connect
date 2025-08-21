@@ -13,7 +13,7 @@ const SignupPage = lazy(() => import('./pages/SignupPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
 const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
-const CabsPage = lazy(() => import('./pages/CabsPage'));
+
 const ToursPage = lazy(() => import('./pages/ToursPage'));
 const BookingEditPage = lazy(() => import('./pages/BookingEditPage'));
 const ReceiptPage = lazy(() => import('./pages/ReceiptPage'));
@@ -35,7 +35,6 @@ const ServicesPage = lazy(() => import('./pages/ServicesPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const RefundsPage = lazy(() => import('./pages/RefundsPage'));
-const BlogPage = lazy(() => import('./pages/BlogPage'));
 const CancellationRefundPolicyPage = lazy(() => import('./pages/CancellationRefundPolicyPage'));
 const FAQPage = lazy(() => import('./pages/FAQPage'));
 const PoolingPage = lazy(() => import('./pages/PoolingPage'));
@@ -242,14 +241,6 @@ const router = createBrowserRouter([
       },
       // Service routes
       {
-        path: 'cabs',
-        element: <CabsPage />,
-      },
-      {
-        path: 'cabs/:tripType',
-        element: <CabsPage />,
-      },
-      {
         path: 'tours',
         element: <ToursPage />,
       },
@@ -359,10 +350,6 @@ const router = createBrowserRouter([
       {
         path: 'cancellation-refund-policy',
         element: <CancellationRefundPolicyPage />,
-      },
-      {
-        path: 'blog',
-        element: <BlogPage />,
       },
       {
         path: 'faq',

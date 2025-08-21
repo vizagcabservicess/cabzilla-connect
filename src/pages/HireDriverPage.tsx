@@ -460,7 +460,12 @@ export default function HireDriverPage() {
               Our customer support team is available 24/7 to help you find the perfect driver
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="secondary" size="lg" className="rounded-full">
+              <Button 
+                variant="secondary" 
+                size="lg" 
+                className="rounded-full"
+                onClick={() => window.open('tel:+919966363662', '_self')}
+              >
                 <Phone className="h-4 w-4 mr-2" />
                 Call: +91 9966363662
               </Button>

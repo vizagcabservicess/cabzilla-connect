@@ -151,7 +151,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
 
     return (
         <>
-            <Card className="p-4 md:p-6 mb-8 shadow-none border-0">
+            <Card className="p-6 md:p-8 mb-8 shadow-none border-0 ">
                 <TabTripSelector
                     selectedTab={tripDetails.tripType}
                     tripMode={tripDetails.tripMode}
@@ -160,7 +160,7 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                 />
             </Card>
 
-            <div className="grid lg:grid-cols-3 gap-8 items-start">
+            <div className="grid lg:grid-cols-3 gap-8 items-start py-8">
                 <div className="lg:col-span-2">
                     <ErrorBoundary FallbackComponent={ApiErrorFallback} key={tripDetails.tripType}>
                         <Suspense fallback={<div>Loading cabs...</div>}>
@@ -201,18 +201,22 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
             </div>
 
             {step === 2 && selectedCab && fare !== null && (
-                <GuestDetailsForm
-                    onSubmit={handleGuestDetailsSubmit}
-                    onBack={handleBack}
-                    totalPrice={bookNowTotal}
-                />
+                <div className="py-12">
+                    <GuestDetailsForm
+                        onSubmit={handleGuestDetailsSubmit}
+                        onBack={handleBack}
+                        totalPrice={bookNowTotal}
+                    />
+                </div>
             )}
 
             {step === 3 && selectedCab && tripDetails && guestDetails && fare !== null && (
-                <PaymentGateway
-                    totalAmount={bookNowTotal}
-                    onPaymentComplete={() => {}}
-                />
+                <div className="py-12">
+                    <PaymentGateway
+                        totalAmount={bookNowTotal}
+                        onPaymentComplete={() => {}}
+                    />
+                </div>
             )}
         </>
     );
