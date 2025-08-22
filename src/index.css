@@ -171,6 +171,99 @@ font-weight: 500;
 @apply text-blue-600;
 }
 
+/* ServicesShowcase Slider Customizations */
+.services-swiper {
+@apply relative;
+}
+
+.services-swiper .swiper-slide {
+@apply h-auto;
+}
+
+/* Pagination dots styling to match reference image */
+.services-swiper .swiper-pagination {
+@apply relative mt-4 flex items-center justify-center gap-2;
+}
+
+.services-swiper .swiper-pagination-bullet {
+@apply w-2 h-2 bg-gray-300 opacity-60;
+}
+
+.services-swiper .swiper-pagination-bullet-active {
+@apply bg-red-500 opacity-100;
+}
+
+/* Custom slide counter styling */
+.slide-counter {
+@apply bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium ml-2;
+}
+
+/* Hide navigation arrows since we're using pagination dots */
+.services-swiper .swiper-button-next,
+.services-swiper .swiper-button-prev {
+@apply hidden;
+}
+
+/* FleetShowcase Slider Customizations */
+.fleet-swiper {
+@apply relative;
+}
+
+.fleet-swiper .swiper-slide {
+@apply h-auto;
+}
+
+/* Hide navigation arrows since we're using pagination dots */
+.fleet-swiper .swiper-button-next,
+.fleet-swiper .swiper-button-prev {
+@apply hidden;
+}
+
+/* DestinationsShowcase Slider Customizations */
+.destinations-swiper {
+@apply relative;
+}
+
+.destinations-swiper .swiper-slide {
+@apply h-auto;
+}
+
+/* Hide navigation arrows since we're using pagination dots */
+.destinations-swiper .swiper-button-next,
+.destinations-swiper .swiper-button-prev {
+@apply hidden;
+}
+
+/* PopularRoutes Slider Customizations */
+.routes-swiper {
+@apply relative;
+}
+
+.routes-swiper .swiper-slide {
+@apply h-auto;
+}
+
+/* Hide navigation arrows since we're using pagination dots */
+.routes-swiper .swiper-button-next,
+.routes-swiper .swiper-button-prev {
+@apply hidden;
+}
+
+/* Ensure mobile slider is visible */
+@media (max-width: 768px) {
+.services-swiper {
+@apply block;
+}
+
+.services-swiper .swiper-wrapper {
+@apply flex;
+}
+
+.services-swiper .swiper-slide {
+@apply flex-shrink-0;
+}
+}
+
 /* Fix Text Overlap Issues */
 .no-overlap {
 overflow-wrap: break-word;

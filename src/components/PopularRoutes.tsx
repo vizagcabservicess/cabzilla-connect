@@ -1,15 +1,35 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination } from 'swiper/modules';
 import { Card, CardContent } from '@/components/ui/card';
-import { MapPin, Clock, TrendingUp, Star } from 'lucide-react';
+import { MapPin, Clock, TrendingUp, Star, Shield } from 'lucide-react';
+
+// Import Swiper styles
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 export function PopularRoutes() {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [swiperInstance, setSwiperInstance] = useState<any>(null);
+  
   const routes = [
+    {
+      destination: "Vizag Local Temples",
+      distance: "100 km",
+      duration: "10 hours",
+      startingPrice: "₹3,000",
+      description: "Simhachalam, Kanaka Maha Lakshmi, Sampath Vinayagar, ISKCON, Kailasagiri, TTD & Kali Temple",
+      popularity: "Weekend Favorite",
+      gradient: "from-teal-500 to-cyan-600",
+      savings: "Sedan"
+    },
     {
       destination: "Annavaram",
       distance: "260 km",
       duration: "8-9 hours",
       startingPrice: "₹4,500",
-      description: "Famous for Satyanarayana Swamy Temple",
+      description: "Sri Veera Venkata Satyanarayana Swamy Temple is a Hindu-Vaishnavite temple located in Annavaram ",
       popularity: "Most Popular",
       gradient: "from-blue-500 to-indigo-600",
       savings: "Sedan"
@@ -19,7 +39,7 @@ export function PopularRoutes() {
       distance: "260 km",
       duration: "8-9 hours",
       startingPrice: "₹4,500",
-      description: "Famous for Arasavalli & Srikurmam",
+      description: "Srikakulam is known for its temples, with the Srikurmam Temple and Arasavalli Sun God Temple",
       popularity: "Trending",
       gradient: "from-green-500 to-emerald-600",
       savings: "Sedan"
@@ -29,144 +49,209 @@ export function PopularRoutes() {
       distance: "320 km",
       duration: "11-12 hours",
       startingPrice: "₹5,000",
-      description: "Holy pilgrimage destination",
+      description: "Pithapuram is one of the oldest and famous pilgrim places of India",
       popularity: "Spiritual",
       gradient: "from-purple-500 to-violet-600",
       savings: "Sedan"
     },
     {
-      destination: "Lambasingi",
-      distance: "300 km",
-      duration: "12-13 hours",
-      startingPrice: "₹5,000",
-      description: "Known as Kashmir of Andhra",
+      destination: "Vijayawada",
+      distance: "750 km",
+      duration: "14-16 hours",
+      startingPrice: "₹11,500",
+      description: "Situated in the heart of the Vijayawada city, Kanaka Durga temple is located on the Indrakeeladri hill, on the banks of the River Krishna.",
+      popularity: "Weekend Favorite",
+      gradient: "from-emerald-500 to-green-600",
+      savings: "Sedan"
+    },
+    {
+      destination: "Tirupati",
+      distance: "1600 km",
+      duration: "36 hours",
+      startingPrice: "₹24,000",
+      description: "Tirumala is the riches pilgrimage centre in the world",
       popularity: "Weekend Favorite",
       gradient: "from-orange-500 to-red-600",
       savings: "Sedan"
     },
-    {
-      destination: "Vanajangi",
-      distance: "260 km",
-      duration: "11-12 hours",
-      startingPrice: "₹5,000",
-      description: "Known for its sunrises",
-      popularity: "Weekend Favorite",
-      gradient: "from-teal-500 to-cyan-600",
-      savings: "Sedan"
-    },
-    {
-      destination: "Araku Valley",
-      distance: "260 km",
-      duration: "12-13 hours",
-      startingPrice: "₹5,000",
-      description: "Hill station getaway",
-      popularity: "Weekend Favorite",
-      gradient: "from-emerald-500 to-green-600",
-      savings: "Sedan"
-    }
   ];
 
-  return (
-    <section className="px-4 py-8 md:py-12 bg-white">
-      <div className="mx-auto max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-4 md:mb-8">
-          <div className="inline-flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full mb-4">
-            <TrendingUp className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-medium text-green-600">POPULAR ROUTES</span>
+  const gridRoutes = routes.slice(0, 4);
+  const sliderRoutes = routes.slice(4);
+
+  const renderRouteCard = (route: any, index: number) => {
+    return (
+      <Card
+        key={index}
+        className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[250px]"
+        onClick={() => window.location.href = `/outstation-taxi`}
+      >
+        <CardContent className="p-5 relative h-full flex flex-col">
+                     {/* Background Image */}
+           <div className="absolute inset-0  bg-no-repeat" style={{ backgroundImage: 'url(https://vizagtaxihub.com/uploads/popular-destinations.jpg)' }}></div>
+           <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-white/80"></div>
+
+          {/* Content */}
+          <div className="relative z-10 flex flex-col h-full">
+            {/* Category Tag */}
+            <div className="flex justify-between items-start mb-3">
+              <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                {route.destination}
+              </div>
+            </div>
+
+            {/* Main Price */}
+            <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+              {route.startingPrice}
+            </h3>
+
+            {/* Description */}
+            <p className="text-sm text-gray-800 mb-3">
+              {route.description}
+            </p>
+
+            {/* Features */}
+            <div className="flex flex-wrap gap-2">
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {route.distance}
+              </div>
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {route.duration}
+              </div>
+            </div>
           </div>
-          <h2 className="text-3xl md:text-4xl font-medium text-gray-900 mb-4 leading-tight">
+        </CardContent>
+      </Card>
+    );
+  };
+
+  return (
+    <section className="pt-4 md:pt-8 pb-0 bg-white">
+      <div className="max-w-7xl mx-auto px-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
             Top Destinations from Vizag
           </h2>
-          <p className="text-gray-600 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             Explore popular destinations from Visakhapatnam with our reliable outstation taxi services. 
             All prices include driver allowance and toll charges.
           </p>
         </div>
 
-        {/* Routes Grid - 3x2 layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-          {routes.map((route, index) => (
-            <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-2xl md:rounded-3xl overflow-hidden flex flex-col h-auto">
-              {/* Route Header */}
-              <div className={`relative bg-gradient-to-r ${route.gradient} p-6`}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1 pr-4">
-                    <h3 className="text-xl md:text-2xl font-bold text-white mb-2 leading-tight">{route.destination}</h3>
-                    <p className="text-white/90 text-sm leading-relaxed">{route.description}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-2xl md:text-3xl font-medium text-white leading-none">{route.startingPrice}</div>
-                    <div className="text-white/80 text-xs mt-1">starting from</div>
-                    {/* Popularity Badge */}
-                    <div className="mt-2 flex justify-end">
-                      <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full inline-block">
-                        <span className="text-white text-xs font-medium whitespace-nowrap">{route.popularity}</span>
-                      </div>
-                    </div>
-                  </div>
+        {/* Route Cards with Sliding Functionality */}
+        <>
+          {/* Desktop Layout - Sliding Row */}
+          <div className="hidden lg:block mb-8 relative overflow-hidden">
+            <div className="flex gap-4 transition-transform duration-500 ease-in-out" style={{ 
+              transform: `translateX(-${Math.min(currentSlide * 50, Math.max(0, (gridRoutes.length + sliderRoutes.length - 4) * 50))}%)` 
+            }}>
+              {/* All routes in a single row */}
+              {[...gridRoutes, ...sliderRoutes].map((route, index) => (
+                <div key={index} className="w-full max-w-[calc(25%-12px)] flex-shrink-0">
+                  {renderRouteCard(route, index)}
                 </div>
-              </div>
-              
-              <CardContent className="p-6 flex-1 flex flex-col">
-                {/* Route Details */}
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    <span className="font-medium">{route.distance}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4 text-green-500 flex-shrink-0" />
-                    <span className="font-medium">{route.duration}</span>
-                  </div>
-                </div>
-                
-                {/* Features */}
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-yellow-500 fill-current flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-700">Premium Service</span>
-                    </div>
-                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
-                      {route.savings}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Inclusions */}
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0"></div>
-                    <span>Two-way starting price</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></div>
-                    <span>Driver allowance included</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-1.5 h-1.5 bg-purple-400 rounded-full flex-shrink-0"></div>
-                    <span>Toll charges included</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              ))}
+            </div>
 
-        {/* Bottom CTA */}
-        <div className="text-center mt-10 bg-gradient-to-r from-gray-50 to-blue-50 rounded-3xl p-8">
-          <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">Don't See Your Destination?</h3>
-          <p className="text-gray-600 mb-6 text-base md:text-lg">We cover many more routes! Contact us for custom destinations and competitive pricing.</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <span className="text-blue-600 font-medium text-base md:text-lg cursor-pointer hover:text-blue-700 transition-colors">
-              📞 Call +91 9966363662
-            </span>
-            <span className="text-gray-400 hidden sm:block">or</span>
-            <span className="text-blue-600 font-medium text-base md:text-lg cursor-pointer hover:text-blue-700 transition-colors">
-              💬 WhatsApp us for instant quotes
-            </span>
+            {/* Previous Arrow - show when not at first slide */}
+            {currentSlide > 0 && (
+              <button
+                className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                onClick={() => {
+                  if (currentSlide > 0) {
+                    setCurrentSlide(currentSlide - 1);
+                  }
+                }}
+              >
+                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+            )}
+
+            {/* Next Arrow - only show if there are additional routes and we're not at the end */}
+            {sliderRoutes.length > 0 && currentSlide < Math.max(0, (gridRoutes.length + sliderRoutes.length - 4)) && (
+              <button
+                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                onClick={() => {
+                  const maxSlides = Math.max(0, gridRoutes.length + sliderRoutes.length - 4);
+                  if (currentSlide < maxSlides) {
+                    setCurrentSlide(currentSlide + 1);
+                  }
+                }}
+              >
+                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+            )}
           </div>
+
+          {/* Tablet Layout - Grid */}
+          <div className="hidden md:block lg:hidden mb-8">
+            <div className="grid grid-cols-2 gap-4">
+              {gridRoutes.map((route, index) => renderRouteCard(route, index))}
+            </div>
+          </div>
+
+          {/* Mobile Slider */}
+          <div className="md:hidden mb-8">
+            <Swiper
+              modules={[Pagination]}
+              spaceBetween={12}
+              slidesPerView={1.2}
+              pagination={false}
+              onSwiper={setSwiperInstance}
+              onSlideChange={(swiper) => setCurrentSlide(swiper.activeIndex)}
+              className="routes-swiper"
+            >
+              {gridRoutes.map((route, index) => (
+                <SwiperSlide key={index}>
+                  {renderRouteCard(route, index)}
+                </SwiperSlide>
+              ))}
+            </Swiper>
+            
+            {/* Custom Pagination with Dots and Counter */}
+            <div className="flex justify-center items-center mt-4">
+              <div className="flex items-center gap-1">
+                {gridRoutes.map((_, index) => {
+                  // Show the counter pill in place of the active dot
+                  if (index === currentSlide) {
+                    return (
+                      <div 
+                        key={index}
+                        className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                      >
+                        {currentSlide + 1}/{gridRoutes.length}
+                      </div>
+                    );
+                  }
+                  
+                  // Show regular dots for inactive slides
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => swiperInstance?.slideTo(index)}
+                      className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+
+        {/* Bottom Info */}
+        <div className="text-center mt-8 bg-gray-50 rounded-2xl p-6">
+          <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
+            <Shield className="h-5 w-5" />
+            <span className="font-medium">Reliable Service</span>
+          </div>
+          <p className="text-sm text-gray-500">
+            All routes include driver allowance, toll charges, and professional service for your comfort.
+          </p>
         </div>
       </div>
     </section>

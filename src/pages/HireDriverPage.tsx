@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield, Loader2 } from 'lucide-react';
+import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield, Loader2, Mail, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { driverHireAPI } from '@/services/api/driverHireAPI';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
+import { FaWhatsapp } from 'react-icons/fa';
 
 const services = [
   {
@@ -77,14 +78,47 @@ export default function HireDriverPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleCall = () => {
+    window.open('tel:+919966363662', '_self');
+  };
+
+  const handleWhatsApp = () => {
+    const message = encodeURIComponent('Hi Kumar! I would like to hire a driver');
+    window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
+  };
+
+  const handleEmail = () => {
+    const subject = encodeURIComponent('Driver Hire Request - Vizag Taxi Hub');
+    const body = encodeURIComponent(`Hi Kumar,
+
+I would like to hire a driver for my vehicle.
+
+Please contact me for more details.
+
+Best regards,
+[Your Name]`);
+    window.open(`mailto:info@vizagtaxihub.com?subject=${subject}&body=${body}`, '_self');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate required fields
-    if (!formData.name || !formData.phone || !formData.serviceType || !formData.duration) {
+    // Validate required fields including email
+    if (!formData.name || !formData.phone || !formData.email || !formData.serviceType || !formData.duration) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields including email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
         variant: "destructive",
       });
       return;
@@ -243,7 +277,7 @@ export default function HireDriverPage() {
               Need a reliable driver for your personal vehicle? Our experienced, verified drivers 
               are ready to serve you with professionalism and safety.
             </p>
-            <Button size="lg" className="rounded-full">
+            <Button size="lg" className="rounded-full" onClick={handleCall}>
               <Phone className="h-4 w-4 mr-2" />
               Call Now: +91 9966363662
             </Button>
@@ -293,8 +327,6 @@ export default function HireDriverPage() {
                         </li>
                       ))}
                     </ul>
-                    
-                   
                   </CardContent>
                 </Card>
               ))}
@@ -339,12 +371,13 @@ export default function HireDriverPage() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="email">Email Address</Label>
+                    <Label htmlFor="email">Email Address *</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      required
                     />
                   </div>
                   
@@ -464,14 +497,28 @@ export default function HireDriverPage() {
                 variant="secondary" 
                 size="lg" 
                 className="rounded-full"
-                onClick={() => window.open('tel:+919966363662', '_self')}
+                onClick={handleCall}
               >
                 <Phone className="h-4 w-4 mr-2" />
                 Call: +91 9966363662
               </Button>
-              <Button variant="outline" size="lg" className="rounded-full bg-transparent border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary">
-                <Calendar className="h-4 w-4 mr-2" />
-                Schedule a Call
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="rounded-full bg-transparent border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary"
+                onClick={handleWhatsApp}
+              >
+                <FaWhatsapp className="h-4 w-4 mr-2" />
+                WhatsApp
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="rounded-full bg-transparent border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary"
+                onClick={handleEmail}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Email
               </Button>
             </div>
           </div>

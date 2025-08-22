@@ -7,7 +7,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import PerformanceMonitor from "@/components/PerformanceMonitor";
+
 import router from './routes'; // Only for original approach
 
 // Lazy load pages for better performance
@@ -68,7 +68,7 @@ const App = () => (
         )}
       </PoolingAuthProvider>
     </AuthProvider>
-    <PerformanceMonitor showInProduction={false} />
+    
   </TooltipProvider>
 );
 

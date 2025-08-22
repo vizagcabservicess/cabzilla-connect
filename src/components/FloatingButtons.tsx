@@ -2,15 +2,25 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Phone, MessageCircle } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
+import { useLocation } from 'react-router-dom';
 
 export function FloatingButtons({ onChatbotClick }: { onChatbotClick: () => void }) {
+  const location = useLocation();
+  
   const handleCall = () => {
     window.location.href = 'tel:+919966363662';
   };
 
   const handleWhatsApp = () => {
-    const message = encodeURIComponent('Hi! I would like to book a taxi.');
-    window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
+    // Custom message for driver page
+    let message = 'Hi! I would like to book a taxi.';
+    
+    if (location.pathname === '/hire-driver') {
+      message = 'Hi Kumar! I would like to hire a driver';
+    }
+    
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/919966363662?text=${encodedMessage}`, '_blank');
   };
 
   return (

@@ -217,7 +217,7 @@ export function TourSlider() {
                     </div>
                     <Button
                       className="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold"
-                      onClick={() => navigate(`/tours/${tour.tourId || tour.id}`)}
+                      onClick={() => navigate(`/tour/${tour.tourId || tour.id}`)}
                     >
                       Book This Tour
                     </Button>

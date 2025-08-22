@@ -39,8 +39,8 @@
     <link rel="preload" href="/src/main.tsx" as="script" type="module" />
     <link rel="preload" href="/src/index.css" as="style" />
     
-    <!-- Content Security Policy to allow Google Maps and Razorpay -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://q.clarity.ms https://c.clarity.ms;">
+    <!-- Content Security Policy to allow Google Maps, Razorpay, and Clarity with iOS support -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms;">
     
     <!-- Google Analytics - Load asynchronously with reduced impact -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
@@ -54,13 +54,72 @@
       });
     </script>
     
-    <!-- Microsoft Clarity - Load asynchronously -->
+    <!-- Microsoft Clarity - Enhanced for iOS and mobile compatibility -->
     <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "htvvpivvo1");
+        // iOS-specific detection
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        // Enhanced Clarity initialization with iOS support
+        function initializeClarity() {
+            try {
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window, document, "clarity", "script", "htvvpivvo1");
+                
+                // Enhanced Clarity configuration for mobile devices
+                if (typeof clarity !== 'undefined') {
+                    // Enable session recording for mobile
+                    clarity('set', 'mobile_session_recording', 'true');
+                    
+                    // Set custom dimensions for mobile detection
+                    clarity('set', 'device_type', /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'mobile' : 'desktop');
+                    
+                    // Enable heatmaps for mobile
+                    clarity('set', 'mobile_heatmaps', 'true');
+                    
+                    // Set viewport dimensions
+                    clarity('set', 'viewport_width', window.innerWidth || document.documentElement.clientWidth);
+                    clarity('set', 'viewport_height', window.innerHeight || document.documentElement.clientHeight);
+                    
+                    // Track orientation changes
+                    window.addEventListener('orientationchange', function() {
+                        setTimeout(function() {
+                            clarity('set', 'viewport_width', window.innerWidth || document.documentElement.clientWidth);
+                            clarity('set', 'viewport_height', window.innerHeight || document.documentElement.clientHeight);
+                            clarity('set', 'orientation', window.orientation === 0 ? 'portrait' : 'landscape');
+                        }, 500);
+                    });
+                    
+                    // Track touch events for mobile
+                    if ('ontouchstart' in window) {
+                        clarity('set', 'touch_support', 'true');
+                    }
+                    
+                    // iOS-specific settings
+                    if (isIOS) {
+                        clarity('set', 'ios_device', 'true');
+                        clarity('set', 'safari_browser', isSafari);
+                        // Disable some features that might cause issues on iOS
+                        clarity('set', 'session_recording', 'false');
+                        clarity('set', 'heatmaps', 'false');
+                    }
+                }
+            } catch (error) {
+                console.log('Clarity initialization error:', error);
+            }
+        }
+        
+        // Initialize Clarity with delay for iOS
+        if (isIOS) {
+            // Delay initialization for iOS to ensure proper loading
+            setTimeout(initializeClarity, 1000);
+        } else {
+            // Immediate initialization for other devices
+            initializeClarity();
+        }
     </script>
   </head>
 
@@ -107,6 +166,47 @@
             }, 300);
           }
         }, 1000);
+        
+        // Initialize Clarity after page load for better mobile compatibility
+        if (typeof clarity === 'undefined') {
+          // Fallback Clarity initialization for mobile devices
+          setTimeout(function() {
+            if (typeof clarity === 'undefined') {
+              console.log('Clarity not loaded, attempting fallback initialization...');
+              
+              // iOS-specific fallback
+              const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+              
+              if (isIOS) {
+                // For iOS, try a more conservative approach
+                try {
+                  const script = document.createElement('script');
+                  script.type = 'text/javascript';
+                  script.async = true;
+                  script.src = 'https://www.clarity.ms/tag/htvvpivvo1';
+                  document.head.appendChild(script);
+                  
+                  script.onload = function() {
+                    console.log('Clarity loaded successfully on iOS');
+                  };
+                  
+                  script.onerror = function() {
+                    console.log('Clarity failed to load on iOS');
+                  };
+                } catch (error) {
+                  console.log('iOS Clarity fallback error:', error);
+                }
+              } else {
+                // Standard fallback for other devices
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window, document, "clarity", "script", "htvvpivvo1");
+              }
+            }
+          }, 2000);
+        }
       });
     </script>
     

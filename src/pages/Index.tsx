@@ -2,6 +2,7 @@ import { Navbar } from "@/components/Navbar";
 import { Hero } from '@/components/Hero';
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
+import { DestinationsShowcase } from "@/components/DestinationsShowcase";
 import { TourSlider } from "@/components/TourSlider";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
@@ -93,7 +94,8 @@ const Index = () => {
             <div className="space-y-8 md:space-y-12">
               <ServicesShowcase />
               <FleetShowcase />
-              <TourSlider />
+              <DestinationsShowcase />
+             
               <WhyChooseUs />
               <PopularRoutes />
               <EnhancedCTA />

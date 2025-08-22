@@ -5,6 +5,7 @@ import { Phone, MessageCircle, X, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FloatingButtons } from './FloatingButtons';
+import { useLocation } from 'react-router-dom';
 
 interface ChatMessage {
   id: number | string;
@@ -14,6 +15,7 @@ interface ChatMessage {
 }
 
 export const QuickActionBar = () => {
+  const location = useLocation();
   const [chatOpen, setChatOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -31,8 +33,15 @@ export const QuickActionBar = () => {
   };
 
   const handleWhatsApp = () => {
-    const message = encodeURIComponent('Hi! I would like to book a taxi.');
-    window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
+    // Custom message for driver page
+    let message = 'Hi! I would like to book a taxi.';
+    
+    if (location.pathname === '/hire-driver') {
+      message = 'Hi Kumar! I would like to hire a driver';
+    }
+    
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/919966363662?text=${encodedMessage}`, '_blank');
   };
 
   const handleSendMessage = async () => {

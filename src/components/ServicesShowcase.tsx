@@ -1,182 +1,363 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard } from 'lucide-react';
+import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard, Tag, Bus, Plane, Route, UserCheck } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation } from 'swiper/modules';
+import { Navigation, Pagination } from 'swiper/modules';
 import { useNavigate } from 'react-router-dom';
 import 'swiper/css';
 import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 export function ServicesShowcase() {
   const navigate = useNavigate();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [swiperInstance, setSwiperInstance] = useState<any>(null);
   
   const services = [
     {
-      icon: Clock,
+      icon: Car,
       title: "Local Trips",
-      description: "Hourly packages perfect for city exploration",
+      offer: "Save up to ₹200 on local packages",
+      validity: "Valid till 31 SEP",
+      promoCode: "LOCAL200",
+      description: "Hourly packages for city exploration",
       features: ["8hrs/80km - ₹2,400", "10hrs/100km - ₹3,000", "Professional drivers"],
-      bgColor: "bg-blue-100",
+      bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
       iconColor: "text-blue-600",
-      link: "/local-taxi"
+      link: "/local-taxi",
+      discount: "₹200"
     },
     {
-      icon: MapPin,
+      icon: Route,
       title: "Outstation Travel",
+      offer: "Save up to ₹300 on long journeys",
+      validity: "Valid till 31 SEP",
+      promoCode: "OUT300",
       description: "Comfortable long-distance journeys",
       features: ["Hyderabad - 650km", "Chennai - 800km", "Bangalore - 1000km"],
-      bgColor: "bg-green-100",
+      bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
       iconColor: "text-green-600",
-      link: "/outstation-taxi"
+      link: "/outstation-taxi",
+      discount: "₹300"
     },
     {
-      icon: Car,
+      icon: Plane,
       title: "Airport Transfers",
+      offer: "Save up to ₹200 on airport rides",
+      validity: "Valid till 31 SEP",
+      promoCode: "AIR200",
       description: "Reliable airport connectivity",
       features: ["On-time guarantee", "Flight tracking", "Fixed rates"],
-      bgColor: "bg-purple-100",
+      bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
       iconColor: "text-purple-600",
-      link: "/airport-taxi"
+      link: "/airport-taxi",
+      discount: "₹200"
     },
     {
-      icon: Users,
-      title: "Car Pooling",
-      description: "Share rides, save money",
-      features: ["Eco-friendly travel", "Meet new people", "Affordable rates"],
-      bgColor: "bg-orange-100",
+      icon: UserCheck,
+      title: "Hire a Driver",
+      offer: "Save up to ₹100 with professional drivers",
+      validity: "Valid till 31 Dec",
+      promoCode: "DRIVER100",
+      description: "Professional drivers for your vehicle",
+      features: ["Licensed drivers", "Flexible hours", "Safe & reliable"],
+      bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
       iconColor: "text-orange-600",
-      link: "#"
+      link: "/hire-driver",
+      discount: "₹400"
     }
   ];
 
   const features = [
-    { icon: Clock, title: "24/7 Service", description: "Round-the-clock availability" },
-    { icon: Shield, title: "Professional Drivers", description: "Verified & experienced" },
-    { icon: Smartphone, title: "GPS Tracking", description: "Real-time location sharing" },
-    { icon: Star, title: "Transparent Pricing", description: "No hidden charges" },
-    { icon: Car, title: "Fleet Variety", description: "Economy to luxury options" },
-    { icon: CreditCard, title: "Easy Payments", description: "Multiple payment options" }
+    { icon: Clock, title: "24/7 Service", description: "Available round the clock" },
+    { icon: Shield, title: "Safe Travel", description: "Verified drivers & vehicles" },
+    { icon: Star, title: "Best Rates", description: "Competitive pricing guaranteed" },
+    { icon: Smartphone, title: "Easy Booking", description: "Book with just a few taps" }
   ];
 
   return (
-    <section className="px-0 py-2 pb-2 mb-6 md:px-4 md:py-16 md:mb-0 bg-white">
-      <div className="mx-auto md:container md:max-w-6xl px-0 md:px-4">
+    <section className="pt-4 md:pt-12 pb-0 bg-white">
+      <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-2 md:mb-4">
-          <div className="inline-flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full mb-4">
-            <Car className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-600">OUR SERVICES</span>
-          </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-1 leading-tight">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
             Your Journey, Our Priority
           </h2>
-          <p className="text-gray-600 px-4 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             From local city trips to outstation travel, we provide reliable and comfortable transportation solutions for all your needs.
           </p>
         </div>
 
-        {/* Mobile Slider */}
-        <div className="block md:hidden">
-          <div className="relative">
-            <Swiper
-              slidesPerView={1.1}
-              spaceBetween={16}
-              navigation={{
-                nextEl: '.service-swiper-next',
-                prevEl: '.service-swiper-prev',
-              }}
-              modules={[Navigation]}
-              className="w-full"
-            >
-              {services.map((service, index) => (
-                <SwiperSlide key={index}>
-                  <div 
-                    className="rounded-2xl shadow-lg bg-gradient-to-b from-blue-50 to-white p-6 flex flex-col items-center text-center min-h-[340px] relative cursor-pointer"
-                    onClick={() => navigate(service.link)}
-                  >
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${service.bgColor}`}>
-                      <service.icon className={`h-7 w-7 ${service.iconColor}`} />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
-                    <p className="text-gray-600 text-base mb-4 leading-relaxed">{service.description}</p>
-                    <ul className="text-gray-500 text-sm space-y-1 mb-2">
-                      {service.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-center justify-center gap-2">
-                          <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="absolute bottom-4 left-0 w-full flex justify-center">
-                      <button 
-                        className="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold shadow-md text-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(service.link);
-                        }}
-                      >
-                        Book Now
-                      </button>
-                    </div>
-                  </div>
-                </SwiperSlide>
-              ))}
-              {/* Arrows */}
-              <div className="service-swiper-prev absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full shadow p-2 cursor-pointer">
-                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><polyline points="15 18 9 12 15 6"></polyline></svg>
-              </div>
-              <div className="service-swiper-next absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 rounded-full shadow p-2 cursor-pointer">
-                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </div>
-            </Swiper>
-          </div>
-          <div className="mb-2"></div>
-        </div>
-        {/* Desktop Grid */}
-        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {services.map((service, index) => (
-            <Card 
-              key={index} 
-              className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer"
-              onClick={() => navigate(service.link)}
-            >
-              <CardContent className="p-6 text-center">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ${service.bgColor}`}>
-                  <service.icon className={`h-8 w-8 ${service.iconColor}`} />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
-                <p className="text-gray-600 text-base mb-4 leading-relaxed">{service.description}</p>
-                <div className="space-y-1">
-                  {service.features.map((feature, idx) => (
-                    <div key={idx} className="text-sm text-gray-500 flex items-center justify-center gap-1">
-                      <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Desktop Layout - Sliding Row */}
+        <div className="hidden xl:block mb-8 relative overflow-hidden">
+          <div className="flex gap-4 transition-transform duration-500 ease-in-out" style={{ 
+            transform: `translateX(-${Math.min(currentSlide * 50, Math.max(0, (services.length - 4) * 50))}%)` 
+          }}>
+            {/* All services in a single row */}
+            {services.map((service, index) => (
+              <div key={index} className="w-full max-w-[calc(25%-12px)] flex-shrink-0">
+                <Card 
+                  className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
+                  onClick={() => navigate(service.link)}
+                >
+                  <CardContent className="p-5 relative h-full flex flex-col">
+                    {/* Background Pattern */}
+                    <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+                    
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col h-full">
+                      {/* Category Tag and Icon */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          {service.title}
+                        </div>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
+                          <service.icon className={`h-6 w-6 ${service.iconColor}`} />
+                        </div>
+                      </div>
 
-        {/* Why Choose Us Features */}
-        <div className="bg-gray-50 rounded-3xl p-6 md:p-8">
-          <div className="text-center mb-6 md:mb-8">
-            <h3 className="text-xl md:text-2xl font-medium text-gray-900 mb-2">Why Choose Vizag Taxi Hub?</h3>
-            <p className="text-gray-600 text-sm md:text-base">Experience the difference with our premium features</p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-            {features.map((feature, index) => (
-              <div key={index} className="text-center group">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:shadow-lg transition-shadow duration-300">
-                  <feature.icon className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 text-sm md:text-base mb-1">{feature.title}</h4>
-                <p className="text-xs md:text-sm text-gray-500 leading-relaxed">{feature.description}</p>
+                      {/* Main Offer */}
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                        {service.offer}
+                      </h3>
+
+                      {/* Validity */}
+                      <p className="text-sm text-gray-600 mb-3">
+                        {service.validity}
+                      </p>
+
+                      {/* Promo Code Button */}
+                      <div className="mb-3">
+                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
+                          <Tag className="h-4 w-4" />
+                          {service.promoCode}
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-sm text-gray-600 mb-2 flex-grow">
+                        {service.description}
+                      </p>
+
+                      {/* Features */}
+                      <div className="space-y-1.5 mt-2">
+                        {service.features.map((feature, idx) => (
+                          <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                            <span>{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             ))}
           </div>
+
+          {/* Previous Arrow - show when not at first slide */}
+          {currentSlide > 0 && (
+            <button
+              className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+              onClick={() => {
+                if (currentSlide > 0) {
+                  setCurrentSlide(currentSlide - 1);
+                }
+              }}
+            >
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Next Arrow - only show if there are additional services and we're not at the end */}
+          {services.length > 4 && currentSlide < Math.max(0, (services.length - 4)) && (
+            <button
+              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+              onClick={() => {
+                const maxSlides = Math.max(0, services.length - 4);
+                if (currentSlide < maxSlides) {
+                  setCurrentSlide(currentSlide + 1);
+                }
+              }}
+            >
+              <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          )}
         </div>
+
+        {/* Tablet Layout - Grid */}
+        <div className="hidden lg:block xl:hidden mb-8">
+          <div className="grid grid-cols-2 gap-4">
+            {services.map((service, index) => (
+              <Card 
+                key={index} 
+                className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
+                onClick={() => navigate(service.link)}
+              >
+                <CardContent className="p-5 relative h-full flex flex-col">
+                  {/* Background Pattern */}
+                  <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
+                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+                  
+                  {/* Content */}
+                  <div className="relative z-10 flex flex-col h-full">
+                    {/* Category Tag and Icon */}
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                        {service.title}
+                      </div>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
+                        <service.icon className={`h-6 w-6 ${service.iconColor}`} />
+                      </div>
+                    </div>
+
+                    {/* Main Offer */}
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                      {service.offer}
+                    </h3>
+
+                    {/* Validity */}
+                    <p className="text-sm text-gray-600 mb-3">
+                      {service.validity}
+                    </p>
+
+                    {/* Promo Code Button */}
+                    <div className="mb-3">
+                      <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
+                        <Tag className="h-4 w-4" />
+                        {service.promoCode}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-sm text-gray-600 mb-2 flex-grow">
+                      {service.description}
+                    </p>
+
+                    {/* Features */}
+                    <div className="space-y-1.5 mt-2">
+                      {service.features.map((feature, idx) => (
+                        <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                          <span>{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Mobile Slider */}
+        <div className="block xl:hidden mb-8 relative">
+          <Swiper
+            modules={[Pagination]}
+            spaceBetween={12}
+            slidesPerView={1.2}
+            pagination={false}
+            onSwiper={setSwiperInstance}
+            onSlideChange={(swiper) => setCurrentSlide(swiper.activeIndex)}
+            className="services-swiper"
+          >
+            {services.map((service, index) => (
+              <SwiperSlide key={index}>
+                <Card 
+                  className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
+                  onClick={() => navigate(service.link)}
+                >
+                  <CardContent className="p-5 relative h-full flex flex-col">
+                    {/* Background Pattern */}
+                    <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+                    
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col h-full">
+                      {/* Category Tag and Icon */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          {service.title}
+                        </div>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
+                          <service.icon className={`h-6 w-6 ${service.iconColor}`} />
+                        </div>
+                      </div>
+
+                      {/* Main Offer */}
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                        {service.offer}
+                      </h3>
+
+                      {/* Validity */}
+                      <p className="text-sm text-gray-600 mb-3">
+                        {service.validity}
+                      </p>
+
+                      {/* Promo Code Button */}
+                      <div className="mb-3">
+                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
+                          <Tag className="h-4 w-4" />
+                          {service.promoCode}
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-sm text-gray-600 mb-2 flex-grow">
+                        {service.description}
+                      </p>
+
+                      {/* Features */}
+                      <div className="space-y-1.5 mt-2">
+                        {service.features.map((feature, idx) => (
+                          <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                            <span>{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+          
+          {/* Custom Pagination with Dots and Counter */}
+          <div className="flex justify-center items-center mt-4">
+            <div className="flex items-center gap-1">
+              {services.map((_, index) => {
+                // Show the counter pill in place of the active dot
+                if (index === currentSlide) {
+                  return (
+                    <div 
+                      key={index}
+                      className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                    >
+                      {currentSlide + 1}/{services.length}
+                    </div>
+                  );
+                }
+                
+                // Show regular dots for inactive slides
+                return (
+                  <button
+                    key={index}
+                    onClick={() => swiperInstance?.slideTo(index)}
+                    className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+     
       </div>
     </section>
   );
