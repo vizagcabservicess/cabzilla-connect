@@ -136,6 +136,188 @@ RewriteRule ^admin/(.*)$ /index.html [L]
 RewriteRule ^booking/(.*)$ /index.html [L]
 RewriteRule ^receipt/(.*)$ /index.html [L]
 
+# URL Redirects for Old URLs - Handle 404 errors from Google search results
+# Old vehicle pages (now redirected to fleet)
+RewriteRule ^sedan$ /fleet [R=301,L]
+RewriteRule ^suv$ /fleet [R=301,L]
+RewriteRule ^tempotraveller$ /fleet [R=301,L]
+RewriteRule ^tempo-traveller$ /fleet [R=301,L]
+RewriteRule ^tempo_traveller$ /fleet [R=301,L]
+
+# Old service pages
+RewriteRule ^rentals$ /local-taxi [R=301,L]
+RewriteRule ^car-rental$ /local-taxi [R=301,L]
+RewriteRule ^taxi-rental$ /local-taxi [R=301,L]
+RewriteRule ^cab-rental$ /local-taxi [R=301,L]
+
+# Old tour pages
+RewriteRule ^tour$ /tours [R=301,L]
+RewriteRule ^tour-packages$ /tours [R=301,L]
+RewriteRule ^packages$ /tours [R=301,L]
+
+# Old contact pages
+RewriteRule ^contact$ /contact-us [R=301,L]
+RewriteRule ^get-in-touch$ /contact-us [R=301,L]
+RewriteRule ^reach-us$ /contact-us [R=301,L]
+
+# Old about pages
+RewriteRule ^about$ /our-story [R=301,L]
+RewriteRule ^about-us$ /our-story [R=301,L]
+RewriteRule ^company$ /our-story [R=301,L]
+
+# Old terms pages
+RewriteRule ^terms$ /terms-conditions [R=301,L]
+RewriteRule ^terms-of-service$ /terms-conditions [R=301,L]
+RewriteRule ^terms-and-conditions$ /terms-conditions [R=301,L]
+
+# Old privacy pages
+RewriteRule ^privacy$ /privacy-policy [R=301,L]
+
+# Old FAQ pages
+RewriteRule ^faqs$ /faq [R=301,L]
+RewriteRule ^frequently-asked-questions$ /faq [R=301,L]
+
+# Old booking pages
+RewriteRule ^book$ /local-taxi [R=301,L]
+RewriteRule ^book-now$ /local-taxi [R=301,L]
+RewriteRule ^booking$ /local-taxi [R=301,L]
+
+# Old location-specific pages
+RewriteRule ^vizag-taxi$ /local-taxi [R=301,L]
+RewriteRule ^visakhapatnam-taxi$ /local-taxi [R=301,L]
+RewriteRule ^vizag-cabs$ /local-taxi [R=301,L]
+RewriteRule ^visakhapatnam-cabs$ /local-taxi [R=301,L]
+
+# Old airport pages
+RewriteRule ^airport$ /airport-taxi [R=301,L]
+RewriteRule ^airport-transfer$ /airport-taxi [R=301,L]
+RewriteRule ^airport-pickup$ /airport-taxi [R=301,L]
+RewriteRule ^airport-drop$ /airport-taxi [R=301,L]
+
+# Old outstation pages
+RewriteRule ^outstation$ /outstation-taxi [R=301,L]
+RewriteRule ^intercity$ /outstation-taxi [R=301,L]
+RewriteRule ^long-distance$ /outstation-taxi [R=301,L]
+
+# Old driver pages
+RewriteRule ^hire$ /hire-driver [R=301,L]
+RewriteRule ^driver-hire$ /hire-driver [R=301,L]
+RewriteRule ^hire-a-driver$ /hire-driver [R=301,L]
+
+# Old support pages
+RewriteRule ^help$ /help-center [R=301,L]
+RewriteRule ^support-center$ /support [R=301,L]
+RewriteRule ^customer-support$ /support [R=301,L]
+
+# Old refund pages
+RewriteRule ^refund$ /cancellation-refund-policy [R=301,L]
+RewriteRule ^refund-policy$ /cancellation-refund-policy [R=301,L]
+RewriteRule ^cancellation$ /cancellation-refund-policy [R=301,L]
+
+# Old career pages
+RewriteRule ^career$ /careers [R=301,L]
+RewriteRule ^jobs$ /careers [R=301,L]
+RewriteRule ^employment$ /careers [R=301,L]
+
+# Old vision pages
+RewriteRule ^vision$ /vision-mission [R=301,L]
+RewriteRule ^mission$ /vision-mission [R=301,L]
+
+# Common misspellings and variations
+RewriteRule ^taxi$ /local-taxi [R=301,L]
+RewriteRule ^cab$ /local-taxi [R=301,L]
+RewriteRule ^cabs$ /local-taxi [R=301,L]
+RewriteRule ^taxi-service$ /local-taxi [R=301,L]
+RewriteRule ^cab-service$ /local-taxi [R=301,L]
+
+# Old blog or news pages (if any)
+RewriteRule ^blog$ /our-story [R=301,L]
+RewriteRule ^news$ /our-story [R=301,L]
+RewriteRule ^updates$ /our-story [R=301,L]
+
+# Old pricing pages
+RewriteRule ^pricing$ /local-taxi [R=301,L]
+RewriteRule ^rates$ /local-taxi [R=301,L]
+RewriteRule ^tariff$ /local-taxi [R=301,L]
+RewriteRule ^fare$ /local-taxi [R=301,L]
+RewriteRule ^fares$ /local-taxi [R=301,L]
+
+# Old testimonial pages
+RewriteRule ^testimonials$ / [R=301,L]
+RewriteRule ^reviews$ / [R=301,L]
+RewriteRule ^feedback$ / [R=301,L]
+
+# Old gallery pages
+RewriteRule ^gallery$ /fleet [R=301,L]
+RewriteRule ^photos$ /fleet [R=301,L]
+RewriteRule ^images$ /fleet [R=301,L]
+
+# Old sitemap pages
+RewriteRule ^sitemap$ /sitemap.xml [R=301,L]
+RewriteRule ^sitemap\.html$ /sitemap.xml [R=301,L]
+
+# Old login/register pages
+RewriteRule ^register$ /signup [R=301,L]
+RewriteRule ^sign-up$ /signup [R=301,L]
+RewriteRule ^signin$ /login [R=301,L]
+RewriteRule ^sign-in$ /login [R=301,L]
+
+# Old dashboard pages
+RewriteRule ^profile$ /dashboard [R=301,L]
+RewriteRule ^account$ /dashboard [R=301,L]
+RewriteRule ^my-account$ /dashboard [R=301,L]
+
+# Old payment pages
+RewriteRule ^pay$ /payment [R=301,L]
+RewriteRule ^payment-gateway$ /payment [R=301,L]
+RewriteRule ^checkout$ /payment [R=301,L]
+
+# Old confirmation pages
+RewriteRule ^confirmation$ /booking-confirmation [R=301,L]
+RewriteRule ^booking-confirmed$ /booking-confirmation [R=301,L]
+RewriteRule ^success$ /booking-confirmation [R=301,L]
+
+# Old receipt pages
+RewriteRule ^invoice$ /receipt [R=301,L]
+RewriteRule ^bill$ /receipt [R=301,L]
+
+# Old pooling pages (if any)
+RewriteRule ^carpool$ /pooling [R=301,L]
+RewriteRule ^carpooling$ /pooling [R=301,L]
+RewriteRule ^ride-sharing$ /pooling [R=301,L]
+
+# Old location-specific outstation routes (common patterns)
+RewriteRule ^vizag-to-hyderabad$ /outstation-taxi/visakhapatnam-to-hyderabad [R=301,L]
+RewriteRule ^vizag-to-chennai$ /outstation-taxi/visakhapatnam-to-chennai [R=301,L]
+RewriteRule ^vizag-to-bangalore$ /outstation-taxi/visakhapatnam-to-bangalore [R=301,L]
+RewriteRule ^vizag-to-araku$ /outstation-taxi/visakhapatnam-to-araku-valley [R=301,L]
+RewriteRule ^vizag-to-tirupati$ /outstation-taxi/visakhapatnam-to-tirupati [R=301,L]
+RewriteRule ^vizag-to-vijayawada$ /outstation-taxi/visakhapatnam-to-vijayawada [R=301,L]
+RewriteRule ^vizag-to-bhubaneswar$ /outstation-taxi/visakhapatnam-to-bhubaneswar [R=301,L]
+RewriteRule ^vizag-to-kolkata$ /outstation-taxi/visakhapatnam-to-kolkata [R=301,L]
+RewriteRule ^vizag-to-raipur$ /outstation-taxi/visakhapatnam-to-raipur [R=301,L]
+
+# Old tour-specific routes
+RewriteRule ^araku-tour$ /tours/araku-valley-tour [R=301,L]
+RewriteRule ^araku-valley$ /tours/araku-valley-tour [R=301,L]
+RewriteRule ^lambasingi-tour$ /tours/lambasingi-tour [R=301,L]
+RewriteRule ^lambasingi$ /tours/lambasingi-tour [R=301,L]
+RewriteRule ^vizag-city-tour$ /tours/vizag-north-city-tour [R=301,L]
+RewriteRule ^city-tour$ /tours/vizag-north-city-tour [R=301,L]
+
+# Old vehicle-specific routes
+RewriteRule ^swift-dzire$ /vehicle/swift-dzire [R=301,L]
+RewriteRule ^ertiga$ /vehicle/ertiga [R=301,L]
+RewriteRule ^innova$ /vehicle/innova-crysta [R=301,L]
+RewriteRule ^innova-crysta$ /vehicle/innova-crysta [R=301,L]
+RewriteRule ^toyota-glanza$ /vehicle/toyota-glanza [R=301,L]
+RewriteRule ^tempo-traveller$ /vehicle/tempo_traveller [R=301,L]
+RewriteRule ^honda-amaze$ /vehicle/amaze [R=301,L]
+RewriteRule ^amaze$ /vehicle/amaze [R=301,L]
+
+# Handle trailing slashes
+RewriteRule ^(.+)/$ /$1 [R=301,L]
+
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

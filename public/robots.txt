@@ -13,16 +13,29 @@ Disallow: /pooling/
 Disallow: /api/
 Disallow: /backend/
 
+# Disallow specific URLs that should not be crawled
+Disallow: /outstation-taxi/visakhapatnam-to-yarada-beach
+Disallow: /outstation-taxi/visakhapatnam-to-simhachalam
+Disallow: /outstation-taxi/visakhapatnam-to-borra-caves
+Disallow: /outstation-taxi/visakhapatnam-to-rushikonda-beach
+Disallow: /pooling/
+Disallow: /blog
+Disallow: /customer
+Disallow: /driver
+Disallow: /payment
+Disallow: /booking-confirmation
+Disallow: /tempotraveller
+Disallow: /suv
+Disallow: /sedan
+Disallow: /rentals
+Disallow: /cabs
+
 # Allow important pages
 Allow: /local-taxi
 Allow: /outstation-taxi
 Allow: /airport-taxi
 Allow: /tours
 Allow: /fleet
-Allow: /sedan
-Allow: /suv
-Allow: /tempotraveller
-Allow: /rentals
 Allow: /hire-driver
 Allow: /our-story
 Allow: /vision-mission

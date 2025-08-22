@@ -2,6 +2,7 @@ import { createBrowserRouter, Outlet } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
+import { RedirectHandler } from './components/RedirectHandler';
 import { useAuth } from './providers/AuthProvider';
 import { UserRole, EnhancedUser } from '@/types/privileges';
 
@@ -66,9 +67,7 @@ const ContactUsPage = lazy(() => import('./pages/ContactUsPage').then(module => 
 const TermsConditionsPage = lazy(() => import('./pages/TermsConditionsPage').then(module => ({ default: module.TermsConditionsPage })));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(module => ({ default: module.PrivacyPolicyPage })));
 const TourDetailPage = lazy(() => import('./pages/TourDetailPage'));
-const SedanPage = lazy(() => import('./pages/SedanPage'));
-const SUVPage = lazy(() => import('./pages/SUVPage'));
-const TempoTravellerPage = lazy(() => import('./pages/TempoTravellerPage'));
+
 const RoutePage = lazy(() => import('./pages/RoutePage'));
 const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
 const OperatorProfilesPage = lazy(() => import('@/pages/OperatorProfilesPage'));
@@ -100,12 +99,14 @@ const LazyRoute = ({ component: Component }: { component: React.LazyExoticCompon
   </Suspense>
 );
 
-// Root component that includes ScrollToTop
+// Root component that includes ScrollToTop and RedirectHandler
 function Root() {
   return (
     <>
       <ScrollToTop />
-      <Outlet />
+      <RedirectHandler>
+        <Outlet />
+      </RedirectHandler>
     </>
   );
 }
@@ -375,18 +376,7 @@ const router = createBrowserRouter([
         path: 'pooling/admin',
         element: <PoolingAdminPage />,
       },
-      {
-        path: 'sedan',
-        element: <SedanPage />,
-      },
-      {
-        path: 'suv',
-        element: <SUVPage />,
-      },
-      {
-        path: 'tempotraveller',
-        element: <TempoTravellerPage />,
-      },
+
       {
         path: 'vehicle/:vehicleId',
         element: <VehicleDetailPage />,
