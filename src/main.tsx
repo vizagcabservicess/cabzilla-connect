@@ -1,13 +1,18 @@
 
-import React, { StrictMode, lazy, Suspense } from 'react';
+import React, { StrictMode, lazy, Suspense, startTransition } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 
-// Lazy load the main App component
-const App = lazy(() => import('./App'));
+// Check if we're on the homepage
+const isHomepage = window.location.pathname === '/' || window.location.pathname === '';
+
+// Lazy load the main App component with proper error handling
+const App = lazy(() => import('./App').then(module => ({ default: module.default })));
 
 // DEV PATCH: Always set a valid JWT and user in localStorage for testing
 if (import.meta.env.MODE === 'development') {
@@ -45,31 +50,21 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading component for Suspense
-const LoadingSpinner = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    fontSize: '16px',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-);
+
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 
-// Performance optimization: Use React.lazy and Suspense
+// Performance optimization: Use React.lazy and Suspense with proper error handling
 root.render(
   <StrictMode>
-    <HelmetProvider>
-      <QueryClientProvider client={queryClient}>
-        <Suspense fallback={<LoadingSpinner />}>
-          <App />
-        </Suspense>
-      </QueryClientProvider>
-    </HelmetProvider>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <QueryClientProvider client={queryClient}>
+          <Suspense fallback={isHomepage ? <HeroSkeleton /> : <PageSkeleton />}>
+            <App />
+          </Suspense>
+        </QueryClientProvider>
+      </HelmetProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

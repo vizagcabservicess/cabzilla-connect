@@ -17,9 +17,7 @@ import {
 
 // Get base API URL based on environment
 const getApiBaseUrl = (): string => {
-  return window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
-    ? `${window.location.protocol}//${window.location.host}`
-    : 'https://vizagtaxihub.com';
+  return 'https://www.vizagtaxihub.com';
 };
 
 /**

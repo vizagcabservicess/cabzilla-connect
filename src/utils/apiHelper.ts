@@ -9,8 +9,6 @@ export const isPreviewMode = () => {
   // Check if we're in a preview environment or local development
   return (
     window.location.hostname.includes('lovable.app') ||
-    window.location.hostname.includes('localhost') ||
-    window.location.hostname.includes('127.0.0.1') ||
     window.location.hostname.includes('vercel.app') ||
     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')
   );

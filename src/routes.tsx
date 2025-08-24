@@ -1,10 +1,12 @@
+import React from 'react';
 import { createBrowserRouter, Outlet } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, startTransition } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { RedirectHandler } from './components/RedirectHandler';
 import { useAuth } from './providers/AuthProvider';
 import { UserRole, EnhancedUser } from '@/types/privileges';
+import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 
 // Lazy load all pages for better performance
 const Index = lazy(() => import('./pages/Index'));
@@ -79,18 +81,7 @@ const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
 const PrivilegeManagement = lazy(() => import('./components/admin/PrivilegeManagement').then(module => ({ default: module.PrivilegeManagement })));
 
 // Loading component for route transitions
-const RouteLoadingSpinner = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '50vh',
-    fontSize: '14px',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-);
+const RouteLoadingSpinner = () => <PageSkeleton />;
 
 // Wrapper component for lazy-loaded routes
 const LazyRoute = ({ component: Component }: { component: React.LazyExoticComponent<any> }) => (
@@ -118,7 +109,11 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <LazyRoute component={Index} />,
+        element: (
+          <Suspense fallback={<HeroSkeleton />}>
+            <Index />
+          </Suspense>
+        ),
       },
       {
         path: 'login',

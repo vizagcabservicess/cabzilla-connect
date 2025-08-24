@@ -14,17 +14,7 @@
       /* Critical CSS for above-the-fold content */
       body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
       #root { min-height: 100vh; }
-      #loading-indicator { 
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-        background: white; display: flex; justify-content: center; 
-        align-items: center; z-index: 9999; 
-      }
-      .loading-spinner { 
-        width: 40px; height: 40px; border: 4px solid #f3f3f3; 
-        border-top: 4px solid #3498db; border-radius: 50%; 
-        animation: spin 1s linear infinite; margin: 0 auto 16px; 
-      }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      
     </style>
     
     <!-- Resource hints for better performance -->
@@ -54,85 +44,20 @@
       });
     </script>
     
-    <!-- Microsoft Clarity - Enhanced for iOS and mobile compatibility -->
+    <!-- Microsoft Clarity - Universal compatibility -->
     <script type="text/javascript">
-        // iOS-specific detection
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        
-        // Enhanced Clarity initialization with iOS support
-        function initializeClarity() {
-            try {
-                (function(c,l,a,r,i,t,y){
-                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-                })(window, document, "clarity", "script", "htvvpivvo1");
-                
-                // Enhanced Clarity configuration for mobile devices
-                if (typeof clarity !== 'undefined') {
-                    // Enable session recording for mobile
-                    clarity('set', 'mobile_session_recording', 'true');
-                    
-                    // Set custom dimensions for mobile detection
-                    clarity('set', 'device_type', /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'mobile' : 'desktop');
-                    
-                    // Enable heatmaps for mobile
-                    clarity('set', 'mobile_heatmaps', 'true');
-                    
-                    // Set viewport dimensions
-                    clarity('set', 'viewport_width', window.innerWidth || document.documentElement.clientWidth);
-                    clarity('set', 'viewport_height', window.innerHeight || document.documentElement.clientHeight);
-                    
-                    // Track orientation changes
-                    window.addEventListener('orientationchange', function() {
-                        setTimeout(function() {
-                            clarity('set', 'viewport_width', window.innerWidth || document.documentElement.clientWidth);
-                            clarity('set', 'viewport_height', window.innerHeight || document.documentElement.clientHeight);
-                            clarity('set', 'orientation', window.orientation === 0 ? 'portrait' : 'landscape');
-                        }, 500);
-                    });
-                    
-                    // Track touch events for mobile
-                    if ('ontouchstart' in window) {
-                        clarity('set', 'touch_support', 'true');
-                    }
-                    
-                    // iOS-specific settings
-                    if (isIOS) {
-                        clarity('set', 'ios_device', 'true');
-                        clarity('set', 'safari_browser', isSafari);
-                        // Disable some features that might cause issues on iOS
-                        clarity('set', 'session_recording', 'false');
-                        clarity('set', 'heatmaps', 'false');
-                    }
-                }
-            } catch (error) {
-                console.log('Clarity initialization error:', error);
-            }
-        }
-        
-        // Initialize Clarity with delay for iOS
-        if (isIOS) {
-            // Delay initialization for iOS to ensure proper loading
-            setTimeout(initializeClarity, 1000);
-        } else {
-            // Immediate initialization for other devices
-            initializeClarity();
-        }
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "htvvpivvo1");
     </script>
   </head>
 
   <body>
     <div id="root"></div>
     
-    <!-- Loading indicator for better UX -->
-    <div id="loading-indicator">
-      <div style="text-align: center;">
-        <div class="loading-spinner"></div>
-        <p style="color: #666; font-family: Arial, sans-serif;">Loading Vizag Taxi Hub...</p>
-      </div>
-    </div>
+
     
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
@@ -152,63 +77,7 @@
         }
       };
     </script>
-    
-    <!-- Hide loading indicator when app is ready -->
-    <script>
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          const loadingIndicator = document.getElementById('loading-indicator');
-          if (loadingIndicator) {
-            loadingIndicator.style.opacity = '0';
-            loadingIndicator.style.transition = 'opacity 0.3s ease';
-            setTimeout(function() {
-              loadingIndicator.style.display = 'none';
-            }, 300);
-          }
-        }, 1000);
-        
-        // Initialize Clarity after page load for better mobile compatibility
-        if (typeof clarity === 'undefined') {
-          // Fallback Clarity initialization for mobile devices
-          setTimeout(function() {
-            if (typeof clarity === 'undefined') {
-              console.log('Clarity not loaded, attempting fallback initialization...');
-              
-              // iOS-specific fallback
-              const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-              
-              if (isIOS) {
-                // For iOS, try a more conservative approach
-                try {
-                  const script = document.createElement('script');
-                  script.type = 'text/javascript';
-                  script.async = true;
-                  script.src = 'https://www.clarity.ms/tag/htvvpivvo1';
-                  document.head.appendChild(script);
-                  
-                  script.onload = function() {
-                    console.log('Clarity loaded successfully on iOS');
-                  };
-                  
-                  script.onerror = function() {
-                    console.log('Clarity failed to load on iOS');
-                  };
-                } catch (error) {
-                  console.log('iOS Clarity fallback error:', error);
-                }
-              } else {
-                // Standard fallback for other devices
-                (function(c,l,a,r,i,t,y){
-                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-                })(window, document, "clarity", "script", "htvvpivvo1");
-              }
-            }
-          }, 2000);
-        }
-      });
-    </script>
+
     
 
   </body>
