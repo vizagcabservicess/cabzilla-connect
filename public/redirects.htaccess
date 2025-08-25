@@ -39,8 +39,7 @@ RewriteRule ^terms-and-conditions$ /terms-conditions [R=301,L]
 RewriteRule ^privacy$ /privacy-policy [R=301,L]
 
 # Old FAQ pages
-RewriteRule ^faqs$ /faq [R=301,L]
-RewriteRule ^frequently-asked-questions$ /faq [R=301,L]
+
 
 # Old booking pages
 RewriteRule ^book$ /local-taxi [R=301,L]

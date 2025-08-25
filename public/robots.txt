@@ -41,7 +41,7 @@ Allow: /our-story
 Allow: /vision-mission
 Allow: /careers
 Allow: /contact
-Allow: /faq
+
 Allow: /support
 Allow: /help-center
 Allow: /terms-conditions

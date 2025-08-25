@@ -34,12 +34,10 @@ const AdminBookingCreationPage = lazy(() => import('./pages/AdminBookingCreation
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
-const ServicesPage = lazy(() => import('./pages/ServicesPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const RefundsPage = lazy(() => import('./pages/RefundsPage'));
 const CancellationRefundPolicyPage = lazy(() => import('./pages/CancellationRefundPolicyPage'));
-const FAQPage = lazy(() => import('./pages/FAQPage'));
 const PoolingPage = lazy(() => import('./pages/PoolingPage'));
 const PoolingBookingPage = lazy(() => import('./pages/PoolingBookingPage'));
 const PoolingDashboard = lazy(() => import('./pages/admin/PoolingDashboard'));
@@ -327,10 +325,7 @@ const router = createBrowserRouter([
         path: 'privacy-policy',
         element: <PrivacyPolicyPage />,
       },
-      {
-        path: 'services',
-        element: <ServicesPage />,
-      },
+
       {
         path: 'terms',
         element: <TermsPage />,
@@ -347,10 +342,7 @@ const router = createBrowserRouter([
         path: 'cancellation-refund-policy',
         element: <CancellationRefundPolicyPage />,
       },
-      {
-        path: 'faq',
-        element: <FAQPage />,
-      },
+
       {
         path: 'customer',
         element: <CustomerDashboard />,

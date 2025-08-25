@@ -44,9 +44,7 @@ export class URLRedirectService {
     { from: '/privacy', to: '/privacy-policy', type: 'permanent', statusCode: 301 },
     { from: '/privacy-policy', to: '/privacy-policy', type: 'permanent', statusCode: 301 },
     
-    // Old FAQ pages
-    { from: '/faqs', to: '/faq', type: 'permanent', statusCode: 301 },
-    { from: '/frequently-asked-questions', to: '/faq', type: 'permanent', statusCode: 301 },
+
     
     // Old booking pages
     { from: '/book', to: '/local-taxi', type: 'permanent', statusCode: 301 },
