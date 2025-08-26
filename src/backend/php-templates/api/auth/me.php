@@ -28,16 +28,21 @@ if (!$token) {
 }
 
 try {
+    // Debug: Log the token
+    error_log("DEBUG: me.php - Token received: " . substr($token, 0, 20) . "...");
+    
     // Verify JWT token
     $payload = verifyJwtToken($token);
     
     if (!$payload) {
+        error_log("DEBUG: me.php - JWT verification failed");
         http_response_code(401);
         echo json_encode(['error' => 'Invalid or expired token']);
         exit();
     }
     
     $user_id = $payload['user_id'];
+    error_log("DEBUG: me.php - User ID from JWT: " . $user_id);
     
     $conn = getDbConnectionWithRetry();
     
@@ -52,7 +57,22 @@ try {
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     
+    error_log("DEBUG: me.php - User lookup result: " . ($user ? "Found user ID " . $user['id'] : "No user found"));
+    
     if (!$user) {
+        // Debug: Let's also check if the user exists without the is_active condition
+        $stmt2 = $conn->prepare("SELECT id, name, email, phone, role, is_active FROM users WHERE id = ?");
+        $stmt2->bind_param("i", $user_id);
+        $stmt2->execute();
+        $result2 = $stmt2->get_result();
+        $userCheck = $result2->fetch_assoc();
+        
+        if ($userCheck) {
+            error_log("DEBUG: me.php - User exists but is_active = " . $userCheck['is_active']);
+        } else {
+            error_log("DEBUG: me.php - User with ID " . $user_id . " does not exist in users table");
+        }
+        
         http_response_code(401);
         echo json_encode(['error' => 'User not found or inactive']);
         exit();
@@ -70,6 +90,7 @@ try {
     }
     */
 
+    error_log("DEBUG: me.php - Successfully returning user data for ID " . $user['id']);
     echo json_encode(['success' => true, 'user' => $user]);
     
 } catch (Exception $e) {

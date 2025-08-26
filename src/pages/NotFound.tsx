@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Helmet } from 'react-helmet-async';
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Home, ArrowLeft, Search, MapPin, Car, Plane } from "lucide-react";
 import { URLRedirectService } from "@/services/urlRedirectService";
@@ -82,79 +83,109 @@ const NotFound = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center max-w-2xl mx-auto px-4">
-        <div className="flex justify-center mb-6">
-          <AlertCircle size={60} className="text-red-500" />
-        </div>
-        <h1 className="text-2xl md:text-4xl font-medium mb-4">404</h1>
-        <p className="text-xl text-gray-600 mb-4">
-          {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
-        </p>
-        <p className="text-gray-500 mb-6">
-          {isApiError 
-            ? "The requested API endpoint could not be found. This might be due to a server configuration issue."
-            : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
-        </p>
+    <>
+      <Helmet>
+        <title>Page Not Found - Vizag Taxi Hub | 404 Error</title>
+        <meta name="description" content="The page you're looking for doesn't exist. Find local taxi, outstation taxi, airport transfer, and tour services in Visakhapatnam." />
+        <meta name="keywords" content="404 error, page not found, vizag taxi services, local taxi, outstation taxi, airport transfer" />
+        <meta name="author" content="Vizag Taxi Hub" />
         
-        {/* Search Bar */}
-        <form onSubmit={handleSearch} className="mb-8">
-          <div className="flex max-w-md mx-auto">
-            <input
-              type="text"
-              placeholder="Search for services..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Button type="submit" className="rounded-l-none">
-              <Search className="h-4 w-4" />
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/404" />
+        <meta property="og:title" content="Page Not Found - Vizag Taxi Hub | 404 Error" />
+        <meta property="og:description" content="The page you're looking for doesn't exist. Find local taxi, outstation taxi, airport transfer, and tour services in Visakhapatnam." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/404" />
+        <meta property="twitter:title" content="Page Not Found - Vizag Taxi Hub | 404 Error" />
+        <meta property="twitter:description" content="The page you're looking for doesn't exist. Find local taxi, outstation taxi, airport transfer, and tour services in Visakhapatnam." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/404" />
+      </Helmet>
+      
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center max-w-2xl mx-auto px-4">
+          <div className="flex justify-center mb-6">
+            <AlertCircle size={60} className="text-red-500" />
+          </div>
+          <h1 className="text-2xl md:text-4xl font-medium mb-4">404</h1>
+          <p className="text-xl text-gray-600 mb-4">
+            {isApiError ? "API Endpoint Not Found" : "Page Not Found"}
+          </p>
+          <p className="text-gray-500 mb-6">
+            {isApiError 
+              ? "The requested API endpoint could not be found. This might be due to a server configuration issue."
+              : "The page you are looking for might have been removed, had its name changed, or is temporarily unavailable."}
+          </p>
+          
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="mb-8">
+            <div className="flex max-w-md mx-auto">
+              <input
+                type="text"
+                placeholder="Search for services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <Button type="submit" className="rounded-l-none">
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+          </form>
+          
+          {/* Suggested Pages */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Pages</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {suggestedPages.map((page) => (
+                <Button
+                  key={page.path}
+                  variant="outline"
+                  onClick={() => navigate(page.path)}
+                  className="flex items-center gap-2 h-auto p-4 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    {page.icon}
+                    <div>
+                      <div className="font-medium">{page.title}</div>
+                      <div className="text-sm text-gray-500">{page.description}</div>
+                    </div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button 
+              variant="outline" 
+              onClick={goBack}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft size={16} />
+              Go Back
+            </Button>
+            <Button 
+              onClick={goHome}
+              className="flex items-center gap-2"
+            >
+              <Home size={16} />
+              Return to Home
             </Button>
           </div>
-        </form>
-        
-        {/* Suggested Pages */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Pages</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {suggestedPages.map((page) => (
-              <Button
-                key={page.path}
-                variant="outline"
-                onClick={() => navigate(page.path)}
-                className="flex items-center gap-2 h-auto p-4 text-left"
-              >
-                <div className="flex items-center gap-2">
-                  {page.icon}
-                  <div>
-                    <div className="font-medium">{page.title}</div>
-                    <div className="text-sm text-gray-500">{page.description}</div>
-                  </div>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button 
-            variant="outline" 
-            onClick={goBack}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft size={16} />
-            Go Back
-          </Button>
-          <Button 
-            onClick={goHome}
-            className="flex items-center gap-2"
-          >
-            <Home size={16} />
-            Return to Home
-          </Button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

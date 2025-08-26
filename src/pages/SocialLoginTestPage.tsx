@@ -76,22 +76,6 @@ export function SocialLoginTestPage() {
     }
   };
 
-  const handleFacebookLogin = async () => {
-    setIsLoading(true);
-    try {
-      toast.loading('Testing Facebook login...', { id: 'test-facebook' });
-      await socialLogin('facebook');
-      toast.success('Facebook login test successful!', { id: 'test-facebook' });
-    } catch (error) {
-      toast.error('Facebook login test failed', {
-        id: 'test-facebook',
-        description: error instanceof Error ? error.message : 'Unknown error'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const getStatusIcon = (status: 'pending' | 'success' | 'error') => {
     switch (status) {
       case 'success':
@@ -211,7 +195,6 @@ export function SocialLoginTestPage() {
                 
                 <SocialLoginButtons
                   onGoogleLogin={handleGoogleLogin}
-                  onFacebookLogin={handleFacebookLogin}
                   isLoading={isLoading}
                   variant="login"
                 />

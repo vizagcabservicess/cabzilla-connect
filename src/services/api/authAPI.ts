@@ -21,6 +21,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   phone: string;
+  role?: 'guest' | 'admin' | 'super_admin' | 'driver' | 'user' | 'customer' | 'provider';
 }
 
 export interface SocialLoginRequest {
@@ -37,6 +38,14 @@ export interface AuthResponse {
   error?: string;
   user?: User;
   token?: string;
+  redirect_to_signup?: boolean;
+  social_data?: {
+    provider: string;
+    providerId: string;
+    email: string;
+    name: string;
+    picture?: string;
+  };
 }
 
 class AuthAPI {
@@ -95,16 +104,78 @@ class AuthAPI {
 
   async socialLogin(socialData: SocialLoginRequest): Promise<AuthResponse> {
     try {
-      const response = await axios.post('/src/backend/php-templates/api/auth/social-login.php', socialData, {
+      console.log('DEBUG: Attempting social login with data:', socialData);
+      console.log('DEBUG: API_BASE_URL:', API_BASE_URL);
+      console.log('DEBUG: Full URL will be:', `${API_BASE_URL}/social-login.php`);
+      
+      // Use the same API base URL as regular login
+      const response = await axios.post(`${API_BASE_URL}/social-login.php`, socialData, {
         headers: { 'Content-Type': 'application/json' }
       });
+      
+      console.log('DEBUG: Social login response status:', response.status);
+      console.log('DEBUG: Social login response headers:', response.headers);
+      console.log('DEBUG: Social login response data:', response.data);
+      
       if (response.data.success && response.data.token && response.data.user) {
         this.setToken(response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
+        console.log('DEBUG: Social login successful, user stored:', response.data.user);
+      } else {
+        console.warn('DEBUG: Social login response missing required data:', response.data);
       }
+      
       return response.data;
     } catch (error) {
       console.error('Social login error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('DEBUG: Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        });
+      }
+      throw error;
+    }
+  }
+
+  async socialSignup(socialData: SocialLoginRequest & { phone?: string }): Promise<AuthResponse> {
+    try {
+      console.log('DEBUG: Attempting social signup with data:', socialData);
+      console.log('DEBUG: API_BASE_URL:', API_BASE_URL);
+      console.log('DEBUG: Full URL will be:', `${API_BASE_URL}/social-signup.php`);
+      
+      const response = await axios.post(`${API_BASE_URL}/social-signup.php`, socialData, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      console.log('DEBUG: Social signup response status:', response.status);
+      console.log('DEBUG: Social signup response data:', response.data);
+      
+      if (response.data.success && response.data.token && response.data.user) {
+        this.setToken(response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        console.log('DEBUG: Social signup successful, user stored:', response.data.user);
+      } else {
+        console.warn('DEBUG: Social signup response missing required data:', response.data);
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Social signup error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('DEBUG: Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        });
+      }
       throw error;
     }
   }

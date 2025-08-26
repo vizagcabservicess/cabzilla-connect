@@ -3,15 +3,35 @@ import { SignupForm } from '@/components/auth/SignupForm';
 import { SocialLoginButtons } from '@/components/auth/SocialLoginButtons';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/providers/AuthProvider';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { getDashboardUrl } from '@/utils/authUtils';
+import { authAPI } from '@/services/api/authAPI';
 
 export default function SignupPage() {
-  const { socialLogin } = useAuth();
+  const { socialSignup, socialSignupWithData } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [socialData, setSocialData] = useState<any>(null);
+
+  // Check if user was redirected from login with social data
+  useEffect(() => {
+    const storedSocialData = localStorage.getItem('social_signup_data');
+    if (storedSocialData) {
+      try {
+        const parsedData = JSON.parse(storedSocialData);
+        setSocialData(parsedData);
+        toast({
+          title: "Complete Your Signup",
+          description: `Please complete your signup with ${parsedData.provider}.`,
+        });
+      } catch (error) {
+        console.error('Error parsing social data:', error);
+      }
+    }
+  }, [toast]);
 
   const handleGoogleSignup = async () => {
     setIsLoading(true);
@@ -20,40 +40,46 @@ export default function SignupPage() {
         title: "Signing up with Google...",
         description: "Please complete the Google signup process.",
       });
-      await socialLogin('google');
+      
+      // Use stored social data if available, otherwise get new data
+      let signupData = socialData;
+      if (!signupData || signupData.provider !== 'google') {
+        // Get fresh Google data
+        const response = await socialSignup('google');
+        signupData = response;
+      } else {
+        // Use stored data and clear it
+        localStorage.removeItem('social_signup_data');
+        
+        // Create the signup data object with all required fields
+        // Map the fields correctly: 'id' should be 'providerId'
+        const signupRequest = {
+          provider: signupData.provider,
+          providerId: signupData.providerId || signupData.id, // Use providerId if available, fallback to id
+          email: signupData.email,
+          name: signupData.name,
+          picture: signupData.picture,
+          phone: signupData.phone || ''
+        };
+        
+        // Call the social signup API with stored data
+        const response = await socialSignupWithData(signupRequest);
+        signupData = response;
+      }
+      
       toast({
         title: "Registration Successful",
         description: "Your account has been created with Google. Welcome!",
       });
-      navigate('/admin');
+      
+      // Redirect based on user role
+      const user = signupData?.user || null;
+      const dashboardUrl = getDashboardUrl(user);
+      navigate(dashboardUrl);
     } catch (error: any) {
       toast({
         title: "Google Signup Failed",
         description: error.response?.data?.error || "Failed to create account with Google",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFacebookSignup = async () => {
-    setIsLoading(true);
-    try {
-      toast({
-        title: "Signing up with Facebook...",
-        description: "Please complete the Facebook signup process.",
-      });
-      await socialLogin('facebook');
-      toast({
-        title: "Registration Successful",
-        description: "Your account has been created with Facebook. Welcome!",
-      });
-      navigate('/admin');
-    } catch (error: any) {
-      toast({
-        title: "Facebook Signup Failed",
-        description: error.response?.data?.error || "Failed to create account with Facebook",
         variant: "destructive",
       });
     } finally {
@@ -80,7 +106,6 @@ export default function SignupPage() {
               
               <SocialLoginButtons
                 onGoogleLogin={handleGoogleSignup}
-                onFacebookLogin={handleFacebookSignup}
                 isLoading={isLoading}
                 variant="signup"
               />

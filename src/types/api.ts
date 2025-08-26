@@ -50,6 +50,14 @@ export interface AuthResponse {
   error?: string;
   user?: User;
   token?: string;
+  redirect_to_signup?: boolean;
+  social_data?: {
+    provider: string;
+    providerId: string;
+    email: string;
+    name: string;
+    picture?: string;
+  };
 }
 
 export interface User {

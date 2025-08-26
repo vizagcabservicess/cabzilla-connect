@@ -1,16 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, User } from '@/services/api/authAPI';
+import { authAPI, User, AuthResponse, RegisterRequest } from '@/services/api/authAPI';
 import { socialAuthService } from '@/services/socialAuthService';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   isAdmin: boolean;
-  isDriver: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  socialLogin: (provider: 'google' | 'facebook') => Promise<void>;
-  logout: () => void;
-  loading: boolean;
+  login: (email: string, password: string) => Promise<AuthResponse>;
+  signup: (userData: RegisterRequest) => Promise<AuthResponse>;
+  socialLogin: (provider: 'google' | 'facebook') => Promise<AuthResponse>;
+  socialSignup: (provider: 'google' | 'facebook', phone?: string) => Promise<AuthResponse>;
+  socialSignupWithData: (socialData: any) => Promise<AuthResponse>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,47 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // DEV PATCH: Always set a valid JWT and user in localStorage for testing
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      // Only run this once on mount, not on every user change
-      const currentToken = localStorage.getItem('auth_token');
-      const currentUser = localStorage.getItem('user');
-      
-      if (!currentToken || isTokenExpired(currentToken) || !currentUser) {
-        // Generate a fresh token with expiration 1 hour from now
-        const currentTime = Math.floor(Date.now() / 1000);
-        const expTime = currentTime + 3600; // 1 hour
-        
-        // Create a new token with fresh expiration
-        const header = btoa(JSON.stringify({typ: "JWT", alg: "HS256"}));
-        const payload = btoa(JSON.stringify({
-          iat: currentTime,
-          exp: expTime,
-          user_id: 9,
-          email: "joelnagireddy@gmail.com",
-          role: "super_admin"
-        }));
-        const signature = "Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI"; // Keep same signature for dev
-        const devToken = `${header}.${payload}.${signature}`;
-        
-        const devUser = {
-          id: 9,
-          name: "Super Admin",
-          email: "joelnagireddy@gmail.com",
-          phone: "+91 9876543210",
-          role: "super_admin" as const,
-          is_active: true
-        };
-        
-        localStorage.setItem('auth_token', devToken);
-        localStorage.setItem('user', JSON.stringify(devUser));
-        authAPI.setToken(devToken);
-        setUser(devUser);
-        console.log('DEBUG: Dev mode - Set fresh token and user');
-      }
-    }
-  }, []); // Empty dependency array - only run once
+  // Removed development mode code that was interfering with social login
 
   const login = async (email: string, password: string) => {
     try {
@@ -135,6 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Debug: Check localStorage after login
       console.log('DEBUG: localStorage["auth_token"] after login:', localStorage.getItem('auth_token'));
       console.log('DEBUG: localStorage["user"] after login:', localStorage.getItem('user'));
+      
+      // Return the response for the LoginForm to access user data
+      return response;
     } catch (error) {
       console.error('Login error:', error);
       // Clear any invalid tokens
@@ -167,8 +132,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       console.log('DEBUG: Social login successful', { provider, user: response.user });
+      
+      // Return the response for the LoginForm to access user data
+      return response;
     } catch (error) {
       console.error('Social login error:', error);
+      authAPI.logout();
+      setUser(null);
+      throw error;
+    }
+  };
+
+  const socialSignup = async (provider: 'google' | 'facebook', phone?: string) => {
+    try {
+      let socialUser;
+      
+      if (provider === 'google') {
+        socialUser = await socialAuthService.signInWithGoogle();
+      } else if (provider === 'facebook') {
+        socialUser = await socialAuthService.signInWithFacebook();
+      } else {
+        throw new Error('Unsupported provider');
+      }
+
+      // Map the fields correctly: 'id' should be 'providerId'
+      const signupData = {
+        provider: socialUser.provider,
+        providerId: socialUser.id, // Map id to providerId
+        email: socialUser.email,
+        name: socialUser.name,
+        picture: socialUser.picture,
+        phone: phone || ''
+      };
+
+      // Sign up with backend
+      const response = await authAPI.socialSignup(signupData);
+      
+      if (response.user) {
+        setUser(response.user);
+      }
+      if (response.token) {
+        authAPI.setToken(response.token);
+      }
+      
+      // Return the response for the SignupForm to access user data
+      return response;
+    } catch (error) {
+      console.error('Social signup error:', error);
+      authAPI.logout();
+      setUser(null);
+      throw error;
+    }
+  };
+
+  // New method to handle social signup with pre-existing data
+  const socialSignupWithData = async (socialData: any) => {
+    try {
+      // Map the fields correctly: 'id' should be 'providerId'
+      const mappedData = {
+        provider: socialData.provider,
+        providerId: socialData.providerId || socialData.id, // Use providerId if available, fallback to id
+        email: socialData.email,
+        name: socialData.name,
+        picture: socialData.picture,
+        phone: socialData.phone || ''
+      };
+      
+      // Sign up with backend using the mapped social data
+      const response = await authAPI.socialSignup(mappedData);
+      
+      if (response.user) {
+        setUser(response.user);
+      }
+      if (response.token) {
+        authAPI.setToken(response.token);
+      }
+      
+      // Return the response for the SignupForm to access user data
+      return response;
+    } catch (error) {
+      console.error('Social signup with data error:', error);
       authAPI.logout();
       setUser(null);
       throw error;
@@ -189,12 +232,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     isAuthenticated: !!user,
+    isLoading: loading,
     isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
-    isDriver: user?.role === 'driver',
     login,
+    signup: authAPI.signup, // Fixed method name
     socialLogin,
+    socialSignup,
+    socialSignupWithData,
     logout,
-    loading
   };
 
   return (

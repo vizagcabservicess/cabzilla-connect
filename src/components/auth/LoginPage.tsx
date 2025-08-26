@@ -37,7 +37,7 @@ export function LoginPage() {
       } else if (response.user.role === 'provider') {
         navigate('/pooling/provider');
       } else if (response.user.role === 'guest') {
-        navigate('/pooling/guest');
+        navigate('/dashboard'); // Changed from '/pooling/guest' to '/dashboard'
       } else {
         navigate('/dashboard');
       }

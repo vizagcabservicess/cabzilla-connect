@@ -1,88 +1,26 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
-import { bookingAPI } from "@/services/api";
-import { MapPin, Calendar, Car, ArrowRight, DollarSign, Printer } from "lucide-react";
-// Removed BookingStatusManager controls from receipt header
-import { format, parseISO, isValid } from "date-fns";
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { Navbar } from '@/components/Navbar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, Download, Printer, Share2, Phone, Mail, MapPin, Calendar, Clock, Car, CreditCard, CheckCircle, ArrowRight, DollarSign } from 'lucide-react';
+import { bookingAPI } from '@/services/api/bookingAPI';
+import { Booking } from '@/types/api';
+import { formatDate, formatTime, formatDateTime } from '@/lib/dateUtils';
+import { formatPrice } from '@/lib/cabData';
+import { toast } from 'sonner';
 
 const ReceiptPage = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [booking, setBooking] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchBookingDetails = async () => {
-      if (!bookingId) {
-        setError("No booking ID provided");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const bookingIdNumber = parseInt(bookingId, 10);
-        
-        const response = await bookingAPI.getBookingById(bookingIdNumber);
-        console.log("Booking details:", response);
-        if (response) {
-          setBooking(response);
-        } else {
-          throw new Error("Invalid booking data received");
-        }
-        setLoading(false);
-      } catch (err) {
-        console.error("Failed to fetch booking details:", err);
-        setError("Failed to fetch booking details. Please try again later.");
-        setLoading(false);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to fetch booking details",
-        });
-      }
-    };
-
-    fetchBookingDetails();
-  }, [bookingId, toast]);
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A";
-    
-    try {
-      // Handle SQL datetime format (YYYY-MM-DD HH:MM:SS)
-      if (dateString.includes(' ')) {
-        const [datePart, timePart] = dateString.split(' ');
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hour, minute, second] = timePart.split(':').map(Number);
-        
-        // Interpret stored time as UTC to avoid local timezone shifts
-        const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-        if (isNaN(date.getTime())) {
-          throw new Error("Invalid date");
-        }
-        return format(date, "PPpp");
-      }
-      
-      // Try standard ISO format
-      const date = parseISO(dateString);
-      if (!isValid(date)) {
-        throw new Error("Invalid date");
-      }
-      return format(date, "PPpp");
-    } catch (error) {
-      console.error("Date formatting error:", error, "for date:", dateString);
-      return "Invalid Date";
-    }
-  };
-
+  // Helper functions
   const formatCurrency = (amount: number) => {
     if (typeof amount !== 'number' || isNaN(amount)) return "₹0";
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -95,7 +33,6 @@ const ReceiptPage = () => {
     let formattedMode = "";
     
     if (tripMode) {
-      // Convert one-way to One Way, etc.
       formattedMode = tripMode
         .split('-')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -106,17 +43,82 @@ const ReceiptPage = () => {
     return type;
   };
 
+  // Calculate total amount
+  const totalAmount = booking ? (booking.totalAmount || 0) : 0;
+  const paymentStatus = booking?.paymentStatus || booking?.payment_status || 'Pending';
+
+  useEffect(() => {
+    if (bookingId) {
+      fetchBookingDetails(bookingId);
+    } else {
+      setError('No booking ID provided');
+      setLoading(false);
+    }
+  }, [bookingId]);
+
+  const fetchBookingDetails = async (id: string) => {
+    try {
+      setLoading(true);
+      const bookingData = await bookingAPI.getBookingById(id);
+      if (bookingData) {
+        setBooking(bookingData);
+      } else {
+        setError('Booking not found');
+      }
+    } catch (error) {
+      console.error('Error fetching booking details:', error);
+      setError('Failed to load booking details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownload = () => {
+    // Generate PDF and download
+    toast.info('Download feature coming soon');
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Booking Receipt - Vizag Taxi Hub',
+        text: `My booking receipt for ${booking?.pickupLocation} to ${booking?.dropLocation}`,
+        url: window.location.href,
+      });
+    } else {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Receipt link copied to clipboard');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800';
+      case 'in_progress':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-gray-600">Loading receipt...</p>
           </div>
         </div>
       </div>
@@ -127,198 +129,222 @@ const ReceiptPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <Card className="p-6 max-w-2xl mx-auto">
-            <div className="text-center py-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">
-                {error || "Booking not found"}
-              </h2>
-              <p className="text-gray-600 mb-6">
-                We couldn't find the booking receipt you're looking for.
-              </p>
-              <Button onClick={() => navigate("/dashboard")}>
-                Go to Dashboard
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-lg mx-auto bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-medium text-red-600 mb-4">Error</h1>
+            <p className="text-gray-700 mb-6">{error || 'Booking not found'}</p>
+            <div className="flex justify-between">
+              <Button onClick={() => navigate('/')} variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+              <Button onClick={() => navigate('/local-taxi')}>
+                Book a New Ride
               </Button>
             </div>
-          </Card>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Ensure totalAmount is a number
-  const totalAmount = typeof booking.totalAmount === 'number' 
-    ? booking.totalAmount 
-    : parseFloat(booking.totalAmount) || 0;
-
-  const paymentStatus = booking?.paymentStatus || booking?.payment_status || booking?.status || 'Pending';
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="container mx-auto px-4 py-8">
-        <Card className="max-w-3xl mx-auto">
-          <div className="bg-blue-600 p-3 text-white flex justify-between items-center">
-            <div>
-              <h1 className="text-lg font-medium">Booking Receipt</h1>
-              <p className="text-xs mt-1">#{booking?.bookingNumber}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handlePrint} 
-                className="bg-white text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
-              </Button>
-            </div>
-          </div>
-          
-          <div className="p-4">
-            <div className="flex justify-between items-start">
+    <>
+      <Helmet>
+        <title>Booking Receipt - Vizag Taxi Hub | Trip Details & Payment</title>
+        <meta name="description" content="View your booking receipt and trip details from Vizag Taxi Hub. Download receipt, view payment status, and trip information." />
+        <meta name="keywords" content="booking receipt, taxi receipt, trip details, payment receipt, vizag taxi booking" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/receipt" />
+        <meta property="og:title" content="Booking Receipt - Vizag Taxi Hub | Trip Details & Payment" />
+        <meta property="og:description" content="View your booking receipt and trip details from Vizag Taxi Hub. Download receipt and view payment status." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/receipt" />
+        <meta property="twitter:title" content="Booking Receipt - Vizag Taxi Hub | Trip Details & Payment" />
+        <meta property="twitter:description" content="View your booking receipt and trip details from Vizag Taxi Hub." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/receipt" />
+      </Helmet>
+      
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-3xl mx-auto">
+            <div className="bg-blue-600 p-3 text-white flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-medium text-gray-800">
-                  Booking #{booking?.bookingNumber}
-                </h2>
-                <p className="text-gray-500 text-sm">ID: {booking?.id}</p>
+                <h1 className="text-lg font-medium">Booking Receipt</h1>
+                <p className="text-xs mt-1">#{booking?.bookingNumber}</p>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">Booking Date</p>
-                <p className="font-medium text-sm">
-                  {booking?.createdAt ? formatDate(booking.createdAt) : "N/A"}
-                </p>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handlePrint} 
+                  className="bg-white text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print
+                </Button>
               </div>
             </div>
             
-            <Separator className="my-6" />
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2 text-sm">Trip Details</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start">
-                    <MapPin className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">PICKUP LOCATION</p>
-                      <p className="font-medium text-sm">{booking?.pickupLocation || "N/A"}</p>
-                    </div>
-                  </div>
-                  
-                  {booking?.dropLocation && (
-                    <div className="flex items-start">
-                      <MapPin className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
-                      <div>
-                        <p className="text-xs text-gray-500">DROP LOCATION</p>
-                        <p className="font-medium text-sm">{booking.dropLocation}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-start">
-                    <Calendar className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">PICKUP DATE & TIME</p>
-                      <p className="font-medium text-sm">
-                        {booking?.pickupDate ? formatDate(booking.pickupDate) : "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {booking?.tripType === 'outstation' && booking?.tripMode === 'round-trip' && booking?.returnDate && (
-                    <div className="flex items-start">
-                      <Calendar className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
-                      <div>
-                        <p className="text-xs text-gray-500">RETURN DATE & TIME</p>
-                        <p className="font-medium text-sm">{formatDate(booking.returnDate)}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-start">
-                    <Car className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">CAB TYPE</p>
-                      <p className="font-medium text-sm">{booking?.cabType || "N/A"}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <ArrowRight className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">TRIP TYPE</p>
-                      <p className="font-medium text-sm">
-                        {formatTripType(booking?.tripType, booking?.tripMode)}
-                      </p>
-                    </div>
-                  </div>
+            <div className="p-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-xl font-medium text-gray-800">
+                    Booking #{booking?.bookingNumber}
+                  </h2>
+                  <p className="text-gray-500 text-sm">ID: {booking?.id}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">Booking Date</p>
+                  <p className="font-medium text-sm">
+                    {booking?.createdAt ? formatDate(booking.createdAt) : "N/A"}
+                  </p>
                 </div>
               </div>
               
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2 text-sm">Payment Details</h3>
-                <div className="bg-gray-50 p-3 rounded-lg text-sm">
-                  {booking.driverAllowance > 0 && (
-                    <div className="flex justify-between mb-2">
-                      <span>Driver Allowance</span>
-                      <span>{formatCurrency(booking.driverAllowance)}</span>
+              <Separator className="my-6" />
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-gray-800 mb-2 text-sm">Trip Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <MapPin className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">PICKUP LOCATION</p>
+                        <p className="font-medium text-sm">{booking?.pickupLocation || "N/A"}</p>
+                      </div>
                     </div>
-                  )}
-                  {booking.nightCharges > 0 && (
-                    <div className="flex justify-between mb-2">
-                      <span>Night Charges</span>
-                      <span>{formatCurrency(booking.nightCharges)}</span>
+                    
+                    {booking?.dropLocation && (
+                      <div className="flex items-start">
+                        <MapPin className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
+                        <div>
+                          <p className="text-xs text-gray-500">DROP LOCATION</p>
+                          <p className="font-medium text-sm">{booking.dropLocation}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-start">
+                      <Calendar className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">PICKUP DATE & TIME</p>
+                        <p className="font-medium text-sm">
+                          {booking?.pickupDate ? formatDate(booking.pickupDate) : "N/A"}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  {booking.extraDistanceFare > 0 && (
-                    <div className="flex justify-between mb-2">
-                      <span>Extra Distance Charges</span>
-                      <span>{formatCurrency(booking.extraDistanceFare)}</span>
+                    
+                    {booking?.tripType === 'outstation' && booking?.tripMode === 'round-trip' && booking?.returnDate && (
+                      <div className="flex items-start">
+                        <Calendar className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
+                        <div>
+                          <p className="text-xs text-gray-500">RETURN DATE & TIME</p>
+                          <p className="font-medium text-sm">{formatDate(booking.returnDate)}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-start">
+                      <Car className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">CAB TYPE</p>
+                        <p className="font-medium text-sm">{booking?.cabType || "N/A"}</p>
+                      </div>
                     </div>
-                  )}
-                  {booking.airportFee > 0 && (
-                    <div className="flex justify-between mb-2">
-                      <span>Airport Fee</span>
-                      <span>{formatCurrency(booking.airportFee)}</span>
+                    
+                    <div className="flex items-start">
+                      <ArrowRight className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-xs text-gray-500">TRIP TYPE</p>
+                        <p className="font-medium text-sm">
+                          {formatTripType(booking?.tripType, booking?.tripMode)}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-medium text-base">
-                    <span>Total Amount</span>
-                    <span>{formatCurrency(totalAmount)}</span>
-                  </div>
-                  <div className={`mt-2 text-sm font-medium ${paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>
-                    <DollarSign className="w-4 h-4 inline mr-1" />
-                    Payment Status: {paymentStatus === "paid" ? "Paid" : "Pending"}
                   </div>
                 </div>
+                
+                <div>
+                  <h3 className="font-semibold text-gray-800 mb-2 text-sm">Payment Details</h3>
+                  <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                    {/* Show extra charges if they exist */}
+                    {booking?.extraCharges && booking.extraCharges.length > 0 && (
+                      booking.extraCharges.map((charge, index) => (
+                        <div key={index} className="flex justify-between mb-2">
+                          <span>{charge.description}</span>
+                          <span>{formatCurrency(charge.amount)}</span>
+                        </div>
+                      ))
+                    )}
+                    
+                    {/* Show discount if applied */}
+                    {booking?.discountAmount && booking.discountAmount > 0 && (
+                      <div className="flex justify-between mb-2 text-green-600">
+                        <span>Discount ({booking.discountType || 'Discount'})</span>
+                        <span>-{formatCurrency(booking.discountAmount)}</span>
+                      </div>
+                    )}
+                    
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-medium text-base">
+                      <span>Total Amount</span>
+                      <span>{formatCurrency(totalAmount)}</span>
+                    </div>
+                    <div className={`mt-2 text-sm font-medium ${paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>
+                      <DollarSign className="w-4 h-4 inline mr-1" />
+                      Payment Status: {paymentStatus === "paid" ? "Paid" : "Pending"}
+                    </div>
+                    
+                    {/* Show advance payment if any */}
+                    {booking?.advance_paid_amount && booking.advance_paid_amount > 0 && (
+                      <div className="mt-2 text-sm text-blue-600">
+                        <span>Advance Paid: {formatCurrency(booking.advance_paid_amount)}</span>
+                      </div>
+                    )}
+                  </div>
 
-                <div className="mt-6">
-                  <h3 className="font-semibold text-gray-800 mb-2 text-sm">
-                    Passenger Details
-                  </h3>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500">NAME</p>
-                      <p className="font-medium text-sm">{booking?.passengerName || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">PHONE</p>
-                      <p className="font-medium text-sm">{booking?.passengerPhone || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">EMAIL</p>
-                      <p className="font-medium text-sm">{booking?.passengerEmail || "N/A"}</p>
+                  <div className="mt-6">
+                    <h3 className="font-semibold text-gray-800 mb-2 text-sm">
+                      Passenger Details
+                    </h3>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-xs text-gray-500">NAME</p>
+                        <p className="font-medium text-sm">{booking?.passengerName || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">PHONE</p>
+                        <p className="font-medium text-sm">{booking?.passengerPhone || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">EMAIL</p>
+                        <p className="font-medium text-sm">{booking?.passengerEmail || "N/A"}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

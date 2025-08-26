@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Navbar } from '../components/Navbar';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -325,202 +326,233 @@ function BookingConfirmationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex-1">
-        <div className="container mx-auto px-4 py-8">
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading booking details...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-8">
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <p>{error}</p>
-                <button
-                  onClick={() => navigate('/')}
-                  className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                >
-                  Go to Home
-                </button>
+    <>
+      <Helmet>
+        <title>Booking Confirmed - Vizag Taxi Hub | Your Trip is Confirmed</title>
+        <meta name="description" content="Your cab booking has been successfully confirmed with Vizag Taxi Hub. View booking details, driver information, and download your receipt." />
+        <meta name="keywords" content="booking confirmed, cab booking confirmation, taxi booking success, vizag taxi booking" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/booking-confirmation" />
+        <meta property="og:title" content="Booking Confirmed - Vizag Taxi Hub | Your Trip is Confirmed" />
+        <meta property="og:description" content="Your cab booking has been successfully confirmed with Vizag Taxi Hub. View booking details and driver information." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/booking-confirmation" />
+        <meta property="twitter:title" content="Booking Confirmed - Vizag Taxi Hub | Your Trip is Confirmed" />
+        <meta property="twitter:description" content="Your cab booking has been successfully confirmed with Vizag Taxi Hub." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/booking-confirmation" />
+      </Helmet>
+      
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Navbar />
+        <main className="flex-1">
+          <div className="container mx-auto px-4 py-8">
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading booking details...</p>
               </div>
-            </div>
-          ) : booking ? (
-            <div className="max-w-4xl mx-auto">
-              {/* Success Header */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h1 className="text-2xl font-bold text-green-800">Booking Confirmed!</h1>
-                    <p className="text-green-700">Your booking has been successfully confirmed.</p>
-                  </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  <p>{error}</p>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                  >
+                    Go to Home
+                  </button>
                 </div>
               </div>
+            ) : booking ? (
+              <div className="max-w-4xl mx-auto">
+                {/* Success Header */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h1 className="text-2xl font-bold text-green-800">Booking Confirmed!</h1>
+                      <p className="text-green-700">Your booking has been successfully confirmed.</p>
+                    </div>
+                  </div>
+                </div>
 
-              {/* Receipt Section Removed - PDF receipt is now attached to emails */}
+                {/* Receipt Section Removed - PDF receipt is now attached to emails */}
 
-              {/* Booking Details */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Booking Details</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Trip Information */}
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-700 mb-3">Trip Information</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Booking Number:</span>
-                        <p className="text-gray-900 font-semibold">{booking.bookingNumber}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Pickup Location:</span>
-                        <p className="text-gray-900">{booking.pickupLocation || 'N/A'}</p>
-                      </div>
-                      {booking.dropLocation && (
+                {/* Booking Details */}
+                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Booking Details</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Trip Information */}
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-700 mb-3">Trip Information</h3>
+                      <div className="space-y-3">
                         <div>
-                          <span className="text-sm font-medium text-gray-500">Drop Location:</span>
-                          <p className="text-gray-900">{booking.dropLocation}</p>
+                          <span className="text-sm font-medium text-gray-500">Booking Number:</span>
+                          <p className="text-gray-900 font-semibold">{booking.bookingNumber}</p>
                         </div>
-                      )}
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Pickup Date & Time:</span>
-                        <p className="text-gray-900">
-                          {booking.pickupDate ? (
-                            <>
-                              {formatDateTime(booking.pickupDate)}
-                              <br />
-                              
-                            </>
-                          ) : 'N/A'}
-                        </p>
-                      </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Pickup Location:</span>
+                          <p className="text-gray-900">{booking.pickupLocation || 'N/A'}</p>
+                        </div>
+                        {booking.dropLocation && (
+                          <div>
+                            <span className="text-sm font-medium text-gray-500">Drop Location:</span>
+                            <p className="text-gray-900">{booking.dropLocation}</p>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Pickup Date & Time:</span>
+                          <p className="text-gray-900">
+                            {booking.pickupDate ? (
+                              <>
+                                {formatDateTime(booking.pickupDate)}
+                                <br />
+                                
+                              </>
+                            ) : 'N/A'}
+                          </p>
+                        </div>
                                              {booking.return_date && (
-                         <div>
-                           <span className="text-sm font-medium text-gray-500">Return Date & Time:</span>
-                           <p className="text-gray-900">{formatDateTime(booking.return_date)}</p>
-                         </div>
-                       )}
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Vehicle Type:</span>
-                        <p className="text-gray-900">{booking.cabType || 'N/A'}</p>
+                           <div>
+                             <span className="text-sm font-medium text-gray-500">Return Date & Time:</span>
+                             <p className="text-gray-900">{formatDateTime(booking.return_date)}</p>
+                           </div>
+                         )}
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Vehicle Type:</span>
+                          <p className="text-gray-900">{booking.cabType || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Trip Type:</span>
+                          <p className="text-gray-900">{booking.tripType || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Mode:</span>
+                          <p className="text-gray-900">{booking.tripMode || 'N/A'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Trip Type:</span>
-                        <p className="text-gray-900">{booking.tripType || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Mode:</span>
-                        <p className="text-gray-900">{booking.tripMode || 'N/A'}</p>
+                    </div>
+
+                    {/* Payment Information */}
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-700 mb-3">Payment Information</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Payment Status:</span>
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
+                              paymentStatus === 'payment_pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {paymentStatus === 'paid' ? 'PAID' : 
+                               paymentStatus === 'payment_pending' ? 'PARTIAL PAYMENT' : 'PENDING'}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Payment Method:</span>
+                          <p className="text-gray-900">{booking.payment_method || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Total Amount:</span>
+                          <p className="text-gray-900 font-semibold">{formatPrice(booking.totalAmount || 0)}</p>
+                        </div>
+                        
+                        {/* Partial Payment Details */}
+                        {(paymentStatus === 'payment_pending' || paymentStatus === 'pending') && booking?.advance_paid_amount && booking.advance_paid_amount > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-sm text-green-600">
+                              Paid: {formatPrice(booking.advance_paid_amount)}
+                            </p>
+                            <p className="text-sm text-orange-600">
+                              Balance: {formatPrice((booking.totalAmount || 0) - (booking.advance_paid_amount || 0))}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Partial payment received. Balance to be paid before trip.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Payment Information */}
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-700 mb-3">Payment Information</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Payment Status:</span>
-                        <div className="mt-1">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
-                            paymentStatus === 'payment_pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {paymentStatus === 'paid' ? 'PAID' : 
-                             paymentStatus === 'payment_pending' ? 'PARTIAL PAYMENT' : 'PENDING'}
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Payment Method:</span>
-                        <p className="text-gray-900">{booking.payment_method || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Total Amount:</span>
-                        <p className="text-gray-900 font-semibold">{formatPrice(booking.totalAmount || 0)}</p>
-                      </div>
-                      
-                      {/* Partial Payment Details */}
-                      {(paymentStatus === 'payment_pending' || paymentStatus === 'pending') && booking?.advance_paid_amount && booking.advance_paid_amount > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <p className="text-sm text-green-600">
-                            Paid: {formatPrice(booking.advance_paid_amount)}
-                          </p>
-                          <p className="text-sm text-orange-600">
-                            Balance: {formatPrice((booking.totalAmount || 0) - (booking.advance_paid_amount || 0))}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Partial payment received. Balance to be paid before trip.
-                          </p>
-                        </div>
-                      )}
+                {/* Contact Information */}
+                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Contact Information</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <span className="text-sm font-medium text-gray-500">Passenger Name:</span>
+                      <p className="text-gray-900">{booking.passengerName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-500">Phone Number:</span>
+                      <p className="text-gray-900">{booking.passengerPhone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-500">Email:</span>
+                      <p className="text-gray-900">{booking.passengerEmail || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Contact Information */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Contact Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Passenger Name:</span>
-                    <p className="text-gray-900">{booking.passengerName || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Phone Number:</span>
-                    <p className="text-gray-900">{booking.passengerPhone || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Email:</span>
-                    <p className="text-gray-900">{booking.passengerEmail || 'N/A'}</p>
+                {/* Support Information */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                  <h2 className="text-lg font-semibold text-blue-800 mb-3">Need Help?</h2>
+                  <p className="text-blue-700 mb-3">
+                    If you have any questions or need to modify your booking, please contact our customer support:
+                  </p>
+                  <div className="space-y-2">
+                    <p className="text-blue-700">
+                      <span className="font-medium">Phone:</span> +91 9966363662
+                    </p>
+                    <p className="text-blue-700">
+                      <span className="font-medium">Email:</span> info@vizagtaxihub.com
+                    </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Support Information */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-                <h2 className="text-lg font-semibold text-blue-800 mb-3">Need Help?</h2>
-                <p className="text-blue-700 mb-3">
-                  If you have any questions or need to modify your booking, please contact our customer support:
-                </p>
-                <div className="space-y-2">
-                  <p className="text-blue-700">
-                    <span className="font-medium">Phone:</span> +91 9966363662
-                  </p>
-                  <p className="text-blue-700">
-                    <span className="font-medium">Email:</span> info@vizagtaxihub.com
-                  </p>
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => navigate('/')}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Book Another Trip
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Print Confirmation
+                  </button>
                 </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => navigate('/')}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Book Another Trip
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  Print Confirmation
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </main>
-      <MobileNavigation />
-    </div>
+            ) : null}
+          </div>
+        </main>
+        <MobileNavigation />
+      </div>
+    </>
   );
 }
 

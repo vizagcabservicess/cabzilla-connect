@@ -1,3 +1,22 @@
+# SEO and Canonical Redirects
+# Force HTTPS (uncomment if you have SSL certificate)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Remove trailing slashes (except root)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} (.+)/$
+RewriteRule ^ %1 [R=301,L]
+
+# Force lowercase URLs for better SEO (optional)
+RewriteMap lc int:tolower
+RewriteCond %{REQUEST_URI} [A-Z]
+RewriteRule (.*) ${lc:$1} [R=301,L]
+
+# Remove query parameters that don't affect content (tracking, etc.)
+RewriteCond %{QUERY_STRING} ^(.*)&?(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|ref|source)=[^&]*&?(.*)$ [NC]
+RewriteRule ^(.*)$ /$1?%1%2 [R=301,L]
+
 # Ensure PHP files are executed and accessible FIRST
 <FilesMatch "\.php$">
     SetHandler application/x-httpd-php

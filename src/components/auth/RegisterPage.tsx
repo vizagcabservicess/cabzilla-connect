@@ -1,15 +1,20 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/providers/AuthProvider';
 import { useToast } from '@/hooks/use-toast';
 import { authAPI } from '@/services/api/authAPI';
 import { Car, Eye, EyeOff } from 'lucide-react';
 import { SocialLoginButtons } from './SocialLoginButtons';
-import { useAuth } from '@/providers/AuthProvider';
 import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
+import { getDashboardUrl } from '@/utils/authUtils';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -55,40 +60,20 @@ export function RegisterPage() {
         title: "Signing up with Google...",
         description: "Please complete the Google signup process.",
       });
-      await socialLogin('google');
+      const response = await socialLogin('google');
       toast({
         title: "Registration Successful",
         description: "Your account has been created with Google. Welcome!",
       });
-      navigate('/admin');
+      
+      // Redirect based on user role
+      const user = response?.user || null;
+      const dashboardUrl = getDashboardUrl(user);
+      navigate(dashboardUrl);
     } catch (error: any) {
       toast({
         title: "Google Signup Failed",
         description: error.response?.data?.error || "Failed to create account with Google",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFacebookSignup = async () => {
-    setIsLoading(true);
-    try {
-      toast({
-        title: "Signing up with Facebook...",
-        description: "Please complete the Facebook signup process.",
-      });
-      await socialLogin('facebook');
-      toast({
-        title: "Registration Successful",
-        description: "Your account has been created with Facebook. Welcome!",
-      });
-      navigate('/admin');
-    } catch (error: any) {
-      toast({
-        title: "Facebook Signup Failed",
-        description: error.response?.data?.error || "Failed to create account with Facebook",
         variant: "destructive",
       });
     } finally {
@@ -159,7 +144,6 @@ export function RegisterPage() {
 
           <SocialLoginButtons
             onGoogleLogin={handleGoogleSignup}
-            onFacebookLogin={handleFacebookSignup}
             isLoading={isLoading}
             variant="signup"
           />

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import { EnhancedPoolingSearch } from '@/components/pooling/EnhancedPoolingSearch';
 import { EnhancedRideCard } from '@/components/pooling/EnhancedRideCard';
@@ -94,205 +95,235 @@ const PoolingPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-medium text-blue-600">Pooling Platform</h1>
-            </div>
-            <div className="flex items-center space-x-3">
-              {!isAuthenticated ? (
-                <>
-                  <Button variant="outline" onClick={handleLogin}>
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Login
-                  </Button>
-                  <Button onClick={handleLogin}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Sign Up
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="text-sm text-gray-600">
-                    Welcome, {user.name} ({user.role})
-                  </div>
-                  {user.role !== 'guest' && (
-                    <Button variant="outline" onClick={handleDashboard}>
-                      Dashboard
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={logout}>
-                    Logout
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+    <>
+      <Helmet>
+        <title>Car Pooling - Vizag Taxi Hub | Share Rides & Save Money</title>
+        <meta name="description" content="Find and book car pooling rides in Visakhapatnam. Share rides to Hyderabad, Chennai, Bangalore and other cities. Save money and reduce carbon footprint with Vizag Taxi Hub." />
+        <meta name="keywords" content="car pooling vizag, ride sharing visakhapatnam, shared taxi, carpooling, vizag to hyderabad pooling, vizag to chennai pooling" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/pooling" />
+        <meta property="og:title" content="Car Pooling - Vizag Taxi Hub | Share Rides & Save Money" />
+        <meta property="og:description" content="Find and book car pooling rides in Visakhapatnam. Share rides to Hyderabad, Chennai, Bangalore and other cities." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/pooling" />
+        <meta property="twitter:title" content="Car Pooling - Vizag Taxi Hub | Share Rides & Save Money" />
+        <meta property="twitter:description" content="Find and book car pooling rides in Visakhapatnam. Share rides and save money." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/pooling" />
+      </Helmet>
       
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-medium text-gray-900 mb-2">
-              Ride Sharing & Bus Booking
-            </h1>
-            <p className="text-gray-600">
-              Find affordable car pools and bus rides between major cities
-            </p>
-          </div>
-          <div className="flex items-center space-x-3 mt-4 md:mt-0">
-            {isAuthenticated && user?.role === 'provider' && (
-              <Button onClick={handleCreateRide} disabled={!canCreateRide()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Offer a Ride
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Wallet Balance Alert for Providers */}
-        {isAuthenticated && user?.role === 'provider' && !canCreateRide() && (
-          <Alert className="mb-6 border-orange-200 bg-orange-50">
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              You need a minimum wallet balance of ₹500 to create rides. 
-              Current balance: ₹{user.walletBalance || 0}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Search Component */}
-        <div className="mb-8">
-          <EnhancedPoolingSearch onSearch={handleSearch} isLoading={isLoading} />
-        </div>
-
-        {/* Results Section */}
-        {searchParams && (
-          <div className="space-y-6">
+      <div className="min-h-screen bg-gray-50">
+        {/* Navigation */}
+        <div className="bg-white border-b">
+          <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">
-                Available {searchParams.type} rides from {searchParams.from} to {searchParams.to}
-              </h2>
-              {rides && (
-                <span className="text-gray-600">
-                  {rides.length} rides found
-                </span>
-              )}
-            </div>
-
-            {isLoading && (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Searching for rides...</p>
+              <div className="flex items-center space-x-4">
+                <h1 className="text-xl font-medium text-blue-600">Pooling Platform</h1>
               </div>
-            )}
-
-            {error && (
-              <div className="text-center py-12">
-                <p className="text-red-600">
-                  Error loading rides. {error instanceof Error ? error.message : 'Please try again.'}
-                </p>
-              </div>
-            )}
-
-            {rides && rides.length === 0 && !isLoading && (
-              <div className="text-center py-12">
-                <p className="text-gray-600 mb-4">No rides found for your search criteria.</p>
-                {isAuthenticated && user?.role === 'provider' && canCreateRide() && (
-                  <Button onClick={handleCreateRide} variant="outline">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Be the first to offer a ride
-                  </Button>
+              <div className="flex items-center space-x-3">
+                {!isAuthenticated ? (
+                  <>
+                    <Button variant="outline" onClick={handleLogin}>
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Login
+                    </Button>
+                    <Button onClick={handleLogin}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Sign Up
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm text-gray-600">
+                      Welcome, {user.name} ({user.role})
+                    </div>
+                    {user.role !== 'guest' && (
+                      <Button variant="outline" onClick={handleDashboard}>
+                        Dashboard
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={logout}>
+                      Logout
+                    </Button>
+                  </>
                 )}
               </div>
-            )}
-
-            {rides && rides.length > 0 && (
-              <div className="space-y-4">
-                {rides.map((ride) => (
-                  <EnhancedRideCard
-                    key={ride.id}
-                    ride={ride}
-                    onRequestSent={handleRideRequest}
-                    onViewDetails={handleViewDetails}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Default Content When No Search */}
-        {!searchParams && (
-          <div className="text-center py-16">
-            <h3 className="text-xl font-semibold mb-4">Ready to start your journey?</h3>
-            <p className="text-gray-600 mb-8">
-              Search for available rides or {isAuthenticated && user?.role === 'provider' ? 'offer your own' : 'join as a provider'} to start sharing rides with others.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-              <div className="bg-white p-6 rounded-lg shadow text-center">
-                <Car className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-                <h4 className="font-semibold mb-2">Car Pooling</h4>
-                <p className="text-sm text-gray-600">Share rides with fellow travelers and split costs</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow text-center">
-                <Bus className="h-12 w-12 text-green-600 mx-auto mb-4" />
-                <h4 className="font-semibold mb-2">Bus Travel</h4>
-                <p className="text-sm text-gray-600">Book seats on scheduled bus routes</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow text-center">
-                <Users className="h-12 w-12 text-purple-600 mx-auto mb-4" />
-                <h4 className="font-semibold mb-2">Shared Taxis</h4>
-                <p className="text-sm text-gray-600">Join others for door-to-door taxi rides</p>
-              </div>
             </div>
-
-            {!isAuthenticated && (
-              <div className="mt-8">
-                <Button onClick={handleLogin} size="lg">
-                  Join Pooling Platform
-                </Button>
-              </div>
-            )}
           </div>
-        )}
-      </div>
+        </div>
+        
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-medium text-gray-900 mb-2">
+                Ride Sharing & Bus Booking
+              </h1>
+              <p className="text-gray-600">
+                Find affordable car pools and bus rides between major cities
+              </p>
+            </div>
+            <div className="flex items-center space-x-3 mt-4 md:mt-0">
+              {isAuthenticated && user?.role === 'provider' && (
+                <Button onClick={handleCreateRide} disabled={!canCreateRide()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Offer a Ride
+                </Button>
+              )}
+            </div>
+          </div>
 
-      {/* Ride Details Modal */}
-      <RideDetailsModal
-        ride={selectedRide}
-        open={isDetailsModalOpen}
-        onClose={() => {
-          setIsDetailsModalOpen(false);
-          setSelectedRide(null);
-        }}
-        onBook={(ride) => {
-          if (!ride) return;
-          // Compose the request object for the selected ride
-          if (!user) {
-            toast.error('Please login to request a ride');
-            navigate('/pooling/login');
-            return;
-          }
-          const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
-            rideId: ride.id,
-            guestId: user.id,
-            guestName: user.name,
-            guestPhone: user.phone,
-            guestEmail: user.email,
-            seatsRequested: 1, // Default to 1 seat
-            status: 'pending',
-            requestMessage: 'I would like to join this ride',
-          };
-          handleRideRequest(ride.id, request);
-        }}
-      />
-    </div>
+          {/* Wallet Balance Alert for Providers */}
+          {isAuthenticated && user?.role === 'provider' && !canCreateRide() && (
+            <Alert className="mb-6 border-orange-200 bg-orange-50">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                You need a minimum wallet balance of ₹500 to create rides. 
+                Current balance: ₹{user.walletBalance || 0}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Search Component */}
+          <div className="mb-8">
+            <EnhancedPoolingSearch onSearch={handleSearch} isLoading={isLoading} />
+          </div>
+
+          {/* Results Section */}
+          {searchParams && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">
+                  Available {searchParams.type} rides from {searchParams.from} to {searchParams.to}
+                </h2>
+                {rides && (
+                  <span className="text-gray-600">
+                    {rides.length} rides found
+                  </span>
+                )}
+              </div>
+
+              {isLoading && (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Searching for rides...</p>
+                </div>
+              )}
+
+              {error && (
+                <div className="text-center py-12">
+                  <p className="text-red-600">
+                    Error loading rides. {error instanceof Error ? error.message : 'Please try again.'}
+                  </p>
+                </div>
+              )}
+
+              {rides && rides.length === 0 && !isLoading && (
+                <div className="text-center py-12">
+                  <p className="text-gray-600 mb-4">No rides found for your search criteria.</p>
+                  {isAuthenticated && user?.role === 'provider' && canCreateRide() && (
+                    <Button onClick={handleCreateRide} variant="outline">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Be the first to offer a ride
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {rides && rides.length > 0 && (
+                <div className="space-y-4">
+                  {rides.map((ride) => (
+                    <EnhancedRideCard
+                      key={ride.id}
+                      ride={ride}
+                      onRequestSent={handleRideRequest}
+                      onViewDetails={handleViewDetails}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Default Content When No Search */}
+          {!searchParams && (
+            <div className="text-center py-16">
+              <h3 className="text-xl font-semibold mb-4">Ready to start your journey?</h3>
+              <p className="text-gray-600 mb-8">
+                Search for available rides or {isAuthenticated && user?.role === 'provider' ? 'offer your own' : 'join as a provider'} to start sharing rides with others.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                <div className="bg-white p-6 rounded-lg shadow text-center">
+                  <Car className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                  <h4 className="font-semibold mb-2">Car Pooling</h4>
+                  <p className="text-sm text-gray-600">Share rides with fellow travelers and split costs</p>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow text-center">
+                  <Bus className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                  <h4 className="font-semibold mb-2">Bus Travel</h4>
+                  <p className="text-sm text-gray-600">Book seats on scheduled bus routes</p>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow text-center">
+                  <Users className="h-12 w-12 text-purple-600 mx-auto mb-4" />
+                  <h4 className="font-semibold mb-2">Shared Taxis</h4>
+                  <p className="text-sm text-gray-600">Join others for door-to-door taxi rides</p>
+                </div>
+              </div>
+
+              {!isAuthenticated && (
+                <div className="mt-8">
+                  <Button onClick={handleLogin} size="lg">
+                    Join Pooling Platform
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Ride Details Modal */}
+        <RideDetailsModal
+          ride={selectedRide}
+          open={isDetailsModalOpen}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setSelectedRide(null);
+          }}
+          onBook={(ride) => {
+            if (!ride) return;
+            // Compose the request object for the selected ride
+            if (!user) {
+              toast.error('Please login to request a ride');
+              navigate('/pooling/login');
+              return;
+            }
+            const request: Omit<RideRequest, 'id' | 'requestedAt'> = {
+              rideId: ride.id,
+              guestId: user.id,
+              guestName: user.name,
+              guestPhone: user.phone,
+              guestEmail: user.email,
+              seatsRequested: 1, // Default to 1 seat
+              status: 'pending',
+              requestMessage: 'I would like to join this ride',
+            };
+            handleRideRequest(ride.id, request);
+          }}
+        />
+      </div>
+    </>
   );
 };
 
