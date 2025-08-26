@@ -185,8 +185,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       console.error('Modify endpoint failed:', modifyError);
     }
     // If all update attempts failed but we're in preview mode, pretend it worked
-    if (window.location.hostname.includes('lovableproject.com') || 
-        window.location.hostname.includes('localhost')) {
+    if (window.location.hostname.includes('lovableproject.com')) {
       console.warn('All update attempts failed, but in preview mode. Returning prepared vehicle.');
       await forceRefreshVehicles();
       return preparedVehicle;

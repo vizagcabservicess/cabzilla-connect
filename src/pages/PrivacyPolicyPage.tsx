@@ -92,6 +92,28 @@ export function PrivacyPolicyPage() {
       <Helmet>
         <title>Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy</title>
         <meta name="description" content="Learn how Vizag Taxi Hub protects your personal information and privacy. Comprehensive privacy policy covering data collection, usage, and your rights." />
+        <meta name="keywords" content="privacy policy vizag taxi hub, data protection, personal information, privacy rights" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/privacy" />
+        <meta property="og:title" content="Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy" />
+        <meta property="og:description" content="Learn how Vizag Taxi Hub protects your personal information and privacy." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/privacy" />
+        <meta property="twitter:title" content="Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy" />
+        <meta property="twitter:description" content="Learn how Vizag Taxi Hub protects your personal information and privacy." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/privacy" />
       </Helmet>
 
       {/* Hero Section */}

@@ -52,6 +52,8 @@ const VisionMissionPage = () => {
         <meta property="og:title" content="Vision & Mission - Vizag Taxi Hub | Our Goals and Values" />
         <meta property="og:description" content="Learn about Vizag Taxi Hub's vision and mission. We are committed to providing safe, reliable, and comfortable transportation solutions." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

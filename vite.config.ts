@@ -6,7 +6,7 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 8081,
     proxy: {
       '/api': {
         target: 'https://www.vizagtaxihub.com',
@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => ({
       usePolling: true,
       interval: 1000,
     },
+  },
+  define: {
+    // Ensure environment variables are available at build time
+    'process.env.VITE_API_BASE_URL': JSON.stringify(process.env.VITE_API_BASE_URL || 'https://www.vizagtaxihub.com'),
+    'process.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(process.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4'),
   },
   plugins: [
     react(),

@@ -54,6 +54,28 @@ export function SupportPage() {
       <Helmet>
         <title>Support - Vizag Taxi Hub | 24/7 Customer Support</title>
         <meta name="description" content="Get instant support for your taxi bookings. Available 24/7 via phone, WhatsApp, and email. Quick resolution for all your queries." />
+        <meta name="keywords" content="support vizag taxi hub, customer support, taxi booking support, 24/7 support, help desk" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/support" />
+        <meta property="og:title" content="Support - Vizag Taxi Hub | 24/7 Customer Support" />
+        <meta property="og:description" content="Get instant support for your taxi bookings. Available 24/7 via phone, WhatsApp, and email. Quick resolution for all your queries." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/support" />
+        <meta property="twitter:title" content="Support - Vizag Taxi Hub | 24/7 Customer Support" />
+        <meta property="twitter:description" content="Get instant support for your taxi bookings. Available 24/7 via phone, WhatsApp, and email. Quick resolution for all your queries." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/support" />
       </Helmet>
 
       {/* Hero Section */}

@@ -57,6 +57,8 @@ const ContactPage = () => {
         <meta property="og:title" content="Contact Us - Vizag Taxi Hub | Get in Touch for Taxi Bookings" />
         <meta property="og:description" content="Contact Vizag Taxi Hub for taxi bookings, support, and inquiries. Available 24/7 via phone, email, and WhatsApp." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

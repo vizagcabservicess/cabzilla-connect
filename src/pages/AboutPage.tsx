@@ -7,8 +7,8 @@ const AboutPage = () => {
   return (
     <>
       <Helmet>
-        <title>About Us - Vizag Taxi Hub | Leading Taxi Service in Visakhapatnam Since 2012</title>
-        <meta name="description" content="Discover Vizag Taxi Hub's journey from 5 cars in 2012 to 50+ vehicles today. Learn about our mission, core values, and commitment to providing safe, reliable transportation services in Visakhapatnam with 95% customer satisfaction." />
+        <title>About Us - Vizag Taxi Hub | Leading Taxi Service in Visakhapatnam Since 2020</title>
+        <meta name="description" content="Discover Vizag Taxi Hub's journey from 5 cars in 2020 to 50+ vehicles today. Learn about our mission, core values, and commitment to providing safe, reliable transportation services in Visakhapatnam with 95% customer satisfaction." />
         <meta name="keywords" content="about vizag taxi hub, taxi service history vizag, reliable taxi visakhapatnam, trusted cab service" />
         <meta name="author" content="Vizag Taxi Hub" />
         
@@ -16,14 +16,16 @@ const AboutPage = () => {
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/about" />
         <meta property="og:title" content="About Us - Vizag Taxi Hub | Leading Taxi Service in Visakhapatnam" />
-        <meta property="og:description" content="Learn about Vizag Taxi Hub - a trusted taxi service in Visakhapatnam since 2012. Discover our mission, values, and commitment to providing safe, reliable transportation." />
+        <meta property="og:description" content="Learn about Vizag Taxi Hub - a trusted taxi service in Visakhapatnam since 2020. Discover our mission, values, and commitment to providing safe, reliable transportation." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://vizagtaxihub.com/about" />
         <meta property="twitter:title" content="About Us - Vizag Taxi Hub | Leading Taxi Service in Visakhapatnam" />
-        <meta property="twitter:description" content="Learn about Vizag Taxi Hub - a trusted taxi service in Visakhapatnam since 2012." />
+        <meta property="twitter:description" content="Learn about Vizag Taxi Hub - a trusted taxi service in Visakhapatnam since 2020." />
         <meta property="twitter:image" content="/og-image.png" />
         
         {/* Additional SEO */}
@@ -41,7 +43,7 @@ const AboutPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
             <div>
               <p className="text-gray-600 mb-6 leading-relaxed">
-                Founded in 2012, Vizag Taxi Hub has been serving the people of Visakhapatnam and tourists with reliable and affordable taxi services. We've grown from a small fleet of just 5 cars to over 50+ vehicles of various types and categories.
+                Founded in 2020, Vizag Taxi Hub has been serving the people of Visakhapatnam and tourists with reliable and affordable taxi services. We've grown from a small fleet of just 5 cars to over 50+ vehicles of various types and categories.
               </p>
               <p className="text-gray-600 mb-6 leading-relaxed">
                 What sets us apart is our commitment to customer satisfaction, punctuality, and safety. We ensure that all our drivers are well-trained, courteous, and knowledgeable about the city and its surroundings.

@@ -177,6 +177,28 @@ const CancellationRefundPolicyPage = () => {
           name="description"
           content="Read Vizag Taxi Hub's cancellation and refund policy covering booking types, payments, user responsibilities, and refund timelines."
         />
+        <meta name="keywords" content="cancellation policy vizag taxi hub, refund policy, booking cancellation, taxi refund" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/cancellation-refund-policy" />
+        <meta property="og:title" content="Cancellation & Refund Policy - Vizag Taxi Hub" />
+        <meta property="og:description" content="Read Vizag Taxi Hub's cancellation and refund policy covering booking types, payments, user responsibilities, and refund timelines." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/cancellation-refund-policy" />
+        <meta property="twitter:title" content="Cancellation & Refund Policy - Vizag Taxi Hub" />
+        <meta property="twitter:description" content="Read Vizag Taxi Hub's cancellation and refund policy covering booking types, payments, user responsibilities, and refund timelines." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/cancellation-refund-policy" />
       </Helmet>
 
       {/* Hero Section */}

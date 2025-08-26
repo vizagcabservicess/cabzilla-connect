@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom';
 import { LoginForm } from '@/components/auth/LoginForm';
-import { SocialLogin } from '@/components/SocialLogin';
-import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
   return (
@@ -18,18 +16,12 @@ export default function LoginPage() {
           <div className="bg-white p-8 rounded-lg shadow-sm border">
             <LoginForm />
             
-            <div className="mt-6">
-              <Separator className="my-4" />
-              
-              <SocialLogin />
-              
-              <p className="text-center mt-6 text-sm text-gray-600">
-                Don't have an account?{' '}
-                <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-800">
-                  Sign up
-                </Link>
-              </p>
-            </div>
+            <p className="text-center mt-6 text-sm text-gray-600">
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-semibold text-blue-600 hover:text-blue-800">
+                Sign up
+              </Link>
+            </p>
           </div>
         </div>
       </div>

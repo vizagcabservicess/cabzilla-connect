@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +12,7 @@ import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut,
 import { bookingAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
 import { apiHealthCheck } from '@/services/api/healthCheck';
-import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
+import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType, User, Location as ApiLocation } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
@@ -21,6 +22,7 @@ const MAX_RETRIES = 3;
 
 export default function DashboardPage() {
   const { user, loading, isAuthenticated } = useAuth();
+  const userTyped = user as User | null;
   const navigate = useNavigate();
   const location = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -128,7 +130,7 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings(user.id);
+      const data = await bookingAPI.getUserBookings(userTyped?.id || 0);
       if (Array.isArray(data)) {
         setBookings(data);
       } else if (data && Array.isArray(data.bookings)) {
@@ -152,7 +154,7 @@ export default function DashboardPage() {
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      console.log('Fetching admin metrics for user ID:', user.id);
+      console.log('Fetching admin metrics for user ID:', userTyped?.id);
       
       const data = await bookingAPI.getAdminDashboardMetrics('week');
       
@@ -173,16 +175,16 @@ export default function DashboardPage() {
   }, [isAdmin, user]);
 
   useEffect(() => {
-    if (user?.id) {
+    if (userTyped?.id) {
       fetchBookings();
     }
-  }, [fetchBookings, user]);
+  }, [fetchBookings, userTyped]);
 
   useEffect(() => {
-    if (isAdmin && user?.id) {
+    if (isAdmin && userTyped?.id) {
       fetchAdminMetrics();
     }
-  }, [isAdmin, fetchAdminMetrics, user]);
+  }, [isAdmin, fetchAdminMetrics, userTyped]);
 
   const handleLogout = () => {
     authAPI.logout();
@@ -219,6 +221,13 @@ export default function DashboardPage() {
   function safeToFixed(value, digits = 2, fallback = '0.00') {
     const num = Number(value);
     return isNaN(num) ? fallback : num.toFixed(digits);
+  }
+
+  // Helper function to extract location name from string or Location object
+  function getLocationName(location: string | ApiLocation | undefined): string {
+    if (!location) return '';
+    if (typeof location === 'string') return location;
+    return location.name || location.address || `${location.city}, ${location.state}`;
   }
 
   // Categorize bookings
@@ -321,29 +330,58 @@ export default function DashboardPage() {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !userTyped) {
     navigate('/login');
     return null;
   }
 
   // If user is a guest, show enhanced guest dashboard
-  if (user.role === 'guest') {
+  if (userTyped?.role === 'guest') {
     const GuestDashboard = React.lazy(() => import('@/components/guest/GuestDashboard'));
     return (
       <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-        <GuestDashboard user={user} onLogout={handleLogout} />
+        <GuestDashboard user={userTyped} onLogout={handleLogout} />
       </React.Suspense>
     );
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+    <>
+      <Helmet>
+        <title>Dashboard - Vizag Taxi Hub | Manage Your Bookings</title>
+        <meta name="description" content="Access your Vizag Taxi Hub dashboard to view and manage your taxi bookings, track trip status, and download invoices." />
+        <meta name="keywords" content="dashboard vizag taxi hub, booking management, trip status, taxi booking history" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/dashboard" />
+        <meta property="og:title" content="Dashboard - Vizag Taxi Hub | Manage Your Bookings" />
+        <meta property="og:description" content="Access your Vizag Taxi Hub dashboard to view and manage your taxi bookings, track trip status, and download invoices." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/dashboard" />
+        <meta property="twitter:title" content="Dashboard - Vizag Taxi Hub | Manage Your Bookings" />
+        <meta property="twitter:description" content="Access your Vizag Taxi Hub dashboard to view and manage your taxi bookings, track trip status, and download invoices." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/dashboard" />
+      </Helmet>
+      
+      <div className="container mx-auto py-8">
+        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
       <h2 className="text-xl font-semibold mb-4">
-        Welcome back, {user.name}
+        Welcome back, {userTyped?.name}
       </h2>
-      {user.role && (
-        <div className="mb-4 text-gray-600">Role: {user.role.replace('_', ' ')}</div>
+      {userTyped?.role && (
+        <div className="mb-4 text-gray-600">Role: {userTyped.role.replace('_', ' ')}</div>
       )}
       {!apiStatus.connected && (
         <Alert variant="warning" className="mb-6">
@@ -455,7 +493,7 @@ export default function DashboardPage() {
       {currentBooking ? (
         <div className="mb-4 p-4 border rounded-lg bg-blue-50">
           <div>Booking #{currentBooking.bookingNumber || currentBooking.id}</div>
-          <div>{currentBooking.pickup_location || currentBooking.pickupLocation} → {currentBooking.drop_location || currentBooking.dropLocation}</div>
+          <div>{getLocationName(currentBooking.pickup_location) || currentBooking.pickupLocation} → {getLocationName(currentBooking.drop_location) || currentBooking.dropLocation}</div>
           <div>Date: {currentBooking.pickup_date || currentBooking.pickupDate}</div>
           <div>Status: {currentBooking.status}</div>
         </div>
@@ -465,7 +503,7 @@ export default function DashboardPage() {
       {upcomingBookings.length > 0 ? upcomingBookings.map(b => (
         <div key={b.id} className="mb-2 p-4 border rounded-lg">
           <div>Booking #{b.bookingNumber || b.id}</div>
-          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>{getLocationName(b.pickup_location) || b.pickupLocation} → {getLocationName(b.drop_location) || b.dropLocation}</div>
           <div>Date: {b.pickup_date || b.pickupDate}</div>
           <div>Status: {b.status}</div>
         </div>
@@ -475,7 +513,7 @@ export default function DashboardPage() {
       {pastBookings.length > 0 ? pastBookings.map(b => (
         <div key={b.id} className="mb-2 p-4 border rounded-lg">
           <div>Booking #{b.bookingNumber || b.id}</div>
-          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>{getLocationName(b.pickup_location) || b.pickupLocation} → {getLocationName(b.drop_location) || b.dropLocation}</div>
           <div>Date: {b.pickup_date || b.pickupDate}</div>
           <div>Status: {b.status}</div>
           <a href={getInvoiceUrl(b)} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mt-2 inline-block">Download Invoice</a>
@@ -486,12 +524,13 @@ export default function DashboardPage() {
       {cancelledBookings.length > 0 ? cancelledBookings.map(b => (
         <div key={b.id} className="mb-2 p-4 border rounded-lg bg-gray-100">
           <div>Booking #{b.bookingNumber || b.id}</div>
-          <div>{b.pickup_location || b.pickupLocation} → {b.drop_location || b.dropLocation}</div>
+          <div>{getLocationName(b.pickup_location) || b.pickupLocation} → {getLocationName(b.drop_location) || b.dropLocation}</div>
           <div>Date: {b.pickup_date || b.pickupDate}</div>
           <div>Status: {b.status}</div>
         </div>
       )) : <p>No cancelled bookings.</p>}
-    </div>
+      </div>
+    </>
   );
 }
 

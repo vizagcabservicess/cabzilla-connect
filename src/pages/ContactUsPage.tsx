@@ -157,6 +157,28 @@ export function ContactUsPage() {
       <Helmet>
         <title>Contact Us - Vizag Taxi Hub | Get in Touch</title>
         <meta name="description" content="Contact Vizag Taxi Hub for taxi bookings, support, and inquiries. Available 24/7 via phone, email, and WhatsApp. Quick response guaranteed." />
+        <meta name="keywords" content="contact vizag taxi hub, taxi booking contact, cab service contact visakhapatnam, customer support taxi" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/contact" />
+        <meta property="og:title" content="Contact Us - Vizag Taxi Hub | Get in Touch" />
+        <meta property="og:description" content="Contact Vizag Taxi Hub for taxi bookings, support, and inquiries. Available 24/7 via phone, email, and WhatsApp. Quick response guaranteed." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/contact" />
+        <meta property="twitter:title" content="Contact Us - Vizag Taxi Hub | Get in Touch" />
+        <meta property="twitter:description" content="Contact Vizag Taxi Hub for taxi bookings, support, and inquiries. Available 24/7 via phone, email, and WhatsApp. Quick response guaranteed." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/contact" />
       </Helmet>
 
       {/* Hero Section */}

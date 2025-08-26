@@ -17,6 +17,8 @@ const TermsPage = () => {
         <meta property="og:title" content="Terms & Conditions - Vizag Taxi Hub | Service Terms & Policies" />
         <meta property="og:description" content="Read the terms and conditions for using Vizag Taxi Hub services." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

@@ -10,9 +10,11 @@ import { poolingAPI } from '@/services/api/poolingAPI';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
+import { SocialLoginButtons } from './SocialLoginButtons';
+import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
 
 export function LoginForm() {
-  const { login } = useAuth();
+  const { login, socialLogin } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -123,6 +125,50 @@ export function LoginForm() {
     testApiConnection();
   };
 
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      toast.loading('Signing in with Google...', { id: 'social-login-toast' });
+      await socialLogin('google');
+      toast.success('Google login successful', { 
+        id: 'social-login-toast', 
+        description: `Redirecting to your dashboard...` 
+      });
+      setTimeout(() => {
+        window.location.href = '/admin';
+      }, 500);
+    } catch (error) {
+      toast.error('Google login failed', {
+        id: 'social-login-toast',
+        description: error instanceof Error ? error.message : 'Authentication failed'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setIsLoading(true);
+    try {
+      toast.loading('Signing in with Facebook...', { id: 'social-login-toast' });
+      await socialLogin('facebook');
+      toast.success('Facebook login successful', { 
+        id: 'social-login-toast', 
+        description: `Redirecting to your dashboard...` 
+      });
+      setTimeout(() => {
+        window.location.href = '/admin';
+      }, 500);
+    } catch (error) {
+      toast.error('Facebook login failed', {
+        id: 'social-login-toast',
+        description: error instanceof Error ? error.message : 'Authentication failed'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (error) {
     return (
       <ApiErrorFallback 
@@ -135,6 +181,7 @@ export function LoginForm() {
 
   return (
     <>
+      <SocialLoginConfigCheck />
       {apiUrl && (
         <div className="mb-4 p-2 bg-blue-50 rounded-md text-xs text-blue-700 flex items-center justify-between">
           <div className="flex items-center">
@@ -215,6 +262,13 @@ export function LoginForm() {
           {isLoading ? "Logging in..." : "Login"}
         </Button>
       </form>
+
+      <SocialLoginButtons
+        onGoogleLogin={handleGoogleLogin}
+        onFacebookLogin={handleFacebookLogin}
+        isLoading={isLoading}
+        variant="login"
+      />
     </>
   );
 }

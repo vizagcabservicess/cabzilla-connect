@@ -187,6 +187,8 @@ Best regards,
         <meta property="og:title" content="Hire a Driver - Vizag Taxi Hub | Professional Drivers for Your Vehicle" />
         <meta property="og:description" content="Hire professional drivers in Visakhapatnam for your personal or business vehicle. Experienced, licensed drivers available." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

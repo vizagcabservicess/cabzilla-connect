@@ -7,10 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { authAPI } from '@/services/api/authAPI';
 import { Car, Eye, EyeOff } from 'lucide-react';
+import { SocialLoginButtons } from './SocialLoginButtons';
+import { useAuth } from '@/providers/AuthProvider';
+import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { socialLogin } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -25,7 +29,7 @@ export function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const response = await authAPI.register(formData);
+      const response = await authAPI.signup(formData);
       
       toast({
         title: "Registration Successful",
@@ -44,6 +48,54 @@ export function RegisterPage() {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    setIsLoading(true);
+    try {
+      toast({
+        title: "Signing up with Google...",
+        description: "Please complete the Google signup process.",
+      });
+      await socialLogin('google');
+      toast({
+        title: "Registration Successful",
+        description: "Your account has been created with Google. Welcome!",
+      });
+      navigate('/admin');
+    } catch (error: any) {
+      toast({
+        title: "Google Signup Failed",
+        description: error.response?.data?.error || "Failed to create account with Google",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFacebookSignup = async () => {
+    setIsLoading(true);
+    try {
+      toast({
+        title: "Signing up with Facebook...",
+        description: "Please complete the Facebook signup process.",
+      });
+      await socialLogin('facebook');
+      toast({
+        title: "Registration Successful",
+        description: "Your account has been created with Facebook. Welcome!",
+      });
+      navigate('/admin');
+    } catch (error: any) {
+      toast({
+        title: "Facebook Signup Failed",
+        description: error.response?.data?.error || "Failed to create account with Facebook",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -55,6 +107,7 @@ export function RegisterPage() {
           <p className="text-gray-600">Join our pooling community</p>
         </CardHeader>
         <CardContent>
+          <SocialLoginConfigCheck />
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Input
@@ -103,6 +156,13 @@ export function RegisterPage() {
               {isLoading ? "Creating account..." : "Create Account"}
             </Button>
           </form>
+
+          <SocialLoginButtons
+            onGoogleLogin={handleGoogleSignup}
+            onFacebookLogin={handleFacebookSignup}
+            isLoading={isLoading}
+            variant="signup"
+          />
           
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">

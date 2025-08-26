@@ -163,6 +163,8 @@ export default function CareersPage() {
         <meta property="og:title" content="Careers - Join Vizag Taxi Hub Team | Job Opportunities in Visakhapatnam" />
         <meta property="og:description" content="Join the Vizag Taxi Hub team! Explore exciting career opportunities in Visakhapatnam. We're hiring drivers, customer service representatives, and management professionals." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

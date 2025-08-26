@@ -64,6 +64,28 @@ export function TermsConditionsPage() {
       <Helmet>
         <title>Terms & Conditions - Vizag Taxi Hub | Service Agreement</title>
         <meta name="description" content="Read the terms and conditions for using Vizag Taxi Hub services. Important information about bookings, payments, cancellations, and service policies." />
+        <meta name="keywords" content="terms conditions vizag taxi hub, service terms, booking policies, cancellation policy" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/terms" />
+        <meta property="og:title" content="Terms & Conditions - Vizag Taxi Hub | Service Agreement" />
+        <meta property="og:description" content="Read the terms and conditions for using Vizag Taxi Hub services." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/terms" />
+        <meta property="twitter:title" content="Terms & Conditions - Vizag Taxi Hub | Service Agreement" />
+        <meta property="twitter:description" content="Read the terms and conditions for using Vizag Taxi Hub services." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/terms" />
       </Helmet>
 
       {/* Hero Section */}

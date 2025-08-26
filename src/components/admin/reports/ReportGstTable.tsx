@@ -23,10 +23,8 @@ export const ReportGstTable: React.FC<ReportGstTableProps> = ({ data }) => {
 
   // Function to handle invoice download
   const handleDownloadInvoice = (invoice: GstInvoice) => {
-    // Get the API base URL
-    const apiBaseUrl = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
-      ? `${window.location.protocol}//${window.location.host}`
-      : 'https://vizagtaxihub.com';
+    // Use production API base URL
+    const apiBaseUrl = 'https://www.vizagtaxihub.com';
     
     // Use bookingId if available, otherwise fallback to id
     const bookingId = invoice.bookingId || invoice.id;

@@ -65,23 +65,25 @@ export default function OurStoryPage() {
   return (
     <>
       <Helmet>
-        <title>Our Story - Vizag Taxi Hub | Journey from 2012 to Leading Taxi Service</title>
-        <meta name="description" content="Follow Vizag Taxi Hub's remarkable journey from humble beginnings with 5 cars in 2012 to becoming Visakhapatnam's leading taxi service with 50+ vehicles. Learn about our milestones, growth story, and commitment to excellence." />
+        <title>Our Story - Vizag Taxi Hub | Journey from 2020 to Leading Taxi Service</title>
+        <meta name="description" content="Follow Vizag Taxi Hub's remarkable journey from humble beginnings with 5 cars in 2020 to becoming Visakhapatnam's leading taxi service with 50+ vehicles. Learn about our milestones, growth story, and commitment to excellence." />
         <meta name="keywords" content="vizag taxi hub story, taxi service history vizag, company journey, taxi business growth visakhapatnam, success story" />
         <meta name="author" content="Vizag Taxi Hub" />
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/our-story" />
-        <meta property="og:title" content="Our Story - Vizag Taxi Hub | Journey from 2012 to Leading Taxi Service" />
-        <meta property="og:description" content="Discover the inspiring journey of Vizag Taxi Hub from a small fleet of 5 cars in 2012 to becoming Visakhapatnam's leading taxi service provider." />
+        <meta property="og:title" content="Our Story - Vizag Taxi Hub | Journey from 2020 to Leading Taxi Service" />
+        <meta property="og:description" content="Discover the inspiring journey of Vizag Taxi Hub from a small fleet of 5 cars in 2020 to becoming Visakhapatnam's leading taxi service provider." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://vizagtaxihub.com/our-story" />
-        <meta property="twitter:title" content="Our Story - Vizag Taxi Hub | Journey from 2012 to Leading Taxi Service" />
-        <meta property="twitter:description" content="Discover the inspiring journey of Vizag Taxi Hub from a small fleet of 5 cars in 2012." />
+        <meta property="twitter:title" content="Our Story - Vizag Taxi Hub | Journey from 2020 to Leading Taxi Service" />
+        <meta property="twitter:description" content="Discover the inspiring journey of Vizag Taxi Hub from a small fleet of 5 cars in 2020." />
         <meta property="twitter:image" content="/og-image.png" />
         
         {/* Additional SEO */}

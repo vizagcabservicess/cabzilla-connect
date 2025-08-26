@@ -17,6 +17,8 @@ const PrivacyPage = () => {
         <meta property="og:title" content="Privacy Policy - Vizag Taxi Hub | Data Protection & Privacy" />
         <meta property="og:description" content="Learn how Vizag Taxi Hub protects your personal information and privacy." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

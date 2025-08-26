@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --mode production",
     "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "vite preview --port 3000"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -46,6 +48,7 @@
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@react-google-maps/api": "^2.20.6",
+    "@react-oauth/google": "^0.12.2",
     "@react-pdf/renderer": "^4.3.0",
     "@tanstack/react-query": "^5.80.7",
     "axios": "^1.6.2",

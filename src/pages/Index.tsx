@@ -35,6 +35,9 @@ const Index = () => {
         <meta property="og:title" content="Vizag Taxi Hub - Best Cab Services in Visakhapatnam" />
         <meta property="og:description" content="Book reliable and affordable taxi services in Visakhapatnam. Local trips, outstation journeys, airport transfers, and tour packages." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

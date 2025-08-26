@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Vizag Taxi Hub – Your Reliable Outstation, Local & Airport Taxi Service in Visakhapatnam | Araku & Lambasingi Tours</title>
+    <!-- Title is handled dynamically by React Helmet for each page -->
     <meta name="author" content="Vizag Taxi Hub" />
-    <meta property="og:image" content="/uploads/banner-vth.jpg" />
+    <!-- Open Graph and Twitter Card meta tags are handled dynamically by React Helmet -->
+    <!-- This prevents static meta tags from overriding page-specific SEO -->
+    
+    <!-- Additional SEO -->
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+    <meta name="revisit-after" content="7 days" />
+    <!-- Description, keywords, and other SEO meta tags are handled dynamically by React Helmet -->
+    
     <link rel="icon" type="image/png" href="/uploads/favicon.png" />
-    <link rel="canonical" href="https://vizagtaxihub.com/" />
+    <!-- Canonical URL is handled dynamically by React Helmet for each page -->
     
     <!-- Critical CSS inlined to prevent render blocking -->
     <style>
@@ -29,8 +37,8 @@
     <link rel="preload" href="/src/main.tsx" as="script" type="module" />
     <link rel="preload" href="/src/index.css" as="style" />
     
-    <!-- Content Security Policy to allow Google Maps, Razorpay, and Clarity with iOS support -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms;">
+    <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, and Social Login with iOS support -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms;">
     
     <!-- Google Analytics - Load asynchronously with reduced impact -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>

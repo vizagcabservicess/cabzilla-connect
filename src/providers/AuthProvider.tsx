@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI, User } from '@/services/api/authAPI';
+import { socialAuthService } from '@/services/socialAuthService';
 
 interface AuthContextType {
   user: User | null;
@@ -7,6 +8,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isDriver: boolean;
   login: (email: string, password: string) => Promise<void>;
+  socialLogin: (provider: 'google' | 'facebook') => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -75,34 +77,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // DEV PATCH: Always set a valid JWT and user in localStorage for testing
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      // Generate a fresh token with expiration 1 hour from now
-      const currentTime = Math.floor(Date.now() / 1000);
-      const expTime = currentTime + 3600; // 1 hour
-      
-      // Create a new token with fresh expiration
-      const header = btoa(JSON.stringify({typ: "JWT", alg: "HS256"}));
-      const payload = btoa(JSON.stringify({
-        iat: currentTime,
-        exp: expTime,
-        user_id: 9,
-        email: "joelnagireddy@gmail.com",
-        role: "super_admin"
-      }));
-      const signature = "Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI"; // Keep same signature for dev
-      const devToken = `${header}.${payload}.${signature}`;
-      
-      const devUser = {
-        id: 9,
-        name: "Super Admin",
-        email: "joelnagireddy@gmail.com",
-        phone: "+91 9876543210",
-        role: "super_admin" as const,
-        is_active: true
-      };
-      
-      // Check if current token is expired or missing
+      // Only run this once on mount, not on every user change
       const currentToken = localStorage.getItem('auth_token');
-      if (!currentToken || isTokenExpired(currentToken) || !user) {
+      const currentUser = localStorage.getItem('user');
+      
+      if (!currentToken || isTokenExpired(currentToken) || !currentUser) {
+        // Generate a fresh token with expiration 1 hour from now
+        const currentTime = Math.floor(Date.now() / 1000);
+        const expTime = currentTime + 3600; // 1 hour
+        
+        // Create a new token with fresh expiration
+        const header = btoa(JSON.stringify({typ: "JWT", alg: "HS256"}));
+        const payload = btoa(JSON.stringify({
+          iat: currentTime,
+          exp: expTime,
+          user_id: 9,
+          email: "joelnagireddy@gmail.com",
+          role: "super_admin"
+        }));
+        const signature = "Ru5niRlUx_idt1ChI3l1wufFFMFFyu3yR6P8NGE_iTI"; // Keep same signature for dev
+        const devToken = `${header}.${payload}.${signature}`;
+        
+        const devUser = {
+          id: 9,
+          name: "Super Admin",
+          email: "joelnagireddy@gmail.com",
+          phone: "+91 9876543210",
+          role: "super_admin" as const,
+          is_active: true
+        };
+        
         localStorage.setItem('auth_token', devToken);
         localStorage.setItem('user', JSON.stringify(devUser));
         authAPI.setToken(devToken);
@@ -110,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('DEBUG: Dev mode - Set fresh token and user');
       }
     }
-  }, [user]);
+  }, []); // Empty dependency array - only run once
 
   const login = async (email: string, password: string) => {
     try {
@@ -140,6 +144,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const socialLogin = async (provider: 'google' | 'facebook') => {
+    try {
+      let socialUser;
+      
+      if (provider === 'google') {
+        socialUser = await socialAuthService.signInWithGoogle();
+      } else if (provider === 'facebook') {
+        socialUser = await socialAuthService.signInWithFacebook();
+      } else {
+        throw new Error('Unsupported provider');
+      }
+
+      // Authenticate with backend
+      const response = await socialAuthService.authenticateWithBackend(socialUser);
+      
+      if (response.user) {
+        setUser(response.user);
+      }
+      if (response.token) {
+        authAPI.setToken(response.token);
+      }
+      
+      console.log('DEBUG: Social login successful', { provider, user: response.user });
+    } catch (error) {
+      console.error('Social login error:', error);
+      authAPI.logout();
+      setUser(null);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await authAPI.logout();
@@ -157,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
     isDriver: user?.role === 'driver',
     login,
+    socialLogin,
     logout,
     loading
   };

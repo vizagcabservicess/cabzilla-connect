@@ -56,15 +56,13 @@ const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 
 // Performance optimization: Use React.lazy and Suspense with proper error handling
 root.render(
-  <StrictMode>
-    <ErrorBoundary>
-      <HelmetProvider>
-        <QueryClientProvider client={queryClient}>
-          <Suspense fallback={isHomepage ? <HeroSkeleton /> : <PageSkeleton />}>
-            <App />
-          </Suspense>
-        </QueryClientProvider>
-      </HelmetProvider>
-    </ErrorBoundary>
-  </StrictMode>
+  <ErrorBoundary>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={isHomepage ? <HeroSkeleton /> : <PageSkeleton />}>
+          <App />
+        </Suspense>
+      </QueryClientProvider>
+    </HelmetProvider>
+  </ErrorBoundary>
 );

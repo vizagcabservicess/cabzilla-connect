@@ -23,6 +23,14 @@ export interface RegisterRequest {
   phone: string;
 }
 
+export interface SocialLoginRequest {
+  provider: 'google' | 'facebook';
+  providerId: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message?: string;
@@ -81,6 +89,22 @@ class AuthAPI {
       return response.data;
     } catch (error) {
       console.error('Signup error:', error);
+      throw error;
+    }
+  }
+
+  async socialLogin(socialData: SocialLoginRequest): Promise<AuthResponse> {
+    try {
+      const response = await axios.post('/src/backend/php-templates/api/auth/social-login.php', socialData, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.data.success && response.data.token && response.data.user) {
+        this.setToken(response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Social login error:', error);
       throw error;
     }
   }

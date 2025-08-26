@@ -99,6 +99,8 @@ export default function FleetPage() {
         <meta property="og:title" content="Our Fleet - Vizag Taxi Hub | Wide Range of Vehicles in Visakhapatnam" />
         <meta property="og:description" content="Explore our diverse fleet of vehicles in Visakhapatnam. From sedans to SUVs, tempo travellers to luxury cars." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

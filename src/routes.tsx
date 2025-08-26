@@ -67,6 +67,8 @@ const ContactUsPage = lazy(() => import('./pages/ContactUsPage').then(module => 
 const TermsConditionsPage = lazy(() => import('./pages/TermsConditionsPage').then(module => ({ default: module.TermsConditionsPage })));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(module => ({ default: module.PrivacyPolicyPage })));
 const TourDetailPage = lazy(() => import('./pages/TourDetailPage'));
+const SocialLoginTestPage = lazy(() => import('./pages/SocialLoginTestPage').then(module => ({ default: module.SocialLoginTestPage })));
+const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage'));
 
 const RoutePage = lazy(() => import('./pages/RoutePage'));
 const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
@@ -120,6 +122,10 @@ const router = createBrowserRouter([
       {
         path: 'signup',
         element: <LazyRoute component={SignupPage} />,
+      },
+      {
+        path: 'social-login-test',
+        element: <LazyRoute component={SocialLoginTestPage} />,
       },
       {
         path: 'dashboard',
@@ -333,6 +339,10 @@ const router = createBrowserRouter([
       {
         path: 'privacy',
         element: <PrivacyPage />,
+      },
+      {
+        path: 'data-deletion',
+        element: <LazyRoute component={DataDeletionPage} />,
       },
       {
         path: 'refunds',

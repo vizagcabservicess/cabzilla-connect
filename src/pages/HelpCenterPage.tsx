@@ -92,6 +92,28 @@ export function HelpCenterPage() {
       <Helmet>
         <title>Help Center - Vizag Taxi Hub | FAQs & Support Guide</title>
         <meta name="description" content="Find answers to common questions about taxi booking, payments, and services. Complete help guide for Vizag Taxi Hub customers." />
+        <meta name="keywords" content="help center vizag taxi hub, taxi booking help, cab service support, customer support vizag taxi" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/help" />
+        <meta property="og:title" content="Help Center - Vizag Taxi Hub | FAQs & Support Guide" />
+        <meta property="og:description" content="Find answers to common questions about taxi booking, payments, and services. Complete help guide for Vizag Taxi Hub customers." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/help" />
+        <meta property="twitter:title" content="Help Center - Vizag Taxi Hub | FAQs & Support Guide" />
+        <meta property="twitter:description" content="Find answers to common questions about taxi booking, payments, and services. Complete help guide for Vizag Taxi Hub customers." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/help" />
       </Helmet>
 
       {/* Hero Section */}

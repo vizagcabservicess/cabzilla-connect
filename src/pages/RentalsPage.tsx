@@ -97,6 +97,8 @@ const RentalsPage = () => {
         <meta property="og:title" content="Car Rentals - Vizag Taxi Hub | Self-Drive & Chauffeur-Driven Cars in Visakhapatnam" />
         <meta property="og:description" content="Rent cars in Visakhapatnam with Vizag Taxi Hub. Choose from self-drive or chauffeur-driven options. Wide range of vehicles available." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

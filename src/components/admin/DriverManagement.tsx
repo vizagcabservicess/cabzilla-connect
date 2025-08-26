@@ -51,14 +51,7 @@ export function DriverManagement() {
   }, [retryCount]);
 
   const getApiBaseUrl = () => {
-    const currentDomain = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    if (currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1')) {
-      return `${protocol}//${currentDomain}${window.location.port ? `:${window.location.port}` : ''}`;
-    }
-    
-    return 'https://vizagtaxihub.com';
+    return 'https://www.vizagtaxihub.com';
   };
 
   const fetchDrivers = async () => {

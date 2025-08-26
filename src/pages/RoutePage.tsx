@@ -99,7 +99,28 @@ export const RoutePage = () => {
       <Helmet>
         <title>{routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`}</title>
         <meta name="description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
-        <meta name="keywords" content={routeInfo.seo?.keywords || ''} />
+        <meta name="keywords" content={routeInfo.seo?.keywords || `${routeInfo.from} to ${routeInfo.to} taxi, ${routeInfo.from} to ${routeInfo.to} cab, outstation taxi ${routeInfo.from} ${routeInfo.to}`} />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
+        <meta property="og:title" content={routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`} />
+        <meta property="og:description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
+        <meta property="twitter:title" content={routeInfo.seo?.title || `${routeInfo.from} to ${routeInfo.to} Taxi | Book Outstation Cab`} />
+        <meta property="twitter:description" content={routeInfo.seo?.description || `Book a reliable taxi from ${routeInfo.from} to ${routeInfo.to}. ${routeInfo.distance} journey in ${routeInfo.duration}. Best rates guaranteed.`} />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={`https://vizagtaxihub.com/outstation-taxi/${slug}`} />
       </Helmet>
       <ScrollToTop />
       <div className="min-h-screen bg-gray-50 pt-16">

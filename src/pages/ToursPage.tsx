@@ -230,6 +230,8 @@ const ToursPage = () => {
         <meta property="og:title" content="Tour Packages - Vizag Taxi Hub | Best Tour Packages in Visakhapatnam" />
         <meta property="og:description" content="Explore amazing tour packages in and around Visakhapatnam. Book guided tours, sightseeing trips, and holiday packages with Vizag Taxi Hub." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />

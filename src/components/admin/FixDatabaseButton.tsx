@@ -12,10 +12,8 @@ export function FixDatabaseButton() {
   const fixSchema = async () => {
     setIsFixing(true);
     try {
-      // Determine API base URL based on environment
-      const apiBaseUrl = window.location.hostname.includes('localhost') 
-        ? `${window.location.protocol}//${window.location.host}`
-        : 'https://vizagtaxihub.com';
+      // Use production API base URL
+      const apiBaseUrl = 'https://www.vizagtaxihub.com';
       
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();

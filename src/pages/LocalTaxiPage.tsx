@@ -116,6 +116,26 @@ export function LocalTaxiPage() {
         <title>Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
         <meta name="keywords" content="local taxi visakhapatnam, city cab vizag, local cab booking visakhapatnam, vizag city taxi, point to point taxi vizag" />
+        <meta name="author" content="Vizag Taxi Hub" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/local-taxi" />
+        <meta property="og:title" content="Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub" />
+        <meta property="og:description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
+        <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/local-taxi" />
+        <meta property="twitter:title" content="Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub" />
+        <meta property="twitter:description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
+        <meta property="twitter:image" content="/og-image.png" />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
         <link rel="canonical" href="https://vizagtaxihub.com/local-taxi" />
       </Helmet>
 

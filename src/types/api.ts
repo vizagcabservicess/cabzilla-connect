@@ -289,3 +289,28 @@ export interface CommissionPayment {
   createdAt: string;
   updatedAt: string;
 }
+
+// GST Report Types
+export interface GstInvoice {
+  id: string | number;
+  bookingId?: string | number;
+  invoiceNumber: string;
+  customerName: string;
+  gstNumber?: string;
+  companyName?: string;
+  invoiceDate: string;
+  taxableValue: number;
+  gstRate: string;
+  gstAmount: number;
+  totalAmount: number;
+}
+
+export interface GstReportData {
+  gstInvoices: GstInvoice[];
+  summary: {
+    totalInvoices: number;
+    totalTaxableValue: number;
+    totalGstAmount: number;
+    totalWithGst: number;
+  };
+}

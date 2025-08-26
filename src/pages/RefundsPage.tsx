@@ -17,6 +17,8 @@ const RefundsPage = () => {
         <meta property="og:title" content="Refund Policy - Vizag Taxi Hub | Cancellation & Refund Guidelines" />
         <meta property="og:description" content="Understand Vizag Taxi Hub's refund policy for cancellations and service issues." />
         <meta property="og:image" content="/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
