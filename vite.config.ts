@@ -25,10 +25,31 @@ export default defineConfig(({ mode }) => ({
       interval: 1000,
     },
   },
+  build: {
+    // Use Vite's built-in hash system for cache busting
+    rollupOptions: {
+      output: {
+        // Standard hash-based naming for reliable cache busting
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name?.split('.') || [];
+          const ext = info[info.length - 1] || 'asset';
+          return `assets/[name]-[hash].${ext}`;
+        },
+      },
+    },
+    // Ensure source maps are generated for debugging
+    sourcemap: mode === 'development',
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
+  },
   define: {
     // Ensure environment variables are available at build time
     'process.env.VITE_API_BASE_URL': JSON.stringify(process.env.VITE_API_BASE_URL || 'https://www.vizagtaxihub.com'),
     'process.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(process.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4'),
+    // Add build timestamp for cache busting
+    '__BUILD_TIME__': JSON.stringify(Date.now()),
   },
   plugins: [
     react(),

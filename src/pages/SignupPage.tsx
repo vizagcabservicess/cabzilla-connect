@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardUrl } from '@/utils/authUtils';
 import { authAPI } from '@/services/api/authAPI';
+import { Navbar } from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 export default function SignupPage() {
   const { socialSignup, socialSignupWithData } = useAuth();
@@ -88,38 +90,44 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="container mx-auto py-20 px-4">
-      <div className="flex flex-col items-center justify-center">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-medium">Create an account</h1>
-            <p className="mt-2 text-gray-600">
-              Sign up to manage your bookings and get special offers
-            </p>
-          </div>
-          
-          <div className="bg-white p-8 rounded-lg shadow-sm border">
-            <SignupForm />
-            
-            <div className="mt-6">
-              <Separator className="my-4" />
-              
-              <SocialLoginButtons
-                onGoogleLogin={handleGoogleSignup}
-                isLoading={isLoading}
-                variant="signup"
-              />
-              
-              <p className="text-center mt-6 text-sm text-gray-600">
-                Already have an account?{' '}
-                <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-800">
-                  Log in
-                </Link>
+    <div className="min-h-screen bg-gray-50 pt-16">
+      <Navbar />
+      
+      <div className="container mx-auto py-20 px-4">
+        <div className="flex flex-col items-center justify-center">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-medium">Create an account</h1>
+              <p className="mt-2 text-gray-600">
+                Sign up to manage your bookings and get special offers
               </p>
+            </div>
+            
+            <div className="bg-white p-8 rounded-lg shadow-sm border">
+              <SignupForm />
+              
+              <div className="mt-6">
+                <Separator className="my-4" />
+                
+                <SocialLoginButtons
+                  onGoogleLogin={handleGoogleSignup}
+                  isLoading={isLoading}
+                  variant="signup"
+                />
+                
+                <p className="text-center mt-6 text-sm text-gray-600">
+                  Already have an account?{' '}
+                  <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-800">
+                    Log in
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
+      
+      <Footer />
     </div>
   );
 }

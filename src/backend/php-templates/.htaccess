@@ -16,6 +16,35 @@ RewriteRule .* - [R=200,L]
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
     Header always set X-Content-Type-Options "nosniff"
+    
+    # Cache Control Headers for Static Assets
+    # No cache for HTML files
+    <FilesMatch "\.(html|htm)$">
+        Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </FilesMatch>
+    
+    # Long-term caching for hashed assets (Vite's built-in hash system)
+    <FilesMatch ".*-[a-f0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$">
+        Header always set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    
+    # No cache for non-hashed assets
+    <FilesMatch "\.(js|css)$">
+        Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </FilesMatch>
+    
+    # Force no cache for index.html
+    <Files "index.html">
+        Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </Files>
+    
+    # Default cache control for other files
     Header always set Cache-Control "no-cache, no-store, must-revalidate"
     Header always set Pragma "no-cache"
     Header always set Expires "0"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -162,6 +162,23 @@ export function SignupForm() {
             </FormItem>
           )}
         />
+        
+        {/* Legal Disclaimer */}
+        <div className="text-xs text-gray-600 text-center mt-4">
+          By proceeding, you agree to Vizag Taxi Hub's{' '}
+          <Link to="/privacy-policy" className="text-blue-600 hover:text-blue-800 underline">
+            Privacy Policy
+          </Link>
+          ,{' '}
+          <Link to="/user-agreement" className="text-blue-600 hover:text-blue-800 underline">
+            User Agreement
+          </Link>
+          {' '}and{' '}
+          <Link to="/terms-conditions" className="text-blue-600 hover:text-blue-800 underline">
+            Terms & Conditions
+          </Link>
+        </div>
+        
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "Creating Account..." : "Sign Up"}
         </Button>

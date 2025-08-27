@@ -66,6 +66,7 @@ const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage').then(module =
 const ContactUsPage = lazy(() => import('./pages/ContactUsPage').then(module => ({ default: module.ContactUsPage })));
 const TermsConditionsPage = lazy(() => import('./pages/TermsConditionsPage').then(module => ({ default: module.TermsConditionsPage })));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(module => ({ default: module.PrivacyPolicyPage })));
+const UserAgreementPage = lazy(() => import('./pages/UserAgreementPage').then(module => ({ default: module.UserAgreementPage })));
 const TourDetailPage = lazy(() => import('./pages/TourDetailPage'));
 const SocialLoginTestPage = lazy(() => import('./pages/SocialLoginTestPage').then(module => ({ default: module.SocialLoginTestPage })));
 const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage'));
@@ -330,6 +331,10 @@ const router = createBrowserRouter([
       {
         path: 'privacy-policy',
         element: <PrivacyPolicyPage />,
+      },
+      {
+        path: 'user-agreement',
+        element: <UserAgreementPage />,
       },
 
       {
