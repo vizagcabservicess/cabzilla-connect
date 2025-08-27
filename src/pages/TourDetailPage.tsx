@@ -363,7 +363,7 @@ const TourDetailPage = () => {
   const seoDescription = `${tour.tourName} - ${tour.duration} tour package from Visakhapatnam. ${tour.description.substring(0, 120)}... Book now for the best prices and professional service.`;
   const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
   const tourImage = tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
-  const tourUrl = `https://vizagtaxihub.com/tour/${tour.tourId}`;
+  const tourUrl = `https://vizagtaxihub.com/tours/${tourId}`;
 
   return (
     <>

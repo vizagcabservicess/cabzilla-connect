@@ -40,6 +40,7 @@ Thank you.`);
         <meta name="description" content="Request account deletion from Vizag Taxi Hub. Learn how to delete your data and understand our deletion process for privacy compliance." />
         <meta name="robots" content="noindex, nofollow" />
         <meta name="googlebot" content="noindex, nofollow" />
+        <link rel="canonical" href="https://vizagtaxihub.com/data-deletion" />
       </Helmet>
 
       {/* Hero Section */}

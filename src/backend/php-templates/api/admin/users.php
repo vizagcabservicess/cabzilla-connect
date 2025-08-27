@@ -147,9 +147,9 @@ try {
         $newRole = $requestData['role'];
         
         // Validate role
-        if (!in_array($newRole, ['user', 'admin'])) {
+        if (!in_array($newRole, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
             error_log("Invalid role: $newRole");
-            sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be either "user" or "admin"'], 400);
+            sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be one of: "guest", "user", "admin", "super_admin", "driver", "provider", "customer"'], 400);
             exit;
         }
         
@@ -218,6 +218,13 @@ try {
         $email = $requestData['email'];
         $phone = isset($requestData['phone']) ? $requestData['phone'] : null;
         $role = $requestData['role'];
+        
+        // Validate role for new user creation
+        if (!in_array($role, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
+            error_log("Invalid role for new user: $role");
+            sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be one of: "guest", "user", "admin", "super_admin", "driver", "provider", "customer"'], 400);
+            exit;
+        }
 
         // Insert new user
         $stmt = $conn->prepare("INSERT INTO users (name, email, phone, role, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
