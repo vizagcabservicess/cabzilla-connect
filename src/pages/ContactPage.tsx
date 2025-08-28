@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Phone, Mail, MapPin, Send } from 'lucide-react';
 import { toast } from "@/components/ui/use-toast";
 import { Helmet } from 'react-helmet-async';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({
@@ -316,6 +317,7 @@ const ContactPage = () => {
             </div>
           </div>
         </footer>
+        <MobileNavigation />
       </div>
     </>
   );

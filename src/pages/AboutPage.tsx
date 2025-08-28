@@ -2,6 +2,7 @@
 import React from 'react';
 import { Navbar } from "@/components/Navbar";
 import { Helmet } from 'react-helmet-async';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 const AboutPage = () => {
   return (
@@ -177,6 +178,7 @@ const AboutPage = () => {
             </div>
           </div>
         </footer>
+        <MobileNavigation />
       </div>
     </>
   );

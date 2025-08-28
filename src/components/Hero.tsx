@@ -28,7 +28,7 @@ import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
 import { calculateDistanceMatrix } from '@/lib/distanceService';
-import { QuickActionBar } from './QuickActionBar';
+
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { formatDateForAPI } from '@/lib/dateUtils';
 
@@ -1124,7 +1124,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
             <div className="w-16"></div> {/* Spacer for center alignment */}
           </div>
           
-          <div className="p-4">
+                     <div className="p-4 mt-8">
            
             
             {/* Trip Type Selector */}
@@ -1700,7 +1700,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       </section>
       {/* Mobile Navigation Bar */}
       <MobileNavigation />
-      <QuickActionBar />
     </div>
   );
 }

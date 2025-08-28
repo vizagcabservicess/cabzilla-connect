@@ -13,7 +13,7 @@ import { EnhancedCTA } from "@/components/EnhancedCTA";
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
-import { QuickActionBar } from '@/components/QuickActionBar';
+import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 
@@ -111,8 +111,8 @@ const Index = () => {
         
         <Footer />
         
-        {/* Floating Action Buttons */}
-        <QuickActionBar />
+        {/* Mobile Navigation */}
+        <MobileNavigation />
       </div>
     </>
   );

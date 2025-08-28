@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Shield, Lock, Eye, Database, UserCheck, AlertTriangle } from 'lucide-react';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function PrivacyPolicyPage() {
   const sections = [
@@ -343,6 +344,7 @@ export function PrivacyPolicyPage() {
       </section>
 
       <Footer />
+      <MobileNavigation />
     </main>
     </div>
   );

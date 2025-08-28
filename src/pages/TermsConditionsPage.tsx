@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { FileText, Shield, AlertCircle, Users } from 'lucide-react';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function TermsConditionsPage() {
   const sections = [
@@ -252,6 +253,7 @@ export function TermsConditionsPage() {
       </section>
 
       <Footer />
+      <MobileNavigation />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { MobileNavigation } from '@/components/MobileNavigation';
 import { useToast } from '@/components/ui/use-toast';
 import { driverHireAPI } from '@/services/api/driverHireAPI';
 import React from 'react';
@@ -526,6 +527,7 @@ Best regards,
           </div>
         </div>
         <Footer />
+        <MobileNavigation />
       </div>
     </>
   );

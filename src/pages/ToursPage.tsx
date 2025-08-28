@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from 'framer-motion';
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
@@ -8,12 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Location } from "@/lib/locationData";
 import { isLocationInVizag } from "@/lib/locationUtils";
-import { MapPin, Calendar, Loader2, Search, ChevronUp, ChevronDown } from "lucide-react";
+import { MapPin, Calendar, Loader2, Search, ChevronUp, ChevronDown, CheckCircle, Star, Users, Clock, Shield, Navigation, Zap } from "lucide-react";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
 import { TourCard } from "@/components/tour/TourCard";
-import { Hero } from "@/components/Hero";
 import Footer from "@/components/Footer";
 import { Helmet } from 'react-helmet-async';
 
@@ -36,6 +36,7 @@ const ToursPage = () => {
   const [tours, setTours] = useState<TourListItem[]>([]);
   const [isLoadingTours, setIsLoadingTours] = useState<boolean>(false);
   const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
+  const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   
   // Load tours on component mount if location state is provided
   useEffect(() => {
@@ -79,7 +80,16 @@ const ToursPage = () => {
     setIsSearching(true);
     setIsLoadingTours(true);
     setSearchInitiated(true);
-    setShowSearchForm(false); // Hide search form after successful search
+    setShowSearchForm(false);
+    setIsSearchActive(true);
+    
+    // Hide the search widget by scrolling to results
+    setTimeout(() => {
+      const resultsSection = document.getElementById('tour-results');
+      if (resultsSection) {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
     
     try {
       const toursList = await tourDetailAPI.getTours();
@@ -112,7 +122,6 @@ const ToursPage = () => {
 
   const handleModifySearch = () => {
     setShowSearchForm(true);
-    // Scroll to top smoothly to show the search form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -120,10 +129,7 @@ const ToursPage = () => {
     setShowSearchForm(false);
   };
 
-  // Only use what is available from backend for each card
   const buildTourCardProps = (tour: TourListItem) => {
-    // Use the real inclusions and sightseeingPlaces passed from props or API
-    // If missing, send as empty lists (don't inject demo data!)
     return {
       ...tour,
       inclusions: (tour as any).inclusions || [],
@@ -131,24 +137,44 @@ const ToursPage = () => {
     };
   };
 
+  const features = [
+    { 
+      icon: <Zap className="w-6 h-6" />, 
+      title: 'Instant Booking', 
+      description: 'Book your tour in under 60 seconds with our streamlined process.',
+      color: 'bg-emerald-500'
+    },
+    { 
+      icon: <Shield className="w-6 h-6" />, 
+      title: 'Safe & Reliable', 
+      description: 'GPS tracking, verified drivers, and 24/7 customer support.',
+      color: 'bg-blue-500'
+    },
+    { 
+      icon: <Star className="w-6 h-6" />, 
+      title: 'Best Rates', 
+      description: 'Competitive pricing with no hidden charges or surge pricing.',
+      color: 'bg-amber-500'
+    },
+    { 
+      icon: <Users className="w-6 h-6" />, 
+      title: 'Trusted Service', 
+      description: 'Join 10,000+ satisfied customers who travel with us regularly.',
+      color: 'bg-purple-500'
+    }
+  ];
+
+
+
   const renderSearchForm = () => (
-    <Card className="bg-white shadow-lg">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-medium text-gray-800">Find Available Tours</h2>
-          {searchInitiated && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCloseSearchForm}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </Button>
-          )}
+    <div className="w-full max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto px-2 md:px-0">
+      <div className="bg-white/90 md:bg-white/80 rounded-2xl md:rounded-3xl shadow-2xl md:p-10 p-4 border border-gray-100 backdrop-blur-md">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Find Your Perfect Tour</h2>
+          <p className="text-gray-600">Enter your details to discover amazing tour packages</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <LocationInput
             label="PICKUP LOCATION"
             placeholder="Enter your pickup location"
@@ -167,7 +193,7 @@ const ToursPage = () => {
         
         <Button
           onClick={handleSearchTours}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md mt-6 w-full md:w-auto"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 text-lg font-semibold rounded-xl shadow-lg"
           disabled={isSearching}
         >
           {isSearching ? (
@@ -182,23 +208,23 @@ const ToursPage = () => {
             </div>
           )}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
   
   const renderTourListing = () => (
-    <div className="bg-white rounded-2xl shadow p-5 px-7 mb-5">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="font-bold text-2xl text-gray-900">Available Tour Packages</h2>
+    <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 mb-8">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Available Tour Packages</h2>
         <Button 
           onClick={handleModifySearch}
-          className="px-3 py-1 border rounded-lg font-semibold text-sm hover:bg-blue-50 transition bg-yellow-400 hover:bg-yellow-500 text-gray-900 border-yellow-400"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold"
         >
           Modify Search
         </Button>
       </div>
-      {/* Tour Cards Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-7">
+      
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tours.length > 0 ? (
           tours.map((tour) => (
             <TourCard
@@ -208,8 +234,10 @@ const ToursPage = () => {
             />
           ))
         ) : (
-          <div className="col-span-full text-center text-gray-500 py-6">
-            No tours found.
+          <div className="col-span-full text-center text-gray-500 py-12">
+            <div className="text-6xl mb-4">🏔️</div>
+            <h3 className="text-xl font-semibold mb-2">No tours found</h3>
+            <p className="text-gray-400">Try adjusting your search criteria</p>
           </div>
         )}
       </div>
@@ -245,38 +273,131 @@ const ToursPage = () => {
         <link rel="canonical" href="https://vizagtaxihub.com/tours" />
       </Helmet>
       
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-white flex flex-col">
         <Navbar />
         <main className="flex-1 pt-16">
-        {/* Only show the Tour tab in the Hero for tours */}
-        <div className="container mx-auto px-4 py-6 pb-20">
-          <div className="max-w-7xl mx-auto">
-            {!searchInitiated ? (
-              <>
-                {/* Hero Section */}
-                <div className="text-center mb-8">
-                  <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Explore Amazing Destinations</h1>
-                  <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                    Explore breathtaking destinations around Visakhapatnam with our carefully crafted tour packages.
-                    From scenic hill stations to cultural experiences, find your perfect adventure.
+          
+          {/* Hero Section - Only show when not searching */}
+          {!searchInitiated && (
+            <section className="relative bg-gradient-to-br from-emerald-50 to-white pt-16 md:pt-24 pb-16 md:pb-32">
+              <div className="max-w-7xl mx-auto px-4 md:px-6">
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8 }}
+                  className="text-center mb-8 md:mb-24"
+                >
+                  <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-emerald-100 text-emerald-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
+                    <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
+                    Vizag's Most Trusted Tour Service
+                  </div>
+                  <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-5 leading-tight">
+                    Explore Amazing
+                    <br />
+                    <span className="text-emerald-500">Destinations</span>
+                  </h1>
+                  <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-2xl mx-auto">
+                    Discover breathtaking destinations around Visakhapatnam with our carefully crafted tour packages.
                   </p>
+                </motion.div>
+                
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                  className="rounded-xl md:rounded-2xl md:p-8"
+                >
+                  {renderSearchForm()}
+                </motion.div>
+              </div>
+            </section>
+          )}
+
+          {/* Features Section */}
+          {!searchInitiated && (
+            <section className="py-16 bg-white">
+              <div className="max-w-7xl mx-auto px-4 md:px-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className="text-center mb-12"
+                >
+                  <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Our Tours?</h2>
+                  <p className="text-lg text-gray-600">Experience the best tour packages with unmatched service quality</p>
+                </motion.div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                  {features.map((feature, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.6, delay: index * 0.1 }}
+                      className="text-center"
+                    >
+                      <div className={`w-16 h-16 ${feature.color} rounded-2xl flex items-center justify-center mx-auto mb-4 text-white`}>
+                        {feature.icon}
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
+                      <p className="text-gray-600">{feature.description}</p>
+                    </motion.div>
+                  ))}
                 </div>
-                {renderSearchForm()}
-              </>
-            ) : (
-              <>
+              </div>
+            </section>
+          )}
+
+          
+          {/* Search Results */}
+          {searchInitiated && (
+            <section id="tour-results" className="pt-8 pb-16 bg-gray-50">
+              <div className="max-w-7xl mx-auto px-4 md:px-6">
                 {/* Collapsible Search Form */}
-                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                  showSearchForm ? 'max-h-96 opacity-100 mb-6' : 'max-h-0 opacity-0'
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden mb-6 ${
+                  showSearchForm ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
                 }`}>
                   {renderSearchForm()}
                 </div>
+                
                 {renderTourListing()}
-              </>
-            )}
-          </div>
-        </div>
-        
+              </div>
+            </section>
+          )}
+
+          {/* CTA Section */}
+          {!searchInitiated && (
+            <section className="py-16 bg-emerald-500 text-white">
+              <div className="max-w-4xl mx-auto text-center px-4 md:px-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                >
+                  <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready for Your Adventure?</h2>
+                  <p className="text-xl text-emerald-100 mb-8">
+                    Join thousands of satisfied customers who trust us for their tour experiences. 
+                    Book now and create unforgettable memories.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <Button 
+                      size="lg" 
+                      className="bg-white text-emerald-600 hover:bg-gray-100 font-bold px-8 py-4 rounded-xl"
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    >
+                      <Search className="mr-2 h-5 w-5" />
+                      Start Your Search
+                    </Button>
+                    <div className="text-emerald-100 text-sm">
+                      Available 24/7 • Instant Booking • Best Rates Guaranteed
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </section>
+          )}
+          
         </main>
         <Footer />
         <MobileNavigation />

@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { FileText, Shield, AlertCircle, Users, Handshake } from 'lucide-react';
+import { MobileNavigation } from '@/components/MobileNavigation';
 
 export function UserAgreementPage() {
   const sections = [
@@ -256,6 +257,7 @@ export function UserAgreementPage() {
       </section>
 
       <Footer />
+      <MobileNavigation />
     </div>
   );
 }
