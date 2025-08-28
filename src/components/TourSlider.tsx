@@ -74,13 +74,18 @@ export function TourSlider() {
     );
   }
 
-  // Ensure at least 3 slides for Swiper to enable sliding
-  let displayTours = tours;
-  if (tours.length === 1) {
-    displayTours = [...tours, ...tours, ...tours]; // 3 copies
-  } else if (tours.length === 2) {
-    displayTours = [...tours, ...tours]; // 4 slides (2x2)
+  // Calculate slides with exactly 4 items per slide
+  const ITEMS_PER_SLIDE = 4;
+  const totalSlides = Math.ceil(tours.length / ITEMS_PER_SLIDE);
+  const slides = [];
+  
+  for (let i = 0; i < totalSlides; i++) {
+    const slideItems = tours.slice(i * ITEMS_PER_SLIDE, (i + 1) * ITEMS_PER_SLIDE);
+    slides.push(slideItems);
   }
+
+  // Check if we should show navigation arrows
+  const shouldShowNavigation = totalSlides > 1;
 
   return (
     <section className="py-4 md:py-4  px-4">
@@ -137,9 +142,9 @@ export function TourSlider() {
           autoplay={{ delay: 3500, disableOnInteraction: false }}
           breakpoints={{
             640: { slidesPerView: 1 },
-            768: { slidesPerView: 2 },
-            1024: { slidesPerView: 3 },
-            1280: { slidesPerView: 3 }
+            768: { slidesPerView: 1 },
+            1024: { slidesPerView: 1 },
+            1280: { slidesPerView: 1 }
           }}
           className="tour-slider pb-8"
           onSwiper={swiper => {
@@ -152,80 +157,102 @@ export function TourSlider() {
             setIsEnd(swiper.isEnd);
           }}
         >
-          {displayTours.map((tour, idx) => {
-            // Find vehicleId with lowest price
-            let minVehicleId = null;
-            let minPrice = Infinity;
-            if (tour.pricing) {
-              Object.entries(tour.pricing).forEach(([vid, price]) => {
-                if (typeof price === 'number' && price < minPrice) {
-                  minPrice = price;
-                  minVehicleId = vid;
-                }
-              });
-            }
-            const maxPeople = minVehicleId && vehicleCapacities[minVehicleId] ? vehicleCapacities[minVehicleId] : undefined;
-            // Extract up to 3 unique highlights from itinerary activities
-            let highlights = [];
-            if (tour.itinerary && Array.isArray(tour.itinerary)) {
-              const allActs = tour.itinerary.flatMap(day => Array.isArray(day.activities) ? day.activities : []);
-              highlights = Array.from(new Set(allActs.filter(Boolean))).slice(0, 3);
-            }
-            return (
-              <SwiperSlide key={(tour.tourId || tour.id) + '-' + idx}>
-                <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-0 flex flex-col h-full transition hover:shadow-md">
-                  <div className="relative">
-                    <img 
-                      src={tour.image || tour.imageUrl} 
-                      alt={tour.name || tour.tourName}
-                      className="w-full h-48 object-cover rounded-t-2xl"
-                    />
-                  </div>
-                  <div className="p-5 flex flex-col flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{tour.name || tour.tourName}</h3>
-                      <div className="text-lg font-bold text-blue-600">
-                        {tour.pricing && Object.values(tour.pricing).length > 0
-                          ? `₹${Math.min(...(Object.values(tour.pricing) as number[])).toLocaleString('en-IN')}`
-                          : tour.price || '₹--'}
+          {slides.map((slideItems, slideIndex) => (
+            <SwiperSlide key={slideIndex}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {slideItems.map((tour, idx) => {
+                  // Find vehicleId with lowest price
+                  let minVehicleId = null;
+                  let minPrice = Infinity;
+                  if (tour.pricing) {
+                    Object.entries(tour.pricing).forEach(([vid, price]) => {
+                      if (typeof price === 'number' && price < minPrice) {
+                        minPrice = price;
+                        minVehicleId = vid;
+                      }
+                    });
+                  }
+                  const maxPeople = minVehicleId && vehicleCapacities[minVehicleId] ? vehicleCapacities[minVehicleId] : undefined;
+                  // Extract up to 3 unique highlights from itinerary activities
+                  let highlights = [];
+                  if (tour.itinerary && Array.isArray(tour.itinerary)) {
+                    const allActs = tour.itinerary.flatMap(day => Array.isArray(day.activities) ? day.activities : []);
+                    highlights = Array.from(new Set(allActs.filter(Boolean))).slice(0, 3);
+                  }
+                  return (
+                    <div key={(tour.tourId || tour.id) + '-' + idx} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-0 flex flex-col h-full transition hover:shadow-md">
+                      <div className="relative">
+                        <img 
+                          src={tour.image || tour.imageUrl} 
+                          alt={tour.name || tour.tourName}
+                          className="w-full h-48 object-cover rounded-t-2xl"
+                        />
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 mb-2 text-xs text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        <span>{(tour.timeDuration || tour.duration || 'Full Day').replace(/\s*\(.*?\)\s*/g, '')}</span>
-                      </div>
-                      {maxPeople && (
-                        <div className="flex items-center gap-1">
-                          <Users className="h-4 w-4" />
-                          <span>Max {maxPeople} people</span>
+                      <div className="p-5 flex flex-col flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{tour.name || tour.tourName}</h3>
+                          <div className="text-lg font-bold text-blue-600">
+                            {tour.pricing && Object.values(tour.pricing).length > 0
+                              ? `₹${Math.min(...(Object.values(tour.pricing) as number[])).toLocaleString('en-IN')}`
+                              : tour.price || '₹--'}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                    <div className="mb-4">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Tour Highlights:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {highlights.length > 0 && highlights.map((highlight, index) => (
-                          <span 
-                            key={index}
-                            className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full"
-                          >
-                            {highlight}
-                          </span>
-                        ))}
+                        <div className="flex items-center gap-4 mb-2 text-xs text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{(tour.timeDuration || tour.duration || 'Full Day').replace(/\s*\(.*?\)\s*/g, '')}</span>
+                          </div>
+                          {maxPeople && (
+                            <div className="flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              <span>Max {maxPeople} people</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mb-4">
+                          <p className="text-xs font-medium text-gray-700 mb-1">Tour Highlights:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {highlights.length > 0 && highlights.map((highlight, index) => (
+                              <span 
+                                key={index}
+                                className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full"
+                              >
+                                {highlight}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <Button
+                          className="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold"
+                          onClick={() => navigate(`/tour/${tour.tourId || tour.id}`)}
+                        >
+                          Book This Tour
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      className="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold"
-                      onClick={() => navigate(`/tour/${tour.tourId || tour.id}`)}
-                    >
-                      Book This Tour
-                    </Button>
-                  </div>
-                </div>
-              </SwiperSlide>
-            );
-          })}
+                  );
+                })}
+                {/* Fill empty slots with invisible cards to maintain spacing */}
+                {slideItems.length < ITEMS_PER_SLIDE && 
+                  Array.from({ length: ITEMS_PER_SLIDE - slideItems.length }).map((_, index) => (
+                    <div key={`empty-${index}`} className="invisible">
+                      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-0 flex flex-col h-full">
+                        <div className="relative">
+                          <div className="w-full h-48 bg-gray-200 rounded-t-2xl"></div>
+                        </div>
+                        <div className="p-5 flex flex-col flex-1">
+                          <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded mb-4"></div>
+                          <div className="h-8 bg-gray-200 rounded mt-auto"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </SwiperSlide>
+          ))}
         </Swiper>
       </div>
     </section>

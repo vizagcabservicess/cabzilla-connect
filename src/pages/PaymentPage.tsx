@@ -199,6 +199,22 @@ const PaymentPage = () => {
   };
 
   const handleGoBack = () => {
+    // Check if we came from a tour booking
+    const storedDetails = sessionStorage.getItem('bookingDetails');
+    if (storedDetails) {
+      try {
+        const details = JSON.parse(storedDetails);
+        // If this is a tour booking, go back to the tour details page
+        if (details.bookingType === 'tour' && details.tourId) {
+          navigate(`/tours/${details.tourId}`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error parsing booking details:', error);
+      }
+    }
+    
+    // Fallback to browser history
     navigate(-1);
   };
 

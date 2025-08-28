@@ -3,7 +3,6 @@ import { Hero } from '@/components/Hero';
 import { ServicesShowcase } from "@/components/ServicesShowcase";
 import { FleetShowcase } from "@/components/FleetShowcase";
 import { DestinationsShowcase } from "@/components/DestinationsShowcase";
-import { TourSlider } from "@/components/TourSlider";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
 import { TestimonialsSection } from "@/components/TestimonialsSection";

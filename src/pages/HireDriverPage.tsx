@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield, Loader2, Mail, MessageCircle } from 'lucide-react';
+import { Clock, MapPin, Star, Phone, CheckCircle, Users, Calendar, Shield, Loader2, Mail, MessageCircle, Car, Route, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { useToast } from '@/components/ui/use-toast';
 import { driverHireAPI } from '@/services/api/driverHireAPI';
+import { DriverSlider } from '@/components/DriverSlider';
+import { DateTimePicker } from '@/components/DateTimePicker';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { FaWhatsapp } from 'react-icons/fa';
@@ -22,8 +24,7 @@ const services = [
     title: 'Personal Driver - Local',
     duration: '8 hours',
     price: '₹1,000/day',
-    features: ['Professional driver', 'Your own vehicle', 'Flexible timing', 'Local area coverage', 'Transport Excluded'],
-    popular: true
+    features: ['Professional driver', 'Your own vehicle', 'Flexible timing', 'Local area coverage', 'Transport Excluded']
   },
   {
     id: 2,
@@ -37,10 +38,44 @@ const services = [
   {
     id: 4,
     title: 'Event Driver',
-    duration: 'Special occasions',
+    duration: '12 hours',
     price: '₹1,500/event',
     features: ['Wedding ceremonies', 'Special events', 'Formal attire', 'Punctual service', 'Transport Excluded'],
     popular: false
+  }
+];
+
+const driverServices = [
+  {
+    icon: Car,
+    title: 'Personal Driver - Local',
+    description: 'Professional driver for daily local trips in your vehicle',
+    iconColor: 'text-blue-600'
+  },
+  {
+    icon: Route,
+    title: 'Outstation Driver',
+    description: 'Experienced driver for long-distance journeys and trips',
+    iconColor: 'text-green-600'
+  },
+  {
+    icon: UserCheck,
+    title: 'Event Driver',
+    description: 'Specialized driver for weddings and special occasions',
+    iconColor: 'text-purple-600'
+  },
+  {
+    icon: Users,
+    title: 'Corporate Driver',
+    description: 'Professional driver for business and corporate needs',
+    iconColor: 'text-orange-600'
+  },
+
+  {
+    icon: Clock,
+    title: 'Flexible Hours',
+    description: 'Customizable timing to match your schedule',
+    iconColor: 'text-red-600'
   }
 ];
 
@@ -48,22 +83,31 @@ const benefits = [
   {
     icon: Shield,
     title: 'Verified Drivers',
-    description: 'All drivers are background verified and licensed'
+    description: 'All drivers are background verified and licensed',
+    iconColor: 'text-green-600',
+    image: 'https://vizagtaxihub.com/uploads/verified-driver.jpg'
   },
-  {
-    icon: Star,
-    title: 'Experienced Professionals',
-    description: '5+ years average driving experience'
-  },
-  {
-    icon: Clock,
-    title: 'Flexible Timing',
-    description: 'Available 24/7 for your convenience'
-  },
+  
   {
     icon: Users,
     title: 'Customer Support',
-    description: 'Dedicated support team for any assistance'
+    description: 'Dedicated support team for any assistance',
+    iconColor: 'text-purple-600',
+    image: 'https://vizagtaxihub.com/uploads/support-vizagtaxihub.jpg'
+  },
+  {
+    icon: Car,
+    title: 'Safe Driving',
+    description: 'Defensive driving techniques and safety protocols',
+    iconColor: 'text-red-600',
+    image: 'https://vizagtaxihub.com/uploads/experienced-driver.jpg'
+  },
+  {
+    icon: CheckCircle,
+    title: 'Quality Assured',
+    description: 'Regular training and performance monitoring',
+    iconColor: 'text-emerald-600',
+    image: 'https://vizagtaxihub.com/uploads/quality-assurance.jpg'
   }
 ];
 
@@ -73,6 +117,8 @@ export default function HireDriverPage() {
     name: '',
     phone: '',
     email: '',
+    pickupLocation: '',
+    pickupDateTime: undefined as Date | undefined,
     serviceType: '',
     duration: '',
     requirements: ''
@@ -105,10 +151,10 @@ Best regards,
     e.preventDefault();
     
     // Validate required fields including email
-    if (!formData.name || !formData.phone || !formData.email || !formData.serviceType || !formData.duration) {
+    if (!formData.name || !formData.phone || !formData.email || !formData.pickupLocation || !formData.pickupDateTime || !formData.serviceType || !formData.duration) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields including email address.",
+        description: "Please fill in all required fields including pickup details.",
         variant: "destructive",
       });
       return;
@@ -151,6 +197,8 @@ Best regards,
           name: '',
           phone: '',
           email: '',
+          pickupLocation: '',
+          pickupDateTime: undefined,
           serviceType: '',
           duration: '',
           requirements: ''
@@ -288,53 +336,19 @@ Best regards,
         </div>
 
         {/* Benefits Section */}
-        <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-8">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Choose Our Drivers?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-            {benefits.map((benefit, index) => (
-              <Card key={index} className="text-center hover:shadow-lg transition-shadow">
-                <CardContent className="p-6">
-                  <benefit.icon className="h-12 w-12 text-primary mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">{benefit.title}</h3>
-                  <p className="text-muted-foreground text-sm">{benefit.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+        <DriverSlider 
+          title="Why Choose Our Drivers?" 
+          items={benefits} 
+          type="benefits" 
+        />
 
-        {/* Services Grid */}
-        <div className="bg-muted/30 py-8">
-          <div className="container mx-auto px-6 sm:px-8 lg:px-12">
-            <h2 className="text-3xl font-bold text-center mb-12">Our Driver Services</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {services.map((service) => (
-                <Card key={service.id} className="relative hover:shadow-lg transition-shadow">
-                  {service.popular && (
-                    <Badge className="absolute -top-2 right-4 bg-primary">Most Popular</Badge>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg">{service.title}</CardTitle>
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold text-primary">{service.price}</span>
-                      <span className="text-sm text-muted-foreground">{service.duration}</span>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <ul className="space-y-2 mb-6">
-                      {service.features.map((feature, index) => (
-                        <li key={index} className="text-sm text-muted-foreground flex items-start">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+        {/* Services Section */}
+        <div className="bg-muted/30 pb-4 md:pb-8">
+          <DriverSlider 
+            title="Our Driver Services" 
+            items={services} 
+            type="services" 
+          />
         </div>
 
         {/* Booking Form */}
@@ -384,6 +398,26 @@ Best regards,
                     />
                   </div>
                   
+                  <div>
+                    <Label htmlFor="pickupLocation">Pickup Location *</Label>
+                    <Input
+                      id="pickupLocation"
+                      placeholder=""
+                      value={formData.pickupLocation}
+                      onChange={(e) => setFormData({...formData, pickupLocation: e.target.value})}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="mt-4 pt-4">
+                    <DateTimePicker
+                      date={formData.pickupDateTime}
+                      onDateChange={(date) => setFormData({...formData, pickupDateTime: date})}
+                      minDate={new Date()}
+                      label="Pickup Date & Time *"
+                    />
+                  </div>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Service Type *</Label>
@@ -392,7 +426,7 @@ Best regards,
                           <SelectValue placeholder="Select service" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="daily">Personal Driver - Daily</SelectItem>
+                          <SelectItem value="local">Personal Driver - Local</SelectItem>
                           <SelectItem value="outstation">Outstation Driver</SelectItem>
                           <SelectItem value="corporate">Corporate Driver</SelectItem>
                           <SelectItem value="event">Event Driver</SelectItem>
@@ -410,7 +444,6 @@ Best regards,
                           <SelectItem value="half-day">Half Day (4 hours)</SelectItem>
                           <SelectItem value="full-day">Full Day (8-12 hours)</SelectItem>
                           <SelectItem value="multi-day">Multi Day</SelectItem>
-                          <SelectItem value="monthly">Monthly Contract</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

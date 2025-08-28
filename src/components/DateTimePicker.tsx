@@ -113,7 +113,7 @@ export function DateTimePicker({
       {/* Floating label implementation: only show when focused or has value */}
       {label && (isFocused || date) && (
         <label
-          className="absolute left-4 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
+          className="absolute left-4 -top-2.5 text-xs bg-white px-1 text-gray-900 z-10 pointer-events-none transition-all duration-200 font-semibold"
           style={{
             background: 'white',
             paddingLeft: '0.25rem',

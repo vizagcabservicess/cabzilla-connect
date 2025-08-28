@@ -98,6 +98,32 @@ html, body {
 .booking-details-tabs [role="tablist"] {
   gap: 0.25rem;
   padding: 0.5rem;
+}
+
+/* Driver Slider Styles - Using ServicesShowcase styling */
+.services-swiper {
+  padding-bottom: 16px;
+}
+
+@media (min-width: 768px) {
+  .services-swiper {
+    padding-bottom: 20px;
+  }
+}
+
+.services-swiper .swiper-slide {
+  height: auto;
+}
+
+.services-swiper .swiper-slide .card {
+  height: 100%;
+  min-height: 250px;
+}
+
+/* Specific height for services cards */
+.services-swiper .swiper-slide .card[class*="h-[320px]"] {
+  min-height: 320px;
+}
   background-color: hsl(var(--muted));
   border-radius: 0.5rem;
 }

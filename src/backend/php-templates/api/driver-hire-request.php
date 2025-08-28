@@ -97,6 +97,8 @@ try {
             name VARCHAR(100) NOT NULL,
             phone VARCHAR(20) NOT NULL,
             email VARCHAR(100),
+            pickup_location VARCHAR(255),
+            pickup_datetime DATETIME,
             service_type VARCHAR(50) NOT NULL,
             duration VARCHAR(50) NOT NULL,
             requirements TEXT,
@@ -115,8 +117,8 @@ try {
 
 // Insert the driver hire request
 try {
-    $sql = "INSERT INTO driver_hire_requests (name, phone, email, service_type, duration, requirements) 
-            VALUES (?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO driver_hire_requests (name, phone, email, pickup_location, pickup_datetime, service_type, duration, requirements) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
@@ -125,15 +127,25 @@ try {
     
     // Prepare variables for binding (to avoid reference issues)
     $email = $input['email'] ?? '';
+    $pickupLocation = $input['pickupLocation'] ?? '';
+    $pickupDateTime = $input['pickupDateTime'] ?? null;
     $requirements = $input['requirements'] ?? '';
     
-    // Log the values being inserted for debugging
-    error_log("Inserting driver hire request - Name: {$input['name']}, Phone: {$input['phone']}, Email: {$email}, Service: {$input['serviceType']}, Duration: {$input['duration']}, Requirements: {$requirements}");
+    // Convert pickupDateTime to MySQL format if provided
+    $pickupDateTimeFormatted = null;
+    if ($pickupDateTime) {
+        $pickupDateTimeFormatted = date('Y-m-d H:i:s', strtotime($pickupDateTime));
+    }
     
-    $stmt->bind_param("ssssss", 
+    // Log the values being inserted for debugging
+    error_log("Inserting driver hire request - Name: {$input['name']}, Phone: {$input['phone']}, Email: {$email}, Pickup Location: {$pickupLocation}, Pickup DateTime: {$pickupDateTimeFormatted}, Service: {$input['serviceType']}, Duration: {$input['duration']}, Requirements: {$requirements}");
+    
+    $stmt->bind_param("ssssssss", 
         $input['name'],
         $input['phone'],
         $email,
+        $pickupLocation,
+        $pickupDateTimeFormatted,
         $input['serviceType'],
         $input['duration'],
         $requirements

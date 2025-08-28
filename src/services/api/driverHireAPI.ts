@@ -6,6 +6,8 @@ export interface DriverHireRequest {
   name: string;
   phone: string;
   email?: string;
+  pickupLocation?: string;
+  pickupDateTime?: Date;
   serviceType: string;
   duration: string;
   requirements?: string;

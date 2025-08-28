@@ -66,7 +66,7 @@ export function FleetShowcase() {
   // Helper to get bg gradient
   function getBgGradient(type: string, index: number) {
     // Apply yellow color to the last vehicle
-    if (index === vehicles.length - 1) return 'bg-gradient-to-br from-yellow-50 to-yellow-100';
+    if (index === vehicles.length - 1) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
     
     if (type.toLowerCase().includes('sedan')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
     if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
@@ -104,9 +104,23 @@ export function FleetShowcase() {
     return `${getPrice(vehicle)} per km`;
   }
 
-  // Take first 4 vehicles for the grid, rest for slider
-  const gridVehicles = vehicles.slice(0, 4);
-  const sliderVehicles = vehicles.slice(4);
+  // Calculate the 4-card window behavior
+  const ITEMS_PER_VIEW = 4;
+  const totalItems = vehicles.length;
+  
+  // Calculate if we should show navigation arrows
+  const shouldShowNavigation = totalItems > ITEMS_PER_VIEW;
+  
+  // Calculate the current window start index
+  const currentWindowStart = currentSlide;
+  const currentWindowEnd = Math.min(currentWindowStart + ITEMS_PER_VIEW - 1, totalItems - 1);
+  
+  // Check if we're at the beginning or end
+  const isAtBeginning = currentWindowStart === 0;
+  const isAtEnd = currentWindowEnd === totalItems - 1;
+  
+  // Get the current 4-card window
+  const currentWindowItems = vehicles.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
 
   const renderVehicleCard = (vehicle: any, index: number) => {
     const vehicleSlug = vehicle.id ? vehicle.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
@@ -182,6 +196,22 @@ export function FleetShowcase() {
     );
   };
 
+  const handleNext = () => {
+    if (!isAtEnd) {
+      // Calculate the next window start
+      const nextStart = Math.min(currentWindowStart + 1, totalItems - ITEMS_PER_VIEW);
+      setCurrentSlide(nextStart);
+    }
+  };
+
+  const handlePrev = () => {
+    if (!isAtBeginning) {
+      // Move back by 1
+      const prevStart = Math.max(currentWindowStart - 1, 0);
+      setCurrentSlide(prevStart);
+    }
+  };
+
   return (
     <section className="pt-4 md:pt-8 pb-0 bg-white">
       <div className="max-w-7xl mx-auto px-4">
@@ -202,28 +232,29 @@ export function FleetShowcase() {
           </div>
         ) : (
           <>
-            {/* Desktop Layout - Sliding Row */}
+            {/* Desktop Layout - 4-card window with proper navigation */}
             <div className="hidden lg:block mb-8 relative overflow-hidden">
-              <div className="flex gap-4 transition-transform duration-500 ease-in-out" style={{ 
-                transform: `translateX(-${Math.min(currentSlide * 50, Math.max(0, (gridVehicles.length + sliderVehicles.length - 4) * 50))}%)` 
-              }}>
-                {/* All vehicles in a single row */}
-                {[...gridVehicles, ...sliderVehicles].map((vehicle, index) => (
-                  <div key={vehicle.id || index} className="w-full max-w-[calc(25%-12px)] flex-shrink-0">
-                    {renderVehicleCard(vehicle, index)}
+              <div className="flex gap-4 justify-center">
+                {currentWindowItems.map((vehicle, index) => (
+                  <div key={vehicle.id || index} className="w-full max-w-[calc(25%-12px)]">
+                    {renderVehicleCard(vehicle, currentWindowStart + index)}
                   </div>
                 ))}
+                {/* Fill remaining slots with invisible cards to maintain 4-card layout */}
+                {currentWindowItems.length < ITEMS_PER_VIEW && 
+                  Array.from({ length: ITEMS_PER_VIEW - currentWindowItems.length }).map((_, index) => (
+                    <div key={`empty-${index}`} className="w-full max-w-[calc(25%-12px)] invisible">
+                      <div className="h-[380px]"></div>
+                    </div>
+                  ))
+                }
               </div>
               
-              {/* Previous Arrow - show when not at first slide */}
-              {currentSlide > 0 && (
+              {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
+              {shouldShowNavigation && !isAtBeginning && (
                   <button
                   className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
-                  onClick={() => {
-                    if (currentSlide > 0) {
-                      setCurrentSlide(currentSlide - 1);
-                    }
-                  }}
+                  onClick={handlePrev}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path d="M15 19l-7-7 7-7"/>
@@ -231,16 +262,11 @@ export function FleetShowcase() {
                   </button>
               )}
               
-              {/* Next Arrow - only show if there are additional vehicles and we're not at the end */}
-              {sliderVehicles.length > 0 && currentSlide < Math.max(0, (gridVehicles.length + sliderVehicles.length - 4)) && (
+              {/* Next Arrow - only show if there are multiple slides and not at end */}
+              {shouldShowNavigation && !isAtEnd && (
                   <button
                     className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
-                    onClick={() => {
-                      const maxSlides = Math.max(0, gridVehicles.length + sliderVehicles.length - 4);
-                      if (currentSlide < maxSlides) {
-                        setCurrentSlide(currentSlide + 1);
-                      }
-                    }}
+                    onClick={handleNext}
                   >
                     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path d="M9 5l7 7-7 7"/>
@@ -252,7 +278,7 @@ export function FleetShowcase() {
             {/* Tablet Layout - Grid */}
             <div className="hidden md:block lg:hidden mb-8">
               <div className="grid grid-cols-2 gap-4">
-                {gridVehicles.map((vehicle, index) => renderVehicleCard(vehicle, index))}
+                {vehicles.slice(0, 4).map((vehicle, index) => renderVehicleCard(vehicle, index))}
               </div>
                 </div>
 
