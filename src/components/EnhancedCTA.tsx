@@ -74,7 +74,7 @@ export function EnhancedCTA() {
                 variant="outline" 
                 size="lg"
                 className="bg-green-600 border-2 border-green-500 text-white hover:bg-green-500 px-8 py-4 rounded-2xl font-semibold transition-all duration-300"
-                onClick={() => window.open('https://wa.me/919966363662?text=Hi! I need help with my taxi booking.', '_blank')}
+                onClick={() => window.open('https://wa.me/919966363662?text=Hi Kumar! I would like to know more about your taxi services', '_blank')}
               >
                 <FaWhatsapp className="mr-2 h-5 w-5" />
                 WhatsApp

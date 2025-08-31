@@ -26,7 +26,7 @@ export function SupportPage() {
       action: "Chat Now",
       available: "Response in < 5 mins",
       color: "bg-green-600",
-      link: "https://wa.me/919966363662?text=Hi! I need help with my taxi booking."
+      link: "https://wa.me/919966363662?text=Hi Kumar! I need support with my booking"
     },
     {
       icon: <Mail className="w-6 h-6" />,

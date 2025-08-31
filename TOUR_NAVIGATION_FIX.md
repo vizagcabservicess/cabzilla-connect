@@ -120,3 +120,5 @@ onVehicleSelect={(vehicle) => {
 - **Reduced Confusion:** No more navigation loops
 - **Flexibility:** Users can easily change vehicle selection
 - **Clarity:** Clear visual indicators for navigation options
+
+

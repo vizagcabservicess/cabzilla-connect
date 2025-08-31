@@ -93,7 +93,7 @@ export function EnhancedHero() {
                 variant="outline" 
                 size="lg"
                 className="bg-green-600/80 backdrop-blur-sm border-green-500/30 text-white hover:bg-green-600 px-6 py-4 rounded-xl"
-                onClick={() => window.open('https://wa.me/919966363662?text=Hi! I need help with my taxi booking.', '_blank')}
+                onClick={() => window.open('https://wa.me/919966363662?text=Hi Kumar! I would like to know more about your taxi services', '_blank')}
               >
                 <MessageCircle className="mr-2 h-5 w-5" />
                 WhatsApp
