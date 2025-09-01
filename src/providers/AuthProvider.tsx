@@ -28,30 +28,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedUser = localStorage.getItem('user');
         const storedToken = localStorage.getItem('auth_token');
         
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-        
         // CRITICAL: Restore token to authAPI instance FIRST
         if (storedToken) {
           authAPI.setToken(storedToken);
           console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken.substring(0, 20) + '...');
         }
         
-        // Then verify token validity with server (skip in development)
-        if (authAPI.isAuthenticated() && process.env.NODE_ENV !== 'development') {
+        // Always verify token validity with server (not just in production)
+        if (authAPI.isAuthenticated()) {
           try {
             const userData = await authAPI.getCurrentUser();
             if (userData) {
               setUser(userData);
+              // Update localStorage with fresh user data
+              localStorage.setItem('user', JSON.stringify(userData));
               console.log('DEBUG: Successfully validated token and updated user');
+            } else {
+              // Token is invalid, clear it
+              authAPI.logout();
+              setUser(null);
+              console.log('DEBUG: Token validation failed - cleared invalid token');
             }
           } catch (error) {
             console.error('Token validation failed:', error);
-            // Token is invalid, clear it (only in production)
+            // Token is invalid, clear it
             authAPI.logout();
             setUser(null);
           }
+        } else if (storedUser) {
+          // If no token but stored user exists, clear the invalid state
+          localStorage.removeItem('user');
+          setUser(null);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);

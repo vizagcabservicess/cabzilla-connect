@@ -34,9 +34,9 @@ function handleCreateOrder() {
         sendError('Booking ID is required');
     }
 
-    // Razorpay API keys (live)
-    $key_id = "rzp_live_R6nt1S648RxpNC";
-    $key_secret = "336q1h1t7sDpKyxbyqwGaNRp";
+    // Razorpay API keys - Use environment variables if available
+    $key_id = $_ENV['RAZORPAY_KEY_ID'] ?? "rzp_live_R6nt1S648RxpNC";
+    $key_secret = $_ENV['RAZORPAY_KEY_SECRET'] ?? "336q1h1t7sDpKyxbyqwGaNRp";
     
     try {
         // Get booking details
@@ -102,7 +102,7 @@ function handleCreateOrder() {
             'amount' => $amount, // paise, integer
             'display_amount' => $display_amount, // rupees
             'currency' => $order['currency'],
-            'key' => 'rzp_live_R6nt1S648RxpNC'
+            'key' => $key_id
         ]);
         
     } catch (PDOException $e) {
@@ -124,8 +124,40 @@ function handleVerifyPayment() {
     }
     
     try {
-        // TODO: Verify signature with Razorpay
-        // For now, assume payment is successful
+        // Verify Razorpay signature
+        $key_secret = $_ENV['RAZORPAY_KEY_SECRET'] ?? "336q1h1t7sDpKyxbyqwGaNRp";
+        $expected_signature = hash_hmac('sha256', $input['razorpay_order_id'] . '|' . $input['razorpay_payment_id'], $key_secret);
+        
+        if (!hash_equals($expected_signature, $input['razorpay_signature'])) {
+            error_log('Payment signature verification failed');
+            sendError('Payment verification failed - invalid signature', 400);
+        }
+        
+        // Verify payment with Razorpay API
+        $key_id = $_ENV['RAZORPAY_KEY_ID'] ?? "rzp_live_R6nt1S648RxpNC";
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => "https://api.razorpay.com/v1/payments/" . $input['razorpay_payment_id'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                "Authorization: Basic " . base64_encode($key_id . ":" . $key_secret),
+                "Content-Type: application/json"
+            ],
+        ]);
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        curl_close($curl);
+        
+        if ($err) {
+            error_log("Razorpay API Error: " . $err);
+            sendError('Failed to verify payment', 500);
+        }
+        
+        $payment = json_decode($response, true);
+        if (!$payment || $payment['status'] !== 'captured') {
+            error_log('Payment not captured: ' . json_encode($payment));
+            sendError('Payment verification failed - payment not captured', 400);
+        }
         
         // Update booking status
         $stmt = $pdo->prepare("

@@ -28,24 +28,17 @@ try {
         $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
         $token = str_replace('Bearer ', '', $authHeader);
         
-        // For testing - allow access
-        $isSuperAdmin = true;
-        $userId = 1;
-
-        // Try to parse token if available
-        try {
-            $payload = verifyJwtToken($token);
-            if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
-                $isSuperAdmin = isset($payload['role']) && $payload['role'] === 'super_admin';
-            }
-        } catch (Exception $e) {
-            error_log("JWT verification error: " . $e->getMessage());
+        // Proper JWT verification
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id']) && isset($payload['role'])) {
+            $userId = $payload['user_id'];
+            $isSuperAdmin = $payload['role'] === 'super_admin';
+            error_log("User authenticated: ID=$userId, isSuperAdmin=$isSuperAdmin");
+        } else {
+            error_log("JWT verification failed - invalid token or missing role");
         }
     } else {
-        // For testing - allow access
-        $isSuperAdmin = true;
-        $userId = 1;
+        error_log("No Authorization header found");
     }
 } catch (Exception $e) {
     error_log("JWT verification error: " . $e->getMessage());

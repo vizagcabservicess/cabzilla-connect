@@ -1,4 +1,7 @@
 <?php
+// Load environment variables first
+require_once __DIR__ . '/env-loader.php';
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -19,11 +22,14 @@ define('APP_URL', 'https://vizagtaxihub.com');
 define('APP_VERSION', '1.0.0');
 define('APP_DEBUG', false); // Set to false for production
 
-// Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'u644605165_vth_db');
-define('DB_USER', 'u644605165_vth_usr');
-define('DB_PASS', 'Ub^Ghg]Hip4#');
+// Database Configuration - Use environment variables if available
+define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
+define('DB_NAME', $_ENV['DB_NAME'] ?? 'u644605165_vth_db');
+define('DB_USER', $_ENV['DB_USER'] ?? 'u644605165_vth_usr');
+define('DB_PASS', $_ENV['DB_PASS'] ?? 'Ub^Ghg]Hip4#');
+
+// JWT Configuration - Use environment variable for secret
+define('JWT_SECRET', $_ENV['JWT_SECRET'] ?? 'cabzilla_secret_key_2024');
 
 // Database Connection Settings - Increased timeouts for stability
 ini_set('mysql.connect_timeout', '30');

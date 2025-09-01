@@ -1,6 +1,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../utils/security.php';
 
 // CORS Headers - Ensure these are set before any output
 header('Access-Control-Allow-Origin: *');
@@ -9,10 +10,8 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Access-Control-Max-Age: 86400'); // 24 hours
 header('Content-Type: application/json');
 
-// Debug headers
-header('X-PHP-Version: ' . phpversion());
-header('X-Request-Method: ' . $_SERVER['REQUEST_METHOD']);
-header('X-Script-Path: ' . __FILE__);
+// Set security headers
+setSecurityHeaders();
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -20,9 +19,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Rate limiting for admin endpoints
+$clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+if (!checkRateLimit("admin_users_$clientIP", 50, 60)) { // 50 requests per minute
+    secureLog("Rate limit exceeded for admin users endpoint", "WARNING", ['ip' => $clientIP]);
+    http_response_code(429);
+    echo json_encode(['error' => 'Too many requests. Please try again later.']);
+    exit;
+}
+
 // Log the incoming request for debugging
-error_log("Admin users.php endpoint request received: " . $_SERVER['REQUEST_METHOD']);
-error_log("Request headers: " . json_encode(getallheaders()));
+secureLog("Admin users endpoint request", "INFO", ['method' => $_SERVER['REQUEST_METHOD'], 'ip' => $clientIP]);
 
 // Get user ID from JWT token and check if admin
 $headers = getallheaders();
@@ -34,51 +41,40 @@ try {
         $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
         $token = str_replace('Bearer ', '', $authHeader);
         
-        error_log("Token received: " . substr($token, 0, 10) . "...");
+        secureLog("Token received", "DEBUG", ['token_prefix' => substr($token, 0, 10) . "...", 'ip' => $clientIP]);
         
-        // Simplified JWT check for testing - set everyone as admin temporarily for debugging
-        $isAdmin = true;
-        $userId = 1; // Default userId for testing
-
-        // Try to parse token if available
-        try {
-            $payload = verifyJwtToken($token);
-            if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
-                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                error_log("User authenticated: ID=$userId, isAdmin=$isAdmin");
-            } else {
-                error_log("Using default admin access for debugging");
-            }
-        } catch (Exception $e) {
-            error_log("JWT verification error: " . $e->getMessage() . " - Using default admin access");
+        // Proper JWT verification
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id']) && isset($payload['role'])) {
+            $userId = $payload['user_id'];
+            $isAdmin = in_array($payload['role'], ['admin', 'super_admin']);
+            secureLog("User authenticated", "INFO", ['user_id' => $userId, 'is_admin' => $isAdmin, 'role' => $payload['role']]);
+        } else {
+            secureLog("JWT verification failed", "WARNING", ['ip' => $clientIP]);
         }
     } else {
-        error_log("No Authorization header found - Using default admin access for debugging");
-        // For testing - enable this to bypass authentication temporarily
-        $isAdmin = true;
-        $userId = 1;
+        secureLog("No Authorization header found", "WARNING", ['ip' => $clientIP]);
     }
 } catch (Exception $e) {
-    error_log("JWT verification error: " . $e->getMessage() . " - Using default admin access");
-    // For testing - enable this to bypass authentication temporarily
-    $isAdmin = true;
-    $userId = 1;
+    secureLog("JWT verification error", "ERROR", ['error' => $e->getMessage(), 'ip' => $clientIP]);
 }
 
-// Check if user is admin - temporarily disabled for testing
+// Check if user is admin
 if (!$isAdmin) {
-    error_log("Admin check failed - user is not an admin or not authenticated");
+    secureLog("Admin check failed", "WARNING", ['user_id' => $userId, 'ip' => $clientIP]);
     sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
     exit;
 }
+
+// Audit log admin access
+auditLog('admin_users_access', $userId, ['action' => $_SERVER['REQUEST_METHOD']]);
 
 // Connect to database - with fallback to mock data if connection fails
 $conn = null;
 try {
     $conn = getDbConnection();
 } catch (Exception $e) {
-    error_log("Database connection failed in users.php: " . $e->getMessage());
+    secureLog("Database connection failed", "ERROR", ['error' => $e->getMessage()]);
     // Return mock data as a fallback
     $mockUsers = [
         [
@@ -126,19 +122,19 @@ try {
             ];
         }
         
-        error_log("Successfully fetched " . count($users) . " users from database");
+        secureLog("Successfully fetched " . count($users) . " users from database", "INFO");
         sendJsonResponse(['status' => 'success', 'data' => $users]);
     }
     // Handle PUT request to update user role
     else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         // Get request body
         $requestBody = file_get_contents('php://input');
-        error_log("Received PUT request body: " . $requestBody);
+        secureLog("Received PUT request body", "DEBUG", ['body' => $requestBody]);
         
         $requestData = json_decode($requestBody, true);
         
         if (!isset($requestData['userId']) || !isset($requestData['role'])) {
-            error_log("Invalid request data - missing userId or role");
+            secureLog("Invalid request data - missing userId or role", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'User ID and role are required'], 400);
             exit;
         }
@@ -148,14 +144,14 @@ try {
         
         // Validate role
         if (!in_array($newRole, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
-            error_log("Invalid role: $newRole");
+            secureLog("Invalid role: $newRole", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be one of: "guest", "user", "admin", "super_admin", "driver", "provider", "customer"'], 400);
             exit;
         }
         
         // Prevent admins from removing their own admin status
         if ($targetUserId == $userId && $newRole !== 'admin') {
-            error_log("Attempt to remove own admin status");
+            secureLog("Attempt to remove own admin status", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'You cannot remove your own admin status'], 403);
             exit;
         }
@@ -167,7 +163,7 @@ try {
         $result = $stmt->get_result();
         
         if ($result->num_rows === 0) {
-            error_log("User not found: $targetUserId");
+            secureLog("User not found: $targetUserId", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'User not found'], 404);
             exit;
         }
@@ -178,7 +174,7 @@ try {
         $success = $stmt->execute();
         
         if (!$success) {
-            error_log("Failed to update user role: " . $conn->error);
+            secureLog("Failed to update user role: " . $conn->error, "ERROR");
             throw new Exception("Failed to update user role: " . $conn->error);
         }
         
@@ -198,18 +194,18 @@ try {
             'createdAt' => $userData['created_at']
         ];
         
-        error_log("Successfully updated user role for user $targetUserId to $newRole");
+        secureLog("Successfully updated user role for user $targetUserId to $newRole", "INFO");
         sendJsonResponse(['status' => 'success', 'message' => 'User role updated successfully', 'data' => $updatedUser]);
     }
     // Handle POST request to create a new user
     else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requestBody = file_get_contents('php://input');
-        error_log("Received POST request body: " . $requestBody);
+        secureLog("Received POST request body", "DEBUG", ['body' => $requestBody]);
         $requestData = json_decode($requestBody, true);
 
         // Validate required fields
         if (!isset($requestData['name']) || !isset($requestData['email']) || !isset($requestData['role'])) {
-            error_log("Missing required fields for user creation");
+            secureLog("Missing required fields for user creation", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'Name, email, and role are required'], 400);
             exit;
         }
@@ -221,7 +217,7 @@ try {
         
         // Validate role for new user creation
         if (!in_array($role, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
-            error_log("Invalid role for new user: $role");
+            secureLog("Invalid role for new user: $role", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid role. Must be one of: "guest", "user", "admin", "super_admin", "driver", "provider", "customer"'], 400);
             exit;
         }
@@ -232,7 +228,7 @@ try {
         $success = $stmt->execute();
 
         if (!$success) {
-            error_log("Failed to create user: " . $conn->error);
+            secureLog("Failed to create user: " . $conn->error, "ERROR");
             sendJsonResponse(['status' => 'error', 'message' => 'Failed to create user: ' . $conn->error], 500);
             exit;
         }
@@ -253,7 +249,7 @@ try {
             'createdAt' => $userData['created_at']
         ];
 
-        error_log("Successfully created user $newUserId");
+        secureLog("Successfully created user $newUserId", "INFO");
         sendJsonResponse(['status' => 'success', 'message' => 'User created successfully', 'data' => $createdUser], 201);
     }
     // Handle DELETE request to delete a user (hard delete)
@@ -270,13 +266,13 @@ try {
             }
         }
         if (!$userIdToDelete) {
-            error_log("Missing user_id for deletion");
+            secureLog("Missing user_id for deletion", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'User ID is required for deletion'], 400);
             exit;
         }
         // Prevent self-deletion
         if ($userIdToDelete == $userId) {
-            error_log("Attempt to delete own user account");
+            secureLog("Attempt to delete own user account", "WARNING");
             sendJsonResponse(['status' => 'error', 'message' => 'You cannot delete your own user account'], 403);
             exit;
         }
@@ -285,18 +281,18 @@ try {
         $stmt->bind_param("i", $userIdToDelete);
         $success = $stmt->execute();
         if (!$success) {
-            error_log("Failed to delete user: " . $conn->error);
+            secureLog("Failed to delete user: " . $conn->error, "ERROR");
             sendJsonResponse(['status' => 'error', 'message' => 'Failed to delete user: ' . $conn->error], 500);
             exit;
         }
-        error_log("Successfully deleted user $userIdToDelete");
+        secureLog("Successfully deleted user $userIdToDelete", "INFO");
         sendJsonResponse(['status' => 'success', 'message' => 'User deleted successfully']);
     } else {
-        error_log("Method not allowed: " . $_SERVER['REQUEST_METHOD']);
+        secureLog("Method not allowed: " . $_SERVER['REQUEST_METHOD'], "WARNING");
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
-    error_log("Error in admin users endpoint: " . $e->getMessage());
+    secureLog("Error in admin users endpoint: " . $e->getMessage(), "ERROR");
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
 

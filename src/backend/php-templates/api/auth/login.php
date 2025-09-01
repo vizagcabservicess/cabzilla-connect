@@ -1,17 +1,18 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
+require_once __DIR__ . '/../utils/security.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
-// Debug: Log request method and input for troubleshooting
-file_put_contents(__DIR__ . '/debug_login.log', "----\n" . date('c') . "\n", FILE_APPEND);
-file_put_contents(__DIR__ . '/debug_login.log', "REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
-file_put_contents(__DIR__ . '/debug_login.log', "HEADERS: " . print_r(getallheaders(), true) . "\n", FILE_APPEND);
-file_put_contents(__DIR__ . '/debug_login.log', "RAW INPUT: " . file_get_contents('php://input') . "\n", FILE_APPEND);
-file_put_contents(__DIR__ . '/debug_login.log', "POST: " . print_r($_POST, true) . "\n", FILE_APPEND);
+
+// Set security headers
+setSecurityHeaders();
+
+// Log only basic request info for security
+secureLog("Login attempt", "INFO", ['ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -24,6 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
+// Rate limiting for login attempts
+$clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+if (!checkRateLimit("login_$clientIP", AUTH_RATE_LIMIT_MAX_REQUESTS, 300)) { // 5 attempts per 5 minutes
+    secureLog("Rate limit exceeded for login", "WARNING", ['ip' => $clientIP]);
+    http_response_code(429);
+    echo json_encode(['error' => 'Too many login attempts. Please try again later.']);
+    exit();
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
 
 // Fallback: If JSON is empty, try POST form data
@@ -31,32 +41,41 @@ if (!$input || !is_array($input)) {
     $input = $_POST;
 }
 
-// Log the final input for debugging
-file_put_contents(__DIR__ . '/debug_login.log', "FINAL INPUT: " . print_r($input, true) . "\n", FILE_APPEND);
+// Validate and sanitize input
+$validationRules = [
+    'email' => ['type' => 'email', 'required' => true, 'max_length' => 255],
+    'password' => ['type' => 'string', 'required' => true, 'min_length' => 1]
+];
 
-if (!isset($input['email']) || !isset($input['password'])) {
+$validation = validateAndSanitizeInput($input, $validationRules);
+if (!empty($validation['errors'])) {
+    secureLog("Login validation failed", "WARNING", ['errors' => $validation['errors']]);
     http_response_code(400);
-    echo json_encode(['error' => 'Email and password are required']);
+    echo json_encode(['error' => implode(', ', $validation['errors'])]);
     exit();
 }
+
+$sanitizedInput = $validation['sanitized'];
 
 try {
     $conn = getDbConnectionWithRetry();
     
     // Check if user exists
     $stmt = $conn->prepare("SELECT id, name, email, password, role, is_active FROM users WHERE email = ?");
-    $stmt->bind_param("s", $input['email']);
+    $stmt->bind_param("s", $sanitizedInput['email']);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     
-    if (!$user || !password_verify($input['password'], $user['password'])) {
+    if (!$user || !password_verify($sanitizedInput['password'], $user['password'])) {
+        secureLog("Failed login attempt", "WARNING", ['email' => $sanitizedInput['email'], 'ip' => $clientIP]);
         http_response_code(401);
         echo json_encode(['error' => 'Invalid credentials']);
         exit();
     }
     
     if (!$user['is_active']) {
+        secureLog("Login attempt for inactive account", "WARNING", ['email' => $sanitizedInput['email'], 'ip' => $clientIP]);
         http_response_code(403);
         echo json_encode(['error' => 'Account is inactive']);
         exit();
@@ -68,6 +87,10 @@ try {
     // Remove password_hash from response
     unset($user['password']);
 
+    // Audit log successful login
+    auditLog('user_login', $user['id'], ['email' => $sanitizedInput['email'], 'role' => $user['role']]);
+    secureLog("Successful login", "INFO", ['user_id' => $user['id'], 'email' => $sanitizedInput['email'], 'role' => $user['role']]);
+
     echo json_encode([
         'success' => true,
         'user' => $user,
@@ -75,7 +98,7 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log('Login error: ' . $e->getMessage());
+    secureLog("Login error", "ERROR", ['error' => $e->getMessage(), 'email' => $sanitizedInput['email'] ?? 'unknown']);
     http_response_code(500);
     echo json_encode(['error' => 'Login failed']);
 }

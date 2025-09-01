@@ -1,9 +1,9 @@
 <?php
-// Database configuration
-$host = 'localhost';
-$dbname = 'u644605165_db_be';
-$username = 'u644605165_usr_be';
-$password = 'Vizag@1213';
+// Database configuration - Use environment variables if available
+$host = $_ENV['POOLING_DB_HOST'] ?? 'localhost';
+$dbname = $_ENV['POOLING_DB_NAME'] ?? 'u644605165_db_be';
+$username = $_ENV['POOLING_DB_USER'] ?? 'u644605165_usr_be';
+$password = $_ENV['POOLING_DB_PASS'] ?? 'Vizag@1213';
 
 // CORS headers
 header('Access-Control-Allow-Origin: *');
