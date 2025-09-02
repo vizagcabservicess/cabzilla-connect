@@ -6,12 +6,9 @@ import { DestinationsShowcase } from "@/components/DestinationsShowcase";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { PopularRoutes } from "@/components/PopularRoutes";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
+import { VideoTestimonials } from "@/components/VideoTestimonials";
+import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
-import { lazy, Suspense } from "react";
-
-// Lazy load heavy components to reduce initial DOM size
-const VideoTestimonials = lazy(() => import("@/components/VideoTestimonials"));
-const SocialMediaSection = lazy(() => import("@/components/SocialMediaSection"));
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
@@ -100,14 +97,13 @@ const Index = () => {
               <ServicesShowcase />
               <FleetShowcase />
               <DestinationsShowcase />
+             
               <WhyChooseUs />
               <PopularRoutes />
               <EnhancedCTA />
               <TestimonialsSection />
-              <Suspense fallback={<div className="h-32 flex items-center justify-center"><div className="text-sm text-gray-500">Loading...</div></div>}>
-                <VideoTestimonials />
-                <SocialMediaSection />
-              </Suspense>
+              <VideoTestimonials />
+              <SocialMediaSection />
             </div>
           )}
         </main>

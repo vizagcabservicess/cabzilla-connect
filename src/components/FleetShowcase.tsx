@@ -15,6 +15,11 @@ import 'swiper/css/pagination';
 export function FleetShowcase() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const swiperRef = useRef<any>(null);
+  const [isBeginning, setIsBeginning] = useState(true);
+  const [isEnd, setIsEnd] = useState(false);
+  const [swiperInstance, setSwiperInstance] = useState<any>(null);
 
   useEffect(() => {
     async function fetchVehicles() {
@@ -31,11 +36,14 @@ export function FleetShowcase() {
     fetchVehicles();
   }, []);
 
-  // Helper functions (simplified)
+  // Helper to get vehicle type/category
   function getType(vehicle: any) {
-    return vehicle.vehicleType || vehicle.cabTypeId || 'other';
+    if (vehicle.vehicleType) return vehicle.vehicleType.toLowerCase();
+    if (vehicle.cabTypeId) return vehicle.cabTypeId.toLowerCase();
+    return 'other';
   }
 
+  // Helper to get price (per KM or base price)
   function getPrice(vehicle: any) {
     if (vehicle.pricePerKm) return `₹${vehicle.pricePerKm}`;
     if (vehicle.basePrice) return `₹${vehicle.basePrice}`;
@@ -43,69 +51,171 @@ export function FleetShowcase() {
     return '₹--';
   }
 
+  // Helper to get amenities
   function getAmenities(vehicle: any) {
     if (Array.isArray(vehicle.amenities)) return vehicle.amenities;
     if (typeof vehicle.amenities === 'string') return vehicle.amenities.split(',').map((a: string) => a.trim());
     return [];
   }
 
+  // Helper to get capacity
   function getCapacity(vehicle: any) {
     return vehicle.capacity ? `${vehicle.capacity} Pax` : '';
   }
 
+  // Helper to get bg gradient
+  function getBgGradient(type: string, index: number) {
+    // Apply yellow color to the last vehicle
+    if (index === vehicles.length - 1) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    
+    if (type.toLowerCase().includes('sedan')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    if (type.toLowerCase().includes('tempo')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+  }
+
+  // Helper to get icon color
+  function getIconColor(type: string) {
+    if (type.toLowerCase().includes('sedan')) return 'text-blue-600';
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'text-green-600';
+    if (type.toLowerCase().includes('tempo')) return 'text-purple-600';
+    return 'text-orange-600';
+  }
+
+  // Helper to get icon
+  function getIcon(type: string) {
+    if (type.toLowerCase().includes('sedan')) return Car;
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return Car;
+    if (type.toLowerCase().includes('tempo')) return Bus;
+    return Car;
+  }
+
+  // Helper to get promo code
+  function getPromoCode(vehicle: any, index: number) {
+    const type = getType(vehicle);
+    if (type.toLowerCase().includes('sedan')) return 'SEDAN200';
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'SUV300';
+    if (type.toLowerCase().includes('tempo')) return 'TEMPO500';
+    return `FLEET${index + 1}00`;
+  }
+
+  // Helper to get offer text
+  function getOfferText(vehicle: any) {
+    return `${getPrice(vehicle)} per km`;
+  }
+
+  // Calculate the 4-card window behavior
+  const ITEMS_PER_VIEW = 4;
+  const totalItems = vehicles.length;
+  
+  // Calculate if we should show navigation arrows
+  const shouldShowNavigation = totalItems > ITEMS_PER_VIEW;
+  
+  // Calculate the current window start index
+  const currentWindowStart = currentSlide;
+  const currentWindowEnd = Math.min(currentWindowStart + ITEMS_PER_VIEW - 1, totalItems - 1);
+  
+  // Check if we're at the beginning or end
+  const isAtBeginning = currentWindowStart === 0;
+  const isAtEnd = currentWindowEnd === totalItems - 1;
+  
+  // Get the current 4-card window
+  const currentWindowItems = vehicles.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
+
   const renderVehicleCard = (vehicle: any, index: number) => {
     const vehicleSlug = vehicle.id ? vehicle.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
+    const vehicleType = getType(vehicle);
+    const VehicleIcon = getIcon(vehicleType);
     
     return (
-      <div 
+      <Card 
         key={vehicle.id || index}
-        className="bg-white rounded-xl p-4 border border-gray-100 hover:shadow-lg transition-shadow cursor-pointer"
+        className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
         onClick={() => window.location.href = `/vehicle/${vehicleSlug}`}
       >
-        <div className="flex justify-between items-start mb-3">
-          <span className="bg-gray-800 text-white px-2 py-1 rounded-full text-xs font-medium">
-            {vehicle.name}
-          </span>
-          <div className="inline-flex items-center gap-2 bg-gray-50 border rounded-lg px-2 py-1 text-xs font-medium text-gray-800">
-            <Users className="h-3 w-3" />
-            {getCapacity(vehicle)}
+        <CardContent className="p-5 relative h-full flex flex-col">
+          {/* Background Pattern */}
+          <div className={`absolute inset-0 ${getBgGradient(vehicleType, index)} opacity-50`}></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+          
+          {/* Content */}
+          <div className="relative z-10 flex flex-col h-full">
+            {/* Category Tag */}
+            <div className="flex justify-between items-start mb-3">
+              <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                {vehicle.name}
+              </div>
+            </div>
+
+            {/* Main Offer and Passenger Count Row */}
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-gray-900 leading-tight">
+                {getOfferText(vehicle)}
+              </h3>
+              <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800">
+                <Users className="h-4 w-4" />
+                {getCapacity(vehicle)}
+              </div>
+            </div>
+
+            {/* Validity */}
+            <p className="text-sm text-gray-600 mb-3">
+              Applies for min 300 km during outstation round trip
+            </p>
+
+            {/* Vehicle Image */}
+            <div className="flex-grow flex items-center justify-center mb-3">
+            {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
+              <img
+                src={vehicle.image}
+                alt={vehicle.name}
+                  className="w-full h-32 object-cover rounded-lg"
+                  onError={e => { 
+                    (e.target as HTMLImageElement).style.display = 'none'; 
+                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                  }}
+              />
+            ) : (
+                <div className="w-full h-32 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <Car className="h-12 w-12 text-gray-400" />
+              </div>
+            )}
+            </div>
+
+            {/* Features */}
+            <div className="flex flex-wrap gap-2">
+              {getAmenities(vehicle).slice(0, 2).map((feature: string, idx: number) => (
+                <div key={idx} className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {feature}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        
-        <h3 className="text-lg font-bold text-gray-900 mb-1">{getPrice(vehicle)} per km</h3>
-        <p className="text-sm text-gray-600 mb-3">Applies for min 300 km during outstation round trip</p>
-        
-        <div className="flex items-center justify-center mb-3 h-24">
-          {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
-            <img
-              src={vehicle.image}
-              alt={vehicle.name}
-              className="w-full h-full object-cover rounded-lg"
-              onError={e => { 
-                (e.target as HTMLImageElement).style.display = 'none'; 
-              }}
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-200 rounded-lg flex items-center justify-center">
-              <Car className="h-8 w-8 text-gray-400" />
-            </div>
-          )}
-        </div>
-        
-        <div className="flex flex-wrap gap-2">
-          {getAmenities(vehicle).slice(0, 2).map((feature: string, idx: number) => (
-            <div key={idx} className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-              {feature}
-            </div>
-          ))}
-        </div>
-      </div>
+          </CardContent>
+        </Card>
     );
+  };
+
+  const handleNext = () => {
+    if (!isAtEnd) {
+      // Calculate the next window start
+      const nextStart = Math.min(currentWindowStart + 1, totalItems - ITEMS_PER_VIEW);
+      setCurrentSlide(nextStart);
+    }
+  };
+
+  const handlePrev = () => {
+    if (!isAtBeginning) {
+      // Move back by 1
+      const prevStart = Math.max(currentWindowStart - 1, 0);
+      setCurrentSlide(prevStart);
+    }
   };
 
   return (
     <section className="pt-4 md:pt-8 pb-0 bg-white">
       <div className="max-w-7xl mx-auto px-4">
+        {/* Header */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
             Our Premium Fleet
@@ -115,22 +225,119 @@ export function FleetShowcase() {
           </p>
         </div>
 
+        {/* Loading State */}
         {loading ? (
           <div className="flex justify-center py-10">
             <Car className="h-8 w-8 animate-spin text-gray-400" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {vehicles.slice(0, 8).map(renderVehicleCard)}
-          </div>
+          <>
+            {/* Desktop Layout - 4-card window with proper navigation */}
+            <div className="hidden lg:block mb-8 relative overflow-hidden">
+              <div className="flex gap-4 justify-center">
+                {currentWindowItems.map((vehicle, index) => (
+                  <div key={vehicle.id || index} className="w-full max-w-[calc(25%-12px)]">
+                    {renderVehicleCard(vehicle, currentWindowStart + index)}
+                  </div>
+                ))}
+                {/* Fill remaining slots with invisible cards to maintain 4-card layout */}
+                {currentWindowItems.length < ITEMS_PER_VIEW && 
+                  Array.from({ length: ITEMS_PER_VIEW - currentWindowItems.length }).map((_, index) => (
+                    <div key={`empty-${index}`} className="w-full max-w-[calc(25%-12px)] invisible">
+                      <div className="h-[380px]"></div>
+                    </div>
+                  ))
+                }
+              </div>
+              
+              {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
+              {shouldShowNavigation && !isAtBeginning && (
+                  <button
+                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                  onClick={handlePrev}
+                >
+                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path d="M15 19l-7-7 7-7"/>
+                    </svg>
+                  </button>
+              )}
+              
+              {/* Next Arrow - only show if there are multiple slides and not at end */}
+              {shouldShowNavigation && !isAtEnd && (
+                  <button
+                    className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                    onClick={handleNext}
+                  >
+                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path d="M9 5l7 7-7 7"/>
+                    </svg>
+                  </button>
+                )}
+            </div>
+
+            {/* Tablet Layout - Grid */}
+            <div className="hidden md:block lg:hidden mb-8">
+              <div className="grid grid-cols-2 gap-4">
+                {vehicles.slice(0, 4).map((vehicle, index) => renderVehicleCard(vehicle, index))}
+              </div>
+                </div>
+
+            {/* Mobile Slider */}
+            <div className="md:hidden mb-8">
+                <Swiper
+                modules={[Pagination]}
+                spaceBetween={12}
+                slidesPerView={1.2}
+                pagination={false}
+                onSwiper={setSwiperInstance}
+                onSlideChange={(swiper) => setCurrentSlide(swiper.activeIndex)}
+                className="fleet-swiper"
+              >
+                {vehicles.map((vehicle, index) => (
+                  <SwiperSlide key={vehicle.id || index}>
+                    {renderVehicleCard(vehicle, index)}
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+                
+                {/* Custom Pagination with Dots and Counter */}
+                <div className="flex justify-center items-center mt-4">
+                  <div className="flex items-center gap-1">
+                    {vehicles.map((_, index) => {
+                      // Show the counter pill in place of the active dot
+                      if (index === currentSlide) {
+                        return (
+                          <div 
+                            key={index}
+                            className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                          >
+                            {currentSlide + 1}/{vehicles.length}
+                          </div>
+                        );
+                      }
+                      
+                      // Show regular dots for inactive slides
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => swiperInstance?.slideTo(index)}
+                          className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+            </div>
+          </>
         )}
 
-        <div className="text-center mt-8 bg-gray-50 rounded-xl p-4">
+        {/* Bottom Info */}
+        <div className="text-center mt-8 bg-gray-50 rounded-2xl p-6">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
-            <Shield className="h-4 w-4" />
-            <span className="font-medium text-sm">Safety Guaranteed</span>
+            <Shield className="h-5 w-5" />
+            <span className="font-medium">Safety Guaranteed</span>
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-gray-500">
             All vehicles are regularly sanitized and maintained for your safety and comfort.
           </p>
         </div>
