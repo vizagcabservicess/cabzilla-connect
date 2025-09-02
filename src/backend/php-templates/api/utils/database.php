@@ -5,10 +5,17 @@
 
 // Connect to the MySQL database
 function connectToDatabase() {
-    $db_host = 'localhost';
-    $db_user = 'u644605165_usr_be';
-    $db_pass = 'Vizag@1213';
-    $db_name = 'u644605165_db_be';
+    // SECURITY: Use environment variables for database credentials ONLY
+    $db_host = $_ENV['DB_HOST'] ?? null;
+    $db_user = $_ENV['DB_USER'] ?? null;
+    $db_pass = $_ENV['DB_PASS'] ?? null;
+    $db_name = $_ENV['DB_NAME'] ?? null;
+    
+    // SECURITY: Fail completely if any database configuration is missing
+    if (empty($db_host) || empty($db_user) || empty($db_pass) || empty($db_name)) {
+        error_log("CRITICAL: Database configuration incomplete. Missing environment variables.");
+        throw new Exception("Database configuration incomplete. Please check environment variables: DB_HOST, DB_USER, DB_PASS, DB_NAME");
+    }
     
     // Create a new mysqli connection
     $mysqli = new mysqli($db_host, $db_user, $db_pass, $db_name);
