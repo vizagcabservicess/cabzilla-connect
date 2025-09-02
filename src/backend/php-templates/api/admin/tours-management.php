@@ -1,18 +1,13 @@
 <?php
 require_once '../../config.php';
+require_once '../utils/auth.php'; // Ensure auth utilities are loaded
 
-// Fallback for verifyJwtToken if not defined (for development/testing)
-if (!function_exists('verifyJwtToken')) {
-    function verifyJwtToken($token) {
-        // Always return admin for dev
-        return ['role' => 'admin', 'user_id' => 1];
-    }
-}
-
-// CORS Headers
-header('Access-Control-Allow-Origin: *');
+// SECURITY FIX: Remove dangerous fallback function that granted admin access to anyone
+// CORS Headers - RESTRICTED for admin endpoints
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : ''));
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Credentials: true');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request

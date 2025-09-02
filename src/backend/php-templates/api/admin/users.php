@@ -1,7 +1,34 @@
 <?php
-// Include configuration file
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../utils/security.php';
+// Simple logging for debugging
+function logDebug($message) {
+    $logFile = __DIR__ . '/users_debug.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message\n";
+    file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+}
+
+// Start logging
+logDebug("=== USERS.PHP SCRIPT STARTED ===");
+
+try {
+    logDebug("Including config.php...");
+    require_once __DIR__ . '/../../config.php';
+    logDebug("config.php included successfully");
+    
+    logDebug("Including security.php...");
+    require_once __DIR__ . '/../utils/security.php';
+    logDebug("security.php included successfully");
+    
+    logDebug("Including auth.php...");
+    require_once __DIR__ . '/../utils/auth.php';
+    logDebug("auth.php included successfully");
+    
+} catch (Exception $e) {
+    logDebug("ERROR including files: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Configuration error: ' . $e->getMessage()]);
+    exit;
+}
 
 // CORS Headers - Ensure these are set before any output
 header('Access-Control-Allow-Origin: *');
@@ -43,8 +70,22 @@ try {
         
         secureLog("Token received", "DEBUG", ['token_prefix' => substr($token, 0, 10) . "...", 'ip' => $clientIP]);
         
-        // Proper JWT verification
+        // Proper JWT verification with debugging
+        logDebug("Starting JWT verification...");
+        logDebug("Token length: " . strlen($token));
+        logDebug("Token starts with: " . substr($token, 0, 20) . "...");
+        
         $payload = verifyJwtToken($token);
+        logDebug("JWT verification result: " . ($payload ? "SUCCESS" : "FAILED"));
+        
+        if ($payload) {
+            logDebug("JWT payload: " . json_encode($payload));
+            logDebug("User ID in payload: " . ($payload['user_id'] ?? 'NOT SET'));
+            logDebug("Role in payload: " . ($payload['role'] ?? 'NOT SET'));
+        } else {
+            logDebug("JWT verification failed - no payload returned");
+            logDebug("Check server error logs for JWT verification details");
+        }
         if ($payload && isset($payload['user_id']) && isset($payload['role'])) {
             $userId = $payload['user_id'];
             $isAdmin = in_array($payload['role'], ['admin', 'super_admin']);

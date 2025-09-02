@@ -34,9 +34,15 @@ function handleCreateOrder() {
         sendError('Booking ID is required');
     }
 
-    // Razorpay API keys - Use environment variables if available
-    $key_id = $_ENV['RAZORPAY_KEY_ID'] ?? "rzp_live_R6nt1S648RxpNC";
-    $key_secret = $_ENV['RAZORPAY_KEY_SECRET'] ?? "336q1h1t7sDpKyxbyqwGaNRp";
+    // Razorpay API keys - CRITICAL: Use environment variables only
+    $key_id = $_ENV['RAZORPAY_KEY_ID'] ?? null;
+    $key_secret = $_ENV['RAZORPAY_KEY_SECRET'] ?? null;
+    
+    // SECURITY: Fail if credentials not properly configured
+    if (!$key_id || !$key_secret) {
+        error_log("CRITICAL: Razorpay credentials not configured in environment");
+        sendError('Payment service not configured', 500);
+    }
     
     try {
         // Get booking details

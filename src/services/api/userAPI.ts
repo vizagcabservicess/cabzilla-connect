@@ -2,6 +2,20 @@ import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { User } from '@/types/api';
 
+// Helper function to get auth token
+const getAuthToken = () => {
+  return localStorage.getItem('auth_token');
+};
+
+// Helper function to create headers with auth token
+const getAuthHeaders = () => {
+  const token = getAuthToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
 // Define a userAPI object with methods for user-related API operations
 export const userAPI = {
   /**
@@ -9,7 +23,9 @@ export const userAPI = {
    */
   getAllUsers: async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/admin/users.php`);
+      const response = await axios.get(`${API_BASE_URL}/api/admin/users.php`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching all users:', error);
@@ -23,9 +39,7 @@ export const userAPI = {
   createUser: async (userData: Partial<User>) => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/admin/users.php`, userData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {
@@ -44,9 +58,7 @@ export const userAPI = {
         `${API_BASE_URL}/api/admin/users.php`,
         { userId, role: userData.role },
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders()
         }
       );
       return response.data;
@@ -65,9 +77,7 @@ export const userAPI = {
         `${API_BASE_URL}/api/admin/users.php`,
         {
           data: { user_id: userId },
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders()
         }
       );
       return response.data;
@@ -86,9 +96,7 @@ export const userAPI = {
         `${API_BASE_URL}/api/admin/users.php`,
         { userId, role },
         {
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders()
         }
       );
       return response.data;

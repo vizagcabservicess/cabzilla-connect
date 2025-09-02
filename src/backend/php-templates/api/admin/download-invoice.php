@@ -58,7 +58,8 @@ $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 while (ob_get_level()) ob_end_clean();
 
 // CRITICAL: Set CORS headers
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : ''));
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 

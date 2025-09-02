@@ -1,14 +1,23 @@
 <?php
-// Database configuration - Use environment variables if available
-$host = $_ENV['POOLING_DB_HOST'] ?? 'localhost';
-$dbname = $_ENV['POOLING_DB_NAME'] ?? 'u644605165_db_be';
-$username = $_ENV['POOLING_DB_USER'] ?? 'u644605165_usr_be';
-$password = $_ENV['POOLING_DB_PASS'] ?? 'Vizag@1213';
+// Database configuration - CRITICAL: Use environment variables only
+$host = $_ENV['POOLING_DB_HOST'] ?? null;
+$dbname = $_ENV['POOLING_DB_NAME'] ?? null;
+$username = $_ENV['POOLING_DB_USER'] ?? null;
+$password = $_ENV['POOLING_DB_PASS'] ?? null;
 
-// CORS headers
-header('Access-Control-Allow-Origin: *');
+// SECURITY: Fail if credentials not properly configured
+if (!$host || !$dbname || !$username || !$password) {
+    error_log("CRITICAL: Pooling database credentials not configured in environment");
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Database not configured']);
+    exit;
+}
+
+// CORS headers - RESTRICTED for security
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : ''));
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Credentials: true');
 header('Content-Type: application/json; charset=utf-8');
 
 // Handle preflight OPTIONS request

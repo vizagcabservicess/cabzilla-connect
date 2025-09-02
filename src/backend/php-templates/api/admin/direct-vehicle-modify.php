@@ -2,15 +2,31 @@
 if (file_exists(__DIR__ . '/../../config.php')) {
     require_once __DIR__ . '/../../config.php';
 }
+require_once __DIR__ . '/../utils/auth.php'; // CRITICAL: Add authentication
+
 /**
  * direct-vehicle-modify.php - Direct database operations for vehicle data
  * This script provides a robust interface for both adding and modifying vehicle data
+ * SECURITY MODEL: Public read access for vehicle loading, admin authentication for modifications
  */
 
-// Set CORS headers
-header('Access-Control-Allow-Origin: *');
+// SECURITY CHECK - Require admin authentication only for modifications
+// Allow public read access for vehicle loading
+$isReadOnlyRequest = ($_SERVER['REQUEST_METHOD'] === 'GET' && 
+                     isset($_GET['action']) && 
+                     in_array($_GET['action'], ['load', 'list']));
+
+if (!$isReadOnlyRequest && !validateAdminAuth()) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.']);
+    exit;
+}
+
+// Set CORS headers - Allow public read access for vehicle loading
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh');
+header('Access-Control-Allow-Credentials: true');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 

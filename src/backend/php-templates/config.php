@@ -22,14 +22,21 @@ define('APP_URL', 'https://vizagtaxihub.com');
 define('APP_VERSION', '1.0.0');
 define('APP_DEBUG', false); // Set to false for production
 
-// Database Configuration - Use environment variables if available
-define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
-define('DB_NAME', $_ENV['DB_NAME'] ?? 'u644605165_vth_db');
-define('DB_USER', $_ENV['DB_USER'] ?? 'u644605165_vth_usr');
-define('DB_PASS', $_ENV['DB_PASS'] ?? 'Ub^Ghg]Hip4#');
+// Database Configuration - CRITICAL: Use environment variables only
+define('DB_HOST', $_ENV['DB_HOST'] ?? null);
+define('DB_NAME', $_ENV['DB_NAME'] ?? null);
+define('DB_USER', $_ENV['DB_USER'] ?? null);
+define('DB_PASS', $_ENV['DB_PASS'] ?? null);
 
-// JWT Configuration - Use environment variable for secret
-define('JWT_SECRET', $_ENV['JWT_SECRET'] ?? 'cabzilla_secret_key_2024');
+// JWT Configuration - CRITICAL: Use environment variable only
+define('JWT_SECRET', $_ENV['JWT_SECRET'] ?? null);
+
+// SECURITY: Fail if critical credentials not configured
+if (!DB_HOST || !DB_NAME || !DB_USER || !DB_PASS || !JWT_SECRET) {
+    error_log('CRITICAL: Database or JWT credentials not configured in environment');
+    http_response_code(500);
+    die('Configuration error: Missing required environment variables');
+}
 
 // Database Connection Settings - Increased timeouts for stability
 ini_set('mysql.connect_timeout', '30');
@@ -101,7 +108,8 @@ if (!function_exists('sendJsonResponse')) {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
-        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : ''));
+        header('Access-Control-Allow-Credentials: true');
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
         
@@ -150,7 +158,7 @@ if (!function_exists('generateJwtToken')) {
         
         $header = base64url_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
         $payload = base64url_encode(json_encode($payload));
-        $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", 'cabzilla_secret_key_2024', true));
+        $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", JWT_SECRET, true));
         
         return "$header.$payload.$signature";
     }

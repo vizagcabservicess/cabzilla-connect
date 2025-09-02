@@ -36,3 +36,9 @@ src/backend/
 
 # PHP templates
 **/php-templates/
+
+# Environment files - CRITICAL FOR SECURITY
+.env
+*.env
+.env.*
+!env.example

@@ -9,7 +9,10 @@ require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/auth.php';
 
 // Ensure user is authenticated
-validateAdminAuth();
+if (!validateAdminAuth()) {
+    sendErrorResponse("Unauthorized. Admin privileges required.", [], 403);
+    exit;
+}
 
 // Get the request method
 $method = $_SERVER['REQUEST_METHOD'];
