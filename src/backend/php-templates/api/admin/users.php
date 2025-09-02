@@ -30,8 +30,14 @@ try {
     exit;
 }
 
-// CORS Headers - Ensure these are set before any output
-header('Access-Control-Allow-Origin: *');
+// CORS Headers - SECURITY: Restrict to trusted domains only
+$allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} else {
+    header('Access-Control-Allow-Origin: https://vizagtaxihub.com');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Debug-Attempt, Pragma, Cache-Control, Expires');
 header('Access-Control-Max-Age: 86400'); // 24 hours

@@ -22,8 +22,14 @@ if (!$isReadOnlyRequest && !validateAdminAuth()) {
     exit;
 }
 
-// Set CORS headers - Allow public read access for vehicle loading
-header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
+// Set CORS headers - Restrict to trusted domains only
+$allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} else {
+    header('Access-Control-Allow-Origin: https://vizagtaxihub.com');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh');
 header('Access-Control-Allow-Credentials: true');
@@ -181,27 +187,12 @@ if (file_exists(__DIR__ . '/../../config.php')) {
     }
 }
 
-// If no connection yet, try direct connection
-if (!$conn && class_exists('mysqli')) {
-    // Fallback database credentials
-    $dbHost = 'localhost';
-    $dbName = 'u64460565_db_be';
-    $dbUser = 'u64460565_usr_be';
-    $dbPass = 'Vizag@1213';
-    
-    try {
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            logModifyDebug("Failed to connect to database: " . $conn->connect_error);
-            $conn = null;
-        } else {
-            $conn->set_charset("utf8mb4");
-            logModifyDebug("Connected to database with direct credentials");
-        }
-    } catch (Exception $e) {
-        logModifyDebug("Connection error: " . $e->getMessage());
-        $conn = null;
-    }
+// Security: No fallback database credentials allowed
+// Database connection must be established through secure environment variables
+if (!$conn) {
+    logModifyDebug("ERROR: Database connection failed - no fallback credentials allowed");
+    sendJsonResponse(['error' => 'Database connection failed. Please check environment configuration.'], 500);
+    exit;
 }
 
 // If we have a database connection, perform the operation
@@ -487,26 +478,12 @@ function loadVehiclesFromDatabase() {
             }
         }
         
-        // If still no connection, try direct connection
-        if (!$conn && class_exists('mysqli')) {
-            $dbHost = 'localhost';
-            $dbName = 'u64460565_db_be';
-            $dbUser = 'u64460565_usr_be';
-            $dbPass = 'Vizag@1213';
-            
-            try {
-                $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-                if ($conn->connect_error) {
-                    logModifyDebug("Failed to connect to database for loading: " . $conn->connect_error);
-                    $conn = null;
-                } else {
-                    $conn->set_charset("utf8mb4");
-                    logModifyDebug("Connected to database with direct credentials for loading");
-                }
-            } catch (Exception $e) {
-                logModifyDebug("Connection error for loading: " . $e->getMessage());
-                $conn = null;
-            }
+        // Security: No fallback database credentials allowed
+        // Database connection must be established through secure environment variables
+        if (!$conn) {
+            logModifyDebug("ERROR: Database connection failed for loading - no fallback credentials allowed");
+            sendJsonResponse(['error' => 'Database connection failed. Please check environment configuration.'], 500);
+            exit;
         }
     }
     

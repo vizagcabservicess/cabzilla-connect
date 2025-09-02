@@ -30,8 +30,14 @@ $debugMode = isset($_GET['debug']) || isset($_SERVER['HTTP_X_DEBUG']);
 $format = isset($_GET['format']) ? strtolower($_GET['format']) : 'pdf';
 $isPdfOutput = ($format === 'pdf');
 
-// CRITICAL: Set CORS headers
-header('Access-Control-Allow-Origin: *');
+// CRITICAL: Set CORS headers - SECURITY: Restrict to trusted domains only
+$allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} else {
+    header('Access-Control-Allow-Origin: https://vizagtaxihub.com');
+}
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 

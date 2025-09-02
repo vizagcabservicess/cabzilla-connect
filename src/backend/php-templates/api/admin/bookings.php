@@ -12,9 +12,16 @@ if (file_exists(__DIR__ . '/../common/db_helper.php')) {
 
 // Set response headers first - CRUCIAL to ensure we get JSON, not HTML
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+// SECURITY: Restrict CORS to trusted domains only
+$allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} else {
+    header('Access-Control-Allow-Origin: https://vizagtaxihub.com');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -104,20 +111,13 @@ try {
     } else if (function_exists('getDbConnection')) {
         $conn = getDbConnection();
     } else {
-        // Direct connection as fallback
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
+        // SECURITY: No fallback database credentials allowed
+        // Database connection must be established through secure environment variables
+        throw new Exception("Database connection failed - no fallback credentials allowed. Please check environment configuration.");
     }
     
     if (!$conn) {
-        throw new Exception("Database connection failed");
+        throw new Exception("Database connection failed - no fallback credentials allowed");
     }
 
     // Check if bookings table exists - but don't create if missing
@@ -237,3 +237,4 @@ try {
         'error' => $e->getMessage()
     ]);
 }
+?>
