@@ -140,20 +140,18 @@ try {
     $conn = null;
     if (function_exists('getDbConnection')) {
         $conn = getDbConnection();
-    } else if (class_exists('mysqli')) {
-        // Fallback database credentials
-        $dbHost = 'localhost';
-        $dbName = 'u64460565_db_be';
-        $dbUser = 'u64460565_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        if ($conn->connect_error) {
-            logDebug("Failed to connect to database: " . $conn->connect_error);
-            $conn = null;
-        } else {
-            $conn->set_charset("utf8mb4");
-        }
+    } else {
+        // SECURITY: No fallback database credentials allowed
+        // Database connection must be established through secure environment variables
+        logDebug("ERROR: Database connection failed - no fallback credentials allowed");
+        sendJsonResponse(['error' => 'Database connection failed. Please check environment configuration.'], 500);
+        exit;
+    }
+    
+    if (!$conn) {
+        logDebug("ERROR: Database connection failed - no fallback credentials allowed");
+        sendJsonResponse(['error' => 'Database connection failed. Please check environment configuration.'], 500);
+        exit;
     }
     
     if ($conn) {
