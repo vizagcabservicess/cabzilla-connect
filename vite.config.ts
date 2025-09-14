@@ -43,6 +43,8 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
+    // Copy .htaccess file to build directory
+    copyPublicDir: true,
   },
   define: {
     // Ensure environment variables are available at build time

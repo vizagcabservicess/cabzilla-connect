@@ -8,6 +8,8 @@ import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
+import { ServiceLinks } from '@/components/ServiceLinks';
+import { PopularDestinations } from '@/components/PopularDestinations';
 
 export function OutstationTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -363,6 +365,27 @@ export function OutstationTaxiPage() {
       )}
 
      
+
+      {/* Popular Destinations Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <PopularDestinations 
+            title="Popular Outstation Destinations"
+            limit={8}
+            showFares={true}
+          />
+        </div>
+      </section>
+
+      {/* Service Links Section */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <ServiceLinks 
+            currentService="/outstation-taxi"
+            title="Explore Our Other Services"
+          />
+        </div>
+      </section>
 
       </main>
       <Footer />

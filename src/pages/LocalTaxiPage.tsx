@@ -8,6 +8,7 @@ import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
+import { ServiceLinks } from '@/components/ServiceLinks';
 
 export function LocalTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -453,10 +454,20 @@ export function LocalTaxiPage() {
         </div>
       </section>
       )}
+     {/* Service Links Section */}
+     <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <ServiceLinks 
+            currentService="/local-taxi"
+            title="Explore Our Other Services"
+          />
+        </div>
+      </section>
 
 
       </main>
       <Footer />
+   
       <MobileNavigation />
       <script type="application/ld+json">
         {JSON.stringify(structuredData)}

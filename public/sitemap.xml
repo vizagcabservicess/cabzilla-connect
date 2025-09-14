@@ -61,7 +61,7 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/contact</loc>
+    <loc>https://vizagtaxihub.com/contact-us</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -318,25 +318,31 @@
 
   <!-- Tour Packages -->
   <url>
-    <loc>https://vizagtaxihub.com/tours/araku-valley-tour</loc>
+    <loc>https://vizagtaxihub.com/tours/araku</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/vizag-north-city-tour</loc>
+    <loc>https://vizagtaxihub.com/tours/vizag_north_city_tour</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/lambasingi-tour</loc>
+    <loc>https://vizagtaxihub.com/tours/lambasingi</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/vizag-south-city-tour</loc>
+    <loc>https://vizagtaxihub.com/tours/vizag_south_city_tour</loc>
+    <lastmod>2024-12-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://vizagtaxihub.com/tours/araku_vizag_3D_2N</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -344,7 +350,7 @@
 
   <!-- Fleet Vehicles -->
   <url>
-    <loc>https://vizagtaxihub.com/vehicle/swift-dzire</loc>
+    <loc>https://vizagtaxihub.com/vehicle/sedan</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -356,7 +362,7 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/vehicle/toyota-glanza</loc>
+    <loc>https://vizagtaxihub.com/vehicle/toyota</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

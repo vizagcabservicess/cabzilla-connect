@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
+import { PopularDestinations } from '@/components/PopularDestinations';
 
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,6 +101,8 @@ const Index = () => {
              
               <WhyChooseUs />
               <PopularRoutes />
+       
+              
               <EnhancedCTA />
               <TestimonialsSection />
               <VideoTestimonials />

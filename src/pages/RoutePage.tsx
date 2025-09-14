@@ -7,6 +7,8 @@ import { CabOptions } from '@/components/CabOptions';
 import { Helmet } from 'react-helmet-async';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { getRouteBySlug } from '@/lib/routeData';
+import { RelatedRoutes } from '@/components/RelatedRoutes';
+import { ServiceLinks } from '@/components/ServiceLinks';
 
 export const RoutePage = () => {
   const { slug } = useParams();
@@ -184,6 +186,26 @@ export const RoutePage = () => {
             </div>
           </section>
         )}
+        
+        {/* Related Routes Section */}
+        <section className="py-12 bg-gray-50">
+          <div className="container mx-auto px-4">
+            <RelatedRoutes 
+              currentRoute={routeInfo ? { from: routeInfo.from, to: routeInfo.to } : undefined}
+              limit={4}
+            />
+          </div>
+        </section>
+
+        {/* Service Links Section */}
+        <section className="py-12 bg-white">
+          <div className="container mx-auto px-4">
+            <ServiceLinks 
+              currentService="/outstation-taxi"
+              title="Explore Our Other Services"
+            />
+          </div>
+        </section>
         
         <MobileNavigation />
       </div>

@@ -72,7 +72,7 @@ module.exports = {
   // Prerender service configuration
   prerenderService: {
     // For Prerender.io
-    token: process.env.PRERENDER_TOKEN || '',
+    token: process.env.PRERENDER_TOKEN || '8nM46UKKpkXVmwdA3axX',
     serviceUrl: 'https://service.prerender.io/',
     
     // For Rendertron
