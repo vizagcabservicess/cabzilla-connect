@@ -28,7 +28,7 @@ import {
   Download
 } from 'lucide-react';
 import { TourDetail } from '@/types/tour';
-import { VehicleWithPricing } from '@/types/vehicle';
+import { CabType } from '@/types/cab';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
@@ -36,9 +36,14 @@ import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
+import { getTourIdFromSlug, getTourUrl } from '@/utils/tourUrlUtils';
+
+interface VehicleWithPricing extends CabType {
+  price: number;
+}
 
 const TourDetailPage = () => {
-  const { tourId } = useParams<{ tourId: string }>();
+  const { tourSlug } = useParams<{ tourSlug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -89,6 +94,7 @@ const TourDetailPage = () => {
   // Edit functionality
   const handleEditTrip = () => {
     // Navigate back to main booking page with tour context
+    const tourId = getTourIdFromSlug(tourSlug || '');
     navigate('/', { 
       state: { 
         tripType: 'tour',
@@ -113,10 +119,10 @@ const TourDetailPage = () => {
   };
 
   useEffect(() => {
-    if (tourId) {
+    if (tourSlug) {
       loadTourDetail();
     }
-  }, [tourId]);
+  }, [tourSlug]);
 
   useEffect(() => {
     if (tour) {
@@ -134,6 +140,7 @@ const TourDetailPage = () => {
         const details = JSON.parse(storedDetails);
         // If this is a tour booking and we have a selected vehicle, 
         // but we want to show vehicle selection instead of booking form
+        const tourId = getTourIdFromSlug(tourSlug || '');
         if (details.bookingType === 'tour' && details.tourId === tourId) {
           // Reset to vehicle selection view
           setShowBookingForm(false);
@@ -146,22 +153,51 @@ const TourDetailPage = () => {
         console.error('Error parsing booking details:', error);
       }
     }
-  }, [tourId]);
+  }, [tourSlug]);
 
   const loadTourDetail = async () => {
-    if (!tourId) return;
+    if (!tourSlug) return;
     try {
       setIsLoading(true);
-      const tourDetail = await tourDetailAPI.getTourDetail(tourId);
-      console.log('Fetched Tour Detail:', tourDetail);
-      if (tourDetail) {
-        setTour(tourDetail);
+      
+      // First, try to get all tours to find the correct tour ID
+      const allTours = await tourDetailAPI.getTours();
+      console.log('All available tours:', allTours);
+      
+      // Find the tour that matches our URL slug
+      const matchingTour = allTours.find(tour => {
+        const tourUrl = getTourUrl(tour);
+        const urlSlug = tourUrl.replace('/tours/', '');
+        return urlSlug === tourSlug;
+      });
+      
+      if (matchingTour) {
+        // Get the detailed tour information
+        const tourDetail = await tourDetailAPI.getTourDetail(matchingTour.tourId);
+        console.log('Fetched Tour Detail:', tourDetail);
+        if (tourDetail) {
+          setTour(tourDetail);
+        } else {
+          toast({
+            title: "Tour not found",
+            description: "The requested tour could not be found",
+            variant: "destructive",
+          });
+        }
       } else {
-        toast({
-          title: "Tour not found",
-          description: "The requested tour could not be found",
-          variant: "destructive",
-        });
+        // Fallback: try the original method
+        const tourId = getTourIdFromSlug(tourSlug);
+        const tourDetail = await tourDetailAPI.getTourDetail(tourId);
+        console.log('Fetched Tour Detail (fallback):', tourDetail);
+        if (tourDetail) {
+          setTour(tourDetail);
+        } else {
+          toast({
+            title: "Tour not found",
+            description: "The requested tour could not be found",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading tour detail:', error);
@@ -253,20 +289,21 @@ const TourDetailPage = () => {
   function vehicleWithPricingToCabType(vehicle: VehicleWithPricing | null) {
     if (!vehicle) return null;
     return {
-      id: vehicle.id || vehicle.vehicle_id,
+      id: vehicle.id || vehicle.vehicleId,
       name: vehicle.name,
       capacity: vehicle.capacity,
-      luggageCapacity: 0,
+      luggageCapacity: vehicle.luggageCapacity || 0,
       image: vehicle.image || '',
-      amenities: [],
-      description: '',
-      ac: true,
+      amenities: vehicle.amenities || [],
+      description: vehicle.description || '',
+      ac: vehicle.ac || true,
       price: vehicle.price,
-      pricePerKm: undefined,
-      nightHaltCharge: undefined,
-      driverAllowance: undefined,
-      vehicleId: vehicle.vehicle_id || vehicle.id,
-      vehicleType: vehicle.type || '',
+      pricePerKm: vehicle.pricePerKm,
+      nightHaltCharge: vehicle.nightHaltCharge,
+      driverAllowance: vehicle.driverAllowance,
+      vehicleId: vehicle.vehicleId || vehicle.id,
+      vehicleType: vehicle.vehicleType || '',
+      inactiveDates: vehicle.inactiveDates || [],
     };
   }
 
@@ -283,7 +320,7 @@ const TourDetailPage = () => {
         dropLocation: '',
         pickupDate: formatDateForAPI(pickupDate),
         returnDate: null,
-        vehicleType: selectedVehicle.type,
+        vehicleType: selectedVehicle.vehicleType || selectedVehicle.name,
         cabType: selectedVehicle.name,
         distance: computedDistance,
         tripType: 'tour',
@@ -385,7 +422,7 @@ const TourDetailPage = () => {
   const seoDescription = `${tour.tourName} - ${tour.duration} tour package from Visakhapatnam. ${tour.description.substring(0, 120)}... Book now for the best prices and professional service.`;
   const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
   const tourImage = tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
-  const tourUrl = `https://vizagtaxihub.com/tours/${tourId}`;
+  const tourUrl = `https://vizagtaxihub.com${getTourUrl(tour)}`;
 
   return (
     <>
@@ -639,6 +676,7 @@ const TourDetailPage = () => {
                     }}
                     selectedVehicle={selectedVehicle}
                     onBookNow={() => {}}
+                    tourDate={pickupDate}
                   />
                 ) : (
                   // Show Booking Summary and "Book Now" at bottom

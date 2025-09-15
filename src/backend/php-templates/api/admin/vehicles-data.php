@@ -126,18 +126,19 @@ if (!file_exists($persistentCacheFile)) {
             'id' => 'tempo_traveller',
             'vehicleId' => 'tempo_traveller',
             'name' => 'Tempo Traveller',
-            'capacity' => 12,
+            'capacity' => 17,
             'luggageCapacity' => 8,
-            'price' => 5500,
-            'basePrice' => 5500,
-            'pricePerKm' => 25,
+            'price' => 10500,
+            'basePrice' => 10500,
+            'pricePerKm' => 35,
             'image' => '/cars/tempo.png',
             'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
-            'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
+            'description' => 'Large mini bus suitable for groups of up to 17 passengers.',
             'ac' => true,
             'nightHaltCharge' => 1200,
             'driverAllowance' => 300,
-            'isActive' => true
+            'isActive' => true,
+            'inactiveDates' => []
         ]
     ];
     

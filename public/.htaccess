@@ -370,7 +370,7 @@ RewriteRule ^vizag-to-bhubaneswar$ /outstation-taxi/visakhapatnam-to-bhubaneswar
 RewriteRule ^vizag-to-kolkata$ /outstation-taxi/visakhapatnam-to-kolkata [R=301,L]
 RewriteRule ^vizag-to-raipur$ /outstation-taxi/visakhapatnam-to-raipur [R=301,L]
 
-# Old tour-specific routes
+# Old tour-specific routes - Redirect to tour name URLs
 RewriteRule ^araku-tour$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^araku-valley$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^lambasingi-tour$ /tours/lambasingi-tour [R=301,L]
@@ -378,15 +378,32 @@ RewriteRule ^lambasingi$ /tours/lambasingi-tour [R=301,L]
 RewriteRule ^vizag-city-tour$ /tours/vizag-north-city-tour [R=301,L]
 RewriteRule ^city-tour$ /tours/vizag-north-city-tour [R=301,L]
 
-# Old vehicle-specific routes
+# Legacy tour ID redirects to new tour name URLs
+RewriteRule ^tours/araku$ /tours/araku-valley-tour [R=301,L]
+RewriteRule ^tours/lambasingi$ /tours/lambasingi-tour [R=301,L]
+RewriteRule ^tours/vizag_north_city_tour$ /tours/vizag-north-city-tour [R=301,L]
+RewriteRule ^tours/vizag_south_city_tour$ /tours/vizag-south-city-tour [R=301,L]
+RewriteRule ^tours/araku_vizag_3D_2N$ /tours/araku-vizag-3d-2n [R=301,L]
+
+# Old vehicle-specific routes - Redirect to vehicle name URLs
 RewriteRule ^swift-dzire$ /vehicle/swift-dzire [R=301,L]
 RewriteRule ^ertiga$ /vehicle/ertiga [R=301,L]
 RewriteRule ^innova$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^innova-crysta$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^toyota-glanza$ /vehicle/toyota-glanza [R=301,L]
-RewriteRule ^tempo-traveller$ /vehicle/tempo_traveller [R=301,L]
+RewriteRule ^tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^honda-amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^amaze$ /vehicle/amaze [R=301,L]
+
+# Redirect old vehicle_id URLs to new vehicle name URLs
+RewriteRule ^vehicle/sedan$ /vehicle/sedan [R=301,L]
+RewriteRule ^vehicle/ertiga$ /vehicle/ertiga [R=301,L]
+RewriteRule ^vehicle/toyota$ /vehicle/toyota-glanza [R=301,L]
+RewriteRule ^vehicle/innova-crysta$ /vehicle/innova-crysta [R=301,L]
+RewriteRule ^vehicle/tempo_traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^vehicle/amaze$ /vehicle/amaze [R=301,L]
+RewriteRule ^vehicle/mpv$ /vehicle/innova-hycross [R=301,L]
+RewriteRule ^vehicle/bus$ /vehicle/urbania [R=301,L]
 
 # Handle trailing slashes
 RewriteRule ^(.+)/$ /$1 [R=301,L]

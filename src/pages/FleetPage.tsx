@@ -10,6 +10,7 @@ import { getVehicleData } from '@/services/vehicleDataService';
 import { Link } from 'react-router-dom';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
+import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 
 export default function FleetPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -163,11 +164,11 @@ export default function FleetPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredVehicles.map((vehicle, index) => {
-                const vehicleSlug = vehicle.id ? vehicle.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
+                const vehicleUrl = getVehicleUrl(vehicle);
                 return (
                   <Link
                     key={vehicle.id || index}
-                    to={`/vehicle/${vehicleSlug}`}
+                    to={vehicleUrl}
                     style={{ textDecoration: 'none' }}
                     className="group hover:shadow-2xl transition-all duration-300 border-0 bg-white rounded-3xl overflow-hidden relative"
                   >
@@ -237,7 +238,7 @@ export default function FleetPage() {
                           className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl py-3 font-medium shadow-lg hover:shadow-xl transition-all"
                           asChild
                         >
-                          <Link to={`/vehicle/${vehicleSlug}`}>Book Now</Link>
+                          <Link to={vehicleUrl}>Book Now</Link>
                         </Button>
                       </CardContent>
                     </Card>

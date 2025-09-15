@@ -787,7 +787,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 'borra caves', 'borra guhalu', 'anjadevudu waterfalls'];
       
       if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
-        navigate('/tours/araku', { replace: true });
+        navigate('/tours/araku-valley-tour', { replace: true });
         return;
       }
     }
@@ -797,7 +797,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         const arakuKeywords = ['lambasingi','kothapalli','Lambasingi Hill Top view'];
         
         if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
-          navigate('/tours/lambasingi', { replace: true });
+          navigate('/tours/lambasingi-tour', { replace: true });
           return;
         }
       }

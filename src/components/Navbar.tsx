@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/providers/AuthProvider';
 import { Logo } from './Logo';
 import { Button } from '@/components/ui/button';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -333,7 +334,7 @@ export function Navbar() {
                       .map(tour => (
                         <Link
                           key={tour.tourId}
-                          to={`/tours/${tour.tourId}`}
+                          to={getTourUrl(tour)}
                           className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
                           onClick={() => setMegaMenuOpen(null)}
                         >
@@ -352,7 +353,7 @@ export function Navbar() {
                       .map(tour => (
                         <Link
                           key={tour.tourId}
-                          to={`/tours/${tour.tourId}`}
+                          to={getTourUrl(tour)}
                           className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
                           onClick={() => setMegaMenuOpen(null)}
                         >

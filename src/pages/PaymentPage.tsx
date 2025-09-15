@@ -12,6 +12,7 @@ import {
 } from '@/services/razorpayService';
 import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
@@ -22,7 +23,7 @@ const PaymentPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'failed'>('pending');
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success' | 'failed'>('pending');
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
 
   useEffect(() => {
@@ -206,7 +207,7 @@ const PaymentPage = () => {
         const details = JSON.parse(storedDetails);
         // If this is a tour booking, go back to the tour details page
         if (details.bookingType === 'tour' && details.tourId) {
-          navigate(`/tours/${details.tourId}`);
+          navigate(getTourUrl({ tourId: details.tourId }));
           return;
         }
       } catch (error) {

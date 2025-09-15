@@ -1,21 +1,28 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Vehicle, VehicleWithPricing } from '@/types/vehicle';
+import { CabType } from '@/types/cab';
+import { getVehicleData } from '@/services/vehicleDataService';
+
+interface VehicleWithPricing extends CabType {
+  price: number;
+}
 
 interface TourVehicleSelectionProps {
   pricing: { [vehicleId: string]: number };
   onVehicleSelect: (vehicle: VehicleWithPricing) => void;
   selectedVehicle: VehicleWithPricing | null;
   onBookNow: () => void;
+  tourDate?: Date; // Add tour date prop
 }
 
 export const TourVehicleSelection = ({
   pricing,
   onVehicleSelect,
   selectedVehicle,
+  tourDate,
 }: TourVehicleSelectionProps) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [vehiclesWithPricing, setVehiclesWithPricing] = useState<VehicleWithPricing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,30 +31,54 @@ export const TourVehicleSelection = ({
   }, []);
 
   useEffect(() => {
-    // Only filter out vehicles with no price
+    // Filter vehicles based on pricing and inactive dates
     if (vehicles.length > 0 && pricing) {
       const vehiclesWithPrices = vehicles
         .map((vehicle) => {
-          const price = pricing[vehicle.vehicle_id] || 0;
+          // Use vehicleId or id for pricing lookup
+          const vehicleId = vehicle.vehicleId || vehicle.id;
+          const price = pricing[vehicleId] || 0;
           return {
             ...vehicle,
             price,
           };
         })
-        .filter((v) => v.price > 0);
+        .filter((v) => {
+          // Filter out vehicles with no price
+          if (v.price <= 0) return false;
+          
+          // Filter out vehicles that are inactive on the tour date
+          if (tourDate && v.inactiveDates && Array.isArray(v.inactiveDates)) {
+            const tourDateStr = tourDate.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+            
+            for (const inactiveRange of v.inactiveDates) {
+              if (inactiveRange.from && inactiveRange.to) {
+                const fromDate = new Date(inactiveRange.from).toISOString().split('T')[0];
+                const toDate = new Date(inactiveRange.to).toISOString().split('T')[0];
+                
+                if (tourDateStr >= fromDate && tourDateStr <= toDate) {
+                  console.log(`Vehicle ${v.name} is inactive on ${tourDateStr} (inactive period: ${fromDate} to ${toDate})`);
+                  return false;
+                }
+              }
+            }
+          }
+          
+          return true;
+        });
 
       setVehiclesWithPricing(vehiclesWithPrices);
       setIsLoading(false);
     }
-  }, [vehicles, pricing]);
+  }, [vehicles, pricing, tourDate]);
 
   const loadVehicles = async () => {
     try {
-      // @ts-ignore
-      const { vehicleAPI } = await import('@/services/api/vehicleAPI');
-      const response = await vehicleAPI.getVehicles();
-      setVehicles(response.vehicles || []);
+      // Use the proper vehicle data service that includes inactive dates
+      const allVehicles = await getVehicleData(false, false); // Don't include inactive vehicles, don't force refresh
+      setVehicles(allVehicles || []);
     } catch (error) {
+      console.error('Error loading vehicles:', error);
       setVehicles([]);
       setIsLoading(false);
     }

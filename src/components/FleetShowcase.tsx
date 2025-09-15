@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Car, Users, MapPin, CheckCircle, Star, Shield, Bus, Plane, Tag } from 'lucide-react';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { Link } from 'react-router-dom';
+import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -123,7 +124,7 @@ export function FleetShowcase() {
   const currentWindowItems = vehicles.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
 
   const renderVehicleCard = (vehicle: any, index: number) => {
-    const vehicleSlug = vehicle.id ? vehicle.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
+    const vehicleUrl = getVehicleUrl(vehicle);
     const vehicleType = getType(vehicle);
     const VehicleIcon = getIcon(vehicleType);
     
@@ -131,7 +132,7 @@ export function FleetShowcase() {
       <Card 
         key={vehicle.id || index}
         className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
-        onClick={() => window.location.href = `/vehicle/${vehicleSlug}`}
+        onClick={() => window.location.href = vehicleUrl}
       >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}

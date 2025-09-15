@@ -191,18 +191,19 @@ $defaultVehicles = [
         'id' => 'tempo_traveller',
         'vehicleId' => 'tempo_traveller',
         'name' => 'Tempo Traveller',
-        'capacity' => 12,
+        'capacity' => 17,
         'luggageCapacity' => 8,
-        'price' => 5500,
-        'basePrice' => 5500,
-        'pricePerKm' => 25,
+        'price' => 10500,
+        'basePrice' => 10500,
+        'pricePerKm' => 35,
         'image' => '/cars/tempo.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
-        'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
+        'description' => 'Large mini bus suitable for groups of up to 17 passengers.',
         'ac' => true,
         'nightHaltCharge' => 1200,
         'driverAllowance' => 300,
-        'isActive' => true
+        'isActive' => true,
+        'inactiveDates' => []
     ]
 ];
 
@@ -231,6 +232,55 @@ foreach ($defaultVehicles as $defaultVehicle) {
 // ALWAYS use the persistent data as our vehicle source
 $vehicles = $persistentData;
 file_put_contents($logFile, "[$timestamp] Using " . count($vehicles) . " vehicles from persistent data\n", FILE_APPEND);
+
+// Load inactive dates from database if available
+if (file_exists(__DIR__ . '/../../config.php')) {
+    try {
+        require_once __DIR__ . '/../../config.php';
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn) {
+                file_put_contents($logFile, "[$timestamp] *** UPDATED FILE IS RUNNING *** Loading inactive dates from database\n", FILE_APPEND);
+                
+                // Get inactive dates for all vehicles
+                $sql = "SELECT vehicle_id, inactive_dates FROM vehicles WHERE inactive_dates IS NOT NULL AND inactive_dates != ''";
+                $result = $conn->query($sql);
+                
+                if ($result && $result->num_rows > 0) {
+                    $inactiveDatesMap = [];
+                    while ($row = $result->fetch_assoc()) {
+                        $vehicleId = $row['vehicle_id'];
+                        $inactiveDatesJson = $row['inactive_dates'];
+                        
+                        if ($inactiveDatesJson) {
+                            $inactiveDates = json_decode($inactiveDatesJson, true);
+                            if (is_array($inactiveDates)) {
+                                $inactiveDatesMap[$vehicleId] = $inactiveDates;
+                                file_put_contents($logFile, "[$timestamp] Loaded inactive dates for vehicle $vehicleId: " . count($inactiveDates) . " date ranges\n", FILE_APPEND);
+                            }
+                        }
+                    }
+                    
+                    // Update vehicles with inactive dates from database
+                    foreach ($vehicles as &$vehicle) {
+                        $vehicleId = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
+                        if (isset($inactiveDatesMap[$vehicleId])) {
+                            $vehicle['inactiveDates'] = $inactiveDatesMap[$vehicleId];
+                            file_put_contents($logFile, "[$timestamp] Updated vehicle $vehicleId with inactive dates from database\n", FILE_APPEND);
+                        }
+                    }
+                    unset($vehicle); // Break reference
+                } else {
+                    file_put_contents($logFile, "[$timestamp] No inactive dates found in database\n", FILE_APPEND);
+                }
+            } else {
+                file_put_contents($logFile, "[$timestamp] Could not connect to database for inactive dates\n", FILE_APPEND);
+            }
+        }
+    } catch (Exception $e) {
+        file_put_contents($logFile, "[$timestamp] Error loading inactive dates from database: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+}
 
 // Filter inactive vehicles if needed
 if (!$includeInactive) {

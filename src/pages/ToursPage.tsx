@@ -13,6 +13,7 @@ import { MapPin, Calendar, Loader2, Search, ChevronUp, ChevronDown, CheckCircle,
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
 import { tourDetailAPI } from "@/services/api/tourDetailAPI";
+import { getTourUrl } from '@/utils/tourUrlUtils';
 import { TourCard } from "@/components/tour/TourCard";
 import Footer from "@/components/Footer";
 import { Helmet } from 'react-helmet-async';
@@ -117,7 +118,7 @@ const ToursPage = () => {
   };
 
   const handleTourSelect = (tourId: string) => {
-    navigate(`/tours/${tourId}`);
+    navigate(getTourUrl({ tourId }));
   };
 
   const handleModifySearch = () => {

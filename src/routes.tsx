@@ -325,7 +325,7 @@ const router = createBrowserRouter([
         element: <ToursPage />,
       },
       {
-        path: 'tours/:tourId',
+        path: 'tours/:tourSlug',
         element: <TourDetailPage />,
       },
       {
@@ -459,7 +459,7 @@ const router = createBrowserRouter([
       },
 
       {
-        path: 'vehicle/:vehicleId',
+        path: 'vehicle/:vehicleSlug',
         element: <VehicleDetailPage />,
       },
       {

@@ -6,6 +6,7 @@ import { Car, MapPin, Loader2 } from 'lucide-react';
 import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
 import { useNavigate } from 'react-router-dom';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 
 interface RateCardPanelProps {
   vehicleId: string;
@@ -197,7 +198,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     
     // Navigate based on booking type
     if (rate.bookingType === 'tour' && rate.tourId) {
-      navigate(`/tours/${rate.tourId}`);
+      navigate(getTourUrl({ tourId: rate.tourId }));
     } else if (rate.bookingType === 'outstation') {
       navigate('/', { 
         state: { 

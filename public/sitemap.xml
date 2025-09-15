@@ -318,31 +318,31 @@
 
   <!-- Tour Packages -->
   <url>
-    <loc>https://vizagtaxihub.com/tours/araku</loc>
+    <loc>https://vizagtaxihub.com/tours/araku-valley-tour</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/vizag_north_city_tour</loc>
+    <loc>https://vizagtaxihub.com/tours/lambasingi-tour</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/lambasingi</loc>
+    <loc>https://vizagtaxihub.com/tours/vizag-north-city-tour</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/vizag_south_city_tour</loc>
+    <loc>https://vizagtaxihub.com/tours/vizag-south-city-tour</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/tours/araku_vizag_3D_2N</loc>
+    <loc>https://vizagtaxihub.com/tours/araku-vizag-3d-2n</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -356,13 +356,19 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://vizagtaxihub.com/vehicle/swift-dzire</loc>
+    <lastmod>2024-12-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://vizagtaxihub.com/vehicle/ertiga</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vizagtaxihub.com/vehicle/toyota</loc>
+    <loc>https://vizagtaxihub.com/vehicle/toyota-glanza</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -373,14 +379,26 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
-   <url>
-    <loc>https://vizagtaxihub.com/vehicle/tempo_traveller</loc>
+  <url>
+    <loc>https://vizagtaxihub.com/vehicle/innova-hycross</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
-   <url>
+  <url>
+    <loc>https://vizagtaxihub.com/vehicle/tempo-traveller</loc>
+    <lastmod>2024-12-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://vizagtaxihub.com/vehicle/amaze</loc>
+    <lastmod>2024-12-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://vizagtaxihub.com/vehicle/urbania</loc>
     <lastmod>2024-12-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

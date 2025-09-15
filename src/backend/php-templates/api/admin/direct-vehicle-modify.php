@@ -349,7 +349,8 @@ $vehicle = [
     'ac' => $ac,
     'nightHaltCharge' => $nightHaltCharge,
     'driverAllowance' => $driverAllowance,
-    'isActive' => $isActive
+    'isActive' => $isActive,
+    'inactiveDates' => []
 ];
 
 logModifyDebug("Prepared vehicle data for update:", $vehicle);

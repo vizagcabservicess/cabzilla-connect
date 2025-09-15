@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Clock, Calendar, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 import { tourAPI } from '@/services/api/tourAPI';
 
 interface VehicleToursProps {
@@ -144,7 +145,7 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
                   <span className="font-medium">Includes:</span> AC, Driver, Fuel, Parking
                 </div>
                 <Button variant="outline" size="sm" asChild>
-                  <Link to={`/tours/${tour.tourId}`}>
+                  <Link to={getTourUrl(tour)}>
                     View Details
                   </Link>
                 </Button>

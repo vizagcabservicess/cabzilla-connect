@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Car, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 
 interface SimilarVehiclesProps {
   vehicles?: {
@@ -82,7 +83,7 @@ const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({
                    </div>
                    
                    <Button variant="outline" size="sm" asChild className="text-xs">
-                     <Link to={`/vehicle/${vehicle.id}`}>View Details</Link>
+                     <Link to={getVehicleUrl(vehicle)}>View Details</Link>
                    </Button>
                  </div>
               </div>

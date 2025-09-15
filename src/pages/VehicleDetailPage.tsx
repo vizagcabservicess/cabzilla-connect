@@ -15,6 +15,7 @@ import { getVehicleData } from '@/services/vehicleDataService';
 import { GalleryItem } from '@/types/cab';
 import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 import { Helmet } from 'react-helmet-async';
+import { getVehicleUrl, getVehicleDisplayName } from '@/utils/vehicleUrlUtils';
 
 interface VehicleData {
   id: string;
@@ -38,7 +39,7 @@ interface VehicleData {
 }
 
 const VehicleDetailPage = () => {
-  const { vehicleId } = useParams();
+  const { vehicleSlug } = useParams();
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +48,8 @@ const VehicleDetailPage = () => {
 
   useEffect(() => {
     const loadVehicleData = async () => {
-      if (!vehicleId) {
-        setError('Vehicle ID not provided');
+      if (!vehicleSlug) {
+        setError('Vehicle not provided');
         setLoading(false);
         return;
       }
@@ -59,20 +60,21 @@ const VehicleDetailPage = () => {
 
         const allVehicles = await getVehicleData(true, true);
         
-        const foundVehicle = allVehicles.find(v => 
-          v.id === vehicleId || 
-          v.vehicleId === vehicleId ||
-          v.name?.toLowerCase().replace(/\s+/g, '_') === vehicleId
-        );
+        // Try to find vehicle by URL slug
+        const foundVehicle = allVehicles.find(v => {
+          const vehicleUrl = getVehicleUrl(v);
+          const urlSlug = vehicleUrl.replace('/vehicle/', '');
+          return urlSlug === vehicleSlug;
+        });
 
         if (!foundVehicle) {
-          setError(`Vehicle with ID "${vehicleId}" not found`);
+          setError(`Vehicle "${vehicleSlug}" not found`);
           setLoading(false);
           return;
         }
 
         const vehicleData: VehicleData = {
-          id: foundVehicle.id || vehicleId,
+          id: foundVehicle.id || vehicleSlug,
           name: foundVehicle.name,
           capacity: foundVehicle.capacity,
           fuelType: foundVehicle.fuelType,
@@ -97,7 +99,7 @@ const VehicleDetailPage = () => {
         }
 
         const similar = allVehicles
-          .filter(v => v.id !== vehicleId && v.isActive !== false)
+          .filter(v => v.id !== foundVehicle.id && v.isActive !== false)
           .slice(0, 3)
           .map(v => ({
             id: v.id,
@@ -118,7 +120,7 @@ const VehicleDetailPage = () => {
     };
 
     loadVehicleData();
-  }, [vehicleId]);
+  }, [vehicleSlug]);
 
   if (loading) {
     return (
@@ -201,7 +203,7 @@ const VehicleDetailPage = () => {
   const seoDescription = getUniqueDescription();
   const seoKeywords = `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`;
   const vehicleImage = galleryImages?.[0]?.url || vehicle.image || '/og-image.png';
-  const vehicleUrl = `https://vizagtaxihub.com/vehicle/${vehicle.id}`;
+  const vehicleUrl = `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`;
 
   return (
     <>

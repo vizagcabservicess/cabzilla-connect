@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { MapPin, Calendar, Users, Clock, Star, Shield, Plane, Tag } from 'lucide-react';
 import { tourAPI } from '@/services/api/tourAPI';
 import { Link } from 'react-router-dom';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -113,14 +114,14 @@ export function DestinationsShowcase() {
   const currentWindowItems = tours.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
 
   const renderTourCard = (tour: any, index: number) => {
-    const tourSlug = tour.id ? tour.id.toString().trim().toLowerCase().replace(/\s+/g, '-') : '';
+    const tourUrl = getTourUrl(tour);
     const tourType = getType(tour);
 
     return (
       <Card
         key={tour.id || index}
         className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
-        onClick={() => window.location.href = `/tours/${tourSlug}`}
+        onClick={() => window.location.href = tourUrl}
       >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}
