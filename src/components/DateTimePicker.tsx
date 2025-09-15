@@ -34,15 +34,20 @@ export function DateTimePicker({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    // Always set to current date/time if no date is provided (even after refresh)
-    if (!date) {
+    // Only set to current date/time if no date is provided AND this is the initial render
+    if (!date && !selectedTime) {
       const now = new Date();
       setSelectedTime(format(now, "HH:mm"));
       onDateChange(now);
-    } else {
+    }
+  }, [onDateChange]);
+
+  useEffect(() => {
+    // Update selectedTime when date changes (but don't trigger onDateChange)
+    if (date) {
       setSelectedTime(format(date, "HH:mm"));
     }
-  }, [date, onDateChange]);
+  }, [date]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);

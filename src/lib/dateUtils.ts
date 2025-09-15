@@ -9,8 +9,14 @@ export function formatDate(date: Date | string) {
     if (date.includes('T') || date.includes('Z')) {
       // ISO format - parse and treat as local
       d = parseISO(date);
+    } else if (date.includes('-') && date.includes(':')) {
+      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as local time
+      const [datePart, timePart] = date.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+      d = new Date(year, month - 1, day, hours, minutes, seconds);
     } else {
-      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as local
+      // Fallback
       d = new Date(date);
     }
   } else {
@@ -29,8 +35,14 @@ export function formatTime(date: Date | string) {
     if (date.includes('T') || date.includes('Z')) {
       // ISO format - parse and treat as local
       d = parseISO(date);
+    } else if (date.includes('-') && date.includes(':')) {
+      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as local time
+      const [datePart, timePart] = date.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+      d = new Date(year, month - 1, day, hours, minutes, seconds);
     } else {
-      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as local
+      // Fallback
       d = new Date(date);
     }
   } else {
@@ -50,8 +62,12 @@ export function formatDateTime(date: Date | string) {
       // ISO format - parse and treat as local
       d = parseISO(date);
     } else if (date.includes('-') && date.includes(':')) {
-      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as IST
-      d = new Date(date);
+      // SQL datetime format (YYYY-MM-DD HH:MM:SS) - treat as local time
+      // Parse manually to avoid UTC interpretation
+      const [datePart, timePart] = date.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(Number);
+      d = new Date(year, month - 1, day, hours, minutes, seconds);
     } else {
       // Fallback
       d = new Date(date);

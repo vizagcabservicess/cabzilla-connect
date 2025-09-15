@@ -136,16 +136,6 @@ const CabFareCard = ({
     fareData = fareResult.fareData;
     isLoading = fareResult.isLoading;
     const error = fareResult.error;
-    
-    console.log(`CabList: Fare result for ${cab.name}:`, {
-      fareData,
-      isLoading,
-      error,
-      tripType,
-      tripMode,
-      distance,
-      packageType
-    });
 
     if (error) {
       console.error(`Fare error for ${cab.name}:`, error);
@@ -154,18 +144,10 @@ const CabFareCard = ({
        // For outstation one-way trips, use the totalPrice directly from useFare
        if (tripType === 'outstation' && (tripMode === 'one-way' || !tripMode)) {
          fare = fareData.totalPrice;
-         console.log(`CabList: Using totalPrice for outstation one-way: ₹${fare}`);
        } else {
          fare = sumBreakdown(fareData.breakdown) || fareData.totalPrice;
        }
        fareSource = fareData.source || 'unknown';
-      
-      console.log(`CabList: Calculated fare for ${cab.name}:`, {
-        fare,
-        breakdown: fareData.breakdown,
-        totalPrice: fareData.totalPrice,
-        source: fareSource
-      });
 
       if (tripType === 'local') {
         const localPackageLimits: Record<string, { km: number; hours: number }> = {
@@ -246,17 +228,8 @@ export const CabList: React.FC<CabListProps> = ({
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   const isMobile = useIsMobile();
   
-  // Debug: Log what vehicles are being passed to CabList
-  console.log('🚗 CabList received vehicles:', {
-    count: initialCabTypes?.length || 0,
-    vehicles: initialCabTypes?.map(v => ({ name: v.name, id: v.id })) || [],
-    pickupDate: pickupDate?.toDateString(),
-    hasTempoTraveller: initialCabTypes?.some(v => v.name.toLowerCase().includes('tempo')) || false
-  });
-  
   useEffect(() => {
     const handleFareUpdate = () => {
-      console.log('CabList: Detected fare update, refreshing list');
       setRefreshKey(Date.now());
     };
     
@@ -299,7 +272,6 @@ export const CabList: React.FC<CabListProps> = ({
           packageType,
           cabId: cab.id
         }));
-        console.log(`Stored selected fare for ${cab.name}: ₹${fare} (${fareSource})`);
       } catch (e) {
         console.error('Error storing selected fare:', e);
       }

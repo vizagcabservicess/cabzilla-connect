@@ -43,7 +43,6 @@ const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
 
 export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
-  console.log('Hero component rendered');
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -61,12 +60,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         return {
           pickupLocation: prefillData.pickupLocation,
           dropLocation: prefillData.dropLocation,
-          pickupDate: new Date(),
-          returnDate: null,
+          pickupDate: prefillData.pickupDate ? new Date(prefillData.pickupDate) : new Date(),
+          returnDate: prefillData.returnDate ? new Date(prefillData.returnDate) : null,
           tripType: prefillData.tripType || 'outstation',
           tripMode: prefillData.tripMode || 'one-way',
-          hourlyPackage: hourlyPackageOptions[0].value,
-          selectedCab: null,
+          hourlyPackage: prefillData.hourlyPackage || hourlyPackageOptions[0].value,
+          selectedCab: prefillData.selectedCab || null,
           autoTriggerSearch: prefillData.autoTriggerSearch
         };
       }
@@ -164,7 +163,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
-    console.log('Edit pickup location clicked - setting sliding search to true');
     setIsSlidingSearch(true);
     // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
@@ -172,7 +170,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   };
 
   const handleEditPickupDate = () => {
-    console.log('Edit pickup date clicked - setting sliding search to true');
     setIsSlidingSearch(true);
     // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
@@ -197,39 +194,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         localStorage.removeItem('cachedVehicles');
         localStorage.removeItem('cachedVehiclesTimestamp');
         
-        console.log('Cleared vehicle cache, fetching fresh data...');
         const vehicles = await loadCabTypes(false, true); // Load active vehicles only with force refresh
         setDynamicVehicles(vehicles);
         setVehiclesLoaded(true);
-        console.log('Loaded dynamic vehicles:', vehicles.length);
-        
-        // Log each vehicle's inactive dates for debugging
-        vehicles.forEach(vehicle => {
-          if (vehicle.inactiveDates && vehicle.inactiveDates.length > 0) {
-            console.log(`Vehicle ${vehicle.name} has inactive dates:`, vehicle.inactiveDates);
-          }
-        });
-        
-        // Test filtering for October 1st, 2025
-        const testDate = new Date('2025-10-01');
-        const availableVehicles = filterAvailableVehicles(vehicles, testDate);
-        console.log(`Available vehicles on Oct 1, 2025:`, availableVehicles.map(v => v.name));
-        console.log(`Total vehicles: ${vehicles.length}, Available: ${availableVehicles.length}`);
         
         // Add a global function for manual testing
         (window as any).refreshVehicles = () => {
-          console.log('🔄 Manual vehicle refresh triggered');
           loadVehicles();
         };
         
         // Add global debug functions
         (window as any).debugVehicles = () => {
-          console.log('🔍 DEBUG VEHICLES:', {
-            dynamicVehicles: dynamicVehicles,
-            vehiclesLoaded: vehiclesLoaded,
-            pickupDate: pickupDate?.toDateString(),
-            filtered: filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined)
-          });
+          // Debug function for vehicles
         };
       } catch (error) {
         console.error('Error loading dynamic vehicles:', error);
@@ -242,7 +218,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     loadVehicles();
   }, []);
 
-  console.log('PREFILL:', { pickupLocation, dropLocation });
 
   // Listen for route prefill events
   useEffect(() => {
@@ -252,7 +227,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       setDropLocation(drop);
       setTripType(type);
       setTripMode(mode);
-      setPickupDate(new Date());
+      // Don't reset pickup date when switching tabs - preserve user's selection
+      // setPickupDate(new Date());
       
       // Auto-trigger search after a short delay
       setTimeout(() => {
@@ -279,7 +255,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Always keep pickupDate enabled and default to now on mount/refresh
   useEffect(() => {
-    if (!savedData.autoTriggerSearch) {
+    // Only set initial date if no date is already set
+    if (!savedData.autoTriggerSearch && !pickupDate) {
       setPickupDate(new Date());
     }
   }, []);
@@ -359,7 +336,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Reset/disable returnDate and errors when locations change
   useEffect(() => {
     if (tripType === 'outstation' && tripMode === 'round-trip') {
-      setPickupDate(new Date());
+      // Don't reset pickup date when switching to round-trip mode
+      // setPickupDate(new Date());
       setReturnDate(null);
       setIsReturnTimeEnabled(false);
       setMinValidReturnTime(null);
@@ -452,12 +430,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     const isAirport = location.name === 'Visakhapatnam International Airport' || 
                      location.id === 'vizag_airport' ||
                      location.name.toLowerCase().includes('airport');
-    
-    console.log('isVizagAirport check:', {
-      locationName: location.name,
-      locationId: location.id,
-      isAirport: isAirport
-    });
     
     return isAirport;
   };
@@ -716,10 +688,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
     // Check distance between pickup and drop locations before proceeding
     if (pickupLocation && dropLocation && (tripType === 'outstation' || tripType === 'airport')) {
-      console.log('=== DISTANCE CHECK BEFORE SEARCH ===');
-      console.log('Pickup location:', pickupLocation.name);
-      console.log('Drop location:', dropLocation.name);
-      console.log('Current trip type:', tripType);
       
       // Calculate distance using Haversine formula
       if (pickupLocation.lat && pickupLocation.lng && dropLocation.lat && dropLocation.lng) {
@@ -735,11 +703,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const calculatedDistance = R * c;
         
-        console.log('Calculated distance between locations:', calculatedDistance.toFixed(2), 'km');
-        
         // If distance is within 35km and currently on outstation tab, switch to airport
         if (calculatedDistance <= 35 && tripType === 'outstation') {
-          console.log('🚀 AUTO-SWITCHING: Distance within 35km, switching to airport tab');
           toast({
             title: "Trip Type Updated",
             description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
@@ -756,7 +721,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         
         // If distance is beyond 35km and currently on airport tab, switch to outstation
         if (calculatedDistance > 35 && tripType === 'airport') {
-          console.log('🚀 AUTO-SWITCHING: Distance beyond 35km, switching to outstation tab');
           toast({
             title: "Trip Type Updated",
             description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
@@ -772,12 +736,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         }
       } else {
         // Fallback: Use isLocationInVizag function if coordinates are not available
-        console.log('Coordinates not available, using fallback distance check');
         const isDropInVizag = isLocationInVizag(dropLocation);
         
         // If drop location is within Vizag and currently on outstation tab, switch to airport
         if (isDropInVizag && tripType === 'outstation') {
-          console.log('🚀 AUTO-SWITCHING: Drop location within Vizag, switching to airport tab');
           toast({
             title: "Trip Type Updated",
             description: "Drop location is within Visakhapatnam city limits. We've updated your trip type to Airport Transfer for better rates.",
@@ -794,7 +756,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         
         // If drop location is outside Vizag and currently on airport tab, switch to outstation
         if (!isDropInVizag && tripType === 'airport') {
-          console.log('🚀 AUTO-SWITCHING: Drop location outside Vizag, switching to outstation tab');
           toast({
             title: "Trip Type Updated",
             description: "Drop location is outside Visakhapatnam city limits. We've updated your trip type to Outstation for better rates.",
@@ -871,9 +832,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     
     // If we're in sliding search mode, hide the search widget after updating
     if (isSlidingSearch) {
-      console.log('In sliding search mode - will hide search widget after 2 seconds');
       setTimeout(() => {
-        console.log('Hiding search widget - setting isSlidingSearch to false');
         setIsSlidingSearch(false);
       }, 2000); // Increased delay to allow the search to complete and animation to be visible
     }
@@ -889,7 +848,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       setDistance(calculatedDistance);
       setDuration(calculatedDuration);
       setIsCalculatingDistance(false);
-      console.log(`Distance calculated for ${tripType}: ${calculatedDistance}km, ${calculatedDuration} minutes`);
     }
   };
 
@@ -910,7 +868,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
         totalPrice += extraKm * extraKmRate;
-        console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
       }
     } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -971,7 +928,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     try {
       setIsLoading(true);
       const authToken = localStorage.getItem('authToken');
-      console.log("Auth token available:", !!authToken);
       
       // Use the totalPrice passed from GuestDetailsForm
       const latestTotal = guestDetails.totalPrice;
@@ -1001,8 +957,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       };
 
       const response = await bookingAPI.createBooking(bookingData);
-      
-      console.log('Booking created:', response);
       
       const bookingDataForStorage = {
         bookingId: response.id || response.booking_id,
@@ -1065,8 +1019,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Custom handler for tab (trip type) changes
   const handleTabChange = (type: TripType) => {
-    console.log('=== TAB CHANGE ===');
-    console.log('Tab changed to:', type);
     
     setTripType(type);
     setDistance(0);
@@ -1103,28 +1055,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Test function to manually trigger automatic switching (for debugging)
   const testAutomaticSwitching = () => {
-    console.log('=== MANUAL TEST OF AUTOMATIC SWITCHING ===');
-    console.log('Current state:');
-    console.log('  - Trip type:', tripType);
-    console.log('  - Pickup location:', pickupLocation?.name);
-    console.log('  - Drop location:', dropLocation?.name);
-    console.log('  - Is tab switching:', isTabSwitching);
-    
     if (pickupLocation && dropLocation) {
       const isDropInVizag = isLocationInVizag(dropLocation);
-      console.log('  - Is drop in Vizag:', isDropInVizag);
       
       if (tripType === 'outstation' && isDropInVizag) {
-        console.log('🚀 MANUAL TRIGGER: Switching from outstation to airport');
         setTripType('airport');
       } else if (tripType === 'airport' && !isDropInVizag) {
-        console.log('🚀 MANUAL TRIGGER: Switching from airport to outstation');
         setTripType('outstation');
-      } else {
-        console.log('❌ No automatic switching needed');
       }
-    } else {
-      console.log('❌ Missing locations for automatic switching');
     }
   };
 
@@ -1150,11 +1088,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       
       if (!isSelectedCabAvailable && availableVehicles.length > 0) {
         // If selected cab is not available, select the first available one
-        console.log(`Selected cab ${selectedCab.name} is not available, switching to ${availableVehicles[0].name}`);
         setSelectedCab(availableVehicles[0]);
       } else if (availableVehicles.length === 0) {
         // If no vehicles are available, clear selection
-        console.log('No vehicles available, clearing selection');
         setSelectedCab(null);
       }
     }
@@ -1586,11 +1522,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           {/* Always Visible Edit Button */}
                           <button
                             onClick={() => {
-                              console.log('Main edit button clicked');
                               if (isMobile) {
                                 setShowMobileEditForm(true);
                               } else {
-                                console.log('Setting sliding search to true from main edit button');
                                 setIsSlidingSearch(true);
                                 // Keep in step 2, don't change step
                                 setShowGuestDetailsForm(false);
@@ -1689,20 +1623,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               </div>
                             ) : (
                               <CabOptions 
-                                cabTypes={(() => {
-                                const filtered = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
-                                console.log('🔍 FILTERING DEBUG:', {
-                                  totalVehicles: dynamicVehicles.length,
-                                  pickupDate: pickupDate?.toDateString(),
-                                  returnDate: returnDate?.toDateString(),
-                                  filteredCount: filtered.length,
-                                  filteredVehicles: filtered.map(v => v.name),
-                                  allVehicles: dynamicVehicles.map(v => ({ name: v.name, inactiveDates: v.inactiveDates })),
-                                  tempoTravellerInFiltered: filtered.some(v => v.name.toLowerCase().includes('tempo')),
-                                  tempoTravellerInOriginal: dynamicVehicles.some(v => v.name.toLowerCase().includes('tempo'))
-                                });
-                                return filtered;
-                                })()} 
+                                cabTypes={filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined)} 
                                 selectedCab={selectedCab} 
                                 onSelectCab={setSelectedCab} 
                                 distance={distance} 
