@@ -5,33 +5,36 @@ import { getVehicleData } from '@/services/vehicleDataService';
 let cabTypesCache: CabType[] = [];
 
 // Function to load cab types from API or cache
-export const loadCabTypes = async (includeInactive: boolean = false): Promise<CabType[]> => {
+export const loadCabTypes = async (includeInactive: boolean = false, forceRefresh: boolean = false): Promise<CabType[]> => {
   try {
-    console.log('Attempting to load cab types...');
+    console.log('Attempting to load cab types...', forceRefresh ? '(force refresh)' : '');
     
-    // Try to get from sessionStorage first (for faster subsequent loads)
-    const cachedData = sessionStorage.getItem('cabTypes');
-    if (cachedData) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        // Validate cache has required fields
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
-          console.log('Retrieved', parsed.length, 'active vehicle types from cache');
-          cabTypesCache = parsed;
-          
-          // Update the cabTypes array in-place to keep the same reference
-          cabTypes.length = 0;
-          cabTypes.push(...parsed);
-          
-          // Filter out inactive ones if not including inactive
-          if (!includeInactive) {
-            return parsed.filter(vehicle => vehicle.isActive !== false);
+    // Skip cache if force refresh is requested
+    if (!forceRefresh) {
+      // Try to get from sessionStorage first (for faster subsequent loads)
+      const cachedData = sessionStorage.getItem('cabTypes');
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          // Validate cache has required fields
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
+            console.log('Retrieved', parsed.length, 'active vehicle types from cache');
+            cabTypesCache = parsed;
+            
+            // Update the cabTypes array in-place to keep the same reference
+            cabTypes.length = 0;
+            cabTypes.push(...parsed);
+            
+            // Filter out inactive ones if not including inactive
+            if (!includeInactive) {
+              return parsed.filter(vehicle => vehicle.isActive !== false);
+            }
+            return parsed;
           }
-          return parsed;
+        } catch (e) {
+          console.error('Error parsing cached cab data:', e);
+          sessionStorage.removeItem('cabTypes');
         }
-      } catch (e) {
-        console.error('Error parsing cached cab data:', e);
-        sessionStorage.removeItem('cabTypes');
       }
     }
 
@@ -54,6 +57,7 @@ export const loadCabTypes = async (includeInactive: boolean = false): Promise<Ca
       nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
       driverAllowance: Number(vehicle.driverAllowance) || 0,
       isActive: vehicle.isActive !== false, // Default to active if not specified
+      inactiveDates: vehicle.inactiveDates || [], // Include inactive dates
       // Add the fare-specific properties
       outstationFares: vehicle.outstationFares,
       localPackageFares: vehicle.localPackageFares,

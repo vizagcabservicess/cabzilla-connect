@@ -130,7 +130,8 @@ $defaultVehicles = [
         'ac' => true,
         'nightHaltCharge' => 700,
         'driverAllowance' => 250,
-        'isActive' => true
+        'isActive' => true,
+        'inactiveDates' => []
     ],
     [
         'id' => 'ertiga',
@@ -147,7 +148,8 @@ $defaultVehicles = [
         'ac' => true,
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
-        'isActive' => true
+        'isActive' => true,
+        'inactiveDates' => []
     ],
     [
         'id' => 'innova_crysta',
@@ -164,7 +166,8 @@ $defaultVehicles = [
         'ac' => true,
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
-        'isActive' => true
+        'isActive' => true,
+        'inactiveDates' => []
     ],
     [
         'id' => 'luxury',
@@ -181,7 +184,8 @@ $defaultVehicles = [
         'ac' => true,
         'nightHaltCharge' => 1200,
         'driverAllowance' => 300,
-        'isActive' => true
+        'isActive' => true,
+        'inactiveDates' => []
     ],
     [
         'id' => 'tempo_traveller',

@@ -113,7 +113,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       pricePerKm: Number(vehicle.pricePerKm || 14),
       nightHaltCharge: Number(vehicle.nightHaltCharge || 700), 
       driverAllowance: Number(vehicle.driverAllowance || 250),
-      isActive: vehicle.isActive !== false // default to active if not specified
+      isActive: vehicle.isActive !== false, // default to active if not specified
+      inactiveDates: vehicle.inactiveDates || [] // include inactive dates
     };
     
     console.log('Prepared vehicle data for update:', preparedVehicle);

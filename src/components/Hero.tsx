@@ -9,10 +9,11 @@ import {
   Location
 } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
-import { cabTypes, formatPrice } from '@/lib/cabData';
+import { cabTypes, formatPrice, loadCabTypes } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
+import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
 import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
@@ -158,6 +159,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
   const [isTabSwitching, setIsTabSwitching] = useState<boolean>(false);
   const [isSlidingSearch, setIsSlidingSearch] = useState<boolean>(false);
+  const [dynamicVehicles, setDynamicVehicles] = useState<CabType[]>([]);
+  const [vehiclesLoaded, setVehiclesLoaded] = useState<boolean>(false);
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
@@ -182,6 +185,61 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Load dynamic vehicles with inactive dates
+  useEffect(() => {
+    const loadVehicles = async () => {
+      try {
+        // Clear cache to force fresh data
+        sessionStorage.removeItem('cabTypes');
+        sessionStorage.removeItem('cachedVehicles');
+        localStorage.removeItem('cachedVehicles');
+        localStorage.removeItem('cachedVehiclesTimestamp');
+        
+        console.log('Cleared vehicle cache, fetching fresh data...');
+        const vehicles = await loadCabTypes(false, true); // Load active vehicles only with force refresh
+        setDynamicVehicles(vehicles);
+        setVehiclesLoaded(true);
+        console.log('Loaded dynamic vehicles:', vehicles.length);
+        
+        // Log each vehicle's inactive dates for debugging
+        vehicles.forEach(vehicle => {
+          if (vehicle.inactiveDates && vehicle.inactiveDates.length > 0) {
+            console.log(`Vehicle ${vehicle.name} has inactive dates:`, vehicle.inactiveDates);
+          }
+        });
+        
+        // Test filtering for October 1st, 2025
+        const testDate = new Date('2025-10-01');
+        const availableVehicles = filterAvailableVehicles(vehicles, testDate);
+        console.log(`Available vehicles on Oct 1, 2025:`, availableVehicles.map(v => v.name));
+        console.log(`Total vehicles: ${vehicles.length}, Available: ${availableVehicles.length}`);
+        
+        // Add a global function for manual testing
+        (window as any).refreshVehicles = () => {
+          console.log('🔄 Manual vehicle refresh triggered');
+          loadVehicles();
+        };
+        
+        // Add global debug functions
+        (window as any).debugVehicles = () => {
+          console.log('🔍 DEBUG VEHICLES:', {
+            dynamicVehicles: dynamicVehicles,
+            vehiclesLoaded: vehiclesLoaded,
+            pickupDate: pickupDate?.toDateString(),
+            filtered: filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined)
+          });
+        };
+      } catch (error) {
+        console.error('Error loading dynamic vehicles:', error);
+        // Fallback to static cabTypes
+        setDynamicVehicles(cabTypes);
+        setVehiclesLoaded(true);
+      }
+    };
+    
+    loadVehicles();
   }, []);
 
   console.log('PREFILL:', { pickupLocation, dropLocation });
@@ -1084,6 +1142,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
+  // Update selectedCab when available vehicles change due to date filtering
+  useEffect(() => {
+    if (selectedCab && pickupDate && vehiclesLoaded) {
+      const availableVehicles = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
+      const isSelectedCabAvailable = availableVehicles.some(vehicle => vehicle.id === selectedCab.id);
+      
+      if (!isSelectedCabAvailable && availableVehicles.length > 0) {
+        // If selected cab is not available, select the first available one
+        console.log(`Selected cab ${selectedCab.name} is not available, switching to ${availableVehicles[0].name}`);
+        setSelectedCab(availableVehicles[0]);
+      } else if (availableVehicles.length === 0) {
+        // If no vehicles are available, clear selection
+        console.log('No vehicles available, clearing selection');
+        setSelectedCab(null);
+      }
+    }
+  }, [pickupDate, returnDate, selectedCab, dynamicVehicles, vehiclesLoaded]);
+
   useEffect(() => {
     if (
       isMobile &&
@@ -1607,18 +1683,37 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             )}
                           </div>
                           <div className="text-xs lg:text-[12px]">
-                            <CabOptions 
-                              cabTypes={cabTypes} 
-                              selectedCab={selectedCab} 
-                              onSelectCab={setSelectedCab} 
-                              distance={distance} 
-                              tripType={tripType} 
-                              tripMode={tripMode}
-                              hourlyPackage={hourlyPackage}
-                              pickupDate={pickupDate}
-                              returnDate={returnDate}
-                              isCalculatingFares={false}
-                            />
+                            {!vehiclesLoaded ? (
+                              <div className="flex items-center justify-center p-4">
+                                <div className="text-gray-500">Loading vehicles...</div>
+                              </div>
+                            ) : (
+                              <CabOptions 
+                                cabTypes={(() => {
+                                const filtered = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
+                                console.log('🔍 FILTERING DEBUG:', {
+                                  totalVehicles: dynamicVehicles.length,
+                                  pickupDate: pickupDate?.toDateString(),
+                                  returnDate: returnDate?.toDateString(),
+                                  filteredCount: filtered.length,
+                                  filteredVehicles: filtered.map(v => v.name),
+                                  allVehicles: dynamicVehicles.map(v => ({ name: v.name, inactiveDates: v.inactiveDates })),
+                                  tempoTravellerInFiltered: filtered.some(v => v.name.toLowerCase().includes('tempo')),
+                                  tempoTravellerInOriginal: dynamicVehicles.some(v => v.name.toLowerCase().includes('tempo'))
+                                });
+                                return filtered;
+                                })()} 
+                                selectedCab={selectedCab} 
+                                onSelectCab={setSelectedCab} 
+                                distance={distance} 
+                                tripType={tripType} 
+                                tripMode={tripMode}
+                                hourlyPackage={hourlyPackage}
+                                pickupDate={pickupDate}
+                                returnDate={returnDate}
+                                isCalculatingFares={false}
+                              />
+                            )}
                           </div>
                         </div>
                         <div className="lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md mobile-nav-fix">

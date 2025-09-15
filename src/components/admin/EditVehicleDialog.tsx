@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, AlertTriangle, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { CabType } from "@/types/cab";
+import { CabType, InactiveDateRange, GalleryItem } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
 import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,6 +16,7 @@ import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
 import { fixDatabaseTables, formatDataForMultipart } from '@/utils/apiHelper';
 import { apiBaseUrl } from '@/config/api';
 import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
+import { VehicleInactiveDatesPicker } from './VehicleInactiveDatesPicker';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function EditVehicleDialog({
   const [isInitialized, setIsInitialized] = useState(false);
   const [inclusionsText, setInclusionsText] = useState('');
   const [exclusionsText, setExclusionsText] = useState('');
+  const [inactiveDates, setInactiveDates] = useState<InactiveDateRange[]>([]);
 
   // Updated gallery state to include database IDs
   const [gallery, setGallery] = useState<Array<GalleryItem & {id?: string}>>([]);
@@ -83,6 +85,16 @@ export function EditVehicleDialog({
       
       setInclusionsText(Array.isArray(initialVehicle.inclusions) ? initialVehicle.inclusions.join(', ') : (initialVehicle.inclusions || ''));
       setExclusionsText(Array.isArray(initialVehicle.exclusions) ? initialVehicle.exclusions.join(', ') : (initialVehicle.exclusions || ''));
+      
+      // Initialize inactive dates - parse date strings back to Date objects
+      console.log("Initial vehicle inactive dates:", initialVehicle.inactiveDates);
+      const parsedInactiveDates = (initialVehicle.inactiveDates || []).map((dateRange: any) => ({
+        ...dateRange,
+        from: new Date(dateRange.from),
+        to: new Date(dateRange.to)
+      }));
+      console.log("Parsed inactive dates:", parsedInactiveDates);
+      setInactiveDates(parsedInactiveDates);
       
       // Load gallery images from database
       loadGalleryImages();
@@ -184,6 +196,7 @@ export function EditVehicleDialog({
         ...vehicle,
         inclusions: inclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
         exclusions: exclusionsText.split(/,|\n/).map(s => s.trim()).filter(Boolean),
+        inactiveDates: inactiveDates,
         capacity: Number(vehicle.capacity),
         luggageCapacity: Number(vehicle.luggageCapacity),
         basePrice: Number(vehicle.basePrice || 0),
@@ -199,6 +212,7 @@ export function EditVehicleDialog({
       };
       
       console.log("Prepared vehicle data for update:", updatedVehicle);
+      console.log("Inactive dates being saved:", inactiveDates);
       
       const maxRetries = 3;
       let attempt = 0;
@@ -223,6 +237,14 @@ export function EditVehicleDialog({
             if (key === 'gallery') {
               // Handle gallery array specially
               formData.append('gallery', JSON.stringify(value));
+            } else if (key === 'inactiveDates') {
+              // Handle inactive dates array specially - convert dates to ISO strings
+              const serializedDates = value.map((dateRange: InactiveDateRange) => ({
+                ...dateRange,
+                from: dateRange.from.toISOString(),
+                to: dateRange.to.toISOString()
+              }));
+              formData.append('inactiveDates', JSON.stringify(serializedDates));
             } else if (Array.isArray(value)) {
               // Handle other arrays
               formData.append(key, JSON.stringify(value));
@@ -777,6 +799,14 @@ export function EditVehicleDialog({
               />
               <Label htmlFor="active-toggle">Vehicle is Active</Label>
             </div>
+          </div>
+
+          {/* Vehicle Inactive Dates Section */}
+          <div className="mt-6 pt-4 border-t">
+            <VehicleInactiveDatesPicker
+              inactiveDates={inactiveDates}
+              onInactiveDatesChange={setInactiveDates}
+            />
           </div>
           
           <DialogFooter className="mt-4 pt-2 border-t">

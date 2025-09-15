@@ -65,7 +65,8 @@ if (!file_exists($persistentCacheFile)) {
             'ac' => true,
             'nightHaltCharge' => 700,
             'driverAllowance' => 250,
-            'isActive' => true
+            'isActive' => true,
+            'inactiveDates' => []
         ],
         [
             'id' => 'ertiga',
@@ -82,7 +83,8 @@ if (!file_exists($persistentCacheFile)) {
             'ac' => true,
             'nightHaltCharge' => 1000,
             'driverAllowance' => 250,
-            'isActive' => true
+            'isActive' => true,
+            'inactiveDates' => []
         ],
         [
             'id' => 'innova_crysta',
@@ -99,7 +101,8 @@ if (!file_exists($persistentCacheFile)) {
             'ac' => true,
             'nightHaltCharge' => 1000,
             'driverAllowance' => 250,
-            'isActive' => true
+            'isActive' => true,
+            'inactiveDates' => []
         ],
         [
             'id' => 'luxury',
@@ -116,7 +119,8 @@ if (!file_exists($persistentCacheFile)) {
             'ac' => true,
             'nightHaltCharge' => 1200,
             'driverAllowance' => 300,
-            'isActive' => true
+            'isActive' => true,
+            'inactiveDates' => []
         ],
         [
             'id' => 'tempo_traveller',

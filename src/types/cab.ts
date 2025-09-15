@@ -39,6 +39,14 @@ export interface CabType {
   cancellationPolicy?: string;
   fuelType?: string;
   gallery?: GalleryItem[];
+  inactiveDates?: InactiveDateRange[];
+}
+
+export interface InactiveDateRange {
+  id: string;
+  from: Date;
+  to: Date;
+  reason?: string;
 }
 
 export interface OutstationFare {

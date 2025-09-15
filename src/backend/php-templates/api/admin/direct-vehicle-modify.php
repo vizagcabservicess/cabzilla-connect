@@ -539,7 +539,26 @@ function loadVehiclesFromDatabase() {
                             return [];
                         })($row['exclusions'] ?? ''),
                         'cancellationPolicy' => $row['cancellation_policy'] ?? '',
-                        'fuelType' => $row['fuel_type'] ?? ''
+                        'fuelType' => $row['fuel_type'] ?? '',
+                        'inactiveDates' => (function($val) {
+                            if (empty($val)) return [];
+                            $decoded = json_decode($val, true);
+                            if (is_array($decoded)) {
+                                // Convert date strings back to Date objects for frontend
+                                return array_map(function($dateRange) {
+                                    if (isset($dateRange['from']) && isset($dateRange['to'])) {
+                                        return [
+                                            'id' => $dateRange['id'] ?? uniqid(),
+                                            'from' => $dateRange['from'],
+                                            'to' => $dateRange['to'],
+                                            'reason' => $dateRange['reason'] ?? null
+                                        ];
+                                    }
+                                    return $dateRange;
+                                }, $decoded);
+                            }
+                            return [];
+                        })($row['inactive_dates'] ?? '')
                     ];
                     
                     $vehicles[] = $vehicle;

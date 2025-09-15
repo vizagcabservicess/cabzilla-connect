@@ -107,6 +107,18 @@ if (file_exists(__DIR__ . '/../../config.php')) {
             if ($conn) {
                 logUpdateDebug("Connected to database successfully");
                 
+                // Ensure inactive_dates column exists
+                $checkColumnQuery = "SHOW COLUMNS FROM vehicles LIKE 'inactive_dates'";
+                $result = $conn->query($checkColumnQuery);
+                if ($result->num_rows === 0) {
+                    $addColumnQuery = "ALTER TABLE vehicles ADD COLUMN inactive_dates TEXT NULL";
+                    if ($conn->query($addColumnQuery)) {
+                        logUpdateDebug("Added inactive_dates column to vehicles table");
+                    } else {
+                        logUpdateDebug("Failed to add inactive_dates column: " . $conn->error);
+                    }
+                }
+                
                 // Create amenities string
                 $amenitiesValue = '';
                 if (isset($vehicleData['amenities'])) {
@@ -122,6 +134,19 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                 $exclusions = isset($vehicleData['exclusions']) ? (is_array($vehicleData['exclusions']) ? json_encode($vehicleData['exclusions']) : $vehicleData['exclusions']) : null;
                 $cancellationPolicy = $vehicleData['cancellationPolicy'] ?? null;
                 $fuelType = $vehicleData['fuelType'] ?? null;
+                
+                // Handle inactive dates
+                $inactiveDates = null;
+                if (isset($vehicleData['inactiveDates'])) {
+                    if (is_string($vehicleData['inactiveDates'])) {
+                        // If it's a JSON string, use it directly
+                        $inactiveDates = $vehicleData['inactiveDates'];
+                    } else if (is_array($vehicleData['inactiveDates'])) {
+                        // If it's an array, encode it to JSON
+                        $inactiveDates = json_encode($vehicleData['inactiveDates']);
+                    }
+                }
+                logUpdateDebug("Inactive dates processed", ['raw' => $vehicleData['inactiveDates'] ?? 'not set', 'processed' => $inactiveDates]);
                 
                 // Check if vehicle exists
                 $checkSql = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
@@ -150,7 +175,8 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         inclusions = ?, 
                         exclusions = ?, 
                         cancellation_policy = ?, 
-                        fuel_type = ?
+                        fuel_type = ?,
+                        inactive_dates = ?
                     WHERE vehicle_id = ? OR id = ?";
                     
                     $stmt = $conn->prepare($sql);
@@ -174,7 +200,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("siiddsssiddissssss", 
+                    $stmt->bind_param("siiddsssiddisssssss", 
                         $name, 
                         $capacity, 
                         $luggageCapacity, 
@@ -187,7 +213,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         $nightHaltCharge, 
                         $driverAllowance, 
                         $isActive,
-                        $inclusions, $exclusions, $cancellationPolicy, $fuelType,
+                        $inclusions, $exclusions, $cancellationPolicy, $fuelType, $inactiveDates,
                         $vehicleId, $vehicleId
                     );
                     
@@ -202,9 +228,9 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     logUpdateDebug("Inserting new vehicle into database");
                     
                     $sql = "INSERT INTO vehicles 
-                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, inclusions, exclusions, cancellation_policy, fuel_type) 
+                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, inclusions, exclusions, cancellation_policy, fuel_type, inactive_dates) 
                     VALUES 
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -227,7 +253,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                     $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
                                (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
                     
-                    $stmt->bind_param("ssiiddsssiddiisss", 
+                    $stmt->bind_param("ssiiddsssiddiissss", 
                         $vehicleId, 
                         $name, 
                         $capacity, 
@@ -241,7 +267,7 @@ if (file_exists(__DIR__ . '/../../config.php')) {
                         $nightHaltCharge, 
                         $driverAllowance, 
                         $isActive,
-                        $inclusions, $exclusions, $cancellationPolicy, $fuelType
+                        $inclusions, $exclusions, $cancellationPolicy, $fuelType, $inactiveDates
                     );
                     
                     if ($stmt->execute()) {
@@ -293,7 +319,8 @@ if ($vehicleIndex < 0) {
         'inclusions' => [],
         'exclusions' => [],
         'cancellationPolicy' => '',
-        'fuelType' => ''
+        'fuelType' => '',
+        'inactiveDates' => []
     ];
     $persistentData[] = $newVehicle;
     $vehicleIndex = count($persistentData) - 1;
@@ -408,6 +435,17 @@ if (isset($vehicleData['cancellationPolicy'])) {
 
 if (isset($vehicleData['fuelType'])) {
     $normalizedVehicle['fuelType'] = $vehicleData['fuelType'];
+}
+
+if (isset($vehicleData['inactiveDates'])) {
+    if (is_string($vehicleData['inactiveDates'])) {
+        // Parse JSON string back to array
+        $inactiveDates = json_decode($vehicleData['inactiveDates'], true);
+        $normalizedVehicle['inactiveDates'] = $inactiveDates ?: [];
+    } else if (is_array($vehicleData['inactiveDates'])) {
+        $normalizedVehicle['inactiveDates'] = $vehicleData['inactiveDates'];
+    }
+    logUpdateDebug("Updated inactiveDates in normalized vehicle", $normalizedVehicle['inactiveDates']);
 }
 
 logUpdateDebug("Normalized vehicle data", $normalizedVehicle);

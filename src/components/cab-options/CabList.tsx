@@ -240,11 +240,19 @@ export const CabList: React.FC<CabListProps> = ({
   returnDate,
   selectedCabBreakdown
 }) => {
-  const [cabTypes, setCabTypes] = useState<CabType[]>(initialCabTypes);
+  // Use the cabTypes prop directly instead of local state
   const [loading, setLoading] = useState(false);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   const isMobile = useIsMobile();
+  
+  // Debug: Log what vehicles are being passed to CabList
+  console.log('🚗 CabList received vehicles:', {
+    count: initialCabTypes?.length || 0,
+    vehicles: initialCabTypes?.map(v => ({ name: v.name, id: v.id })) || [],
+    pickupDate: pickupDate?.toDateString(),
+    hasTempoTraveller: initialCabTypes?.some(v => v.name.toLowerCase().includes('tempo')) || false
+  });
   
   useEffect(() => {
     const handleFareUpdate = () => {
@@ -263,32 +271,7 @@ export const CabList: React.FC<CabListProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    async function fetchAndMerge() {
-      setLoading(true);
-      try {
-        // 1. Fetch vehicles
-        const vehicles = await getVehicleData();
-        // 2. Fetch fares (example for outstation)
-        let fares = {};
-        if (tripType === 'outstation') {
-          fares = await getOutstationFares(); // Should return an object keyed by vehicleId
-        }
-        // 3. Merge fares into vehicles
-        const merged = vehicles.map(v => ({
-          ...v,
-          ...(fares[v.id] || {})
-        }));
-        setCabTypes(merged);
-      } catch (e) {
-        console.error('Error merging vehicles and fares:', e);
-        setCabTypes(initialCabTypes);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAndMerge();
-  }, [tripType, packageType, distance, pickupDate]);
+  // Removed the useEffect that was fetching vehicles since we're using the prop directly
 
   const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
     // For outstation round trip, always use breakdown.totalFare as fare and pass breakdown
@@ -335,13 +318,13 @@ export const CabList: React.FC<CabListProps> = ({
       {loading ? (
         <div>Loading cabs...</div>
       ) : (
-        (!cabTypes || cabTypes.length === 0) ? (
+        (!initialCabTypes || initialCabTypes.length === 0) ? (
           <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
             <p className="font-medium">No cab options available</p>
             <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
           </div>
         ) : (
-          cabTypes.map((cab) => (
+          initialCabTypes.map((cab) => (
             <CabFareCard
               key={cab.id}
               cab={cab}
