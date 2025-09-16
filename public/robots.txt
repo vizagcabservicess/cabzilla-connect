@@ -26,7 +26,6 @@ Disallow: /payment
 Disallow: /booking-confirmation
 Disallow: /tempotraveller
 Disallow: /suv
-Disallow: /sedan
 Disallow: /rentals
 Disallow: /cabs
 
@@ -36,6 +35,7 @@ Allow: /outstation-taxi
 Allow: /airport-taxi
 Allow: /tours
 Allow: /fleet
+Allow: /vehicle/
 Allow: /hire-driver
 Allow: /our-story
 Allow: /vision-mission

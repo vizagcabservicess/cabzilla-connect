@@ -5,6 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import RateCardPanel from '@/components/vehicle/RateCardPanel';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
@@ -286,13 +294,25 @@ const VehicleDetailPage = () => {
         <Navbar />
         
         <div className="container mx-auto px-4 py-8 max-w-7xl  pt-16 md:pt-24 pb-16 md:pb-32">
-          <Link 
-            to="/" 
-            className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Vehicles
-          </Link>
+          <Breadcrumb className="mb-6">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link to="/">Home</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link to="/fleet">Fleet</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{vehicle.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">

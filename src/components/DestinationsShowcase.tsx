@@ -118,11 +118,14 @@ export function DestinationsShowcase() {
     const tourType = getType(tour);
 
     return (
-      <Card
+      <Link
         key={tour.id || index}
-        className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
-        onClick={() => window.location.href = tourUrl}
+        to={tourUrl}
+        className="block"
       >
+        <Card
+          className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
+        >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}
           <div className={`absolute inset-0 ${getBgGradient(tourType)} opacity-50`}></div>
@@ -177,6 +180,7 @@ export function DestinationsShowcase() {
           </div>
         </CardContent>
       </Card>
+      </Link>
     );
   };
 

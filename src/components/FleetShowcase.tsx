@@ -129,11 +129,14 @@ export function FleetShowcase() {
     const VehicleIcon = getIcon(vehicleType);
     
     return (
-      <Card 
+      <Link
         key={vehicle.id || index}
-        className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
-        onClick={() => window.location.href = vehicleUrl}
+        to={vehicleUrl}
+        className="block"
       >
+        <Card 
+          className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
+        >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}
           <div className={`absolute inset-0 ${getBgGradient(vehicleType, index)} opacity-50`}></div>
@@ -194,6 +197,7 @@ export function FleetShowcase() {
           </div>
           </CardContent>
         </Card>
+      </Link>
     );
   };
 

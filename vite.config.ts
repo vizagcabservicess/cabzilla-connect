@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { copyFileSync, mkdirSync, readdirSync, statSync } from "fs";
+import { join } from "path";
 
 export default defineConfig(({ mode }) => ({
   server: {
@@ -57,6 +59,26 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' &&
     componentTagger(),
+    // Custom plugin to exclude api folder from build
+    {
+      name: 'exclude-api-folder',
+      generateBundle() {
+        // This plugin runs during build and ensures api folder is not included
+      },
+      writeBundle() {
+        // After build, remove api folder if it was copied
+        const distApiPath = join(process.cwd(), 'dist', 'api');
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(distApiPath)) {
+            fs.rmSync(distApiPath, { recursive: true, force: true });
+            console.log('✅ Removed api folder from dist directory');
+          }
+        } catch (error) {
+          console.log('Note: api folder was not found in dist or already removed');
+        }
+      }
+    }
   ].filter(Boolean),
   resolve: {
     alias: {

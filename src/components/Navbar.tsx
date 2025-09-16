@@ -60,10 +60,30 @@ const megaMenuData = {
   },
   'Tour Packages': {
     left: [
-      { label: 'Popular', to: '#' },
+      { label: 'View All Tours', to: '/tours' },
+      { label: 'Araku Valley Tour', to: '/tours/araku-valley-tour' },
+      { label: 'Lambasingi Tour', to: '/tours/lambasingi-tour' },
+      { label: 'Vizag North City Tour', to: '/tours/vizag-north-city-tour' },
     ],
     right: [
-      { label: 'Popular Destinations', items: ['Hyderabad', 'Chennai', 'Bangalore', 'Araku Valley'] },
+      { label: 'Popular Tours', items: ['Araku Valley Tour', 'Lambasingi Tour', 'Vizag City Tours'] },
+      { label: 'Tour Features', items: ['Professional Guides', 'Comfortable Vehicles', 'Best Rates'] },
+      { label: 'Booking Options', items: ['Instant Booking', 'Flexible Dates', 'Group Discounts'] },
+      { label: 'Destinations', items: ['Araku Valley', 'Lambasingi', 'Vizag City', 'Borra Caves'] },
+    ],
+  },
+  Fleet: {
+    left: [
+      { label: 'View All Vehicles', to: '/fleet' },
+      { label: 'Sedan', to: '/vehicle/sedan' },
+      { label: 'Ertiga', to: '/vehicle/ertiga' },
+      { label: 'Toyota Glanza', to: '/vehicle/toyota-glanza' },
+    ],
+    right: [
+      { label: 'Premium Vehicles', items: ['Toyota Glanza', 'Innova Crysta'] },
+      { label: 'Group Travel', items: ['Tempo Traveller (17-seater)', 'Amaze', 'Urbania'] },
+      { label: 'Vehicle Features', items: ['AC & Comfort', 'Professional Drivers', 'GPS Tracking'] },
+      { label: 'Booking Options', items: ['Hourly Rentals', 'Outstation Trips', 'Airport Transfers'] },
     ],
   },
   Company: {

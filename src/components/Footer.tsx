@@ -7,7 +7,7 @@ const Footer = () => {
     <footer className="bg-gray-900 text-white py-12 md:py-16 mt-auto pb-20 md:pb-16">
       <div className="container mx-auto px-8 md:px-12 lg:px-16 space-y-12">
         {/* Quick Links Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           <div>
             <h3 className="font-medium text-white mb-4 text-lg">Services</h3>
             <ul className="space-y-3 text-gray-300">
@@ -22,6 +22,52 @@ const Footer = () => {
               </li>
               <li>
                 <Link to="/tours" className="hover:text-white transition-colors block">Tour Packages</Link>
+              </li>
+            </ul>
+          </div>
+          
+          <div>
+            <h3 className="font-medium text-white mb-4 text-lg">Fleet</h3>
+            <ul className="space-y-3 text-gray-300">
+              <li>
+                <Link to="/fleet" className="hover:text-white transition-colors block">View All Vehicles</Link>
+              </li>
+              <li>
+                <Link to="/vehicle/sedan" className="hover:text-white transition-colors block">Sedan</Link>
+              </li>
+             
+              <li>
+                <Link to="/vehicle/ertiga" className="hover:text-white transition-colors block">Ertiga</Link>
+              </li>
+              <li>
+                <Link to="/vehicle/toyota-glanza" className="hover:text-white transition-colors block">Toyota Glanza</Link>
+              </li>
+              <li>
+                <Link to="/vehicle/innova-crysta" className="hover:text-white transition-colors block">Innova Crysta</Link>
+              </li>
+              <li>
+                <Link to="/vehicle/tempo-traveller" className="hover:text-white transition-colors block">Tempo Traveller</Link>
+              </li>
+            </ul>
+          </div>
+          
+          <div>
+            <h3 className="font-medium text-white mb-4 text-lg">Tours</h3>
+            <ul className="space-y-3 text-gray-300">
+              <li>
+                <Link to="/tours" className="hover:text-white transition-colors block">View All Tours</Link>
+              </li>
+              <li>
+                <Link to="/tours/araku-valley-tour" className="hover:text-white transition-colors block">Araku Valley Tour</Link>
+              </li>
+              <li>
+                <Link to="/tours/lambasingi-tour" className="hover:text-white transition-colors block">Lambasingi Tour</Link>
+              </li>
+              <li>
+                <Link to="/tours/vizag-north-city-tour" className="hover:text-white transition-colors block">Vizag North City Tour</Link>
+              </li>
+              <li>
+                <Link to="/tours/vizag-south-city-tour" className="hover:text-white transition-colors block">Vizag South City Tour</Link>
               </li>
             </ul>
           </div>
