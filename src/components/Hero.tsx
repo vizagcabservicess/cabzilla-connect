@@ -539,21 +539,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         
         if (tripType === 'outstation' && calculatedDistance <= 35) {
           setIsTabSwitching(true); // Set flag to prevent re-triggering
-          toast({
-            title: "Trip Type Updated",
-            description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
-            duration: 3000,
-          });
+          // toast({
+          //   title: "Trip Type Updated",
+          //   description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
+          //   duration: 3000,
+          // });
           setTripType('airport');
           // Reset flag after a short delay
           setTimeout(() => setIsTabSwitching(false), 1000);
         } else if (tripType === 'airport' && calculatedDistance > 35) {
           setIsTabSwitching(true); // Set flag to prevent re-triggering
-          toast({
-            title: "Trip Type Updated",
-            description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
-            duration: 3000,
-          });
+          // toast({
+          //   title: "Trip Type Updated",
+          //   description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
+          //   duration: 3000,
+          // });
           setTripType('outstation');
           // Reset flag after a short delay
           setTimeout(() => setIsTabSwitching(false), 1000);

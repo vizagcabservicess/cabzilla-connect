@@ -61,7 +61,12 @@ export const loadCabTypes = async (includeInactive: boolean = false, forceRefres
       // Add the fare-specific properties
       outstationFares: vehicle.outstationFares,
       localPackageFares: vehicle.localPackageFares,
-      airportFares: vehicle.airportFares
+      airportFares: vehicle.airportFares,
+      // Add missing fields that are expected by CabType interface
+      inclusions: vehicle.inclusions || ['Driver', 'Fuel', 'Toll charges'],
+      exclusions: vehicle.exclusions || ['Meals', 'Entry fees', 'Parking charges'],
+      cancellationPolicy: vehicle.cancellationPolicy || 'Free cancellation up to 2 hours before pickup',
+      fuelType: vehicle.fuelType || 'CNG'
     }));
     
     console.log('Processed', processedVehicles.length, 'vehicle types');
@@ -164,7 +169,11 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 700,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    inclusions: ['Driver', 'Fuel', 'Toll charges'],
+    exclusions: ['Meals', 'Entry fees', 'Parking charges'],
+    cancellationPolicy: 'Free cancellation up to 2 hours before pickup',
+    fuelType: 'CNG'
   },
   {
     id: 'ertiga',
@@ -179,7 +188,11 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 1000,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    inclusions: ['Driver', 'Fuel', 'Toll charges'],
+    exclusions: ['Meals', 'Entry fees', 'Parking charges'],
+    cancellationPolicy: 'Free cancellation up to 2 hours before pickup',
+    fuelType: 'CNG'
   },
   {
     id: 'innova_crysta',
@@ -194,7 +207,11 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 1000,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    inclusions: ['Driver', 'Fuel', 'Toll charges'],
+    exclusions: ['Meals', 'Entry fees', 'Parking charges'],
+    cancellationPolicy: 'Free cancellation up to 2 hours before pickup',
+    fuelType: 'CNG'
   }
 ];
 

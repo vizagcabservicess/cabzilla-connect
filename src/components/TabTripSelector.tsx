@@ -111,20 +111,20 @@ export function TabTripSelector({
       setPrevTab(selectedTab);
       
       // Notify user of tab change with toast (only for non-tour tabs to avoid obstruction)
-      if (selectedTab !== 'tour') {
-        const tabNames = {
-          'outstation': 'Outstation Trip',
-          'local': 'Local Hourly Rental',
-          'airport': 'Airport Transfer',
-          'tour': 'Tour Package'
-        };
-        
-        toast({
-          title: `Switched to ${tabNames[selectedTab]}`,
-          description: "Your selections have been adjusted.",
-          duration: 3000,
-        });
-      }
+      // if (selectedTab !== 'tour') {
+      //   const tabNames = {
+      //     'outstation': 'Outstation Trip',
+      //     'local': 'Local Hourly Rental',
+      //     'airport': 'Airport Transfer',
+      //     'tour': 'Tour Package'
+      //   };
+      //   
+      //   toast({
+      //     title: `Switched to ${tabNames[selectedTab]}`,
+      //     description: "Your selections have been adjusted.",
+      //     duration: 3000,
+      //   });
+      // }
       
       // Cancel any previous refresh timer
       if (refreshTimer) {
