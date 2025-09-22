@@ -8,7 +8,7 @@ import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, 
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
-import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
+import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
@@ -50,7 +50,8 @@ export const BookingSummary = ({
     tripType,
     distance,
     tripType === 'local' ? hourlyPackage : (tripType === 'outstation' ? tripMode : undefined),
-    pickupDate
+    pickupDate,
+    tripType === 'outstation' && tripMode === 'round-trip' ? returnDate : undefined
   );
 
   // Debug: Log the fare data from useFare hook
@@ -387,14 +388,12 @@ export const BookingSummary = ({
 
       async function calculateOutstationBreakdown() {
         try {
-          const normalizedId = normalizeVehicleId(selectedCab.id);
-          const outstationFares = await getOutstationFaresForVehicle(normalizedId);
-
           // Only apply for round-trip
           if (tripMode === 'round-trip' && pickupDate && returnDate && selectedCab) {
-            const perKmRate = outstationFares.pricePerKm;
-            const nightAllowancePerNight = outstationFares.nightHaltCharge;
-            const driverAllowancePerDay = outstationFares.driverAllowance;
+            // Use the same fare data source as CabList component
+            const perKmRate = selectedCab.pricePerKm ?? selectedCab.outstationFares?.pricePerKm ?? 15;
+            const nightAllowancePerNight = selectedCab.nightHaltCharge ?? selectedCab.outstationFares?.nightHaltCharge ?? 0;
+            const driverAllowancePerDay = selectedCab.driverAllowance ?? selectedCab.outstationFares?.driverAllowance ?? 250;
             const actualDistance = distance * 2;
             const fareResult = calculateOutstationRoundTripFare({
               pickupDate,
@@ -485,8 +484,27 @@ export const BookingSummary = ({
 
       if (tripType === 'outstation') {
         try {
-          const outstationFares = await getOutstationFaresForVehicle(normalizeVehicleId(selectedCab.id));
-          console.log('BookingSummary: Retrieved outstation fares:', outstationFares);
+          // Use the same fare data source as CabList component
+          const outstationFares = {
+            basePrice: selectedCab.price ?? selectedCab.outstationFares?.basePrice ?? 4200,
+            pricePerKm: selectedCab.pricePerKm ?? selectedCab.outstationFares?.pricePerKm ?? 15,
+            nightHaltCharge: selectedCab.nightHaltCharge ?? selectedCab.outstationFares?.nightHaltCharge ?? 0,
+            driverAllowance: selectedCab.driverAllowance ?? selectedCab.outstationFares?.driverAllowance ?? 250,
+            extraKmCharge: selectedCab.pricePerKm ?? selectedCab.outstationFares?.pricePerKm ?? 15,
+            tier1MinKm: 35,
+            tier1MaxKm: 50,
+            tier2MinKm: 51,
+            tier2MaxKm: 75,
+            tier3MinKm: 76,
+            tier3MaxKm: 100,
+            tier4MinKm: 101,
+            tier4MaxKm: 149,
+            tier1Price: 3500,
+            tier2Price: 4200,
+            tier3Price: 4900,
+            tier4Price: 5600
+          };
+          console.log('BookingSummary: Using cab object fare data:', outstationFares);
 
           if (tripMode === 'one-way') {
             // Use dynamic tiered pricing for one-way outstation trips

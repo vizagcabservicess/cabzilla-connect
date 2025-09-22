@@ -90,27 +90,25 @@ export function LocationInput({
   // Initialize input value from either value or location only on first render
   // or when value/location changes from external sources
   useEffect(() => {
-    // Skip if the value hasn't actually changed to avoid loops
-    if (valueRef.current === value && locationRef.current === location) {
-      return;
-    }
-    
     // Always update when value/location changes, regardless of initialization state
     // Update refs
     valueRef.current = value;
     locationRef.current = location;
     
     // Set input value based on value or location (without triggering onChange)
+    let newInputValue = "";
     if (typeof value === 'string') {
-      setInputValue(value);
+      newInputValue = value;
     } else if (value && typeof value === 'object') {
-      setInputValue(value.name || value.address || "");
+      newInputValue = value.name || value.address || "";
     } else if (location) {
-      setInputValue(location.name || location.address || "");
+      newInputValue = location.name || location.address || "";
     } else {
       // Clear input when value is undefined/null
-      setInputValue("");
+      newInputValue = "";
     }
+    
+    setInputValue(newInputValue);
     
     // Mark as initialized
     initializedRef.current = true;

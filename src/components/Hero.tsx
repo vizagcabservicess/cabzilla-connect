@@ -88,7 +88,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       return {
         pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
         dropLocation: dropData ? JSON.parse(dropData) as Location : null,
-        pickupDate: pickupDateStr ? new Date(JSON.parse(pickupDateStr)) : new Date(),
+        pickupDate: pickupDateStr ? (() => {
+          const parsedDate = new Date(JSON.parse(pickupDateStr));
+          const now = new Date();
+          // If the stored date is in the future, use current date instead
+          return parsedDate > now ? now : parsedDate;
+        })() : new Date(),
         returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
         tripType: tripTypeData as TripType || defaultTripType,
         tripMode: tripModeData as TripMode || 'one-way',
@@ -130,7 +135,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   
   const [pickupLocation, setPickupLocation] = useState<Location | null>(editModeData.pickupLocation || savedData.pickupLocation);
   const [dropLocation, setDropLocation] = useState<Location | null>(savedData.dropLocation);
-  const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate);
+  const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate || new Date());
   const [returnDate, setReturnDate] = useState<Date | null>(savedData.returnDate);
   const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
   const [distance, setDistance] = useState<number>(0);
@@ -160,18 +165,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [isSlidingSearch, setIsSlidingSearch] = useState<boolean>(false);
   const [dynamicVehicles, setDynamicVehicles] = useState<CabType[]>([]);
   const [vehiclesLoaded, setVehiclesLoaded] = useState<boolean>(false);
+  const [editTrigger, setEditTrigger] = useState<number>(0);
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
+    // Force LocationInput components to completely re-mount by changing their keys
+    setEditTrigger(prev => prev + 1);
     setIsSlidingSearch(true);
-    // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
   };
 
   const handleEditPickupDate = () => {
+    // Force LocationInput components to completely re-mount by changing their keys
+    setEditTrigger(prev => prev + 1);
     setIsSlidingSearch(true);
-    // Keep in step 2, don't change step
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
   };
@@ -255,10 +263,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Always keep pickupDate enabled and default to now on mount/refresh
   useEffect(() => {
-    // Only set initial date if no date is already set
-    if (!savedData.autoTriggerSearch && !pickupDate) {
-      setPickupDate(new Date());
-    }
+    // Clear any stored future dates and always set to current date/time
+    sessionStorage.removeItem('pickupDate');
+    sessionStorage.removeItem('returnDate');
+    setPickupDate(new Date());
   }, []);
 
   // Handle autoTriggerSearch functionality
@@ -1151,7 +1159,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
             </div>
 
             {/* Main Booking Container */}
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
+            <div key={`booking-form-${editTrigger}`} className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
               {/* Airport Direction Label */}
               {tripType === 'airport' && airportDirectionLabel && (
                 <div className="px-4 pt-4 pb-2">
@@ -1169,7 +1177,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                     {/* Removed icon and 'Enter' text */}
                     <div className="flex-1 min-w-0">
                                              <LocationInput
-                         key="pickup-mobile"
+                         key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
                          label="Pickup location"
                          placeholder="Pickup location"
                          value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -1189,7 +1197,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                                                  <LocationInput
-                           key={`drop-mobile-${dropLocation?.id || 'empty'}`}
+                           key={`drop-mobile-${editTrigger}-${dropLocation?.id || 'empty'}`}
                            label="Drop location"
                            placeholder="Enter Drop location"
                            value={dropLocation ? { ...dropLocation } : undefined}
@@ -1307,7 +1315,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       </div>
 
                       {/* Main Booking Container - Bus booking style */}
-                      <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
+                      <div key={`booking-form-mobile-${editTrigger}`} className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
                         {/* Airport Direction Label */}
                         {tripType === 'airport' && airportDirectionLabel && (
                           <div className="px-4 pt-4 pb-2">
@@ -1325,7 +1333,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               {/* Removed icon and 'Enter' text */}
                               <div className="flex-1 min-w-0">
                                                                  <LocationInput
-                                   key="pickup"
+                                   key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
                                    label="Pickup location"
                                    placeholder="Enter Pickup location"
                                    value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -1350,7 +1358,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                                                      <LocationInput
-                                     key={`drop-${dropLocation?.id || 'empty'}`}
+                                     key={`drop-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                      label="Drop location"
                                      placeholder="Enter Drop location"
                                      value={dropLocation ? { ...dropLocation } : undefined}
