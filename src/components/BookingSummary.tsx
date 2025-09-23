@@ -989,7 +989,10 @@ export const BookingSummary = ({
               <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
               <div className="text-left flex-1">
                 <p className="text-[12px] text-gray-500 text-left">PICKUP</p>
-                <p className="font-semibold text-left text-[14px]">{pickupLocation.address || pickupLocation.name}</p>
+                <p className="font-semibold text-left text-[14px]">{pickupLocation.name}</p>
+                {pickupLocation.address && pickupLocation.address !== pickupLocation.name && (
+                  <p className="text-[12px] text-gray-600 text-left mt-1">{pickupLocation.address}</p>
+                )}
               </div>
               {onEditPickupLocation && (
                 <button
@@ -1007,7 +1010,10 @@ export const BookingSummary = ({
                 <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                 <div className="text-left">
                   <p className="text-[12px] text-gray-500 text-left">DROP-OFF</p>
-                  <p className="font-semibold text-left text-[14px]">{dropLocation.address || dropLocation.name}</p>
+                  <p className="font-semibold text-left text-[14px]">{dropLocation.name}</p>
+                  {dropLocation.address && dropLocation.address !== dropLocation.name && (
+                    <p className="text-[12px] text-gray-600 text-left mt-1">{dropLocation.address}</p>
+                  )}
                 </div>
               </div>
             )}

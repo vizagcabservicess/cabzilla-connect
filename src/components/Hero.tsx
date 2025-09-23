@@ -60,7 +60,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         return {
           pickupLocation: prefillData.pickupLocation,
           dropLocation: prefillData.dropLocation,
-          pickupDate: prefillData.pickupDate ? new Date(prefillData.pickupDate) : new Date(),
+          pickupDate: prefillData.pickupDate ? (() => {
+            const parsedDate = new Date(prefillData.pickupDate);
+            const now = new Date();
+            const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+            
+            // Check if prefill date is still valid (at least 1 hour in advance)
+            if (parsedDate < oneHourFromNow) {
+              // If prefill date is too close to current time, update to minimum allowed time
+              return oneHourFromNow;
+            }
+            
+            // Preserve the prefill date if it's still valid
+            return parsedDate;
+          })() : (() => {
+            const now = new Date();
+            const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+            return oneHourFromNow;
+          })(),
           returnDate: prefillData.returnDate ? new Date(prefillData.returnDate) : null,
           tripType: prefillData.tripType || 'outstation',
           tripMode: prefillData.tripMode || 'one-way',
@@ -91,9 +108,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         pickupDate: pickupDateStr ? (() => {
           const parsedDate = new Date(JSON.parse(pickupDateStr));
           const now = new Date();
-          // If the stored date is in the future, use current date instead
-          return parsedDate > now ? now : parsedDate;
-        })() : new Date(),
+          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+          
+          // Check if stored date is still valid (at least 1 hour in advance)
+          if (parsedDate < oneHourFromNow) {
+            // If stored date is too close to current time, update to minimum allowed time
+            return oneHourFromNow;
+          }
+          
+          // Preserve the stored date if it's still valid
+          return parsedDate;
+        })() : (() => {
+          const now = new Date();
+          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+          return oneHourFromNow;
+        })(),
         returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
         tripType: tripTypeData as TripType || defaultTripType,
         tripMode: tripModeData as TripMode || 'one-way',
@@ -113,7 +142,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       return {
         pickupLocation: null,
         dropLocation: null,
-        pickupDate: new Date(),
+        pickupDate: (() => {
+          const now = new Date();
+          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+          return oneHourFromNow;
+        })(),
         returnDate: null,
         tripType: defaultTripType,
         tripMode: 'one-way' as TripMode,
@@ -166,6 +199,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [dynamicVehicles, setDynamicVehicles] = useState<CabType[]>([]);
   const [vehiclesLoaded, setVehiclesLoaded] = useState<boolean>(false);
   const [editTrigger, setEditTrigger] = useState<number>(0);
+
+  // Helper function to get minimum allowed date (current date + 1 hour for today, or current date for future dates)
+  const getMinimumAllowedDate = () => {
+    const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    return oneHourFromNow;
+  };
 
   // Edit handlers for booking summary
   const handleEditPickupLocation = () => {
@@ -261,12 +301,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
   }, [navigationState]);
 
-  // Always keep pickupDate enabled and default to now on mount/refresh
+  // Preserve stored dates instead of always resetting to current date
   useEffect(() => {
-    // Clear any stored future dates and always set to current date/time
-    sessionStorage.removeItem('pickupDate');
-    sessionStorage.removeItem('returnDate');
-    setPickupDate(new Date());
+    // Only set to current date if no date is stored and no date is already set
+    const storedPickupDate = sessionStorage.getItem('pickupDate');
+    if (!storedPickupDate && !pickupDate) {
+      // Set to minimum allowed date (current time + 1 hour)
+      setPickupDate(getMinimumAllowedDate());
+    }
   }, []);
 
   // Handle autoTriggerSearch functionality
@@ -651,6 +693,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   useEffect(() => {
     if (pickupDate) {
+      // Always update sessionStorage with the current pickupDate
       sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
     }
     if (returnDate) {
@@ -659,6 +702,19 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       sessionStorage.removeItem('returnDate');
     }
   }, [pickupDate, returnDate]);
+
+  // Update sessionStorage when pickupDate is automatically adjusted due to 1-hour rule
+  useEffect(() => {
+    if (pickupDate) {
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      
+      // If the current pickupDate is less than 1 hour from now, update it
+      if (pickupDate < oneHourFromNow) {
+        setPickupDate(oneHourFromNow);
+      }
+    }
+  }, []); // Run once on mount to check and update if needed
 
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
@@ -1218,7 +1274,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       <DateTimePicker
                         date={pickupDate}
                         onDateChange={setPickupDate}
-                        minDate={new Date()}
+                        minDate={getMinimumAllowedDate()}
                         className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                       />
                     </div>
@@ -1432,7 +1488,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 <DateTimePicker
                                   date={pickupDate}
                                   onDateChange={setPickupDate}
-                                  minDate={new Date()}
+                                  minDate={getMinimumAllowedDate()}
                                   className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                                 />
                               </div>

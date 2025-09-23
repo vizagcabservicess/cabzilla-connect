@@ -40,7 +40,7 @@ export function DateTimePicker({
       setSelectedTime(format(now, "HH:mm"));
       onDateChange(now);
     }
-  }, [onDateChange]);
+  }, []); // Remove onDateChange dependency to prevent re-triggering
 
   useEffect(() => {
     // Update selectedTime when date changes (but don't trigger onDateChange)
@@ -73,8 +73,13 @@ export function DateTimePicker({
     newDate.setHours(hours);
     newDate.setMinutes(minutes);
 
-    // Prevent selecting a past date/time
+    // Prevent selecting a past date/time and require 1 hour advance booking for today
     const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000); // Add 1 hour
+    
+    // Check if selected date is today
+    const isToday = newDate.toDateString() === now.toDateString();
+    
     if (minDate) {
       if (newDate < minDate) {
         toast({
@@ -89,6 +94,16 @@ export function DateTimePicker({
         toast({
           title: "Invalid selection",
           description: "You cannot select a past date or time.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // For today's bookings, require at least 1 hour advance notice
+      if (isToday && newDate < oneHourFromNow) {
+        toast({
+          title: "Advance booking required",
+          description: "Please book at least 1 hour in advance for same-day trips.",
           variant: "destructive"
         });
         return;
