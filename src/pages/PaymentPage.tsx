@@ -135,7 +135,8 @@ const PaymentPage = () => {
       setPaymentStatus('processing');
       
       // Get payment mode from sessionStorage
-      const paymentMode = sessionStorage.getItem('paymentMode') as 'partial' | 'full' || 'partial';
+      const paymentMode = (sessionStorage.getItem('paymentMode') as 'partial' | 'full') || 'partial';
+      console.log('Payment Mode from sessionStorage:', paymentMode);
       
       // Calculate the amount based on payment mode
       const amount = paymentMode === 'partial'
@@ -143,13 +144,17 @@ const PaymentPage = () => {
         : (bookingDetails.totalPrice || 0);
       
       // Update booking with payment details
+      const paymentStatus = paymentMode === 'partial' ? 'payment_pending' : 'paid';
+      console.log('Setting payment status to:', paymentStatus, 'for payment mode:', paymentMode);
+      
       const updateData = {
-        payment_status: paymentMode === 'partial' ? 'payment_pending' : 'paid',
+        payment_status: paymentStatus,
         payment_method: 'razorpay',
         razorpay_payment_id: response.razorpay_payment_id,
         razorpay_order_id: response.razorpay_order_id,
         razorpay_signature: response.razorpay_signature,
-        advance_paid_amount: amount
+        advance_paid_amount: amount,
+        payment_timestamp: new Date().toISOString()
       };
 
       // First update the booking

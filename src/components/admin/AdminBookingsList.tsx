@@ -40,6 +40,7 @@ import { getStatusColorClass } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
 import { formatPrice } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { formatLocationForDisplay } from '@/utils/locationUtils';
 
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
@@ -832,7 +833,17 @@ export function AdminBookingsList() {
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
                           <div className="text-sm leading-relaxed">
-                            <div className="text-sm">{booking.pickupLocation}</div>
+                            {(() => {
+                              const pickup = formatLocationForDisplay(booking.pickupLocation);
+                              return (
+                                <div>
+                                  <div className="font-semibold text-sm">{pickup.name}</div>
+                                  {pickup.address && pickup.address !== pickup.name && (
+                                    <div className="text-xs text-gray-500 mt-1">{pickup.address}</div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -843,7 +854,17 @@ export function AdminBookingsList() {
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
                           <div className="text-sm leading-relaxed">
-                            <div className="text-sm">{booking.dropLocation}</div>
+                            {(() => {
+                              const drop = formatLocationForDisplay(booking.dropLocation);
+                              return (
+                                <div>
+                                  <div className="font-semibold text-sm">{drop.name}</div>
+                                  {drop.address && drop.address !== drop.name && (
+                                    <div className="text-xs text-gray-500 mt-1">{drop.address}</div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>

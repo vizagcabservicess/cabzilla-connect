@@ -149,6 +149,29 @@ export interface Booking {
     companyAddress?: string;
     companyEmail?: string;
   };
+  // Razorpay payment fields
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  razorpay_signature?: string;
+  payment_timestamp?: string;
+  // Package and billing fields
+  inclusions?: string[];
+  exclusions?: string[];
+  hours_included?: number;
+  km_included?: number;
+  extra_per_hour?: number;
+  extra_per_km?: number;
+  waiting_charge_per_hour?: number;
+  grace_minutes?: number;
+  night_window?: string;
+  night_charge_rate?: number;
+  via_stops?: string;
+  special_notes?: string;
+  cancellation_policy?: string;
+  no_show_policy?: string;
+  invoice_mode?: string;
+  driver_helpline?: string;
+  customer_support?: string;
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';

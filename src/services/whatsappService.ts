@@ -19,7 +19,26 @@ export function formatPhoneNumber(phone: string): string {
 }
 
 export function generateBookingConfirmationMessage(booking: Booking): string {
+  // Debug: Log available booking fields
+  console.log('Booking data for WhatsApp:', {
+    razorpay_payment_id: booking.razorpay_payment_id,
+    payment_timestamp: booking.payment_timestamp,
+    payment_method: booking.payment_method,
+    advance_paid_amount: booking.advance_paid_amount,
+    fare: booking.fare,
+    totalAmount: booking.totalAmount,
+    created_at: booking.created_at,
+    updated_at: booking.updated_at,
+    // Check for alternative field names
+    razorpayPaymentId: (booking as any).razorpayPaymentId,
+    paymentTimestamp: (booking as any).paymentTimestamp,
+    paymentTime: (booking as any).paymentTime,
+    transactionId: (booking as any).transactionId,
+    paymentId: (booking as any).paymentId
+  });
+  
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
+  const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
@@ -27,7 +46,241 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     ? typeof booking.drop_location === 'string' 
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
-    : 'N/A';
+    : booking.dropLocation || 'N/A';
+
+  // Format pickup date and time
+  const pickupDateTime = booking.pickup_date || booking.pickupDate;
+  const formattedDateTime = pickupDateTime ? new Date(pickupDateTime).toLocaleString('en-IN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }) : 'N/A';
+
+  // Get trip type
+  const tripType = booking.tripType || booking.trip_type || 'Unknown';
+  const tripTypeDisplay = tripType === 'local' ? 'Local City Ride' : tripType;
+
+  // Get vehicle details with specifications
+  const vehicleModel = booking.vehicle_type || booking.cabType || 'To be assigned';
+  const vehicleRegNo = booking.vehicleNumber || 'to be shared';
+  
+  // Debug: Log available booking fields for vehicle details
+  console.log('Vehicle details debug:', {
+    vehicle_type: booking.vehicle_type,
+    cabType: booking.cabType,
+    vehicleCapacity: (booking as any).vehicleCapacity,
+    capacity: (booking as any).capacity,
+    vehicleLuggage: (booking as any).vehicleLuggage,
+    luggageCapacity: (booking as any).luggageCapacity,
+    vehicleFuelType: (booking as any).vehicleFuelType,
+    fuelType: (booking as any).fuelType,
+    vehicleFeatures: (booking as any).vehicleFeatures,
+    amenities: (booking as any).amenities,
+    features: (booking as any).features,
+    fullBooking: booking
+  });
+
+  // Get vehicle specifications from booking data - check multiple possible field names
+  let vehicleCapacity = (booking as any).vehicleCapacity || 
+                       (booking as any).capacity || 
+                       (booking as any).vehicle_capacity ||
+                       (booking as any).seating_capacity ||
+                       'N/A';
+  let vehicleLuggage = (booking as any).vehicleLuggage || 
+                      (booking as any).luggageCapacity || 
+                      (booking as any).vehicle_luggage ||
+                      (booking as any).luggage_capacity ||
+                      'N/A';
+  let vehicleFuelType = (booking as any).vehicleFuelType || 
+                       (booking as any).fuelType || 
+                       (booking as any).vehicle_fuel_type ||
+                       (booking as any).fuel_type ||
+                       'N/A';
+  let vehicleFeatures = (booking as any).vehicleFeatures || 
+                       (booking as any).amenities || 
+                       (booking as any).features ||
+                       (booking as any).vehicle_features ||
+                       (booking as any).vehicle_amenities ||
+                       [];
+
+  // If vehicle specifications are not available in booking data, provide defaults based on vehicle type
+  if (vehicleCapacity === 'N/A' && vehicleModel !== 'To be assigned') {
+    // Provide default specifications based on vehicle type
+    const vehicleType = vehicleModel.toLowerCase();
+    
+    if (vehicleType.includes('swift') || vehicleType.includes('dzire')) {
+      vehicleCapacity = '4';
+      vehicleLuggage = '3';
+      vehicleFuelType = 'Petrol';
+      vehicleFeatures = ['AC', 'Music System', 'Charging Point'];
+    } else if (vehicleType.includes('innova') || vehicleType.includes('crysta')) {
+      vehicleCapacity = '7';
+      vehicleLuggage = '4';
+      vehicleFuelType = 'Petrol';
+      vehicleFeatures = ['AC', 'Music System', 'Charging Point', 'Spacious'];
+    } else if (vehicleType.includes('ertiga')) {
+      vehicleCapacity = '7';
+      vehicleLuggage = '4';
+      vehicleFuelType = 'Petrol';
+      vehicleFeatures = ['AC', 'Music System', 'Charging Point'];
+    } else if (vehicleType.includes('wagon') || vehicleType.includes('r')) {
+      vehicleCapacity = '7';
+      vehicleLuggage = '4';
+      vehicleFuelType = 'Petrol';
+      vehicleFeatures = ['AC', 'Music System', 'Charging Point'];
+    } else {
+      // Default specifications for unknown vehicles
+      vehicleCapacity = '4';
+      vehicleLuggage = '2';
+      vehicleFuelType = 'Petrol';
+      vehicleFeatures = ['AC', 'Music System'];
+    }
+  }
+
+  const vehicleFeaturesText = Array.isArray(vehicleFeatures) ? vehicleFeatures.join(', ') : vehicleFeatures || 'AC, Music System';
+
+  // Get driver details
+  const driverName = booking.driverName || 'to be shared';
+  const driverPhone = booking.driverPhone || 'to be shared';
+
+  // Get fare details - using actual database fields
+  const fareBase = booking.fare || booking.totalAmount || 0;
+  const advanceAmount = booking.advance_paid_amount || 0;
+  const advanceMode = booking.payment_method || 'N/A';
+  const advanceTxnId = booking.razorpay_payment_id || 
+                      (booking as any).razorpayPaymentId || 
+                      (booking as any).transactionId || 
+                      (booking as any).paymentId || 
+                      'Payment completed via Razorpay';
+  const paymentTime = booking.payment_timestamp || 
+                     (booking as any).paymentTimestamp || 
+                     (booking as any).paymentTime;
+  
+  const advanceDateTime = paymentTime
+    ? new Date(paymentTime).toLocaleString('en-IN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    : booking.created_at 
+      ? new Date(booking.created_at).toLocaleString('en-IN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        })
+      : 'Payment time not recorded';
+  const pendingAmount = Math.max(0, fareBase - advanceAmount);
+  const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
+
+  // Get package details for local trips only
+  const hoursIncluded = tripType === 'local' ? (booking.hours_included || '8') : 'N/A';
+  const kmIncluded = tripType === 'local' ? (booking.km_included || '80') : 'N/A';
+  const extraPerHour = tripType === 'local' ? (booking.extra_per_hour || '100') : 'N/A';
+  const extraPerKm = tripType === 'local' ? (booking.extra_per_km || '12') : 'N/A';
+
+  // Get billing details
+  const billingBasis = 'Per trip'; // Default billing basis
+  const waitingChargePerHour = booking.waiting_charge_per_hour || 'N/A';
+  const graceMinutes = booking.grace_minutes || 'N/A';
+  const nightWindow = booking.night_window || 'N/A';
+  const nightChargeRate = booking.night_charge_rate || 'N/A';
+
+  // Get route and notes
+  const viaStops = booking.via_stops || 'N/A';
+  const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+
+  // Get policies - Different policies for tours vs regular trips
+  const isTour = tripType === 'tour' || tripType === 'outstation';
+  
+  const cancellationPolicy = booking.cancellation_policy || (isTour 
+    ? '30+ days: 100% refund. 16-30 days: 25% deduction. 7-15 days: 50% deduction. 2-6 days: 75% deduction. 1-48 hours: No refund. After driver details shared: No refund'
+    : 'Cancellations within 4 hours of pickup: No refund. Between 4-24 hours: Cancellation charges apply, balance refunded within 21 days'
+  );
+  
+  const noShowPolicy = booking.no_show_policy || (isTour 
+    ? 'No refund after driver/vendor details are shared'
+    : 'No-show if cancelled within 4 hours of pickup time'
+  );
+  
+  const invoiceMode = booking.invoice_mode || 'Digital receipt provided';
+
+  // Get support details - Updated with correct numbers
+  const driverHelpline = booking.driver_helpline || '+91 9966363662';
+  const customerSupport = booking.customer_support || '+91 9966363662';
+
+  // Generate secure payment receipt link - provide contact information instead of direct access
+  const receiptUrl = `${window.location.origin}/contact?receipt_request=true`;
+
+  // Get inclusions and exclusions - handle both array and string formats
+  let inclusions = booking.inclusions 
+    ? Array.isArray(booking.inclusions) 
+      ? booking.inclusions.join(', ') 
+      : booking.inclusions
+    : null;
+  let exclusions = booking.exclusions 
+    ? Array.isArray(booking.exclusions) 
+      ? booking.exclusions.join(', ') 
+      : booking.exclusions
+    : null;
+
+  // If no specific inclusions/exclusions found, provide defaults based on vehicle type
+  if (!inclusions || inclusions === 'Standard inclusions apply') {
+    const vehicleType = vehicleModel.toLowerCase();
+    if (vehicleType.includes('swift') || vehicleType.includes('dzire') || 
+        vehicleType.includes('innova') || vehicleType.includes('crysta') ||
+        vehicleType.includes('ertiga') || vehicleType.includes('wagon')) {
+      inclusions = 'Driver, Car, AC, Fuel';
+    } else {
+      inclusions = 'Driver, Car, AC, Fuel';
+    }
+  }
+
+  if (!exclusions || exclusions === 'Standard exclusions apply') {
+    exclusions = 'Toll gates, Parking fees, Entry fees, State and Route Permits (If applicable)';
+  }
+
+  // Get GST details
+  const gstEnabled = booking.gstEnabled || (booking as any).gst_enabled || false;
+  const gstDetails = booking.gstDetails || (booking as any).gst_details;
+  const gstNumber = gstDetails?.gstNumber || gstDetails?.gst_number || 'N/A';
+  const companyName = gstDetails?.companyName || gstDetails?.company_name || 'N/A';
+
+  // Get return date for round-trip - check multiple possible field names
+  const returnDate = booking.return_date || (booking as any).returnDate;
+  
+  const formattedReturnDate = returnDate ? new Date(returnDate).toLocaleString('en-IN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }) : 'N/A';
+  
+  console.log('Return date debug:', {
+    return_date: booking.return_date,
+    returnDate: (booking as any).returnDate,
+    returnDate_final: returnDate,
+    trip_mode: booking.trip_mode,
+    tripMode: booking.tripMode,
+    formattedReturnDate: formattedReturnDate,
+    willShowReturnDate: !!returnDate,
+    fullBooking: booking
+  });
+
+  // Calculate distance for round-trip (double the one-way distance)
+  const oneWayDistance = (booking as any).distance || 0;
+  const isRoundTrip = booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
+  const totalDistance = isRoundTrip ? oneWayDistance * 2 : oneWayDistance;
 
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
@@ -35,18 +288,57 @@ Hello ${passengerName}!
 
 Your cab booking has been confirmed:
 
+*Trip Details*
 📍 *Pickup:* ${pickupLocation}
-📍 *Drop:* ${dropLocation}
-📅 *Date:* ${booking.pickup_date || booking.pickupDate}
-🚗 *Vehicle:* ${booking.vehicle_type || booking.cabType}
-💰 *Fare:* ₹${booking.fare || booking.totalAmount}
-📋 *Status:* ${booking.status}
+📍 *Destination:* ${dropLocation === 'N/A' ? 'Local City Ride' : dropLocation}
+📅 *Pickup date & time:* ${formattedDateTime}
+${returnDate ? `📅 *Return date & time:* ${formattedReturnDate}` : ''}
+🚗 *Trip type:* ${tripTypeDisplay}
+${tripType === 'outstation' ? `📏 *Total distance:* ${totalDistance} km${isRoundTrip ? ' (round-trip)' : ''}` : ''}
+🚗 *Vehicle:* ${vehicleModel} [${vehicleRegNo}]
+👥 *Capacity:* ${vehicleCapacity} passengers
+👨‍💼 *Driver:* ${driverName}, ${driverPhone}
+📞 *Guest contact:* ${passengerName}, ${passengerPhone}
+
+*Fare and Payments*
+💰 *Fare (base):* ₹${fareBase}
+💳 *Advance:* ₹${advanceAmount}, mode: ${advanceMode}
+⏳ *Pending:* ₹${pendingAmount}, payable: ${pendingDue}
+${gstEnabled ? `🏢 *GST Details:* ${gstNumber} (${companyName})` : ''}
+🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt
+
+*Trip Inclusions & Exclusions*
+📋 *Inclusions:* ${inclusions}
+❌ *Exclusions:* ${exclusions}
+
+${tripType === 'local' ? `*Package Limits*
+⏰ *Hours included:* ${hoursIncluded}
+🛣️ *Kilometers limit:* ${kmIncluded} km
+📈 *Extra charges:* ₹${extraPerHour} beyond hours; ₹${extraPerKm} beyond km (pro rate basis)` : ''}
+
+*Billing and Charges*
+📊 *Basis:* ${billingBasis}
+⏳ *Waiting:* ₹${waitingChargePerHour} after ${graceMinutes} min grace
+🌙 *Night charges:* ${nightWindow} at ₹${nightChargeRate}
+${tripType === 'local' ? `📏 *Kilometers limit:* ${kmIncluded} km included, extra charges applicable beyond given kilometers on pro rate basis` : ''}
+
+*Route and Notes*
+🛣️ *Via/Stops:* ${viaStops}
+📝 *Special notes:* ${specialNotes}
+
+*Policies*
+❌ *Cancellation:* ${cancellationPolicy}
+🚫 *No-show:* ${noShowPolicy}
+💰 *Refund:* ${isTour ? 'Refunds processed within 21 working days based on cancellation timeframe' : 'Refunds processed within 21 working days'}
+🧾 *Invoice/Receipt:* ${invoiceMode}
+
+*Support*
+📞 *Driver helpline:* +91 9966363662
+📞 *Customer support:* +91 9966363662
 
 *Booking ID:* ${booking.id}
 
-Thank you for choosing Vizag Taxi Hub! 🙏
-
-For any queries, please contact us.`;
+Thank you for choosing Vizag Taxi Hub. Have a safe and comfortable ride! 🙏`;
 }
 
 export function generateDriverAssignmentMessage(booking: Booking): string {

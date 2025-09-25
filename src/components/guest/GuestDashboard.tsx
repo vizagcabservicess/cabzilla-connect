@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { formatLocationForDisplay } from '@/utils/locationUtils';
 import { 
   LogOut, 
   Search, 
@@ -289,8 +290,16 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
                             <div className="text-sm">
-                              <div className="font-medium">{booking.pickupLocation}</div>
-                              <div className="text-muted-foreground">→ {booking.dropLocation}</div>
+                              {(() => {
+                                const pickup = formatLocationForDisplay(booking.pickupLocation);
+                                const drop = formatLocationForDisplay(booking.dropLocation);
+                                return (
+                                  <div>
+                                    <div className="font-medium">{pickup.name}</div>
+                                    <div className="text-muted-foreground">→ {drop.name}</div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 

@@ -12,6 +12,7 @@ import { Booking } from '@/types/api';
 import { formatDate, formatTime, formatDateTime } from '@/lib/dateUtils';
 import { formatPrice } from '@/lib/cabData';
 import { toast } from 'sonner';
+import { formatLocationForDisplay } from '@/utils/locationUtils';
 
 const ReceiptPage = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -226,7 +227,17 @@ const ReceiptPage = () => {
                       <MapPin className="w-5 h-5 text-blue-500 mt-0.5 mr-2" />
                       <div>
                         <p className="text-xs text-gray-500">PICKUP LOCATION</p>
-                        <p className="font-medium text-sm">{booking?.pickupLocation || "N/A"}</p>
+                        {(() => {
+                          const pickup = formatLocationForDisplay(booking?.pickupLocation || '');
+                          return (
+                            <div>
+                              <p className="font-medium text-sm">{pickup.name}</p>
+                              {pickup.address && pickup.address !== pickup.name && (
+                                <p className="text-xs text-gray-500 mt-1">{pickup.address}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                     
@@ -235,7 +246,17 @@ const ReceiptPage = () => {
                         <MapPin className="w-5 h-5 text-red-500 mt-0.5 mr-2" />
                         <div>
                           <p className="text-xs text-gray-500">DROP LOCATION</p>
-                          <p className="font-medium text-sm">{booking.dropLocation}</p>
+                          {(() => {
+                            const drop = formatLocationForDisplay(booking.dropLocation);
+                            return (
+                              <div>
+                                <p className="font-medium text-sm">{drop.name}</p>
+                                {drop.address && drop.address !== drop.name && (
+                                  <p className="text-xs text-gray-500 mt-1">{drop.address}</p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}

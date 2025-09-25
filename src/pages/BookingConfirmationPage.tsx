@@ -10,6 +10,7 @@ import { bookingAPI } from '../services/api/bookingAPI';
 import { Booking, BookingStatus } from '../types/api';
 import { formatDate, formatTime, formatDateTime } from '../lib/dateUtils';
 import { formatPrice } from '../lib/cabData';
+import { formatLocationForDisplay } from '../utils/locationUtils';
 // Receipt component removed - no longer needed
 import { MobileNavigation } from '../components/MobileNavigation';
 
@@ -28,18 +29,24 @@ function BookingConfirmationPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const paymentStatus = booking?.paymentStatus || booking?.status || 'Pending';
+  const paymentStatus = booking?.payment_status || booking?.paymentStatus || booking?.status || 'Pending';
 
   // Debug logging for payment details
   useEffect(() => {
     if (booking) {
-      console.log('Payment Status:', paymentStatus);
+      console.log('=== BOOKING CONFIRMATION DEBUG ===');
+      console.log('Full booking object:', booking);
+      console.log('Payment Status (payment_status):', booking.payment_status);
+      console.log('Payment Status (paymentStatus):', booking.paymentStatus);
+      console.log('Status:', booking.status);
+      console.log('Final Payment Status:', paymentStatus);
       console.log('Advance Paid Amount:', booking.advance_paid_amount);
       console.log('Total Amount:', booking.totalAmount);
       console.log('Payment Status Check:', paymentStatus === 'payment_pending' || paymentStatus === 'pending');
       console.log('Advance Amount Check:', booking.advance_paid_amount && booking.advance_paid_amount > 0);
       console.log('Pickup Date Raw:', booking.pickupDate);
       console.log('Pickup Date Formatted:', booking.pickupDate ? formatDateTime(booking.pickupDate) : 'N/A');
+      console.log('=== END DEBUG ===');
     }
   }, [booking, paymentStatus]);
 
@@ -248,6 +255,146 @@ function BookingConfirmationPage() {
     }
   };
 
+  const handleDownloadReceipt = async () => {
+    try {
+      // Show loading state
+      toast({
+        title: "Generating Receipt",
+        description: "Please wait while we prepare your receipt...",
+        duration: 2000,
+      });
+
+      // Get the print content
+      const printContent = document.getElementById('print-content');
+      if (!printContent) {
+        toast({
+          title: "Error",
+          description: "Receipt content not found. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast({
+          title: "Error",
+          description: "Please allow popups to download the receipt.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get the receipt content
+      const receiptContent = printContent.innerHTML;
+      
+      // Create the HTML document
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Payment Receipt - ${booking?.bookingNumber || 'N/A'}</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            
+            body {
+              font-family: Arial, sans-serif;
+              background: white;
+              color: #000;
+              line-height: 1.4;
+            }
+            
+            .invoice-container {
+              background: white;
+              padding: 32px;
+              min-height: 100vh;
+              font-family: Arial, sans-serif;
+              color: #000;
+            }
+            
+            .invoice-header {
+              border-bottom: 2px solid #ccc;
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+            }
+            
+            .invoice-section {
+              margin-bottom: 24px;
+            }
+            
+            .invoice-section h3 {
+              font-size: 18px;
+              font-weight: 600;
+              color: #000;
+              margin-bottom: 12px;
+              border-bottom: 1px solid #ddd;
+              padding-bottom: 8px;
+            }
+            
+            .invoice-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+            }
+            
+            .invoice-amount-box {
+              background: #f8f9fa;
+              border: 1px solid #dee2e6;
+              border-radius: 4px;
+              padding: 16px;
+            }
+            
+            .invoice-footer {
+              border-top: 1px solid #eee;
+              padding-top: 16px;
+              margin-top: 24px;
+            }
+            
+            @media print {
+              body { margin: 0; padding: 0; }
+              .invoice-container { padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptContent}
+        </body>
+        </html>
+      `;
+
+      // Write content to the new window
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+
+      // Wait for content to load, then trigger print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      };
+
+      toast({
+        title: "Receipt Ready",
+        description: "Your receipt has been prepared for download.",
+        duration: 3000,
+      });
+
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate receipt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Add a mapping function to normalize backend fields to frontend usage
   function mapBackendBooking(booking: any): NormalizedBooking {
     console.log('Mapping booking data:', booking);
@@ -333,6 +480,92 @@ function BookingConfirmationPage() {
         <meta name="keywords" content="booking confirmed, cab booking confirmation, taxi booking success, vizag taxi booking" />
         <meta name="author" content="Vizag Taxi Hub" />
         
+        {/* Print Styles */}
+        <style>{`
+          /* Hide print-only content on screen */
+          .print-only { 
+            display: none !important; 
+          }
+          
+          /* Show print-only content when printing */
+          @media print {
+            * { 
+              -webkit-print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            
+            .no-print { 
+              display: none !important; 
+            }
+            
+            .print-only { 
+              display: block !important; 
+              border: none !important;
+              background: white !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            
+            body { 
+              margin: 0 !important; 
+              padding: 0 !important; 
+              background: white !important; 
+            }
+            
+            .invoice-container { 
+              display: block !important; 
+              background: white !important; 
+              color: black !important;
+              font-family: Arial, sans-serif !important;
+              width: 100% !important;
+              height: auto !important;
+            }
+            
+            .invoice-header { 
+              border-bottom: 2px solid #ccc !important; 
+              padding-bottom: 16px !important; 
+              margin-bottom: 24px !important; 
+            }
+            
+            .invoice-section { 
+              margin-bottom: 24px !important; 
+            }
+            
+            .invoice-section h3 { 
+              font-size: 18px !important; 
+              font-weight: 600 !important; 
+              color: #000 !important; 
+              margin-bottom: 12px !important; 
+              border-bottom: 1px solid #ddd !important; 
+              padding-bottom: 4px !important; 
+            }
+            
+            .invoice-grid { 
+              display: grid !important; 
+              grid-template-columns: 1fr 1fr !important; 
+              gap: 16px !important; 
+            }
+            
+            .invoice-grid-3 { 
+              display: grid !important; 
+              grid-template-columns: 1fr 1fr 1fr !important; 
+              gap: 16px !important; 
+            }
+            
+            .invoice-amount-box { 
+              background: #f5f5f5 !important; 
+              padding: 16px !important; 
+              border-radius: 4px !important; 
+            }
+            
+            .invoice-footer { 
+              border-top: 1px solid #ccc !important; 
+              padding-top: 16px !important; 
+              margin-top: 32px !important; 
+            }
+          }
+        `}</style>
+        
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/booking-confirmation" />
@@ -356,9 +589,11 @@ function BookingConfirmationPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Navbar />
-        <main className="flex-1">
-          <div className="container mx-auto px-4 py-8">
+        <div className="no-print">
+          <Navbar />
+        </div>
+        <main className="flex-1 no-print">
+          <div className="container mx-auto px-4 py-8 no-print">
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -379,7 +614,7 @@ function BookingConfirmationPage() {
             ) : booking ? (
               <div className="max-w-4xl mx-auto">
                 {/* Success Header */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6 mt-24">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
                       <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -410,12 +645,32 @@ function BookingConfirmationPage() {
                         </div>
                         <div>
                           <span className="text-sm font-medium text-gray-500">Pickup Location:</span>
-                          <p className="text-gray-900">{booking.pickupLocation || 'N/A'}</p>
+                          {(() => {
+                            const pickup = formatLocationForDisplay(booking.pickupLocation);
+                            return (
+                              <div>
+                                <p className="text-gray-900 font-semibold">{pickup.name}</p>
+                                {pickup.address && pickup.address !== pickup.name && (
+                                  <p className="text-sm text-gray-600 mt-1">{pickup.address}</p>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                         {booking.dropLocation && (
                           <div>
                             <span className="text-sm font-medium text-gray-500">Drop Location:</span>
-                            <p className="text-gray-900">{booking.dropLocation}</p>
+                            {(() => {
+                              const drop = formatLocationForDisplay(booking.dropLocation);
+                              return (
+                                <div>
+                                  <p className="text-gray-900 font-semibold">{drop.name}</p>
+                                  {drop.address && drop.address !== drop.name && (
+                                    <p className="text-sm text-gray-600 mt-1">{drop.address}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                         <div>
@@ -540,17 +795,345 @@ function BookingConfirmationPage() {
                     Book Another Trip
                   </button>
                   <button
-                    onClick={() => window.print()}
-                    className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
+                    onClick={handleDownloadReceipt}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                   >
-                    Print Confirmation
+                    Download Receipt
                   </button>
+                </div>
+
+                {/* Print-Only Invoice Layout */}
+                <div className="print-only" id="print-content">
+                  
+                  <div className="invoice-container" style={{ 
+                    background: 'white', 
+                    padding: '32px', 
+                    minHeight: '100vh',
+                    fontFamily: 'Arial, sans-serif',
+                    color: '#000'
+                  }}>
+                    {/* Invoice Header */}
+                    <div className="invoice-header">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{ marginBottom: '8px' }}>
+                                <img 
+                                  src="https://vizagtaxihub.com/uploads/vizagtaxihub-logo.png" 
+                                  alt="Vizag Taxi Hub Logo"
+                                  style={{ 
+                                    width: '182px', 
+                                    height: '48px', 
+                                    objectFit: 'contain'
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <h1 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '2px', color: '#000', lineHeight: '1.1' }}>
+                                  VIZAG TAXI HUB
+                                </h1>
+                                
+                              </div>
+                            </div>
+                          
+                        </div>
+                        <div style={{ textAlign: 'right', flex: 1 }}>
+                          <div style={{ 
+                            backgroundColor: '#f8f9fa', 
+                            padding: '16px', 
+                            borderRadius: '8px',
+                            border: '1px solid #e9ecef'
+                          }}>
+                            <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '6px', color: '#000' }}>PAYMENT RECEIPT</h2>
+                            <p style={{ fontSize: '12px', color: '#666', marginBottom: '3px' }}><strong>Receipt #:</strong> {booking?.bookingNumber}</p>
+                            <p style={{ fontSize: '12px', color: '#666', marginBottom: '3px' }}><strong>Date:</strong> {booking?.pickupDate ? formatDateTime(booking.pickupDate) : 'N/A'}</p>
+                            <p style={{ fontSize: '10px', color: '#999' }}>Generated: {new Date().toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Customer Information */}
+                    <div className="invoice-section">
+                      <h3 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#000', 
+                        marginBottom: '12px',
+                        borderBottom: '1px solid #1e40af',
+                        paddingBottom: '4px'
+                      }}>👤 Booking Details</h3>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr 1fr 1fr', 
+                        gap: '12px',
+                        backgroundColor: '#f8f9fa',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border: '1px solid #e9ecef'
+                      }}>
+                        <div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Customer Name</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.passengerName || 'N/A'}</p>
+                          </div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone Number</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.passengerPhone || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.passengerEmail || 'N/A'}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Booking ID</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.bookingNumber}</p>
+                          </div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Trip Type</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.tripType?.toUpperCase() || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Trip Mode</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.tripMode || 'N/A'}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Vehicle Type</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.vehicle_type || 'N/A'}</p>
+                          </div>
+                          <div style={{ marginBottom: '6px' }}>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Driver</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.driverName || 'To be assigned'}</p>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</span>
+                            <p style={{ fontSize: '11px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.status || 'Confirmed'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trip Details */}
+                    <div className="invoice-section">
+                      <h3 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#000', 
+                        marginBottom: '12px',
+                        borderBottom: '1px solid #1e40af',
+                        paddingBottom: '4px'
+                      }}>🚗 Trip Details</h3>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '1fr 1fr', 
+                        gap: '12px',
+                        marginBottom: '12px'
+                      }}>
+                        <div style={{
+                          backgroundColor: '#e8f5e8',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid #c3e6c3'
+                        }}>
+                          <h4 style={{ fontSize: '10px', fontWeight: '600', marginBottom: '4px', color: '#2d5a2d', display: 'flex', alignItems: 'center' }}>
+                            📍 PICKUP LOCATION
+                          </h4>
+                          {(() => {
+                            const pickup = formatLocationForDisplay(booking?.pickupLocation || '');
+                            return (
+                              <div>
+                                <p style={{ fontSize: '12px', color: '#000', fontWeight: '500', marginBottom: '2px' }}>{pickup.name}</p>
+                                {pickup.address && pickup.address !== pickup.name && (
+                                  <p style={{ fontSize: '10px', color: '#666', margin: '0' }}>{pickup.address}</p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <div style={{
+                          backgroundColor: '#ffe8e8',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid #ffc3c3'
+                        }}>
+                          <h4 style={{ fontSize: '10px', fontWeight: '600', marginBottom: '4px', color: '#5a2d2d', display: 'flex', alignItems: 'center' }}>
+                            📍 DROP LOCATION
+                          </h4>
+                          {(() => {
+                            const drop = formatLocationForDisplay(booking?.dropLocation || '');
+                            return (
+                              <div>
+                                <p style={{ fontSize: '12px', color: '#000', fontWeight: '500', marginBottom: '2px' }}>{drop.name}</p>
+                                {drop.address && drop.address !== drop.name && (
+                                  <p style={{ fontSize: '10px', color: '#666', margin: '0' }}>{drop.address}</p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                      <div style={{ 
+                        backgroundColor: '#f8f9fa',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid #e9ecef'
+                      }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <span style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pickup Date & Time</span>
+                            <p style={{ fontSize: '12px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.pickupDate ? formatDateTime(booking.pickupDate) : 'N/A'}</p>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Status</span>
+                          <p style={{
+                            display: 'inline-block',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            backgroundColor: paymentStatus === 'paid' ? '#dcfce7' : 
+                                           paymentStatus === 'payment_pending' ? '#fef3c7' : '#fecaca',
+                            color: paymentStatus === 'paid' ? '#166534' : 
+                                   paymentStatus === 'payment_pending' ? '#92400e' : '#991b1b'
+                          }}>
+                            {paymentStatus === 'paid' ? 'PAID' : 
+                             paymentStatus === 'payment_pending' ? 'PARTIAL PAYMENT' : 'PENDING'}
+                          </p>
+                          </div>
+                          <div>
+
+                            <span style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Method</span>
+                          <p style={{ fontSize: '12px', color: '#000', margin: '2px 0 0 0', fontWeight: '500' }}>{booking?.payment_method || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                   
+
+                    {/* Payment Summary */}
+                    <div className="invoice-section">
+                      <h3>Payment Summary</h3>
+                      <div className="invoice-amount-box">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '14px', color: '#666' }}>Total Amount:</span>
+                          <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#000' }}>{formatPrice(booking?.totalAmount || 0)}</span>
+                        </div>
+                        {booking?.advance_paid_amount && booking.advance_paid_amount > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '14px', color: '#666' }}>Advance Paid:</span>
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: '#059669' }}>{formatPrice(booking.advance_paid_amount)}</span>
+                          </div>
+                        )}
+                        {booking?.advance_paid_amount && booking.advance_paid_amount > 0 && booking?.totalAmount && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
+                            <span style={{ fontSize: '14px', color: '#666' }}>Remaining Amount:</span>
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: '#ea580c' }}>
+                              {formatPrice(booking.totalAmount - booking.advance_paid_amount)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Trip Details and Limits */}
+                    <div className="invoice-section">
+                      <h3 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#000', 
+                        marginBottom: '12px',
+                        borderBottom: '1px solid #1e40af',
+                        paddingBottom: '4px'
+                      }}>📋 Trip Details & Limits</h3>
+                      
+                      {/* Kilometers Limit */}
+                      <div style={{ 
+                        backgroundColor: '#f8f9fa',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border: '1px solid #e9ecef',
+                        marginBottom: '12px'
+                      }}>
+                        <h4 style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#000' }}>🛣️ Kilometers Limit</h4>
+                        <p style={{ fontSize: '11px', color: '#000', margin: '0' }}>
+                          {booking?.tripType === 'local' 
+                            ? `${booking?.km_included || '80'} km included. Extra charges apply beyond limit.`
+                            : booking?.tripType === 'outstation' 
+                              ? `${(booking as any).distance || 'N/A'} km total distance${booking?.tripMode === 'round-trip' ? ' (round-trip)' : ''}`
+                              : 'N/A'
+                          }
+                        </p>
+                      </div>
+
+                      {/* Inclusions */}
+                      <div style={{ 
+                        backgroundColor: '#e8f5e8',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border: '1px solid #c3e6c3',
+                        marginBottom: '12px'
+                      }}>
+                        <h4 style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#2d5a2d' }}>✅ Inclusions</h4>
+                        <div style={{ fontSize: '11px', color: '#000' }}>
+                          {booking?.inclusions && booking.inclusions.length > 0 ? (
+                            <ul style={{ margin: '0', paddingLeft: '16px' }}>
+                              {booking.inclusions.map((inclusion: string, index: number) => (
+                                <li key={index} style={{ marginBottom: '4px' }}>{inclusion}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ margin: '0', fontStyle: 'italic' }}>Standard inclusions apply</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Exclusions */}
+                      <div style={{ 
+                        backgroundColor: '#ffe8e8',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border: '1px solid #ffc3c3'
+                      }}>
+                        <h4 style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#5a2d2d' }}>❌ Exclusions</h4>
+                        <div style={{ fontSize: '11px', color: '#000' }}>
+                          {booking?.exclusions && booking.exclusions.length > 0 ? (
+                            <ul style={{ margin: '0', paddingLeft: '16px' }}>
+                              {booking.exclusions.map((exclusion: string, index: number) => (
+                                <li key={index} style={{ marginBottom: '4px' }}>{exclusion}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ margin: '0', fontStyle: 'italic' }}>Standard exclusions apply</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="invoice-footer">
+                      <div style={{ textAlign: 'center', fontSize: '12px', color: '#666', marginBottom: '16px' }}>
+                        <p>Thank you for choosing VIZAG TAXI HUB!</p>
+                        <p>For any queries, contact us at +91 9966363662 or info@vizagtaxihub.com</p>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#999' }}>
+                        <p>Receipt generated on: {new Date().toLocaleString()}</p>
+                        <p>www.vizagtaxihub.com</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
           </div>
         </main>
-        <MobileNavigation />
+        <div className="no-print">
+          <MobileNavigation />
+        </div>
       </div>
     </>
   );

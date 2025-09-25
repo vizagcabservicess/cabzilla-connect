@@ -207,8 +207,8 @@ export function AdminBookingForm() {
       const discountAmount = basePrice - finalPrice;
       
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
-        dropLocation: dropLocation?.address || dropLocation?.name || '',
+        pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
+        dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
         pickupDate: formatDateForAPI(pickupDate) || '',
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         cabType: selectedCab?.name || '',

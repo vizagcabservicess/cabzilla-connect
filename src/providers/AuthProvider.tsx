@@ -51,9 +51,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch (error) {
             console.error('Token validation failed:', error);
-            // Token is invalid, clear it
-            authAPI.logout();
-            setUser(null);
+            
+            // Check if it's a network error - don't logout for network issues
+            if (error instanceof Error && (
+              error.message.includes('Network Error') ||
+              error.message.includes('ERR_NETWORK') ||
+              error.message.includes('Failed to fetch') ||
+              error.message.includes('net::ERR_')
+            )) {
+              console.log('Network error during token validation - keeping user logged in');
+              // Keep the user logged in with stored data
+              if (storedUser) {
+                setUser(JSON.parse(storedUser));
+              }
+            } else {
+              // Only logout for actual authentication errors, not network errors
+              console.log('Authentication error - logging out user');
+              authAPI.logout();
+              setUser(null);
+            }
           }
         } else if (storedUser) {
           // If no token but stored user exists, clear the invalid state
@@ -62,8 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        // Clear invalid token
-        authAPI.logout();
+        
+        // Only clear token for authentication errors, not network errors
+        if (!(error instanceof Error && (
+          error.message.includes('Network Error') ||
+          error.message.includes('ERR_NETWORK') ||
+          error.message.includes('Failed to fetch')
+        ))) {
+          // Clear invalid token only for auth errors
+          authAPI.logout();
+        }
       } finally {
         setLoading(false);
       }
@@ -109,9 +133,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response;
     } catch (error) {
       console.error('Login error:', error);
-      // Clear any invalid tokens
-      authAPI.logout();
-      setUser(null);
+      
+      // Only clear tokens for authentication errors, not network errors
+      if (error instanceof Error && (
+        error.message.includes('Network Error') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('Failed to fetch')
+      )) {
+        console.log('Network error during login - not clearing tokens');
+      } else {
+        // Clear any invalid tokens for actual auth errors
+        authAPI.logout();
+        setUser(null);
+      }
       throw error;
     }
   };
@@ -144,8 +178,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response;
     } catch (error) {
       console.error('Social login error:', error);
-      authAPI.logout();
-      setUser(null);
+      
+      // Only logout for authentication errors, not network errors
+      if (!(error instanceof Error && (
+        error.message.includes('Network Error') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('Failed to fetch')
+      ))) {
+        authAPI.logout();
+        setUser(null);
+      }
       throw error;
     }
   };
@@ -186,8 +228,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response;
     } catch (error) {
       console.error('Social signup error:', error);
-      authAPI.logout();
-      setUser(null);
+      
+      // Only logout for authentication errors, not network errors
+      if (!(error instanceof Error && (
+        error.message.includes('Network Error') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('Failed to fetch')
+      ))) {
+        authAPI.logout();
+        setUser(null);
+      }
       throw error;
     }
   };
@@ -219,8 +269,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response;
     } catch (error) {
       console.error('Social signup with data error:', error);
-      authAPI.logout();
-      setUser(null);
+      
+      // Only logout for authentication errors, not network errors
+      if (!(error instanceof Error && (
+        error.message.includes('Network Error') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('Failed to fetch')
+      ))) {
+        authAPI.logout();
+        setUser(null);
+      }
       throw error;
     }
   };

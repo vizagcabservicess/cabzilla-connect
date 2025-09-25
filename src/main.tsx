@@ -7,6 +7,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
+import './utils/globalErrorHandler'; // Initialize global error handler
 
 // Check if we're on the homepage
 const isHomepage = window.location.pathname === '/' || window.location.pathname === '';

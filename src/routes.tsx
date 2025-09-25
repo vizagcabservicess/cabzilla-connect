@@ -9,15 +9,56 @@ import { UserRole, EnhancedUser } from '@/types/privileges';
 import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 import { Button } from '@/components/ui/button';
 import { FaWhatsapp } from 'react-icons/fa';
+import { lazyWithRetry } from './utils/dynamicImportRetry';
+import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 
 // Lazy load all pages for better performance
 const Index = lazy(() => import('./pages/Index'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'));
-const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
+const DashboardPage = lazyWithRetry(
+  () => import('./pages/DashboardPage'),
+  {
+    moduleName: 'DashboardPage',
+    maxRetries: 3,
+    baseDelay: 1000,
+    onRetry: (attempt, error) => {
+      console.log(`Retrying DashboardPage import (attempt ${attempt})`);
+    },
+    onMaxRetriesReached: (error) => {
+      console.error('DashboardPage failed to load after all retries');
+    }
+  }
+);
+const AdminDashboardPage = lazyWithRetry(
+  () => import('./pages/AdminDashboardPage'),
+  {
+    moduleName: 'AdminDashboardPage',
+    maxRetries: 3,
+    baseDelay: 1000,
+    onRetry: (attempt, error) => {
+      console.log(`Retrying AdminDashboardPage import (attempt ${attempt})`);
+    },
+    onMaxRetriesReached: (error) => {
+      console.error('AdminDashboardPage failed to load after all retries');
+    }
+  }
+);
+const BookingConfirmationPage = lazyWithRetry(
+  () => import('./pages/BookingConfirmationPage'),
+  {
+    moduleName: 'BookingConfirmationPage',
+    maxRetries: 3,
+    baseDelay: 1000,
+    onRetry: (attempt, error) => {
+      console.log(`Retrying BookingConfirmationPage import (attempt ${attempt})`);
+    },
+    onMaxRetriesReached: (error) => {
+      console.error('BookingConfirmationPage failed to load after all retries');
+    }
+  }
+);
 
 const ToursPage = lazy(() => import('./pages/ToursPage'));
 const BookingEditPage = lazy(() => import('./pages/BookingEditPage'));
@@ -33,7 +74,20 @@ const PayrollPage = lazy(() => import('./pages/PayrollPage'));
 const PaymentsManagementPage = lazy(() => import('./pages/PaymentsManagementPage'));
 const CommissionManagementPage = lazy(() => import('./pages/CommissionManagementPage'));
 const AdminBookingCreationPage = lazy(() => import('./pages/AdminBookingCreationPage'));
-const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const PaymentPage = lazyWithRetry(
+  () => import('./pages/PaymentPage'),
+  {
+    moduleName: 'PaymentPage',
+    maxRetries: 3,
+    baseDelay: 1000,
+    onRetry: (attempt, error) => {
+      console.log(`Retrying PaymentPage import (attempt ${attempt})`);
+    },
+    onMaxRetriesReached: (error) => {
+      console.error('PaymentPage failed to load after all retries');
+    }
+  }
+);
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
@@ -218,7 +272,11 @@ const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <AdminDashboardPage />,
+            element: (
+              <DynamicImportErrorBoundary>
+                <AdminDashboardPage />
+              </DynamicImportErrorBoundary>
+            ),
           },
           {
             path: 'database',
@@ -305,11 +363,19 @@ const router = createBrowserRouter([
       // Booking routes
       {
         path: 'booking/:bookingId/confirmation',
-        element: <BookingConfirmationPage />,
+        element: (
+          <DynamicImportErrorBoundary>
+            <BookingConfirmationPage />
+          </DynamicImportErrorBoundary>
+        ),
       },
       {
         path: 'booking-confirmation',
-        element: <BookingConfirmationPage />,
+        element: (
+          <DynamicImportErrorBoundary>
+            <BookingConfirmationPage />
+          </DynamicImportErrorBoundary>
+        ),
       },
       {
         path: 'booking/:bookingId/edit',

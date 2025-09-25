@@ -845,26 +845,183 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     // Check if drop location is Araku Valley - redirect to tour page
     if (dropLocation && dropLocation.name) {
       const dropLocationName = dropLocation.name.toLowerCase().trim();
-      const arakuKeywords = ['araku', 'araku valley', 'araku valley station','damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
+      const arakuKeywords = [
+        'araku', 'araku valley', 'araku valley station',
+        'damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
 'katiki waterfalls', 'coffee plantation', 'coffee estates', 'coffee museum',
 'tribal museum', 'padmapuram garden', 'padmapuram gardens',
-'borra caves', 'borra guhalu', 'anjadevudu waterfalls'];
+        'borra caves', 'borra guhalu', 'anjadevudu waterfalls',
+        // Additional locations from the map
+        'ananthagiri', 'ananthagiri water falls', 'ananthagiri adventure hill',
+        'tokuru', 'rayavalasa', 'sariapalle', 'haritha jungle bells tyda',
+        'patakota', 'boodi', 'kasipatnam', 'kasipatnam siva temple tree',
+        'bowdara', 'devarapalle', 'baski', 'puttapadu', 'boorja',
+        'ravvalaguda', 'madagada', 'pakanaguda', 'hattaguda',
+        'kaala naag view point', 'tadaka', 'bondam', 'rega', 'etor',
+        'aguru', 'rajupaka', 'gummakota sivalayam', 'lothug',
+        'giri grama darshini', 'bethastha',
+        // Common variations and misspellings
+        'anantagiri', 'anantagiri', 'ananthagiri falls', 'ananthagiri waterfall',
+        'borra cave', 'borra', 'caves', 'katiki', 'katiki falls',
+        'coffee', 'plantation', 'estate', 'museum', 'tribal',
+        'padmapuram', 'garden', 'gardens', 'viewpoint', 'view point',
+        'damuku', 'galikonda', 'chaparai', 'waterfalls', 'water falls'
+      ];
       
-      if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
+      // Check for exact matches and partial matches
+      const isArakuLocation = arakuKeywords.some(keyword => {
+        const match = dropLocationName.includes(keyword) || keyword.includes(dropLocationName);
+        if (match) {
+          console.log('Araku Valley keyword match:', keyword, 'in location:', dropLocationName);
+        }
+        return match;
+      });
+      
+      if (isArakuLocation) {
+        console.log('Araku Valley location detected in drop location:', dropLocationName);
         navigate('/tours/araku-valley-tour', { replace: true });
         return;
       }
     }
-       // Check if drop location is Araku Valley - redirect to tour page
+
+    // Check if pickup location is also Araku Valley - redirect to tour page
+    if (pickupLocation && pickupLocation.name) {
+      const pickupLocationName = pickupLocation.name.toLowerCase().trim();
+      const arakuKeywords = [
+        'araku', 'araku valley', 'araku valley station',
+        'damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
+        'katiki waterfalls', 'coffee plantation', 'coffee estates', 'coffee museum',
+        'tribal museum', 'padmapuram garden', 'padmapuram gardens',
+        'borra caves', 'borra guhalu', 'anjadevudu waterfalls',
+        // Additional locations from the map
+        'ananthagiri', 'ananthagiri water falls', 'ananthagiri adventure hill',
+        'tokuru', 'rayavalasa', 'sariapalle', 'haritha jungle bells tyda',
+        'patakota', 'boodi', 'kasipatnam', 'kasipatnam siva temple tree',
+        'bowdara', 'devarapalle', 'baski', 'puttapadu', 'boorja',
+        'ravvalaguda', 'madagada', 'pakanaguda', 'hattaguda',
+        'kaala naag view point', 'tadaka', 'bondam', 'rega', 'etor',
+        'aguru', 'rajupaka', 'gummakota sivalayam', 'lothug',
+        'giri grama darshini', 'bethastha',
+        // Common variations and misspellings
+        'anantagiri', 'anantagiri', 'ananthagiri falls', 'ananthagiri waterfall',
+        'borra cave', 'borra', 'caves', 'katiki', 'katiki falls',
+        'coffee', 'plantation', 'estate', 'museum', 'tribal',
+        'padmapuram', 'garden', 'gardens', 'viewpoint', 'view point',
+        'damuku', 'galikonda', 'chaparai', 'waterfalls', 'water falls'
+      ];
+      
+      // Check for exact matches and partial matches
+      const isArakuLocation = arakuKeywords.some(keyword => {
+        const match = pickupLocationName.includes(keyword) || keyword.includes(pickupLocationName);
+        if (match) {
+          console.log('Araku Valley keyword match:', keyword, 'in location:', pickupLocationName);
+        }
+        return match;
+      });
+      
+      if (isArakuLocation) {
+        console.log('Araku Valley location detected in pickup location:', pickupLocationName);
+        navigate('/tours/araku-valley-tour', { replace: true });
+        return;
+      }
+    }
+
+    // Check if drop location is Lambasingi - redirect to Lambasingi tour page
        if (dropLocation && dropLocation.name) {
         const dropLocationName = dropLocation.name.toLowerCase().trim();
-        const arakuKeywords = ['lambasingi','kothapalli','Lambasingi Hill Top view'];
+      const lambasingiKeywords = ['lambasingi', 'kothapalli', 'lambasingi hill top view'];
         
-        if (arakuKeywords.some(keyword => dropLocationName.includes(keyword))) {
+      if (lambasingiKeywords.some(keyword => dropLocationName.includes(keyword))) {
           navigate('/tours/lambasingi-tour', { replace: true });
           return;
         }
       }
+
+    // Check if drop location is Paderu/Vanajangi area - redirect to Vanajangi tour page
+    if (dropLocation && dropLocation.name) {
+      const dropLocationName = dropLocation.name.toLowerCase().trim();
+      const vanajangiKeywords = [
+        'paderu', 'vanajangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'paderu town', 'paderu village', 'paderu mandal',
+        'thotapalli', 'thotapalli reservoir', 'thotapalli dam',
+        'munchingput', 'munchingput mandal', 'munchingput village',
+        'gudem', 'gudem sathupalli', 'gudem sathupalli mandal',
+        'hukumpeta', 'hukumpeta mandal', 'hukumpeta village',
+        'dumbriguda', 'dumbriguda mandal', 'dumbriguda village',
+        'pedabayalu', 'pedabayalu mandal', 'pedabayalu village',
+        'golugonda', 'golugonda mandal', 'golugonda village',
+        'nathavaram', 'nathavaram mandal', 'nathavaram village',
+        'chintapalli', 'chintapalli mandal', 'chintapalli village',
+        'koyyuru', 'koyyuru mandal', 'koyyuru village',
+        'maddimadugu', 'maddimadugu mandal', 'maddimadugu village',
+        'guduru', 'guduru mandal', 'guduru village',
+        'rambilli', 'rambilli mandal', 'rambilli village',
+        'yellavaram', 'yellavaram mandal', 'yellavaram village',
+        'sabari', 'sabari river', 'sabari valley',
+        'sileru', 'sileru river', 'sileru valley',
+        'gosthani', 'gosthani river', 'gosthani valley',
+        'tribal', 'tribal areas', 'tribal villages',
+        'agency', 'agency areas', 'agency villages'
+      ];
+      
+      // Check for exact matches and partial matches
+      const isVanajangiLocation = vanajangiKeywords.some(keyword => {
+        const match = dropLocationName.includes(keyword) || keyword.includes(dropLocationName);
+        if (match) {
+          console.log('Vanajangi keyword match:', keyword, 'in location:', dropLocationName);
+        }
+        return match;
+      });
+      
+      if (isVanajangiLocation) {
+        console.log('Vanajangi location detected in drop location:', dropLocationName);
+        navigate('/tours/vanajangi-tour', { replace: true });
+        return;
+      }
+    }
+
+    // Check if pickup location is Paderu/Vanajangi area - redirect to Vanajangi tour page
+    if (pickupLocation && pickupLocation.name) {
+      const pickupLocationName = pickupLocation.name.toLowerCase().trim();
+      const vanajangiKeywords = [
+        'paderu', 'vanajangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'paderu town', 'paderu village', 'paderu mandal',
+        'thotapalli', 'thotapalli reservoir', 'thotapalli dam',
+        'munchingput', 'munchingput mandal', 'munchingput village',
+        'gudem', 'gudem sathupalli', 'gudem sathupalli mandal',
+        'hukumpeta', 'hukumpeta mandal', 'hukumpeta village',
+        'dumbriguda', 'dumbriguda mandal', 'dumbriguda village',
+        'pedabayalu', 'pedabayalu mandal', 'pedabayalu village',
+        'golugonda', 'golugonda mandal', 'golugonda village',
+        'nathavaram', 'nathavaram mandal', 'nathavaram village',
+        'chintapalli', 'chintapalli mandal', 'chintapalli village',
+        'koyyuru', 'koyyuru mandal', 'koyyuru village',
+        'maddimadugu', 'maddimadugu mandal', 'maddimadugu village',
+        'guduru', 'guduru mandal', 'guduru village',
+        'rambilli', 'rambilli mandal', 'rambilli village',
+        'yellavaram', 'yellavaram mandal', 'yellavaram village',
+        'sabari', 'sabari river', 'sabari valley',
+        'sileru', 'sileru river', 'sileru valley',
+        'gosthani', 'gosthani river', 'gosthani valley',
+        'tribal', 'tribal areas', 'tribal villages',
+        'agency', 'agency areas', 'agency villages'
+      ];
+      
+      // Check for exact matches and partial matches
+      const isVanajangiLocation = vanajangiKeywords.some(keyword => {
+        const match = pickupLocationName.includes(keyword) || keyword.includes(pickupLocationName);
+        if (match) {
+          console.log('Vanajangi keyword match:', keyword, 'in location:', pickupLocationName);
+        }
+        return match;
+      });
+      
+      if (isVanajangiLocation) {
+        console.log('Vanajangi location detected in pickup location:', pickupLocationName);
+        navigate('/tours/vanajangi-tour', { replace: true });
+        return;
+      }
+    }
 
     if (onSearch) onSearch({
       pickupLocation,
@@ -996,8 +1153,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       // Use the totalPrice passed from GuestDetailsForm
       const latestTotal = guestDetails.totalPrice;
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
-        dropLocation: dropLocation?.address || dropLocation?.name || '',
+        pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
+        dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
         pickupDate: formatDateForAPI(pickupDate) || '',
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         cabType: selectedCab?.name || '',
