@@ -76,18 +76,57 @@
     "id": "tempo_traveller",
     "vehicleId": "tempo_traveller",
     "name": "Tempo Traveller",
+    "displayName": "17 Seater Tempo Traveller in Vizag",
     "capacity": 17,
     "luggageCapacity": 8,
     "price": 10500,
     "basePrice": 10500,
     "pricePerKm": 35,
     "image": "/cars/tempo.png",
-    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Pushback Seats"],
-    "description": "Large mini bus suitable for groups of up to 17 passengers.",
+    "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Pushback Seats", "GPS Tracking", "Professional Driver"],
+    "description": "Best 17 seater Tempo Traveller rental service in Visakhapatnam (Vizag). Perfect for group travel, corporate events, family trips, and outstation tours. Our well-maintained tempo travellers come with professional drivers and modern amenities. Available for local sightseeing, airport transfers, and long-distance travel across Andhra Pradesh.",
+    "seoContent": {
+      "title": "17 Seater Tempo Traveller Rental in Vizag | Best Rates | Vizag Taxi Hub",
+      "metaDescription": "Book 17 seater Tempo Traveller in Visakhapatnam at best rates. AC mini bus with professional driver for group travel, corporate events & family trips. Call +91 9966363662",
+      "keywords": "tempo traveller vizag, 17 seater tempo traveller visakhapatnam, mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag",
+      "localKeywords": ["tempo traveller in vizag", "tempo traveller visakhapatnam", "17 seater mini bus vizag", "group transport vizag", "tempo traveller rental vizag", "mini bus hire visakhapatnam"]
+    },
+    "features": [
+      "17 Comfortable Push-back Seats",
+      "Fully Air Conditioned",
+      "Music System with USB/AUX",
+      "Mobile Charging Points", 
+      "Ample Luggage Space",
+      "Professional Experienced Driver",
+      "GPS Tracking for Safety",
+      "Clean & Well-maintained Vehicle"
+    ],
+    "idealFor": [
+      "Corporate Events & Meetings",
+      "Family Group Travel", 
+      "Wedding Parties",
+      "College/School Trips",
+      "Pilgrimage Tours",
+      "Airport Group Transfers",
+      "Outstation Group Tours",
+      "Sightseeing with Large Groups"
+    ],
+    "serviceAreas": [
+      "Vizag City Tours",
+      "Araku Valley Tours", 
+      "Borra Caves Trips",
+      "Lambasingi Tours",
+      "Simhachalam Temple Visits",
+      "Kailasagiri Sightseeing",
+      "Airport Transfers",
+      "Outstation Group Travel"
+    ],
     "ac": true,
     "nightHaltCharge": 1200,
     "driverAllowance": 300,
     "isActive": true,
-    "inactiveDates": []
+    "inactiveDates": [],
+    "vehicleType": "tempo_traveller",
+    "tags": ["Group Travel", "Corporate Transport", "Family Friendly", "AC Mini Bus", "Professional Driver"]
   }
 ]

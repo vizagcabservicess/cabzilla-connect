@@ -9,6 +9,7 @@ import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { useAuth } from '@/providers/AuthProvider';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
+import { ForgotPasswordForm } from './ForgotPasswordForm';
 import { getDashboardUrl } from '@/utils/authUtils';
 
 export function LoginForm() {
@@ -18,6 +19,7 @@ export function LoginForm() {
   const [error, setError] = useState<Error | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +103,15 @@ export function LoginForm() {
     }
   };
 
+  if (showForgotPassword) {
+    return (
+      <ForgotPasswordForm
+        onBack={() => setShowForgotPassword(false)}
+        onSuccess={() => setShowForgotPassword(false)}
+      />
+    );
+  }
+
   if (error) {
     return (
       <ApiErrorFallback 
@@ -146,6 +157,16 @@ export function LoginForm() {
           {isLoading ? "Logging in..." : "Login"}
         </Button>
       </form>
+
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={() => setShowForgotPassword(true)}
+          className="text-sm text-blue-600 hover:text-blue-500 underline"
+        >
+          Forgot your password?
+        </button>
+      </div>
 
       <div className="mt-8">
         <SocialLoginButtons

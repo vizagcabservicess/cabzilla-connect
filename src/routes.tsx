@@ -17,6 +17,7 @@ const Index = lazy(() => import('./pages/Index'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const DashboardPage = lazyWithRetry(
   () => import('./pages/DashboardPage'),
   {
@@ -260,6 +261,10 @@ const router = createBrowserRouter([
       {
         path: 'signup',
         element: <LazyRoute component={SignupPage} />,
+      },
+      {
+        path: 'reset-password',
+        element: <LazyRoute component={ResetPasswordPage} />,
       },
       {
         path: 'dashboard',

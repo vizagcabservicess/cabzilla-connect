@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Car, Users, Fuel, Loader2 } from 'lucide-react';
+import { ArrowLeft, Car, Users, Fuel, Loader2, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
@@ -44,6 +45,12 @@ interface VehicleData {
   inclusions?: string[];
   exclusions?: string[];
   features?: string[];
+  seoContent?: {
+    title?: string;
+    metaDescription?: string;
+    keywords?: string;
+    localKeywords?: string[];
+  };
 }
 
 const VehicleDetailPage = () => {
@@ -198,6 +205,11 @@ const VehicleDetailPage = () => {
   
   // Create unique descriptions based on vehicle type and capacity
   const getUniqueDescription = () => {
+    // Use SEO content if available, otherwise fallback to generic description
+    if (vehicle.seoContent?.metaDescription) {
+      return vehicle.seoContent.metaDescription;
+    }
+    
     if (vehicle.capacity > 12) {
       return `${vehicle.name} - ${vehicle.capacity} seater mini bus service in Visakhapatnam. Perfect for group travel, corporate events, and family trips. Spacious and comfortable mini bus with professional driver. Book now for reliable transportation.`;
     } else if (vehicle.capacity > 6) {
@@ -207,9 +219,9 @@ const VehicleDetailPage = () => {
     }
   };
   
-  const seoTitle = `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`;
+  const seoTitle = vehicle.seoContent?.title || `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`;
   const seoDescription = getUniqueDescription();
-  const seoKeywords = `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`;
+  const seoKeywords = vehicle.seoContent?.keywords || `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`;
   const vehicleImage = galleryImages?.[0]?.url || vehicle.image || '/og-image.png';
   const vehicleUrl = `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`;
 
@@ -243,7 +255,67 @@ const VehicleDetailPage = () => {
         
                  {/* Vehicle-specific structured data */}
          <script type="application/ld+json">
-           {JSON.stringify({
+           {JSON.stringify(vehicle.id === 'tempo_traveller' ? {
+             "@context": "https://schema.org",
+             "@type": "LocalBusiness",
+             "name": "Vizag Taxi Hub - Tempo Traveller Rental",
+             "description": "17 seater tempo traveller rental service in Visakhapatnam for group travel, corporate events, and family trips",
+             "image": vehicleImage,
+             "url": vehicleUrl,
+             "telephone": "+91-9966363662",
+             "priceRange": "₹₹",
+             "address": {
+               "@type": "PostalAddress",
+               "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+               "addressLocality": "Visakhapatnam",
+               "addressRegion": "Andhra Pradesh",
+               "postalCode": "530024",
+               "addressCountry": "IN"
+             },
+             "geo": {
+               "@type": "GeoCoordinates",
+               "latitude": "17.7231",
+               "longitude": "83.3012"
+             },
+             "areaServed": [
+               {
+                 "@type": "City",
+                 "name": "Visakhapatnam",
+                 "addressRegion": "Andhra Pradesh",
+                 "addressCountry": "IN"
+               },
+               {
+                 "@type": "City", 
+                 "name": "Araku Valley",
+                 "addressRegion": "Andhra Pradesh",
+                 "addressCountry": "IN"
+               },
+               {
+                 "@type": "City",
+                 "name": "Borra Caves", 
+                 "addressRegion": "Andhra Pradesh",
+                 "addressCountry": "IN"
+               }
+             ],
+             "serviceType": "Tempo Traveller Rental",
+             "hasOfferCatalog": {
+               "@type": "OfferCatalog",
+               "name": "Tempo Traveller Services",
+               "itemListElement": {
+                 "@type": "Offer",
+                 "itemOffered": {
+                   "@type": "Service",
+                   "name": "17 Seater Tempo Traveller Rental in Vizag",
+                   "description": "Professional tempo traveller rental service for group travel in Visakhapatnam"
+                 }
+               }
+             },
+             "aggregateRating": {
+               "@type": "AggregateRating",
+               "ratingValue": "4.9",
+               "reviewCount": "150"
+             }
+           } : {
              "@context": "https://schema.org",
              "@type": "Service",
              "serviceType": "Taxi Service",
@@ -355,6 +427,69 @@ const VehicleDetailPage = () => {
                 features={vehicle.features}
                 tags={[]} // Empty array since tags are now displayed at the top
               />
+
+              {/* Special SEO Content for Tempo Traveller */}
+              {vehicle.id === 'tempo_traveller' && (
+                <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">17 Seater Tempo Traveller in Vizag - Best Group Travel Solution</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Perfect for Group Travel in Visakhapatnam</h3>
+                      <ul className="space-y-2 text-gray-600">
+                        <li>• Corporate events and meetings</li>
+                        <li>• Family group travel and weddings</li>
+                        <li>• College and school trips</li>
+                        <li>• Pilgrimage tours to Simhachalam, Araku Valley</li>
+                        <li>• Airport group transfers</li>
+                        <li>• Outstation group tours</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Tempo Traveller Routes from Vizag</h3>
+                      <ul className="space-y-2 text-gray-600">
+                        <li>• Vizag to Araku Valley (120 km)</li>
+                        <li>• Vizag to Borra Caves (90 km)</li>
+                        <li>• Vizag to Lambasingi (100 km)</li>
+                        <li>• Vizag to Simhachalam Temple (15 km)</li>
+                        <li>• Vizag to Kailasagiri (8 km)</li>
+                        <li>• Airport to city transfers</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-blue-900 mb-3">Why Choose Our Tempo Traveller Service in Vizag?</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
+                      <div>✓ Professional drivers with local expertise</div>
+                      <div>✓ Well-maintained AC tempo travellers</div>
+                      <div>✓ GPS tracking for safety</div>
+                      <div>✓ Competitive rates starting ₹35/km</div>
+                      <div>✓ 24/7 customer support</div>
+                      <div>✓ Flexible booking options</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-green-900 mb-3">Book Your Tempo Traveller in Vizag Today</h3>
+                    <p className="text-gray-700 mb-4">
+                      Get the best tempo traveller rental service in Visakhapatnam with professional drivers, 
+                      modern amenities, and competitive rates. Perfect for group travel, corporate events, 
+                      and family trips across Andhra Pradesh.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button className="bg-blue-600 hover:bg-blue-700">
+                        <Phone className="mr-2 h-4 w-4" />
+                        Call +91 9966363662
+                      </Button>
+                      <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                        <Car className="mr-2 h-4 w-4" />
+                        Book Online
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <RateCard vehicleId={vehicle.id} />
 

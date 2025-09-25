@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
 header('Content-Type: application/json');
 
 if (!isset($_GET['id'])) {
