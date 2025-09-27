@@ -482,34 +482,49 @@ try {
 </head>
 <body>
     <div class="invoice-container">
-        <div class="invoice-header">
-            <div>
-                <h1 style="margin: 0; color: #333;">INVOICE</h1>
-                <p style="margin-top: 5px; color: #777;">Vizag Taxi hub</p>
-            </div>
-            <div class="company-info">
-                <h2 style="margin: 0;">#' . $invoiceNumber . '</h2>
-                <p>Date: ' . date('d M Y', strtotime($currentDate)) . '</p>
-                <p>Booking #: ' . $booking['booking_number'] . '</p>
-            </div>
+        <div style="border: 1px solid #000; padding: 5px; margin-bottom: 15px;">
+            <table width="100%" cellpadding="2" cellspacing="0">
+                <tr>
+                    <td width="40%" valign="top">
+                        <p><strong>Seller/Service Provider:</strong></p>
+                        <p><strong>VIZAG TAXI HUB</strong></p>
+                        <p>44-66-22/4, Singalamma Puram, Kailasapuram,<br>
+                        Visakhapatnam, Andhra Pradesh - 530024</p>' . 
+                        ($gstEnabled ? '<p><strong>GSTIN: 37AATFV5320K1ZL</strong></p>' : '') . '
+                    </td>
+                    
+                    <td width="20%" align="center" valign="top">
+                        <h2>' . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . '</h2>
+                        <p>Original for Recipient</p>
+                    </td>
+                    
+                    <td width="40%" align="right" valign="top">
+                        <p><strong>Invoice #:</strong> ' . $invoiceNumber . '</p>
+                        <p><strong>Date:</strong> ' . date('d M Y', strtotime($currentDate)) . '</p>
+                        <p><strong>Booking #:</strong> ' . $booking['booking_number'] . '</p>
+                    </td>
+                </tr>
+            </table>
         </div>
         
-        <div class="invoice-body">
-            <div style="display: flex; justify-content: space-between;">
-                <div class="customer-details" style="width: 48%;">
-                    <h3 class="section-title">Customer Details</h3>
-                    <p><strong>Name:</strong> ' . $booking['passenger_name'] . '</p>
-                    <p><strong>Phone:</strong> ' . $booking['passenger_phone'] . '</p>
-                    <p><strong>Email:</strong> ' . $booking['passenger_email'] . '</p>
-                </div>
-                
-                <div class="invoice-summary" style="width: 48%;">
-                    <h3 class="section-title">Trip Summary</h3>
-                    <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type']) . ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
-                    <p><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
-                    <p><strong>Vehicle:</strong> ' . $booking['cab_type'] . '</p>
-                </div>
-            </div>
+        <div style="margin-bottom: 20px;">
+            <table width="100%" cellpadding="5" cellspacing="0">
+                <tr>
+                    <td width="50%" valign="top">
+                        <h3>Customer Details</h3>
+                        <p><strong>Name:</strong> ' . $booking['passenger_name'] . '</p>
+                        <p><strong>Phone:</strong> ' . $booking['passenger_phone'] . '</p>
+                        <p><strong>Email:</strong> ' . $booking['passenger_email'] . '</p>
+                    </td>
+                    
+                    <td width="50%" valign="top">
+                        <h3>Trip Summary</h3>
+                        <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type']) . ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
+                        <p><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
+                        <p><strong>Vehicle:</strong> ' . $booking['cab_type'] . '</p>
+                    </td>
+                </tr>
+            </table>
             
             <div class="trip-details">
                 <h3 class="section-title">Trip Details</h3>

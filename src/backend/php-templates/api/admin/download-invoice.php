@@ -294,19 +294,29 @@ try {
     </head>
     <body>
         <div class='invoice-container'>
-            <div class='invoice-header'>
-                <div>
-                    <h1>INVOICE</h1>
-                    <p>Invoice #: {$invoiceNumber}</p>
-                    <p>Date: {$currentDate}</p>
-                    <p>Booking #: {$booking['booking_number']}</p>
-                </div>
-                <div class='company-info'>
-                    <h2>BE Rides</h2>
-                    <p>Vizag, Andhra Pradesh, India</p>
-                    <p>Phone: +91-7093864511</p>
-                    <p>Email: info@berides.in</p>
-                </div>
+            <div style='border: 1px solid #000; padding: 5px; margin-bottom: 15px;'>
+                <table width='100%' cellpadding='2' cellspacing='0'>
+                    <tr>
+                        <td width='40%' valign='top'>
+                            <p><strong>Seller/Service Provider:</strong></p>
+                            <p><strong>VIZAG TAXI HUB</strong></p>
+                            <p>44-66-22/4, Singalamma Puram, Kailasapuram,<br>
+                            Visakhapatnam, Andhra Pradesh - 530024</p>" . 
+                            ($gstEnabled ? "<p><strong>GSTIN: 37AATFV5320K1ZL</strong></p>" : "") . "
+                        </td>
+                        
+                        <td width='20%' align='center' valign='top'>
+                            <h2>" . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . "</h2>
+                            <p>Original for Recipient</p>
+                        </td>
+                        
+                        <td width='40%' align='right' valign='top'>
+                            <p><strong>Invoice #:</strong> {$invoiceNumber}</p>
+                            <p><strong>Date:</strong> {$currentDate}</p>
+                            <p><strong>Booking #:</strong> {$booking['booking_number']}</p>
+                        </td>
+                    </tr>
+                </table>
             </div>
             
             <div class='customer-info'>

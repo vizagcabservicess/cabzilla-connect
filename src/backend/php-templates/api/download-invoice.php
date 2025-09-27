@@ -317,15 +317,22 @@ try {
         font-family: DejaVu Sans, Arial, sans-serif; 
         line-height: 1.4; 
         margin: 0; 
-        padding: 10px; 
+        padding: 40px 20px; 
         color: #333;
         font-size: 9pt;
+        background-color: #f8f9fa;
+        text-align: center;
     }
     .invoice-container { 
-        width: 100%; 
+        width: 800px; 
         max-width: 800px; 
         margin: 0 auto; 
-        padding: 15px; 
+        padding: 30px 40px;
+        background-color: #ffffff;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        border-radius: 6px;
+        text-align: left;
+        display: inline-block;
     }
     .invoice-header { 
         width: 100%; 
@@ -415,6 +422,29 @@ try {
     .extra-charges-table th:last-child, .extra-charges-table td:last-child {
         text-align: right;
     }
+    
+    /* Responsive design */
+    @media (max-width: 900px) {
+        body {
+            padding: 20px 10px;
+        }
+        .invoice-container {
+            width: 100%;
+            max-width: 100%;
+            padding: 20px 15px;
+            box-shadow: none;
+            border-radius: 0;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        body {
+            padding: 10px 5px;
+        }
+        .invoice-container {
+            padding: 15px 10px;
+        }
+    }
     ";
 
     // Create HTML content for the invoice
@@ -430,35 +460,50 @@ try {
     </head>
     <body>
         <div class="invoice-container">
-            <div class="invoice-header">
-                <div>
-                    <h1>INVOICE</h1>
-                    <p style="margin-top: 5px; color: #777;">Vizag Taxi Hub</p>
-                </div>
-                <div class="company-info">
-                    <h2>#'.$invoiceNumber.'</h2>
-                    <p>Date: '.date('d M Y', strtotime($currentDate)).'</p>
-                    <p>Booking #: '.($booking['booking_number'] ?? 'N/A').'</p>
-                </div>
+            <div style="border: 1px solid #000; padding: 5px; margin-bottom: 15px;">
+                <table width="100%" cellpadding="2" cellspacing="0">
+                    <tr>
+                        <td width="40%" valign="top">
+                            <p><strong>Seller/Service Provider:</strong></p>
+                            <p><strong>VIZAG TAXI HUB</strong></p>
+                            <p>44-66-22/4, Singalamma Puram, Kailasapuram,<br>
+                            Visakhapatnam, Andhra Pradesh - 530024</p>' . 
+                            ($gstEnabled ? '<p><strong>GSTIN: 37AATFV5320K1ZL</strong></p>' : '') . '
+                        </td>
+                        
+                        <td width="20%" align="center" valign="top">
+                            <h2>' . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . '</h2>
+                            <p>Original for Recipient</p>
+                        </td>
+                        
+                        <td width="40%" align="right" valign="top">
+                            <p><strong>Invoice #:</strong> '.$invoiceNumber.'</p>
+                            <p><strong>Date:</strong> '.date('d M Y', strtotime($currentDate)).'</p>
+                            <p><strong>Booking #:</strong> '.($booking['booking_number'] ?? 'N/A').'</p>
+                        </td>
+                    </tr>
+                </table>
             </div>
             
-            <div class="invoice-body">
-                <div class="customer-section" style="display: table; width: 100%; margin-bottom: 20px;">
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Customer Details</h3>
-                        <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
-                        <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
-                        <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
-                    </div>
-                    
-                    <div style="display: table-cell; width: 50%;">
-                        <h3 class="section-title">Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
-                        (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
-                        <p><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                        <p><strong>Vehicle:</strong> '.($booking['cab_type'] ?? 'N/A').'</p>
-                    </div>
-                </div>
+            <div style="margin-bottom: 20px;">
+                <table width="100%" cellpadding="5" cellspacing="0">
+                    <tr>
+                        <td width="50%" valign="top">
+                            <h3>Customer Details</h3>
+                            <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
+                            <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
+                            <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
+                        </td>
+                        
+                        <td width="50%" valign="top">
+                            <h3>Trip Summary</h3>
+                            <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
+                            (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
+                            <p><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
+                            <p><strong>Vehicle:</strong> '.($booking['cab_type'] ?? 'N/A').'</p>
+                        </td>
+                    </tr>
+                </table>
                 
                 <div class="trip-details">
                     <h3 class="section-title">Trip Details</h3>
@@ -543,7 +588,7 @@ try {
 
     $content .= '
                     <tr class="total-row">
-                        <td>Total Amount'.($includeTax ? ' (including tax)' : ' (excluding tax)').'</td>
+                        <td>Total Amount'.($gstEnabled && $includeTax ? ' (including tax)' : '').'</td>
                         <td><span class="rupee-symbol">₹</span> '.number_format($totalAmount, 2).'</td>
                     </tr>
                 </table>';

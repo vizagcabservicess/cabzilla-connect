@@ -78,3 +78,5 @@ export function formatLocationForDisplay(location: string | any): { name: string
   return { name: 'Unknown Location', address: location || '' };
 }
 
+
+
