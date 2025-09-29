@@ -54,6 +54,8 @@ export function AdminBookingForm() {
   const [discountType, setDiscountType] = useState<'none' | 'percentage' | 'fixed'>('none');
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [markAsPaid, setMarkAsPaid] = useState(false);
+  const [partialPaymentReceived, setPartialPaymentReceived] = useState(false);
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
   
   // Form validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -108,7 +110,6 @@ export function AdminBookingForm() {
       'driverAllowance',
       'nightCharges',
       'extraDistanceFare',
-      'extraHourCharge',
       'airportFee',
     ];
     let total = 0;
@@ -118,6 +119,13 @@ export function AdminBookingForm() {
         total += val;
       }
     }
+    
+    // Handle extra hour charges properly - only add if there are actual extra hours
+    // extraHourCharge is the rate per hour, not the total charges
+    if (breakdown.extraHourCharge && breakdown.extraHours && breakdown.extraHours > 0) {
+      total += breakdown.extraHourCharge * breakdown.extraHours;
+    }
+    
     return total;
   };
   
@@ -128,17 +136,21 @@ export function AdminBookingForm() {
   
   // Update calculateFinalPrice to use the new calculatePrice:
   const calculateFinalPrice = () => {
-    const basePrice = calculatePrice();
-    if (discountType === 'none' || discountValue <= 0) {
-      return basePrice;
-    }
-    if (discountType === 'percentage') {
+    let basePrice = calculatePrice();
+    
+    // Apply discount first
+    if (discountType === 'percentage' && discountValue > 0) {
       const discount = basePrice * (discountValue / 100);
-      return Math.max(0, basePrice - discount);
+      basePrice = Math.max(0, basePrice - discount);
+    } else if (discountType === 'fixed' && discountValue > 0) {
+      basePrice = Math.max(0, basePrice - discountValue);
     }
-    if (discountType === 'fixed') {
-      return Math.max(0, basePrice - discountValue);
+    
+    // Apply partial payment deduction
+    if (partialPaymentReceived && partialPaymentAmount > 0) {
+      basePrice = Math.max(0, basePrice - partialPaymentAmount);
     }
+    
     return basePrice;
   };
   
@@ -184,6 +196,16 @@ export function AdminBookingForm() {
       }
     }
     
+    if (partialPaymentReceived) {
+      if (partialPaymentAmount < 0) {
+        newErrors.partialPaymentAmount = 'Partial payment cannot be negative';
+      }
+      
+      if (partialPaymentAmount > calculatePrice()) {
+        newErrors.partialPaymentAmount = 'Partial payment cannot exceed total price';
+      }
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -211,6 +233,7 @@ export function AdminBookingForm() {
         dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
         pickupDate: formatDateForAPI(pickupDate) || '',
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
+        vehicleType: selectedCab?.name || '',
         cabType: selectedCab?.name || '',
         distance: distance,
         tripType: tripType,
@@ -226,6 +249,8 @@ export function AdminBookingForm() {
         discountType: discountType !== 'none' ? discountType : null,
         discountValue: discountValue > 0 ? discountValue : 0,
         isPaid: markAsPaid,
+        partialPaymentReceived: partialPaymentReceived,
+        partialPaymentAmount: partialPaymentReceived ? partialPaymentAmount : 0,
         createdBy: 'admin',
       };
       
@@ -399,10 +424,10 @@ export function AdminBookingForm() {
                           <span>{formatPrice(selectedFareBreakdown.extraDistanceFare)}</span>
                         </div>
                       )}
-                      {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHourCharge > 0 && (
+                      {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHours && selectedFareBreakdown.extraHours > 0 && (
                         <div className="flex justify-between text-gray-800">
                           <span>Extra hour charges</span>
-                          <span>{formatPrice(selectedFareBreakdown.extraHourCharge)}</span>
+                          <span>{formatPrice(selectedFareBreakdown.extraHourCharge * selectedFareBreakdown.extraHours)}</span>
                         </div>
                       )}
                       {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
@@ -470,21 +495,70 @@ export function AdminBookingForm() {
                   </div>
                 )}
                 
+                <div className="mt-4 space-y-4">
+                  <Label>Payment Status</Label>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="partialPaymentReceived" 
+                        checked={partialPaymentReceived} 
+                        onCheckedChange={(checked) => {
+                          setPartialPaymentReceived(checked as boolean);
+                          if (!checked) setPartialPaymentAmount(0);
+                        }}
+                      />
+                      <Label htmlFor="partialPaymentReceived" className="font-medium">
+                        Partial Payment Received
+                      </Label>
+                    </div>
+                    
+                    {partialPaymentReceived && (
+                      <div className="ml-6 space-y-2">
+                        <Label htmlFor="partialPaymentAmount">Partial Payment Amount (₹)</Label>
+                        <Input
+                          id="partialPaymentAmount"
+                          type="number"
+                          value={partialPaymentAmount}
+                          onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
+                          min={0}
+                          max={calculatePrice()}
+                          className={`w-32 ${errors.partialPaymentAmount ? "border-red-500" : ""}`}
+                          placeholder="0"
+                        />
+                        {errors.partialPaymentAmount && (
+                          <p className="text-xs text-red-500">{errors.partialPaymentAmount}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="markAsPaid" 
+                        checked={markAsPaid} 
+                        onCheckedChange={() => setMarkAsPaid(!markAsPaid)}
+                        disabled={partialPaymentReceived}
+                      />
+                      <Label htmlFor="markAsPaid" className="font-medium">
+                        Mark as Paid (Full Payment)
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+                
+                {partialPaymentReceived && partialPaymentAmount > 0 && (
+                  <div className="flex justify-between py-2 border-b mt-4">
+                    <span className="text-gray-600">Partial Payment:</span>
+                    <span className="font-medium text-blue-600">
+                      - {formatPrice(partialPaymentAmount)}
+                    </span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between py-3 border-b border-t mt-4 text-lg">
                   <span className="font-semibold">Final Price:</span>
                   <span className="font-bold">{formatPrice(calculateFinalPrice())}</span>
                 </div>
                 
-                <div className="mt-4 flex items-center space-x-2">
-                  <Checkbox 
-                    id="markAsPaid" 
-                    checked={markAsPaid} 
-                    onCheckedChange={() => setMarkAsPaid(!markAsPaid)}
-                  />
-                  <Label htmlFor="markAsPaid" className="font-medium">
-                    Mark as Paid
-                  </Label>
-                </div>
                 <div className="flex justify-end mt-4">
                   <Button type="submit" className="px-6 py-2 text-sm rounded-full bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 transition">Create Booking</Button>
                 </div>

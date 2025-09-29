@@ -23,7 +23,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
 import { Booking, BookingStatus } from '@/types/api';
-import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee } from 'lucide-react';
+import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2 } from 'lucide-react';
+import { usePrivileges } from '@/hooks/usePrivileges';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ import { formatLocationForDisplay } from '@/utils/locationUtils';
 export function AdminBookingsList() {
   const { toast: uiToast } = useToast();
   const navigate = useNavigate();
+  const { isSuperAdmin } = usePrivileges();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -393,6 +395,70 @@ export function AdminBookingsList() {
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error("Failed to cancel booking: " + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteBooking = async (booking?: Booking) => {
+    const targetBooking = booking || selectedBooking;
+    if (!targetBooking) return;
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete booking #${targetBooking.bookingNumber || targetBooking.id}?\n\n` +
+      `This action cannot be undone and will permanently remove the booking from the system.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Try bookingAPI first
+      try {
+        await bookingAPI.deleteBooking(targetBooking.id);
+        
+        // Remove from bookings list
+        const updatedBookings = bookings.filter(b => b.id !== targetBooking.id);
+        setBookings(updatedBookings);
+        applyFilters(updatedBookings, searchTerm, statusFilter);
+        
+        toast.success("Booking deleted successfully");
+        return;
+      } catch (apiError) {
+        console.warn('bookingAPI.deleteBooking failed, trying direct fetch:', apiError);
+      }
+      
+      // Direct fetch for better debugging
+      const directResponse = await fetch('/api/admin/delete-booking.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        body: JSON.stringify({
+          bookingId: targetBooking.id
+        })
+      });
+      
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        console.error('Delete booking error response:', errorText);
+        throw new Error(`Failed to delete booking: ${directResponse.status} ${directResponse.statusText}`);
+      }
+      
+      // Remove from bookings list
+      const updatedBookings = bookings.filter(b => b.id !== targetBooking.id);
+      setBookings(updatedBookings);
+      applyFilters(updatedBookings, searchTerm, statusFilter);
+      
+      toast.success("Booking deleted successfully");
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      toast.error("Failed to delete booking: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -941,6 +1007,18 @@ export function AdminBookingsList() {
                             }}>
                               Cancel booking
                             </DropdownMenuItem>
+                          )}
+                          {isSuperAdmin() && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteBooking(booking)}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete booking
+                              </DropdownMenuItem>
+                            </>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>

@@ -33,6 +33,8 @@ export interface BookingRequest {
   discountType?: string | null;
   discountValue?: number;
   isPaid?: boolean;
+  partialPaymentReceived?: boolean;
+  partialPaymentAmount?: number;
   createdBy?: string;
   // Optional GST details captured during guest form submission
   gstEnabled?: boolean;
