@@ -134,11 +134,11 @@ export function AdminBookingForm() {
     return sumBreakdown(selectedFareBreakdown) || selectedFare || 0;
   };
   
-  // Update calculateFinalPrice to use the new calculatePrice:
-  const calculateFinalPrice = () => {
+  // Calculate price after discount only
+  const calculatePriceAfterDiscount = () => {
     let basePrice = calculatePrice();
     
-    // Apply discount first
+    // Apply discount only
     if (discountType === 'percentage' && discountValue > 0) {
       const discount = basePrice * (discountValue / 100);
       basePrice = Math.max(0, basePrice - discount);
@@ -146,12 +146,16 @@ export function AdminBookingForm() {
       basePrice = Math.max(0, basePrice - discountValue);
     }
     
-    // Apply partial payment deduction
-    if (partialPaymentReceived && partialPaymentAmount > 0) {
-      basePrice = Math.max(0, basePrice - partialPaymentAmount);
-    }
-    
     return basePrice;
+  };
+
+  // Calculate remaining amount after partial payment
+  const calculateRemainingAmount = () => {
+    const priceAfterDiscount = calculatePriceAfterDiscount();
+    if (partialPaymentReceived && partialPaymentAmount > 0) {
+      return Math.max(0, priceAfterDiscount - partialPaymentAmount);
+    }
+    return priceAfterDiscount;
   };
   
   // Validate form fields
@@ -225,8 +229,16 @@ export function AdminBookingForm() {
     
     try {
       const basePrice = calculatePrice();
-      const finalPrice = calculateFinalPrice();
-      const discountAmount = basePrice - finalPrice;
+      const priceAfterDiscount = calculatePriceAfterDiscount();
+      const remainingAmount = calculateRemainingAmount();
+      
+      // Calculate discount amount (excluding partial payment)
+      let discountAmount = 0;
+      if (discountType === 'percentage' && discountValue > 0) {
+        discountAmount = basePrice * (discountValue / 100);
+      } else if (discountType === 'fixed' && discountValue > 0) {
+        discountAmount = discountValue;
+      }
       
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
@@ -238,14 +250,14 @@ export function AdminBookingForm() {
         distance: distance,
         tripType: tripType,
         tripMode: tripMode,
-        totalAmount: finalPrice,
+        totalAmount: basePrice,
         passengerName: passengerName,
         passengerPhone: passengerPhone,
         passengerEmail: passengerEmail,
         hourlyPackage: tripType === 'local' ? hourlyPackage : null,
         // Admin-specific fields
         adminNotes: adminNotes,
-        discountAmount: discountAmount > 0 ? discountAmount : 0,
+        discountAmount: discountAmount,
         discountType: discountType !== 'none' ? discountType : null,
         discountValue: discountValue > 0 ? discountValue : 0,
         isPaid: markAsPaid,
@@ -490,7 +502,7 @@ export function AdminBookingForm() {
                   <div className="flex justify-between py-2 border-b mt-4">
                     <span className="text-gray-600">Discount:</span>
                     <span className="font-medium text-green-600">
-                      - {formatPrice(calculatePrice() - calculateFinalPrice())}
+                      - {formatPrice(calculatePrice() - calculatePriceAfterDiscount())}
                     </span>
                   </div>
                 )}
@@ -556,7 +568,7 @@ export function AdminBookingForm() {
                 
                 <div className="flex justify-between py-3 border-b border-t mt-4 text-lg">
                   <span className="font-semibold">Final Price:</span>
-                  <span className="font-bold">{formatPrice(calculateFinalPrice())}</span>
+                  <span className="font-bold">{formatPrice(calculateRemainingAmount())}</span>
                 </div>
                 
                 <div className="flex justify-end mt-4">

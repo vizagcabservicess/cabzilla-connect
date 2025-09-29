@@ -120,6 +120,9 @@ export interface Booking {
   payment_status: string;
   payment_method?: string;
   advance_paid_amount?: number;
+  partialPaymentReceived?: boolean;
+  partialPaymentAmount?: number;
+  isPaid?: boolean;
   vehicleId?: string;
   vehicleNumber?: string;
   created_at: string;

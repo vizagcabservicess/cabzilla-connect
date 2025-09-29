@@ -195,11 +195,50 @@ export function BookingDetails({
               </div>
             )}
 
-            <div className="mt-3 flex justify-between items-center border-t pt-3">
-              <div>
-                <p className="text-xs text-gray-500">Total Amount</p>
-                <p className="font-bold text-lg">{formatPrice(booking.totalAmount)}</p>
+            <div className="mt-3 border-t pt-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-500">Total Amount</p>
+                  <p className="font-bold text-lg">{formatPrice(booking.totalAmount)}</p>
+                </div>
+                
+                {/* Show partial payment information if available */}
+                {(booking as any).advance_paid_amount && (booking as any).advance_paid_amount > 0 && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <p className="text-xs text-gray-500">Advance Paid</p>
+                      <p className="font-medium text-green-600">{formatPrice((booking as any).advance_paid_amount)}</p>
+                    </div>
+                    <div className="flex justify-between items-center border-t pt-2">
+                      <p className="text-xs text-gray-500">Remaining Amount</p>
+                      <p className="font-bold text-lg">{formatPrice(booking.totalAmount - (booking as any).advance_paid_amount)}</p>
+                    </div>
+                  </>
+                )}
+                
+                {/* Show payment status */}
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-500">Payment Status</p>
+                  <div className="flex items-center space-x-2">
+                    {(booking as any).payment_status === 'partial_payment' || ((booking as any).advance_paid_amount && (booking as any).advance_paid_amount > 0) ? (
+                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
+                        PARTIAL PAYMENT
+                      </span>
+                    ) : (booking as any).payment_status === 'paid' || (booking as any).isPaid ? (
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                        PAID
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full">
+                        PENDING
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
+            </div>
+            
+            <div className="mt-3 flex justify-end items-center">
 
               <div className="space-x-2">
                 {!isCancelled && (
