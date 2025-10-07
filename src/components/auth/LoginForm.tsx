@@ -42,11 +42,23 @@ export function LoginForm() {
         const dashboardUrl = getDashboardUrl(user);
         navigate(dashboardUrl);
       }, 500);
-    } catch (error) {
-      toast.error('Login failed', {
-        id: 'login-toast',
-        description: error instanceof Error ? error.message : 'Authentication failed'
-      });
+    } catch (error: any) {
+      // Check if it's an email verification error
+      if (error?.response?.data?.email_verification_required) {
+        toast.error('Email verification required', {
+          id: 'login-toast',
+          description: 'Please verify your email address before logging in. Check your inbox for a verification email.',
+          action: {
+            label: 'Resend Email',
+            onClick: () => navigate('/verify-email', { state: { email } })
+          }
+        });
+      } else {
+        toast.error('Login failed', {
+          id: 'login-toast',
+          description: error instanceof Error ? error.message : 'Authentication failed'
+        });
+      }
     } finally {
       setIsLoading(false);
     }

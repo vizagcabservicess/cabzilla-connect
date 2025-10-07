@@ -35,7 +35,18 @@ export function ForgotPasswordForm({ onBack, onSuccess }: ForgotPasswordFormProp
           description: 'Check your email for password reset instructions.'
         });
       } else {
-        throw new Error(data.message || 'Failed to send reset link');
+        // Handle specific error cases
+        if (data.status === 'error' && data.message.includes('No account found')) {
+          toast.error('Account not found', {
+            description: 'No account found with that email address. Please check your email or create a new account.',
+            action: {
+              label: 'Sign Up',
+              onClick: () => window.location.href = '/signup'
+            }
+          });
+        } else {
+          throw new Error(data.message || 'Failed to send reset link');
+        }
       }
     } catch (error) {
       toast.error('Failed to send reset link', {

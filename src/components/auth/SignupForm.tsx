@@ -55,7 +55,19 @@ export function SignupForm() {
         const response = await authAPI.signup({ ...values, role: 'customer' });
         console.log('Registration API response:', response);
 
-        if (response && response.message.includes('successful')) {
+        if (response && response.email_verification_required) {
+          // Email verification required - update the loading toast
+          toast.success("Account created successfully!", { id: loadingToastId });
+          uiToast({
+            title: "Email Verification Required",
+            description: "Please check your email and click the verification link to activate your account.",
+            duration: 8000,
+          });
+          // Redirect to email verification page or show verification message
+          setTimeout(() => {
+            navigate('/verify-email', { state: { email: values.email } });
+          }, 1000);
+        } else if (response && response.message.includes('successful')) {
           // Success - update the loading toast
           toast.success("Account created successfully!", { id: loadingToastId });
           uiToast({

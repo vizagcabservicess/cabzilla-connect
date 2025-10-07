@@ -53,6 +53,8 @@ export interface AuthResponse {
   user?: User;
   token?: string;
   redirect_to_signup?: boolean;
+  email_verification_required?: boolean;
+  verification_email_sent?: boolean;
   social_data?: {
     provider: string;
     providerId: string;

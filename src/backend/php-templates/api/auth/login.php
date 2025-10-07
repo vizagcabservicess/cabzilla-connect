@@ -61,7 +61,7 @@ try {
     $conn = getDbConnectionWithRetry();
     
     // Check if user exists
-    $stmt = $conn->prepare("SELECT id, name, email, password, role, is_active FROM users WHERE email = ?");
+    $stmt = $conn->prepare("SELECT id, name, email, password, role, is_active, email_verified FROM users WHERE email = ?");
     $stmt->bind_param("s", $sanitizedInput['email']);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -78,6 +78,18 @@ try {
         secureLog("Login attempt for inactive account", "WARNING", ['email' => $sanitizedInput['email'], 'ip' => $clientIP]);
         http_response_code(403);
         echo json_encode(['error' => 'Account is inactive']);
+        exit();
+    }
+    
+    // Check if email is verified
+    if (!$user['email_verified']) {
+        secureLog("Login attempt for unverified email", "WARNING", ['email' => $sanitizedInput['email'], 'ip' => $clientIP]);
+        http_response_code(403);
+        echo json_encode([
+            'error' => 'Email not verified',
+            'message' => 'Please verify your email address before logging in. Check your inbox for a verification email.',
+            'email_verification_required' => true
+        ]);
         exit();
     }
     

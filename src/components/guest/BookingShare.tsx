@@ -38,7 +38,7 @@ export function BookingShare({ booking, isOpen = true, onClose }: BookingSharePr
   };
   const getStatus = () => booking?.status || 'pending';
 
-  const shareText = `🚗 Booking Confirmation - VizagUp Taxi
+  const shareText = `🚗 Booking Confirmation - Vizag Taxi Hub
 
 📋 Booking ID: ${getBookingId()}
 👤 Passenger: ${getPassengerName()}
@@ -113,7 +113,7 @@ Book your ride at: www.vizagtaxihub.com`;
             <CardContent className="p-4">
               <div className="text-sm space-y-2">
                 <div className="font-semibold text-primary">
-                  🚗 Booking Confirmation - VizagUp Taxi
+                  🚗 Booking Confirmation - Vizag Taxi Hub
                 </div>
                 <div className="space-y-1 text-muted-foreground">
                   <div>📋 Booking ID: {getBookingId()}</div>

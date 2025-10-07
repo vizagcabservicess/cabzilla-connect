@@ -18,6 +18,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const DashboardPage = lazyWithRetry(
   () => import('./pages/DashboardPage'),
   {
@@ -265,6 +266,10 @@ const router = createBrowserRouter([
       {
         path: 'reset-password',
         element: <LazyRoute component={ResetPasswordPage} />,
+      },
+      {
+        path: 'verify-email',
+        element: <LazyRoute component={VerifyEmailPage} />,
       },
       {
         path: 'dashboard',
