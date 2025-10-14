@@ -11,7 +11,8 @@ export class URLRedirectService {
     { from: '/sedan', to: '/fleet', type: 'permanent', statusCode: 301 },
     { from: '/suv', to: '/fleet', type: 'permanent', statusCode: 301 },
     { from: '/tempotraveller', to: '/fleet', type: 'permanent', statusCode: 301 },
-    { from: '/tempo-traveller', to: '/fleet', type: 'permanent', statusCode: 301 },
+    // FIXED: This was redirecting to /fleet instead of the vehicle page
+    // { from: '/tempo-traveller', to: '/fleet', type: 'permanent', statusCode: 301 },
     { from: '/tempo_traveller', to: '/fleet', type: 'permanent', statusCode: 301 },
     
     // Old service pages
@@ -180,7 +181,12 @@ export class URLRedirectService {
     { from: '/innova', to: '/vehicle/innova-crysta', type: 'permanent', statusCode: 301 },
     { from: '/innova-crysta', to: '/vehicle/innova-crysta', type: 'permanent', statusCode: 301 },
     { from: '/toyota-glanza', to: '/vehicle/toyota-glanza', type: 'permanent', statusCode: 301 },
-    { from: '/tempo-traveller', to: '/vehicle/tempo_traveller', type: 'permanent', statusCode: 301 },
+    { from: '/tempo-traveller', to: '/vehicle/tempo-traveller', type: 'permanent', statusCode: 301 },
+    
+    // Redirect non-existent URLs that Google is trying to access
+    { from: '/cabs/12-seater-tempo-traveller', to: '/vehicle/tempo-traveller', type: 'permanent', statusCode: 301 },
+    { from: '/cabs/17-seater-tempo-traveller', to: '/vehicle/tempo-traveller', type: 'permanent', statusCode: 301 },
+    { from: '/cabs/tempo-traveller', to: '/vehicle/tempo-traveller', type: 'permanent', statusCode: 301 },
     { from: '/honda-amaze', to: '/vehicle/amaze', type: 'permanent', statusCode: 301 },
     { from: '/amaze', to: '/vehicle/amaze', type: 'permanent', statusCode: 301 },
   ];

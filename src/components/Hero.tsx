@@ -955,7 +955,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         'koyyuru', 'koyyuru mandal', 'koyyuru village',
         'maddimadugu', 'maddimadugu mandal', 'maddimadugu village',
         'guduru', 'guduru mandal', 'guduru village',
-        'rambilli', 'rambilli mandal', 'rambilli village',
         'yellavaram', 'yellavaram mandal', 'yellavaram village',
         'sabari', 'sabari river', 'sabari valley',
         'sileru', 'sileru river', 'sileru valley',
@@ -998,7 +997,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         'koyyuru', 'koyyuru mandal', 'koyyuru village',
         'maddimadugu', 'maddimadugu mandal', 'maddimadugu village',
         'guduru', 'guduru mandal', 'guduru village',
-        'rambilli', 'rambilli mandal', 'rambilli village',
         'yellavaram', 'yellavaram mandal', 'yellavaram village',
         'sabari', 'sabari river', 'sabari valley',
         'sileru', 'sileru river', 'sileru valley',
@@ -1174,13 +1172,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           companyAddress: guestDetails.companyAddress,
           companyEmail: guestDetails.companyEmail,
         } : undefined,
-        hourlyPackage: tripType === 'local' ? hourlyPackage : null
+        hourlyPackage: tripType === 'local' ? hourlyPackage : null,
+        // Prevent tour bookings through Hero component - should redirect to tour pages
+        tourId: tripType === 'tour' ? 'INVALID_TOUR_FROM_HERO' : undefined
       };
 
       const response = await bookingAPI.createBooking(bookingData);
       
       const bookingDataForStorage = {
-        bookingId: response.id || response.booking_id,
+        bookingId: response.data?.id || response.id || response.booking_id,
+        bookingNumber: response.data?.bookingNumber || response.bookingNumber || response.data?.booking_number || response.booking_number,
         pickupLocation,
         dropLocation,
         pickupDate: formatDateForAPI(pickupDate),

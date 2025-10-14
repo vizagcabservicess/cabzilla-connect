@@ -56,6 +56,8 @@ export function AdminBookingForm() {
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const [partialPaymentReceived, setPartialPaymentReceived] = useState(false);
   const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
+  const [selectedTourId, setSelectedTourId] = useState<string>('');
+  const [selectedTourName, setSelectedTourName] = useState<string>('');
   
   // Form validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -93,6 +95,12 @@ export function AdminBookingForm() {
     setSelectedCab(null);
     setSelectedFare(0);
     setSelectedFareBreakdown(null);
+    
+    // Clear tour selection if trip type changes away from tour
+    if (searchData.tripType !== 'tour') {
+      setSelectedTourId('');
+      setSelectedTourName('');
+    }
   };
   
   // Handle cab selection with fare and breakdown
@@ -185,6 +193,15 @@ export function AdminBookingForm() {
     if (!selectedCab) {
       newErrors.selectedCab = 'Please select a vehicle';
     }
+
+    if (tripType === 'tour' && !selectedTourId) {
+      newErrors.selectedTourId = 'Please select a tour package';
+    }
+    
+    // Additional validation: ensure tour bookings have proper drop location
+    if (tripType === 'tour' && !dropLocation) {
+      newErrors.dropLocation = 'Drop location is required for tour bookings';
+    }
     
     if (discountType !== 'none') {
       if (discountValue < 0) {
@@ -264,10 +281,21 @@ export function AdminBookingForm() {
         partialPaymentReceived: partialPaymentReceived,
         partialPaymentAmount: partialPaymentReceived ? partialPaymentAmount : 0,
         createdBy: 'admin',
+        tourId: tripType === 'tour' && selectedTourId ? selectedTourId : undefined,
       };
       
-      // Call API to create booking
-      const response = await bookingAPI.createBooking(bookingData);
+      // Debug logging for tour bookings
+      if (tripType === 'tour') {
+        console.log('Tour booking data:', {
+          tripType,
+          selectedTourId,
+          tourId: bookingData.tourId,
+          dropLocation: bookingData.dropLocation
+        });
+      }
+      
+      // Call API to create admin booking
+      const response = await bookingAPI.createAdminBooking(bookingData);
       
       toast({
         title: "Booking Created Successfully",
@@ -366,6 +394,50 @@ export function AdminBookingForm() {
                     placeholder="Add any internal notes or special instructions..."
                   />
                 </div>
+
+                {/* Tour Selection - only show for tour trips */}
+                {tripType === 'tour' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="tourSelection">Select Tour <span className="text-red-500">*</span></Label>
+                    <Select value={selectedTourId} onValueChange={(value) => {
+                      setSelectedTourId(value);
+                      // Automatically set drop location to tour name
+                      const tourNames: Record<string, string> = {
+                        'araku_valley': 'Araku Valley Tour',
+                        'lambasingi': 'Lambasingi Hill Station',
+                        'vizag_city': 'Vizag City Tour',
+                        'yarada_beach': 'Yarada Beach Tour'
+                      };
+                      const tourName = tourNames[value] || '';
+                      setSelectedTourName(tourName);
+                      setDropLocation({ 
+                        id: `tour_${value}`,
+                        name: tourName, 
+                        city: 'Visakhapatnam',
+                        state: 'Andhra Pradesh',
+                        lat: 17.7215,
+                        lng: 83.2248,
+                        type: 'other',
+                        popularityScore: 50,
+                        address: tourName,
+                        isInVizag: true
+                      });
+                    }}>
+                      <SelectTrigger className={errors.selectedTourId ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Choose a tour package" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="araku_valley">Araku Valley Tour</SelectItem>
+                        <SelectItem value="lambasingi">Lambasingi Hill Station</SelectItem>
+                        <SelectItem value="vizag_city">Vizag City Tour</SelectItem>
+                        <SelectItem value="yarada_beach">Yarada Beach Tour</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.selectedTourId && (
+                      <p className="text-xs text-red-500">{errors.selectedTourId}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -17,8 +17,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
+// Get the request body (read once and store)
+$rawInput = file_get_contents('php://input');
+$data = json_decode($rawInput, true);
+
+// Log the raw input for debugging
+file_put_contents(__DIR__ . '/debug.log', 'verify-razorpay-payment.php called at ' . date('Y-m-d H:i:s') . ': ' . $rawInput . PHP_EOL, FILE_APPEND);
 
 // Validate required parameters
 if (!isset($data['razorpay_payment_id']) || !isset($data['razorpay_order_id']) || !isset($data['razorpay_signature'])) {
@@ -34,8 +38,10 @@ try {
     // Use config.php database connection instead of database.php to avoid credential conflicts
     require_once __DIR__ . '/utils/email.php';
     $dbAvailable = true;
+    file_put_contents(__DIR__ . '/debug.log', 'Email utils loaded successfully at ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND);
 } catch (Throwable $e) {
-    file_put_contents(__DIR__ . '/debug.log', 'WARN: Email utils not available: ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+    file_put_contents(__DIR__ . '/debug.log', 'ERROR: Email utils not available: ' . $e->getMessage() . ' - Trace: ' . $e->getTraceAsString() . PHP_EOL, FILE_APPEND);
+    // Don't exit - continue without email functionality
 }
 
 // Load Razorpay API keys
@@ -81,15 +87,68 @@ $razorpay_signature = $data['razorpay_signature'];
 $booking_id = $data['booking_id'] ?? null;
 $frontend_amount = $data['amount'] ?? null; // Amount from frontend
 
+// Check for duplicate requests (prevent processing same payment twice)
+$requestKey = $razorpay_payment_id . '_' . $razorpay_order_id;
+$processedFile = __DIR__ . '/processed_payments_' . date('Y-m-d') . '.txt';
+$processedPayments = [];
+
+if (file_exists($processedFile)) {
+    $processedPayments = json_decode(file_get_contents($processedFile), true) ?: [];
+}
+
+// Check if this payment was already processed today
+if (isset($processedPayments[$requestKey])) {
+    $lastProcessed = $processedPayments[$requestKey];
+    $timeDiff = time() - $lastProcessed['timestamp'];
+    
+    // If processed within last 60 seconds, skip (likely duplicate)
+    if ($timeDiff < 60) {
+        file_put_contents(__DIR__ . '/debug.log', 'SKIP: Duplicate payment verification request for ' . $requestKey . ' (processed ' . $timeDiff . 's ago)' . PHP_EOL, FILE_APPEND);
+        echo json_encode(['success' => true, 'message' => 'Payment already verified', 'duplicate' => true]);
+        exit;
+    }
+}
+
+// Mark as processing
+$processedPayments[$requestKey] = [
+    'timestamp' => time(),
+    'booking_id' => $booking_id,
+    'amount' => $frontend_amount
+];
+file_put_contents($processedFile, json_encode($processedPayments));
+
 // Generate the signature to verify the payment
 $generated_signature = hash_hmac('sha256', $razorpay_order_id . "|" . $razorpay_payment_id, $key_secret);
 
-file_put_contents(__DIR__ . '/debug.log', 'verify-razorpay-payment.php called at ' . date('Y-m-d H:i:s') . ': ' . file_get_contents('php://input') . PHP_EOL, FILE_APPEND);
-
 try {
     // Verify signature
+    
     if ($generated_signature != $razorpay_signature) {
         file_put_contents(__DIR__ . '/debug.log', 'Signature verification failed. Generated: ' . $generated_signature . ' Provided: ' . $razorpay_signature . PHP_EOL, FILE_APPEND);
+        
+        // Track payment failure
+        $failureData = [
+            'action' => 'track_failure',
+            'booking_id' => $booking_id,
+            'booking_number' => 'UNKNOWN',
+            'amount' => $frontend_amount ?? 0,
+            'failure_reason' => 'Signature verification failed',
+            'failure_code' => 'SIGNATURE_MISMATCH'
+        ];
+        
+        $failureRequest = json_encode($failureData);
+        $failureContext = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => 'Content-Type: application/json',
+                'content' => $failureRequest
+            ]
+        ]);
+        
+        // Use the correct endpoint URL
+        $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+        @file_get_contents($baseUrl . '/api/payment-tracker-final.php', false, $failureContext);
+        
         echo json_encode(['success' => false, 'error' => 'Payment signature verification failed']);
         http_response_code(400);
         exit;
@@ -172,8 +231,13 @@ try {
             // Update booking if possible
             if ($booking_id) {
                 file_put_contents(__DIR__ . '/debug.log', 'Fetching booking data for ID: ' . $booking_id . PHP_EOL, FILE_APPEND);
-                // First, get the current booking data
-                $selectStmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+                // First, get the current booking data with tour information
+                $selectStmt = $conn->prepare("
+                    SELECT b.*, tf.tour_name 
+                    FROM bookings b
+                    LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+                    WHERE b.id = ?
+                ");
                 if ($selectStmt) {
                     $selectStmt->bind_param("i", $booking_id);
                     $selectStmt->execute();
@@ -203,47 +267,125 @@ try {
                 }
                 
                 // Send payment confirmation email only for successful payments
-                file_put_contents(__DIR__ . '/debug.log', 'Checking email conditions - booking_data: ' . (!empty($booking_data) ? 'yes' : 'no') . ', payAmount: ' . $payAmount . PHP_EOL, FILE_APPEND);
-                if ($booking_data && $payAmount > 0) {
-                    // Format booking data for email
-                    $formattedBooking = [
-                        'id' => $booking_data['id'],
-                        'bookingNumber' => $booking_data['booking_number'],
-                        'pickupLocation' => $booking_data['pickup_location'],
-                        'dropLocation' => $booking_data['drop_location'],
-                        'pickupDate' => $booking_data['pickup_date'],
-                        'returnDate' => $booking_data['return_date'],
-                        'cabType' => $booking_data['cab_type'],
-                        'distance' => $booking_data['distance'],
-                        'tripType' => $booking_data['trip_type'],
-                        'tripMode' => $booking_data['trip_mode'],
-                        'totalAmount' => $booking_data['total_amount'],
-                        'status' => $bookingStatus,
-                        'passengerName' => $booking_data['passenger_name'],
-                        'passengerPhone' => $booking_data['passenger_phone'],
-                        'passengerEmail' => $booking_data['passenger_email'],
-                        'payment_status' => $paymentStatus,
-                        'payment_method' => 'razorpay',
-                        'advance_paid_amount' => $payAmount,
-                        'razorpay_payment_id' => $razorpay_payment_id,
-                        'razorpay_order_id' => $razorpay_order_id,
-                        'razorpay_signature' => $razorpay_signature,
-                        'createdAt' => $booking_data['created_at'],
-                        'updatedAt' => date('Y-m-d H:i:s')
-                    ];
-                    
-                    // Send payment confirmation email with enhanced error handling
-                    try {
+                file_put_contents(__DIR__ . '/debug.log', 'Checking email conditions - booking_data: ' . (!empty($booking_data) ? 'yes' : 'no') . ', payAmount: ' . $payAmount . ', dbAvailable: ' . ($dbAvailable ? 'yes' : 'no') . PHP_EOL, FILE_APPEND);
+                
+                // Check if email functions are available
+                $emailFunctionsAvailable = function_exists('sendPaymentConfirmationEmail') && function_exists('sendBookingConfirmationEmail');
+                file_put_contents(__DIR__ . '/debug.log', 'Email functions available: ' . ($emailFunctionsAvailable ? 'yes' : 'no') . PHP_EOL, FILE_APPEND);
+                
+                // Send payment confirmation email only for successful payments
+                // Wrap in try-catch to prevent email errors from crashing the payment verification
+                try {
+                    if ($booking_data && $payAmount > 0 && $emailFunctionsAvailable) {
+                        file_put_contents(__DIR__ . '/debug.log', 'Starting email sending process for booking: ' . $booking_id . PHP_EOL, FILE_APPEND);
+                        
+                        // Fetch tour itinerary if this is a tour booking
+                        $tourItinerary = [];
+                        if (!empty($booking_data['tour_id'])) {
+                            try {
+                                $itineraryStmt = $conn->prepare("
+                                    SELECT day_number as day, title, description, activities 
+                                    FROM tour_itinerary 
+                                    WHERE tour_id = ? 
+                                    ORDER BY day_number
+                                ");
+                                if ($itineraryStmt) {
+                                    $itineraryStmt->bind_param("s", $booking_data['tour_id']);
+                                    $itineraryStmt->execute();
+                                    $itineraryResult = $itineraryStmt->get_result();
+                                    
+                                    while ($itineraryRow = $itineraryResult->fetch_assoc()) {
+                                        $activities = [];
+                                        if (!empty($itineraryRow['activities'])) {
+                                            $decoded = json_decode($itineraryRow['activities'], true);
+                                            $activities = is_array($decoded) ? $decoded : explode(',', $itineraryRow['activities']);
+                                        }
+                                        
+                                        $tourItinerary[] = [
+                                            'day' => (int)$itineraryRow['day'],
+                                            'title' => $itineraryRow['title'],
+                                            'description' => $itineraryRow['description'],
+                                            'activities' => $activities
+                                        ];
+                                    }
+                                    $itineraryStmt->close();
+                                }
+                            } catch (Exception $itineraryEx) {
+                                file_put_contents(__DIR__ . '/debug.log', 'Error fetching tour itinerary: ' . $itineraryEx->getMessage() . PHP_EOL, FILE_APPEND);
+                            }
+                        }
+
+                        // Format booking data for email
+                        $formattedBooking = [
+                            'id' => $booking_data['id'],
+                            'bookingNumber' => $booking_data['booking_number'],
+                            'pickupLocation' => $booking_data['pickup_location'],
+                            'dropLocation' => $booking_data['drop_location'],
+                            'pickupDate' => $booking_data['pickup_date'],
+                            'returnDate' => $booking_data['return_date'],
+                            'cabType' => $booking_data['cab_type'],
+                            'distance' => $booking_data['distance'],
+                            'tripType' => $booking_data['trip_type'],
+                            'tripMode' => $booking_data['trip_mode'],
+                            'totalAmount' => $booking_data['total_amount'],
+                            'status' => $bookingStatus,
+                            'passengerName' => $booking_data['passenger_name'],
+                            'passengerPhone' => $booking_data['passenger_phone'],
+                            'passengerEmail' => $booking_data['passenger_email'],
+                            'payment_status' => $paymentStatus,
+                            'payment_method' => 'razorpay',
+                            'advance_paid_amount' => $payAmount,
+                            'razorpay_payment_id' => $razorpay_payment_id,
+                            'razorpay_order_id' => $razorpay_order_id,
+                            'razorpay_signature' => $razorpay_signature,
+                            'tourId' => $booking_data['tour_id'] ?? null,
+                            'tourName' => $booking_data['tour_name'] ?? null,
+                            'tour_itinerary' => $tourItinerary,
+                            'createdAt' => $booking_data['created_at'],
+                            'updatedAt' => date('Y-m-d H:i:s')
+                        ];
+                        
+                        // Send payment confirmation email with enhanced error handling
                         file_put_contents(__DIR__ . '/debug.log', 'Attempting to send payment confirmation email for booking: ' . $booking_id . ' with amount: ' . $payAmount . PHP_EOL, FILE_APPEND);
                         
                         // First try the payment confirmation email
-                        $paymentEmailSuccess = sendPaymentConfirmationEmail($formattedBooking);
+                        $paymentEmailSuccess = @sendPaymentConfirmationEmail($formattedBooking);
                         file_put_contents(__DIR__ . '/debug.log', 'Payment confirmation email result: ' . ($paymentEmailSuccess ? 'success' : 'failed') . ' for amount: ' . $payAmount . ' at ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND);
+                        
+                        // Track successful payment
+                        try {
+                            $successData = [
+                                'action' => 'track_attempt',
+                                'booking_id' => $booking_data['id'],
+                                'booking_number' => $booking_data['booking_number'],
+                                'razorpay_order_id' => $razorpay_order_id,
+                                'razorpay_payment_id' => $razorpay_payment_id,
+                                'amount' => $payAmount,
+                                'payment_status' => 'successful',
+                                'customer_phone' => $booking_data['passenger_phone'],
+                                'customer_email' => $booking_data['passenger_email']
+                            ];
+                            
+                            $successRequest = json_encode($successData);
+                            $successContext = stream_context_create([
+                                'http' => [
+                                    'method' => 'POST',
+                                    'header' => 'Content-Type: application/json',
+                                    'content' => $successRequest
+                                ]
+                            ]);
+                            
+                            // Use the correct endpoint URL
+                            $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+                            @file_get_contents($baseUrl . '/api/payment-tracker-final.php', false, $successContext);
+                        } catch (Exception $trackEx) {
+                            file_put_contents(__DIR__ . '/debug.log', 'Error tracking payment: ' . $trackEx->getMessage() . PHP_EOL, FILE_APPEND);
+                        }
                         
                         // If payment email fails, try booking confirmation email as fallback
                         if (!$paymentEmailSuccess) {
                             file_put_contents(__DIR__ . '/debug.log', 'Payment email failed, trying booking confirmation email as fallback' . PHP_EOL, FILE_APPEND);
-                            $bookingEmailSuccess = sendBookingConfirmationEmail($formattedBooking);
+                            $bookingEmailSuccess = @sendBookingConfirmationEmail($formattedBooking);
                             file_put_contents(__DIR__ . '/debug.log', 'Booking confirmation email fallback result: ' . ($bookingEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
                         }
                         
@@ -255,15 +397,18 @@ try {
                             $subject = "Payment Confirmed - Booking #" . $formattedBooking['bookingNumber'];
                             $body = "<h1>Payment Confirmed!</h1><p>Your payment of ₹" . number_format($payAmount, 2) . " has been received for booking #" . $formattedBooking['bookingNumber'] . "</p>";
                             
-                            $basicEmailSuccess = sendEmail($to, $subject, $body);
+                            $basicEmailSuccess = @sendEmail($to, $subject, $body);
                             file_put_contents(__DIR__ . '/debug.log', 'Basic email function result: ' . ($basicEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
                         }
-                        
-                    } catch (Exception $emailEx) {
-                        file_put_contents(__DIR__ . '/debug.log', 'Email sending failed at ' . date('Y-m-d H:i:s') . ': ' . $emailEx->getMessage() . ' - Trace: ' . $emailEx->getTraceAsString() . PHP_EOL, FILE_APPEND);
-                        
-                        // Try one more time with basic mail function
-                        try {
+                    } else {
+                        file_put_contents(__DIR__ . '/debug.log', 'Skipping email - booking_data: ' . (!empty($booking_data) ? 'yes' : 'no') . ', payAmount: ' . $payAmount . ', emailFunctionsAvailable: ' . ($emailFunctionsAvailable ? 'yes' : 'no') . PHP_EOL, FILE_APPEND);
+                    }
+                } catch (Exception $emailEx) {
+                    file_put_contents(__DIR__ . '/debug.log', 'CRITICAL: Email sending exception at ' . date('Y-m-d H:i:s') . ': ' . $emailEx->getMessage() . ' - Trace: ' . $emailEx->getTraceAsString() . PHP_EOL, FILE_APPEND);
+                    
+                    // Try one more time with basic mail function
+                    try {
+                        if (isset($formattedBooking) && !empty($formattedBooking['passengerEmail'])) {
                             $to = $formattedBooking['passengerEmail'];
                             $subject = "Payment Confirmed - Booking #" . $formattedBooking['bookingNumber'];
                             $body = "<h1>Payment Confirmed!</h1><p>Your payment has been received.</p>";
@@ -274,9 +419,9 @@ try {
                             ini_set('sendmail_from', 'info@vizagtaxihub.com');
                             $finalEmailSuccess = @mail($to, $subject, $body, $headers);
                             file_put_contents(__DIR__ . '/debug.log', 'Final email attempt result: ' . ($finalEmailSuccess ? 'success' : 'failed') . PHP_EOL, FILE_APPEND);
-                        } catch (Exception $finalEx) {
-                            file_put_contents(__DIR__ . '/debug.log', 'Final email attempt also failed: ' . $finalEx->getMessage() . PHP_EOL, FILE_APPEND);
                         }
+                    } catch (Exception $finalEx) {
+                        file_put_contents(__DIR__ . '/debug.log', 'Final email attempt also failed: ' . $finalEx->getMessage() . PHP_EOL, FILE_APPEND);
                     }
                 }
             }

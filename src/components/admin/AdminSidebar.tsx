@@ -48,6 +48,7 @@ export function AdminSidebar({ activeTab, setActiveTab, onClose }: AdminSidebarP
     { id: 'expenses', label: 'Expenses', icon: <CircleDollarSign size={20} />, path: '/admin/expenses' },
     { id: 'payroll', label: 'Payroll', icon: <Banknote size={20} />, path: '/admin/payroll' },
     { id: 'payments', label: 'Payments', icon: <CreditCard size={20} />, path: '/admin/payments' },
+    { id: 'payment-tracking', label: 'Payment Tracking', icon: <BarChart3 size={20} />, path: '/admin/payment-tracking' },
     { id: 'users', label: 'Users', icon: <Users size={20} />, path: '/admin/users' },
     { id: 'drivers', label: 'Drivers', icon: <Users size={20} />, path: '/admin/drivers' },
     { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports' },

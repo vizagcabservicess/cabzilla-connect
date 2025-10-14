@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,17 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { AdminStatsCards } from '@/components/admin/AdminStatsCards';
 import { AdminOrdersChart } from '@/components/admin/AdminOrdersChart';
 import { AdminNotifications } from '@/components/admin/AdminNotifications';
+import { PaymentTrackingWidget } from '@/components/admin/PaymentTrackingWidget';
 
 export default function AdminDashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Read tab from URL parameters
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'dashboard';
+    setActiveTab(tab);
+  }, [searchParams]);
 
   // Sample data for recent orders
   const recentOrders = [
@@ -394,6 +402,10 @@ export default function AdminDashboardPage() {
                 <p className="mt-4">Reporting functionality coming soon.</p>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="payment-tracking">
+            <PaymentTrackingWidget />
           </TabsContent>
         </Tabs>
       </div>

@@ -144,7 +144,7 @@ export const bookingAPI = {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      const response = await axios.post(`${API_BASE_URL}/api/admin/bookings.php`, bookingData, {
+      const response = await axios.post(`${API_BASE_URL}/api/book.php`, bookingData, {
         headers,
       });
       
@@ -154,6 +154,29 @@ export const bookingAPI = {
       return response.data;
     } catch (error) {
       console.error('Error creating booking:', error);
+      throw error;
+    }
+  },
+
+  createAdminBooking: async (bookingData: BookingRequest) => {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authorization token if available for authenticated users
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await axios.post(`${API_BASE_URL}/api/admin/create-booking.php`, bookingData, {
+        headers,
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error creating admin booking:', error);
       throw error;
     }
   },

@@ -214,8 +214,14 @@ RewriteRule ^receipt/(.*)$ /index.html [L]
 RewriteRule ^sedan$ /fleet [R=301,L]
 RewriteRule ^suv$ /fleet [R=301,L]
 RewriteRule ^tempotraveller$ /fleet [R=301,L]
-RewriteRule ^tempo-traveller$ /fleet [R=301,L]
-RewriteRule ^tempo_traveller$ /fleet [R=301,L]
+# FIXED: These were redirecting to /fleet instead of the vehicle page
+# RewriteRule ^tempo-traveller$ /fleet [R=301,L]
+# RewriteRule ^tempo_traveller$ /fleet [R=301,L]
+
+# Redirect non-existent URLs that Google is trying to access
+RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 
 # Old service pages
 RewriteRule ^rentals$ /local-taxi [R=301,L]

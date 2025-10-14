@@ -42,11 +42,23 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
-  const dropLocation = booking.drop_location 
+
+  // Get trip type and tour information early, as we'll need them for drop location
+  const tripType = booking.tripType || booking.trip_type || 'Unknown';
+  const tourId = booking.tour_id || booking.tourId;
+  const tourName = booking.tour_name || booking.tourName;
+  
+  // For tour bookings, use tour name as destination
+  let dropLocation = booking.drop_location 
     ? typeof booking.drop_location === 'string' 
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
     : booking.dropLocation || 'N/A';
+  
+  // If it's a tour booking, override the drop location with tour name
+  if ((tripType === 'tour' || tourId) && tourName) {
+    dropLocation = tourName;
+  }
 
   // Format pickup date and time
   const pickupDateTime = booking.pickup_date || booking.pickupDate;
@@ -58,10 +70,17 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     minute: '2-digit',
     hour12: true
   }) : 'N/A';
-
-  // Get trip type
-  const tripType = booking.tripType || booking.trip_type || 'Unknown';
-  const tripTypeDisplay = tripType === 'local' ? 'Local City Ride' : tripType;
+  
+  // Determine trip type display
+  let tripTypeDisplay = tripType;
+  if (tripType === 'local') {
+    tripTypeDisplay = 'Local City Ride';
+  } else if (tripType === 'tour' || tourId) {
+    tripTypeDisplay = 'Tour';
+  } else if (tripType !== 'Unknown') {
+    // Capitalize first letter for other trip types (outstation, airport)
+    tripTypeDisplay = tripType.charAt(0).toUpperCase() + tripType.slice(1);
+  }
 
   // Get vehicle details with specifications
   const vehicleModel = booking.vehicle_type || booking.cabType || 'To be assigned';
@@ -282,6 +301,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const isRoundTrip = booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
   const totalDistance = isRoundTrip ? oneWayDistance * 2 : oneWayDistance;
 
+  // Prepare destination display
+  let destinationDisplay = dropLocation;
+  if (dropLocation === 'N/A' && tripType !== 'tour') {
+    destinationDisplay = tripType === 'local' ? 'Local City Ride' : 'As per itinerary';
+  }
+
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
 Hello ${passengerName}!
@@ -290,7 +315,7 @@ Your cab booking has been confirmed:
 
 *Trip Details*
 📍 *Pickup:* ${pickupLocation}
-📍 *Destination:* ${dropLocation === 'N/A' ? 'Local City Ride' : dropLocation}
+📍 *Destination:* ${destinationDisplay}
 📅 *Pickup date & time:* ${formattedDateTime}
 ${returnDate ? `📅 *Return date & time:* ${formattedReturnDate}` : ''}
 🚗 *Trip type:* ${tripTypeDisplay}
@@ -326,7 +351,15 @@ ${tripType === 'local' ? `📏 *Kilometers limit:* ${kmIncluded} km included, ex
 🛣️ *Via/Stops:* ${viaStops}
 📝 *Special notes:* ${specialNotes}
 
-*Policies*
+${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
+${(booking as any).tour_itinerary.map((day: any) => {
+  const activities = Array.isArray(day.activities) ? day.activities.join(', ') : '';
+  return `📅 *Day ${day.day}: ${day.title}*
+${day.description}
+${activities ? `🎯 Activities: ${activities}` : ''}`;
+}).join('\n\n')}
+
+` : ''}*Policies*
 ❌ *Cancellation:* ${cancellationPolicy}
 🚫 *No-show:* ${noShowPolicy}
 💰 *Refund:* ${isTour ? 'Refunds processed within 21 working days based on cancellation timeframe' : 'Refunds processed within 21 working days'}

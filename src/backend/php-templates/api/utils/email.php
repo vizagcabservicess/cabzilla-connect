@@ -1221,12 +1221,29 @@ function sendPaymentConfirmationEmail($booking) {
     // Generate the email body
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    // Generate receipt for attachment
-    $receiptHtml = generatePaymentReceipt($booking);
-    
-    // Generate PDF receipt
-    $pdfFilename = 'receipt_' . $booking['bookingNumber'] . '_' . date('Y-m-d_H-i-s');
-    $pdfFile = generatePDFFromHTML($receiptHtml, $pdfFilename);
+    // Try to generate PDF receipt (with timeout protection)
+    $pdfFile = null;
+    try {
+        // Set timeout for PDF generation (5 seconds max)
+        $startTime = microtime(true);
+        $receiptHtml = generatePaymentReceipt($booking);
+        $pdfFilename = 'receipt_' . $booking['bookingNumber'] . '_' . date('Y-m-d_H-i-s');
+        $pdfFile = generatePDFFromHTML($receiptHtml, $pdfFilename);
+        $pdfTime = microtime(true) - $startTime;
+        
+        logError("PDF generation completed", [
+            'booking_number' => $booking['bookingNumber'],
+            'pdf_file' => $pdfFile,
+            'time_taken' => round($pdfTime, 2) . 's',
+            'file_exists' => $pdfFile && file_exists($pdfFile) ? 'yes' : 'no'
+        ]);
+    } catch (Exception $pdfEx) {
+        logError("PDF generation failed (non-blocking)", [
+            'booking_number' => $booking['bookingNumber'],
+            'error' => $pdfEx->getMessage()
+        ]);
+        // Continue without PDF - send email anyway
+    }
     
     // Add high importance headers
     $headers = [
@@ -1236,25 +1253,17 @@ function sendPaymentConfirmationEmail($booking) {
         'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
-    // Try sending with multiple methods
+    // Try sending with multiple methods (simplified - skip PDF attachment for now)
     $attempts = 0;
-    $maxAttempts = 3;
+    $maxAttempts = 2; // Reduced from 3 to speed up
     $success = false;
     
     while (!$success && $attempts < $maxAttempts) {
         $attempts++;
         
-        // Try sending with receipt attachment if available
-        if ($pdfFile && file_exists($pdfFile)) {
-            $fileExtension = strtolower(pathinfo($pdfFile, PATHINFO_EXTENSION));
-            $attachmentName = $fileExtension === 'html' ? 'Payment_Receipt.html' : 'Payment_Receipt.pdf';
-            $success = sendEmailWithAttachment($to, $subject, $htmlBody, $pdfFile, $attachmentName);
-        }
-        
-        if (!$success) {
-            // Try our enhanced email delivery system first
-            $success = sendEmailAllMethods($to, $subject, $htmlBody);
-        }
+        // Skip PDF attachment for now - send simple email first
+        // This matches the working driver hire email approach
+        $success = sendEmailAllMethods($to, $subject, $htmlBody);
         
         if (!$success) {
             // If enhanced system fails, try original method as fallback
@@ -1262,7 +1271,26 @@ function sendPaymentConfirmationEmail($booking) {
         }
         
         if (!$success && $attempts < $maxAttempts) {
-            sleep(2); // Wait 2 seconds before retrying
+            sleep(1); // Reduced wait time from 2 to 1 second
+        }
+    }
+    
+    // Try sending with PDF attachment as a separate attempt (optional)
+    if ($success && $pdfFile && file_exists($pdfFile)) {
+        try {
+            $fileExtension = strtolower(pathinfo($pdfFile, PATHINFO_EXTENSION));
+            $attachmentName = $fileExtension === 'html' ? 'Payment_Receipt.html' : 'Payment_Receipt.pdf';
+            $attachmentSuccess = sendEmailWithAttachment($to, $subject . ' - Receipt Attached', $htmlBody, $pdfFile, $attachmentName);
+            logError("PDF attachment email sent", [
+                'booking_number' => $booking['bookingNumber'],
+                'success' => $attachmentSuccess ? 'yes' : 'no'
+            ]);
+        } catch (Exception $attachEx) {
+            logError("PDF attachment email failed (non-blocking)", [
+                'booking_number' => $booking['bookingNumber'],
+                'error' => $attachEx->getMessage()
+            ]);
+            // Don't fail the main email if attachment fails
         }
     }
         

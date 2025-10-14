@@ -106,16 +106,11 @@ const PaymentPage = () => {
         },
         theme: {
           color: '#3399FF'
-        },
-        modal: {
-          ondismiss: () => {
-            setIsLoading(false);
-            toast('Payment cancelled. You can try again later.');
-          }
         }
+        // Note: ondismiss is handled by openRazorpayCheckout to track cancellations
       };
 
-      // Open Razorpay checkout
+      // Open Razorpay checkout with booking data for tracking
       openRazorpayCheckout(
         options,
         (response) => {
@@ -123,6 +118,16 @@ const PaymentPage = () => {
         },
         (error) => {
           handlePaymentError(error);
+        },
+        {
+          bookingId: bookingDetails.bookingId,
+          bookingNumber: bookingDetails.bookingNumber,
+          amount: amount
+        },
+        () => {
+          // Handle modal dismissal
+          setIsLoading(false);
+          toast('Payment cancelled. You can try again later.');
         }
       );
     } catch (error) {

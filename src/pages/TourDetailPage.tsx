@@ -56,6 +56,8 @@ const TourDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
+  const [returnDate, setReturnDate] = useState<Date | null>(null);
 
   
   // Load pickup details from session storage or navigation state
@@ -90,6 +92,22 @@ const TourDetailPage = () => {
   const pickupData = loadPickupData();
   const [pickupLocation, setPickupLocation] = useState(pickupData.location);
   const [pickupDate, setPickupDate] = useState(pickupData.date);
+
+  // Auto-set return date when pickup date changes for round trips
+  useEffect(() => {
+    if (tripMode === 'round-trip' && returnDate && pickupDate) {
+      // If return date is different from pickup date, update it to same day
+      const pickupDateOnly = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
+      const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
+      
+      if (pickupDateOnly.getTime() !== returnDateOnly.getTime()) {
+        // Set return date to same day as pickup, but keep the time
+        const newReturnDate = new Date(pickupDate);
+        newReturnDate.setHours(returnDate.getHours(), returnDate.getMinutes(), 0, 0);
+        setReturnDate(newReturnDate);
+      }
+    }
+  }, [pickupDate, tripMode]);
   
   // Edit functionality
   const handleEditTrip = () => {
@@ -315,20 +333,27 @@ const TourDetailPage = () => {
       
       const computedTotal = selectedVehicle.price;
       const computedDistance = tour.distance;
+      
+      // For round-trip tours, drop location should be same as pickup location
+      const dropLocation = tripMode === 'round-trip' 
+        ? pickupLocation.name 
+        : tour.tourName;
+      
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
-        dropLocation: '',
+        dropLocation: dropLocation,
         pickupDate: formatDateForAPI(pickupDate),
-        returnDate: null,
+        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
         vehicleType: selectedVehicle.vehicleType || selectedVehicle.name,
         cabType: selectedVehicle.name,
         distance: computedDistance,
         tripType: 'tour',
-        tripMode: 'one-way',
+        tripMode: tripMode,
         totalAmount: computedTotal,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
+        tourId: tour.tourId,
         // Include GST details from guest form if provided
         gstEnabled: !!guestDetails.gstEnabled,
         gstDetails: guestDetails.gstEnabled ? {
@@ -345,15 +370,18 @@ const TourDetailPage = () => {
         tourId: tour.tourId,
         tourName: tour.tourName,
         pickupLocation: pickupLocation,
+        dropLocation: { name: dropLocation, address: '' },
         tourDistance: computedDistance,
         pickupDate: formatDateForAPI(pickupDate),
-        returnDate: null,
+        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
         selectedCab: selectedVehicle,
         totalPrice: computedTotal,
         guestDetails,
         bookingType: 'tour',
-        bookingId: response.id,
-        bookingNumber: response.bookingNumber
+        tripType: 'tour',
+        tripMode: tripMode,
+        bookingId: response.data?.id || response.id,
+        bookingNumber: response.data?.bookingNumber || response.bookingNumber
       };
       
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
@@ -678,19 +706,79 @@ const TourDetailPage = () => {
                     onBookNow={() => {}}
                     tourDate={pickupDate}
                   />
-                ) : (
-                  // Show Booking Summary and "Book Now" at bottom
-                  <div>
+                ) : !showBookingForm ? (
+                  <div className="space-y-4">
+                    {/* Trip Mode Selection */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-gray-700 mb-3">Trip Mode</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => {
+                            setTripMode('one-way');
+                            setReturnDate(null);
+                          }}
+                          className={`p-3 rounded-lg border-2 transition-all ${
+                            tripMode === 'one-way'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-medium">One Way</div>
+                            <div className="text-xs text-gray-500 mt-1">Start from pickup point</div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTripMode('round-trip');
+                            if (!returnDate) {
+                              // For day tours, set return date to same day with reasonable return time (6 hours later)
+                              const sameDay = new Date(pickupDate);
+                              const pickupHour = sameDay.getHours();
+                              const returnHour = Math.min(pickupHour + 6, 22); // 6 hours later, but not later than 10 PM
+                              sameDay.setHours(returnHour, sameDay.getMinutes(), 0, 0);
+                              setReturnDate(sameDay);
+                            }
+                          }}
+                          className={`p-3 rounded-lg border-2 transition-all ${
+                            tripMode === 'round-trip'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-medium">Round Trip</div>
+                            <div className="text-xs text-gray-500 mt-1">Same day return to pickup point</div>
+                          </div>
+                        </button>
+                      </div>
+                      
+                      {/* Return Date Selection for Round Trip */}
+                      {tripMode === 'round-trip' && (
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Return Date & Time
+                          </label>
+                          <DateTimePicker
+                            date={returnDate || new Date()}
+                            onDateChange={(date) => setReturnDate(date || null)}
+                            minDate={new Date(pickupDate)} // Same day or later
+                            label="Select return date (same day for day tours)"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
                     <BookingSummary
                       pickupLocation={pickupLocation}
-                      dropLocation={null}
+                      dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                       pickupDate={pickupDate}
-                      returnDate={null}
+                      returnDate={tripMode === 'round-trip' ? returnDate : null}
                       selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                       distance={tour.distance}
                       totalPrice={selectedVehicle.price}
                       tripType="tour"
-                      tripMode="one-way"
+                      tripMode={tripMode}
                       hourlyPackage="tour"
                     />
                     <div className="flex gap-2 mt-3 mb-2">
@@ -709,7 +797,7 @@ const TourDetailPage = () => {
                       </Button>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           ) : (
@@ -730,14 +818,14 @@ const TourDetailPage = () => {
                 {selectedVehicle && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
-                    dropLocation={null}
+                    dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                     pickupDate={pickupDate}
-                    returnDate={null}
+                    returnDate={tripMode === 'round-trip' ? returnDate : null}
                     selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                     distance={tour.distance}
                     totalPrice={selectedVehicle.price}
                     tripType="tour"
-                    tripMode="one-way"
+                    tripMode={tripMode}
                     hourlyPackage="tour"
                   />
                 )}

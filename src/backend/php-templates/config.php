@@ -2,22 +2,9 @@
 // Load environment variables first
 require_once __DIR__ . '/env-loader.php';
 
-// SECURITY: Restrict CORS to trusted domains only
-$allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins)) {
-    header("Access-Control-Allow-Origin: " . $origin);
-} else {
-    header("Access-Control-Allow-Origin: https://vizagtaxihub.com");
-}
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
-
-// Handle preflight requests
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    http_response_code(204);
-    exit;
-}
+// NOTE: Headers are set by individual API files to avoid "headers already sent" errors
+// Do NOT set headers here as env-loader.php may output content
+// Each API file (book.php, etc.) sets its own headers
 
 /**
  * Global Configuration File

@@ -129,7 +129,7 @@ try {
     // Generate unique booking number
     $bookingNumber = 'VTH' . date('ymd') . strtoupper(substr(uniqid(), -6));
     
-    // Prepare SQL query - including user_id
+    // Prepare SQL query - including user_id and tour_id
     $sql = "INSERT INTO bookings (
                 booking_number, 
                 pickup_location, 
@@ -154,8 +154,9 @@ try {
                 advance_paid_amount,
                 payment_status,
                 created_by,
-                user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                user_id,
+                tour_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     // Set default values
     $status = 'pending';
@@ -176,6 +177,13 @@ try {
     $paymentStatus = $partialPaymentReceived && $partialPaymentAmount > 0 ? 'partial_payment' : ($isPaid ? 'paid' : 'pending');
     
     $createdBy = isset($requestData['createdBy']) ? $requestData['createdBy'] : 'admin';
+    $tourId = isset($requestData['tourId']) ? $requestData['tourId'] : null;
+    
+    // Additional validation for tour bookings
+    if (isset($requestData['tripType']) && $requestData['tripType'] === 'tour' && empty($tourId)) {
+        error_log("ERROR: Tour booking created without tourId. Request data: " . json_encode($requestData));
+        // Don't fail the booking, but log the issue
+    }
     
     // Debug: Log all variables before binding
     error_log("Debug - Variables before bind_param:");
@@ -203,6 +211,7 @@ try {
     error_log("paymentStatus: " . ($paymentStatus ?? 'NULL'));
     error_log("createdBy: " . ($createdBy ?? 'NULL'));
     error_log("user_id: " . ($user_id ?? 'NULL'));
+    error_log("tourId: " . ($tourId ?? 'NULL'));
     
     // Check for any null values that could cause binding issues
     $nullVars = [];
@@ -243,9 +252,9 @@ try {
     }
     error_log("Debug - Statement prepared successfully");
     
-    // Bind parameters - including user_id at the end
-    error_log("Debug - About to bind parameters. Type string: 'ssssdssdssdsssssdssdidsi' (length: " . strlen("ssssdssdssdsssssdssdidsi") . ")");
-    error_log("Debug - Number of parameters: 24");
+    // Bind parameters - including user_id and tour_id at the end
+    error_log("Debug - About to bind parameters. Type string: 'ssssdssdssdsssssdssdidsis' (length: " . strlen("ssssdssdssdsssssdssdidsis") . ")");
+    error_log("Debug - Number of parameters: 25");
     
     // Store all parameters in an array for easier debugging
     $params = [
@@ -272,10 +281,11 @@ try {
         $advancePaidAmount,
         $paymentStatus,
         $createdBy,
-        $user_id
+        $user_id,
+        $tourId
     ];
     
-    $typeString = "ssssdssdssdsssssdssdidsi";
+    $typeString = "ssssdssdssdsssssdssdidsis";
     
     error_log("Debug - Parameter count: " . count($params));
     error_log("Debug - Type string: " . $typeString . " (length: " . strlen($typeString) . ")");

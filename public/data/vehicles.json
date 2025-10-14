@@ -86,10 +86,10 @@
     "amenities": ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point", "Pushback Seats", "GPS Tracking", "Professional Driver"],
     "description": "Best 17 seater Tempo Traveller rental service in Visakhapatnam (Vizag). Perfect for group travel, corporate events, family trips, and outstation tours. Our well-maintained tempo travellers come with professional drivers and modern amenities. Available for local sightseeing, airport transfers, and long-distance travel across Andhra Pradesh.",
     "seoContent": {
-      "title": "17 Seater Tempo Traveller Rental in Vizag | Best Rates | Vizag Taxi Hub",
-      "metaDescription": "Book 17 seater Tempo Traveller in Visakhapatnam at best rates. AC mini bus with professional driver for group travel, corporate events & family trips. Call +91 9966363662",
-      "keywords": "tempo traveller vizag, 17 seater tempo traveller visakhapatnam, mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag",
-      "localKeywords": ["tempo traveller in vizag", "tempo traveller visakhapatnam", "17 seater mini bus vizag", "group transport vizag", "tempo traveller rental vizag", "mini bus hire visakhapatnam"]
+      "title": "17 Seater Tempo Traveller Rental in Vizag | AC Mini Bus Hire | Best Rates",
+      "metaDescription": "Book 17 seater AC Tempo Traveller in Visakhapatnam at ₹35/km. Professional driver, GPS tracking, modern amenities. Perfect for group travel, corporate events, family trips & outstation tours. Call +91 9966363662",
+      "keywords": "tempo traveller vizag, 17 seater tempo traveller visakhapatnam, mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag, AC tempo traveller vizag, outstation tempo traveller vizag, family group travel vizag, wedding tempo traveller vizag, pilgrimage tempo traveller vizag, airport tempo traveller vizag, araku valley tempo traveller, borra caves tempo traveller, lambasingi tempo traveller, tempo traveller booking vizag, tempo traveller rates vizag",
+      "localKeywords": ["tempo traveller in vizag", "tempo traveller visakhapatnam", "17 seater mini bus vizag", "group transport vizag", "tempo traveller rental vizag", "mini bus hire visakhapatnam", "AC tempo traveller vizag", "outstation tempo traveller", "family group travel", "wedding transport vizag", "pilgrimage transport vizag", "airport group transfer", "araku valley transport", "borra caves transport", "lambasingi transport", "simhachalam transport", "kailasagiri transport"]
     },
     "features": [
       "17 Comfortable Push-back Seats",
@@ -122,8 +122,8 @@
       "Outstation Group Travel"
     ],
     "ac": true,
-    "nightHaltCharge": 1200,
-    "driverAllowance": 300,
+    "City Tour": 8000,
+    "Araku Valley Tour": 13000,
     "isActive": true,
     "inactiveDates": [],
     "vehicleType": "tempo_traveller",

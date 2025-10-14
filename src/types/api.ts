@@ -36,6 +36,7 @@ export interface BookingRequest {
   partialPaymentReceived?: boolean;
   partialPaymentAmount?: number;
   createdBy?: string;
+  tourId?: string;
   // Optional GST details captured during guest form submission
   gstEnabled?: boolean;
   gstDetails?: {
@@ -179,6 +180,12 @@ export interface Booking {
   invoice_mode?: string;
   driver_helpline?: string;
   customer_support?: string;
+  // Tour fields
+  tour_id?: string;
+  tourId?: string;
+  tour_name?: string;
+  tourName?: string;
+  tour_itinerary?: TourItineraryDay[];
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';

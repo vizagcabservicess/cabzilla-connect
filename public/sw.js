@@ -2,12 +2,28 @@
  * Service Worker for cache management and dynamic import error handling
  */
 
-const CACHE_NAME = 'vizag-taxi-hub-v1';
-const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v1';
+const CACHE_NAME = 'vizag-taxi-hub-v2';
+const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v2';
+const STATIC_ASSETS = [
+  '/',
+  '/fleet',
+  '/vehicle/tempo-traveller',
+  '/cars/tempo.png',
+  '/og-image.png',
+  '/cars/sedan.png',
+  '/cars/ertiga.png',
+  '/cars/innova.png',
+  '/cars/luxury.png'
+];
 
 // Install event
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS);
+    })
+  );
   self.skipWaiting();
 });
 
@@ -167,6 +183,9 @@ async function preloadModule(url) {
     console.warn('Failed to preload module:', url, error);
   }
 }
+
+
+
 
 
 

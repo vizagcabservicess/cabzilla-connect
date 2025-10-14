@@ -55,7 +55,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       id: 'dashboard', 
       label: 'Dashboard', 
       icon: <LayoutDashboard size={20} />, 
-      path: '/admin',
+      path: '/admin?tab=dashboard',
       show: true
     },
     
@@ -64,7 +64,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       id: 'bookings', 
       label: 'Bookings', 
       icon: <CalendarDays size={20} />, 
-      path: '/admin/bookings',
+      path: '/admin?tab=bookings',
       show: canViewBookings()
     },
     { 
@@ -80,7 +80,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       id: 'vehicles', 
       label: 'Vehicles', 
       icon: <Car size={20} />, 
-      path: '/admin/vehicles',
+      path: '/admin?tab=vehicles',
       show: checkPrivilege('vehicles_view')
     },
     { 
@@ -103,7 +103,7 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       id: 'fares', 
       label: 'Fares', 
       icon: <Map size={20} />, 
-      path: '/admin/fares',
+      path: '/admin?tab=fares',
       show: checkPrivilege('fares_view')
     },
     { 
@@ -111,6 +111,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       label: 'Payments', 
       icon: <CreditCard size={20} />, 
       path: '/admin/payments',
+      show: checkPrivilege('payments_view')
+    },
+    { 
+      id: 'payment-tracking', 
+      label: 'Payment Tracking', 
+      icon: <BarChart3 size={20} />, 
+      path: '/admin?tab=payment-tracking',
       show: checkPrivilege('payments_view')
     },
     { 

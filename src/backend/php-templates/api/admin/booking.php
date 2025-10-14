@@ -161,7 +161,12 @@ try {
         }
         // Handle GET request for specific booking
         else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            $stmt = $conn->prepare("
+                SELECT b.*, tf.tour_name 
+                FROM bookings b
+                LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+                WHERE b.id = ?
+            ");
             $stmt->bind_param("i", $bookingId);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -176,6 +181,35 @@ try {
             $extraCharges = [];
             if (!empty($booking['extra_charges'])) {
                 $extraCharges = json_decode($booking['extra_charges'], true) ?? [];
+            }
+            
+            // Fetch tour itinerary if this is a tour booking
+            $tourItinerary = [];
+            if (!empty($booking['tour_id'])) {
+                $itineraryStmt = $conn->prepare("
+                    SELECT day_number as day, title, description, activities 
+                    FROM tour_itinerary 
+                    WHERE tour_id = ? 
+                    ORDER BY day_number
+                ");
+                $itineraryStmt->bind_param("s", $booking['tour_id']);
+                $itineraryStmt->execute();
+                $itineraryResult = $itineraryStmt->get_result();
+                
+                while ($itineraryRow = $itineraryResult->fetch_assoc()) {
+                    $activities = [];
+                    if (!empty($itineraryRow['activities'])) {
+                        $decoded = json_decode($itineraryRow['activities'], true);
+                        $activities = is_array($decoded) ? $decoded : explode(',', $itineraryRow['activities']);
+                    }
+                    
+                    $tourItinerary[] = [
+                        'day' => (int)$itineraryRow['day'],
+                        'title' => $itineraryRow['title'],
+                        'description' => $itineraryRow['description'],
+                        'activities' => $activities
+                    ];
+                }
             }
             
             // Format response data
@@ -205,6 +239,9 @@ try {
                 'payment_status' => $booking['payment_status'] ?? 'pending',
                 'payment_method' => $booking['payment_method'] ?? '',
                 'advance_paid_amount' => (float)($booking['advance_paid_amount'] ?? 0),
+                'tourId' => $booking['tour_id'] ?? null,
+                'tourName' => $booking['tour_name'] ?? null,
+                'tour_itinerary' => $tourItinerary,
                 'createdAt' => $booking['created_at'],
                 'updatedAt' => $booking['updated_at']
             ];
@@ -265,11 +302,11 @@ try {
             $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
             
             // Prepare SQL query with optional status filter
-            $sql = "SELECT * FROM bookings";
+            $sql = "SELECT b.*, tf.tour_name FROM bookings b LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id";
             if (!empty($statusFilter)) {
-                $sql .= " WHERE status = ?";
+                $sql .= " WHERE b.status = ?";
             }
-            $sql .= " ORDER BY created_at DESC";
+            $sql .= " ORDER BY b.created_at DESC";
             
             try {
                 $stmt = $conn->prepare($sql);
@@ -329,6 +366,8 @@ try {
                         'payment_status' => $row['payment_status'] ?? 'pending',
                         'payment_method' => $row['payment_method'] ?? '',
                         'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),
+                        'tourId' => $row['tour_id'] ?? null,
+                        'tourName' => $row['tour_name'] ?? null,
                         'createdAt' => $row['created_at'],
                         'updatedAt' => $row['updated_at']
                     ];

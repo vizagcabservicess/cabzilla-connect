@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { BookingRequest } from "@/types/api";
 import { getApiUrl, apiBaseUrl } from "@/config/api";
+import { trackPaymentCancellation } from "./paymentTrackingService";
 
 // Razorpay types
 export interface RazorpayOptions {
@@ -135,20 +136,88 @@ export const createRazorpayOrder = async (amount: number, bookingId?: string): P
 export const openRazorpayCheckout = (
   options: RazorpayOptions,
   onSuccess: (response: RazorpayResponse) => void,
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  bookingData?: { bookingId?: number; bookingNumber?: string; amount?: number },
+  onDismiss?: () => void
 ) => {
   if (typeof (window as any).Razorpay !== 'function') {
     toast.error('Razorpay failed to load. Please refresh and try again.');
     return;
   }
-  const rzp = new (window as any).Razorpay(options);
+  
+  // Enhanced options with cancellation tracking
+  const enhancedOptions = {
+    ...options,
+    modal: {
+      ...options.modal,
+      ondismiss: async () => {
+        // Track payment cancellation when user dismisses modal
+        if (bookingData?.bookingId && bookingData?.bookingNumber && bookingData?.amount) {
+          try {
+            // Get customer details from sessionStorage
+            const bookingDetails = sessionStorage.getItem('bookingDetails');
+            let customerPhone = null;
+            let customerEmail = null;
+            
+            if (bookingDetails) {
+              try {
+                const details = JSON.parse(bookingDetails);
+                customerPhone = details.guestDetails?.phone || details.passengerPhone || details.passenger_phone;
+                customerEmail = details.guestDetails?.email || details.passengerEmail || details.passenger_email;
+              } catch (e) {
+                // Silent error handling
+              }
+            }
+            
+            await trackPaymentCancellation(
+              bookingData.bookingId,
+              bookingData.bookingNumber,
+              bookingData.amount,
+              'user_cancelled',
+              'User dismissed payment modal',
+              customerPhone,
+              customerEmail
+            );
+          } catch (error) {
+            // Silent error handling
+          }
+        }
+        
+        // Call custom ondismiss callback if provided
+        if (onDismiss) {
+          onDismiss();
+        }
+        
+        // Call original ondismiss if provided
+        if (options.modal?.ondismiss) {
+          options.modal.ondismiss();
+        }
+      }
+    }
+  };
+  
+  const rzp = new (window as any).Razorpay(enhancedOptions);
   
   // Add event handlers
   rzp.on('payment.success', (response: RazorpayResponse) => {
     onSuccess(response);
   });
   
-  rzp.on('payment.error', (response: any) => {
+  rzp.on('payment.error', async (response: any) => {
+    // Track payment failure
+    if (bookingData?.bookingId && bookingData?.bookingNumber && bookingData?.amount) {
+      try {
+        await trackPaymentCancellation(
+          bookingData.bookingId,
+          bookingData.bookingNumber,
+          bookingData.amount,
+          'system_error',
+          `Payment error: ${response.error?.description || 'Unknown error'}`
+        );
+      } catch (error) {
+        console.error('Failed to track payment error:', error);
+      }
+    }
     onError(response.error);
   });
   

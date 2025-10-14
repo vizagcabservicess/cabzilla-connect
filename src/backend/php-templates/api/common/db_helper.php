@@ -134,3 +134,71 @@ function updateData($sql, $params = [], $types = "") {
     }
 }
 }
+if (!function_exists('ensureBookingsTableExists')) {
+function ensureBookingsTableExists($conn) {
+    try {
+        // Check if bookings table exists
+        $result = $conn->query("SHOW TABLES LIKE 'bookings'");
+        if ($result && $result->num_rows > 0) {
+            return true; // Table exists
+        }
+        
+        // Create bookings table if it doesn't exist
+        $createTableSql = "
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            booking_number VARCHAR(50) NOT NULL UNIQUE,
+            pickup_location TEXT NOT NULL,
+            drop_location TEXT,
+            pickup_date DATETIME NOT NULL,
+            return_date DATETIME,
+            cab_type VARCHAR(50) NOT NULL,
+            distance DECIMAL(10,2) DEFAULT 0,
+            trip_type VARCHAR(20) NOT NULL,
+            trip_mode VARCHAR(20) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            passenger_name VARCHAR(100) NOT NULL,
+            passenger_phone VARCHAR(20) NOT NULL,
+            passenger_email VARCHAR(100) NOT NULL,
+            driver_name VARCHAR(100),
+            driver_phone VARCHAR(20),
+            vehicle_number VARCHAR(50),
+            admin_notes TEXT,
+            hourly_package VARCHAR(50),
+            tour_id VARCHAR(50),
+            payment_status VARCHAR(50) DEFAULT 'pending',
+            payment_method VARCHAR(50),
+            advance_paid_amount DECIMAL(10,2) DEFAULT 0.00,
+            razorpay_payment_id VARCHAR(100),
+            razorpay_order_id VARCHAR(100),
+            razorpay_signature VARCHAR(255),
+            gst_enabled TINYINT(1) DEFAULT 0,
+            gst_number VARCHAR(20),
+            company_name VARCHAR(100),
+            company_address TEXT,
+            billing_address TEXT,
+            extra_charges TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_booking_number (booking_number),
+            INDEX idx_user_id (user_id),
+            INDEX idx_status (status),
+            INDEX idx_pickup_date (pickup_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        
+        if (!$conn->query($createTableSql)) {
+            throw new Exception("Failed to create bookings table: " . $conn->error);
+        }
+        
+        error_log("Bookings table created successfully");
+        return true;
+    } catch (Exception $e) {
+        error_log("Error ensuring bookings table exists: " . $e->getMessage());
+        throw $e;
+    }
+}
+}
+ 

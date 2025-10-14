@@ -70,8 +70,8 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
     setTripType(type);
     setDistance(0);
     
-    // Clear drop location for local trips
-    if (type === 'local') {
+    // Clear drop location for local and tour trips
+    if (type === 'local' || type === 'tour') {
       setDropLocation(null);
     }
   };
@@ -88,6 +88,12 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
             setDistance(parseInt(kmMatch[1]));
           }
         }
+        return;
+      }
+
+      if (tripType === 'tour') {
+        // For tour trips, set a default distance or fetch from tour data
+        setDistance(120); // Default tour distance, can be overridden by tour-specific data
         return;
       }
 
@@ -124,6 +130,11 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
     if ((tripType === 'outstation' || tripType === 'airport') && !dropLocation) {
       setValidationError('Drop location is required for outstation and airport trips');
       return false;
+    }
+
+    // For tour trips, we don't require a drop location as it's handled by the tour package
+    if (tripType === 'tour' && !dropLocation) {
+      // This is OK for tour trips - they don't need a specific drop location
     }
 
     if (tripMode === 'round-trip' && !returnDate) {
@@ -168,6 +179,7 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
             tripMode={tripMode}
             onTabChange={handleTabChange}
             onTripModeChange={setTripMode}
+            visibleTabs={['outstation', 'local', 'airport', 'tour']}
           />
         </div>
 

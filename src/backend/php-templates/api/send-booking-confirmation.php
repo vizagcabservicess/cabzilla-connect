@@ -41,8 +41,13 @@ try {
     // Connect to database
     $db = getDbConnectionWithRetry();
     
-    // Fetch booking details
-    $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ?");
+    // Fetch booking details with tour information
+    $stmt = $db->prepare("
+        SELECT b.*, tf.tour_name 
+        FROM bookings b
+        LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+        WHERE b.id = ?
+    ");
     $stmt->bind_param("i", $bookingId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -54,6 +59,35 @@ try {
     
     $booking = $result->fetch_assoc();
     
+    // Fetch tour itinerary if this is a tour booking
+    $tourItinerary = [];
+    if (!empty($booking['tour_id'])) {
+        $itineraryStmt = $db->prepare("
+            SELECT day_number as day, title, description, activities 
+            FROM tour_itinerary 
+            WHERE tour_id = ? 
+            ORDER BY day_number
+        ");
+        $itineraryStmt->bind_param("s", $booking['tour_id']);
+        $itineraryStmt->execute();
+        $itineraryResult = $itineraryStmt->get_result();
+        
+        while ($itineraryRow = $itineraryResult->fetch_assoc()) {
+            $activities = [];
+            if (!empty($itineraryRow['activities'])) {
+                $decoded = json_decode($itineraryRow['activities'], true);
+                $activities = is_array($decoded) ? $decoded : explode(',', $itineraryRow['activities']);
+            }
+            
+            $tourItinerary[] = [
+                'day' => (int)$itineraryRow['day'],
+                'title' => $itineraryRow['title'],
+                'description' => $itineraryRow['description'],
+                'activities' => $activities
+            ];
+        }
+    }
+
     // Format booking data for email
     $formattedBooking = [
         'id' => $booking['id'],
@@ -77,6 +111,9 @@ try {
         'razorpay_payment_id' => $booking['razorpay_payment_id'],
         'razorpay_order_id' => $booking['razorpay_order_id'],
         'razorpay_signature' => $booking['razorpay_signature'],
+        'tourId' => $booking['tour_id'] ?? null,
+        'tourName' => $booking['tour_name'] ?? null,
+        'tour_itinerary' => $tourItinerary,
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];

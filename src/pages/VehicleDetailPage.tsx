@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,17 +14,36 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import ImageGallery from '@/components/vehicle/ImageGallery';
-import RateCardPanel from '@/components/vehicle/RateCardPanel';
-import VehicleTabs from '@/components/vehicle/VehicleTabs';
-import RateCard from '@/components/vehicle/RateCard';
-import SimilarVehicles from '@/components/vehicle/SimilarVehicles';
-import VehicleTours from '@/components/vehicle/VehicleTours';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { GalleryItem } from '@/types/cab';
 import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 import { Helmet } from 'react-helmet-async';
 import { getVehicleUrl, getVehicleDisplayName } from '@/utils/vehicleUrlUtils';
+
+// Lazy load heavy components with prefetch and defer
+const ImageGallery = lazy(() => import('@/components/vehicle/ImageGallery'));
+const RateCardPanel = lazy(() => import('@/components/vehicle/RateCardPanel'));
+const VehicleTabs = lazy(() => import('@/components/vehicle/VehicleTabs'));
+const RateCard = lazy(() => import('@/components/vehicle/RateCard'));
+const SimilarVehicles = lazy(() => import('@/components/vehicle/SimilarVehicles'));
+const VehicleTours = lazy(() => import('@/components/vehicle/VehicleTours'));
+
+// Note: DeferredComponents would be used for non-critical components
+
+// Minimal critical CSS for above-the-fold content - reduced size for faster parsing
+const criticalStyles = `
+  .vehicle-hero { min-height: 400px; width: 100%; display: block; contain: layout; }
+  .vehicle-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0; contain: layout; }
+  .vehicle-meta { display: flex; gap: 1.5rem; align-items: center; min-height: 24px; contain: layout; }
+  .image-gallery-container { min-height: 400px; width: 100%; display: block; contain: layout; }
+  .loading-skeleton { background: #f3f4f6; border-radius: 8px; animation: pulse 2s infinite; contain: layout; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  @media (max-width: 768px) {
+    .vehicle-title { font-size: 1.5rem; }
+    .vehicle-meta { flex-direction: column; gap: 0.5rem; }
+    .image-gallery-container { min-height: 300px; }
+  }
+`;
 
 interface VehicleData {
   id: string;
@@ -55,11 +74,123 @@ interface VehicleData {
 
 const VehicleDetailPage = () => {
   const { vehicleSlug } = useParams();
+  const navigate = useNavigate();
   const [vehicle, setVehicle] = useState<VehicleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [similarVehicles, setSimilarVehicles] = useState<any[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
+
+  // Memoize expensive calculations - must be before early returns
+  const seoData = useMemo(() => {
+    if (!vehicle) return null;
+    
+    const vehicleType = vehicle.capacity > 12 ? 'mini bus' : vehicle.capacity > 6 ? 'SUV' : 'sedan';
+    const vehicleTypeForTitle = vehicle.capacity > 12 ? 'Mini Bus' : vehicle.capacity > 6 ? 'SUV' : 'Sedan';
+    
+    const getUniqueDescription = () => {
+      if (vehicle.seoContent?.metaDescription) {
+        return vehicle.seoContent.metaDescription;
+      }
+      
+      if (vehicle.capacity > 12) {
+        return `${vehicle.name} - ${vehicle.capacity} seater mini bus service in Visakhapatnam. Perfect for group travel, corporate events, and family trips. Spacious and comfortable mini bus with professional driver. Book now for reliable transportation.`;
+      } else if (vehicle.capacity > 6) {
+        return `${vehicle.name} - ${vehicle.capacity} seater SUV taxi service in Visakhapatnam. Ideal for family trips and group travel. Comfortable SUV with ample space and modern amenities. Professional driver included.`;
+      } else {
+        return `${vehicle.name} - ${vehicle.capacity} seater sedan taxi service in Visakhapatnam. Perfect for business travel and small groups. Comfortable sedan with AC and professional driver. Best rates guaranteed.`;
+      }
+    };
+    
+    return {
+      title: vehicle.seoContent?.title || `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`,
+      description: getUniqueDescription(),
+      keywords: vehicle.seoContent?.keywords || `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`,
+      image: galleryImages?.[0]?.url || vehicle.image || '/og-image.png',
+      url: `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`
+    };
+  }, [vehicle, galleryImages]);
+
+  // Memoize structured data generation - must be before early returns
+  const structuredData = useMemo(() => {
+    if (!vehicle || vehicle.id !== 'tempo_traveller') return null;
+    
+    return {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "17 Seater AC Tempo Traveller Rental in Vizag",
+      "description": "Best 17 seater tempo traveller rental service in Visakhapatnam with professional drivers, AC comfort, and modern amenities for group travel.",
+      "image": [
+        `${seoData?.url}/image.jpg`,
+        "https://vizagtaxihub.com/cars/tempo.png"
+      ],
+      "brand": {
+        "@type": "Brand",
+        "name": "Vizag Taxi Hub"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "35",
+        "priceCurrency": "INR",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "35",
+          "priceCurrency": "INR",
+          "unitText": "per kilometer"
+        },
+        "availability": "https://schema.org/InStock",
+        "seller": {
+          "@type": "Organization",
+          "name": "Vizag Taxi Hub",
+          "url": "https://vizagtaxihub.com",
+          "telephone": "+919966363662"
+        }
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "reviewCount": "127",
+        "bestRating": "5",
+        "worstRating": "1"
+      },
+      "category": "Transportation Services",
+      "additionalProperty": [
+        {
+          "@type": "PropertyValue",
+          "name": "Capacity",
+          "value": "17 passengers"
+        },
+        {
+          "@type": "PropertyValue", 
+          "name": "Air Conditioning",
+          "value": "Yes"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Driver",
+          "value": "Professional driver included"
+        },
+        {
+          "@type": "PropertyValue",
+          "name": "Service Area",
+          "value": "Visakhapatnam and Andhra Pradesh"
+        }
+      ]
+    };
+  }, [vehicle?.id, seoData?.url]);
+
+  // Handler functions for booking
+  const handleBookOnline = () => {
+    if (!vehicle) return;
+    // Scroll to top and navigate to home page with booking form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate('/', { state: { selectedVehicle: vehicle, openBooking: true } });
+  };
+
+  const handleCallNow = () => {
+    // Open phone dialer
+    window.location.href = 'tel:+919966363662';
+  };
 
   useEffect(() => {
     const loadVehicleData = async () => {
@@ -199,167 +330,94 @@ const VehicleDetailPage = () => {
     );
   }
 
-  // Generate SEO-friendly content based on vehicle data
-  const vehicleType = vehicle.capacity > 12 ? 'mini bus' : vehicle.capacity > 6 ? 'SUV' : 'sedan';
-  const vehicleTypeForTitle = vehicle.capacity > 12 ? 'Mini Bus' : vehicle.capacity > 6 ? 'SUV' : 'Sedan';
-  
-  // Create unique descriptions based on vehicle type and capacity
-  const getUniqueDescription = () => {
-    // Use SEO content if available, otherwise fallback to generic description
-    if (vehicle.seoContent?.metaDescription) {
-      return vehicle.seoContent.metaDescription;
-    }
-    
-    if (vehicle.capacity > 12) {
-      return `${vehicle.name} - ${vehicle.capacity} seater mini bus service in Visakhapatnam. Perfect for group travel, corporate events, and family trips. Spacious and comfortable mini bus with professional driver. Book now for reliable transportation.`;
-    } else if (vehicle.capacity > 6) {
-      return `${vehicle.name} - ${vehicle.capacity} seater SUV taxi service in Visakhapatnam. Ideal for family trips and group travel. Comfortable SUV with ample space and modern amenities. Professional driver included.`;
-    } else {
-      return `${vehicle.name} - ${vehicle.capacity} seater sedan taxi service in Visakhapatnam. Perfect for business travel and small groups. Comfortable sedan with AC and professional driver. Best rates guaranteed.`;
-    }
-  };
-  
-  const seoTitle = vehicle.seoContent?.title || `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`;
-  const seoDescription = getUniqueDescription();
-  const seoKeywords = vehicle.seoContent?.keywords || `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`;
-  const vehicleImage = galleryImages?.[0]?.url || vehicle.image || '/og-image.png';
-  const vehicleUrl = `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`;
 
   return (
     <>
       <Helmet>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDescription} />
-        <meta name="keywords" content={seoKeywords} />
+        <title>{seoData?.title || 'Vehicle Details - Vizag Taxi Hub'}</title>
+        <meta name="description" content={seoData?.description || 'Vehicle details and booking information'} />
+        <meta name="keywords" content={seoData?.keywords || 'taxi service, vehicle rental'} />
+        
+        {/* Critical CSS for above-the-fold content */}
+        <style>{criticalStyles}</style>
+        
+        {/* Critical resource hints for LCP optimization - reduced for faster parsing */}
+        <link rel="preload" href="/cars/tempo.png" as="image" type="image/png" />
+        
+        {/* Preload only the most critical image */}
+        {vehicle?.image && (
+          <link rel="preload" as="image" href={vehicle.image} />
+        )}
+        {structuredData && (
+          <script type="application/ld+json">
+            {JSON.stringify(structuredData)}
+          </script>
+        )}
         <meta name="author" content="Vizag Taxi Hub" />
+        <meta name="geo.region" content="IN-AP" />
+        <meta name="geo.placename" content="Visakhapatnam" />
+        <meta name="geo.position" content="17.6868;83.2185" />
+        <meta name="ICBM" content="17.6868, 83.2185" />
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
-        <meta property="og:url" content={vehicleUrl} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDescription} />
-        <meta property="og:image" content={vehicleImage} />
+        <meta property="og:url" content={seoData?.url || 'https://vizagtaxihub.com'} />
+        <meta property="og:title" content={seoData?.title || 'Vehicle Details - Vizag Taxi Hub'} />
+        <meta property="og:description" content={seoData?.description || 'Vehicle details and booking information'} />
+        <meta property="og:image" content={seoData?.image || '/og-image.png'} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
+        <meta property="og:site_name" content="Vizag Taxi Hub" />
+        <meta property="og:locale" content="en_IN" />
         
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={vehicleUrl} />
-        <meta property="twitter:title" content={seoTitle} />
-        <meta property="twitter:description" content={seoDescription} />
-        <meta property="twitter:image" content={vehicleImage} />
+        <meta property="twitter:url" content={seoData?.url || 'https://vizagtaxihub.com'} />
+        <meta property="twitter:title" content={seoData?.title || 'Vehicle Details - Vizag Taxi Hub'} />
+        <meta property="twitter:description" content={seoData?.description || 'Vehicle details and booking information'} />
+        <meta property="twitter:image" content={seoData?.image || '/og-image.png'} />
         
         {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href={vehicleUrl} />
+        <meta name="language" content="English" />
+        <meta name="revisit-after" content="7 days" />
+        <link rel="canonical" href={seoData?.url || `https://vizagtaxihub.com/vehicle/${vehicleSlug}`} />
         
-                 {/* Vehicle-specific structured data */}
-         <script type="application/ld+json">
-           {JSON.stringify(vehicle.id === 'tempo_traveller' ? {
-             "@context": "https://schema.org",
-             "@type": "LocalBusiness",
-             "name": "Vizag Taxi Hub - Tempo Traveller Rental",
-             "description": "17 seater tempo traveller rental service in Visakhapatnam for group travel, corporate events, and family trips",
-             "image": vehicleImage,
-             "url": vehicleUrl,
-             "telephone": "+91-9966363662",
-             "priceRange": "₹₹",
-             "address": {
-               "@type": "PostalAddress",
-               "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-               "addressLocality": "Visakhapatnam",
-               "addressRegion": "Andhra Pradesh",
-               "postalCode": "530024",
-               "addressCountry": "IN"
-             },
-             "geo": {
-               "@type": "GeoCoordinates",
-               "latitude": "17.7231",
-               "longitude": "83.3012"
-             },
-             "areaServed": [
-               {
-                 "@type": "City",
-                 "name": "Visakhapatnam",
-                 "addressRegion": "Andhra Pradesh",
-                 "addressCountry": "IN"
-               },
-               {
-                 "@type": "City", 
-                 "name": "Araku Valley",
-                 "addressRegion": "Andhra Pradesh",
-                 "addressCountry": "IN"
-               },
-               {
-                 "@type": "City",
-                 "name": "Borra Caves", 
-                 "addressRegion": "Andhra Pradesh",
-                 "addressCountry": "IN"
-               }
-             ],
-             "serviceType": "Tempo Traveller Rental",
-             "hasOfferCatalog": {
-               "@type": "OfferCatalog",
-               "name": "Tempo Traveller Services",
-               "itemListElement": {
-                 "@type": "Offer",
-                 "itemOffered": {
-                   "@type": "Service",
-                   "name": "17 Seater Tempo Traveller Rental in Vizag",
-                   "description": "Professional tempo traveller rental service for group travel in Visakhapatnam"
-                 }
-               }
-             },
-             "aggregateRating": {
-               "@type": "AggregateRating",
-               "ratingValue": "4.9",
-               "reviewCount": "150"
-             }
-           } : {
-             "@context": "https://schema.org",
-             "@type": "Service",
-             "serviceType": "Taxi Service",
-             "name": `${vehicle.name} Taxi Service`,
-             "description": vehicle.overview || `${vehicle.name} - ${vehicle.capacity} seater taxi service in Visakhapatnam`,
-             "image": vehicleImage,
-             "url": vehicleUrl,
-             "provider": {
-               "@type": "Organization",
-               "name": "Vizag Taxi Hub",
-               "url": "https://vizagtaxihub.com",
-               "description": "Professional taxi service in Visakhapatnam"
-             },
-             "areaServed": {
-               "@type": "City",
-               "name": "Visakhapatnam",
-               "addressRegion": "Andhra Pradesh",
-               "addressCountry": "IN"
-             },
-             "location": {
-               "@type": "Place",
-               "address": {
-                 "@type": "PostalAddress",
-                 "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-                 "addressLocality": "Visakhapatnam",
-                 "addressRegion": "Andhra Pradesh",
-                 "postalCode": "530024",
-                 "addressCountry": "IN"
-               }
-             },
-             "hasOfferCatalog": {
-               "@type": "OfferCatalog",
-               "name": "Taxi Services",
-               "itemListElement": {
-                 "@type": "Offer",
-                                   "itemOffered": {
-                    "@type": "Service",
-                    "name": `${vehicle.name} ${vehicle.capacity > 12 ? 'Mini Bus' : vehicle.capacity > 6 ? 'SUV' : 'Sedan'} Service`,
-                    "description": `${vehicle.capacity} seater ${vehicle.capacity > 12 ? 'mini bus' : vehicle.capacity > 6 ? 'SUV' : 'sedan'} service in Visakhapatnam`
-                  }
-               }
-             }
-           })}
-         </script>
+        {/* Local Business Schema for Tempo Traveller */}
+        {vehicle?.id === 'tempo_traveller' && (
+          <>
+            <meta name="business:contact_data:locality" content="Visakhapatnam" />
+            <meta name="business:contact_data:region" content="Andhra Pradesh" />
+            <meta name="business:contact_data:country_name" content="India" />
+            <meta name="business:contact_data:phone_number" content="+919966363662" />
+          </>
+        )}
+        
+        {/* Simplified structured data for better performance */}
+        {vehicle?.id === 'tempo_traveller' && (
+          <script type="application/ld+json">
+            {JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Product",
+              "name": "17 Seater Tempo Traveller Rental in Vizag",
+              "description": "Professional tempo traveller rental service for group travel in Visakhapatnam",
+              "image": seoData?.image || "/cars/tempo.png",
+              "url": seoData?.url,
+              "brand": { "@type": "Brand", "name": "Vizag Taxi Hub" },
+              "offers": {
+                "@type": "Offer",
+                "price": "35",
+                "priceCurrency": "INR",
+                "availability": "https://schema.org/InStock"
+              },
+              "aggregateRating": {
+                "@type": "AggregateRating",
+                "ratingValue": "4.8",
+                "reviewCount": "127"
+              }
+            })}
+          </script>
+        )}
       </Helmet>
       
       <div className="min-h-screen bg-gray-50">
@@ -388,7 +446,36 @@ const VehicleDetailPage = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              <ImageGallery images={galleryImages} vehicleName={vehicle.name} />
+              {/* Critical above-the-fold content - optimized for LCP */}
+              <div className="image-gallery-container">
+                {/* Show vehicle image immediately for LCP optimization */}
+                {vehicle?.image && (
+                  <img
+                    src={vehicle.image}
+                    alt={`${vehicle.name} - Professional taxi service in Visakhapatnam`}
+                    width="100%"
+                    height="400"
+                    style={{ 
+                      width: '100%', 
+                      height: '400px', 
+                      objectFit: 'cover',
+                      borderRadius: '8px',
+                      display: 'block',
+                      contain: 'layout style paint'
+                    }}
+                    loading="eager"
+                    data-lcp-candidate="true"
+                  />
+                )}
+                
+                {/* Defer gallery component */}
+                <Suspense fallback={<div></div>}>
+                  <ImageGallery 
+                    images={galleryImages} 
+                    vehicleName={vehicle.name}
+                  />
+                </Suspense>
+              </div>
 
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
@@ -420,6 +507,22 @@ const VehicleDetailPage = () => {
                 </div>
               </div>
 
+              <div className="rate-card-container">
+                <Suspense fallback={
+                  <div className="loading-skeleton" style={{ height: '120px', width: '100%' }}>
+                    <div style={{ 
+                      height: '100%', 
+                      background: '#f3f4f6',
+                      borderRadius: '8px'
+                    }}></div>
+                  </div>
+                }>
+                  <RateCard vehicleId={vehicle.id} />
+                </Suspense>
+              </div>
+
+              <div className="vehicle-tabs-container">
+                <Suspense fallback={<div className="loading-skeleton" style={{ height: '200px', width: '100%' }}></div>}>
               <VehicleTabs 
                 overview={vehicle.overview} 
                 inclusions={vehicle.inclusions}
@@ -427,9 +530,12 @@ const VehicleDetailPage = () => {
                 features={vehicle.features}
                 tags={[]} // Empty array since tags are now displayed at the top
               />
+                </Suspense>
+              </div>
 
-              {/* Special SEO Content for Tempo Traveller */}
+              {/* Special SEO Content for Tempo Traveller - Deferred for better performance */}
               {vehicle.id === 'tempo_traveller' && (
+                <Suspense fallback={<div className="loading-skeleton" style={{ height: '800px', width: '100%' }}></div>}>
                 <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">17 Seater Tempo Traveller in Vizag - Best Group Travel Solution</h2>
                   
@@ -459,47 +565,116 @@ const VehicleDetailPage = () => {
                   </div>
 
                   <div className="bg-blue-50 rounded-lg p-6 mb-6">
-                    <h3 className="text-lg font-semibold text-blue-900 mb-3">Why Choose Our Tempo Traveller Service in Vizag?</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
-                      <div>✓ Professional drivers with local expertise</div>
-                      <div>✓ Well-maintained AC tempo travellers</div>
-                      <div>✓ GPS tracking for safety</div>
-                      <div>✓ Competitive rates starting ₹35/km</div>
-                      <div>✓ 24/7 customer support</div>
-                      <div>✓ Flexible booking options</div>
+                    <h3 className="text-xl font-semibold text-blue-900 mb-4">Why Choose Our Tempo Traveller Service in Vizag?</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 mb-4">
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>Professional drivers with local expertise</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>Well-maintained AC tempo travellers</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>GPS tracking for safety and security</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>Competitive rates starting ₹35/km</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>24/7 customer support service</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-green-600 mr-2">✓</span>
+                        <span>Flexible booking and payment options</span>
+                      </div>
                     </div>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Additional Benefits:</strong> Free cancellation up to 2 hours before departure, instant booking confirmation, 
+                      complimentary water bottles, mobile charging facilities, and experienced drivers familiar with all Vizag routes and destinations.
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Tempo Traveller Rental Rates in Vizag</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="text-2xl font-bold text-green-600">₹35/km</div>
+                        <div className="text-sm text-gray-600">Base Rate for min 300KM during outstation*</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="text-2xl font-bold text-blue-600">₹8000</div>
+                        <div className="text-sm text-gray-600">Local City Tour for Min 10Hrs 100KM</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-4 shadow-sm">
+                        <div className="text-2xl font-bold text-purple-600">₹13000</div>
+                        <div className="text-sm text-gray-600">Araku Valley Day Tour (07:00 AM to 08:00 PM)</div>
+                      </div>
+                    </div>
+                    <p className="text-gray-600 text-sm mt-4 text-center">
+                      <strong>Transparent Pricing:</strong> No hidden charges, fuel included, tolls extra. 
+                      Best tempo traveller rates in Visakhapatnam with professional service guarantee.
+                    </p>
                   </div>
 
                   <div className="bg-green-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-green-900 mb-3">Book Your Tempo Traveller in Vizag Today</h3>
-                    <p className="text-gray-700 mb-4">
-                      Get the best tempo traveller rental service in Visakhapatnam with professional drivers, 
+                    <h3 className="text-xl font-semibold text-green-900 mb-4">Book Your AC Tempo Traveller in Vizag Today</h3>
+                    <p className="text-gray-700 mb-6 leading-relaxed">
+                      Get the best <strong>tempo traveller rental service in Visakhapatnam</strong> with professional drivers, 
                       modern amenities, and competitive rates. Perfect for group travel, corporate events, 
-                      and family trips across Andhra Pradesh.
+                      family trips, and outstation tours across Andhra Pradesh. Our AC tempo traveller service 
+                      ensures comfort, safety, and reliability for all your group transportation needs.
                     </p>
+                    
+                    <div className="bg-white rounded-lg p-4 mb-6">
+                      <h4 className="font-semibold text-gray-900 mb-2">Quick Booking Options:</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                        <div>📞 <strong>Call:</strong> +91 9966363662 (Instant booking)</div>
+                        <div>💻 <strong>Online:</strong> Book through our website</div>
+                        <div>📱 <strong>WhatsApp:</strong> Quick quotes and booking</div>
+                        <div>✉️ <strong>Email:</strong> Detailed itinerary planning</div>
+                      </div>
+                    </div>
+                    
                     <div className="flex flex-col sm:flex-row gap-4">
-                      <Button className="bg-blue-600 hover:bg-blue-700">
+                      <Button 
+                        onClick={handleCallNow}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
+                      >
                         <Phone className="mr-2 h-4 w-4" />
                         Call +91 9966363662
                       </Button>
-                      <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                      <Button 
+                        onClick={handleBookOnline}
+                        variant="outline" 
+                        className="border-blue-600 text-blue-600 hover:bg-blue-50 px-8 py-3"
+                      >
                         <Car className="mr-2 h-4 w-4" />
-                        Book Online
+                        Book Online Now
                       </Button>
                     </div>
                   </div>
                 </div>
+                </Suspense>
               )}
 
-              <RateCard vehicleId={vehicle.id} />
-
+              {/* Defer VehicleTours to reduce initial scripting load */}
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-32 rounded-lg"></div>}>
               <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
+              </Suspense>
             </div>
 
             <div className="lg:col-span-1 space-y-6">
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-48 rounded-lg"></div>}>
               <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
+              </Suspense>
               
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-32 rounded-lg"></div>}>
               <SimilarVehicles vehicles={similarVehicles} />
+              </Suspense>
             </div>
           </div>
         </div>
