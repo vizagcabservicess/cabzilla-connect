@@ -170,6 +170,36 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [dropLocation, setDropLocation] = useState<Location | null>(savedData.dropLocation);
   const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate || new Date());
   const [returnDate, setReturnDate] = useState<Date | null>(savedData.returnDate);
+  
+  // Wrap setReturnDate to track all calls
+  const setReturnDateWithLogging = useCallback((value: Date | null | ((prev: Date | null) => Date | null)) => {
+    console.log('[SET RETURN DATE] Called with:', {
+      value,
+      type: typeof value,
+      isFunction: typeof value === 'function',
+      timestamp: new Date().toISOString(),
+      stackTrace: new Error().stack
+    });
+    setReturnDate(value);
+  }, [setReturnDate]);
+  
+  // Track returnDate state changes
+  useEffect(() => {
+    console.log('[RETURN DATE STATE] returnDate state changed:', {
+      returnDate,
+      timestamp: new Date().toISOString()
+    });
+  }, [returnDate]);
+  
+  // Add a wrapper to track return date changes
+  const handleReturnDateChange = useCallback((newDate: Date | undefined) => {
+    console.log('[RETURN DATE CHANGE] User changed return date:', {
+      newDate,
+      currentReturnDate: returnDate,
+      timestamp: new Date().toISOString()
+    });
+    setReturnDate(newDate || null);
+  }, [returnDate]);
   const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -383,28 +413,29 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     setIsFormValid(false);
   }, []);
 
-  // Reset/disable returnDate and errors when locations change
-  useEffect(() => {
-    if (tripType === 'outstation' && tripMode === 'round-trip') {
-      // Don't reset pickup date when switching to round-trip mode
-      // setPickupDate(new Date());
-      setReturnDate(null);
-      setIsReturnTimeEnabled(false);
-      setMinValidReturnTime(null);
-      setValidationError(null);
-    }
-  }, []);
+  // REMOVED: This useEffect was clearing returnDate on mount, which was causing
+  // the user's manually selected return date to be lost. The travel time calculation
+  // useEffect already handles setting the initial return date appropriately.
 
   // Only call travel time API and set returnDate when both locations are filled
   useEffect(() => {
+    console.log('[TRAVEL TIME CALC] useEffect triggered', {
+      tripType,
+      tripMode,
+      hasPickupLocation: !!pickupLocation,
+      hasDropLocation: !!dropLocation,
+      currentReturnDate: returnDate
+    });
+    
     if (
       tripType === 'outstation' &&
       tripMode === 'round-trip'
     ) {
       // If either location is missing, disable and clear returnDate, do not call API
       if (!pickupLocation || !dropLocation) {
+        console.log('[TRAVEL TIME CALC] Missing locations, clearing return date');
         setIsReturnTimeEnabled(false);
-        setReturnDate(null);
+        setReturnDateWithLogging(null);
         setMinValidReturnTime(null);
         setValidationError(null);
         setIsCheckingTravelTime(false);
@@ -414,25 +445,59 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       setIsCheckingTravelTime(true);
       (async () => {
         try {
+          console.log('[TRAVEL TIME CALC] Calling calculateDistanceMatrix...');
           const result = await calculateDistanceMatrix(pickupLocation, dropLocation);
+          console.log('[TRAVEL TIME CALC] Result:', result);
+          
           if (result.status === 'OK') {
             const minMinutes = result.duration + 30;
             const minReturn = new Date(pickupDate.getTime() + minMinutes * 60 * 1000);
+            console.log('[TRAVEL TIME CALC] Calculated minReturn:', {
+              duration: result.duration,
+              minMinutes,
+              minReturn,
+              pickupDate,
+              currentReturnDate: returnDate
+            });
+            
             setIsReturnTimeEnabled(true);
             setMinValidReturnTime(minReturn);
-            // Always prefill returnDate with minReturn on every change
-            setReturnDate(minReturn);
+            
+            // Only prefill returnDate if it's null (first time calculation) or invalid (before pickup date)
+            // This allows users to manually set their own return time without it being overridden
+            setReturnDateWithLogging(prevReturnDate => {
+              console.log('[TRAVEL TIME CALC] setReturnDate callback:', {
+                prevReturnDate,
+                minReturn,
+                pickupDate,
+                willReset: !prevReturnDate || prevReturnDate < pickupDate
+              });
+              
+              if (!prevReturnDate) {
+                console.log('[TRAVEL TIME CALC] Setting return date to minReturn (null)');
+                return minReturn;
+              }
+              // If current return date is before pickup date, reset it
+              if (prevReturnDate < pickupDate) {
+                console.log('[TRAVEL TIME CALC] Resetting return date (before pickup)');
+                return minReturn;
+              }
+              console.log('[TRAVEL TIME CALC] Preserving user return date:', prevReturnDate);
+              return prevReturnDate;
+            });
             setValidationError(null);
           } else {
+            console.log('[TRAVEL TIME CALC] API error:', result.status);
             setIsReturnTimeEnabled(false);
             setMinValidReturnTime(null);
-            setReturnDate(null);
+            setReturnDateWithLogging(null);
             setValidationError('Could not validate travel time. Please try again.');
           }
         } catch (err) {
+          console.error('[TRAVEL TIME CALC] Exception:', err);
           setIsReturnTimeEnabled(false);
           setMinValidReturnTime(null);
-          setReturnDate(null);
+          setReturnDateWithLogging(null);
           setValidationError('Could not validate travel time. Please try again.');
         } finally {
           setIsCheckingTravelTime(false);
@@ -440,6 +505,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       })();
     }
   // Only depend on pickupLocation, dropLocation, pickupDate, tripType, tripMode
+  // returnDate is NOT in dependencies to avoid infinite loops
   }, [pickupLocation, dropLocation, pickupDate, tripType, tripMode]);
 
   // Validate returnDate when user manually edits it
@@ -1446,7 +1512,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       <div className="flex-1 min-w-0">
                         <DateTimePicker
                           date={returnDate}
-                          onDateChange={setReturnDate}
+                          onDateChange={handleReturnDateChange}
                           minDate={pickupDate}
                           disabled={!isReturnTimeEnabled || isCheckingTravelTime}
                           className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
@@ -1663,7 +1729,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                   <div className="flex-1 min-w-0">
                                     <DateTimePicker
                                       date={returnDate}
-                                      onDateChange={setReturnDate}
+                                      onDateChange={handleReturnDateChange}
                                       minDate={pickupDate}
                                       disabled={!isReturnTimeEnabled || isCheckingTravelTime}
                                       className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"

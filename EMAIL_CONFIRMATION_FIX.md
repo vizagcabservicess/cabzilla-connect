@@ -134,3 +134,4 @@ If emails are still not being received after following these steps:
 
 1. `EMAIL_CONFIRMATION_FIX.md` - This documentation file
 
+

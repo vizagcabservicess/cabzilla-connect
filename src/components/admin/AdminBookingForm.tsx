@@ -19,6 +19,7 @@ import { useFare } from '@/hooks/useFare';
 import { formatPrice } from '@/lib/cabData';
 import { formatDateForAPI } from '@/lib/dateUtils';
 import { AdminSearchWidget } from './AdminSearchWidget';
+import { tourAPI } from '@/services/api/tourAPI';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -49,6 +50,15 @@ export function AdminBookingForm() {
   const [selectedFare, setSelectedFare] = useState<number>(0);
   const [selectedFareBreakdown, setSelectedFareBreakdown] = useState<any>(null);
   
+  // Track selectedCab state changes
+  useEffect(() => {
+    console.log('[ADMIN BOOKING] selectedCab state changed:', {
+      selectedCab: selectedCab ? selectedCab.name : 'null',
+      selectedFare,
+      selectedFareBreakdown: selectedFareBreakdown ? Object.keys(selectedFareBreakdown) : 'none'
+    });
+  }, [selectedCab, selectedFare, selectedFareBreakdown]);
+  
   // Admin-specific fields
   const [adminNotes, setAdminNotes] = useState('');
   const [discountType, setDiscountType] = useState<'none' | 'percentage' | 'fixed'>('none');
@@ -58,6 +68,11 @@ export function AdminBookingForm() {
   const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
   const [selectedTourId, setSelectedTourId] = useState<string>('');
   const [selectedTourName, setSelectedTourName] = useState<string>('');
+  
+  // Tour packages from API
+  const [tours, setTours] = useState<Array<{tourId: string, tourName: string}>>([]);
+  const [toursLoading, setToursLoading] = useState(false);
+  const [tourVehicles, setTourVehicles] = useState<CabType[]>([]);
   
   // Form validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -70,6 +85,93 @@ export function AdminBookingForm() {
     tripType === 'local' ? hourlyPackage : undefined,
     pickupDate
   );
+  
+  // Fetch tour packages from API
+  useEffect(() => {
+    const fetchTours = async () => {
+      if (tripType === 'tour') {
+        try {
+          setToursLoading(true);
+          const tourData = await tourAPI.getTourFares();
+          
+          // Transform API response to simple format
+          const formattedTours = tourData
+            .filter(tour => tour.tourName)
+            .map(tour => ({
+              tourId: tour.tourId,
+              tourName: tour.tourName
+            }));
+          
+          setTours(formattedTours);
+        } catch (error) {
+          console.error('Error fetching tours:', error);
+          toast({
+            title: "Error Loading Tours",
+            description: "Failed to load tour packages. Please try again.",
+            variant: "destructive",
+          });
+          setTours([]);
+        } finally {
+          setToursLoading(false);
+        }
+      } else {
+        // Clear tours when not in tour mode
+        setTours([]);
+        setTourVehicles([]);
+      }
+    };
+    
+    fetchTours();
+  }, [tripType, toast]);
+  
+  // Fetch tour-specific vehicles with pricing when a tour is selected
+  useEffect(() => {
+    const fetchTourVehicles = async () => {
+      if (tripType === 'tour' && selectedTourId) {
+        try {
+          console.log('[ADMIN BOOKING] Fetching tour vehicles for tour:', selectedTourId);
+          const tourData = await tourAPI.getTourFares();
+          
+          // Find the selected tour
+          const selectedTour = tourData.find(tour => tour.tourId === selectedTourId);
+          
+          if (selectedTour && selectedTour.pricing) {
+            console.log('[ADMIN BOOKING] Tour pricing found:', selectedTour.pricing);
+            // Transform tour pricing to CabType format with tour-specific prices
+            const vehiclesWithPricing = cabTypes.map((cab) => {
+              // Get the tour price for this vehicle from the pricing object
+              const tourPrice = selectedTour.pricing?.[cab.id.toLowerCase()] || 
+                               selectedTour.pricing?.[cab.name.toLowerCase()];
+              
+              if (tourPrice) {
+                return {
+                  ...cab,
+                  price: tourPrice,
+                  tourPrice: tourPrice
+                };
+              }
+              
+              // If no tour price found, return the cab as-is with its base price
+              return cab;
+            });
+            
+            setTourVehicles(vehiclesWithPricing);
+          } else {
+            console.log('[ADMIN BOOKING] No pricing found for tour, using static cabTypes');
+            setTourVehicles(cabTypes);
+          }
+        } catch (error) {
+          console.error('Error fetching tour vehicles:', error);
+          // Fallback to static cabTypes
+          setTourVehicles(cabTypes);
+        }
+      } else if (tripType !== 'tour') {
+        setTourVehicles([]);
+      }
+    };
+    
+    fetchTourVehicles();
+  }, [tripType, selectedTourId]);
   
   // Handle search from widget
   const handleSearch = (searchData: {
@@ -100,11 +202,18 @@ export function AdminBookingForm() {
     if (searchData.tripType !== 'tour') {
       setSelectedTourId('');
       setSelectedTourName('');
+      setTourVehicles([]);
     }
   };
   
   // Handle cab selection with fare and breakdown
   const handleCabSelect = (cab: CabType, fare: number, breakdown?: any) => {
+    console.log('[ADMIN BOOKING] Cab selected:', {
+      cab: cab.name,
+      fare,
+      breakdown,
+      breakdownKeys: breakdown ? Object.keys(breakdown) : 'none'
+    });
     setSelectedCab(cab);
     setSelectedFare(fare);
     setSelectedFareBreakdown(breakdown || null);
@@ -113,11 +222,20 @@ export function AdminBookingForm() {
   // Add this helper at the top, after selectedFareBreakdown:
   const sumBreakdown = (breakdown: any) => {
     if (!breakdown) return 0;
+    
+    // If breakdown already has totalFare (round-trip calculation), use it directly
+    if (typeof breakdown.totalFare === 'number' && !isNaN(breakdown.totalFare)) {
+      return breakdown.totalFare;
+    }
+    
     const fields = [
       'basePrice',
+      'baseFare', // Round-trip uses baseFare instead of basePrice
       'driverAllowance',
       'nightCharges',
+      'nightAllowance', // Round-trip uses nightAllowance instead of nightCharges
       'extraDistanceFare',
+      'extraDistanceCharges', // Round-trip uses extraDistanceCharges instead of extraDistanceFare
       'airportFee',
     ];
     let total = 0;
@@ -139,7 +257,14 @@ export function AdminBookingForm() {
   
   // Update calculatePrice to use sumBreakdown:
   const calculatePrice = () => {
-    return sumBreakdown(selectedFareBreakdown) || selectedFare || 0;
+    const price = sumBreakdown(selectedFareBreakdown) || selectedFare || 0;
+    console.log('[ADMIN BOOKING] calculatePrice:', {
+      selectedFareBreakdown,
+      sumBreakdown: sumBreakdown(selectedFareBreakdown),
+      selectedFare,
+      finalPrice: price
+    });
+    return price;
   };
   
   // Calculate price after discount only
@@ -168,6 +293,11 @@ export function AdminBookingForm() {
   
   // Validate form fields
   const validateForm = () => {
+    console.log('[ADMIN BOOKING] validateForm called:', {
+      selectedCab: selectedCab ? selectedCab.name : 'null',
+      pickupLocation: pickupLocation ? pickupLocation.name : 'null'
+    });
+    
     const newErrors: Record<string, string> = {};
     
     if (!passengerName.trim()) {
@@ -191,6 +321,7 @@ export function AdminBookingForm() {
     }
     
     if (!selectedCab) {
+      console.log('[ADMIN BOOKING] Validation error: selectedCab is null');
       newErrors.selectedCab = 'Please select a vehicle';
     }
 
@@ -399,38 +530,50 @@ export function AdminBookingForm() {
                 {tripType === 'tour' && (
                   <div className="space-y-2">
                     <Label htmlFor="tourSelection">Select Tour <span className="text-red-500">*</span></Label>
-                    <Select value={selectedTourId} onValueChange={(value) => {
-                      setSelectedTourId(value);
-                      // Automatically set drop location to tour name
-                      const tourNames: Record<string, string> = {
-                        'araku_valley': 'Araku Valley Tour',
-                        'lambasingi': 'Lambasingi Hill Station',
-                        'vizag_city': 'Vizag City Tour',
-                        'yarada_beach': 'Yarada Beach Tour'
-                      };
-                      const tourName = tourNames[value] || '';
-                      setSelectedTourName(tourName);
-                      setDropLocation({ 
-                        id: `tour_${value}`,
-                        name: tourName, 
-                        city: 'Visakhapatnam',
-                        state: 'Andhra Pradesh',
-                        lat: 17.7215,
-                        lng: 83.2248,
-                        type: 'other',
-                        popularityScore: 50,
-                        address: tourName,
-                        isInVizag: true
-                      });
-                    }}>
+                    <Select 
+                      value={selectedTourId} 
+                      onValueChange={(value) => {
+                        setSelectedTourId(value);
+                        // Find the selected tour to get its name
+                        const selectedTour = tours.find(t => t.tourId === value);
+                        const tourName = selectedTour?.tourName || '';
+                        setSelectedTourName(tourName);
+                        setDropLocation({ 
+                          id: `tour_${value}`,
+                          name: tourName, 
+                          city: 'Visakhapatnam',
+                          state: 'Andhra Pradesh',
+                          lat: 17.7215,
+                          lng: 83.2248,
+                          type: 'other',
+                          popularityScore: 50,
+                          address: tourName,
+                          isInVizag: true
+                        });
+                        // Clear previous cab selection when tour changes
+                        setSelectedCab(null);
+                        setSelectedFare(0);
+                        setSelectedFareBreakdown(null);
+                      }}
+                      disabled={toursLoading}
+                    >
                       <SelectTrigger className={errors.selectedTourId ? "border-red-500" : ""}>
-                        <SelectValue placeholder="Choose a tour package" />
+                        <SelectValue placeholder={toursLoading ? "Loading tours..." : "Choose a tour package"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="araku_valley">Araku Valley Tour</SelectItem>
-                        <SelectItem value="lambasingi">Lambasingi Hill Station</SelectItem>
-                        <SelectItem value="vizag_city">Vizag City Tour</SelectItem>
-                        <SelectItem value="yarada_beach">Yarada Beach Tour</SelectItem>
+                        {tours.length > 0 ? (
+                          tours.map((tour) => (
+                            <SelectItem key={tour.tourId} value={tour.tourId}>
+                              {tour.tourName}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          !toursLoading && (
+                            <SelectItem value="no-tours" disabled>
+                              No tours available
+                            </SelectItem>
+                          )
+                        )}
                       </SelectContent>
                     </Select>
                     {errors.selectedTourId && (
@@ -448,7 +591,7 @@ export function AdminBookingForm() {
               <div className="bg-white border border-gray-200 rounded-lg p-4 md:p-6">
                 <h2 className="text-base font-semibold text-gray-700 mb-3">Vehicle Selection</h2>
                 <CabOptions
-                  cabTypes={cabTypes}
+                  cabTypes={tripType === 'tour' && tourVehicles.length > 0 ? tourVehicles : cabTypes}
                   selectedCab={selectedCab}
                   onSelectCab={handleCabSelect}
                   distance={distance}
@@ -484,10 +627,10 @@ export function AdminBookingForm() {
                   <div className="mb-4">
                     <h3 className="text-md font-semibold mb-2">Fare Breakup</h3>
                     <div className="space-y-2">
-                      {selectedFareBreakdown.basePrice !== undefined && (
+                      {(selectedFareBreakdown.basePrice !== undefined || selectedFareBreakdown.baseFare !== undefined) && (
                         <div className="flex justify-between text-gray-800">
                           <span>Base fare</span>
-                          <span>{formatPrice(selectedFareBreakdown.basePrice)}</span>
+                          <span>{formatPrice(selectedFareBreakdown.basePrice || selectedFareBreakdown.baseFare)}</span>
                         </div>
                       )}
                       {selectedFareBreakdown.driverAllowance !== undefined && (
@@ -496,16 +639,18 @@ export function AdminBookingForm() {
                           <span>{formatPrice(selectedFareBreakdown.driverAllowance)}</span>
                         </div>
                       )}
-                      {selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0 && (
+                      {(selectedFareBreakdown.nightCharges !== undefined && selectedFareBreakdown.nightCharges > 0) || 
+                       (selectedFareBreakdown.nightAllowance !== undefined && selectedFareBreakdown.nightAllowance > 0) && (
                         <div className="flex justify-between text-gray-800">
                           <span>Night charges</span>
-                          <span>{formatPrice(selectedFareBreakdown.nightCharges)}</span>
+                          <span>{formatPrice(selectedFareBreakdown.nightCharges || selectedFareBreakdown.nightAllowance)}</span>
                         </div>
                       )}
-                      {selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0 && (
+                      {(selectedFareBreakdown.extraDistanceFare !== undefined && selectedFareBreakdown.extraDistanceFare > 0) ||
+                       (selectedFareBreakdown.extraDistanceCharges !== undefined && selectedFareBreakdown.extraDistanceCharges > 0) && (
                         <div className="flex justify-between text-gray-800">
                           <span>Extra distance charges</span>
-                          <span>{formatPrice(selectedFareBreakdown.extraDistanceFare)}</span>
+                          <span>{formatPrice(selectedFareBreakdown.extraDistanceFare || selectedFareBreakdown.extraDistanceCharges)}</span>
                         </div>
                       )}
                       {selectedFareBreakdown.extraHourCharge !== undefined && selectedFareBreakdown.extraHours && selectedFareBreakdown.extraHours > 0 && (
@@ -514,7 +659,7 @@ export function AdminBookingForm() {
                           <span>{formatPrice(selectedFareBreakdown.extraHourCharge * selectedFareBreakdown.extraHours)}</span>
                         </div>
                       )}
-                      {Object.keys(selectedFareBreakdown).length === 1 && selectedFareBreakdown.basePrice !== undefined && (
+                      {Object.keys(selectedFareBreakdown).length === 1 && (selectedFareBreakdown.basePrice !== undefined || selectedFareBreakdown.baseFare !== undefined) && (
                         <div className="text-gray-500 text-sm">No detailed breakup available.</div>
                       )}
                     </div>
