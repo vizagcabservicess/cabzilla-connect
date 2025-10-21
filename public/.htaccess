@@ -436,6 +436,14 @@ RewriteRule ^12-seater-tempo-traveller-vizag$ /seo-handler.php?url=12-seater-tem
 RewriteRule ^18-seater-tempo-traveller-vizag$ /seo-handler.php?url=18-seater-tempo-traveller-vizag [L,QSA]
 RewriteRule ^mini-bus-travels-vizag$ /seo-handler.php?url=mini-bus-travels-vizag [L,QSA]
 
+# LOCATION-SPECIFIC TEMPO TRAVELLER ROUTES - Handle the new location-specific SEO URLs
+RewriteRule ^tempo-traveller-madhurawada$ /seo-handler.php?url=tempo-traveller-madhurawada [L,QSA]
+RewriteRule ^tempo-traveller-dwaraka-nagar$ /seo-handler.php?url=tempo-traveller-dwaraka-nagar [L,QSA]
+RewriteRule ^tempo-traveller-gajuwaka$ /seo-handler.php?url=tempo-traveller-gajuwaka [L,QSA]
+RewriteRule ^tempo-traveller-mvp-colony$ /seo-handler.php?url=tempo-traveller-mvp-colony [L,QSA]
+RewriteRule ^tempo-traveller-seethammadhara$ /seo-handler.php?url=tempo-traveller-seethammadhara [L,QSA]
+RewriteRule ^tempo-traveller-rushikonda$ /seo-handler.php?url=tempo-traveller-rushikonda [L,QSA]
+
 # Handle trailing slashes
 RewriteRule ^(.+)/$ /$1 [R=301,L]
 
