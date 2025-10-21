@@ -218,7 +218,7 @@ RewriteRule ^tempotraveller$ /fleet [R=301,L]
 # RewriteRule ^tempo-traveller$ /fleet [R=301,L]
 # RewriteRule ^tempo_traveller$ /fleet [R=301,L]
 
-# Redirect non-existent URLs that Google is trying to access
+# Redirect old URLs to MAIN tempo traveller page
 RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
@@ -410,6 +410,31 @@ RewriteRule ^vehicle/tempo_traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^vehicle/amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^vehicle/mpv$ /vehicle/innova-hycross [R=301,L]
 RewriteRule ^vehicle/bus$ /vehicle/urbania [R=301,L]
+
+# REDIRECT OLD TEMPO TRAVELLER URLs TO MAIN PAGE
+RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^tempo-traveller-rental$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^18-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^group-travel-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^corporate-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^wedding-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^pilgrimage-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^mini-bus-travels$ /vehicle/tempo-traveller [R=301,L]
+
+# NEW TEMPO TRAVELLER SPECIFIC ROUTES - Handle the new SEO URLs
+RewriteRule ^tempo-traveller-rental-vizag$ /seo-handler.php?url=tempo-traveller-rental-vizag [L,QSA]
+RewriteRule ^17-seater-tempo-traveller-vizag$ /seo-handler.php?url=17-seater-tempo-traveller-vizag [L,QSA]
+RewriteRule ^group-travel-tempo-traveller-vizag$ /seo-handler.php?url=group-travel-tempo-traveller-vizag [L,QSA]
+RewriteRule ^corporate-tempo-traveller-vizag$ /seo-handler.php?url=corporate-tempo-traveller-vizag [L,QSA]
+RewriteRule ^wedding-tempo-traveller-vizag$ /seo-handler.php?url=wedding-tempo-traveller-vizag [L,QSA]
+RewriteRule ^pilgrimage-tempo-traveller-vizag$ /seo-handler.php?url=pilgrimage-tempo-traveller-vizag [L,QSA]
+RewriteRule ^12-seater-tempo-traveller-vizag$ /seo-handler.php?url=12-seater-tempo-traveller-vizag [L,QSA]
+RewriteRule ^18-seater-tempo-traveller-vizag$ /seo-handler.php?url=18-seater-tempo-traveller-vizag [L,QSA]
+RewriteRule ^mini-bus-travels-vizag$ /seo-handler.php?url=mini-bus-travels-vizag [L,QSA]
 
 # Handle trailing slashes
 RewriteRule ^(.+)/$ /$1 [R=301,L]

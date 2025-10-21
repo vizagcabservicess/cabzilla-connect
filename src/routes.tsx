@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Outlet, useLocation, Navigate } from 'react-router-dom';
 import { lazy, Suspense, startTransition } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
@@ -541,6 +541,43 @@ const router = createBrowserRouter([
       {
         path: 'fleet',
         element: <FleetPage />,
+      },
+      // Tempo Traveller SEO URLs - redirect to main tempo traveller page
+      {
+        path: 'tempo-traveller-rental-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: '17-seater-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: '12-seater-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: 'group-travel-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: 'corporate-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: 'wedding-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: 'pilgrimage-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: '18-seater-tempo-traveller-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+      },
+      {
+        path: 'mini-bus-travels-vizag',
+        element: <Navigate to="/vehicle/tempo-traveller" replace />,
       },
       {
         path: 'careers',

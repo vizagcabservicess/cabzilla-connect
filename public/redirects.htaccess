@@ -5,9 +5,9 @@
 # Old vehicle pages (now redirected to fleet)
 RewriteRule ^sedan$ /fleet [R=301,L]
 RewriteRule ^suv$ /fleet [R=301,L]
-RewriteRule ^tempotraveller$ /fleet [R=301,L]
-RewriteRule ^tempo-traveller$ /fleet [R=301,L]
-RewriteRule ^tempo_traveller$ /fleet [R=301,L]
+RewriteRule ^tempotraveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^tempo_traveller$ /vehicle/tempo-traveller [R=301,L]
 
 # Old service pages
 RewriteRule ^rentals$ /local-taxi [R=301,L]
@@ -175,7 +175,7 @@ RewriteRule ^ertiga$ /vehicle/ertiga [R=301,L]
 RewriteRule ^innova$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^innova-crysta$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^toyota-glanza$ /vehicle/toyota-glanza [R=301,L]
-RewriteRule ^tempo-traveller$ /vehicle/tempo_traveller [R=301,L]
+RewriteRule ^tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^honda-amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^amaze$ /vehicle/amaze [R=301,L]
 
