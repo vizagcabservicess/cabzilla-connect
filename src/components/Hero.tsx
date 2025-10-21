@@ -276,6 +276,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         setDynamicVehicles(vehicles);
         setVehiclesLoaded(true);
         
+        // Auto-select first vehicle if none is selected and we have vehicles
+        if (!selectedCab && vehicles.length > 0) {
+          setSelectedCab(vehicles[0]);
+        }
+        
         // Add a global function for manual testing
         (window as any).refreshVehicles = () => {
           loadVehicles();
@@ -290,6 +295,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         // Fallback to static cabTypes
         setDynamicVehicles(cabTypes);
         setVehiclesLoaded(true);
+        
+        // Auto-select first vehicle from fallback if none is selected
+        if (!selectedCab && cabTypes.length > 0) {
+          setSelectedCab(cabTypes[0]);
+        }
       }
     };
     
@@ -1137,27 +1147,29 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   };
 
   function calculatePrice() {
-    if (!selectedCab) return 0;
+    // If no vehicle is selected, try to get the first available vehicle for pricing
+    const currentCab = selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null);
+    if (!currentCab) return 0;
     
     let totalPrice = 0;
     
     if (tripType === 'airport') {
-      totalPrice = calculateAirportFare(selectedCab.name, distance);
+      totalPrice = calculateAirportFare(currentCab.name, distance);
     } else if (tripType === 'local') {
       // For local trips, use only the package price (no driver allowance or extras)
-      totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
+      totalPrice = getLocalPackagePrice(hourlyPackage, currentCab.name);
       // Only add extra distance if it's specifically calculated for local trips
       // and is greater than the package limit
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm && tripType === 'local') {
         const extraKm = distance - packageKm;
-        const extraKmRate = selectedCab.pricePerKm;
+        const extraKmRate = currentCab.pricePerKm;
         totalPrice += extraKm * extraKmRate;
       }
     } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
       
-      switch (selectedCab.name.toLowerCase()) {
+      switch (currentCab.name.toLowerCase()) {
         case "sedan":
           basePrice = 4200;
           perKmRate = 14;
@@ -1174,8 +1186,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           nightHaltCharge = 1000;
           break;
         default:
-          basePrice = selectedCab.price;
-          perKmRate = selectedCab.pricePerKm;
+          basePrice = currentCab.price;
+          perKmRate = currentCab.pricePerKm;
           nightHaltCharge = 700;
       }
       
@@ -1370,16 +1382,22 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Update selectedCab when available vehicles change due to date filtering
   useEffect(() => {
-    if (selectedCab && pickupDate && vehiclesLoaded) {
+    if (pickupDate && vehiclesLoaded) {
       const availableVehicles = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
-      const isSelectedCabAvailable = availableVehicles.some(vehicle => vehicle.id === selectedCab.id);
       
-      if (!isSelectedCabAvailable && availableVehicles.length > 0) {
-        // If selected cab is not available, select the first available one
+      if (selectedCab) {
+        const isSelectedCabAvailable = availableVehicles.some(vehicle => vehicle.id === selectedCab.id);
+        
+        if (!isSelectedCabAvailable && availableVehicles.length > 0) {
+          // If selected cab is not available, select the first available one
+          setSelectedCab(availableVehicles[0]);
+        } else if (availableVehicles.length === 0) {
+          // If no vehicles are available, clear selection
+          setSelectedCab(null);
+        }
+      } else if (availableVehicles.length > 0) {
+        // If no vehicle is selected but vehicles are available, auto-select the first one
         setSelectedCab(availableVehicles[0]);
-      } else if (availableVehicles.length === 0) {
-        // If no vehicles are available, clear selection
-        setSelectedCab(null);
       }
     }
   }, [pickupDate, returnDate, selectedCab, dynamicVehicles, vehiclesLoaded]);
@@ -1932,7 +1950,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               dropLocation={dropLocation} 
                               pickupDate={pickupDate} 
                               returnDate={returnDate} 
-                              selectedCab={selectedCab!} 
+                              selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)} 
                               distance={distance} 
                               tripType={tripType} 
                               tripMode={tripMode} 
@@ -1985,7 +2003,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       dropLocation={dropLocation}
                       pickupDate={pickupDate}
                       returnDate={returnDate}
-                      selectedCab={selectedCab!}
+                      selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)}
                       distance={distance}
                       totalPrice={totalPrice}
                       tripType={tripType}

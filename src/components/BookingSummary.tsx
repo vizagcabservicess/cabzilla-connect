@@ -932,7 +932,7 @@ export const BookingSummary = ({
     }
   }, [localTotal, fareData?.breakdown, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
 
-  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
+  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
