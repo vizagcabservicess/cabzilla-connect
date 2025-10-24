@@ -172,8 +172,21 @@ export function AdminBookingsList() {
     }
   };
   
-  const handleViewDetails = (booking: Booking) => {
-    setSelectedBooking(booking);
+  const handleViewDetails = async (booking: Booking) => {
+    // Fetch full booking details including tour itinerary
+    try {
+      const fullBooking = await bookingAPI.getBookingById(booking.id);
+      setSelectedBooking(fullBooking);
+    } catch (error) {
+      console.error('Error fetching full booking details:', error);
+      // Fallback to using the list data if fetch fails
+      setSelectedBooking(booking);
+      uiToast({
+        title: "Warning",
+        description: "Could not load full booking details. Some information may be missing.",
+        variant: "default",
+      });
+    }
   };
 
   const handleCloseDetails = () => {

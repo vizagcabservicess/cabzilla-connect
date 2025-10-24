@@ -136,6 +136,17 @@ const CareersPage = lazy(() => import('./pages/CareersPage'));
 const OurStoryPage = lazy(() => import('./pages/OurStoryPage'));
 const VisionMissionPage = lazy(() => import('./pages/VisionMissionPage'));
 const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
+const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
+const SeventeenSeaterTempoTravellerPage = lazy(() => import('./pages/SeventeenSeaterTempoTravellerPage'));
+const TwelveSeaterTempoTravellerPage = lazy(() => import('./pages/TwelveSeaterTempoTravellerPage'));
+const GroupTravelTempoTravellerPage = lazy(() => import('./pages/GroupTravelTempoTravellerPage'));
+const CorporateTempoTravellerPage = lazy(() => import('./pages/CorporateTempoTravellerPage'));
+const WeddingTempoTravellerPage = lazy(() => import('./pages/WeddingTempoTravellerPage'));
+const PilgrimageTempoTravellerPage = lazy(() => import('./pages/PilgrimageTempoTravellerPage'));
+const EighteenSeaterTempoTravellerPage = lazy(() => import('./pages/EighteenSeaterTempoTravellerPage'));
+const MiniBusTravelsPage = lazy(() => import('./pages/MiniBusTravelsPage'));
+const ArakuTourPackagesPage = lazy(() => import('./pages/ArakuTourPackagesPage'));
+const VizagToArakuBusPage = lazy(() => import('./pages/VizagToArakuBusPage'));
 const PrivilegeManagement = lazy(() => import('./components/admin/PrivilegeManagement').then(module => ({ default: module.PrivilegeManagement })));
 
 // Loading component for route transitions
@@ -542,42 +553,50 @@ const router = createBrowserRouter([
         path: 'fleet',
         element: <FleetPage />,
       },
-      // Tempo Traveller SEO URLs - redirect to main tempo traveller page
+      // Tempo Traveller SEO URLs - actual pages with content
       {
         path: 'tempo-traveller-rental-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={TempoTravellerRentalPage} />,
       },
       {
         path: '17-seater-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={SeventeenSeaterTempoTravellerPage} />,
       },
       {
         path: '12-seater-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={TwelveSeaterTempoTravellerPage} />,
       },
       {
         path: 'group-travel-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={GroupTravelTempoTravellerPage} />,
       },
       {
         path: 'corporate-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={CorporateTempoTravellerPage} />,
       },
       {
         path: 'wedding-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={WeddingTempoTravellerPage} />,
       },
       {
         path: 'pilgrimage-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={PilgrimageTempoTravellerPage} />,
       },
       {
         path: '18-seater-tempo-traveller-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={EighteenSeaterTempoTravellerPage} />,
       },
       {
         path: 'mini-bus-travels-vizag',
-        element: <Navigate to="/vehicle/tempo-traveller" replace />,
+        element: <LazyRoute component={MiniBusTravelsPage} />,
+      },
+      {
+        path: 'araku-tour-packages-vizag',
+        element: <LazyRoute component={ArakuTourPackagesPage} />,
+      },
+      {
+        path: 'vizag-to-araku-bus',
+        element: <LazyRoute component={VizagToArakuBusPage} />,
       },
       {
         path: 'careers',

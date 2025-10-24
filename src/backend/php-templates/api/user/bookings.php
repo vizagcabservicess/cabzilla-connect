@@ -214,10 +214,11 @@ try {
         exit;
     }
     
-    // Query to get bookings with calculated payment status
+    // Query to get bookings with calculated payment status and tour info
     $baseSql = "
         SELECT 
             b.*,
+            tf.tour_name,
             CASE
                 WHEN b.status = 'cancelled' THEN 'cancelled'
                 WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
@@ -233,6 +234,7 @@ try {
             WHERE status = 'confirmed'
             GROUP BY booking_id
         ) p ON p.booking_id = b.id
+        LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
     ";
     
     if ($userId && !$isAdmin) {
@@ -299,6 +301,8 @@ try {
             'driverName' => $row['driver_name'] ?? null,
             'driverPhone' => $row['driver_phone'] ?? null,
             'vehicleNumber' => $row['vehicle_number'] ?? null,
+            'tourId' => $row['tour_id'] ?? null,
+            'tourName' => $row['tour_name'] ?? null,
             'payment_status' => $row['calculated_payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
             'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),

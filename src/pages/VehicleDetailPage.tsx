@@ -393,27 +393,74 @@ const VehicleDetailPage = () => {
           </>
         )}
         
-        {/* Simplified structured data for better performance */}
+        {/* LocalBusiness structured data for Tempo Traveller */}
         {vehicle?.id === 'tempo_traveller' && (
           <script type="application/ld+json">
             {JSON.stringify({
               "@context": "https://schema.org",
-              "@type": "Product",
-              "name": "17 Seater Tempo Traveller Rental in Vizag",
+              "@type": "LocalBusiness",
+              "name": "Vizag Taxi Hub - Tempo Traveller Service",
               "description": "Professional tempo traveller rental service for group travel in Visakhapatnam",
-              "image": seoData?.image || "/cars/tempo.png",
               "url": seoData?.url,
-              "brand": { "@type": "Brand", "name": "Vizag Taxi Hub" },
-              "offers": {
-                "@type": "Offer",
-                "price": "35",
-                "priceCurrency": "INR",
-                "availability": "https://schema.org/InStock"
+              "telephone": "+91-9966363662",
+              "email": "info@vizagtaxihub.com",
+              "address": {
+                "@type": "PostalAddress",
+                "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+                "addressLocality": "Visakhapatnam",
+                "addressRegion": "Andhra Pradesh",
+                "postalCode": "530024",
+                "addressCountry": "IN"
               },
+              "geo": {
+                "@type": "GeoCoordinates",
+                "latitude": 17.7428416,
+                "longitude": 83.2889633
+              },
+              "areaServed": {
+                "@type": "City",
+                "name": "Visakhapatnam"
+              },
+              "openingHours": "Mo-Su 00:00-23:59",
+              "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
+              "currenciesAccepted": "INR",
+              "priceRange": "₹35-₹15000",
               "aggregateRating": {
                 "@type": "AggregateRating",
                 "ratingValue": "4.8",
-                "reviewCount": "127"
+                "reviewCount": "127",
+                "bestRating": "5",
+                "worstRating": "1"
+              },
+              "hasOfferCatalog": {
+                "@type": "OfferCatalog",
+                "name": "Tempo Traveller Services",
+                "itemListElement": [
+                  {
+                    "@type": "Offer",
+                    "itemOffered": {
+                      "@type": "Service",
+                      "name": "17 Seater Tempo Traveller",
+                      "description": "Large group travel with AC comfort"
+                    },
+                    "price": "35",
+                    "priceCurrency": "INR",
+                    "priceSpecification": {
+                      "@type": "UnitPriceSpecification",
+                      "price": "35",
+                      "priceCurrency": "INR",
+                      "unitText": "per kilometer"
+                    }
+                  },
+                  {
+                    "@type": "Offer",
+                    "itemOffered": {
+                      "@type": "Service",
+                      "name": "Group Travel Service",
+                      "description": "Corporate and family group transportation"
+                    }
+                  }
+                ]
               }
             })}
           </script>
@@ -655,6 +702,45 @@ const VehicleDetailPage = () => {
                         <Car className="mr-2 h-4 w-4" />
                         Book Online Now
                       </Button>
+                    </div>
+                  </div>
+
+                  {/* Internal Links to Tempo Traveller Pages */}
+                  <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-6">Explore Our Tempo Traveller Services</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <Link to="/tempo-traveller-rental-vizag" className="block p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                        <h4 className="font-semibold text-blue-900 mb-2">Tempo Traveller Rental</h4>
+                        <p className="text-sm text-blue-700">Best tempo traveller rental service in Vizag</p>
+                      </Link>
+                      <Link to="/17-seater-tempo-traveller-vizag" className="block p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                        <h4 className="font-semibold text-green-900 mb-2">17 Seater Tempo Traveller</h4>
+                        <p className="text-sm text-green-700">Perfect for large group travel</p>
+                      </Link>
+                      <Link to="/12-seater-tempo-traveller-vizag" className="block p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                        <h4 className="font-semibold text-purple-900 mb-2">12 Seater Tempo Traveller</h4>
+                        <p className="text-sm text-purple-700">Ideal for medium group travel</p>
+                      </Link>
+                      <Link to="/group-travel-tempo-traveller-vizag" className="block p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+                        <h4 className="font-semibold text-orange-900 mb-2">Group Travel</h4>
+                        <p className="text-sm text-orange-700">Specialized group travel solutions</p>
+                      </Link>
+                      <Link to="/corporate-tempo-traveller-vizag" className="block p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+                        <h4 className="font-semibold text-indigo-900 mb-2">Corporate Transport</h4>
+                        <p className="text-sm text-indigo-700">Business travel and corporate events</p>
+                      </Link>
+                      <Link to="/wedding-tempo-traveller-vizag" className="block p-4 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors">
+                        <h4 className="font-semibold text-pink-900 mb-2">Wedding Transport</h4>
+                        <p className="text-sm text-pink-700">Wedding party transportation</p>
+                      </Link>
+                      <Link to="/pilgrimage-tempo-traveller-vizag" className="block p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
+                        <h4 className="font-semibold text-yellow-900 mb-2">Pilgrimage Tours</h4>
+                        <p className="text-sm text-yellow-700">Religious and pilgrimage tours</p>
+                      </Link>
+                      <Link to="/mini-bus-travels-vizag" className="block p-4 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors">
+                        <h4 className="font-semibold text-teal-900 mb-2">Mini Bus Travels</h4>
+                        <p className="text-sm text-teal-700">Mini bus rental services</p>
+                      </Link>
                     </div>
                   </div>
                 </div>

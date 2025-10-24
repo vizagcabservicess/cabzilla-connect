@@ -254,22 +254,21 @@ Best regards,
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "Service",
-            "name": "Professional Driver Hire Service",
+            "@type": "LocalBusiness",
+            "name": "Vizag Taxi Hub - Driver Hire Service",
             "description": "Hire professional drivers in Visakhapatnam for your personal or business vehicle. Choose from local drivers, outstation drivers, and event drivers.",
-            "provider": {
-              "@type": "Organization",
-              "name": "Vizag Taxi Hub",
-              "url": "https://vizagtaxihub.com",
-              "address": {
-                "@type": "PostalAddress",
-                "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-                "addressLocality": "Visakhapatnam",
-                "addressRegion": "Andhra Pradesh",
-                "postalCode": "530024",
-                "addressCountry": "IN"
-              }
+            "url": "https://vizagtaxihub.com/hire-driver",
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+              "addressLocality": "Visakhapatnam",
+              "addressRegion": "Andhra Pradesh",
+              "postalCode": "530024",
+              "addressCountry": "IN"
             },
+            "telephone": "+91-9966363662",
+            "openingHours": "Mo-Su 00:00-23:59",
+            "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
             "areaServed": {
               "@type": "City",
               "name": "Visakhapatnam"

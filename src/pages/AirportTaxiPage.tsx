@@ -8,6 +8,9 @@ import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
+import { ServiceLinks } from '@/components/ServiceLinks';
+import { Link } from 'react-router-dom';
+import { Users } from 'lucide-react';
 
 export function AirportTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -99,29 +102,47 @@ export function AirportTaxiPage() {
 
   const structuredData = {
     "@context": "https://schema.org",
-    "@type": "Service",
-    "name": "Airport Taxi Service Visakhapatnam",
+    "@type": "LocalBusiness",
+    "name": "Vizag Taxi Hub - Airport Taxi Service",
     "description": "Professional airport transfer service in Visakhapatnam. Pickup and drop to Visakhapatnam Airport with flight tracking and fixed pricing.",
-    "provider": {
-      "@type": "LocalBusiness",
-      "name": "Vizag Taxi Hub",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Visakhapatnam",
-        "addressRegion": "Andhra Pradesh",
-        "addressCountry": "IN"
-      },
-      "telephone": "+91-9966363662"
+    "url": "https://vizagtaxihub.com/airport-taxi",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+      "addressLocality": "Visakhapatnam",
+      "addressRegion": "Andhra Pradesh",
+      "postalCode": "530024",
+      "addressCountry": "IN"
     },
+    "telephone": "+91-9966363662",
+    "openingHours": "Mo-Su 00:00-23:59",
+    "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
+    "priceRange": "₹350-650",
     "areaServed": {
       "@type": "City",
       "name": "Visakhapatnam"
     },
-    "serviceType": "Airport Taxi Service",
-    "offers": {
-      "@type": "Offer",
-      "priceRange": "₹350-650",
-      "availability": "https://schema.org/InStock"
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Airport Transfer Services",
+      "itemListElement": [
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Service",
+            "name": "Airport Pickup",
+            "description": "From airport to destination"
+          }
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Service",
+            "name": "Airport Drop",
+            "description": "From location to airport"
+          }
+        }
+      ]
     }
   };
 
@@ -447,7 +468,69 @@ export function AirportTaxiPage() {
       </section>
       )}
 
-     
+      {/* Tempo Traveller Services Section */}
+      <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Need Group Airport Transportation?</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              For larger groups arriving at the airport, explore our specialized tempo traveller services for comfortable group airport transfers
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Link to="/tempo-traveller-rental-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                  <Car className="h-6 w-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Tempo Traveller Rental</h3>
+                <p className="text-sm text-gray-600">Best tempo traveller rental service in Vizag</p>
+              </div>
+            </Link>
+            
+            <Link to="/17-seater-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
+                  <Users className="h-6 w-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">17 Seater Tempo Traveller</h3>
+                <p className="text-sm text-gray-600">Perfect for large group airport transfers</p>
+              </div>
+            </Link>
+            
+            <Link to="/corporate-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-indigo-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
+                  <Shield className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Corporate Transport</h3>
+                <p className="text-sm text-gray-600">Business travel and corporate events</p>
+              </div>
+            </Link>
+            
+            <Link to="/group-travel-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-orange-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                  <Users className="h-6 w-6 text-orange-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Group Travel</h3>
+                <p className="text-sm text-gray-600">Specialized group travel solutions</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Service Links Section */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <ServiceLinks 
+            currentService="/airport-taxi"
+            title="Explore Our Other Services"
+          />
+        </div>
+      </section>
 
       </main>
       <Footer />

@@ -36,6 +36,54 @@ export const ServiceLinks: React.FC<ServiceLinksProps> = ({
       icon: '🏛️'
     },
     {
+      name: 'Tempo Traveller Rental',
+      href: '/tempo-traveller-rental-vizag',
+      description: 'Group travel solutions',
+      icon: '🚌'
+    },
+    {
+      name: '17 Seater Tempo Traveller',
+      href: '/17-seater-tempo-traveller-vizag',
+      description: 'Large group transportation',
+      icon: '🚐'
+    },
+    {
+      name: '12 Seater Tempo Traveller',
+      href: '/12-seater-tempo-traveller-vizag',
+      description: 'Medium group travel',
+      icon: '🚐'
+    },
+    {
+      name: 'Group Travel',
+      href: '/group-travel-tempo-traveller-vizag',
+      description: 'Specialized group travel',
+      icon: '👥'
+    },
+    {
+      name: 'Corporate Transport',
+      href: '/corporate-tempo-traveller-vizag',
+      description: 'Business travel solutions',
+      icon: '🏢'
+    },
+    {
+      name: 'Wedding Transport',
+      href: '/wedding-tempo-traveller-vizag',
+      description: 'Special wedding services',
+      icon: '💒'
+    },
+    {
+      name: 'Pilgrimage Tours',
+      href: '/pilgrimage-tempo-traveller-vizag',
+      description: 'Religious journey transport',
+      icon: '🕍'
+    },
+    {
+      name: 'Mini Bus Travels',
+      href: '/mini-bus-travels-vizag',
+      description: 'Mini bus rental services',
+      icon: '🚌'
+    },
+    {
       name: 'Fleet',
       href: '/fleet',
       description: 'Our vehicle fleet',

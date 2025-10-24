@@ -21,6 +21,8 @@ export function formatPhoneNumber(phone: string): string {
 export function generateBookingConfirmationMessage(booking: Booking): string {
   // Debug: Log available booking fields
   console.log('Booking data for WhatsApp:', {
+    id: booking.id,
+    bookingNumber: booking.bookingNumber,
     razorpay_payment_id: booking.razorpay_payment_id,
     payment_timestamp: booking.payment_timestamp,
     payment_method: booking.payment_method,
@@ -29,6 +31,18 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     totalAmount: booking.totalAmount,
     created_at: booking.created_at,
     updated_at: booking.updated_at,
+    // Trip type and mode fields
+    tripType: booking.tripType,
+    trip_type: booking.trip_type,
+    tripMode: booking.tripMode,
+    trip_mode: booking.trip_mode,
+    // Tour fields
+    tourId: booking.tourId,
+    tour_id: booking.tour_id,
+    tourName: booking.tourName,
+    tour_name: booking.tour_name,
+    tour_itinerary: booking.tour_itinerary,
+    tour_itinerary_length: Array.isArray(booking.tour_itinerary) ? booking.tour_itinerary.length : 'not an array',
     // Check for alternative field names
     razorpayPaymentId: (booking as any).razorpayPaymentId,
     paymentTimestamp: (booking as any).paymentTimestamp,
@@ -44,9 +58,84 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
 
   // Get trip type and tour information early, as we'll need them for drop location
-  const tripType = booking.tripType || booking.trip_type || 'Unknown';
+  let tripType = booking.tripType || booking.trip_type || '';
+  const tripMode = booking.tripMode || booking.trip_mode || 'one-way';
   const tourId = booking.tour_id || booking.tourId;
   const tourName = booking.tour_name || booking.tourName;
+  
+  // Smart fallback: If trip type is not set, try to infer it from the data
+  if (!tripType || tripType === '') {
+    if (tourId || tourName) {
+      tripType = 'tour';
+    } else if ((booking as any).hourlyPackage || (booking as any).hourly_package) {
+      tripType = 'local';
+    } else {
+      // Check if it's an airport transfer or outstation
+      const hasAirportInPickup = pickupLocation.toLowerCase().includes('airport');
+      const dropLocationStr = booking.drop_location 
+        ? (typeof booking.drop_location === 'string' ? booking.drop_location : booking.drop_location?.city || '')
+        : '';
+      const hasAirportInDrop = dropLocationStr.toLowerCase().includes('airport');
+      
+      // Extract cities from pickup and drop locations
+      const pickupCity = pickupLocation.split(',')[0].trim().toLowerCase();
+      const dropCity = dropLocationStr.split(',')[0].trim().toLowerCase();
+      
+      // For your specific case: Visakhapatnam -> Gopalpur (different cities)
+      // This should always be outstation, not airport transfer
+      
+      // Airport transfer: Only if both locations are in the same city AND one involves airport
+      // Examples: "Mumbai Airport" -> "Mumbai City" = Airport Transfer
+      // Examples: "Visakhapatnam Airport" -> "Gopalpur Port" = Outstation (different cities)
+      
+      // More explicit logic: Check if cities are different
+      const isSameCity = pickupCity === dropCity || 
+                        pickupCity.includes(dropCity.split(' ')[0]) || 
+                        dropCity.includes(pickupCity.split(' ')[0]);
+      const isInterCityTrip = !isSameCity;
+      
+      console.log('Trip type inference debug:', {
+        pickupLocation,
+        dropLocationStr,
+        pickupCity,
+        dropCity,
+        hasAirportInPickup,
+        hasAirportInDrop,
+        isSameCity,
+        isInterCityTrip
+      });
+      
+      if (isInterCityTrip) {
+        // Different cities = always outstation
+        tripType = 'outstation';
+        console.log('✅ Detected inter-city trip, setting as outstation');
+      } else if ((hasAirportInPickup || hasAirportInDrop)) {
+        // Same city + airport involved = airport transfer
+        tripType = 'airport';
+        console.log('✅ Detected same-city airport transfer');
+      } else {
+        // Same city, no airport = local (but this shouldn't happen in this context)
+        tripType = 'outstation';
+        console.log('✅ Fallback to outstation');
+      }
+    }
+    console.warn(`Trip type was not set for booking ${booking.id}, inferred as: ${tripType}`);
+  }
+  
+  // Final fallback and safety check
+  if (!tripType) {
+    tripType = 'Unknown';
+  }
+  
+  // Safety check: If we somehow got "airport" for inter-city trips, force it to "outstation"
+  if (tripType === 'airport' && pickupLocation && booking.drop_location) {
+    const pickupCity = pickupLocation.split(',')[0].trim().toLowerCase();
+    const dropCity = String(booking.drop_location).split(',')[0].trim().toLowerCase();
+    if (pickupCity !== dropCity && !pickupCity.includes(dropCity.split(' ')[0]) && !dropCity.includes(pickupCity.split(' ')[0])) {
+      console.warn(`⚠️ Safety check: Forcing airport transfer to outstation for inter-city trip`);
+      tripType = 'outstation';
+    }
+  }
   
   // For tour bookings, use tour name as destination
   let dropLocation = booking.drop_location 
@@ -71,14 +160,24 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     hour12: true
   }) : 'N/A';
   
-  // Determine trip type display
+  // Determine trip type display with trip mode
   let tripTypeDisplay = tripType;
   if (tripType === 'local') {
-    tripTypeDisplay = 'Local City Ride';
+    // For local trips, include the trip mode (One Way or Round Trip)
+    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
+    tripTypeDisplay = `Local City Ride - ${modeDisplay}`;
   } else if (tripType === 'tour' || tourId) {
     tripTypeDisplay = 'Tour';
+  } else if (tripType === 'outstation') {
+    // For outstation, include the trip mode (One Way or Round Trip)
+    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
+    tripTypeDisplay = `Outstation - ${modeDisplay}`;
+  } else if (tripType === 'airport') {
+    // For airport transfers, include the trip mode (One Way or Round Trip)
+    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
+    tripTypeDisplay = `Airport Transfer - ${modeDisplay}`;
   } else if (tripType !== 'Unknown') {
-    // Capitalize first letter for other trip types (outstation, airport)
+    // Capitalize first letter for other trip types
     tripTypeDisplay = tripType.charAt(0).toUpperCase() + tripType.slice(1);
   }
 
@@ -200,11 +299,94 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const pendingAmount = Math.max(0, fareBase - advanceAmount);
   const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
 
-  // Get package details for local trips only
-  const hoursIncluded = tripType === 'local' ? (booking.hours_included || '8') : 'N/A';
-  const kmIncluded = tripType === 'local' ? (booking.km_included || '80') : 'N/A';
-  const extraPerHour = tripType === 'local' ? (booking.extra_per_hour || '100') : 'N/A';
-  const extraPerKm = tripType === 'local' ? (booking.extra_per_km || '12') : 'N/A';
+  // Get package details for local trips only - use actual booking data or smart inference
+  let hoursIncluded = tripType === 'local' ? (booking.hours_included || (booking as any).hoursIncluded) : 'N/A';
+  let kmIncluded = tripType === 'local' ? (booking.km_included || (booking as any).kmIncluded) : 'N/A';
+  let extraPerHour = tripType === 'local' ? (booking.extra_per_hour || (booking as any).extraPerHour) : 'N/A';
+  let extraPerKm = tripType === 'local' ? (booking.extra_per_km || (booking as any).extraPerKm) : 'N/A';
+  
+  // Smart inference for local trips based on fare and vehicle type
+  if (tripType === 'local' && (!hoursIncluded || !kmIncluded || !extraPerHour || !extraPerKm)) {
+    const vehicleType = vehicleModel.toLowerCase();
+    const fare = parseFloat(fareBase.toString());
+    
+    // Infer package based on fare and vehicle type
+    if (vehicleType.includes('innova')) {
+      if (fare >= 4000 && fare <= 5000) {
+        // 10hrs 100km package for Innova Crysta
+        hoursIncluded = '10';
+        kmIncluded = '100';
+        extraPerHour = '450';
+        extraPerKm = '20';
+      } else if (fare >= 3000 && fare <= 4000) {
+        // 8hrs 80km package for Innova Crysta
+        hoursIncluded = '8';
+        kmIncluded = '80';
+        extraPerHour = '450';
+        extraPerKm = '20';
+      }
+    } else if (vehicleType.includes('ertiga')) {
+      if (fare >= 3500 && fare <= 4500) {
+        hoursIncluded = '10';
+        kmIncluded = '100';
+        extraPerHour = '400';
+        extraPerKm = '18';
+      } else if (fare >= 2500 && fare <= 3500) {
+        hoursIncluded = '8';
+        kmIncluded = '80';
+        extraPerHour = '400';
+        extraPerKm = '18';
+      }
+    } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
+      if (fare >= 7500 && fare <= 9000) {
+        hoursIncluded = '10';
+        kmIncluded = '100';
+        extraPerHour = '850';
+        extraPerKm = '35';
+      } else if (fare >= 6000 && fare <= 8000) {
+        hoursIncluded = '8';
+        kmIncluded = '80';
+        extraPerHour = '850';
+        extraPerKm = '35';
+      }
+    } else {
+      // Sedan (Swift/Dzire/Amaze/Glanza)
+      if (fare >= 2500 && fare <= 3500) {
+        hoursIncluded = '10';
+        kmIncluded = '100';
+        extraPerHour = '300';
+        extraPerKm = '14';
+      } else if (fare >= 2000 && fare <= 3000) {
+        hoursIncluded = '8';
+        kmIncluded = '80';
+        extraPerHour = '300';
+        extraPerKm = '14';
+      }
+    }
+    
+    // Final fallback to defaults
+    if (!hoursIncluded) {
+      hoursIncluded = '8';
+      kmIncluded = '80';
+      extraPerHour = '100';
+      extraPerKm = '12';
+    }
+  }
+  
+  // Debug: Log package details for local trips
+  if (tripType === 'local') {
+    console.log('Local trip package details:', {
+      hoursIncluded,
+      kmIncluded,
+      extraPerHour,
+      extraPerKm,
+      vehicleModel,
+      fareBase,
+      vehicleType: vehicleModel.toLowerCase(),
+      fare: parseFloat(fareBase.toString()),
+      inference: 'Smart inference based on fare and vehicle type'
+    });
+  }
 
   // Get billing details
   const billingBasis = 'Per trip'; // Default billing basis
@@ -264,7 +446,7 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   }
 
   if (!exclusions || exclusions === 'Standard exclusions apply') {
-    exclusions = 'Toll gates, Parking fees, Entry fees, State and Route Permits (If applicable)';
+    exclusions = 'Toll gates, Parking fees, Entry fees, State and Route Permits (If applicable), During standby and ghat roads the A/C will be turned off';
   }
 
   // Get GST details
@@ -364,6 +546,26 @@ ${activities ? `🎯 Activities: ${activities}` : ''}`;
 🚫 *No-show:* ${noShowPolicy}
 💰 *Refund:* ${isTour ? 'Refunds processed within 21 working days based on cancellation timeframe' : 'Refunds processed within 21 working days'}
 🧾 *Invoice/Receipt:* ${invoiceMode}
+
+${(tripType === 'tour' || tourId || (booking as any).tour_id) ? `*Additional Terms & Conditions*
+📋 *Important Notes:*
+• Prices exclude driver's food, parking fees, and entry fees
+• AC will be turned off during ghat roads and while on standby
+• Places will be shown based on timing and conditions. We are not responsible for traffic delays or bandhs
+• For Katiki Waterfalls, vehicles will go only to the parking lot. Guests need to take jeeps (extra charge)
+• During peak season (October to January), will park at Borra Caves or Katiki waterfalls' parking area. Guests need to walk or take an auto at their own expense
+• Exceeding the time limit will incur extra charges
+
+` : ''}${tripType === 'outstation' ? `*Terms & Conditions*
+📋 *Important Notes:*
+• Please provide food for the driver
+• The above prices do not include tolls, entry fees, parking fees
+• From the garage to the garage, kilometers are calculated
+• During standby and ghat roads the A/C will be turned off
+• The prices quoted are for today's date and are subject to change
+• The prices do not include any taxes or fees
+
+` : ''}
 
 *Support*
 📞 *Driver helpline:* +91 9966363662

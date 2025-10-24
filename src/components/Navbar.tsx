@@ -41,6 +41,7 @@ import { tourAPI } from '@/services/api/tourAPI';
 interface NavLink {
   to: string;
   label: string;
+  subItems?: NavLink[];
 }
 
 const megaMenuData = {
@@ -50,12 +51,26 @@ const megaMenuData = {
       { label: 'Outstation', to: '/outstation-taxi' },
       { label: 'Airport Transfer', to: '/airport-taxi' },
       { label: 'Tour Packages', to: '/tours' },
+      { 
+        label: 'Tempo Traveller Rental', 
+        to: '/tempo-traveller-rental-vizag',
+        subItems: [
+          { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
+          { label: '17 Seater Tempo Traveller', to: '/17-seater-tempo-traveller-vizag' },
+          { label: '12 Seater Tempo Traveller', to: '/12-seater-tempo-traveller-vizag' },
+          { label: 'Group Travel', to: '/group-travel-tempo-traveller-vizag' },
+          { label: 'Corporate Transport', to: '/corporate-tempo-traveller-vizag' },
+          { label: 'Wedding Transport', to: '/wedding-tempo-traveller-vizag' },
+          { label: 'Pilgrimage Tours', to: '/pilgrimage-tempo-traveller-vizag' },
+          { label: 'Mini Bus Travels', to: '/mini-bus-travels-vizag' },
+        ]
+      },
     ],
     right: [
       { label: 'Hourly Packages', items: ['8hrs/80km', '10hrs/100km', 'Professional drivers'] },
       { label: 'Long Distance', items: ['Hyderabad', 'Chennai', 'Bangalore'] },
       { label: 'Airport Info', items: ['On-time guarantee', 'Flight tracking', 'Fixed rates'] },
-      { label: 'Tour Options', items: ['Vizag-Araku', 'Vizag-Lambasingi', 'Vizag-Borra Caves'] },
+      { label: 'Tempo Traveller Services', items: ['12-18 seater options', 'Group travel', 'Wedding transport', 'Corporate events'] },
     ],
   },
   'Tour Packages': {
@@ -78,6 +93,14 @@ const megaMenuData = {
       { label: 'Sedan', to: '/vehicle/sedan' },
       { label: 'Ertiga', to: '/vehicle/ertiga' },
       { label: 'Toyota Glanza', to: '/vehicle/toyota-glanza' },
+      { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
+      { label: '17 Seater Tempo Traveller', to: '/17-seater-tempo-traveller-vizag' },
+      { label: '12 Seater Tempo Traveller', to: '/12-seater-tempo-traveller-vizag' },
+      { label: 'Group Travel', to: '/group-travel-tempo-traveller-vizag' },
+      { label: 'Corporate Transport', to: '/corporate-tempo-traveller-vizag' },
+      { label: 'Wedding Transport', to: '/wedding-tempo-traveller-vizag' },
+      { label: 'Araku Tour Packages', to: '/araku-tour-packages-vizag' },
+      { label: 'Vizag to Araku Bus', to: '/vizag-to-araku-bus' },
     ],
     right: [
       { label: 'Premium Vehicles', items: ['Toyota Glanza', 'Innova Crysta'] },
@@ -318,7 +341,11 @@ export function Navbar() {
                   onClick={() => setMegaMenuOpen(null)}
                 >
                   {item.label}
-                  <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
+                  {item.subItems ? (
+                    <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
+                  ) : (
+                    <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
+                  )}
                 </Link>
               ))}
             </div>
@@ -361,6 +388,22 @@ export function Navbar() {
                           {tour.tourName}
                         </Link>
                       ))}
+                  </div>
+                </div>
+              ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tempo Traveller Rental' ? (
+                <div>
+                  <div className="font-semibold text-gray-800 mb-3">Tempo Traveller Services</div>
+                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                    {left[activeLeftIndex]?.subItems?.map((subItem, idx) => (
+                      <Link
+                        key={idx}
+                        to={subItem.to}
+                        className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                        onClick={() => setMegaMenuOpen(null)}
+                      >
+                        {subItem.label}
+                      </Link>
+                    ))}
                   </div>
                 </div>
               ) : category === 'Tour Packages' ? (

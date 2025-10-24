@@ -126,10 +126,11 @@ try {
         throw new Exception("Bookings table doesn't exist");
     }
     
-    // Admin sees all bookings with calculated payment status
+    // Admin sees all bookings with calculated payment status and tour info
     $sql = "
         SELECT 
             b.*,
+            tf.tour_name,
             CASE
                 WHEN b.status = 'cancelled' THEN 'cancelled'
                 WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
@@ -145,6 +146,7 @@ try {
             WHERE status = 'confirmed'
             GROUP BY booking_id
         ) p ON p.booking_id = b.id
+        LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
         ORDER BY b.created_at DESC
     ";
     $stmt = $conn->prepare($sql);
@@ -209,6 +211,8 @@ try {
             'vehicleNumber' => $row['vehicle_number'] ?? null,
             'billingAddress' => $row['billing_address'] ?? null,
             'extraCharges' => json_decode($row['extra_charges'] ?? '[]'),
+            'tourId' => $row['tour_id'] ?? null,
+            'tourName' => $row['tour_name'] ?? null,
             'payment_status' => $row['calculated_payment_status'] ?? 'pending',
             'payment_method' => $row['payment_method'] ?? '',
             'advance_paid_amount' => (float)($row['advance_paid_amount'] ?? 0),

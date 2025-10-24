@@ -16,6 +16,7 @@ RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
 RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)$
 RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)/
+RewriteCond %{REQUEST_URI} !^/(tempo-traveller-rental-vizag|17-seater-tempo-traveller-vizag|12-seater-tempo-traveller-vizag|group-travel-tempo-traveller-vizag|corporate-tempo-traveller-vizag|wedding-tempo-traveller-vizag|pilgrimage-tempo-traveller-vizag|18-seater-tempo-traveller-vizag|mini-bus-travels-vizag)$
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 
 # SEO Handler - Only when explicitly requested with ?seo=1
@@ -218,10 +219,8 @@ RewriteRule ^tempotraveller$ /fleet [R=301,L]
 # RewriteRule ^tempo-traveller$ /fleet [R=301,L]
 # RewriteRule ^tempo_traveller$ /fleet [R=301,L]
 
-# Redirect old URLs to MAIN tempo traveller page
-RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+# OLD CAB URLs - Now handled by React components
+# These specific tempo traveller pages now have their own React components
 
 # Old service pages
 RewriteRule ^rentals$ /local-taxi [R=301,L]
@@ -397,7 +396,7 @@ RewriteRule ^ertiga$ /vehicle/ertiga [R=301,L]
 RewriteRule ^innova$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^innova-crysta$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^toyota-glanza$ /vehicle/toyota-glanza [R=301,L]
-RewriteRule ^tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+# tempo-traveller now handled by React router
 RewriteRule ^honda-amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^amaze$ /vehicle/amaze [R=301,L]
 
@@ -411,30 +410,9 @@ RewriteRule ^vehicle/amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^vehicle/mpv$ /vehicle/innova-hycross [R=301,L]
 RewriteRule ^vehicle/bus$ /vehicle/urbania [R=301,L]
 
-# REDIRECT OLD TEMPO TRAVELLER URLs TO MAIN PAGE
-RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^tempo-traveller-rental$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^18-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^group-travel-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^corporate-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^wedding-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^pilgrimage-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^mini-bus-travels$ /vehicle/tempo-traveller [R=301,L]
-
-# NEW TEMPO TRAVELLER SPECIFIC ROUTES - Handle the new SEO URLs
-RewriteRule ^tempo-traveller-rental-vizag$ /seo-handler.php?url=tempo-traveller-rental-vizag [L,QSA]
-RewriteRule ^17-seater-tempo-traveller-vizag$ /seo-handler.php?url=17-seater-tempo-traveller-vizag [L,QSA]
-RewriteRule ^group-travel-tempo-traveller-vizag$ /seo-handler.php?url=group-travel-tempo-traveller-vizag [L,QSA]
-RewriteRule ^corporate-tempo-traveller-vizag$ /seo-handler.php?url=corporate-tempo-traveller-vizag [L,QSA]
-RewriteRule ^wedding-tempo-traveller-vizag$ /seo-handler.php?url=wedding-tempo-traveller-vizag [L,QSA]
-RewriteRule ^pilgrimage-tempo-traveller-vizag$ /seo-handler.php?url=pilgrimage-tempo-traveller-vizag [L,QSA]
-RewriteRule ^12-seater-tempo-traveller-vizag$ /seo-handler.php?url=12-seater-tempo-traveller-vizag [L,QSA]
-RewriteRule ^18-seater-tempo-traveller-vizag$ /seo-handler.php?url=18-seater-tempo-traveller-vizag [L,QSA]
-RewriteRule ^mini-bus-travels-vizag$ /seo-handler.php?url=mini-bus-travels-vizag [L,QSA]
+# TEMPO TRAVELLER PAGES - Now handled by React components
+# All tempo traveller pages now have proper React components with content
+# No server-side redirects needed - React router handles all routing
 
 # LOCATION-SPECIFIC TEMPO TRAVELLER ROUTES - Redirect to main tempo traveller page
 RewriteRule ^tempo-traveller-madhurawada$ /vehicle/tempo-traveller [R=301,L]

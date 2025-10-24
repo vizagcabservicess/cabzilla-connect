@@ -255,6 +255,100 @@ export default function FleetPage() {
           )}
         </div>
 
+        {/* Tempo Traveller Services Section */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 py-16">
+          <div className="container mx-auto px-6 sm:px-8 lg:px-12">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Specialized Tempo Traveller Services</h2>
+              <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+                Explore our comprehensive tempo traveller services designed for different travel needs and group sizes
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Link to="/tempo-traveller-rental-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                    <Car className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Tempo Traveller Rental</h3>
+                  <p className="text-sm text-gray-600">Best tempo traveller rental service in Vizag</p>
+                </div>
+              </Link>
+              
+              <Link to="/17-seater-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
+                    <Users className="h-6 w-6 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">17 Seater Tempo Traveller</h3>
+                  <p className="text-sm text-gray-600">Perfect for large group travel</p>
+                </div>
+              </Link>
+              
+              <Link to="/12-seater-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-purple-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
+                    <Users className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">12 Seater Tempo Traveller</h3>
+                  <p className="text-sm text-gray-600">Ideal for medium group travel</p>
+                </div>
+              </Link>
+              
+              <Link to="/group-travel-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-orange-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                    <Users className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Group Travel</h3>
+                  <p className="text-sm text-gray-600">Specialized group travel solutions</p>
+                </div>
+              </Link>
+              
+              <Link to="/corporate-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-indigo-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
+                    <Shield className="h-6 w-6 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Corporate Transport</h3>
+                  <p className="text-sm text-gray-600">Business travel and corporate events</p>
+                </div>
+              </Link>
+              
+              <Link to="/wedding-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-pink-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-pink-200 transition-colors">
+                    <Star className="h-6 w-6 text-pink-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Wedding Transport</h3>
+                  <p className="text-sm text-gray-600">Wedding party transportation</p>
+                </div>
+              </Link>
+              
+              <Link to="/pilgrimage-tempo-traveller-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-yellow-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-yellow-200 transition-colors">
+                    <MapPin className="h-6 w-6 text-yellow-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Pilgrimage Tours</h3>
+                  <p className="text-sm text-gray-600">Religious and pilgrimage tours</p>
+                </div>
+              </Link>
+              
+              <Link to="/mini-bus-travels-vizag" className="group">
+                <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <div className="bg-teal-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-teal-200 transition-colors">
+                    <Car className="h-6 w-6 text-teal-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mini Bus Travels</h3>
+                  <p className="text-sm text-gray-600">Mini bus rental services</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* CTA Section */}
         <div className="bg-primary text-primary-foreground py-16">
           <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">

@@ -10,6 +10,7 @@ import Footer from '@/components/Footer';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import { ServiceLinks } from '@/components/ServiceLinks';
 import { PopularDestinations } from '@/components/PopularDestinations';
+import { Link } from 'react-router-dom';
 
 export function OutstationTaxiPage() {
   const widgetRef = React.useRef<HTMLDivElement>(null);
@@ -73,29 +74,47 @@ export function OutstationTaxiPage() {
 
   const structuredData = {
     "@context": "https://schema.org",
-    "@type": "Service",
-    "name": "Outstation Taxi Service Visakhapatnam",
+    "@type": "LocalBusiness",
+    "name": "Vizag Taxi Hub - Outstation Taxi Service",
     "description": "Professional outstation cab booking service from Visakhapatnam. One way and round trip taxi service to all major cities in India.",
-    "provider": {
-      "@type": "LocalBusiness",
-      "name": "Vizag Taxi Hub",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Visakhapatnam",
-        "addressRegion": "Andhra Pradesh",
-        "addressCountry": "IN"
-      },
-      "telephone": "+91-9966363662"
+    "url": "https://vizagtaxihub.com/outstation-taxi",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+      "addressLocality": "Visakhapatnam",
+      "addressRegion": "Andhra Pradesh",
+      "postalCode": "530024",
+      "addressCountry": "IN"
     },
+    "telephone": "+91-9966363662",
+    "openingHours": "Mo-Su 00:00-23:59",
+    "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
+    "priceRange": "₹14-35 per km",
     "areaServed": {
       "@type": "City",
       "name": "Visakhapatnam"
     },
-    "serviceType": "Outstation Taxi Service",
-    "offers": {
-      "@type": "Offer",
-      "priceRange": "₹14-35 per km",
-      "availability": "https://schema.org/InStock"
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Outstation Taxi Services",
+      "itemListElement": [
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Service",
+            "name": "One Way Taxi",
+            "description": "Single direction outstation travel"
+          }
+        },
+        {
+          "@type": "Offer",
+          "itemOffered": {
+            "@type": "Service", 
+            "name": "Round Trip Taxi",
+            "description": "Return journey bookings"
+          }
+        }
+      ]
     }
   };
 
@@ -374,6 +393,60 @@ export function OutstationTaxiPage() {
             limit={8}
             showFares={true}
           />
+        </div>
+      </section>
+
+      {/* Tempo Traveller Services Section */}
+      <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Need Group Transportation for Outstation Travel?</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              For larger groups traveling outstation, explore our specialized tempo traveller services with comfortable long-distance travel options
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Link to="/tempo-traveller-rental-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                  <Car className="h-6 w-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Tempo Traveller Rental</h3>
+                <p className="text-sm text-gray-600">Best tempo traveller rental service in Vizag</p>
+              </div>
+            </Link>
+            
+            <Link to="/17-seater-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
+                  <Users className="h-6 w-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">17 Seater Tempo Traveller</h3>
+                <p className="text-sm text-gray-600">Blue perfect for large group outstation travel</p>
+              </div>
+            </Link>
+            
+            <Link to="/corporate-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-indigo-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
+                  <Shield className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Corporate Transport</h3>
+                <p className="text-sm text-gray-600">Business travel and corporate events</p>
+              </div>
+            </Link>
+            
+            <Link to="/group-travel-tempo-traveller-vizag" className="group">
+              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <div className="bg-orange-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                  <Users className="h-6 w-6 text-orange-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Group Travel</h3>
+                <p className="text-sm text-gray-600">Specialized group travel solutions</p>
+              </div>
+            </Link>
+          </div>
         </div>
       </section>
 

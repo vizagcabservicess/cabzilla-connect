@@ -63,21 +63,30 @@ try {
     // For debugging - log the database connection status
     logError("Database connection established", ['connected' => true]);
     
-    // Build the query based on the user's authentication status
+    // Build the query based on the user's authentication status - include tour_name
     if ($isAdmin) {
         // Admins can access any booking
-        $sql = "SELECT * FROM bookings WHERE id = ?";
+        $sql = "SELECT b.*, tf.tour_name 
+                FROM bookings b
+                LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+                WHERE b.id = ?";
         $params = [$bookingId];
         $types = "i";
     } elseif ($isAuthenticated) {
         // Authenticated users can access their own bookings
-        $sql = "SELECT * FROM bookings WHERE id = ? AND (user_id = ? OR user_id IS NULL)";
+        $sql = "SELECT b.*, tf.tour_name 
+                FROM bookings b
+                LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+                WHERE b.id = ? AND (b.user_id = ? OR b.user_id IS NULL)";
         $params = [$bookingId, $userId];
         $types = "ii";
     } else {
         // Unauthenticated users can access any booking (for guest bookings and email triggers)
         // This allows email triggering to work for all bookings
-        $sql = "SELECT * FROM bookings WHERE id = ?";
+        $sql = "SELECT b.*, tf.tour_name 
+                FROM bookings b
+                LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
+                WHERE b.id = ?";
         $params = [$bookingId];
         $types = "i";
     }
@@ -108,6 +117,35 @@ try {
     // Log successful retrieval
     logError("Booking found successfully", ['booking_id' => $booking['id'], 'status' => $booking['status']]);
     
+    // Fetch tour itinerary if this is a tour booking
+    $tourItinerary = [];
+    if (!empty($booking['tour_id'])) {
+        $itineraryStmt = $conn->prepare("
+            SELECT day_number as day, title, description, activities 
+            FROM tour_itinerary 
+            WHERE tour_id = ? 
+            ORDER BY day_number
+        ");
+        $itineraryStmt->bind_param("s", $booking['tour_id']);
+        $itineraryStmt->execute();
+        $itineraryResult = $itineraryStmt->get_result();
+        
+        while ($itineraryRow = $itineraryResult->fetch_assoc()) {
+            $activities = [];
+            if (!empty($itineraryRow['activities'])) {
+                $decoded = json_decode($itineraryRow['activities'], true);
+                $activities = is_array($decoded) ? $decoded : explode(',', $itineraryRow['activities']);
+            }
+            
+            $tourItinerary[] = [
+                'day' => (int)$itineraryRow['day'],
+                'title' => $itineraryRow['title'],
+                'description' => $itineraryRow['description'],
+                'activities' => $activities
+            ];
+        }
+    }
+    
     // Format response data
     $formattedBooking = [
         'id' => (int)$booking['id'],
@@ -128,6 +166,8 @@ try {
         'passengerEmail' => $booking['passenger_email'],
         'hourlyPackage' => $booking['hourly_package'],
         'tourId' => $booking['tour_id'],
+        'tourName' => $booking['tour_name'] ?? null,
+        'tour_itinerary' => $tourItinerary,
         'payment_status' => $booking['payment_status'] ?? 'pending',
         'payment_method' => $booking['payment_method'] ?? '',
         'advance_paid_amount' => (float)($booking['advance_paid_amount'] ?? 0),
