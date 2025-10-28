@@ -162,6 +162,7 @@ function ensureBookingsTableExists($conn) {
             passenger_name VARCHAR(100) NOT NULL,
             passenger_phone VARCHAR(20) NOT NULL,
             passenger_email VARCHAR(100) NOT NULL,
+            additional_requirements TEXT,
             driver_name VARCHAR(100),
             driver_phone VARCHAR(20),
             vehicle_number VARCHAR(50),

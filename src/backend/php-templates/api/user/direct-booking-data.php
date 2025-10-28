@@ -272,6 +272,7 @@ try {
                                 'passengerName' => $row['passenger_name'],
                                 'passengerPhone' => $row['passenger_phone'],
                                 'passengerEmail' => $row['passenger_email'],
+                                'additionalRequirements' => $row['additional_requirements'] ?? null,
                                 'driverName' => $row['driver_name'] ?? null,
                                 'driverPhone' => $row['driver_phone'] ?? null,
                                 'createdAt' => $row['created_at'],

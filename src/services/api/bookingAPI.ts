@@ -109,10 +109,11 @@ export const bookingAPI = {
    */
   getBookingById: async (id: number | string) => {
     try {
-      // Use the public endpoint instead of admin endpoint
-      const response = await axios.get(`${API_BASE_URL}/api/user/booking.php?id=${id}`, {
+      // Use admin endpoint for complete booking data including additional requirements
+      const response = await axios.get(`${API_BASE_URL}/api/admin/booking.php?id=${id}`, {
         headers: {
           'Cache-Control': 'no-cache',
+          'Content-Type': 'application/json'
         }
       });
       
@@ -267,11 +268,18 @@ export const bookingAPI = {
     try {
       const headers = { 'Content-Type': 'application/json' };
       const payload = { bookingId: bookingId, ...data } as any;
+      
+      console.log('updateBooking called with:', {
+        bookingId: bookingId,
+        payload: payload
+      });
+      
       // Try non-admin endpoint first
       try {
         const r1 = await axios.post(`/api/update-booking.php`, payload, { headers });
         return r1.data;
       } catch (e1) {
+        console.log('Non-admin endpoint failed, trying admin endpoint:', e1.message);
         // Fallback to admin endpoint
         const r2 = await axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers });
         return r2.data;

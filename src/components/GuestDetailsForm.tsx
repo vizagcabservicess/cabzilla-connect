@@ -1,15 +1,18 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, User, Phone, Mail, CreditCard } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, ArrowRight, User, Phone, Mail, CreditCard, MessageSquare, Search } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
 import { motion } from 'framer-motion';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { countryCodes, CountryCode } from '@/lib/countryCodes';
 
 interface GuestDetailsFormProps {
   onSubmit: (data: GuestDetails) => void;
@@ -22,7 +25,9 @@ interface GuestDetailsFormProps {
 export interface GuestDetails {
   name: string;
   phone: string;
+  countryCode: string;
   email: string;
+  additionalRequirements?: string;
   totalPrice: number;
   paymentMode?: 'partial' | 'full';
   gstEnabled?: boolean;
@@ -39,12 +44,24 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   isLoading = false,
   paymentEnabled = true
 }) => {
-  const { register, handleSubmit, formState: { errors, isValid }, watch, setValue } = useForm<GuestDetails>({
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(countryCodes[0]); // Default to India
+  
+  // Ensure selectedCountry is always valid
+  useEffect(() => {
+    if (!selectedCountry) {
+      setSelectedCountry(countryCodes[0]);
+    }
+  }, [selectedCountry]);
+  const [countrySearchTerm, setCountrySearchTerm] = useState('');
+  
+  const { register, handleSubmit, formState: { errors, isValid }, watch, setValue, trigger } = useForm<GuestDetails>({
     mode: 'onChange',
     defaultValues: {
       name: sessionStorage.getItem('guestName') || '',
       phone: sessionStorage.getItem('guestPhone') || '',
+      countryCode: sessionStorage.getItem('countryCode') || '+91',
       email: sessionStorage.getItem('guestEmail') || '',
+      additionalRequirements: sessionStorage.getItem('additionalRequirements') || '',
       totalPrice: totalPrice,
       paymentMode: (sessionStorage.getItem('paymentMode') as 'partial' | 'full') || 'partial',
       gstEnabled: sessionStorage.getItem('gstEnabled') === 'true' || false,
@@ -57,11 +74,69 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   
   const watchedValues = watch();
   
+  // Filter countries based on search term
+  const filteredCountries = countryCodes.filter(country => 
+    country.name.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
+    country.code.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
+    country.dialCode.includes(countrySearchTerm)
+  );
+
+  // Function to highlight search term in text
+  const highlightSearchTerm = (text: string, searchTerm: string) => {
+    if (!searchTerm) return text;
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    return text.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
+  };
+  
+  // Initialize selected country from session storage or default
+  useEffect(() => {
+    const savedCountryCode = sessionStorage.getItem('countryCode') || '+91';
+    const country = countryCodes.find(c => c.dialCode === savedCountryCode);
+    if (country) {
+      setSelectedCountry(country);
+    }
+    
+    // Clear any corrupted additional requirements data
+    const additionalReqs = sessionStorage.getItem('additionalRequirements');
+    if (additionalReqs && (additionalReqs.includes('Country') || additionalReqs.includes('digits') || additionalReqs.includes('+91') || additionalReqs.includes('United States'))) {
+      sessionStorage.removeItem('additionalRequirements');
+      console.log('Cleared corrupted additional requirements data');
+      // Reset the form field to empty
+      setValue('additionalRequirements', '');
+    }
+  }, []);
+
+  // Update phone validation rules when country changes
+  useEffect(() => {
+    // Re-register the phone field with new validation rules
+    register('phone', { 
+      required: 'Phone number is required',
+      pattern: {
+        value: new RegExp(`^[0-9]{${selectedCountry.maxLength}}$`),
+        message: `Please enter a valid ${selectedCountry.maxLength} digit phone number`
+      }
+    });
+    
+    // Trigger validation if there's already a phone number entered
+    if (watchedValues.phone) {
+      trigger('phone');
+    }
+  }, [selectedCountry, register, trigger, watchedValues.phone]);
+
+  // Clear search term when component unmounts or when country changes
+  useEffect(() => {
+    return () => {
+      setCountrySearchTerm('');
+    };
+  }, []);
+  
   const onFormSubmit = (data: GuestDetails) => {
     // Save to session storage for future use
     sessionStorage.setItem('guestName', data.name);
     sessionStorage.setItem('guestPhone', data.phone);
+    sessionStorage.setItem('countryCode', data.countryCode);
     sessionStorage.setItem('guestEmail', data.email);
+    sessionStorage.setItem('additionalRequirements', data.additionalRequirements || '');
     sessionStorage.setItem('paymentMode', data.paymentMode || 'partial');
     sessionStorage.setItem('gstEnabled', String(!!data.gstEnabled));
     if (data.gstEnabled) {
@@ -122,28 +197,105 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               )}
             </div>
             
-            {/* Phone Number Field */}
+            {/* Phone Number Field with Country Code */}
             <div className="space-y-2">
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 flex items-center gap-2">
                 <Phone size={16} className="text-blue-500" />
                 Phone Number
               </Label>
-              <Input
-                id="phone"
-                className={`h-12 px-4 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${
-                  errors.phone ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
-                } ${watchedValues.phone ? 'border-green-300' : ''}`}
-                placeholder="Enter your phone number"
-                type="tel"
-                inputMode="tel"
-                {...register('phone', { 
-                  required: 'Phone number is required',
-                  pattern: {
-                    value: /^\+?[0-9]{10,12}$/,
-                    message: 'Please enter a valid phone number'
-                  }
-                })}
-              />
+              <div className="flex gap-2">
+                {/* Country Code Selector */}
+                <div className="w-32">
+                  <Select
+                    value={selectedCountry?.code || 'IN'}
+                    onValueChange={(value) => {
+                      const country = countryCodes.find(c => c.code === value);
+                      if (country) {
+                        setSelectedCountry(country);
+                        setValue('countryCode', country.dialCode);
+                        setCountrySearchTerm(''); // Clear search term when country is selected
+                        // Trigger phone validation with new country rules
+                        setTimeout(() => {
+                          trigger('phone');
+                        }, 100);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                      <SelectValue>
+                        <div className="flex items-center gap-2">
+                          <span>{selectedCountry?.flag || '🇮🇳'}</span>
+                          <span className="text-sm">{selectedCountry?.dialCode || '+91'}</span>
+                        </div>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {/* Search Input */}
+                      <div className="p-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <Input
+                            placeholder="Search countries..."
+                            value={countrySearchTerm}
+                            onChange={(e) => setCountrySearchTerm(e.target.value)}
+                            className="h-8 text-sm pl-8"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Country List */}
+                      <div className="max-h-48 overflow-y-auto">
+                        {filteredCountries.length > 0 ? (
+                          filteredCountries.map((country) => (
+                            <SelectItem key={country.code} value={country.code}>
+                              <div className="flex items-center gap-2">
+                                <span>{country.flag}</span>
+                                <span 
+                                  className="text-sm"
+                                  dangerouslySetInnerHTML={{ 
+                                    __html: highlightSearchTerm(country.dialCode, countrySearchTerm) 
+                                  }}
+                                />
+                                <span 
+                                  className="text-xs text-gray-500"
+                                  dangerouslySetInnerHTML={{ 
+                                    __html: highlightSearchTerm(country.name, countrySearchTerm) 
+                                  }}
+                                />
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-gray-500 text-center">
+                            No countries found
+                          </div>
+                        )}
+                      </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Phone Number Input */}
+                <div className="flex-1">
+                  <Input
+                    id="phone"
+                    className={`h-12 px-4 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${
+                      errors.phone ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                    } ${watchedValues.phone ? 'border-green-300' : ''}`}
+                    placeholder={`Enter ${selectedCountry.maxLength} digit number`}
+                    type="tel"
+                    inputMode="tel"
+                    maxLength={selectedCountry.maxLength}
+                    {...register('phone')}
+                  />
+                </div>
+              </div>
+              {/* Helper text showing current country requirements */}
+              <p className="text-xs text-gray-500">
+                {selectedCountry.name}: {selectedCountry.dialCode} - {selectedCountry.maxLength} digits required
+              </p>
+              
               {errors.phone && (
                 <motion.p 
                   initial={{ opacity: 0, y: -10 }}
@@ -188,6 +340,25 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   {errors.email.message}
                 </motion.p>
               )}
+            </div>
+
+            {/* Additional Requirements Field */}
+            <div className="space-y-2">
+              <Label htmlFor="additionalRequirements" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <MessageSquare size={16} className="text-blue-500" />
+                Additional Requirements
+              </Label>
+              <Textarea
+                id="additionalRequirements"
+                className={`min-h-20 px-4 py-3 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-none ${
+                  errors.additionalRequirements ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                } ${watchedValues.additionalRequirements ? 'border-green-300' : ''}`}
+                placeholder="Enter flight number, special requests, or any other requirements..."
+                {...register('additionalRequirements')}
+              />
+              <p className="text-xs text-gray-500">
+                Optional: Include flight details, accessibility needs, or any special requests
+              </p>
             </div>
 
             {/* Payment Options */}

@@ -24,7 +24,9 @@ export interface BookingRequest {
   cabType?: string;
   passengerName: string;
   passengerPhone: string;
+  passengerCountryCode?: string;
   passengerEmail: string;
+  additionalRequirements?: string;
   distance?: number;
   totalAmount?: number;
   hourlyPackage?: string | null;
@@ -137,6 +139,9 @@ export interface Booking {
   passengerName?: string;
   passengerPhone?: string;
   passengerEmail?: string;
+  passengerCountryCode?: string;
+  additionalRequirements?: string;
+  additional_requirements?: string;
   driverName?: string;
   driverPhone?: string;
   billingAddress?: string;

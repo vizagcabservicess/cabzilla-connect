@@ -91,6 +91,8 @@ try {
     $data = json_decode($jsonData, true);
     
     error_log("Update booking request data: " . print_r($data, true));
+    error_log("Raw JSON input: " . $jsonData);
+    error_log("bookingId in data: " . (isset($data['bookingId']) ? $data['bookingId'] : 'NOT_SET'));
     
     // Force immediate debug output
     logDebug("Request received", $data);

@@ -1,7 +1,9 @@
 // API configuration
 
-// Base API URL - Always use production URL
-export const apiBaseUrl = 'https://www.vizagtaxihub.com';
+// Base API URL - Use localhost for development, production for production
+export const apiBaseUrl = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:8080' 
+  : 'https://www.vizagtaxihub.com';
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string = ''): string => {

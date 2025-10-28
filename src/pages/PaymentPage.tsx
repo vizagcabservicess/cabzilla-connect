@@ -162,6 +162,13 @@ const PaymentPage = () => {
         payment_timestamp: new Date().toISOString()
       };
 
+      // Debug: Log booking details
+      console.log('Payment Success - Booking Details:', {
+        bookingId: bookingDetails.bookingId,
+        bookingNumber: bookingDetails.bookingNumber,
+        totalPrice: bookingDetails.totalPrice
+      });
+      
       // First update the booking
       await bookingAPI.updateBooking(bookingDetails.bookingId, updateData);
       

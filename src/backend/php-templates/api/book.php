@@ -116,6 +116,13 @@ try {
     }
     logBooking("Parsed booking data", $logData);
     
+    // Debug additional requirements specifically
+    logBooking("Additional Requirements Debug", [
+        'additionalRequirements' => $data['additionalRequirements'] ?? 'NOT_SET',
+        'hasAdditionalRequirements' => isset($data['additionalRequirements']),
+        'additionalRequirementsValue' => $data['additionalRequirements'] ?? null
+    ]);
+    
     // Validate required fields
     $requiredFields = [
         'pickupLocation', 'cabType', 'tripType', 'tripMode', 
@@ -139,13 +146,12 @@ try {
         throw new Exception("Missing required fields: " . implode(', ', $missingFields));
     }
 
-    // Generate booking number
-    $bookingId = time() . rand(1000, 9999);
-    $bookingNumber = 'CB' . $bookingId;
+    // Generate booking number (but don't use as database ID)
+    $bookingNumber = 'VTH' . time() . rand(1000, 9999);
     
     // Create a booking record
     $booking = [
-        'id' => (int)$bookingId,
+        'id' => null, // Will be set after database insert
         'userId' => null,
         'bookingNumber' => $bookingNumber,
         'pickupLocation' => $data['pickupLocation'],
@@ -160,7 +166,9 @@ try {
         'status' => 'pending',
         'passengerName' => $data['passengerName'],
         'passengerPhone' => $data['passengerPhone'],
+        'passengerCountryCode' => isset($data['passengerCountryCode']) ? $data['passengerCountryCode'] : '+91',
         'passengerEmail' => $data['passengerEmail'],
+        'additionalRequirements' => isset($data['additionalRequirements']) ? $data['additionalRequirements'] : '',
         'hourlyPackage' => isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null,
         'created_at' => date('Y-m-d H:i:s')
     ];
@@ -181,8 +189,9 @@ try {
         $sql = "INSERT INTO bookings (
             booking_number, pickup_location, drop_location, pickup_date, return_date,
             cab_type, distance, trip_type, trip_mode, total_amount, status,
-            passenger_name, passenger_phone, passenger_email, hourly_package
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            passenger_name, passenger_phone, passenger_country_code, passenger_email, 
+            additional_requirements, hourly_package
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -200,9 +209,17 @@ try {
             $returnDateFormatted = $returnDateTime->format('Y-m-d H:i:s');
         }
         
+        // Debug additional requirements before binding
+        $additionalRequirementsValue = $booking['additionalRequirements'] ?? null;
+        logBooking("Database Insert Debug", [
+            'additionalRequirementsValue' => $additionalRequirementsValue,
+            'willSaveToDB' => $additionalRequirementsValue !== null && $additionalRequirementsValue !== '' ? 'YES' : 'NO',
+            'fromBookingArray' => true
+        ]);
+        
         // Bind parameters
         $stmt->bind_param(
-            "ssssssdssdsssss",
+            "ssssssdssdsssssss",
             $booking['bookingNumber'],
             $booking['pickupLocation'],
             $booking['dropLocation'],
@@ -216,7 +233,9 @@ try {
             $booking['status'],
             $booking['passengerName'],
             $booking['passengerPhone'],
+            $booking['passengerCountryCode'],
             $booking['passengerEmail'],
+            $additionalRequirementsValue,
             $booking['hourlyPackage']
         );
         
@@ -226,7 +245,14 @@ try {
             throw new Exception("Failed to insert booking: " . $stmt->error);
         }
         
-        $booking['id'] = $stmt->insert_id ?: $bookingId;
+        $insertedId = $stmt->insert_id;
+        $booking['id'] = $insertedId;
+        
+        logBooking("Database insert result", [
+            'insert_id' => $insertedId,
+            'final_booking_id' => $booking['id'],
+            'booking_number' => $booking['bookingNumber']
+        ]);
         
         logBooking("Booking stored in database", [
             'booking_id' => $booking['id'],
@@ -252,7 +278,11 @@ try {
         'data' => $booking
     ];
     
-    logBooking("Sending success response", ['booking_id' => $booking['id']]);
+    logBooking("Sending success response", [
+        'booking_id' => $booking['id'],
+        'booking_number' => $booking['bookingNumber'],
+        'additional_requirements' => $booking['additionalRequirements']
+    ]);
     sendJsonResponse($response);
     
 } catch (Exception $e) {

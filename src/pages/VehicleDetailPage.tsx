@@ -117,9 +117,10 @@ const VehicleDetailPage = () => {
     
     return {
       "@context": "https://schema.org",
-      "@type": "Product",
+      "@type": ["Product", "Service"],
       "name": "17 Seater AC Tempo Traveller Rental in Vizag",
       "description": "Best 17 seater tempo traveller rental service in Visakhapatnam with professional drivers, AC comfort, and modern amenities for group travel.",
+      "url": seoData?.url,
       "image": [
         `${seoData?.url}/image.jpg`,
         "https://vizagtaxihub.com/cars/tempo.png"
@@ -127,6 +128,32 @@ const VehicleDetailPage = () => {
       "brand": {
         "@type": "Brand",
         "name": "Vizag Taxi Hub"
+      },
+      "provider": {
+        "@type": "LocalBusiness",
+        "name": "Vizag Taxi Hub",
+        "url": "https://vizagtaxihub.com",
+        "telephone": "+91-9966363662",
+        "email": "info@vizagtaxihub.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
+          "addressLocality": "Visakhapatnam",
+          "addressRegion": "Andhra Pradesh",
+          "postalCode": "530024",
+          "addressCountry": "IN"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 17.7428416,
+          "longitude": 83.2889633
+        },
+        "areaServed": {
+          "@type": "City",
+          "name": "Visakhapatnam"
+        },
+        "openingHours": "Mo-Su 00:00-23:59",
+        "paymentAccepted": "Cash, Credit Card, UPI, Net Banking"
       },
       "offers": {
         "@type": "Offer",
@@ -391,79 +418,6 @@ const VehicleDetailPage = () => {
             <meta name="business:contact_data:country_name" content="India" />
             <meta name="business:contact_data:phone_number" content="+919966363662" />
           </>
-        )}
-        
-        {/* LocalBusiness structured data for Tempo Traveller */}
-        {vehicle?.id === 'tempo_traveller' && (
-          <script type="application/ld+json">
-            {JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "LocalBusiness",
-              "name": "Vizag Taxi Hub - Tempo Traveller Service",
-              "description": "Professional tempo traveller rental service for group travel in Visakhapatnam",
-              "url": seoData?.url,
-              "telephone": "+91-9966363662",
-              "email": "info@vizagtaxihub.com",
-              "address": {
-                "@type": "PostalAddress",
-                "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-                "addressLocality": "Visakhapatnam",
-                "addressRegion": "Andhra Pradesh",
-                "postalCode": "530024",
-                "addressCountry": "IN"
-              },
-              "geo": {
-                "@type": "GeoCoordinates",
-                "latitude": 17.7428416,
-                "longitude": 83.2889633
-              },
-              "areaServed": {
-                "@type": "City",
-                "name": "Visakhapatnam"
-              },
-              "openingHours": "Mo-Su 00:00-23:59",
-              "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
-              "currenciesAccepted": "INR",
-              "priceRange": "₹35-₹15000",
-              "aggregateRating": {
-                "@type": "AggregateRating",
-                "ratingValue": "4.8",
-                "reviewCount": "127",
-                "bestRating": "5",
-                "worstRating": "1"
-              },
-              "hasOfferCatalog": {
-                "@type": "OfferCatalog",
-                "name": "Tempo Traveller Services",
-                "itemListElement": [
-                  {
-                    "@type": "Offer",
-                    "itemOffered": {
-                      "@type": "Service",
-                      "name": "17 Seater Tempo Traveller",
-                      "description": "Large group travel with AC comfort"
-                    },
-                    "price": "35",
-                    "priceCurrency": "INR",
-                    "priceSpecification": {
-                      "@type": "UnitPriceSpecification",
-                      "price": "35",
-                      "priceCurrency": "INR",
-                      "unitText": "per kilometer"
-                    }
-                  },
-                  {
-                    "@type": "Offer",
-                    "itemOffered": {
-                      "@type": "Service",
-                      "name": "Group Travel Service",
-                      "description": "Corporate and family group transportation"
-                    }
-                  }
-                ]
-              }
-            })}
-          </script>
         )}
       </Helmet>
       

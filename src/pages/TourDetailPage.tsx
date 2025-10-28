@@ -57,7 +57,6 @@ const TourDetailPage = () => {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
-  const [returnDate, setReturnDate] = useState<Date | null>(null);
 
   
   // Load pickup details from session storage or navigation state
@@ -93,21 +92,6 @@ const TourDetailPage = () => {
   const [pickupLocation, setPickupLocation] = useState(pickupData.location);
   const [pickupDate, setPickupDate] = useState(pickupData.date);
 
-  // Auto-set return date when pickup date changes for round trips
-  useEffect(() => {
-    if (tripMode === 'round-trip' && returnDate && pickupDate) {
-      // If return date is different from pickup date, update it to same day
-      const pickupDateOnly = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
-      const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
-      
-      if (pickupDateOnly.getTime() !== returnDateOnly.getTime()) {
-        // Set return date to same day as pickup, but keep the time
-        const newReturnDate = new Date(pickupDate);
-        newReturnDate.setHours(returnDate.getHours(), returnDate.getMinutes(), 0, 0);
-        setReturnDate(newReturnDate);
-      }
-    }
-  }, [pickupDate, tripMode]);
   
   // Edit functionality
   const handleEditTrip = () => {
@@ -118,6 +102,37 @@ const TourDetailPage = () => {
         tripType: 'tour',
         pickupLocation: pickupLocation.name,
         tourId: tourId 
+      } 
+    });
+  };
+
+  // Edit pickup location handler
+  const handleEditPickupLocation = () => {
+    // For now, navigate back to main page to edit location
+    // In the future, this could open a location picker modal
+    const tourId = getTourIdFromSlug(tourSlug || '');
+    navigate('/', { 
+      state: { 
+        tripType: 'tour',
+        pickupLocation: pickupLocation.name,
+        tourId: tourId,
+        editLocation: true
+      } 
+    });
+  };
+
+  // Edit pickup date handler
+  const handleEditPickupDate = () => {
+    // For now, navigate back to main page to edit date
+    // In the future, this could open a date picker modal
+    const tourId = getTourIdFromSlug(tourSlug || '');
+    navigate('/', { 
+      state: { 
+        tripType: 'tour',
+        pickupLocation: pickupLocation.name,
+        pickupDate: pickupDate,
+        tourId: tourId,
+        editDate: true
       } 
     });
   };
@@ -343,7 +358,7 @@ const TourDetailPage = () => {
         pickupLocation: pickupLocation.name,
         dropLocation: dropLocation,
         pickupDate: formatDateForAPI(pickupDate),
-        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
+        returnDate: null,
         vehicleType: selectedVehicle.vehicleType || selectedVehicle.name,
         cabType: selectedVehicle.name,
         distance: computedDistance,
@@ -352,7 +367,9 @@ const TourDetailPage = () => {
         totalAmount: computedTotal,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
+        passengerCountryCode: guestDetails.countryCode,
         passengerEmail: guestDetails.email,
+        additionalRequirements: guestDetails.additionalRequirements,
         tourId: tour.tourId,
         // Include GST details from guest form if provided
         gstEnabled: !!guestDetails.gstEnabled,
@@ -373,7 +390,7 @@ const TourDetailPage = () => {
         dropLocation: { name: dropLocation, address: '' },
         tourDistance: computedDistance,
         pickupDate: formatDateForAPI(pickupDate),
-        returnDate: tripMode === 'round-trip' && returnDate ? formatDateForAPI(returnDate) : null,
+        returnDate: null,
         selectedCab: selectedVehicle,
         totalPrice: computedTotal,
         guestDetails,
@@ -713,10 +730,7 @@ const TourDetailPage = () => {
                       <h3 className="text-lg font-semibold text-gray-700 mb-3">Trip Mode</h3>
                       <div className="grid grid-cols-2 gap-3">
                         <button
-                          onClick={() => {
-                            setTripMode('one-way');
-                            setReturnDate(null);
-                          }}
+                          onClick={() => setTripMode('one-way')}
                           className={`p-3 rounded-lg border-2 transition-all ${
                             tripMode === 'one-way'
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -729,17 +743,7 @@ const TourDetailPage = () => {
                           </div>
                         </button>
                         <button
-                          onClick={() => {
-                            setTripMode('round-trip');
-                            if (!returnDate) {
-                              // For day tours, set return date to same day with reasonable return time (6 hours later)
-                              const sameDay = new Date(pickupDate);
-                              const pickupHour = sameDay.getHours();
-                              const returnHour = Math.min(pickupHour + 6, 22); // 6 hours later, but not later than 10 PM
-                              sameDay.setHours(returnHour, sameDay.getMinutes(), 0, 0);
-                              setReturnDate(sameDay);
-                            }
-                          }}
+                          onClick={() => setTripMode('round-trip')}
                           className={`p-3 rounded-lg border-2 transition-all ${
                             tripMode === 'round-trip'
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -753,33 +757,20 @@ const TourDetailPage = () => {
                         </button>
                       </div>
                       
-                      {/* Return Date Selection for Round Trip */}
-                      {tripMode === 'round-trip' && (
-                        <div className="mt-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Return Date & Time
-                          </label>
-                          <DateTimePicker
-                            date={returnDate || new Date()}
-                            onDateChange={(date) => setReturnDate(date || null)}
-                            minDate={new Date(pickupDate)} // Same day or later
-                            label="Select return date (same day for day tours)"
-                          />
-                        </div>
-                      )}
                     </div>
                     
                     <BookingSummary
                       pickupLocation={pickupLocation}
                       dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                       pickupDate={pickupDate}
-                      returnDate={tripMode === 'round-trip' ? returnDate : null}
                       selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                       distance={tour.distance}
                       totalPrice={selectedVehicle.price}
                       tripType="tour"
                       tripMode={tripMode}
                       hourlyPackage="tour"
+                      onEditPickupLocation={handleEditPickupLocation}
+                      onEditPickupDate={handleEditPickupDate}
                     />
                     <div className="flex gap-2 mt-3 mb-2">
                       <Button
@@ -820,13 +811,14 @@ const TourDetailPage = () => {
                     pickupLocation={pickupLocation}
                     dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                     pickupDate={pickupDate}
-                    returnDate={tripMode === 'round-trip' ? returnDate : null}
                     selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
                     distance={tour.distance}
                     totalPrice={selectedVehicle.price}
                     tripType="tour"
                     tripMode={tripMode}
                     hourlyPackage="tour"
+                    onEditPickupLocation={handleEditPickupLocation}
+                    onEditPickupDate={handleEditPickupDate}
                   />
                 )}
               </div>

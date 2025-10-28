@@ -19,40 +19,14 @@ export function formatPhoneNumber(phone: string): string {
 }
 
 export function generateBookingConfirmationMessage(booking: Booking): string {
-  // Debug: Log available booking fields
-  console.log('Booking data for WhatsApp:', {
-    id: booking.id,
-    bookingNumber: booking.bookingNumber,
-    razorpay_payment_id: booking.razorpay_payment_id,
-    payment_timestamp: booking.payment_timestamp,
-    payment_method: booking.payment_method,
-    advance_paid_amount: booking.advance_paid_amount,
-    fare: booking.fare,
-    totalAmount: booking.totalAmount,
-    created_at: booking.created_at,
-    updated_at: booking.updated_at,
-    // Trip type and mode fields
-    tripType: booking.tripType,
-    trip_type: booking.trip_type,
-    tripMode: booking.tripMode,
-    trip_mode: booking.trip_mode,
-    // Tour fields
-    tourId: booking.tourId,
-    tour_id: booking.tour_id,
-    tourName: booking.tourName,
-    tour_name: booking.tour_name,
-    tour_itinerary: booking.tour_itinerary,
-    tour_itinerary_length: Array.isArray(booking.tour_itinerary) ? booking.tour_itinerary.length : 'not an array',
-    // Check for alternative field names
-    razorpayPaymentId: (booking as any).razorpayPaymentId,
-    paymentTimestamp: (booking as any).paymentTimestamp,
-    paymentTime: (booking as any).paymentTime,
-    transactionId: (booking as any).transactionId,
-    paymentId: (booking as any).paymentId
-  });
   
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
   const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
+  
+  const passengerCountryCode = booking.passengerCountryCode || 
+                               (booking as any).passengerCountryCode || 
+                               (booking as any).passenger_country_code || 
+                               '+91';
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
@@ -94,32 +68,18 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
                         dropCity.includes(pickupCity.split(' ')[0]);
       const isInterCityTrip = !isSameCity;
       
-      console.log('Trip type inference debug:', {
-        pickupLocation,
-        dropLocationStr,
-        pickupCity,
-        dropCity,
-        hasAirportInPickup,
-        hasAirportInDrop,
-        isSameCity,
-        isInterCityTrip
-      });
       
       if (isInterCityTrip) {
         // Different cities = always outstation
         tripType = 'outstation';
-        console.log('✅ Detected inter-city trip, setting as outstation');
       } else if ((hasAirportInPickup || hasAirportInDrop)) {
         // Same city + airport involved = airport transfer
         tripType = 'airport';
-        console.log('✅ Detected same-city airport transfer');
       } else {
         // Same city, no airport = local (but this shouldn't happen in this context)
         tripType = 'outstation';
-        console.log('✅ Fallback to outstation');
       }
     }
-    console.warn(`Trip type was not set for booking ${booking.id}, inferred as: ${tripType}`);
   }
   
   // Final fallback and safety check
@@ -132,7 +92,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     const pickupCity = pickupLocation.split(',')[0].trim().toLowerCase();
     const dropCity = String(booking.drop_location).split(',')[0].trim().toLowerCase();
     if (pickupCity !== dropCity && !pickupCity.includes(dropCity.split(' ')[0]) && !dropCity.includes(pickupCity.split(' ')[0])) {
-      console.warn(`⚠️ Safety check: Forcing airport transfer to outstation for inter-city trip`);
       tripType = 'outstation';
     }
   }
@@ -167,7 +126,9 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
     tripTypeDisplay = `Local City Ride - ${modeDisplay}`;
   } else if (tripType === 'tour' || tourId) {
-    tripTypeDisplay = 'Tour';
+    // For tours, include the trip mode (One Way or Round Trip)
+    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
+    tripTypeDisplay = `Tour - ${modeDisplay}`;
   } else if (tripType === 'outstation') {
     // For outstation, include the trip mode (One Way or Round Trip)
     const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
@@ -185,21 +146,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const vehicleModel = booking.vehicle_type || booking.cabType || 'To be assigned';
   const vehicleRegNo = booking.vehicleNumber || 'to be shared';
   
-  // Debug: Log available booking fields for vehicle details
-  console.log('Vehicle details debug:', {
-    vehicle_type: booking.vehicle_type,
-    cabType: booking.cabType,
-    vehicleCapacity: (booking as any).vehicleCapacity,
-    capacity: (booking as any).capacity,
-    vehicleLuggage: (booking as any).vehicleLuggage,
-    luggageCapacity: (booking as any).luggageCapacity,
-    vehicleFuelType: (booking as any).vehicleFuelType,
-    fuelType: (booking as any).fuelType,
-    vehicleFeatures: (booking as any).vehicleFeatures,
-    amenities: (booking as any).amenities,
-    features: (booking as any).features,
-    fullBooking: booking
-  });
 
   // Get vehicle specifications from booking data - check multiple possible field names
   let vehicleCapacity = (booking as any).vehicleCapacity || 
@@ -373,20 +319,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     }
   }
   
-  // Debug: Log package details for local trips
-  if (tripType === 'local') {
-    console.log('Local trip package details:', {
-      hoursIncluded,
-      kmIncluded,
-      extraPerHour,
-      extraPerKm,
-      vehicleModel,
-      fareBase,
-      vehicleType: vehicleModel.toLowerCase(),
-      fare: parseFloat(fareBase.toString()),
-      inference: 'Smart inference based on fare and vehicle type'
-    });
-  }
 
   // Get billing details
   const billingBasis = 'Per trip'; // Default billing basis
@@ -398,6 +330,21 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   // Get route and notes
   const viaStops = booking.via_stops || 'N/A';
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+  
+  const additionalRequirements = booking.additionalRequirements || 
+                                 booking.additional_requirements || 
+                                 '';
+  
+  // Ensure additional requirements are properly handled
+  const hasAdditionalRequirements = additionalRequirements && 
+                                   additionalRequirements.trim() !== '' && 
+                                   additionalRequirements !== 'N/A' && 
+                                   additionalRequirements !== 'null' &&
+                                   additionalRequirements !== 'undefined';
+  
+  
+  // Combine only special notes (additional requirements are shown separately in Trip Details)
+  const allNotes = specialNotes !== 'N/A' ? `Special Notes: ${specialNotes}` : '';
 
   // Get policies - Different policies for tours vs regular trips
   const isTour = tripType === 'tour' || tripType === 'outstation';
@@ -467,16 +414,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     hour12: true
   }) : 'N/A';
   
-  console.log('Return date debug:', {
-    return_date: booking.return_date,
-    returnDate: (booking as any).returnDate,
-    returnDate_final: returnDate,
-    trip_mode: booking.trip_mode,
-    tripMode: booking.tripMode,
-    formattedReturnDate: formattedReturnDate,
-    willShowReturnDate: !!returnDate,
-    fullBooking: booking
-  });
 
   // Calculate distance for round-trip (double the one-way distance)
   const oneWayDistance = (booking as any).distance || 0;
@@ -489,9 +426,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     destinationDisplay = tripType === 'local' ? 'Local City Ride' : 'As per itinerary';
   }
 
+
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
 Hello ${passengerName}!
+
 
 Your cab booking has been confirmed:
 
@@ -505,7 +444,8 @@ ${tripType === 'outstation' ? `📏 *Total distance:* ${totalDistance} km${isRou
 🚗 *Vehicle:* ${vehicleModel} [${vehicleRegNo}]
 👥 *Capacity:* ${vehicleCapacity} passengers
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
-📞 *Guest contact:* ${passengerName}, ${passengerPhone}
+📞 *Guest contact:* ${passengerName}, ${passengerCountryCode} ${passengerPhone}
+${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
 
 *Fare and Payments*
 💰 *Fare (base):* ₹${fareBase}
@@ -531,7 +471,8 @@ ${tripType === 'local' ? `📏 *Kilometers limit:* ${kmIncluded} km included, ex
 
 *Route and Notes*
 🛣️ *Via/Stops:* ${viaStops}
-📝 *Special notes:* ${specialNotes}
+${allNotes ? `📝 *Special Notes:*
+${allNotes}` : ''}
 
 ${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
 ${(booking as any).tour_itinerary.map((day: any) => {
@@ -578,6 +519,8 @@ Thank you for choosing Vizag Taxi Hub. Have a safe and comfortable ride! 🙏`;
 
 export function generateDriverAssignmentMessage(booking: Booking): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
+  const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
+  const passengerCountryCode = (booking as any).passengerCountryCode || (booking as any).passenger_country_code || '+91';
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
@@ -586,6 +529,18 @@ export function generateDriverAssignmentMessage(booking: Booking): string {
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
     : 'N/A';
+  const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
+  const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+  
+  // Ensure additional requirements are properly handled
+  const hasAdditionalRequirements = additionalRequirements && 
+                                   additionalRequirements.trim() !== '' && 
+                                   additionalRequirements !== 'N/A' && 
+                                   additionalRequirements !== 'null' &&
+                                   additionalRequirements !== 'undefined';
+  
+  // Combine only special notes (additional requirements are shown separately)
+  const allNotes = specialNotes !== 'N/A' ? `Special Notes: ${specialNotes}` : '';
 
   return `🚗 *Driver Assignment - Vizag Taxi Hub*
 
@@ -597,9 +552,15 @@ Your driver has been assigned:
 📱 *Phone:* ${booking.driverPhone}
 🚗 *Vehicle:* ${booking.vehicleNumber}
 
+👤 *Passenger:* ${passengerName}
+📱 *Passenger Phone:* ${passengerCountryCode} ${passengerPhone}
+
 📍 *Pickup:* ${pickupLocation}
 📍 *Drop:* ${dropLocation}
 📅 *Date:* ${booking.pickup_date || booking.pickupDate}
+${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${allNotes ? `📝 *Special Notes:*
+${allNotes}` : ''}
 
 *Booking ID:* ${booking.id}
 
@@ -626,6 +587,8 @@ Thank you for choosing Vizag Taxi Hub! 🙏`;
 
 export function generateDriverNotificationMessage(booking: Booking): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
+  const passengerPhone = booking.passengerPhone || booking.guest_phone || 'N/A';
+  const passengerCountryCode = (booking as any).passengerCountryCode || (booking as any).passenger_country_code || '+91';
   const pickupLocation = typeof booking.pickup_location === 'string' 
     ? booking.pickup_location 
     : booking.pickup_location?.city || booking.pickupLocation || 'Unknown';
@@ -634,17 +597,32 @@ export function generateDriverNotificationMessage(booking: Booking): string {
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
     : 'N/A';
+  const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
+  const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+  
+  // Ensure additional requirements are properly handled
+  const hasAdditionalRequirements = additionalRequirements && 
+                                   additionalRequirements.trim() !== '' && 
+                                   additionalRequirements !== 'N/A' && 
+                                   additionalRequirements !== 'null' &&
+                                   additionalRequirements !== 'undefined';
+  
+  // Combine only special notes (additional requirements are shown separately)
+  const allNotes = specialNotes !== 'N/A' ? `Special Notes: ${specialNotes}` : '';
 
   return `🚗 *New Trip Assignment - Vizag Taxi Hub*
 
 You have been assigned a new trip:
 
 👤 *Passenger:* ${passengerName}
-📱 *Phone:* ${booking.passengerPhone}
+📱 *Phone:* ${passengerCountryCode} ${passengerPhone}
 
 📍 *Pickup:* ${pickupLocation}
 📍 *Drop:* ${dropLocation}
 📅 *Date:* ${booking.pickup_date || booking.pickupDate}
+${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${allNotes ? `📝 *Special Notes:*
+${allNotes}` : ''}
 
 💰 *Fare:* ₹${booking.fare || booking.totalAmount}
 📋 *Booking ID:* ${booking.id}

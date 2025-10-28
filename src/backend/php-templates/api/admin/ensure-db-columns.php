@@ -66,6 +66,20 @@ try {
         'company_address' => "TEXT DEFAULT ''"
     ];
     
+    // Ensure bookings table has additional_requirements column
+    $checkAdditionalRequirements = $conn->query("SHOW COLUMNS FROM bookings LIKE 'additional_requirements'");
+    if (!$checkAdditionalRequirements || $checkAdditionalRequirements->num_rows === 0) {
+        $conn->query("ALTER TABLE bookings ADD COLUMN additional_requirements TEXT NULL AFTER passenger_email");
+        $changes[] = "Added additional_requirements column to bookings table";
+    }
+    
+    // Ensure bookings table has passenger_country_code column
+    $checkPassengerCountryCode = $conn->query("SHOW COLUMNS FROM bookings LIKE 'passenger_country_code'");
+    if (!$checkPassengerCountryCode || $checkPassengerCountryCode->num_rows === 0) {
+        $conn->query("ALTER TABLE bookings ADD COLUMN passenger_country_code VARCHAR(10) NULL AFTER passenger_phone");
+        $changes[] = "Added passenger_country_code column to bookings table";
+    }
+    
     foreach ($gstColumns as $column => $definition) {
         $checkColumn = $conn->query("SHOW COLUMNS FROM bookings LIKE '$column'");
         if (!$checkColumn || $checkColumn->num_rows === 0) {

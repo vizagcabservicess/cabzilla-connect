@@ -1241,7 +1241,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         totalAmount: latestTotal,
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
+        passengerCountryCode: guestDetails.countryCode,
         passengerEmail: guestDetails.email,
+        additionalRequirements: guestDetails.additionalRequirements,
         // pass GST details if captured
         gstEnabled: !!guestDetails.gstEnabled,
         gstDetails: guestDetails.gstEnabled ? {

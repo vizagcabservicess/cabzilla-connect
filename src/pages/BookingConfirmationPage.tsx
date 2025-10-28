@@ -17,6 +17,8 @@ import { MobileNavigation } from '../components/MobileNavigation';
 type NormalizedBooking = Booking & {
   // Additional properties for frontend usage
   razorpayPaymentId?: string;
+  passengerCountryCode?: string;
+  additionalRequirements?: string;
 };
 
 function BookingConfirmationPage() {
@@ -141,7 +143,9 @@ function BookingConfirmationPage() {
                updatedAt: new Date().toISOString(),
                passengerName: parsedData.guestDetails?.name || '',
                passengerPhone: parsedData.guestDetails?.phone || '',
+               passengerCountryCode: parsedData.guestDetails?.countryCode || '+91',
                passengerEmail: parsedData.guestDetails?.email || '',
+               additionalRequirements: parsedData.guestDetails?.additionalRequirements || '',
                driverName: parsedData.driverName || '',
                driverPhone: parsedData.driverPhone || '',
                vehicleNumber: parsedData.vehicleNumber || '',
@@ -198,7 +202,9 @@ function BookingConfirmationPage() {
               updatedAt: new Date().toISOString(),
               passengerName: parsedData.guestDetails?.name || '',
               passengerPhone: parsedData.guestDetails?.phone || '',
+              passengerCountryCode: parsedData.guestDetails?.countryCode || '+91',
               passengerEmail: parsedData.guestDetails?.email || '',
+              additionalRequirements: parsedData.guestDetails?.additionalRequirements || '',
               driverName: parsedData.driverName || '',
               driverPhone: parsedData.driverPhone || '',
               vehicleNumber: parsedData.vehicleNumber || '',
@@ -427,7 +433,9 @@ function BookingConfirmationPage() {
       updatedAt: booking.updatedAt || new Date().toISOString(),
       passengerName: booking.passengerName || '',
       passengerPhone: booking.passengerPhone || '',
+      passengerCountryCode: booking.passengerCountryCode || booking.passenger_country_code || '+91',
       passengerEmail: booking.passengerEmail || '',
+      additionalRequirements: booking.additionalRequirements || booking.additional_requirements || '',
       driverName: booking.driverName || '',
       driverPhone: booking.driverPhone || '',
       vehicleNumber: booking.vehicleNumber || '',

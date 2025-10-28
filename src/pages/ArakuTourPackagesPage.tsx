@@ -17,3 +17,7 @@ const ArakuTourPackagesPage = () => {
 };
 
 export default ArakuTourPackagesPage;
+
+
+
+
