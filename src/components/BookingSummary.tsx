@@ -954,7 +954,7 @@ export const BookingSummary = ({
   }
 
   return (
-    <div className="text-[14px] md:text-[14px]">
+    <div className="text-[14px] md:text-[14px] booking-summary-mobile">
       <div className="bg-white rounded-lg shadow-md p-4 md:p-5 relative">
         <h2 className="text-[14px] md:text-[15px] font-semibold mb-3 text-left">Booking Summary</h2>
 
@@ -1050,15 +1050,50 @@ export const BookingSummary = ({
             )}
           </div>
 
-          <div className="border-b pb-3">
-            <div className="flex items-center gap-2">
-              <Car className="h-5 w-5 text-blue-500" />
-              <p className="font-semibold text-[14px]">{selectedCab.name}</p>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <Users className="h-4 w-4 text-gray-500" />
-                <span className="text-[14px] text-gray-600">{selectedCab.capacity} Seats</span>
+          <div className="border-b pb-4">
+            <div className="bg-blue-50 rounded-lg p-4 mb-3">
+              <div className="flex items-center gap-4">
+                {/* Car Image */}
+                <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                  {selectedCab.image ? (
+                    <img 
+                      src={selectedCab.image} 
+                      alt={selectedCab.name}
+                      className="w-12 h-12 object-contain rounded"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                        if (nextElement) {
+                          nextElement.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center" style={{ display: selectedCab.image ? 'none' : 'flex' }}>
+                    <Car className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+                
+                {/* Vehicle Details */}
+                <div className="flex-1">
+                  <p className="font-bold text-xl text-gray-900 mb-1">{selectedCab.name}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600 font-medium">{selectedCab.capacity} Seats</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Fuel className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600 font-medium">Petrol</span>
+                    </div>
+                    {selectedCab.amenities && selectedCab.amenities.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Check className="h-4 w-4 text-green-500" />
+                        <span className="text-sm text-gray-600 font-medium">{selectedCab.amenities[0]}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

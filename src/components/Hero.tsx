@@ -14,7 +14,7 @@ import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
-import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
+import { StepIndicator } from './StepIndicator';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
@@ -205,6 +206,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [duration, setDuration] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
+  const [showBookingSummaryModal, setShowBookingSummaryModal] = useState<boolean>(false);
+  const [animateBookingSummaryModal, setAnimateBookingSummaryModal] = useState<boolean>(false);
   const [tripType, setTripType] = useState<TripType>(editModeData.tripType || savedData.tripType);
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
@@ -1804,6 +1807,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   {/* Step 2 - Cab Selection */}
                   {currentStep === 2 && !isSlidingSearch && (
                     <>
+                      {/* Step Indicator - Mobile Only */}
+                      <div className="md:hidden mb-4 mt-0">
+                        <StepIndicator 
+                          currentStep={1}
+                          steps={[
+                            { number: 1, title: "Select Vehicle", isCompleted: false },
+                            { number: 2, title: "Passenger Info", isCompleted: false },
+                            { number: 3, title: "Payment", isCompleted: false }
+                          ]}
+                          onStepClick={(stepNumber) => {
+                            if (stepNumber === 1) {
+                              // Already on vehicle selection step
+                            }
+                          }}
+                        />
+                      </div>
+                      
                       {/* Trip Summary Bar */}
                       <div className="mb-4 bg-[#f8faf5] border border-[#e0e7d9] rounded-xl w-full max-w-full overflow-hidden px-4 py-3 shadow-sm">
                         <div className="flex items-start justify-between mb-2">
@@ -1981,11 +2001,100 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   )}
                 </>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in w-full px-2 sm:px-0">
+                <div className="animate-fade-in w-full px-1 sm:px-2">
+                  {/* Step Indicator - Mobile Only */}
+                  <div className="md:hidden mb-4 mt-0">
+                    <StepIndicator 
+                      currentStep={2}
+                      steps={[
+                        { number: 1, title: "Select Vehicle", isCompleted: true },
+                        { number: 2, title: "Passenger Info", isCompleted: false },
+                        { number: 3, title: "Payment", isCompleted: false }
+                      ]}
+                      onStepClick={(stepNumber) => {
+                        if (stepNumber === 1) {
+                          // Go back to vehicle selection (step 2)
+                          setShowGuestDetailsForm(false);
+                          setCurrentStep(2);
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  {/* RedBus-style Trip Summary Card - Mobile Only */}
+                  <div className="md:hidden mb-4">
+                    <div className="bg-white rounded-lg shadow-sm border p-4">
+                      <div className="text-center mb-3">
+                        <span className="text-sm font-semibold text-gray-800">
+                          {tripType === 'outstation' ? (tripMode === 'one-way' ? 'One Way' : 'Round Trip') : 
+                           tripType === 'local' ? 'Local' : 
+                           tripType === 'airport' ? 'Airport Transfer' :
+                           tripType === 'tour' ? 'Tour' : 'Trip'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        {/* Pickup Info */}
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold text-gray-900 text-sm">
+                            {pickupDate?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} · {pickupDate?.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">{pickupLocation?.name || 'Pickup Location'}</div>
+                          <div className="mt-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs">
+                              <Car className="w-3 h-3 mr-1" />
+                              {selectedCab?.name || 'Vehicle'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Arrow */}
+                        <div className="mx-4">
+                          <ArrowRight className="w-4 h-4 text-gray-400" />
+                        </div>
+                        
+                        {/* Drop Info */}
+                        <div className="flex-1 text-right">
+                          <div className="font-semibold text-gray-900 text-sm">
+                            {(() => {
+                              // For round trips, show the return date; for one-way trips, calculate estimated drop time
+                              if (tripType === 'outstation' && tripMode === 'round-trip' && returnDate) {
+                                return returnDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' · ' + 
+                                       returnDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                              } else {
+                                // Calculate estimated drop time based on distance and average speed
+                                const estimatedTravelTime = distance ? Math.ceil(distance / 50) : 2; // Assuming 50 km/h average speed
+                                const estimatedDropTime = new Date(pickupDate || new Date());
+                                estimatedDropTime.setHours(estimatedDropTime.getHours() + estimatedTravelTime);
+                                
+                                return estimatedDropTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' · ' + 
+                                       estimatedDropTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                              }
+                            })()}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">{dropLocation?.name || 'Destination'}</div>
+                          <div className="mt-2">
+                            <button 
+                              onClick={() => {
+                                setShowBookingSummaryModal(true);
+                                setTimeout(() => setAnimateBookingSummaryModal(true), 10);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-xs underline"
+                            >
+                              View details
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Guest Details Form - Centered on mobile, normal on md+ */}
                   <div className="w-full flex justify-center md:block">
-                    <div className="bg-white rounded-xl md:shadow-card md:border md:p-6 mb-4 w-full max-w-md md:max-w-full p-0 shadow-none border-none">
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="bg-white rounded-xl md:shadow-card md:border md:p-6 mb-4 w-full max-w-full md:max-w-full p-0 shadow-none border-none">
+                        {/* Mobile: No large heading, step indicator is sufficient */}
+                        <div className="md:flex md:items-center md:justify-between md:mb-4 hidden">
                         <h3 className="text-xl font-semibold">Complete Your Booking</h3>
                       </div>
                       
@@ -1999,7 +2108,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                     </div>
                   </div>
                   
-                  <div className="w-full">
+                  {/* Mobile Booking Summary - Hidden by default, shown in modal */}
+                  <div className="w-full hidden md:block">
                     <BookingSummary
                       pickupLocation={pickupLocation!}
                       dropLocation={dropLocation}
@@ -2015,6 +2125,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       onEditPickupLocation={handleEditPickupLocation}
                       onEditPickupDate={handleEditPickupDate}
                     />
+                    </div>
                   </div>
                 </div>
               )}
@@ -2022,6 +2133,59 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           </div>
         </div>
       </section>
+      
+      {/* Slide-up Booking Summary Modal - Mobile Only */}
+      {showBookingSummaryModal && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => {
+              setAnimateBookingSummaryModal(false);
+              setTimeout(() => setShowBookingSummaryModal(false), 300);
+            }}
+          />
+          
+          {/* Modal Content */}
+          <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col transform transition-transform duration-300 ease-out ${animateBookingSummaryModal ? 'translate-y-0' : 'translate-y-full'}`}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+              <h3 className="text-lg font-semibold">Booking Details</h3>
+              <button 
+                onClick={() => {
+                  setAnimateBookingSummaryModal(false);
+                  setTimeout(() => setShowBookingSummaryModal(false), 300); // Match transition duration
+                }}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="overflow-y-auto flex-1 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              <div className="pb-20">
+                <BookingSummary
+                  pickupLocation={pickupLocation!}
+                  dropLocation={dropLocation}
+                  pickupDate={pickupDate}
+                  returnDate={returnDate}
+                  selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)}
+                  distance={distance}
+                  totalPrice={totalPrice}
+                  tripType={tripType}
+                  tripMode={tripMode}
+                  hourlyPackage={hourlyPackage}
+                  onFinalTotalChange={setFinalTotal}
+                  onEditPickupLocation={handleEditPickupLocation}
+                  onEditPickupDate={handleEditPickupDate}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Mobile Navigation Bar */}
       <MobileNavigation />
     </div>

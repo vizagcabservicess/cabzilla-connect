@@ -161,26 +161,29 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
       className="mx-auto"
     >
       <Card className="shadow-lg border-0 bg-white">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <User className="h-5 w-5 text-blue-600" />
-            Guest Information
-          </CardTitle>
-          <p className="text-sm text-gray-600">Please provide your contact details to continue</p>
+        <CardHeader className="pb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <User className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900">Contact details</CardTitle>
+              <p className="text-sm text-gray-600">Booking details will be sent to</p>
+            </div>
+          </div>
         </CardHeader>
         
-        <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
+        <CardContent className="space-y-4">
+          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
             {/* Full Name Field */}
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <User size={16} className="text-blue-500" />
+            <div className="space-y-1">
+              <Label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                 Full Name
               </Label>
               <Input
                 id="name"
-                className={`h-12 px-4 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${
-                  errors.name ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                  errors.name ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
                 } ${watchedValues.name ? 'border-green-300' : ''}`}
                 placeholder="Enter your full name"
                 {...register('name', { required: 'Name is required' })}
@@ -198,14 +201,13 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             </div>
             
             {/* Phone Number Field with Country Code */}
-            <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Phone size={16} className="text-blue-500" />
+            <div className="space-y-1">
+              <Label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                 Phone Number
               </Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-3">
                 {/* Country Code Selector */}
-                <div className="w-32">
+                <div>
                   <Select
                     value={selectedCountry?.code || 'IN'}
                     onValueChange={(value) => {
@@ -221,7 +223,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                       }
                     }}
                   >
-                    <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                    <SelectTrigger className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <span>{selectedCountry?.flag || '🇮🇳'}</span>
@@ -277,11 +279,11 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 </div>
                 
                 {/* Phone Number Input */}
-                <div className="flex-1">
+                <div className="col-span-2">
                   <Input
                     id="phone"
-                    className={`h-12 px-4 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${
-                      errors.phone ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                      errors.phone ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
                     } ${watchedValues.phone ? 'border-green-300' : ''}`}
                     placeholder={`Enter ${selectedCountry.maxLength} digit number`}
                     type="tel"
@@ -291,10 +293,6 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   />
                 </div>
               </div>
-              {/* Helper text showing current country requirements */}
-              <p className="text-xs text-gray-500">
-                {selectedCountry.name}: {selectedCountry.dialCode} - {selectedCountry.maxLength} digits required
-              </p>
               
               {errors.phone && (
                 <motion.p 
@@ -309,15 +307,14 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             </div>
             
             {/* Email Address Field */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Mail size={16} className="text-blue-500" />
-                Email Address
+            <div className="space-y-1">
+              <Label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email ID
               </Label>
               <Input
                 id="email"
-                className={`h-12 px-4 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 ${
-                  errors.email ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                  errors.email ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
                 } ${watchedValues.email ? 'border-green-300' : ''}`}
                 placeholder="Enter your email address"
                 type="email"
@@ -342,16 +339,16 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               )}
             </div>
 
+
             {/* Additional Requirements Field */}
-            <div className="space-y-2">
-              <Label htmlFor="additionalRequirements" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <MessageSquare size={16} className="text-blue-500" />
+            <div className="space-y-1">
+              <Label htmlFor="additionalRequirements" className="block text-sm font-medium text-gray-700 mb-1">
                 Additional Requirements
               </Label>
               <Textarea
                 id="additionalRequirements"
-                className={`min-h-20 px-4 py-3 text-base border-2 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-none ${
-                  errors.additionalRequirements ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
+                className={`w-full min-h-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none ${
+                  errors.additionalRequirements ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
                 } ${watchedValues.additionalRequirements ? 'border-green-300' : ''}`}
                 placeholder="Enter flight number, special requests, or any other requirements..."
                 {...register('additionalRequirements')}
@@ -362,21 +359,25 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             </div>
 
             {/* Payment Options */}
-            <div className="border rounded-xl p-4 bg-gray-50">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard size={20} className="text-blue-500" />
-                <h5 className="font-semibold text-gray-900">Payment Options</h5>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <CreditCard className="h-4 w-4 text-blue-600" />
+                </div>
+                <div>
+                  <h5 className="text-lg font-semibold text-gray-900">Payment Options</h5>
+                </div>
               </div>
               <div className="space-y-3">
-                <label className="flex items-center justify-between p-3 bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:border-blue-300">
-                  <div className="flex items-start gap-3">
+                <label className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-sm">
+                  <div className="flex items-center gap-3">
                     <input
                       type="radio"
                       name="paymentMode"
                       value="partial"
                       checked={watchedValues.paymentMode === 'partial'}
                       onChange={() => setValue('paymentMode', 'partial', { shouldDirty: true, shouldValidate: true })}
-                      className="mt-1"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
                     <div>
                       <span className="font-medium text-gray-900">Part Pay</span>
@@ -386,15 +387,15 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   <span className="font-semibold text-gray-900">{formatPrice(partialAmount)}</span>
                 </label>
                 
-                <label className="flex items-center justify-between p-3 bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:border-blue-300">
-                  <div className="flex items-start gap-3">
+                <label className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-sm">
+                  <div className="flex items-center gap-3">
                     <input
                       type="radio"
                       name="paymentMode"
                       value="full"
                       checked={watchedValues.paymentMode === 'full'}
                       onChange={() => setValue('paymentMode', 'full', { shouldDirty: true, shouldValidate: true })}
-                      className="mt-1"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
                     <div>
                       <span className="font-medium text-gray-900">Full Pay</span>
@@ -491,6 +492,28 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
             
             {/* Action Buttons */}
             <div className="pt-6 space-y-3">
+              {/* Legal Disclaimer */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-600 text-center leading-relaxed">
+                  By proceeding to book, I agree to Vizag Taxi Hub's{' '}
+                  <a href="/privacy-policy" className="text-blue-600 hover:text-blue-800 underline">
+                    Privacy Policy
+                  </a>
+                  ,{' '}
+                  <a href="/terms-of-service" className="text-blue-600 hover:text-blue-800 underline">
+                    Terms of Service
+                  </a>
+                  ,{' '}
+                  <a href="/user-agreement" className="text-blue-600 hover:text-blue-800 underline">
+                    User Agreement
+                  </a>
+                  {' '}&{' '}
+                  <a href="https://vizagtaxihub.com/cancellation-refund-policy" className="text-blue-600 hover:text-blue-800 underline">
+                    Cancellation Rules
+                  </a>
+                </p>
+              </div>
+
               {onBack && (
                 <Button 
                   type="button" 
@@ -505,9 +528,9 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               
               <Button 
                 type="submit" 
-                className={`w-full h-12 text-base font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                className={`w-full h-12 text-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${
                   isValid && !isLoading 
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5' 
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl' 
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
                 disabled={!isValid || isLoading}
