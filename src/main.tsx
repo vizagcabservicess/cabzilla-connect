@@ -7,7 +7,11 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
+import { initializeConsentMode } from './utils/consentManager';
 import './utils/globalErrorHandler'; // Initialize global error handler
+
+// Initialize consent mode before any tracking scripts
+initializeConsentMode();
 
 // Check if we're on the homepage
 const isHomepage = window.location.pathname === '/' || window.location.pathname === '';

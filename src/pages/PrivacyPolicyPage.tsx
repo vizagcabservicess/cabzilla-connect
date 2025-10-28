@@ -39,7 +39,19 @@ export function PrivacyPolicyPage() {
     },
     {
       title: "8. Cookies and Tracking",
-      content: "Our website uses cookies to improve user experience, remember preferences, analyze website traffic, and provide personalized content. You can control cookie settings through your browser preferences."
+      content: "We use cookies and similar technologies to enhance your experience, analyze website traffic, and provide personalized content. We implement Google Consent Mode v2 to ensure compliance with privacy regulations."
+    },
+    {
+      title: "8.1 Types of Cookies We Use",
+      content: "Necessary Cookies: Essential for website functionality and security. Analytics Cookies: Help us understand how visitors interact with our website (Google Analytics, Microsoft Clarity). Marketing Cookies: Used for delivering relevant advertisements. Functional Cookies: Enable enhanced functionality like location services and user preferences."
+    },
+    {
+      title: "8.2 Cookie Consent Management",
+      content: "You can manage your cookie preferences through our cookie consent banner. We respect your choices and only load tracking scripts after obtaining your explicit consent. You can change your preferences at any time by clicking the cookie settings icon in your browser or contacting us directly."
+    },
+    {
+      title: "8.3 Third-Party Analytics",
+      content: "We use Google Analytics and Microsoft Clarity for website analytics. These services are configured to respect your privacy choices and only collect data when you have given consent. We have implemented Google Consent Mode v2 to ensure proper consent management."
     },
     {
       title: "9. Third-Party Services",

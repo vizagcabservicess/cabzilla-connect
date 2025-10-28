@@ -60,37 +60,81 @@
     <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, and Social Login with iOS support -->
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
     
-    <!-- Google Analytics - Load asynchronously with reduced impact -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
+    <!-- Google Consent Mode v2 - Initialize before any tracking scripts -->
     <script>
+      // Initialize Google Consent Mode v2 with default denied state
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      
+      // Set default consent state (denied for all non-essential)
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'analytics_storage': 'denied',
+        'functionality_storage': 'denied',
+        'personalization_storage': 'denied',
+        'security_storage': 'granted', // Always granted for security
+        'wait_for_update': 500
+      });
+      
+      // Make gtag available globally
+      window.gtag = gtag;
+    </script>
+    
+    <!-- Google Analytics - Load with consent awareness -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
+    <script>
       gtag('js', new Date());
       gtag('config', 'G-68BN0C389S', {
-        send_page_view: false, // Disable automatic page view to reduce initial load
-        transport_type: 'beacon' // Use beacon for better performance
+        send_page_view: false, // Will be enabled based on consent
+        transport_type: 'beacon',
+        anonymize_ip: true, // Always anonymize IP for privacy
+        allow_google_signals: false, // Will be updated based on consent
+        allow_ad_personalization_signals: false // Will be updated based on consent
       });
     </script>
     
-    <!-- Microsoft Clarity - Fixed with error handling -->
+    <!-- Microsoft Clarity - Initialize with consent awareness -->
     <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+      // Initialize Clarity function but don't load script yet
+      (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        
+        // Function to load Clarity script
+        window.loadClarity = function() {
+          if (!window.clarityLoaded) {
+            t=l.createElement(r);
+            t.async=1;
+            t.src="https://www.clarity.ms/tag/"+i;
             try {
-                y=l.getElementsByTagName(r)[0];
-                if (y && y.parentNode) {
-                    y.parentNode.insertBefore(t,y);
-                } else {
-                    // Fallback: append to head if target element not found
-                    l.head.appendChild(t);
-                }
-            } catch (error) {
-                console.warn('Clarity script insertion failed, using fallback:', error);
-                // Fallback: append to head
+              y=l.getElementsByTagName(r)[0];
+              if (y && y.parentNode) {
+                y.parentNode.insertBefore(t,y);
+              } else {
                 l.head.appendChild(t);
+              }
+            } catch (error) {
+              console.warn('Clarity script insertion failed, using fallback:', error);
+              l.head.appendChild(t);
             }
-        })(window, document, "clarity", "script", "htvvpivvo1");
+            window.clarityLoaded = true;
+          }
+        };
+        
+        // Check if user has already given consent
+        const hasConsent = localStorage.getItem('cookie-consent-given') === 'true';
+        const savedPreferences = localStorage.getItem('cookie-preferences');
+        
+        if (hasConsent && savedPreferences) {
+          try {
+            const preferences = JSON.parse(savedPreferences);
+            if (preferences.analytics) {
+              window.loadClarity();
+            }
+          } catch (error) {
+            console.error('Error parsing saved cookie preferences:', error);
+          }
+        }
+      })(window, document, "clarity", "script", "htvvpivvo1");
     </script>
   </head>
 

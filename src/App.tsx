@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { PoolingAuthProvider } from "@/providers/PoolingAuthProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
+import { CookieConsentProvider } from "@/contexts/CookieConsentContext";
+import CookieConsentManager from "@/components/CookieConsentManager";
 import { ScrollToTop } from "@/components/ScrollToTop";
 
 import router from './routes'; // Only for original approach
@@ -42,33 +44,35 @@ const App = () => (
   <TooltipProvider>
     <Toaster />
     <Sonner />
-    <AuthProvider>
-      <PoolingAuthProvider>
-        {USE_ORIGINAL_APP ? (
-          <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
-            <RouterProvider router={router} />
-          </GoogleMapsProvider>
-        ) : (
-          <BrowserRouter>
-            <ScrollToTop />
-            <Suspense fallback={<RouteLoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/customer" element={<CustomerDashboard />} />
-                <Route path="/driver" element={<DriverDashboard />} />
-                <Route path="/pooling" element={<PoolingPage />} />
-                <Route path="/pooling/login" element={<PoolingLoginPage />} />
-                <Route path="/pooling/provider" element={<PoolingProviderPage />} />
-                <Route path="/pooling/admin" element={<PoolingAdminPage />} />
-                <Route path="/pooling/guest" element={<GuestDashboardPage />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        )}
-      </PoolingAuthProvider>
-    </AuthProvider>
-    
+    <CookieConsentProvider>
+      <AuthProvider>
+        <PoolingAuthProvider>
+          {USE_ORIGINAL_APP ? (
+            <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
+              <RouterProvider router={router} />
+            </GoogleMapsProvider>
+          ) : (
+            <BrowserRouter>
+              <ScrollToTop />
+              <Suspense fallback={<RouteLoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/customer" element={<CustomerDashboard />} />
+                  <Route path="/driver" element={<DriverDashboard />} />
+                  <Route path="/pooling" element={<PoolingPage />} />
+                  <Route path="/pooling/login" element={<PoolingLoginPage />} />
+                  <Route path="/pooling/provider" element={<PoolingProviderPage />} />
+                  <Route path="/pooling/admin" element={<PoolingAdminPage />} />
+                  <Route path="/pooling/guest" element={<GuestDashboardPage />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          )}
+          <CookieConsentManager />
+        </PoolingAuthProvider>
+      </AuthProvider>
+    </CookieConsentProvider>
   </TooltipProvider>
 );
 
