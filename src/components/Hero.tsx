@@ -1981,6 +1981,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               onFinalTotalChange={setFinalTotal}
                               onEditPickupLocation={handleEditPickupLocation}
                               onEditPickupDate={handleEditPickupDate}
+                              hideInclusionsExclusions={true}
                             />
                           </div>
                           <Button 
@@ -2124,6 +2125,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       onFinalTotalChange={setFinalTotal}
                       onEditPickupLocation={handleEditPickupLocation}
                       onEditPickupDate={handleEditPickupDate}
+                      hideInclusionsExclusions={false}
                     />
                     </div>
                   </div>
@@ -2179,6 +2181,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   onFinalTotalChange={setFinalTotal}
                   onEditPickupLocation={handleEditPickupLocation}
                   onEditPickupDate={handleEditPickupDate}
+                  hideInclusionsExclusions={false}
                 />
               </div>
             </div>

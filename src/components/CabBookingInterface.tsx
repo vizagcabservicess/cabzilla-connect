@@ -14,6 +14,8 @@ import { useDistance } from '@/hooks/useDistance';
 import { TripType } from '@/types/trip';
 import { calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
 import { getOutstationFaresForVehicle } from '@/services/fareService';
+import { useFare } from '@/hooks/useFare';
+import { normalizeVehicleId } from '@/utils/safeStringUtils';
 
 export interface TripDetails {
   tripType: TripType;
@@ -69,8 +71,192 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
 
     const { distance, isLoading: isDistanceLoading } = useDistance(tripDetails.from, tripDetails.to);
     const { cabOptions, isLoading: isCabsLoading } = useCabOptions({ tripType: tripDetails.tripType });
+    const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
     const [guestDetails, setGuestDetails] = useState<GuestDetails | null>(null);
+
+    // Helper function to calculate fare the same way CabList does
+    const calculateFareForCab = async (cab: CabType): Promise<{ fare: number; breakdown: any } | null> => {
+        if (!distance || distance <= 0) return null;
+
+        const normalizedId = normalizeVehicleId(cab.id);
+        const correctPackageType = tripDetails.tripType === 'outstation' ? tripDetails.tripMode : tripDetails.package;
+        
+        // For outstation round trips
+        if (
+            tripDetails.tripType === 'outstation' &&
+            tripDetails.tripMode === 'round-trip' &&
+            tripDetails.pickupDate &&
+            tripDetails.returnDate &&
+            distance > 0
+        ) {
+            try {
+                const outstationFares = await getOutstationFaresForVehicle(normalizedId);
+                const perKmRate = cab.pricePerKm ?? cab.outstationFares?.pricePerKm ?? outstationFares.pricePerKm ?? 15;
+                const nightAllowancePerNight = cab.nightHaltCharge ?? cab.outstationFares?.nightHaltCharge ?? outstationFares.nightHaltCharge ?? 0;
+                const driverAllowancePerDay = cab.driverAllowance ?? cab.outstationFares?.driverAllowance ?? outstationFares.driverAllowance ?? 250;
+                const actualDistance = distance * 2;
+                const breakdown = calculateOutstationRoundTripFare({
+                    pickupDate: new Date(tripDetails.pickupDate),
+                    returnDate: new Date(tripDetails.returnDate),
+                    actualDistance,
+                    perKmRate,
+                    nightAllowancePerNight,
+                    driverAllowancePerDay
+                });
+                return { fare: breakdown.totalFare, breakdown };
+            } catch (e) {
+                console.error('Error calculating round trip fare:', e);
+                return null;
+            }
+        }
+
+        // For other trip types, use useFare hook logic via direct calculation
+        // We'll use a simpler approach: trigger the calculation and wait for it
+        // Actually, we need to replicate the exact calculation from CabList
+        // Let's use the useFare hook by creating a wrapper component or calculating directly
+        
+        // For now, return null and let the auto-select use the fare from CabList's calculation
+        // This will be handled by the auto-select logic that triggers selection after fare is calculated
+        return null;
+    };
+
+    // Calculate fare for first cab using useFare hook (for auto-selection)
+    const firstCab = cabOptions.length > 0 ? cabOptions[0] : null;
+    const normalizedFirstCabId = firstCab ? normalizeVehicleId(firstCab.id) : '';
+    const correctPackageType = tripDetails.tripType === 'outstation' ? tripDetails.tripMode : tripDetails.package;
+    const { fareData: firstCabFareData, isLoading: isFirstCabFareLoading } = useFare(
+        normalizedFirstCabId,
+        tripDetails.tripType,
+        distance,
+        correctPackageType,
+        tripDetails.pickupDate ? new Date(tripDetails.pickupDate) : undefined,
+        tripDetails.tripType === 'outstation' && tripDetails.tripMode === 'round-trip' && tripDetails.returnDate 
+            ? new Date(tripDetails.returnDate) 
+            : undefined
+    );
+
+    // Auto-select first cab when fare is calculated
+    useEffect(() => {
+        const autoSelectFirstCab = async () => {
+            // Only auto-select if:
+            // 1. First cab exists
+            // 2. Distance is available and > 0
+            // 3. No cab is currently selected
+            // 4. We haven't auto-selected yet
+            // 5. Fare data is available (or we're dealing with round trip)
+            if (
+                firstCab &&
+                !selectedCab &&
+                !hasAutoSelected &&
+                distance > 0 &&
+                tripDetails.from &&
+                tripDetails.to
+            ) {
+                // For round trips, calculate fare directly
+                if (
+                    tripDetails.tripType === 'outstation' &&
+                    tripDetails.tripMode === 'round-trip' &&
+                    tripDetails.pickupDate &&
+                    tripDetails.returnDate
+                ) {
+                    try {
+                        const result = await calculateFareForCab(firstCab);
+                        if (result) {
+                            setSelectedCab(firstCab);
+                            setFare(result.fare);
+                            setFareBreakdown(result.breakdown);
+                            setHasAutoSelected(true);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('Error auto-selecting first cab:', e);
+                    }
+                }
+                
+                // For other trip types, wait for fare data
+                if (firstCabFareData && !isFirstCabFareLoading) {
+                    // Calculate fare the same way CabList does
+                    const sumBreakdown = (breakdown: any) => {
+                        if (!breakdown) return 0;
+                        const chargeFields = ['basePrice', 'driverAllowance', 'nightCharges', 'extraDistanceFare', 'airportFee', 'baseFare', 'nightAllowance', 'extraDistanceCharges'];
+                        let total = 0;
+                        for (const key of chargeFields) {
+                            const val = breakdown[key];
+                            if (typeof val === 'number' && !isNaN(val)) {
+                                total += val;
+                            }
+                        }
+                        return total;
+                    };
+
+                    let fare = 0;
+                    let breakdown = firstCabFareData.breakdown || {};
+
+                    // For outstation one-way, use totalPrice directly (same as CabList does)
+                    if (tripDetails.tripType === 'outstation' && (tripDetails.tripMode === 'one-way' || !tripDetails.tripMode)) {
+                        fare = firstCabFareData.totalPrice;
+                        // Ensure breakdown matches the totalPrice - use breakdown from fareData
+                        breakdown = firstCabFareData.breakdown || {};
+                    } else {
+                        fare = sumBreakdown(firstCabFareData.breakdown) || firstCabFareData.totalPrice;
+                    }
+
+                    if (tripDetails.tripType === 'local') {
+                        const localPackageLimits: Record<string, { km: number; hours: number }> = {
+                            '4hrs-40km': { km: 40, hours: 4 },
+                            '8hrs-80km': { km: 80, hours: 8 },
+                            '10hrs-100km': { km: 100, hours: 10 },
+                        };
+                        const selectedPackage = localPackageLimits[tripDetails.package || '8hrs-80km'] || { km: 80, hours: 8 };
+                        const extraKm = Math.max(0, distance - selectedPackage.km);
+                        const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
+                        const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
+                        const extraKmFare = extraKm * extraKmCharge;
+                        fare = (breakdown.basePrice || fare) + extraKmFare;
+                    }
+
+                    if (tripDetails.tripType === 'airport') {
+                        const base = breakdown.basePrice || 0;
+                        const airportFee = breakdown.airportFee || 0;
+                        const extra = breakdown.extraDistanceFare || 0;
+                        fare = base + airportFee + extra;
+                    }
+
+                    if (fare > 0) {
+                        console.log('Auto-selecting first cab:', {
+                            cab: firstCab.name,
+                            fare,
+                            breakdown,
+                            tripType: tripDetails.tripType,
+                            tripMode: tripDetails.tripMode,
+                            distance
+                        });
+                        handleActualCabSelect(firstCab, fare, breakdown);
+                        setHasAutoSelected(true);
+                    }
+                }
+            }
+        };
+
+        autoSelectFirstCab();
+    }, [firstCab, firstCabFareData, isFirstCabFareLoading, distance, selectedCab, hasAutoSelected, tripDetails]);
+
+    // Reset auto-selection when trip details change
+    useEffect(() => {
+        if (hasAutoSelected) {
+            // If trip details change, reset to allow re-auto-selection
+            const newTripKey = `${tripDetails.from}-${tripDetails.to}-${tripDetails.tripType}-${tripDetails.tripMode}-${distance}`;
+            const storedKey = sessionStorage.getItem('lastAutoSelectedTrip');
+            if (storedKey !== newTripKey) {
+                setHasAutoSelected(false);
+                setSelectedCab(null);
+                setFare(null);
+                setFareBreakdown(null);
+                sessionStorage.setItem('lastAutoSelectedTrip', newTripKey);
+            }
+        }
+    }, [tripDetails.from, tripDetails.to, tripDetails.tripType, tripDetails.tripMode, distance, hasAutoSelected]);
 
     useEffect(() => {
         async function recalcFareIfNeeded() {
@@ -107,27 +293,41 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
         setTripDetails(details);
         if (step > 1) {
             setStep(1);
-            setSelectedCab(null);
         }
+        // Reset selection when trip details change
+        setSelectedCab(null);
+        setFare(null);
+        setFareBreakdown(null);
+        setHasAutoSelected(false);
     };
 
     const handleActualCabSelect = (cab: CabType, calculatedFare: number, breakdown?: any) => {
+        console.log('handleActualCabSelect called:', {
+            cab: cab.name,
+            calculatedFare,
+            breakdown,
+            tripType: tripDetails.tripType,
+            tripMode: tripDetails.tripMode
+        });
         setBookNowFare(null);
         if (
             tripDetails.tripType === 'outstation' &&
             tripDetails.tripMode === 'round-trip' &&
             breakdown && breakdown.totalFare
         ) {
+            console.log('Setting round-trip fare:', breakdown.totalFare);
             setSelectedCab(cab);
             setFare(breakdown.totalFare);
             setFareBreakdown(breakdown);
         } else {
+            console.log('Setting fare:', calculatedFare, 'with breakdown:', breakdown);
             setSelectedCab(cab);
             setFare(calculatedFare);
             setFareBreakdown(breakdown);
         }
-        setStep(2);
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        // Don't automatically go to step 2 when auto-selecting - let user stay on step 1 to see the summary
+        // setStep(2);
+        // window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     };
 
     const handleGuestDetailsSubmit = (details: GuestDetails) => {
@@ -195,6 +395,8 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                             pickupLocation={null}
                             dropLocation={null}
                             onFinalTotalChange={isOutstationRoundTrip ? setBookNowFare : undefined}
+                            hideInclusionsExclusions={true}
+                            breakdown={fareBreakdown}
                         />
                     )}
                 </div>

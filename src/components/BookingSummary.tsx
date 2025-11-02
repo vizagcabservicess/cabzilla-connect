@@ -26,6 +26,8 @@ interface BookingSummaryProps {
   onFinalTotalChange?: (total: number) => void;
   onEditPickupLocation?: () => void;
   onEditPickupDate?: () => void;
+  hideInclusionsExclusions?: boolean;
+  breakdown?: any; // Breakdown passed from selected cab - should be used instead of recalculating
 }
 
 export const BookingSummary = ({
@@ -41,10 +43,13 @@ export const BookingSummary = ({
   hourlyPackage,
   onFinalTotalChange,
   onEditPickupLocation,
-  onEditPickupDate
+  onEditPickupDate,
+  hideInclusionsExclusions = false,
+  breakdown: passedBreakdown
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
+  // Only recalculate if no breakdown was passed - this ensures consistency with the fare shown in the list
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,
@@ -310,6 +315,41 @@ export const BookingSummary = ({
   }, [distance, tripMode, totalPrice]);
 
   useEffect(() => {
+    // If breakdown was passed, use it instead of recalculating - ensures consistency
+    if (passedBreakdown && selectedCab) {
+      console.log('BookingSummary: Using passed breakdown to ensure consistency with cab list:', passedBreakdown);
+      console.log('BookingSummary: Using totalPrice from prop:', totalPrice);
+      
+      if (tripType === 'local' && passedBreakdown?.packageLabel) {
+        setBaseFare(totalPrice);
+        setDriverAllowance(0);
+        setNightCharges(0);
+        setExtraDistanceFare(0);
+        setCalculatedFare(totalPrice);
+      } else {
+        setBaseFare(passedBreakdown.basePrice || 0);
+        // For airport trips, don't add driverAllowance if it's not in breakdown - use totalPrice as source of truth
+        if (tripType === 'airport' && !passedBreakdown.driverAllowance) {
+          setDriverAllowance(0);
+        } else {
+          setDriverAllowance(passedBreakdown.driverAllowance || 0);
+        }
+        setNightCharges(passedBreakdown.nightCharges || 0);
+        setExtraDistanceFare(passedBreakdown.extraDistanceFare || 0);
+        setCalculatedFare(totalPrice); // ALWAYS use the totalPrice prop which matches what was shown in list
+        
+        // Calculate extra distance from extraDistanceFare and extraKmCharge
+        if (tripType === 'outstation' && tripMode === 'one-way' && passedBreakdown.extraDistanceFare && passedBreakdown.extraKmCharge) {
+          const extraKmCharge = passedBreakdown.extraKmCharge;
+          const extraDistanceFare = passedBreakdown.extraDistanceFare;
+          const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
+          setExtraDistance(calculatedExtraKm);
+          console.log('BookingSummary: Calculated extra distance for one-way:', calculatedExtraKm, 'km');
+        }
+      }
+      return; // Don't process fareData if we have passedBreakdown
+    }
+
     if (!selectedCab || !fareData) return;
 
     console.log('BookingSummary: Using fareData from useFare hook:', fareData);
@@ -326,6 +366,17 @@ export const BookingSummary = ({
       setNightCharges(fareData.breakdown.nightCharges || 0);
       setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
       setCalculatedFare(fareData.totalPrice);
+      
+      // Calculate extra distance from extraDistanceFare and extraKmCharge
+      if (tripType === 'outstation' && tripMode === 'one-way' && fareData.breakdown.extraDistanceFare && fareData.breakdown.extraKmCharge) {
+        const extraKmCharge = fareData.breakdown.extraKmCharge;
+        const extraDistanceFare = fareData.breakdown.extraDistanceFare;
+        // For one-way outstation, extraDistanceFare is already calculated as roundTripExtraKm * extraKmCharge
+        // So we just need to divide by extraKmCharge (not 2*extraKmCharge) to get the round-trip extra km
+        const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
+        setExtraDistance(calculatedExtraKm);
+        console.log('BookingSummary: Calculated extra distance for one-way:', calculatedExtraKm, 'km');
+      }
     }
 
     // For outstation one-way trips, ensure we're using the tier pricing
@@ -334,9 +385,12 @@ export const BookingSummary = ({
       console.log('Tier used:', fareData.breakdown.tierUsed);
       console.log('Base price from tier:', fareData.basePrice);
     }
-  }, [fareData, selectedCab, tripType, tripMode]);
+  }, [passedBreakdown, fareData, selectedCab, tripType, tripMode, totalPrice]);
 
   useEffect(() => {
+    // Skip if breakdown was passed - don't recalculate on package change
+    if (passedBreakdown) return;
+    
     if (tripType === 'local' && hourlyPackage) {
       console.log('BookingSummary: Package changed to:', hourlyPackage);
       if (selectedCab) {
@@ -353,9 +407,12 @@ export const BookingSummary = ({
         recalculateFareDetails();
       }, 100);
     }
-  }, [hourlyPackage, tripType, selectedCab]);
+  }, [passedBreakdown, hourlyPackage, tripType, selectedCab]);
 
   useEffect(() => {
+    // Skip if breakdown was passed - don't store or dispatch events
+    if (passedBreakdown) return;
+    
     if (selectedCab && fareData?.totalPrice > 0) {
       try {
         const normalizedId = normalizeVehicleId(selectedCab.id);
@@ -381,9 +438,12 @@ export const BookingSummary = ({
         console.error('Error storing fare in localStorage:', error);
       }
     }
-  }, [fareData, selectedCab, tripType]);
+  }, [passedBreakdown, fareData, selectedCab, tripType]);
 
   useEffect(() => {
+    // Skip recalculation if breakdown was passed - use it as-is
+    if (passedBreakdown) return;
+    
     if (tripType !== 'outstation' || !selectedCab) return;
 
       async function calculateOutstationBreakdown() {
@@ -424,9 +484,15 @@ export const BookingSummary = ({
       }
 
       calculateOutstationBreakdown();
-  }, [tripType, selectedCab, distance, pickupDate, tripMode, hourlyPackage, totalPrice]);
+  }, [passedBreakdown, tripType, selectedCab, distance, pickupDate, tripMode, hourlyPackage, totalPrice, returnDate]);
 
   const recalculateFareDetails = async (): Promise<void> => {
+    // Skip recalculation if breakdown was passed - use passed values as-is
+    if (passedBreakdown) {
+      console.log('BookingSummary: Skipping recalculation - using passed breakdown');
+      return;
+    }
+    
     if (calculationInProgressRef.current) {
       console.log('BookingSummary: Calculation already in progress, skipping duplicate calculation');
       return;
@@ -440,6 +506,17 @@ export const BookingSummary = ({
       setDriverAllowance(fareData.breakdown.driverAllowance || 250);
       setNightCharges(fareData.breakdown.nightCharges || 0);
       setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
+      
+      // Calculate extra distance from extraDistanceFare and extraKmCharge
+      if (fareData.breakdown.extraDistanceFare && fareData.breakdown.extraKmCharge) {
+        const extraKmCharge = fareData.breakdown.extraKmCharge;
+        const extraDistanceFare = fareData.breakdown.extraDistanceFare;
+        // For one-way outstation, extraDistanceFare is already calculated as roundTripExtraKm * extraKmCharge
+        // So we just need to divide by extraKmCharge (not 2*extraKmCharge) to get the round-trip extra km
+        const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
+        setExtraDistance(calculatedExtraKm);
+        console.log('BookingSummary: Calculated extra distance in recalculateFareDetails:', calculatedExtraKm, 'km');
+      }
       return;
     }
 
@@ -547,6 +624,16 @@ export const BookingSummary = ({
             newExtraDistanceFare = extraDistanceFare;
             newPerKmRate = extraKmCharge;
             newDriverAllowance = outstationFares.driverAllowance || 250;
+            
+            // Calculate and store extra distance for one-way display
+            let calculatedExtraKm = 0;
+            const baseDistanceForCharging = 300; // Use 150km as base for charging, not tier4Max
+            if (distance > tier4Max) {
+              calculatedExtraKm = distance - baseDistanceForCharging;
+            } else if (distance < tier1Min) {
+              calculatedExtraKm = Math.max(0, distance - tier1Min);
+            }
+            newExtraDistance = calculatedExtraKm;
 
             if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
               newNightCharges = Math.round(newBaseFare * 0.1);
@@ -902,27 +989,41 @@ export const BookingSummary = ({
 
   const sumBreakdown = (breakdown: any) => {
     if (!breakdown) return 0;
-    const fields = [
+    
+    // Only sum these specific fields that are actual charges/amounts
+    const chargeFields = [
       'basePrice',
       'driverAllowance',
       'nightCharges',
       'extraDistanceFare',
-      'extraHourCharge',
       'airportFee',
+      'baseFare', // Round-trip uses baseFare
+      'nightAllowance', // Round-trip uses nightAllowance
+      'extraDistanceCharges' // Round-trip uses extraDistanceCharges
     ];
+    
     let total = 0;
-    for (const key of fields) {
+    for (const key of chargeFields) {
       const val = breakdown[key];
       if (typeof val === 'number' && !isNaN(val)) {
         total += val;
       }
     }
+    
+    // Handle extra hour charges only if extra hours are present
+    if (breakdown.extraHourCharge && breakdown.extraHours && breakdown.extraHours > 0) {
+      total += breakdown.extraHourCharge * breakdown.extraHours;
+    }
+    
     return total;
   };
 
   useEffect(() => {
     if (onFinalTotalChange) {
-      if (tripType === 'local') {
+      // If breakdown was passed, use the totalPrice prop to ensure consistency
+      if (passedBreakdown) {
+        onFinalTotalChange(totalPrice);
+      } else if (tripType === 'local') {
         onFinalTotalChange(localTotal);
       } else if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
         onFinalTotalChange(outstationBreakdown.totalFare);
@@ -930,20 +1031,54 @@ export const BookingSummary = ({
         onFinalTotalChange(sumBreakdown(fareData?.breakdown || {}));
       }
     }
-  }, [localTotal, fareData?.breakdown, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
+  }, [passedBreakdown, totalPrice, localTotal, fareData?.breakdown, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  const breakdown = fareData?.breakdown || {};
-  const finalTotal = fareData?.totalPrice || totalPrice;
+  // Prioritize passed breakdown to ensure consistency with fare shown in cab list
+  // Only use fareData if no breakdown was passed
+  const breakdown = passedBreakdown || fareData?.breakdown || {};
+  const finalTotal = passedBreakdown ? totalPrice : (fareData?.totalPrice || totalPrice);
 
   let summaryBaseFare = breakdown.basePrice || 0;
   let summaryDriverAllowance = breakdown.driverAllowance || 0;
   let summaryNightAllowance = breakdown.nightCharges || 0;
   let summaryExtraDistanceCharges = breakdown.extraDistanceFare || 0;
-  let summaryTotal = sumBreakdown(breakdown);
+  let summaryTotal = passedBreakdown ? sumBreakdown(passedBreakdown) : sumBreakdown(breakdown);
+  
+  // When breakdown is passed, use the exact totalPrice to ensure consistency with what was shown in the list
+  // This is important because the breakdown might not include all components (e.g., airport trips don't include driverAllowance in breakdown from useFare)
+  if (passedBreakdown && totalPrice > 0) {
+    summaryTotal = totalPrice; // ALWAYS use the exact totalPrice that was shown in the list - this is the source of truth
+    
+    // For outstation one-way, ensure breakdown components are correctly extracted from passed breakdown
+    // The totalPrice is the final fare shown in the list, so we must use it as-is
+    if (tripType === 'outstation' && tripMode === 'one-way') {
+      // Use breakdown as-is, but ensure total matches totalPrice
+      summaryBaseFare = breakdown.basePrice || 0;
+      summaryDriverAllowance = breakdown.driverAllowance || 0;
+      summaryExtraDistanceCharges = breakdown.extraDistanceFare || 0;
+      summaryNightAllowance = breakdown.nightCharges || 0;
+      // Force total to match totalPrice (what was shown in list)
+      summaryTotal = totalPrice;
+    }
+    
+    // For airport trips, the breakdown from useFare doesn't include driverAllowance, 
+    // but the totalPrice shown in list is the actual fare. So we should NOT add driverAllowance
+    // If the breakdown components don't add up to totalPrice, that's okay - use totalPrice as source of truth
+    if (tripType === 'airport') {
+      // Don't add driverAllowance if it's not in the breakdown - the totalPrice is already correct
+      // Calculate what's missing if breakdown doesn't add up to total
+      const breakdownSum = summaryBaseFare + summaryExtraDistanceCharges + (breakdown.airportFee || 0);
+      if (Math.abs(summaryTotal - breakdownSum) > 1) {
+        // If there's a difference, don't add it as driverAllowance - just use the totalPrice as shown
+        // This ensures consistency - what you see in the list is what you get
+        summaryDriverAllowance = 0; // Don't show driverAllowance if it wasn't in the breakdown
+      }
+    }
+  }
 
   if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
     summaryBaseFare = outstationBreakdown.baseFare;
@@ -951,6 +1086,147 @@ export const BookingSummary = ({
     summaryNightAllowance = outstationBreakdown.nightAllowance;
     summaryExtraDistanceCharges = outstationBreakdown.extraDistanceCharges;
     summaryTotal = outstationBreakdown.totalFare;
+  }
+
+  // Compute dynamic values for inclusions/exclusions section
+  let computedExtraKmCharge = 0;
+  if (tripType === 'local') {
+    // Prefer breakdown from fare engine, else fallback to vehicle local fares
+    // Check all possible field name variations
+    if (typeof breakdown?.extraKmCharge === 'number') {
+      computedExtraKmCharge = breakdown.extraKmCharge as number;
+    } else if (selectedCab?.localPackageFares?.priceExtraKm) {
+      computedExtraKmCharge = selectedCab.localPackageFares.priceExtraKm;
+    } else if (selectedCab?.localPackageFares?.extraKmRate) {
+      computedExtraKmCharge = selectedCab.localPackageFares.extraKmRate;
+    } else if (selectedCab?.localPackageFares?.extra_km_charge) {
+      computedExtraKmCharge = selectedCab.localPackageFares.extra_km_charge;
+    } else if (selectedCab?.localPackageFares?.price_extra_km) {
+      computedExtraKmCharge = selectedCab.localPackageFares.price_extra_km;
+    } else {
+      computedExtraKmCharge = 12; // sensible default for local
+    }
+  } else if (tripType === 'airport') {
+    if (typeof breakdown?.extraKmCharge === 'number') {
+      computedExtraKmCharge = breakdown.extraKmCharge as number;
+    } else if (selectedCab?.airportFares?.extraKmCharge) {
+      computedExtraKmCharge = selectedCab.airportFares.extraKmCharge;
+    } else {
+      computedExtraKmCharge = 14; // airport default
+    }
+  } else if (tripType === 'outstation') {
+    if (tripMode === 'one-way') {
+      // One-way often uses a separate extra km rate
+      if (typeof breakdown?.extraKmCharge === 'number') {
+        computedExtraKmCharge = breakdown.extraKmCharge as number;
+      } else if (selectedCab?.outstationFares?.extraKmCharge) {
+        computedExtraKmCharge = selectedCab.outstationFares.extraKmCharge;
+      } else if (selectedCab?.pricePerKm) {
+        computedExtraKmCharge = selectedCab.pricePerKm;
+      } else {
+        computedExtraKmCharge = 15;
+      }
+    } else {
+      // Round-trip typically uses perKm rate
+      if (perKmRate && perKmRate > 0) {
+        computedExtraKmCharge = perKmRate;
+      } else if (selectedCab?.outstationFares?.pricePerKm) {
+        computedExtraKmCharge = selectedCab.outstationFares.pricePerKm;
+      } else if (selectedCab?.pricePerKm) {
+        computedExtraKmCharge = selectedCab.pricePerKm;
+      } else {
+        computedExtraKmCharge = 15;
+      }
+    }
+  }
+
+  let includedKm = 0;
+  if (tripType === 'local') {
+    includedKm = selectedPackage.km;
+  } else if (tripType === 'airport') {
+    includedKm = 40; // tiers up to 40km are covered in base
+  } else if (tripType === 'outstation') {
+    if (tripMode === 'round-trip') {
+      includedKm = distance * 2; // Actual round-trip distance
+    } else if (tripMode === 'one-way') {
+      // For one-way outstation, there is no included km in the base price
+      // Extra charges apply from km 1 onwards based on the actual distance traveled
+      includedKm = 0;
+    }
+  }
+
+  // Normalize inclusions/exclusions from API/vehicle
+  const normalizeList = (value: any): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean).map(String);
+    if (typeof value === 'string') return value.split(/\n|,/).map(s => s.trim()).filter(Boolean);
+    return [];
+  };
+
+  const apiInclusions = normalizeList((selectedCab as any)?.inclusions);
+  const apiExclusions = normalizeList((selectedCab as any)?.exclusions);
+
+  // Build dynamic policy items list
+  const policyItems: Array<{ text: string; isExclusion?: boolean }> = [];
+
+  // Add inclusions
+  if (apiInclusions.length > 0) {
+    policyItems.push({ text: `Includes ${apiInclusions.join(', ')}`, isExclusion: false });
+  }
+
+  // Add exclusions
+  if (apiExclusions.length > 0) {
+    policyItems.push({ text: `Excludes ${apiExclusions.join(', ')}`, isExclusion: true });
+  }
+
+  // Dynamic extra distance and extra hour lines based on trip type
+  if (tripType === 'local') {
+    // Local: included km/hours + extra km and extra hour from API
+    // Check all possible field name variations
+    let extraHourFromApi = 0;
+    if (typeof fareData?.breakdown?.extraHourCharge === 'number') {
+      extraHourFromApi = fareData.breakdown.extraHourCharge;
+    } else if (selectedCab?.localPackageFares?.priceExtraHour) {
+      extraHourFromApi = selectedCab.localPackageFares.priceExtraHour;
+    } else if (selectedCab?.localPackageFares?.extraHourRate) {
+      extraHourFromApi = selectedCab.localPackageFares.extraHourRate;
+    } else if (selectedCab?.localPackageFares?.extra_hour_charge) {
+      extraHourFromApi = selectedCab.localPackageFares.extra_hour_charge;
+    } else if (selectedCab?.localPackageFares?.price_extra_hour) {
+      extraHourFromApi = selectedCab.localPackageFares.price_extra_hour;
+    }
+
+    // Include km and hours from the selected package
+    if (includedKm > 0) {
+      policyItems.push({ text: `${includedKm} Kms included.` });
+    }
+    if (selectedPackage.hours > 0) {
+      policyItems.push({ text: `${selectedPackage.hours} hours included.` });
+    }
+    if (computedExtraKmCharge > 0) {
+      policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance` });
+    }
+    if (extraHourFromApi > 0) {
+      policyItems.push({ text: `₹${extraHourFromApi}/hour will be charged for extra hours` });
+    }
+  } else if (tripType === 'airport') {
+    if (includedKm > 0) {
+      policyItems.push({ text: `${includedKm} Kms included.` });
+    }
+    if (computedExtraKmCharge > 0) {
+      policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance` });
+    }
+  } else if (tripType === 'outstation') {
+    if (computedExtraKmCharge > 0) {
+      if (tripMode === 'one-way') {
+        policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance (charged on double distance i.e., distance × 2)` });
+      } else {
+        if (includedKm > 0) {
+          policyItems.push({ text: `${includedKm} Kms included.` });
+        }
+        policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance` });
+      }
+    }
   }
 
   return (
@@ -1082,10 +1358,7 @@ export const BookingSummary = ({
                       <Users className="h-4 w-4 text-gray-500" />
                       <span className="text-sm text-gray-600 font-medium">{selectedCab.capacity} Seats</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Fuel className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-600 font-medium">Petrol</span>
-                    </div>
+                    {/* Fuel type intentionally hidden in booking summary */}
                     {selectedCab.amenities && selectedCab.amenities.length > 0 && (
                       <div className="flex items-center gap-1">
                         <Check className="h-4 w-4 text-green-500" />
@@ -1175,6 +1448,61 @@ export const BookingSummary = ({
             )}
           </div>
           <div className="text-[12px] text-gray-500 mt-2">Parking and tolls fees are extra.</div>
+
+          {/* Inclusions/Exclusions */}
+          {!hideInclusionsExclusions && (
+          <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-semibold text-[14px]">Inclusions/Exclusions</p>
+              <a
+                href="/cancellation-refund-policy"
+                className="text-blue-600 hover:text-blue-700 text-[12px] font-medium"
+                target="_blank"
+                rel="noreferrer"
+              >
+                View Policy
+              </a>
+            </div>
+            <ul className="space-y-2">
+              {policyItems.length > 0 ? (
+                policyItems.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    {item.isExclusion ? (
+                      <X className="h-4 w-4 text-red-500 mt-0.5" />
+                    ) : (
+                      <Check className="h-4 w-4 text-green-500 mt-0.5" />
+                    )}
+                    <span className="text-[13px]" dangerouslySetInnerHTML={{ __html: item.text.replace(/\n/g, '<br/>') }}></span>
+                  </li>
+                ))
+              ) : (
+                <>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5" />
+                    <span className="text-[13px]"><span className="font-semibold">Toll charges, Parking, State Tax & Driver Allowance are excluded</span></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5" />
+                    <span className="text-[13px]">Only one pickup and drop</span>
+                  </li>
+                </>
+              )}
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-green-500 mt-0.5" />
+                <span className="text-[13px]">
+                  {tripType === 'outstation' && tripMode === 'round-trip' 
+                    ? <>Waiting time upto <span className="font-semibold">12 hours per day</span> included. <span className="font-semibold">₹100.00/30 mins</span> after that</>
+                    : <>Waiting time upto <span className="font-semibold">45 mins</span> included. <span className="font-semibold">₹100.00/30 mins</span> after that</>
+                  }
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Check className="h-4 w-4 text-green-500 mt-0.5" />
+                <span className="text-[13px]">During ghat roads and standby AC will turned off</span>
+              </li>
+            </ul>
+          </div>
+          )}
         </div>
       </div>
     </div>

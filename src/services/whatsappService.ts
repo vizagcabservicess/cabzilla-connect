@@ -318,7 +318,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       extraPerKm = '12';
     }
   }
-  
 
   // Get billing details
   const billingBasis = 'Per trip'; // Default billing basis
@@ -420,6 +419,65 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const isRoundTrip = booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
   const totalDistance = isRoundTrip ? oneWayDistance * 2 : oneWayDistance;
 
+  // Get outstation and airport extra charges
+  let outstationExtraKm = 'N/A';
+  let outstationExtraHour = 'N/A';
+  let outstationKmIncluded = 'N/A';
+  
+  if (tripType === 'outstation') {
+    // Get extra charges from booking data
+    outstationExtraKm = booking.extra_per_km || (booking as any).extraPerKm || (booking as any).price_per_km || 'N/A';
+    outstationExtraHour = booking.extra_per_hour || (booking as any).extraPerHour || (booking as any).price_per_hour || 'N/A';
+    
+    // Get included km based on trip mode
+    if (isRoundTrip) {
+      // For round-trip, included km is 2x the distance
+      outstationKmIncluded = oneWayDistance ? `${oneWayDistance * 2}` : 'N/A';
+    } else {
+      // For one-way, no km included (0)
+      outstationKmIncluded = '0';
+    }
+    
+    // Fallback inference based on vehicle type if not found in booking data
+    if (outstationExtraKm === 'N/A') {
+      const vehicleType = vehicleModel.toLowerCase();
+      if (vehicleType.includes('innova') || vehicleType.includes('crysta')) {
+        outstationExtraKm = '20';
+        outstationExtraHour = '450';
+      } else if (vehicleType.includes('ertiga')) {
+        outstationExtraKm = '18';
+        outstationExtraHour = '400';
+      } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
+        outstationExtraKm = '35';
+        outstationExtraHour = '850';
+      } else if (vehicleType.includes('swift') || vehicleType.includes('dzire') || vehicleType.includes('amaze') || vehicleType.includes('glanza')) {
+        // Sedan (Swift/Dzire/Amaze/Glanza)
+        outstationExtraKm = '14';
+        outstationExtraHour = '300';
+      } else {
+        // Default fallback
+        outstationExtraKm = '14';
+        outstationExtraHour = '300';
+      }
+    }
+  }
+  
+  // Get airport extra charges
+  let airportExtraKm = 'N/A';
+  if (tripType === 'airport') {
+    airportExtraKm = booking.extra_per_km || (booking as any).extraPerKm || (booking as any).price_per_km || 'N/A';
+    
+    // Fallback inference based on vehicle type
+    if (airportExtraKm === 'N/A') {
+      const vehicleType = vehicleModel.toLowerCase();
+      if (vehicleType.includes('ertiga')) {
+        airportExtraKm = '18';
+      } else {
+        airportExtraKm = '14';
+      }
+    }
+  }
+
   // Prepare destination display
   let destinationDisplay = dropLocation;
   if (dropLocation === 'N/A' && tripType !== 'tour') {
@@ -461,7 +519,16 @@ ${gstEnabled ? `🏢 *GST Details:* ${gstNumber} (${companyName})` : ''}
 ${tripType === 'local' ? `*Package Limits*
 ⏰ *Hours included:* ${hoursIncluded}
 🛣️ *Kilometers limit:* ${kmIncluded} km
-📈 *Extra charges:* ₹${extraPerHour} beyond hours; ₹${extraPerKm} beyond km (pro rate basis)` : ''}
+📈 *Extra charges:* ₹${extraPerHour}/hour beyond hours; ₹${extraPerKm}/km beyond km (pro rate basis)` : ''}
+
+${tripType === 'outstation' ? `*Outstation Charges*
+🛣️ *Kilometers included:* ${isRoundTrip ? `${outstationKmIncluded} km (round-trip distance)` : outstationKmIncluded === '0' ? '0 km (charges from km 1)' : `${outstationKmIncluded} km`}
+📈 *Extra distance:* ₹${outstationExtraKm}/km${isRoundTrip ? '' : ' (charged on double distance i.e., distance × 2)'}
+⏱️ *Extra charges:* ₹${outstationExtraHour}/hour${isRoundTrip ? ' (12 hours per day for round-trip)' : ''}
+🔧 *Special:* During ghat roads and standby AC will turned off` : ''}
+
+${tripType === 'airport' ? `*Airport Charges*
+📈 *Extra distance:* ₹${airportExtraKm}/km beyond 40 km` : ''}
 
 *Billing and Charges*
 📊 *Basis:* ${billingBasis}

@@ -57,83 +57,48 @@
     <link rel="preload" href="/src/main.tsx" as="script" type="module" />
     <link rel="preload" href="/src/index.css" as="style" />
     
-    <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, and Social Login with iOS support -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
+    <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, Cloudflare, and Social Login with iOS support -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
     
     <!-- Google Consent Mode v2 - Initialize before any tracking scripts -->
     <script>
-      // Initialize Google Consent Mode v2 with default denied state
+      // Initialize Google Consent Mode v2 with default granted state
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       
-      // Set default consent state (denied for all non-essential)
+      // Set default consent state (granted for all)
       gtag('consent', 'default', {
-        'ad_storage': 'denied',
-        'analytics_storage': 'denied',
-        'functionality_storage': 'denied',
-        'personalization_storage': 'denied',
-        'security_storage': 'granted', // Always granted for security
-        'wait_for_update': 500
+        'ad_storage': 'granted',
+        'analytics_storage': 'granted',
+        'functionality_storage': 'granted',
+        'personalization_storage': 'granted',
+        'security_storage': 'granted'
       });
       
       // Make gtag available globally
       window.gtag = gtag;
+      console.log('Google Consent Mode v2 initialized with granted state');
     </script>
     
     <!-- Google Analytics - Load with consent awareness -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-68BN0C389S"></script>
     <script>
-      gtag('js', new Date());
-      gtag('config', 'G-68BN0C389S', {
-        send_page_view: false, // Will be enabled based on consent
-        transport_type: 'beacon',
-        anonymize_ip: true, // Always anonymize IP for privacy
-        allow_google_signals: false, // Will be updated based on consent
-        allow_ad_personalization_signals: false // Will be updated based on consent
+      window.gtag('js', new Date());
+      window.gtag('config', 'G-68BN0C389S', {
+        anonymize_ip: true
       });
+      console.log('Google Analytics initialized');
     </script>
     
-    <!-- Microsoft Clarity - Initialize with consent awareness -->
+    <!-- Microsoft Clarity -->
     <script type="text/javascript">
-      // Initialize Clarity function but don't load script yet
       (function(c,l,a,r,i,t,y){
         c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        
-        // Function to load Clarity script
-        window.loadClarity = function() {
-          if (!window.clarityLoaded) {
-            t=l.createElement(r);
-            t.async=1;
-            t.src="https://www.clarity.ms/tag/"+i;
-            try {
-              y=l.getElementsByTagName(r)[0];
-              if (y && y.parentNode) {
-                y.parentNode.insertBefore(t,y);
-              } else {
-                l.head.appendChild(t);
-              }
-            } catch (error) {
-              console.warn('Clarity script insertion failed, using fallback:', error);
-              l.head.appendChild(t);
-            }
-            window.clarityLoaded = true;
-          }
-        };
-        
-        // Check if user has already given consent
-        const hasConsent = localStorage.getItem('cookie-consent-given') === 'true';
-        const savedPreferences = localStorage.getItem('cookie-preferences');
-        
-        if (hasConsent && savedPreferences) {
-          try {
-            const preferences = JSON.parse(savedPreferences);
-            if (preferences.analytics) {
-              window.loadClarity();
-            }
-          } catch (error) {
-            console.error('Error parsing saved cookie preferences:', error);
-          }
-        }
+        t=l.createElement(r);
+        t.async=1;
+        t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];
+        y.parentNode.insertBefore(t,y);
       })(window, document, "clarity", "script", "htvvpivvo1");
     </script>
   </head>

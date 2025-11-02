@@ -367,6 +367,7 @@ export function useFare(
                 basePrice,
                 driverAllowance,
                 extraDistanceFare,
+                extraKmCharge: extraKmCharge,
                 tierUsed: tierUsed
               };
             } else {
@@ -587,15 +588,33 @@ export function useFare(
 
         // Patch: Calculate totalPrice as the sum of all breakdown fields
         const sumBreakdown = (breakdownObj: any) => {
+          if (!breakdownObj) return 0;
+          
+          // Only sum these specific fields that are actual charges/amounts
+          const chargeFields = [
+            'basePrice',
+            'driverAllowance',
+            'nightCharges',
+            'extraDistanceFare',
+            'airportFee',
+            'baseFare', // Round-trip uses baseFare
+            'nightAllowance', // Round-trip uses nightAllowance
+            'extraDistanceCharges' // Round-trip uses extraDistanceCharges
+          ];
+          
           let total = 0;
-          if (breakdownObj) {
-            for (const key of Object.keys(breakdownObj)) {
-              const val = breakdownObj[key];
-              if (typeof val === 'number' && !isNaN(val)) {
-                total += val;
-              }
+          for (const key of chargeFields) {
+            const val = breakdownObj[key];
+            if (typeof val === 'number' && !isNaN(val)) {
+              total += val;
             }
           }
+          
+          // Handle extra hour charges only if extra hours are present
+          if (breakdownObj.extraHourCharge && breakdownObj.extraHours && breakdownObj.extraHours > 0) {
+            total += breakdownObj.extraHourCharge * breakdownObj.extraHours;
+          }
+          
           return total;
         };
         const patchedTotalPrice = sumBreakdown(breakdown);

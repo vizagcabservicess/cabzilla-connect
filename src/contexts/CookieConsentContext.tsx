@@ -75,22 +75,42 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
   };
 
   const applyConsentToScripts = (prefs: CookiePreferences) => {
+    console.log('Applying consent to scripts with preferences:', prefs);
+    
     // Apply Google Consent Mode v2
     if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('consent', 'update', {
+      console.log('gtag available, updating consent');
+      const consentUpdate = {
         'ad_storage': prefs.marketing ? 'granted' : 'denied',
         'analytics_storage': prefs.analytics ? 'granted' : 'denied',
         'functionality_storage': prefs.functional ? 'granted' : 'denied',
         'personalization_storage': prefs.marketing ? 'granted' : 'denied',
-        'security_storage': prefs.necessary ? 'granted' : 'denied',
-        'wait_for_update': 500
-      });
+        'security_storage': prefs.necessary ? 'granted' : 'denied'
+      };
+      console.log('Sending consent update:', consentUpdate);
+      window.gtag('consent', 'update', consentUpdate);
+      
+      // Send initial page view if analytics consent is granted
+      if (prefs.analytics) {
+        console.log('Analytics consent granted, sending page view');
+        window.gtag('config', 'G-68BN0C389S', {
+          send_page_view: true,
+          page_path: window.location.pathname + window.location.search
+        });
+        window.gtag('event', 'page_view', {
+          page_path: window.location.pathname + window.location.search,
+          page_title: document.title
+        });
+        console.log('Page view sent to GA4');
+      }
+    } else {
+      console.warn('gtag not available on window object');
     }
 
     // Apply Microsoft Clarity consent
     if (typeof window !== 'undefined') {
       if (prefs.analytics) {
-        // Load Clarity if analytics consent is given
+        console.log('Loading Microsoft Clarity');
         if (window.loadClarity) {
           window.loadClarity();
         }
@@ -98,7 +118,6 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
           window.clarity('consent');
         }
       } else {
-        // Stop Clarity if analytics consent is not given
         if (window.clarity) {
           window.clarity('stop');
         }

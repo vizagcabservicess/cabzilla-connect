@@ -27,21 +27,32 @@ interface CabListProps {
 
 const sumBreakdown = (breakdown: any) => {
   if (!breakdown) return 0;
-  const fields = [
+  
+  // Only sum these specific fields that are actual charges/amounts
+  const chargeFields = [
     'basePrice',
     'driverAllowance',
     'nightCharges',
     'extraDistanceFare',
-    'extraHourCharge',
     'airportFee',
+    'baseFare', // Round-trip uses baseFare
+    'nightAllowance', // Round-trip uses nightAllowance
+    'extraDistanceCharges' // Round-trip uses extraDistanceCharges
   ];
+  
   let total = 0;
-  for (const key of fields) {
+  for (const key of chargeFields) {
     const val = breakdown[key];
     if (typeof val === 'number' && !isNaN(val)) {
       total += val;
     }
   }
+  
+  // Handle extra hour charges only if extra hours are present
+  if (breakdown.extraHourCharge && breakdown.extraHours && breakdown.extraHours > 0) {
+    total += breakdown.extraHourCharge * breakdown.extraHours;
+  }
+  
   return total;
 };
 
@@ -96,17 +107,18 @@ const CabFareCard = ({
     isLoading = false;
     fareSource = 'calculated';
     // Always use this fare for the card and selection
+    const breakdownToUseForRoundTrip = selectedCabBreakdown ? selectedCabBreakdown : fareResult;
     return (
       <CabOptionCard
         key={cab.id}
         cab={cab}
         fare={fare}
         isSelected={selectedCabId === cab.id}
-        onSelect={() => handleSelectCab(cab, fare, 'calculated', fareResult)}
+        onSelect={() => handleSelectCab(cab, fare, breakdownToUseForRoundTrip)}
         fareDetails={fareText}
         isCalculating={isLoading}
         tripType={tripType}
-        breakdown={selectedCabBreakdown ? selectedCabBreakdown : fareResult}
+        breakdown={breakdownToUseForRoundTrip}
       />
     );
   }
@@ -199,7 +211,7 @@ const CabFareCard = ({
       cab={cab}
       fare={fare}
       isSelected={isSelected}
-      onSelect={() => handleSelectCab(cab, fare, fareSource, fareData?.breakdown)}
+      onSelect={() => handleSelectCab(cab, fare, breakdownToUse)}
       fareDetails={fareText}
       isCalculating={isLoading}
       tripType={tripType}
@@ -246,7 +258,7 @@ export const CabList: React.FC<CabListProps> = ({
 
   // Removed the useEffect that was fetching vehicles since we're using the prop directly
 
-  const enhancedSelectCab = (cab: CabType, fare: number, fareSource: string, breakdown?: any) => {
+  const enhancedSelectCab = (cab: CabType, fare: number, breakdown?: any) => {
     // For outstation round trip, always use breakdown.totalFare as fare and pass breakdown
     if (
       tripType === 'outstation' &&
@@ -267,10 +279,11 @@ export const CabList: React.FC<CabListProps> = ({
       try {
         localStorage.setItem(`selected_fare_${cab.id}_${tripType}_${packageType}`, JSON.stringify({
           fare,
-          source: fareSource,
+          source: 'selected',
           timestamp: Date.now(),
           packageType,
-          cabId: cab.id
+          cabId: cab.id,
+          breakdown
         }));
       } catch (e) {
         console.error('Error storing selected fare:', e);
