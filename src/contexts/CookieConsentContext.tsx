@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 
 interface CookiePreferences {
   necessary: boolean;
@@ -30,51 +30,7 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
   });
   const [hasConsent, setHasConsent] = useState(false);
 
-  useEffect(() => {
-    // Load saved preferences from localStorage
-    const savedConsent = localStorage.getItem('cookie-consent-given');
-    const savedPreferences = localStorage.getItem('cookie-preferences');
-    
-    if (savedConsent === 'true' && savedPreferences) {
-      try {
-        const parsedPreferences = JSON.parse(savedPreferences);
-        setPreferences(parsedPreferences);
-        setHasConsent(true);
-        // Apply consent to tracking scripts
-        applyConsentToScripts(parsedPreferences);
-      } catch (error) {
-        console.error('Error parsing saved cookie preferences:', error);
-      }
-    }
-  }, []);
-
-  const updatePreferences = (newPreferences: CookiePreferences) => {
-    setPreferences(newPreferences);
-    setHasConsent(true);
-    applyConsentToScripts(newPreferences);
-  };
-
-  const acceptAll = () => {
-    const allAccepted = {
-      necessary: true,
-      analytics: true,
-      marketing: true,
-      functional: true
-    };
-    updatePreferences(allAccepted);
-  };
-
-  const rejectAll = () => {
-    const onlyNecessary = {
-      necessary: true,
-      analytics: false,
-      marketing: false,
-      functional: false
-    };
-    updatePreferences(onlyNecessary);
-  };
-
-  const applyConsentToScripts = (prefs: CookiePreferences) => {
+  const applyConsentToScripts = useCallback((prefs: CookiePreferences) => {
     console.log('Applying consent to scripts with preferences:', prefs);
     
     // Apply Google Consent Mode v2
@@ -107,25 +63,70 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
       console.warn('gtag not available on window object');
     }
 
-    // Apply Microsoft Clarity consent
-    if (typeof window !== 'undefined') {
-      if (prefs.analytics) {
-        console.log('Loading Microsoft Clarity');
-        if (window.loadClarity) {
-          window.loadClarity();
-        }
-        if (window.clarity) {
-          window.clarity('consent');
-        }
-      } else {
-        if (window.clarity) {
-          window.clarity('stop');
-        }
-      }
+    // Microsoft Clarity is loaded by default without consent requirement
+    // Clarity will track all visitors by default
+    if (typeof window !== 'undefined' && window.clarity) {
+      console.log('Microsoft Clarity active (no consent required)');
     }
 
     // Store preferences for future page loads
     localStorage.setItem('cookie-preferences', JSON.stringify(prefs));
+  }, []);
+
+  useEffect(() => {
+    // Load saved preferences from localStorage
+    const savedConsent = localStorage.getItem('cookie-consent-given');
+    const savedPreferences = localStorage.getItem('cookie-preferences');
+    
+    if (savedConsent === 'true' && savedPreferences) {
+      try {
+        const parsedPreferences = JSON.parse(savedPreferences);
+        setPreferences(parsedPreferences);
+        setHasConsent(true);
+        // Apply consent to tracking scripts
+        applyConsentToScripts(parsedPreferences);
+      } catch (error) {
+        console.error('Error parsing saved cookie preferences:', error);
+      }
+    } else {
+      // No saved consent, use default granted state (production environment)
+      const defaultPreferences = {
+        necessary: true,
+        analytics: true,
+        marketing: true,
+        functional: true
+      };
+      setPreferences(defaultPreferences);
+      // Don't set hasConsent to true to show banner
+      // But apply scripts with granted state
+      applyConsentToScripts(defaultPreferences);
+    }
+  }, [applyConsentToScripts]);
+
+  const updatePreferences = (newPreferences: CookiePreferences) => {
+    setPreferences(newPreferences);
+    setHasConsent(true);
+    applyConsentToScripts(newPreferences);
+  };
+
+  const acceptAll = () => {
+    const allAccepted = {
+      necessary: true,
+      analytics: true,
+      marketing: true,
+      functional: true
+    };
+    updatePreferences(allAccepted);
+  };
+
+  const rejectAll = () => {
+    const onlyNecessary = {
+      necessary: true,
+      analytics: false,
+      marketing: false,
+      functional: false
+    };
+    updatePreferences(onlyNecessary);
   };
 
   const value: CookieConsentContextType = {
@@ -156,6 +157,5 @@ declare global {
   interface Window {
     gtag: (...args: any[]) => void;
     clarity: (...args: any[]) => void;
-    loadClarity: () => void;
   }
 }
