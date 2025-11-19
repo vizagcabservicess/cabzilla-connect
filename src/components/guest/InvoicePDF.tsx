@@ -176,9 +176,10 @@ interface InvoicePDFProps {
   extraChargesTotal: number;
   taxes: number;
   totalWithTaxes: number;
+  isIGST?: boolean;
 }
 
-export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalWithTaxes }: InvoicePDFProps) => {
+export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalWithTaxes, isIGST = false }: InvoicePDFProps) => {
   // Helper functions to safely access booking data
   const getBookingId = () => {
     const id = booking?.booking_id || booking?.bookingNumber || booking?.id;
@@ -245,12 +246,19 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
 
   // Safe number formatting
   const formatAmount = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0';
-    return amount.toLocaleString('en-IN');
+    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
+    return amount.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   };
 
   // GST applicability
   const gstEnabled = booking?.gstEnabled || (typeof taxes === 'number' && taxes > 0);
+  const gstRate = 18;
+  const componentRate = gstRate / (isIGST ? 1 : 2);
+  const halfTax = Number((taxes / 2).toFixed(2));
+  const otherHalfTax = Number((taxes - halfTax).toFixed(2));
 
   return (
     <Document>
@@ -312,7 +320,7 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
           <Text style={styles.sectionTitle}>Billing Details</Text>
           <View style={styles.billingTable}>
             <View style={styles.billingRow}>
-              <Text>Base Fare</Text>
+              <Text>Base Fare (excluding tax)</Text>
               <Text>₹{formatAmount(subtotal)}</Text>
             </View>
 
@@ -328,14 +336,29 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
             )}
 
             {gstEnabled && (
-              <View style={styles.billingRow}>
-                <Text>GST (18%)</Text>
-                <Text>₹{formatAmount(taxes)}</Text>
-              </View>
+              <>
+                {isIGST ? (
+                  <View style={styles.billingRow}>
+                    <Text>{`IGST (${gstRate}%)`}</Text>
+                    <Text>₹{formatAmount(taxes)}</Text>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.billingRow}>
+                      <Text>{`CGST (${componentRate}%)`}</Text>
+                      <Text>₹{formatAmount(halfTax)}</Text>
+                    </View>
+                    <View style={styles.billingRow}>
+                      <Text>{`SGST (${componentRate}%)`}</Text>
+                      <Text>₹{formatAmount(otherHalfTax)}</Text>
+                    </View>
+                  </>
+                )}
+              </>
             )}
 
             <View style={styles.billingRowTotal}>
-              <Text>Total Amount</Text>
+              <Text>Total Amount (including tax)</Text>
               <Text>₹{formatAmount(totalWithTaxes)}</Text>
             </View>
 

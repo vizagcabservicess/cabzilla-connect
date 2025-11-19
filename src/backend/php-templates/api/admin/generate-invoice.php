@@ -75,6 +75,13 @@ try {
         $jsonData = file_get_contents('php://input');
         $data = json_decode($jsonData, true);
         
+        // Log raw request data for debugging
+        logInvoiceError("POST request received", [
+            'raw_json' => $jsonData,
+            'parsed_data' => $data,
+            'json_error' => json_last_error_msg()
+        ]);
+        
         if (isset($data['bookingId'])) {
             $bookingId = (int)$data['bookingId'];
         }
@@ -97,10 +104,24 @@ try {
         
         if (isset($data['gstDetails'])) {
             $gstDetails = $data['gstDetails'];
+            
+            // CRITICAL: Extract lockedBaseFare from gstDetails if it's nested there
+            // The frontend sends lockedBaseFare inside gstDetails object
+            if (is_array($gstDetails) && isset($gstDetails['lockedBaseFare'])) {
+                $lockedBaseFare = floatval($gstDetails['lockedBaseFare']);
+                logInvoiceError("Extracted lockedBaseFare from gstDetails", [
+                    'lockedBaseFare' => $lockedBaseFare,
+                    'gstDetails_keys' => array_keys($gstDetails)
+                ]);
+            }
         }
         
-        if (isset($data['lockedBaseFare'])) {
+        // Also check top-level lockedBaseFare (for backward compatibility)
+        if (isset($data['lockedBaseFare']) && ($lockedBaseFare === null || $lockedBaseFare <= 0)) {
             $lockedBaseFare = floatval($data['lockedBaseFare']);
+            logInvoiceError("Extracted lockedBaseFare from top-level data", [
+                'lockedBaseFare' => $lockedBaseFare
+            ]);
         }
     } 
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -151,22 +172,15 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
 
-    // Connect to database - direct connection for reliability
+    // Connect to database using config.php function
+    $conn = null;
     try {
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        // Set character set
-        $conn->set_charset("utf8mb4");
-        logInvoiceError("Database connection successful");
+        // Use the database connection function from config.php
+        $conn = getDbConnection();
+        logInvoiceError("Database connection successful", [
+            'host' => DB_HOST ?? 'unknown',
+            'database' => DB_NAME ?? 'unknown'
+        ]);
     } catch (Exception $e) {
         logInvoiceError("Database connection error", ['error' => $e->getMessage()]);
         if ($demoMode) {
@@ -176,7 +190,7 @@ try {
             // In production, return an error
             sendJsonResponse([
                 'status' => 'error', 
-                'message' => 'Database connection failed',
+                'message' => 'Database connection failed: ' . $e->getMessage(),
                 'error_details' => $debugMode ? $e->getMessage() : null
             ], 500);
         }
@@ -187,15 +201,44 @@ try {
     $extraChargesArr = [];
     $totalExtraCharges = 0;
     
+    // Log the booking ID being searched for
+    logInvoiceError("Searching for booking", [
+        'bookingId' => $bookingId,
+        'bookingId_type' => gettype($bookingId),
+        'demoMode' => $demoMode ? 'true' : 'false',
+        'conn_set' => isset($conn) ? 'true' : 'false'
+    ]);
+    
     if (!$demoMode && isset($conn)) {
         try {
+            // First, let's check if the booking exists with better error handling
             $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception("Failed to prepare statement: " . $conn->error);
+            }
+            
             $stmt->bind_param("i", $bookingId);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to execute query: " . $stmt->error);
+            }
+            
             $result = $stmt->get_result();
             
+            logInvoiceError("Query executed", [
+                'bookingId' => $bookingId,
+                'num_rows' => $result->num_rows,
+                'query_error' => $stmt->error ? $stmt->error : 'none'
+            ]);
+            
             if ($result->num_rows === 0) {
-                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                // Try to see if there are any bookings at all
+                $checkStmt = $conn->query("SELECT COUNT(*) as total FROM bookings");
+                $checkResult = $checkStmt->fetch_assoc();
+                logInvoiceError("Booking not found - checking database", [
+                    'bookingId_searched' => $bookingId,
+                    'total_bookings_in_db' => $checkResult['total'] ?? 'unknown'
+                ]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found', 'bookingId' => $bookingId], 404);
             }
             
             $booking = $result->fetch_assoc();
@@ -276,6 +319,14 @@ try {
         $totalExtraCharges = 150;
     }
 
+    // Normalize GST details into an array
+    if (is_string($gstDetails)) {
+        $decodedGstDetails = json_decode($gstDetails, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $gstDetails = $decodedGstDetails;
+        }
+    }
+    
     // At the top, after POST/GET handling, set gstDetails to default if not set
     if (!is_array($gstDetails)) {
         $gstDetails = [
@@ -283,6 +334,25 @@ try {
             'companyName' => '',
             'companyAddress' => ''
         ];
+    }
+    
+    // Attempt to extract locked/base fare hints from GST details
+    $attemptBaseFareExtraction = function($value) use (&$lockedBaseFare) {
+        if (($lockedBaseFare === null || $lockedBaseFare <= 0) && isset($value) && $value !== '') {
+            $candidate = floatval($value);
+            if ($candidate > 0) {
+                $lockedBaseFare = $candidate;
+            }
+        }
+    };
+    
+    if (is_array($gstDetails)) {
+        if (isset($gstDetails['lockedBaseFare'])) {
+            $attemptBaseFareExtraction($gstDetails['lockedBaseFare']);
+        }
+        if (isset($gstDetails['originalFare'])) {
+            $attemptBaseFareExtraction($gstDetails['originalFare']);
+        }
     }
 
     // Current date for invoice generation
@@ -325,11 +395,17 @@ try {
     
     // Only calculate if we don't have existing values
     if (!isset($calculationDone)) {
-        // Use locked base fare if provided
-    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
-        $baseFare = $lockedBaseFare;
-        logInvoiceError("Using locked base fare", ['lockedBaseFare' => $lockedBaseFare]);
-    } else {
+        // CRITICAL: Use locked base fare if provided - this is the user-entered value
+        // Do NOT recalculate it under any circumstances when lockedBaseFare is provided
+        if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+            $baseFare = $lockedBaseFare;
+            logInvoiceError("Using locked base fare (user-entered value)", [
+                'lockedBaseFare' => $lockedBaseFare,
+                'baseFare_set' => $baseFare,
+                'includeTax' => $includeTax ? 'true' : 'false'
+            ]);
+        } else {
+            // Only calculate base fare if lockedBaseFare was NOT provided
             // First try to use booking fare if available
             $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
             
@@ -337,11 +413,19 @@ try {
             if ($baseFare <= 0 && isset($booking['total_amount']) && $booking['total_amount'] > 0) {
         $totalAmount = (float)$booking['total_amount'];
                 
-                // If GST is enabled, the total_amount includes GST, so we need to back it out
+                // If GST is enabled, check if tax is included in the total_amount
                 if ($gstEnabled) {
-                    // total_amount = (base_fare + extra_charges) * 1.12
-                    // So: base_fare = (total_amount / 1.12) - extra_charges
-                    $baseFare = round(($totalAmount / 1.12) - $totalExtraCharges, 2);
+                    if ($includeTax) {
+                        // Tax-inclusive: total_amount already includes tax
+                        // taxable_amount = total_amount / 1.18
+                        // base_fare = taxable_amount - extra_charges
+                        $taxableAmount = round($totalAmount / 1.18, 2);
+                        $baseFare = round($taxableAmount - $totalExtraCharges, 2);
+                    } else {
+                        // Tax-exclusive: total_amount does not include tax
+                        // base_fare = total_amount - extra_charges
+                        $baseFare = $totalAmount - $totalExtraCharges;
+                    }
                 } else {
                     // No GST, so base_fare = total_amount - extra_charges
                     $baseFare = $totalAmount - $totalExtraCharges;
@@ -349,11 +433,12 @@ try {
                 
                 // Ensure base fare is not negative
                 $baseFare = max(0, $baseFare);
-                logInvoiceError("Calculated base fare from total_amount", [
+                logInvoiceError("Calculated base fare from total_amount (no locked base fare provided)", [
                     'total_amount' => $totalAmount,
                     'extra_charges' => $totalExtraCharges,
                     'calculated_base_fare' => $baseFare,
-                    'gst_enabled' => $gstEnabled
+                    'gst_enabled' => $gstEnabled,
+                    'include_tax' => $includeTax ? 'true' : 'false'
                 ]);
             } else {
                 logInvoiceError("Using booking fare as base fare", ['fare' => $baseFare]);
@@ -363,31 +448,134 @@ try {
     
     // Only calculate tax if we don't already have it from existing invoice
     if (!isset($calculationDone)) {
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
-    if (!is_numeric($baseFare)) {
-        $baseFare = floatval($baseFare);
-    }
-    if ($baseFare <= 0) {
-        $baseFare = 0;
-    }
-        // Calculate GST on (base fare + extra charges)
-        $taxableAmount = $baseFare + $totalExtraCharges;
-        $taxAmount = $gstEnabled ? round($taxableAmount * $gstRate, 2) : 0;
+    // GST rate is always 18% (either as IGST 18% or CGST 9% + SGST 9%)
+    $gstRate = $gstEnabled ? 0.18 : 0; 
+    
+    // CRITICAL: When lockedBaseFare is provided, preserve it exactly as entered
+    // This MUST happen BEFORE any validation or recalculation
+    // Do NOT recalculate base fare when lockedBaseFare is provided
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Preserving user-entered base fare (CRITICAL)", [
+            'locked_base_fare' => $lockedBaseFare,
+            'base_fare_preserved' => $baseFare,
+            'includeTax' => $includeTax ? 'true' : 'false'
+        ]);
+    } else {
+        // Only validate/convert if lockedBaseFare was NOT provided
+        if (!is_numeric($baseFare)) {
+            $baseFare = floatval($baseFare);
+        }
+        // Only set to 0 if it's negative (not if it's 0 by design)
+        if ($baseFare < 0) {
+            $baseFare = 0;
+        }
     }
     
-    $finalTotal = $baseFare + $totalExtraCharges + $taxAmount;
+    // Calculate gross amount (base fare + all extra charges)
+    // When tax-inclusive: gross amount = entered amounts (preserve user input)
+    // When tax-exclusive: gross amount = entered amounts (will add tax later)
+    $grossAmount = $baseFare + $totalExtraCharges;
+    
+    // Handle tax calculation based on includeTax setting
+    if ($gstEnabled) {
+        if ($includeTax) {
+            // Tax-inclusive: Extract tax from the gross amount
+            // CRITICAL: Preserve the entered base fare and extra charges - DO NOT MODIFY
+            // Only extract tax for display/compliance purposes
+            // Formula: Taxable Amount = Gross Amount ÷ (1 + Tax Rate)
+            // Formula: GST Amount = Taxable Amount × Tax Rate
+            // Formula: Total = Gross Amount (unchanged, tax is included)
+            
+            // Ensure base fare is preserved (final safety check)
+            if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+                $baseFare = $lockedBaseFare;
+                $grossAmount = $baseFare + $totalExtraCharges;
+            }
+            
+            // Calculate taxable amount and GST using standard formula
+            $taxableAmount = round($grossAmount / (1 + $gstRate), 2);
+            $taxAmount = round($taxableAmount * $gstRate, 2);
+            
+            // Verify: taxable + tax should equal gross (with rounding tolerance)
+            $verification = round($taxableAmount + $taxAmount, 2);
+            if (abs($verification - $grossAmount) > 0.01) {
+                // Adjust tax amount to ensure total matches exactly
+                $taxAmount = round($grossAmount - $taxableAmount, 2);
+            }
+            
+            // Final total remains the same as gross amount (tax is included)
+            // Base fare and extra charges remain unchanged (preserve user input)
+            $finalTotal = $grossAmount;
+            
+            logInvoiceError("Tax-inclusive calculation (FINAL)", [
+                'base_fare_entered' => $baseFare,
+                'base_fare_preserved' => ($lockedBaseFare !== null && $lockedBaseFare > 0) ? 'YES' : 'NO',
+                'extra_charges' => $totalExtraCharges,
+                'gross_amount' => $grossAmount,
+                'taxable_amount' => $taxableAmount,
+                'tax_amount' => $taxAmount,
+                'final_total' => $finalTotal,
+                'gst_rate' => $gstRate,
+                'locked_base_fare' => $lockedBaseFare,
+                'verification' => $verification
+            ]);
+        } else {
+            // Tax-exclusive: Add tax on top of the gross amount
+            // CRITICAL: Calculate GST on SUBTOTAL (gross amount), not on any other amount
+            // Formula: GST = Subtotal × 0.18
+            // Formula: Total = Subtotal + GST
+            // DO NOT use: GST = (Subtotal × 1.18) × 0.18 (this would be wrong)
+            $taxableAmount = $grossAmount; // This is the subtotal (base fare + extra charges)
+            $taxAmount = round($taxableAmount * $gstRate, 2); // GST = Subtotal × 18%
+            $finalTotal = round($grossAmount + $taxAmount, 2); // Total = Subtotal + GST
+            
+            // Verification: Ensure no circular calculation
+            $verificationTax = round($grossAmount * 0.18, 2);
+            if (abs($taxAmount - $verificationTax) > 0.01) {
+                logInvoiceError("WARNING: Tax calculation mismatch in tax-exclusive mode", [
+                    'calculated_tax' => $taxAmount,
+                    'expected_tax' => $verificationTax,
+                    'difference' => abs($taxAmount - $verificationTax)
+                ]);
+                // Correct the tax amount
+                $taxAmount = $verificationTax;
+                $finalTotal = round($grossAmount + $taxAmount, 2);
+            }
+            
+            logInvoiceError("Tax-exclusive calculation (VERIFIED)", [
+                'gross_amount' => $grossAmount,
+                'base_fare' => $baseFare,
+                'extra_charges' => $totalExtraCharges,
+                'taxable_amount' => $taxableAmount,
+                'tax_amount' => $taxAmount,
+                'final_total' => $finalTotal,
+                'gst_rate' => $gstRate,
+                'formula_check' => 'GST = Subtotal × 0.18 = ' . $grossAmount . ' × 0.18 = ' . $taxAmount
+            ]);
+        }
+    } else {
+        // No GST
+        $taxableAmount = $grossAmount;
+        $taxAmount = 0;
+        $finalTotal = $grossAmount;
+    }
+    } else {
+        // Use existing values from database
+        $grossAmount = $baseFare + $totalExtraCharges;
+        $finalTotal = $baseFare + $totalExtraCharges + $taxAmount;
+    }
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
         if ($isIGST) {
-            // Interstate - Use IGST (12%)
+            // Interstate - Use IGST (18%)
             $igstAmount = $taxAmount;
             $igstAmount = round($igstAmount, 2); // Round to ensure consistent display
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
-            // Intrastate - Split into CGST (6%) and SGST (6%)
+            // Intrastate - Split into CGST (9%) and SGST (9%)
             // Use exact division to ensure totals match
             $halfTax = $taxAmount / 2;
             $cgstAmount = round($halfTax, 2);
@@ -400,52 +588,75 @@ try {
         $igstAmount = 0;
     }
     
-    // Ensure final total adds up correctly after rounding
-    $finalTotal = $baseFare + $totalExtraCharges + $taxAmount; // Include base fare, extra charges, and GST
-    $finalTotal = round($finalTotal, 2);
-    
-    // Always use pre-GST value for base fare in breakdown
-    $gstRate = 0.12; // 12% GST (6% CGST + 6% SGST)
-    if (isset($finalTotal) && (!isset($baseFare) || $baseFare <= 0 || $baseFare > $finalTotal * 0.99)) {
-        // If baseFare is missing or suspiciously high (matches total), back out GST
-        $baseFare = round($finalTotal / (1 + $gstRate), 2);
-        $taxAmount = round($baseFare * $gstRate, 2);
-        $finalTotal = $baseFare + $taxAmount;
-        logInvoiceError("Backed out GST from total to get pre-GST base fare", [
-            'corrected_base_fare' => $baseFare,
-            'corrected_tax_amount' => $taxAmount,
-            'corrected_total' => $finalTotal
-        ]);
-    }
-    // Now use $baseFare for the breakdown, and calculate GST and total from it
-    
-    // --- PATCH: Use the same base fare logic as frontend top summary ---
-    $safeNumber = function($value) {
-        if (is_numeric($value)) return floatval($value);
-        if (is_string($value)) {
-            $num = floatval($value);
-            return is_nan($num) ? 0 : $num;
+    // Final total is already calculated correctly above based on includeTax setting
+    // Only round it if it hasn't been set yet (shouldn't happen, but safety check)
+    if (!isset($finalTotal)) {
+        if ($gstEnabled && $includeTax) {
+            // Tax-inclusive: final total = gross amount
+            $finalTotal = round($grossAmount, 2);
+        } else if ($gstEnabled && !$includeTax) {
+            // Tax-exclusive: final total = gross amount + tax
+            $finalTotal = round($grossAmount + $taxAmount, 2);
+        } else {
+            // No GST: final total = gross amount
+            $finalTotal = round($grossAmount, 2);
         }
-        return 0;
-    };
-    $totalAmount = $safeNumber($booking['total_amount']);
-    $extraChargesTotal = 0;
-    if (!empty($extraChargesArr)) {
-        foreach ($extraChargesArr as $charge) {
-            if (isset($charge['amount'])) {
-                $extraChargesTotal += $safeNumber($charge['amount']);
+    } else {
+        $finalTotal = round($finalTotal, 2);
+    }
+    
+    // CRITICAL: NEVER recalculate base fare if lockedBaseFare was provided
+    // The backout calculation should ONLY happen if:
+    // 1. No locked base fare was provided
+    // 2. Base fare is missing or invalid
+    // 3. We're in tax-inclusive mode
+    if ($gstEnabled && $includeTax && ($lockedBaseFare === null || $lockedBaseFare <= 0)) {
+        // Only do backout if base fare is missing or suspicious
+        if (!isset($baseFare) || $baseFare <= 0 || (isset($finalTotal) && $baseFare > $finalTotal * 0.99)) {
+            $gstRateForBackout = 0.18; // 18% GST (9% CGST + 9% SGST)
+            // If baseFare is missing or suspiciously high (matches total), back out GST
+            // Calculate taxable amount first (base fare + extra charges), then GST
+            if (isset($finalTotal) && $finalTotal > 0) {
+                $taxableAmountForBackout = round($finalTotal / (1 + $gstRateForBackout), 2);
+                $taxAmount = round($finalTotal - $taxableAmountForBackout, 2);
+                $baseFare = max(0, $taxableAmountForBackout - $totalExtraCharges);
+                // Final total should remain the same (tax-inclusive)
+                $finalTotal = $finalTotal; // Keep original total
+                logInvoiceError("Backed out GST from total to get pre-GST base fare (tax-inclusive, no locked base fare)", [
+                    'corrected_base_fare' => $baseFare,
+                    'corrected_tax_amount' => $taxAmount,
+                    'corrected_total' => $finalTotal,
+                    'include_tax' => 'true',
+                    'locked_base_fare_provided' => 'false'
+                ]);
             }
         }
     }
-    if ($gstEnabled) {
-        $baseFare = round(($totalAmount - $extraChargesTotal) / 1.12, 2);
-        $taxAmount = round(($totalAmount - $extraChargesTotal) - $baseFare, 2);
-    } else {
-        $baseFare = max(0, $totalAmount - $extraChargesTotal);
-        $taxAmount = 0;
+    
+    // FINAL CHECK: If lockedBaseFare was provided, ensure it's preserved (safety check)
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Final safety check: Preserving locked base fare", [
+            'locked_base_fare' => $lockedBaseFare,
+            'base_fare_final' => $baseFare,
+            'include_tax' => 'true'
+        ]);
     }
-    $finalTotal = $totalAmount;
-    // --- END PATCH ---
+    // Log final calculation for debugging
+    if ($gstEnabled && !isset($calculationDone)) {
+        logInvoiceError("Final GST calculation", [
+            'base_fare' => $baseFare,
+            'extra_charges' => $totalExtraCharges,
+            'gross_amount' => $grossAmount ?? ($baseFare + $totalExtraCharges),
+            'taxable_amount' => $taxableAmount ?? ($baseFare + $totalExtraCharges),
+            'tax_amount' => $taxAmount,
+            'cgst_amount' => $cgstAmount,
+            'sgst_amount' => $sgstAmount,
+            'igst_amount' => $igstAmount,
+            'final_total' => $finalTotal,
+            'include_tax' => $includeTax ? 'true' : 'false'
+        ]);
+    }
     
     // Create HTML content for invoice
     $invoiceHtml = '<!DOCTYPE html>
@@ -545,6 +756,25 @@ try {
             </div>';
     }
             
+    // CRITICAL: Ensure base fare is preserved right before HTML generation
+    // This is the final check to prevent any recalculation from affecting the display
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Pre-HTML generation: Preserving locked base fare", [
+            'locked_base_fare' => $lockedBaseFare,
+            'base_fare_for_html' => $baseFare
+        ]);
+    }
+    
+    // FINAL VERIFICATION: Log the exact value being used in HTML
+    logInvoiceError("HTML generation: Final baseFare value", [
+        'base_fare' => $baseFare,
+        'locked_base_fare' => $lockedBaseFare,
+        'base_fare_formatted' => number_format($baseFare, 2),
+        'include_tax' => $includeTax ? 'true' : 'false',
+        'gst_enabled' => $gstEnabled ? 'true' : 'false'
+    ]);
+    
     $invoiceHtml .= '
             <h3 class="section-title">Fare Breakdown</h3>
             <table class="fare-table">
@@ -553,7 +783,7 @@ try {
                     <th style="text-align: right;">Amount</th>
                 </tr>
                 <tr>
-                    <td>Base Fare' . ($includeTax && $gstEnabled ? ' (excluding tax)' : '') . '</td>
+                    <td>Base Fare' . ($includeTax && $gstEnabled ? '' : ($gstEnabled ? ' (excluding tax)' : '')) . '</td>
                     <td style="text-align: right;">₹ ' . number_format($baseFare, 2) . '</td>
                 </tr>';
     // Add extra charges as line items
@@ -566,9 +796,14 @@ try {
     } else {
         $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
     }
-    // GST row
+    // GST rows - show CGST and SGST separately for intrastate, IGST for interstate
     if ($gstEnabled) {
-        $invoiceHtml .= '\n                <tr>\n                    <td>' . ($isIGST ? 'IGST (12%)' : 'GST (12%)') . '</td>\n                    <td style="text-align: right;">₹ ' . number_format($taxAmount, 2) . '</td>\n                </tr>';
+        if ($isIGST) {
+            $invoiceHtml .= '\n                <tr>\n                    <td>IGST (18%)</td>\n                    <td style="text-align: right;">₹ ' . number_format($igstAmount, 2) . '</td>\n                </tr>';
+        } else {
+            $invoiceHtml .= '\n                <tr>\n                    <td>CGST (9%)</td>\n                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>\n                </tr>';
+            $invoiceHtml .= '\n                <tr>\n                    <td>SGST (9%)</td>\n                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>\n                </tr>';
+        }
     }
     $invoiceHtml .= '\n                <tr class="total-row">\n                    <td>Total Amount' . ($includeTax ? ' (including tax)' : ' (excluding tax)') . '</td>\n                    <td style="text-align: right;">₹ ' . number_format($finalTotal, 2) . '</td>\n                </tr>\n            </table>';
             

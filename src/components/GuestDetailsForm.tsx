@@ -483,7 +483,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
 
                   <Alert className="bg-orange-50 border-orange-200 text-orange-800">
                     <AlertDescription>
-                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking. Additional 12% GST will be charged on the total amount.
+                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking. Additional 18% GST will be charged on the total amount.
                     </AlertDescription>
                   </Alert>
                 </div>

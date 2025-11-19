@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
@@ -96,34 +96,9 @@ function extractInvoiceValues(html: string): { baseFare?: number, extraCharges?:
 
 export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [invoiceHtml, setInvoiceHtml] = useState<string | null>(null);
+  const [rawInvoiceHtml, setRawInvoiceHtml] = useState<string | null>(null);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchLatestInvoice() {
-      if (booking && booking.id) {
-        setLoadingInvoice(true);
-        setInvoiceError(null);
-        try {
-          const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
-          const data = await resp.json();
-          if (data.status === 'success' && data.invoice && data.invoice.invoice_html) {
-            setInvoiceHtml(data.invoice.invoice_html);
-          } else {
-            setInvoiceHtml(null);
-            setInvoiceError('No invoice found for this booking.');
-          }
-        } catch (e) {
-          setInvoiceHtml(null);
-          setInvoiceError('Failed to load invoice.');
-        } finally {
-          setLoadingInvoice(false);
-        }
-      }
-    }
-    fetchLatestInvoice();
-  }, [booking]);
 
   console.log('BookingInvoice - booking data:', booking);
 
@@ -137,6 +112,16 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     return 0;
   };
 
+  const formatCurrency = useCallback((amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      return '0.00';
+    }
+    return amount.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }, []);
+
   // Calculate amounts with safe number handling
   const extraChargesArr = Array.isArray(booking.extraCharges) ? booking.extraCharges : 
                          Array.isArray(booking.extra_charges) ? booking.extra_charges : [];
@@ -146,19 +131,165 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   }, 0);
 
   const totalBeforeTax = safeNumber(booking.totalAmount || booking.total_amount);
+  const baseFareFromFareField = safeNumber((booking as any).fare);
+  const gstAmountFromBooking = safeNumber(booking.gstAmount);
   
-  // GST calculation (12% if enabled)
+  // GST calculation (18% if enabled)
   const gstEnabled = booking.gstEnabled || booking.gstAmount !== undefined;
   let baseFare = 0;
   let taxes = 0;
+  let totalWithTaxes = Math.max(0, totalBeforeTax);
+
   if (gstEnabled) {
-    baseFare = Math.round((totalBeforeTax - extraChargesTotal) / 1.12);
-    taxes = (totalBeforeTax - extraChargesTotal) - baseFare;
+    const baseCandidates = [
+      baseFareFromFareField,
+      totalBeforeTax > 0 ? totalBeforeTax - gstAmountFromBooking : 0
+    ].filter((value) => typeof value === 'number' && !isNaN(value) && value > 0);
+
+    const inferredBase = baseCandidates.length > 0 ? Math.max(...baseCandidates) : 0;
+    if (inferredBase > 0) {
+      baseFare = inferredBase;
+    } else if (totalBeforeTax > 0) {
+      baseFare = Math.round((totalBeforeTax - extraChargesTotal) / 1.18);
+    } else {
+      baseFare = Math.max(0, totalBeforeTax - extraChargesTotal);
+    }
+
+    const taxableSubtotal = Math.max(0, baseFare + extraChargesTotal);
+    taxes = Number((taxableSubtotal * 0.18).toFixed(2));
+    totalWithTaxes = Number((taxableSubtotal + taxes).toFixed(2));
   } else {
-    baseFare = Math.max(0, totalBeforeTax - extraChargesTotal);
+    baseFare = Math.max(
+      0,
+      baseFareFromFareField > 0 ? baseFareFromFareField : totalBeforeTax - extraChargesTotal
+    );
     taxes = 0;
+    totalWithTaxes = baseFare + extraChargesTotal;
   }
-  const totalWithTaxes = totalBeforeTax;
+
+  const sanitizeInvoiceHtml = useCallback((html: string | null) => {
+    if (!html) return html;
+    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+      return html;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const normalizedBase = Math.max(0, baseFare);
+      const taxableAmount = Math.max(0, normalizedBase + extraChargesTotal);
+      const normalizedTaxes = Number((taxableAmount * 0.18).toFixed(2));
+      const normalizedTotal = Number((taxableAmount + normalizedTaxes).toFixed(2));
+      const halfTax = Number((normalizedTaxes / 2).toFixed(2));
+
+      // Update labels
+      const textUpdates: Array<{ selector: string; regex: RegExp; replacement: string }> = [
+        { selector: 'body', regex: /Additional\s+12%\s+GST/gi, replacement: 'Additional 18% GST' },
+        { selector: 'body', regex: /CGST\s*\(6%\)/gi, replacement: 'CGST (9%)' },
+        { selector: 'body', regex: /SGST\s*\(6%\)/gi, replacement: 'SGST (9%)' },
+        { selector: 'body', regex: /IGST\s*\(12%\)/gi, replacement: 'IGST (18%)' },
+        { selector: 'body', regex: /CGST\s*6%\s*\+\s*SGST\s*6%/gi, replacement: 'CGST 9% + SGST 9%' },
+        { selector: 'body', regex: /12%\s*GST/gi, replacement: '18% GST' }
+      ];
+
+      textUpdates.forEach(({ selector, regex, replacement }) => {
+        const node = doc.querySelector(selector);
+        if (node && node.innerHTML) {
+          node.innerHTML = node.innerHTML.replace(regex, replacement);
+        }
+      });
+
+      const setAmount = (cell: HTMLTableCellElement | null, amount: number) => {
+        if (!cell) return;
+        const formatted = amount.toLocaleString('en-IN', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+        cell.innerHTML = `<span class="rupee-symbol">₹</span> ${formatted}`;
+      };
+
+      const findRowByLabel = (label: string) => {
+        return Array.from(doc.querySelectorAll<HTMLTableRowElement>('tr')).find((row) =>
+          row.cells.length > 0 && row.cells[0].textContent?.toLowerCase().includes(label.toLowerCase())
+        );
+      };
+
+      const baseRow = findRowByLabel('base fare');
+      if (baseRow) {
+        baseRow.cells[0].textContent = baseRow.cells[0].textContent?.replace(/(Base Fare).*/i, 'Base Fare (excluding tax)');
+        setAmount(baseRow.cells[1] ?? null, normalizedBase);
+      }
+
+      if (gstEnabled) {
+        const igstRow = findRowByLabel('igst');
+        if (igstRow) {
+          igstRow.cells[0].textContent = 'IGST (18%)';
+          setAmount(igstRow.cells[1] ?? null, normalizedTaxes);
+        } else {
+          const cgstRow = findRowByLabel('cgst');
+          if (cgstRow) {
+            cgstRow.cells[0].textContent = 'CGST (9%)';
+            setAmount(cgstRow.cells[1] ?? null, halfTax);
+          }
+          const sgstRow = findRowByLabel('sgst');
+          if (sgstRow) {
+            sgstRow.cells[0].textContent = 'SGST (9%)';
+            setAmount(sgstRow.cells[1] ?? null, normalizedTaxes - halfTax);
+          }
+        }
+      }
+
+      const totalRow = doc.querySelector<HTMLTableRowElement>('tr.total-row');
+      if (totalRow && totalRow.cells.length > 1) {
+        setAmount(totalRow.cells[1], normalizedTotal);
+      }
+
+      const taxNote = doc.querySelector<HTMLElement>('.tax-note');
+      if (taxNote) {
+        taxNote.textContent = gstEnabled
+          ? /igst/i.test(taxNote.textContent || '')
+            ? 'This invoice includes GST as per applicable rates. IGST 18% has been applied.'
+            : 'This invoice includes GST as per applicable rates. CGST 9% + SGST 9% has been applied.'
+          : taxNote.textContent;
+      }
+
+      return doc.documentElement.outerHTML;
+    } catch (error) {
+      console.error('Failed to sanitize invoice HTML:', error);
+      return html;
+    }
+  }, [baseFare, gstEnabled, taxes, totalWithTaxes, formatCurrency]);
+
+  const invoiceHtml = useMemo(
+    () => sanitizeInvoiceHtml(rawInvoiceHtml),
+    [rawInvoiceHtml, sanitizeInvoiceHtml]
+  );
+
+  useEffect(() => {
+    async function fetchLatestInvoice() {
+      if (booking && booking.id) {
+        setLoadingInvoice(true);
+        setInvoiceError(null);
+        try {
+          const resp = await fetch(`/api/admin/get-invoice.php?booking_id=${booking.id}`);
+          const data = await resp.json();
+          if (data.status === 'success' && data.invoice && data.invoice.invoice_html) {
+            setRawInvoiceHtml(data.invoice.invoice_html);
+          } else {
+            setRawInvoiceHtml(null);
+            setInvoiceError('No invoice found for this booking.');
+          }
+        } catch (e) {
+          setRawInvoiceHtml(null);
+          setInvoiceError('Failed to load invoice.');
+        } finally {
+          setLoadingInvoice(false);
+        }
+      }
+    }
+    fetchLatestInvoice();
+  }, [booking, sanitizeInvoiceHtml]);
 
   console.log('Invoice calculations:', {
     extraChargesTotal,
@@ -173,13 +304,20 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
       setIsGeneratingPDF(true);
       toast.loading('Generating PDF...');
       
+      const pdfBase = Number(baseFare.toFixed(2));
+      const pdfTaxes = Number(taxes.toFixed(2));
+      const pdfTotal = Number(totalWithTaxes.toFixed(2));
+      const pdfExtraCharges = Number(effectiveExtraCharges.toFixed(2));
+      const pdfIsIGST = Boolean(invoiceHtml && /igst/i.test(invoiceHtml) && !/cgst/i.test(invoiceHtml));
+
       const blob = await pdf(
         <InvoicePDF
           booking={booking}
-          subtotal={baseFare}
-          extraChargesTotal={extraChargesTotal}
-          taxes={taxes}
-          totalWithTaxes={totalWithTaxes}
+          subtotal={pdfBase}
+          extraChargesTotal={pdfExtraCharges}
+          taxes={pdfTaxes}
+          totalWithTaxes={pdfTotal}
+          isIGST={pdfIsIGST}
         />
       ).toBlob();
 
@@ -241,6 +379,19 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     if (typeof parsed.extraCharges === 'number') summaryExtraCharges = parsed.extraCharges;
   }
 
+  const effectiveBaseFare = typeof summaryBaseFare === 'number' ? summaryBaseFare : baseFare;
+  const effectiveExtraCharges = typeof summaryExtraCharges === 'number' ? summaryExtraCharges : extraChargesTotal;
+
+  if (gstEnabled) {
+    const gstBaseAmount = Math.max(0, effectiveBaseFare + effectiveExtraCharges);
+    taxes = Number((gstBaseAmount * 0.18).toFixed(2));
+    totalWithTaxes = Number((gstBaseAmount + taxes).toFixed(2));
+  } else {
+    taxes = 0;
+    totalWithTaxes = Number((effectiveBaseFare + effectiveExtraCharges).toFixed(2));
+  }
+  baseFare = effectiveBaseFare;
+
   // Only render summary after backend invoice HTML is loaded and parsed
   if (!invoiceHtml) {
     return (
@@ -269,12 +420,12 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           <div className="flex flex-col gap-1 mb-2">
             <div className="flex justify-between">
               <span>Base Fare</span>
-              <span className="font-semibold text-lg text-yellow-700">₹{typeof summaryBaseFare === 'number' ? summaryBaseFare.toLocaleString('en-IN') : '--'}</span>
+              <span className="font-semibold text-lg text-yellow-700">₹{formatCurrency(effectiveBaseFare)}</span>
             </div>
-            {typeof summaryExtraCharges === 'number' && summaryExtraCharges > 0 && (
+            {effectiveExtraCharges > 0 && (
               <div className="flex justify-between">
                 <span>Extra Charges</span>
-                <span className="font-semibold text-lg text-yellow-700">₹{summaryExtraCharges.toLocaleString('en-IN')}</span>
+                <span className="font-semibold text-lg text-yellow-700">₹{formatCurrency(effectiveExtraCharges)}</span>
               </div>
             )}
           </div>

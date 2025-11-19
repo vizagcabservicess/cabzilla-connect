@@ -141,6 +141,7 @@ try {
     $isIGST = isset($_GET['isIGST']) ? filter_var($_GET['isIGST'], FILTER_VALIDATE_BOOLEAN) : false;
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
+    $lockedBaseFare = isset($_GET['lockedBaseFare']) ? floatval($_GET['lockedBaseFare']) : null;
 
     // Connect to database with improved error handling
     try {
@@ -195,8 +196,7 @@ try {
     $currentDate = date('Y-m-d');
     $invoiceNumber = empty($customInvoiceNumber) ? 'INV-' . date('Ymd') . '-' . $bookingId : $customInvoiceNumber;
     
-    // Calculate base amount and extra charges
-    $totalAmount = (float)$booking['total_amount'];
+    // Calculate extra charges total
     $extraChargesTotal = 0;
     if (!empty($extraCharges)) {
         foreach ($extraCharges as $charge) {
@@ -204,49 +204,124 @@ try {
             $extraChargesTotal += $amount;
         }
     }
-    // PATCH: Calculate base fare correctly
-    $baseFare = $totalAmount - $extraChargesTotal;
     
-    // GST rate is always 12% (either as IGST 12% or CGST 6% + SGST 6%)
-    $gstRate = $gstEnabled ? 0.12 : 0; 
+    // Calculate tax components - use same logic as generate-invoice.php
+    $baseFare = 0;
+    $taxAmount = 0;
     
-    // Ensure we have a valid amount
-    if ($totalAmount <= 0) {
-        $totalAmount = 0;
+    // CRITICAL: Use locked base fare if provided (user-entered value)
+    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;
+        logInvoiceError("Using locked base fare for PDF", [
+            'lockedBaseFare' => $lockedBaseFare,
+            'baseFare_set' => $baseFare
+        ]);
+    } else {
+        // Calculate base fare if not locked
+        $totalAmountOriginal = (float)$booking['total_amount'];
+        if (!is_numeric($totalAmountOriginal)) {
+            $totalAmountOriginal = floatval($totalAmountOriginal);
+        }
+        
+        // Try to use booking fare if available
+        $baseFare = isset($booking['fare']) ? (float)$booking['fare'] : 0;
+        
+        // If no fare field, calculate base fare from total_amount by backing out GST and extra charges
+        if ($baseFare <= 0 && isset($booking['total_amount']) && $booking['total_amount'] > 0) {
+            $totalAmount = (float)$booking['total_amount'];
+            
+            // If GST is enabled, check if tax is included in the total_amount
+            if ($gstEnabled) {
+                if ($includeTax) {
+                    // Tax-inclusive: total_amount already includes tax
+                    $taxableAmount = round($totalAmount / 1.18, 2);
+                    $baseFare = round($taxableAmount - $extraChargesTotal, 2);
+                } else {
+                    // Tax-exclusive: total_amount does not include tax
+                    $baseFare = $totalAmount - $extraChargesTotal;
+                }
+            } else {
+                // No GST, so base_fare = total_amount - extra_charges
+                $baseFare = $totalAmount - $extraChargesTotal;
+            }
+            
+            // Ensure base fare is not negative
+            $baseFare = max(0, $baseFare);
+        }
     }
     
-    if ($includeTax && $gstEnabled) {
-        // If tax is included in total amount (default)
-        $baseAmountBeforeTax = $totalAmount / (1 + $gstRate);
-        $baseAmountBeforeTax = round($baseAmountBeforeTax, 2);
-        $taxAmount = $totalAmount - $baseAmountBeforeTax;
-        $taxAmount = round($taxAmount, 2);
-    } else if (!$includeTax && $gstEnabled) {
-        // If tax is excluded from the base amount
-        $baseAmountBeforeTax = $totalAmount;
-        $taxAmount = $totalAmount * $gstRate;
-        $taxAmount = round($taxAmount, 2);
-        $totalAmount = $baseAmountBeforeTax + $taxAmount;
-        $totalAmount = round($totalAmount, 2);
+    // GST rate is always 18% (either as IGST 18% or CGST 9% + SGST 9%)
+    $gstRate = $gstEnabled ? 0.18 : 0;
+    
+    // Calculate gross amount (base fare + all extra charges)
+    $grossAmount = $baseFare + $extraChargesTotal;
+    
+    // Handle tax calculation based on includeTax setting
+    if ($gstEnabled) {
+        if ($includeTax) {
+            // Tax-inclusive: Extract tax from the gross amount
+            // CRITICAL: Preserve the entered base fare and extra charges - DO NOT MODIFY
+            // Only extract tax for display/compliance purposes
+            // Formula: Taxable Amount = Gross Amount ÷ (1 + Tax Rate)
+            // Formula: GST Amount = Taxable Amount × Tax Rate
+            // Formula: Total = Gross Amount (unchanged, tax is included)
+            
+            // Ensure base fare is preserved (final safety check)
+            if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+                $baseFare = $lockedBaseFare;
+                $grossAmount = $baseFare + $extraChargesTotal;
+            }
+            
+            // Calculate taxable amount and GST using standard formula
+            $taxableAmount = round($grossAmount / (1 + $gstRate), 2);
+            $taxAmount = round($taxableAmount * $gstRate, 2);
+            
+            // Verify: taxable + tax should equal gross (with rounding tolerance)
+            $verification = round($taxableAmount + $taxAmount, 2);
+            if (abs($verification - $grossAmount) > 0.01) {
+                // Adjust tax amount to ensure total matches exactly
+                $taxAmount = round($grossAmount - $taxableAmount, 2);
+            }
+            
+            // Final total remains the same as gross amount (tax is included)
+            // Base fare and extra charges remain unchanged (preserve user input)
+            $fareTotalWithTax = $grossAmount;
+            
+            logInvoiceError("Tax-inclusive calculation (PDF)", [
+                'base_fare' => $baseFare,
+                'extra_charges' => $extraChargesTotal,
+                'gross_amount' => $grossAmount,
+                'taxable_amount' => $taxableAmount,
+                'tax_amount' => $taxAmount,
+                'total' => $fareTotalWithTax,
+                'locked_base_fare' => $lockedBaseFare,
+                'verification' => $verification
+            ]);
+        } else {
+            // Tax-exclusive: Add tax on top of the gross amount
+            $taxableAmount = $grossAmount; // This is the subtotal (base fare + extra charges)
+            $taxAmount = round($taxableAmount * $gstRate, 2); // GST = Subtotal × 18%
+            $fareTotalWithTax = round($grossAmount + $taxAmount, 2); // Total = Subtotal + GST
+        }
     } else {
-        // No tax case
-        $baseAmountBeforeTax = $totalAmount;
+        // No GST
+        $taxableAmount = $grossAmount;
         $taxAmount = 0;
+        $fareTotalWithTax = $grossAmount;
     }
     
     // For GST, split into CGST and SGST or use IGST
     if ($gstEnabled) {
         if ($isIGST) {
-            // Interstate - Use IGST (12%)
-            $igstAmount = $taxAmount;
-            $igstAmount = round($igstAmount, 2);
+            // Interstate - Use IGST (18%)
+            $igstAmount = round($taxAmount, 2);
             $cgstAmount = 0;
             $sgstAmount = 0;
         } else {
-            // Intrastate - Split into CGST (6%) and SGST (6%)
+            // Intrastate - Split into CGST (9%) and SGST (9%)
             $halfTax = $taxAmount / 2;
             $cgstAmount = round($halfTax, 2);
-            $sgstAmount = round($taxAmount - $cgstAmount, 2);
+            $sgstAmount = round($taxAmount - $cgstAmount, 2); // Ensure the total is exact
             $igstAmount = 0;
         }
     } else {
@@ -255,8 +330,8 @@ try {
         $igstAmount = 0;
     }
     
-    // Grand total with extra charges
-    $grandTotal = $totalAmount + $extraChargesTotal;
+    // Final total
+    $grandTotal = round($fareTotalWithTax, 2);
 
     // Use inline CSS for reliability instead of searching for CSS files
     $cssContent = "
@@ -370,7 +445,7 @@ try {
             </div>
             
             <div class='fare-details'>
-                <h3>Fare Details</h3>
+                <h3>Fare Breakdown</h3>
                 <table class='fare-table'>
                     <thead>
                         <tr>
@@ -384,22 +459,37 @@ try {
                             <td>₹ " . number_format($baseFare, 2) . "</td>
                         </tr>";
     
+    // Add extra charges as line items in the same table
+    if (!empty($extraCharges)) {
+        foreach ($extraCharges as $charge) {
+            $chargeDesc = isset($charge['description']) ? $charge['description'] : 
+                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
+            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
+            
+            $htmlContent .= "
+                        <tr>
+                            <td>" . htmlspecialchars($chargeDesc) . "</td>
+                            <td>₹ " . number_format($chargeAmount, 2) . "</td>
+                        </tr>";
+        }
+    }
+    
     // Add GST rows if applicable
     if ($gstEnabled) {
         if ($isIGST) {
             $htmlContent .= "
                         <tr>
-                            <td>IGST (12%)</td>
+                            <td>IGST (18%)</td>
                             <td>₹ " . number_format($igstAmount, 2) . "</td>
                         </tr>";
         } else {
             $htmlContent .= "
                         <tr>
-                            <td>CGST (6%)</td>
+                            <td>CGST (9%)</td>
                             <td>₹ " . number_format($cgstAmount, 2) . "</td>
                         </tr>
                         <tr>
-                            <td>SGST (6%)</td>
+                            <td>SGST (9%)</td>
                             <td>₹ " . number_format($sgstAmount, 2) . "</td>
                         </tr>";
         }
@@ -407,62 +497,21 @@ try {
     
     $htmlContent .= "
                         <tr class='total-row'>
-                            <td>Total Amount</td>
-                            <td>₹ " . number_format($totalAmount, 2) . "</td>
-                        </tr>";
-    
-    // Add extra charges if there are any
-    if (!empty($extraCharges)) {
-        $htmlContent .= "
-            </tbody>
-        </table>
-        
-        <div class='extra-charges'>
-            <h3>Extra Charges</h3>
-            <table class='extra-charges-table'>
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>";
-        
-        foreach ($extraCharges as $charge) {
-            $chargeDesc = isset($charge['description']) ? $charge['description'] : 
-                         (isset($charge['label']) ? $charge['label'] : 'Additional Charge');
-            $chargeAmount = isset($charge['amount']) ? (float)$charge['amount'] : 0;
-            
-            $htmlContent .= "
-                    <tr>
-                        <td>{$chargeDesc}</td>
-                        <td>₹ " . number_format($chargeAmount, 2) . "</td>
-                    </tr>";
-        }
-        
-        $htmlContent .= "
-                </tbody>
-            </table>
-        </div>
-        
-        <div class='grand-total'>
-            Grand Total: ₹ " . number_format($grandTotal, 2) . "
-        </div>";
-    } else {
-        // If no extra charges, just close the table
-        $htmlContent .= "
+                            <td>Total Amount" . ($gstEnabled && $includeTax ? ' (including tax)' : '') . "</td>
+                            <td>₹ " . number_format($fareTotalWithTax, 2) . "</td>
+                        </tr>
                     </tbody>
                 </table>";
-    }
     
     $htmlContent .= "
             </div>
             
             <div class='invoice-footer' style='margin-top: 50px; text-align: center; font-size: 12px;'>
-                <p>Thank you for using BE Rides. For any queries, please contact us at info@berides.in</p>";
+                <p>Thank you for choosing Vizag Taxi Hub</p>
+                <p>For inquiries, please contact: info@vizagtaxihub.com | +91 9966363662</p>";
     
     if ($gstEnabled) {
-        $htmlContent .= "<p>This is a computer-generated invoice and does not require a signature</p>";
+        $htmlContent .= "<p>This invoice includes GST as per applicable rates. " . ($isIGST ? "IGST 18% has been applied." : "CGST 9% + SGST 9% has been applied.") . "</p><p>This is a computer-generated invoice and does not require a signature.</p>";
     }
     
     $htmlContent .= "
@@ -493,8 +542,8 @@ try {
             
             // Set document metadata
             $mpdf->SetTitle("Invoice #{$invoiceNumber}");
-            $mpdf->SetAuthor('BE Rides');
-            $mpdf->SetCreator('BE Rides Invoice System');
+            $mpdf->SetAuthor('Vizag Taxi Hub');
+            $mpdf->SetCreator('Vizag Taxi Hub Invoice System');
             
             // Write HTML content to PDF
             $mpdf->WriteHTML($htmlContent);

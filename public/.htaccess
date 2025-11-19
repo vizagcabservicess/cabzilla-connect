@@ -444,10 +444,30 @@ RewriteRule ^(.*)$ /index.html [L]
     php_value include_path ".:/public_html/vendor"
 </IfModule>
 
+# SECURITY: Block access to suspicious/randomly named directories
+# Block the known malicious folder
+RewriteRule ^hnfwdpvmyh(/.*)?$ - [F,L]
+
+# Block access to suspicious directories (random character patterns that aren't whitelisted)
+# Whitelist known legitimate directories first
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|logs|vendor|cache|data|dist|public|src|node_modules|lovable-uploads) [NC]
+# Block directories with 8+ consecutive random lowercase letters/numbers (potential backdoors)
+RewriteCond %{REQUEST_URI} ^/[a-z0-9]{8,}(/.*)?$ [NC]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule .* - [F,L]
+
 # Prevent direct access to sensitive files
 <FilesMatch "\.(htaccess|htpasswd|ini)$">
     Require all denied
 </FilesMatch>
+
+# SECURITY: Prevent PHP execution in unauthorized directories
+# Only allow PHP execution in specific whitelisted directories
+<DirectoryMatch "^/.*/(hnfwdpvmyh|tmp|temp|test|shell|cmd|wso|uploader|filemanager)">
+    <FilesMatch "\.php$">
+        Require all denied
+    </FilesMatch>
+</DirectoryMatch>
 
 # Force proper MIME type for PHP files to ensure they're executed correctly
 AddType application/x-httpd-php .php

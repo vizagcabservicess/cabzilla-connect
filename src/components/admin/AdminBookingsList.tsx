@@ -572,29 +572,40 @@ export function AdminBookingsList() {
     if (!selectedBooking) return null;
     setIsSubmitting(true);
     try {
-      // Use debug-invoice.php temporarily to see what's happening
-      const apiUrl = getApiUrl(`/api/debug-invoice.php?booking_id=${selectedBooking.id}&t=${Date.now()}`);
+      // Generate invoice using the proper endpoint
+      const apiUrl = getApiUrl('/api/admin/generate-invoice.php');
       
-      // DEBUG: Log the actual URL being called
-      console.log('🔍 DEBUG - API URL being called:', apiUrl);
-      console.log('🔍 DEBUG - Selected booking ID:', selectedBooking.id);
+      console.log('📤 Generating invoice for booking:', selectedBooking.id);
+      console.log('GST Settings:', { gstEnabled, isIGST, includeTax, customInvoiceNumber });
       
-      console.log('📤 Getting invoice data for booking:', selectedBooking.id);
+      const requestBody: any = {
+        bookingId: selectedBooking.id,
+        gstEnabled: gstEnabled || false,
+        isIGST: isIGST || false,
+        includeTax: includeTax !== undefined ? includeTax : true,
+        invoiceNumber: customInvoiceNumber || '',
+        gstDetails: gstDetails || {}
+      };
+      
+      // Extract lockedBaseFare from gstDetails if present
+      if (gstDetails && typeof gstDetails === 'object' && 'lockedBaseFare' in gstDetails) {
+        requestBody.lockedBaseFare = gstDetails.lockedBaseFare;
+      }
       
       const response = await fetch(apiUrl, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Force-Refresh': 'true'
-        }
+          'Expires': '0'
+        },
+        body: JSON.stringify(requestBody)
       });
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to get invoice data: ${response.status} ${response.statusText}\n${errorText}`);
+        throw new Error(`Failed to generate invoice: ${response.status} ${response.statusText}\n${errorText}`);
       }
       
       const contentType = response.headers.get('content-type');
@@ -605,15 +616,15 @@ export function AdminBookingsList() {
       
       const data = await response.json();
       if (data.status === 'success') {
-        console.log('✅ Invoice data retrieved successfully:', data.invoice);
-        toast.success('Invoice data retrieved successfully');
+        console.log('✅ Invoice generated successfully:', data.data);
+        toast.success('Invoice generated successfully');
         return data;
       } else {
-        throw new Error(data.message || 'Unknown error getting invoice data');
+        throw new Error(data.message || 'Unknown error generating invoice');
       }
     } catch (error) {
       console.error('❌ Invoice generation error:', error);
-      toast.error('Failed to get invoice data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to generate invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
       return null;
     } finally {
       setIsSubmitting(false);
