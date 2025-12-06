@@ -47,14 +47,39 @@ export function BookingDetailsModal({
 
   // Prevent modal from closing when clicking outside if submitting
   const handleOpenChange = (open: boolean) => {
+    // Only close if explicitly closing (not submitting)
     if (!isSubmitting && !open) {
       onClose();
     }
   };
 
+  // Prevent dialog from closing when clicking on ANY element inside the dialog content
+  // This includes tabs, toggles, buttons, inputs, etc.
+  const handleInteractOutside = (event: Event) => {
+    const target = event.target as HTMLElement;
+    if (target) {
+      // Check if the click is inside the dialog content area
+      const dialogContent = target.closest('[role="dialog"]');
+      // If clicking inside the dialog (not on the backdrop), prevent closing
+      if (dialogContent) {
+        event.preventDefault();
+      }
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50">
+      <DialogContent 
+        className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50"
+        onInteractOutside={handleInteractOutside}
+        onPointerDownOutside={handleInteractOutside}
+        onEscapeKeyDown={(e) => {
+          // Allow ESC to close only if not submitting
+          if (isSubmitting) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="sticky top-0 z-[51] bg-white pb-2 border-b">
           <DialogTitle className="text-sm font-semibold">Booking #{booking.bookingNumber}</DialogTitle>
         </DialogHeader>

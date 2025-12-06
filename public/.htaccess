@@ -163,6 +163,9 @@ RewriteRule ^api/admin/bookings/?$ /api/admin/booking.php [L,NC,QSA]
 RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,QSA]
 RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 
+# CRITICAL: Email verification endpoint - MUST BE HIGH PRIORITY (before other API routes)
+RewriteRule ^api/auth/verify-email/?$ /api/auth/verify-email.php [L,NC,QSA]
+
 # HIGHEST PRIORITY: Ensure proper access to get-drivers.php
 RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/get-drivers$ /api/admin/get-drivers.php [L,NC,QSA]
@@ -191,6 +194,8 @@ RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/login/?$ /api/login.php [L,NC,QSA]
 RewriteRule ^api/signup/?$ /api/signup.php [L,NC,QSA]
 RewriteRule ^api/register/?$ /api/signup.php [L,NC,QSA]
+# Email verification endpoint - HIGH PRIORITY
+RewriteRule ^api/auth/verify-email/?$ /api/auth/verify-email.php [L,NC,QSA]
 RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
 
 # Invoice and receipt endpoints
@@ -426,6 +431,8 @@ RewriteRule ^tempo-traveller-rushikonda$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^(.+)/$ /$1 [R=301,L]
 
 # CRITICAL: Don't apply rewriting to actual files or directories
+# BUT: Allow API routes to be processed even if file doesn't exist (they'll be handled by PHP)
+RewriteCond %{REQUEST_URI} !^/api/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 

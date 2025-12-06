@@ -30,12 +30,20 @@ export function EmailVerificationPage({ email: propEmail }: EmailVerificationPag
   const verifyEmail = async (verificationToken: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/auth/verify-email?token=${verificationToken}`, {
+      const response = await fetch(`/api/auth/verify-email.php?token=${verificationToken}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
+
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response received:', text.substring(0, 200));
+        throw new Error('Server returned invalid response format. Please try again.');
+      }
 
       const data = await response.json();
 
@@ -54,10 +62,11 @@ export function EmailVerificationPage({ email: propEmail }: EmailVerificationPag
           description: data.message || 'Invalid or expired verification token.'
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error verifying email:', error);
       setVerificationStatus('error');
       toast.error('Verification failed', {
-        description: 'Please try again later.'
+        description: error.message || 'Please try again later.'
       });
     } finally {
       setIsLoading(false);
@@ -72,7 +81,7 @@ export function EmailVerificationPage({ email: propEmail }: EmailVerificationPag
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/auth/verify-email', {
+      const response = await fetch('/api/auth/verify-email.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,20 +89,40 @@ export function EmailVerificationPage({ email: propEmail }: EmailVerificationPag
         body: JSON.stringify({ email }),
       });
 
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response received:', text.substring(0, 200));
+        throw new Error('Server returned invalid response format. Please try again.');
+      }
+
+      // Check if response is ok (status 200-299)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        toast.error('Failed to send verification email', {
+          description: errorData.message || `Server returned ${response.status}. Please try again later.`
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const data = await response.json();
 
+      // Always show success if status is 'success' - email may have been sent even if email_sent is false
       if (data.status === 'success') {
         toast.success('Verification email sent!', {
-          description: 'Please check your inbox and click the verification link.'
+          description: data.message || 'Please check your inbox and spam folder for the verification link.'
         });
       } else {
         toast.error('Failed to send verification email', {
           description: data.message || 'Please try again later.'
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error sending verification email:', error);
       toast.error('Failed to send verification email', {
-        description: 'Please try again later.'
+        description: error.message || 'Network error. Please check your connection and try again.'
       });
     } finally {
       setIsLoading(false);

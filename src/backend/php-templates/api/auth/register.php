@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
+require_once __DIR__ . '/../utils/email-verification.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -69,15 +70,25 @@ try {
     // Hash password
     $hashedPassword = password_hash($input['password'], PASSWORD_DEFAULT);
     
-    // Insert user with the correct role into users table
+    // Generate verification token
+    $verificationToken = bin2hex(random_bytes(32));
+    $verificationExpires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+    
+    // Insert user with verification fields
     $stmt = $conn->prepare("
-        INSERT INTO users (name, email, phone, password, role, is_active)
-        VALUES (?, ?, ?, ?, ?, 1)
+        INSERT INTO users (name, email, phone, password, role, email_verified, email_verification_token, email_verification_expires, is_active)
+        VALUES (?, ?, ?, ?, ?, FALSE, ?, ?, FALSE)
     ");
     if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
-    $stmt->bind_param("sssss", $input['name'], $input['email'], $input['phone'], $hashedPassword, $role);
+    $stmt->bind_param("sssssss", $input['name'], $input['email'], $input['phone'], $hashedPassword, $role, $verificationToken, $verificationExpires);
     $stmt->execute();
     $userId = $conn->insert_id;
+    
+    // Store verification token record
+    $stmt = $conn->prepare("INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
+    if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
+    $stmt->bind_param("iss", $userId, $verificationToken, $verificationExpires);
+    $stmt->execute();
     
     // The wallet logic below seems specific to pooling,
     // which you asked to avoid. I am commenting it out.
@@ -97,7 +108,7 @@ try {
     */
     
     // Fetch the created user from users table
-    $stmt = $conn->prepare("SELECT id, name, email, phone, role, is_active FROM users WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, name, email, phone, role, email_verified, is_active FROM users WHERE id = ?");
     if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -105,19 +116,17 @@ try {
     $user = $result->fetch_assoc();
     $user['role'] = $role; // Ensure role is set in response
     
-    // Generate session token (for consistency with login)
-    $token = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+24 hours'));
-    $stmt = $conn->prepare("INSERT INTO user_sessions (user_id, token, expires_at) VALUES (?, ?, ?)");
-    if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
-    $stmt->bind_param("iss", $userId, $token, $expiresAt);
-    $stmt->execute();
+    // Send verification email
+    $verificationLink = "https://vizagtaxihub.com/verify-email?token=" . $verificationToken;
+    $emailSent = sendAccountVerificationEmail($user['email'], $user['name'], $verificationLink);
     
     echo json_encode([
         'success' => true,
-        'message' => 'Registration successful',
+        'message' => 'Registration successful! Please verify your email before logging in.',
         'user' => $user,
-        'token' => $token
+        'email_verification_required' => true,
+        'verification_email_sent' => $emailSent,
+        'token' => null
     ]);
     
 } catch (Exception $e) {

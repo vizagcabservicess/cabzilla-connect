@@ -2,61 +2,7 @@
 <?php
 // Ensure correct path to config.php - adjusting relative path
 require_once __DIR__ . '/../config.php';
-
-// Email verification function
-function sendVerificationEmail($email, $name, $verificationLink) {
-    // Include the email utilities
-    require_once __DIR__ . '/../utils/email.php';
-    require_once __DIR__ . '/../utils/mailer.php';
-    
-    $subject = "Verify Your Email - Vizag Taxi Hub";
-    
-    // Create HTML email content
-    $htmlBody = "
-    <html>
-    <head>
-        <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #1e40af; color: white; padding: 20px; text-align: center; }
-            .content { padding: 30px; background: #f8f9fa; }
-            .button { display: inline-block; background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-            .footer { background: #e9ecef; padding: 20px; text-align: center; font-size: 14px; color: #666; }
-        </style>
-    </head>
-    <body>
-        <div class='container'>
-            <div class='header'>
-                <h1>📧 Verify Your Email Address</h1>
-            </div>
-            <div class='content'>
-                <h2>Hello $name,</h2>
-                <p>Welcome to Vizag Taxi Hub! Thank you for creating an account with us.</p>
-                <p>To complete your registration and start using our services, please verify your email address by clicking the button below:</p>
-                <a href='$verificationLink' class='button'>Verify My Email</a>
-                <p><strong>This verification link will expire in 24 hours.</strong></p>
-                <p>If you didn't create an account with us, please ignore this email.</p>
-                <p>Once verified, you'll be able to:</p>
-                <ul>
-                    <li>Book taxi rides</li>
-                    <li>Track your bookings</li>
-                    <li>Manage your profile</li>
-                    <li>Access exclusive offers</li>
-                </ul>
-            </div>
-            <div class='footer'>
-                <p>© 2024 Vizag Taxi Hub. All rights reserved.</p>
-                <p>If you're having trouble clicking the button, copy and paste this link into your browser:</p>
-                <p style='word-break: break-all; color: #1e40af;'>$verificationLink</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    ";
-    
-    // Use the same email system as contact form
-    return sendEmailAllMethods($email, $subject, $htmlBody);
-}
+require_once __DIR__ . '/utils/email-verification.php';
 
 // Handle OPTIONS requests for CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -145,7 +91,28 @@ try {
     
     // Send verification email
     $verificationLink = "https://vizagtaxihub.com/verify-email?token=" . $verificationToken;
-    $emailSent = sendVerificationEmail($email, $name, $verificationLink);
+    
+    // Check if function exists before calling
+    if (!function_exists('sendAccountVerificationEmail')) {
+        logError('sendAccountVerificationEmail function not found in signup', [
+            'email' => $email
+        ]);
+        $emailSent = false;
+    } else {
+        try {
+            $emailSent = sendAccountVerificationEmail($email, $name, $verificationLink);
+            logError('Verification email sent from signup', [
+                'email' => $email,
+                'sent' => $emailSent ? 'yes' : 'no'
+            ]);
+        } catch (Exception $emailEx) {
+            logError('Exception sending verification email from signup', [
+                'email' => $email,
+                'error' => $emailEx->getMessage()
+            ]);
+            $emailSent = false;
+        }
+    }
     
     // Get the created user
     $stmt = $conn->prepare("SELECT id, name, email, phone, role, email_verified FROM users WHERE id = ?");

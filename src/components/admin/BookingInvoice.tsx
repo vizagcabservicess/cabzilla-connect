@@ -46,16 +46,24 @@ function parseInvoiceSummary(html: string): {
       const amount = parseAmount(cells[1].textContent);
       if (amount === null) return;
 
+      // Skip header rows
+      if (/description|amount/i.test(label) && cells.length === 2) {
+        return;
+      }
+
+      // Base fare row
       if (/base fare/i.test(label)) {
         baseFare = amount;
         return;
       }
 
+      // Total amount row
       if (/total amount/i.test(label)) {
         totalAmount = amount;
         return;
       }
 
+      // GST rows - IGST, CGST, SGST
       if (/igst/i.test(label)) {
         gstAmount += amount;
         isIGST = true;
@@ -67,7 +75,18 @@ function parseInvoiceSummary(html: string): {
         return;
       }
 
-      if (label.length > 0 && !/description/i.test(label)) {
+      // GST on specific items (e.g., "IGST on Base Fare", "CGST on Food")
+      if (/gst.*on|on.*gst/i.test(label)) {
+        // This is a GST row, not an extra charge
+        return;
+      }
+
+      // Extra charges: Only count rows that are NOT base fare, GST, or total
+      // AND have a meaningful label (not empty, not "Description", not header)
+      // AND are not part of the fare breakdown header
+      if (label.length > 0 && 
+          !/description|amount|fare breakdown|base|total|gst|cgst|sgst|igst|tax|no extra charges/i.test(label)) {
+        // This appears to be an extra charge row (e.g., "Food", "Toll", etc.)
         extraCharges += amount;
       }
     });
@@ -148,13 +167,50 @@ export function BookingInvoice({
   const originalBaseFareKey = `original-base-fare-${booking.id}`;
   
   // Memoize baseFare to prevent infinite loops - only recalculate when booking.id or invoiceData.baseAmount changes
+  // CRITICAL: For GST-inclusive mode, NEVER use invoiceData.baseAmount as it's the back-calculated pre-tax base
+  // For GST-inclusive, we need the original locked fare (from localStorage or booking.fare) as the GST-inclusive base fare
   const baseFare = useMemo(() => {
-    // Priority 1: Use baseAmount from invoiceData if available (most accurate)
-    if (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0) {
-      return invoiceData.baseAmount;
+    // CRITICAL: For GST-inclusive mode, skip invoiceData.baseAmount
+    // invoiceData.baseAmount is the back-calculated pre-tax base (e.g., ₹864.41)
+    // But we need the original locked fare (e.g., ₹1,322.03) for GST-inclusive calculations
+    // Only use invoiceData.baseAmount for GST-exclusive mode where it represents the actual base fare
+    if (gstEnabled && includeTax) {
+      // GST-INCLUSIVE: Skip invoiceData.baseAmount, use original locked fare instead
+      // This ensures baseFare stays stable at the original locked fare (₹1,322.03)
+    } else {
+      // GST-EXCLUSIVE or GST-DISABLED: Use invoiceData.baseAmount if available
+      if (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0) {
+        return invoiceData.baseAmount;
+      }
     }
     
-    // Priority 2: Check localStorage for stored base fare
+    // CRITICAL: When GST is disabled (neutral), base fare should be original booking total
+    // This ensures base fare shows ₹18,814 (with GST) not ₹15,944 (pre-GST)
+    // Only when GST is explicitly excluded should we use pre-GST amount
+    if (!gstEnabled) {
+      // GST disabled: Use original booking total as base fare (includes GST)
+      const originalTotal = typeof booking.totalAmount === 'number'
+        ? booking.totalAmount
+        : typeof (booking as any).total_amount === 'number'
+          ? (booking as any).total_amount as number
+          : 0;
+      
+      if (originalTotal > 0) {
+        const baseFareFromTotal = originalTotal - extraChargesTotal;
+        if (baseFareFromTotal > 0) {
+          console.log('🔍 GST DISABLED: Using original booking total as base fare', {
+            originalTotal,
+            extraChargesTotal,
+            baseFareFromTotal,
+            note: 'When GST is disabled (neutral), base fare = original booking total (₹18,814), not pre-GST (₹15,944)'
+          });
+          return baseFareFromTotal;
+        }
+      }
+    }
+    
+    // Priority 2: Check localStorage for stored base fare (original locked fare)
+    // This is the source of truth for GST-inclusive mode - matches backend lockedBaseFare
     const storedBaseFare = localStorage.getItem(originalBaseFareKey);
     if (storedBaseFare && !isNaN(parseFloat(storedBaseFare))) {
       const parsed = parseFloat(storedBaseFare);
@@ -163,13 +219,28 @@ export function BookingInvoice({
         localStorage.setItem(originalBaseFareKey, booking.fare.toString());
         return booking.fare;
       }
+      console.log('🔍 Using stored base fare from localStorage (original locked fare)', {
+        storedBaseFare: parsed,
+        gstEnabled,
+        includeTax,
+        invoiceData_baseAmount: invoiceData?.baseAmount,
+        note: 'For GST-inclusive, this is the original locked fare (₹1,322.03), NOT the back-calculated pre-tax base (₹864.41)'
+      });
       return parsed;
     }
     
     // Priority 3: Use booking.fare (original fare) instead of totalAmount which may include GST
+    // This matches backend lockedBaseFare or booking.fare logic
     const originalFare = (typeof booking.fare === 'number' ? booking.fare : 0);
     if (originalFare > 0) {
       localStorage.setItem(originalBaseFareKey, originalFare.toString());
+      console.log('🔍 Using booking.fare as base fare (original locked fare)', {
+        originalFare,
+        gstEnabled,
+        includeTax,
+        invoiceData_baseAmount: invoiceData?.baseAmount,
+        note: 'For GST-inclusive, this is the original locked fare, matches backend lockedBaseFare'
+      });
       return originalFare;
     }
     
@@ -177,25 +248,68 @@ export function BookingInvoice({
     const rawTotal = (typeof booking.totalAmount === 'number' ? booking.totalAmount : 0);
     let calculated = rawTotal - extraChargesTotal;
     
-    // If this seems to include GST (high amount), try to reverse it
-    if (calculated > 15000) {
-      const possiblePreGstAmount = calculated / 1.18;
-      if (possiblePreGstAmount > 1000 && possiblePreGstAmount < calculated * 0.95) {
-        calculated = Math.round(possiblePreGstAmount);
-      }
-    }
+    // CRITICAL: When GST is excluded, base fare should be the original total (₹18,814)
+    // GST will be applied on top of this base fare
+    // Do NOT remove GST here - the original total IS the base fare when tax is excluded
+    // When GST is disabled, keep the full amount (includes GST)
+    // Only remove GST if we're in tax-inclusive mode (which we're not handling here)
     
     if (calculated > 0) {
       localStorage.setItem(originalBaseFareKey, calculated.toString());
     }
     return Math.max(0, calculated);
-  }, [booking.id, booking.fare, booking.totalAmount, extraChargesTotal, invoiceData?.baseAmount, originalBaseFareKey]);
+  }, [booking.id, booking.fare, booking.totalAmount, extraChargesTotal, invoiceData?.baseAmount, originalBaseFareKey, gstEnabled, includeTax]);
   
-  const originalTotalAmount = typeof booking.totalAmount === 'number'
-    ? booking.totalAmount
-    : typeof (booking as any).total_amount === 'number'
-      ? (booking as any).total_amount as number
-      : baseFare + extraChargesTotal;
+  // CRITICAL: Match backend PDF logic exactly for determining original booking total
+  // Backend logic: 
+  // - For GST-exclusive: uses booking.fare (pre-GST base)
+  // - For GST-inclusive: uses booking.total_amount, BUT if lockedBaseFare exists, uses that as baseHint
+  // The key insight: For GST-inclusive, baseFare (locked/actual fare = 3000) represents the GST-inclusive total
+  // NOT booking.totalAmount (3540) which might be from a previous GST-exclusive invoice
+  const originalTotalAmount = useMemo(() => {
+    // For GST-inclusive mode: Use baseFare (locked/actual fare) as the GST-inclusive total
+    // baseFare is calculated from localStorage or booking.fare, which is the correct source (matches backend lockedBaseFare)
+    if (gstEnabled && includeTax) {
+      // baseFare represents the locked/actual fare (₹3,000), which IS the GST-inclusive total
+      if (baseFare > 0) {
+        const calculated = baseFare + extraChargesTotal;
+        console.log('🔍 GST-INCLUSIVE: Using baseFare as GST-inclusive total (matches backend PDF)', {
+          baseFare,
+          extraChargesTotal,
+          calculated,
+          bookingFare: booking.fare,
+          bookingTotalAmount: booking.totalAmount,
+          note: 'baseFare (locked fare) IS the GST-inclusive total, NOT booking.totalAmount which might be GST-exclusive from previous invoice'
+        });
+        return calculated;
+      }
+      // If baseFare is 0, fall through to standard logic
+    }
+    
+    // For GST-exclusive mode: Use booking.fare if available (matches backend logic)
+    if (gstEnabled && !includeTax) {
+      if (typeof booking.fare === 'number' && booking.fare > 0) {
+        // For tax-exclusive, fare field is the base fare (pre-GST)
+        return booking.fare + extraChargesTotal;
+      }
+    }
+    
+    // Fallback for GST-exclusive or GST-disabled: use standard priority
+    // Priority 1: booking.totalAmount (camelCase)
+    if (typeof booking.totalAmount === 'number' && booking.totalAmount > 0) {
+      return booking.totalAmount;
+    }
+    // Priority 2: booking.total_amount (snake_case)
+    if (typeof (booking as any).total_amount === 'number' && (booking as any).total_amount > 0) {
+      return (booking as any).total_amount as number;
+    }
+    // Priority 3: booking.fare + extras (if fare is available)
+    if (typeof booking.fare === 'number' && booking.fare > 0) {
+      return booking.fare + extraChargesTotal;
+    }
+    // Priority 4: baseFare + extras (fallback)
+    return baseFare + extraChargesTotal;
+  }, [gstEnabled, includeTax, baseFare, extraChargesTotal, booking.fare, booking.totalAmount, (booking as any).total_amount]);
 
   const parsedSummary = useMemo(
     () => (rawHtmlContent ? parseInvoiceSummary(rawHtmlContent) : null),
@@ -203,71 +317,206 @@ export function BookingInvoice({
   );
 
   const extrasFromBooking = Math.max(0, extraChargesTotal);
-  let fallbackBaseFare = Math.max(0, baseFare);
-  let fallbackExtras = extrasFromBooking;
-  let fallbackTaxes = 0;
-  let fallbackTotal = fallbackBaseFare + fallbackExtras;
+  // Simplified fallback values - actual calculations will be done in computeExclusiveBreakdown/computeInclusiveBreakdown
+  const fallbackBaseFare = Math.max(0, baseFare);
+  const fallbackExtras = extrasFromBooking;
+  const fallbackTaxes = 0;
+  const fallbackTotal = fallbackBaseFare + fallbackExtras;
 
-  if (gstEnabled) {
-    if (includeTax) {
-      const totalWithTax = originalTotalAmount > 0
-        ? originalTotalAmount
-        : fallbackBaseFare + fallbackExtras;
-      const taxableAmount = Number((totalWithTax / 1.18).toFixed(2));
-      fallbackTaxes = Number((totalWithTax - taxableAmount).toFixed(2));
-      fallbackTotal = Number(totalWithTax.toFixed(2));
-    } else {
-      fallbackTaxes = Number(((fallbackBaseFare + fallbackExtras) * 0.18).toFixed(2));
-      fallbackTotal = Number((fallbackBaseFare + fallbackExtras + fallbackTaxes).toFixed(2));
-    }
-  }
+  const GST_RATE = 0.18;
 
-  // Always preserve the user-entered base fare
-  fallbackBaseFare = Number(Math.max(0, baseFare).toFixed(2));
-
-  // CRITICAL: Prioritize backend values from invoiceData over parsed HTML
-  // Backend values are always correct, parsed HTML might be wrong
-  // NEVER use parsed HTML values if backend values are available
-  const summaryBaseFare = (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0)
-    ? invoiceData.baseAmount
-    : fallbackBaseFare; // Always use fallbackBaseFare, never parsed HTML baseFare
-  
   const summaryExtras = (invoiceData && typeof invoiceData.totalExtraCharges === 'number' && invoiceData.totalExtraCharges >= 0)
     ? invoiceData.totalExtraCharges
-    : fallbackExtras; // Always use fallbackExtras, never parsed HTML extraCharges
-  
-  // For taxes, use backend taxAmount (total GST) or sum of CGST+SGST+IGST
-  // Fields are now normalized to camelCase in invoiceData
-  const backendTaxAmount = invoiceData?.taxAmount ?? 0;
-  const backendCgst = invoiceData?.cgstAmount ?? 0;
-  const backendSgst = invoiceData?.sgstAmount ?? 0;
-  const backendIgst = invoiceData?.igstAmount ?? 0;
-  const calculatedBackendTax = backendTaxAmount > 0
-    ? backendTaxAmount
-    : (backendCgst + backendSgst + backendIgst);
-  
-  const summaryTaxes = calculatedBackendTax > 0
-    ? calculatedBackendTax
-    : (typeof parsedSummary?.gstAmount === 'number' && parsedSummary.gstAmount > 0)
-      ? parsedSummary.gstAmount
-      : fallbackTaxes;
-  
-  const summaryTotal = (invoiceData && typeof invoiceData.totalAmount === 'number' && invoiceData.totalAmount > 0)
+    : fallbackExtras;
+
+  const backendBaseAmount = typeof invoiceData?.baseAmount === 'number' && invoiceData.baseAmount > 0
+    ? invoiceData.baseAmount
+    : null;
+  const backendTaxAmount = typeof invoiceData?.taxAmount === 'number' && invoiceData.taxAmount >= 0
+    ? invoiceData.taxAmount
+    : null;
+  const backendTotalAmount = typeof invoiceData?.totalAmount === 'number' && invoiceData.totalAmount > 0
     ? invoiceData.totalAmount
-    : (typeof parsedSummary?.totalAmount === 'number' && parsedSummary.totalAmount > 0)
-      ? parsedSummary.totalAmount
-      : fallbackTotal;
+    : null;
+
+  const exclusiveBaseFallback = Number((originalTotalAmount > 0 ? originalTotalAmount - summaryExtras : fallbackBaseFare).toFixed(2));
+  
+  // CRITICAL: For GST-inclusive, use originalTotalAmount which is baseFare (matches backend PDF)
+  // NEVER use backendTotalAmount for GST-inclusive - it might be from GST-exclusive invoice
+  // Backend logic: For GST-inclusive, uses $baseHint (lockedBaseFare or booking.fare) as the source
+  const inclusiveTotalFallback = (() => {
+    // For GST-inclusive mode, originalTotalAmount is already set from baseFare (the locked/actual fare)
+    // This IS the GST-inclusive total (₹3,000), NOT booking.totalAmount (₹3,540 from previous invoice)
+    if (gstEnabled && includeTax && originalTotalAmount > 0) {
+      console.log('🔍 inclusiveTotalFallback: Using originalTotalAmount (from baseFare for GST-inclusive)', {
+        originalTotalAmount,
+        baseFare,
+        bookingTotalAmount: booking.totalAmount,
+        note: 'For GST-inclusive, originalTotalAmount comes from baseFare (locked fare), matching backend PDF logic'
+      });
+      return originalTotalAmount;
+    }
+    
+    // For GST-exclusive: use originalTotalAmount (from booking.fare or booking.totalAmount)
+    if (originalTotalAmount > 0) {
+      return originalTotalAmount;
+    }
+    
+    // Fallback to booking.fare if available
+    if (typeof booking.fare === 'number' && booking.fare > 0) {
+      return booking.fare + summaryExtras;
+    }
+    
+    // Last resort fallback
+    return fallbackTotal;
+  })();
+
+  const computeExclusiveBreakdown = () => {
+    const baseCandidate = backendBaseAmount ?? exclusiveBaseFallback;
+    const base = Number(Math.max(0, baseCandidate).toFixed(2));
+    const subtotal = Number((base + summaryExtras).toFixed(2));
+    const taxes = backendTaxAmount !== null
+      ? Number(backendTaxAmount.toFixed(2))
+      : Number((subtotal * GST_RATE).toFixed(2));
+    const total = backendTotalAmount ?? Number((subtotal + taxes).toFixed(2));
+    return {
+      base,
+      taxes,
+      total: Number(total.toFixed(2))
+    };
+  };
+
+  const computeInclusiveBreakdown = () => {
+    // CRITICAL: Match backend calculateGstBreakdown logic exactly for GST-inclusive
+    // Backend uses: $baseHint (lockedBaseFare or booking.fare) + extras as the GST-inclusive total
+    // Then: taxableSubtotal = inclusiveTotal / (1 + gstRate), base = taxableSubtotal - extras, tax = inclusiveTotal - taxableSubtotal
+    
+    // For GST-inclusive, use baseFare (locked/actual fare) + extras as the total
+    // This matches backend where $baseHint (3000) represents the GST-inclusive base fare
+    const inclusiveTotal = baseFare + summaryExtras;
+    const total = Number(inclusiveTotal.toFixed(2));
+    
+    // Backend formula: taxableSubtotal = round(inclusiveTotal / (1 + gstRate), 2)
+    const taxableSubtotal = Number((total / (1 + GST_RATE)).toFixed(2));
+    
+    // Backend formula: base = max(0, round(taxableSubtotal - extraCharges, 2))
+    const baseCandidate = Number((taxableSubtotal - summaryExtras).toFixed(2));
+    
+    // Backend formula: taxAmount = round(inclusiveTotal - taxableSubtotal, 2)
+    const taxes = Number((total - taxableSubtotal).toFixed(2));
+    
+    console.log('🔍 computeInclusiveBreakdown: Matching backend PDF logic', {
+      baseFare,
+      summaryExtras,
+      inclusiveTotal: total,
+      taxableSubtotal,
+      baseCandidate,
+      taxes,
+      note: 'For GST-inclusive, baseFare (3000) + extras IS the total, then back-calculate base and taxes'
+    });
+    
+    return {
+      base: Number(Math.max(0, baseCandidate).toFixed(2)),
+      taxes: Number(Math.max(0, taxes).toFixed(2)),
+      total
+    };
+  };
+
+  // Wrap summary calculation in useMemo to ensure it's recalculated when dependencies change
+  // and to provide stable references for sanitizeInvoiceHtml callback
+  // CRITICAL: Inline logic to match backend PDF exactly - use baseFare directly for GST-inclusive
+  const summaryValues = useMemo(() => {
+    let summaryBaseFare: number;
+    let summaryTaxes: number;
+    let summaryTotal: number;
+
+    if (gstEnabled && includeTax) {
+      // GST-INCLUSIVE: Total amount (₹14,000) already includes GST
+      // baseFare (₹3,000) and summaryExtras (₹11,000) are GST-inclusive components
+      // CRITICAL: NEVER use booking.totalAmount for GST-inclusive - it might be from a previous GST-exclusive invoice
+      // Always use baseFare + extras as the GST-inclusive total
+      
+      // Step 1: Use baseFare + extras as the GST-inclusive total (never use booking.totalAmount)
+      const inclusiveTotal = baseFare + summaryExtras; // ₹3,000 + ₹11,000 = ₹14,000
+      const total = Number(inclusiveTotal.toFixed(2)); // ₹14,000 (GST-inclusive total)
+      
+      // Step 2: Back-calculate pre-tax amounts (matching GST calculator logic)
+      // Pre-tax total = Total / (1 + GST_RATE)
+      const preTaxTotal = Number((total / (1 + GST_RATE)).toFixed(2)); // ₹14,000 / 1.18 = ₹11,864.41
+      
+      // Step 3: Calculate GST amount
+      const totalGST = Number((total - preTaxTotal).toFixed(2)); // ₹14,000 - ₹11,864.41 = ₹2,135.59
+      
+      // Step 4: Calculate pre-tax base fare and extras proportionally
+      // If baseFare (₹3,000) and extras (₹11,000) sum to total (₹14,000), they're already GST-inclusive
+      // Back-calculate their pre-tax values
+      const baseFareInclusive = baseFare; // ₹3,000 (GST-inclusive)
+      const extrasInclusive = summaryExtras; // ₹11,000 (GST-inclusive)
+      const totalInclusive = baseFareInclusive + extrasInclusive; // ₹14,000
+      
+      // Calculate pre-tax base fare: (baseFare / totalInclusive) * preTaxTotal
+      const preTaxBase = totalInclusive > 0 
+        ? Number(((baseFareInclusive / totalInclusive) * preTaxTotal).toFixed(2))
+        : Number((baseFareInclusive / (1 + GST_RATE)).toFixed(2)); // ₹3,000 / 1.18 = ₹2,542.37
+      
+      // Calculate pre-tax extras: (extras / totalInclusive) * preTaxTotal
+      const preTaxExtras = totalInclusive > 0
+        ? Number(((extrasInclusive / totalInclusive) * preTaxTotal).toFixed(2))
+        : Number((extrasInclusive / (1 + GST_RATE)).toFixed(2)); // ₹11,000 / 1.18 = ₹9,322.03
+      
+      // Step 5: Display values
+      // Show pre-tax base fare in the breakdown
+      summaryBaseFare = preTaxBase; // ₹2,542.37 (pre-tax base fare)
+      summaryTaxes = totalGST; // ₹2,135.59 (total GST)
+      summaryTotal = total; // ₹14,000 (GST-inclusive total)
+      
+      // Debug logging for GST-inclusive calculation
+      console.log('🔍 GST-INCLUSIVE Summary Calculation (GST calculated on each component):', {
+        baseFareInclusive,
+        extrasInclusive,
+        totalInclusive: total,
+        preTaxBase,
+        preTaxExtras,
+        preTaxTotal,
+        totalGST,
+        summaryBaseFare,
+        summaryTaxes,
+        summaryTotal,
+        bookingTotalAmount: booking.totalAmount,
+        note: 'GST-inclusive: Using baseFare+extras (₹14,000) as GST-inclusive total, NOT booking.totalAmount (₹16,520) which might be GST-exclusive'
+      });
+    } else if (gstEnabled && !includeTax) {
+      // GST-EXCLUSIVE: Base fare + GST on top (matches backend logic)
+      const baseCandidate = backendBaseAmount ?? exclusiveBaseFallback;
+      const base = Number(Math.max(0, baseCandidate).toFixed(2));
+      const subtotal = Number((base + summaryExtras).toFixed(2));
+      const taxes = backendTaxAmount !== null
+        ? Number(backendTaxAmount.toFixed(2))
+        : Number((subtotal * GST_RATE).toFixed(2));
+      const total = backendTotalAmount ?? Number((subtotal + taxes).toFixed(2));
+      summaryBaseFare = base;
+      summaryTaxes = taxes;
+      summaryTotal = Number(total.toFixed(2));
+    } else {
+      // GST DISABLED
+      summaryBaseFare = backendBaseAmount ?? Math.max(0, fallbackBaseFare);
+      summaryTaxes = 0;
+      summaryTotal = backendTotalAmount ?? Number((summaryBaseFare + summaryExtras).toFixed(2));
+    }
+
+    return { summaryBaseFare, summaryTaxes, summaryTotal };
+  }, [gstEnabled, includeTax, baseFare, summaryExtras, GST_RATE, backendBaseAmount, exclusiveBaseFallback, backendTaxAmount, backendTotalAmount, fallbackBaseFare, booking.totalAmount]);
+
+  const { summaryBaseFare, summaryTaxes, summaryTotal } = summaryValues;
   
   // Debug logging for summary calculation
   console.log('📊 Summary Calculation:', {
     invoiceData_available: !!invoiceData,
+    gstEnabled,
+    includeTax,
+    toggle_state: gstEnabled ? (includeTax ? 'GST_ENABLED_INCLUDE_TAX' : 'GST_ENABLED_EXCLUDE_TAX') : 'GST_DISABLED_NEUTRAL',
     summaryBaseFare,
     summaryExtras,
-    backendTaxAmount,
-    backendCgst,
-    backendSgst,
-    backendIgst,
-    calculatedBackendTax,
     summaryTaxes,
     summaryTotal,
     invoiceData_totalAmount: invoiceData?.totalAmount,
@@ -276,7 +525,8 @@ export function BookingInvoice({
     fallbackBaseFare,
     fallbackExtras,
     parsedSummary_baseFare: parsedSummary?.baseFare,
-    parsedSummary_extraCharges: parsedSummary?.extraCharges
+    parsedSummary_extraCharges: parsedSummary?.extraCharges,
+    note: gstEnabled ? 'GST calculation applied' : 'GST disabled - base fare unchanged, no tax applied'
   });
   const summaryIsIGST = parsedSummary?.isIGST ?? isIGST;
 
@@ -341,16 +591,45 @@ export function BookingInvoice({
       };
 
       const summary = parseInvoiceSummary(html);
-      // CRITICAL: Use the actual baseFare from the component state, not the parsed HTML
-      // The parsed HTML might have ₹0.00 if backend generated it incorrectly
-      // Priority: 1) component baseFare, 2) invoiceData.baseAmount, 3) parsed summary, 4) fallback
-      const baseAmount = (typeof baseFare === 'number' && baseFare > 0)
-        ? baseFare
-        : (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0)
-          ? invoiceData.baseAmount
-          : (typeof summary?.baseFare === 'number' && !isNaN(summary.baseFare) && summary.baseFare > 0)
-            ? summary.baseFare
+      
+      // Define extrasAmount early so it can be used in calculations
+      const extrasAmount = (invoiceData && typeof invoiceData.totalExtraCharges === 'number' && invoiceData.totalExtraCharges >= 0)
+        ? invoiceData.totalExtraCharges
+        : fallbackExtras;
+      
+      // CRITICAL: For GST-inclusive mode, ALWAYS use calculated summaryBaseFare
+      // NEVER use invoiceData.baseAmount for GST-inclusive - it might be from a previous GST-exclusive invoice
+      // For GST-exclusive mode, we can use invoiceData.baseAmount as fallback
+      let baseAmount: number;
+      if (gstEnabled && includeTax) {
+        // GST-INCLUSIVE: Always use calculated summaryBaseFare, ignore invoiceData.baseAmount
+        baseAmount = summaryBaseFare > 0
+          ? summaryBaseFare
             : fallbackBaseFare;
+        console.log('🔍 GST-INCLUSIVE: Using calculated summaryBaseFare for HTML sanitization', {
+          summaryBaseFare,
+          fallbackBaseFare,
+          invoiceData_baseAmount: invoiceData?.baseAmount,
+          note: 'Ignoring invoiceData.baseAmount for GST-inclusive mode'
+        });
+      } else {
+        // GST-EXCLUSIVE or GST-DISABLED: Use summaryBaseFare with fallback to invoiceData.baseAmount
+        baseAmount = summaryBaseFare > 0
+          ? summaryBaseFare
+          : (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0
+            ? invoiceData.baseAmount
+            : fallbackBaseFare);
+        
+        // CRITICAL: Ensure baseAmount is not the total amount for GST-exclusive mode
+      if (invoiceData && typeof invoiceData.totalAmount === 'number' && invoiceData.totalAmount > 0) {
+        if (Math.abs(baseAmount - invoiceData.totalAmount) < 0.01 && gstEnabled && !includeTax) {
+          // Tax-exclusive mode: baseAmount should NOT equal totalAmount
+          // If they're equal, use the original booking total as base fare
+          console.warn('⚠️ baseAmount equals totalAmount in EXCLUSIVE mode - using original booking total as base fare');
+          baseAmount = originalTotalAmount > 0 ? (originalTotalAmount - extrasAmount) : baseAmount;
+          }
+        }
+      }
       
       console.log('🔍 Sanitization Debug:', {
         baseFare_from_component: baseFare,
@@ -390,71 +669,6 @@ export function BookingInvoice({
         }
       };
 
-      // Always update base fare cells if found
-      if (baseCells.length > 0 && baseAmount > 0) {
-        const baseLabel = includeTax ? 'Base Fare' : 'Base Fare (excluding tax)';
-        console.log('✅ Updating', baseCells.length, 'base fare cells with amount:', baseAmount);
-        baseCells.forEach(cell => updateAmountCell(cell, baseAmount, baseLabel));
-      } else if (baseCells.length === 0) {
-        console.warn('⚠️ No base fare cells found in HTML!');
-      }
-
-      // GST calculations only if GST is enabled
-      // CRITICAL: Use backend-calculated values from invoiceData instead of recalculating
-      // The backend already calculated everything correctly based on includeTax setting
-      console.log('🔍 GST Calculation Check:', {
-        gstEnabled,
-        invoiceData_available: !!invoiceData,
-        baseAmount,
-        fallbackExtras
-      });
-      
-      if (gstEnabled) {
-        try {
-          // Use backend values if available, otherwise fall back to calculation
-          // Fields are now normalized to camelCase in invoiceData
-          const backendTaxAmount = invoiceData?.taxAmount ?? 0;
-          const backendTotalAmount = invoiceData?.totalAmount ?? 0;
-          const backendCgstAmount = invoiceData?.cgstAmount ?? 0;
-          const backendSgstAmount = invoiceData?.sgstAmount ?? 0;
-          const backendIgstAmount = invoiceData?.igstAmount ?? 0;
-
-          // CRITICAL: Use backend values or fallback, NEVER use parsed HTML values
-          // Parsed HTML might have wrong values (like negative extrasAmount: -95838)
-          const extrasAmount = (invoiceData && typeof invoiceData.totalExtraCharges === 'number' && invoiceData.totalExtraCharges >= 0)
-            ? invoiceData.totalExtraCharges
-            : fallbackExtras;
-          
-          // CRITICAL: Ensure baseAmount is correct - use backend value or fallback, never parsed HTML
-          // The baseAmount variable already prioritizes backend/fallback, but double-check here
-          const correctBaseAmount = (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0)
-            ? invoiceData.baseAmount
-            : (baseAmount > 0 ? baseAmount : fallbackBaseFare);
-          
-          // Calculate taxable amount using correct values
-          const taxableAmount = Math.max(0, correctBaseAmount + extrasAmount);
-          
-          console.log('🔍 Corrected Values Check:', {
-            correctBaseAmount,
-            extrasAmount,
-            taxableAmount,
-            invoiceData_baseAmount: invoiceData?.baseAmount,
-            baseAmount_from_component: baseAmount,
-            fallbackBaseFare
-          });
-
-          console.log('🔍 Taxable Amount Check:', {
-            taxableAmount,
-            correctBaseAmount,
-            baseAmount,
-            extrasAmount,
-            invoiceData_totalExtraCharges: invoiceData?.totalExtraCharges,
-            fallbackExtras,
-            summary_extraCharges: summary?.extraCharges,
-            calculation: `${correctBaseAmount} + ${extrasAmount} = ${taxableAmount}`
-          });
-
-          if (taxableAmount > 0) {
             const cgstCells: HTMLElement[] = [];
             const sgstCells: HTMLElement[] = [];
             const igstCells: HTMLElement[] = [];
@@ -464,192 +678,60 @@ export function BookingInvoice({
             rows.forEach(row => {
               const cells = row.querySelectorAll<HTMLTableCellElement>('td,th');
               if (cells.length < 2) return;
-
               const labelCell = cells[0];
               const amountCell = cells[1];
               const label = (labelCell.textContent || '').trim().toLowerCase();
 
               if (/igst/i.test(label)) {
                 igstCells.push(amountCell);
-                console.log('✅ Found IGST cell:', labelCell.textContent?.trim(), amountCell.textContent?.trim());
               } else if (/cgst/i.test(label)) {
                 cgstCells.push(amountCell);
-                console.log('✅ Found CGST cell:', labelCell.textContent?.trim(), amountCell.textContent?.trim());
               } else if (/sgst/i.test(label)) {
                 sgstCells.push(amountCell);
-                console.log('✅ Found SGST cell:', labelCell.textContent?.trim(), amountCell.textContent?.trim());
-              } else if (/gst/i.test(label) && !/cgst|sgst|igst/i.test(label)) {
+        } else if (/gst/i.test(label)) {
                 genericGstCells.push(amountCell);
-                console.log('✅ Found generic GST cell:', labelCell.textContent?.trim(), amountCell.textContent?.trim());
               }
 
               if ((/total amount/i.test(label) || /grand total/i.test(label)) && !/extra/i.test(label)) {
                 totalCells.push(amountCell);
-                console.log('✅ Found Total cell:', labelCell.textContent?.trim(), amountCell.textContent?.trim());
-              }
-            });
-            
-            console.log('🔍 Cells found summary:', {
-              cgstCells: cgstCells.length,
-              sgstCells: sgstCells.length,
-              igstCells: igstCells.length,
-              genericGstCells: genericGstCells.length,
-              totalCells: totalCells.length
-            });
+        }
+      });
 
-            // CRITICAL: Use backend values if available, otherwise calculate correctly
-            // For tax-exclusive: GST must be calculated on SUBTOTAL (taxableAmount), NOT on total-with-tax
-            let totalTax: number;
-            let cgstValue: number;
-            let sgstValue: number;
-            let igstValue: number;
-            let totalWithTax: number;
+      // Always update base fare cells if found
+      if (baseCells.length > 0 && baseAmount > 0) {
+        // When GST is disabled, don't show tax-related labels
+        const baseLabel = gstEnabled 
+          ? (includeTax ? 'Base Fare' : 'Base Fare (excluding tax)')
+          : 'Base Fare';
+        console.log('✅ Updating', baseCells.length, 'base fare cells with amount:', baseAmount);
+        baseCells.forEach(cell => updateAmountCell(cell, baseAmount, baseLabel));
+      } else if (baseCells.length === 0) {
+        console.warn('⚠️ No base fare cells found in HTML!');
+      }
 
-            // Priority 1: Use backend CGST/SGST values directly (most accurate)
-            const hasBackendCgst = typeof backendCgstAmount === 'number' && backendCgstAmount > 0;
-            const hasBackendSgst = typeof backendSgstAmount === 'number' && backendSgstAmount > 0;
-            const hasBackendIgst = typeof backendIgstAmount === 'number' && backendIgstAmount > 0;
-            const hasBackendTax = typeof backendTaxAmount === 'number' && backendTaxAmount > 0;
-            const hasBackendTotal = typeof backendTotalAmount === 'number' && backendTotalAmount > 0;
+      // Update GST/total rows using derived summary values
+      if (gstEnabled) {
+        const cgstValue = summaryIsIGST ? 0 : Number((summaryTaxes / 2).toFixed(2));
+        const sgstValue = summaryIsIGST ? 0 : Number((summaryTaxes - cgstValue).toFixed(2));
+        const igstValue = summaryIsIGST ? summaryTaxes : 0;
 
-            console.log('🔍 Breakdown GST Calculation Debug:', {
-              hasBackendCgst,
-              hasBackendSgst,
-              hasBackendIgst,
-              hasBackendTax,
-              hasBackendTotal,
-              backendCgstAmount,
-              backendSgstAmount,
-              backendTaxAmount,
-              backendTotalAmount,
-              correctBaseAmount,
-              extrasAmount,
-              taxableAmount,
-              includeTax,
-              calculation: `Subtotal = ${correctBaseAmount} + ${extrasAmount} = ${taxableAmount}`
-            });
-
-            if (hasBackendCgst && hasBackendSgst) {
-              // Use backend CGST and SGST values directly (most accurate)
-              cgstValue = backendCgstAmount;
-              sgstValue = backendSgstAmount;
-              totalTax = cgstValue + sgstValue;
-              igstValue = 0;
-              totalWithTax = hasBackendTotal ? backendTotalAmount : (includeTax ? taxableAmount : taxableAmount + totalTax);
-              
-              console.log('✅ Using backend CGST/SGST values:', {
-                cgst: cgstValue,
-                sgst: sgstValue,
-                totalTax,
-                totalWithTax,
-                correctBaseAmount,
-                extrasAmount,
-                taxableAmount,
-                expectedCgst: Math.round(taxableAmount * 0.09 * 100) / 100,
-                expectedSgst: Math.round(taxableAmount * 0.09 * 100) / 100,
-                verification: `CGST ${cgstValue} + SGST ${sgstValue} = ${totalTax}, should equal ${Math.round(taxableAmount * 0.18 * 100) / 100}`
-              });
-            } else if (hasBackendIgst) {
-              // Use backend IGST value
-              igstValue = backendIgstAmount;
-              totalTax = igstValue;
-              cgstValue = 0;
-              sgstValue = 0;
-              totalWithTax = hasBackendTotal ? backendTotalAmount : (includeTax ? taxableAmount : taxableAmount + totalTax);
-            } else if (hasBackendTax) {
-              // Use backend total tax amount, split into CGST/SGST
-              totalTax = backendTaxAmount;
-              totalWithTax = hasBackendTotal ? backendTotalAmount : (includeTax ? taxableAmount : taxableAmount + totalTax);
-              
-              const applyIGST = summaryIsIGST || hasBackendIgst;
-              
-              if (applyIGST) {
-                igstValue = totalTax;
-                cgstValue = 0;
-                sgstValue = 0;
-              } else {
-                // Split total tax into CGST and SGST (each 9% of subtotal)
-                cgstValue = Math.round(totalTax / 2 * 100) / 100;
-                sgstValue = Math.round((totalTax - cgstValue) * 100) / 100;
-                igstValue = 0;
-              }
-            } else {
-              // Fallback: Calculate based on includeTax setting
-              // CRITICAL: Always calculate GST on SUBTOTAL (taxableAmount), never on total-with-tax
-              if (includeTax) {
-                // Tax-inclusive: Extract tax from taxable amount
-                totalTax = Math.round((taxableAmount / 1.18) * 0.18 * 100) / 100;
-                totalWithTax = taxableAmount; // Total already includes tax
-              } else {
-                // Tax-exclusive: Add tax on top of SUBTOTAL
-                // Formula: GST = Subtotal × 0.18 (NOT total × 0.18)
-                totalTax = Math.round(taxableAmount * 0.18 * 100) / 100;
-                totalWithTax = Math.round((taxableAmount + totalTax) * 100) / 100;
-              }
-              
-              const applyIGST = summaryIsIGST || (igstCells.length > 0 && cgstCells.length === 0 && sgstCells.length === 0);
-              
-              if (applyIGST) {
-                igstValue = totalTax;
-                cgstValue = 0;
-                sgstValue = 0;
-              } else {
-                // Split total tax into CGST and SGST
-                // Each is 9% of SUBTOTAL (taxableAmount), not of total
-                cgstValue = Math.round(totalTax / 2 * 100) / 100;
-                sgstValue = Math.round((totalTax - cgstValue) * 100) / 100;
-                igstValue = 0;
-              }
-              
-              console.log('⚠️ Using fallback calculation:', {
-                taxableAmount,
-                includeTax,
-                totalTax,
-                cgstValue,
-                sgstValue,
-                totalWithTax
-              });
-            }
-
-            // Update GST cells - ALWAYS use calculated values, never parsed HTML values
-            console.log('🔍 Updating GST cells with values:', {
-              cgstValue,
-              sgstValue,
-              igstValue,
-              totalTax,
-              totalWithTax,
-              cgstCellsCount: cgstCells.length,
-              sgstCellsCount: sgstCells.length,
-              igstCellsCount: igstCells.length
-            });
-
-            if (igstValue > 0) {
+        if (summaryIsIGST) {
               const targets = igstCells.length > 0 ? igstCells : genericGstCells;
               targets.forEach(cell => updateAmountCell(cell, igstValue, 'IGST (18%)'));
-            } else {
-              if (cgstCells.length === 0 && sgstCells.length === 0 && genericGstCells.length > 0) {
-                genericGstCells.forEach(cell => updateAmountCell(cell, totalTax, 'GST (18%)'));
               } else {
                 if (cgstCells.length > 0) {
-                  console.log(`✅ Updating ${cgstCells.length} CGST cells with value: ₹${cgstValue}`);
                   cgstCells.forEach(cell => updateAmountCell(cell, cgstValue, 'CGST (9%)'));
                 }
                 if (sgstCells.length > 0) {
-                  console.log(`✅ Updating ${sgstCells.length} SGST cells with value: ₹${sgstValue}`);
                   sgstCells.forEach(cell => updateAmountCell(cell, sgstValue, 'SGST (9%)'));
                 }
-              }
-            }
-
-            // Update total cells - ALWAYS use calculated total, never parsed HTML
-            console.log(`✅ Updating ${totalCells.length} total cells with value: ₹${totalWithTax}`);
-            totalCells.forEach(cell => {
-              updateAmountCell(cell, totalWithTax);
-            });
+          if (cgstCells.length === 0 && sgstCells.length === 0 && genericGstCells.length > 0) {
+            genericGstCells.forEach(cell => updateAmountCell(cell, summaryTaxes, 'GST (18%)'));
           }
-        } catch (calcError) {
-          console.warn('Unable to recalculate GST totals in invoice HTML:', calcError);
         }
+        totalCells.forEach(cell => updateAmountCell(cell, summaryTotal));
+      } else {
+        totalCells.forEach(cell => updateAmountCell(cell, summaryTotal));
       }
 
       return doc.documentElement.outerHTML;
@@ -657,7 +739,7 @@ export function BookingInvoice({
       console.error('Failed to sanitize admin invoice HTML:', error);
       return html;
     }
-  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData]);
+  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount]);
 
   const htmlContent = useMemo(
     () => sanitizeInvoiceHtml(rawHtmlContent),
@@ -1124,15 +1206,24 @@ export function BookingInvoice({
   };
 
   const handleGstToggle = (checked: boolean) => {
+    // When GST is disabled, ensure includeTax doesn't affect calculations
+    // When GST is enabled, default to includeTax = true
     onInvoiceStateChange({
       ...invoiceState,
       gstEnabled: checked,
-      includeTax: checked ? true : invoiceState.includeTax
+      includeTax: checked ? true : invoiceState.includeTax // Preserve includeTax value when disabling GST
     });
+    
     if (checked && !includeTax) {
       toast({
         title: "Tax Inclusion Enabled",
         description: "Enabling GST defaults to include tax in the price"
+      });
+    } else if (!checked) {
+      console.log('🔍 GST Disabled: Base fare will remain unchanged, no tax calculations will be applied', {
+        gstEnabled: false,
+        includeTax: invoiceState.includeTax,
+        note: 'When GST is disabled, includeTax setting has no effect on base fare or total amount'
       });
     }
   };
@@ -1227,9 +1318,18 @@ export function BookingInvoice({
             id="tax-toggle"
             key={`tax-toggle-${forceRenderKey}`}
             checked={includeTax}
-            onCheckedChange={(checked) => onInvoiceStateChange({...invoiceState, includeTax: checked})}
+            disabled={!gstEnabled}
+            onCheckedChange={(checked) => {
+              // Only allow tax toggle changes when GST is enabled
+              if (gstEnabled) {
+                onInvoiceStateChange({...invoiceState, includeTax: checked});
+              }
+            }}
           />
-          <Label htmlFor="tax-toggle">{includeTax ? "Price including tax" : "Price excluding tax"}</Label>
+          <Label htmlFor="tax-toggle" className={!gstEnabled ? "text-gray-400" : ""}>
+            {includeTax ? "Price including tax" : "Price excluding tax"}
+            {!gstEnabled && " (Enable GST first)"}
+          </Label>
         </div>
         
         {gstEnabled && (
@@ -1492,8 +1592,35 @@ export function BookingInvoice({
           
           {/* PATCH: Render correct fare breakdown in the invoice preview (HTML or JSX) */}
           <div className="fare-breakdown mb-6 rounded-lg border p-4 bg-muted/30 space-y-2 text-sm">
+            {gstEnabled && includeTax ? (
+              // Tax-inclusive: Show Total first, then breakdown
+              <>
+                <div className="flex justify-between font-bold border-b pb-2 mb-2 text-base">
+                  <span>Total Amount (including GST)</span>
+                  <span>₹{formatCurrency(summaryTotal)}</span>
+                </div>
             <div className="flex justify-between">
-              <span>Base Fare</span>
+                  <span>Base Fare (excluding GST)</span>
+                  <span className="font-semibold">₹{formatCurrency(summaryBaseFare)}</span>
+                </div>
+                {summaryExtras > 0 && (
+                  <div className="flex justify-between">
+                    <span>Extra Charges</span>
+                    <span className="font-semibold">₹{formatCurrency(summaryExtras)}</span>
+                  </div>
+                )}
+                {summaryTaxes > 0 && (
+                  <div className="flex justify-between">
+                    <span>{summaryIsIGST ? 'GST @ 18%' : 'GST @ 18%'}</span>
+                    <span className="font-semibold">₹{formatCurrency(summaryTaxes)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              // Tax-exclusive or GST disabled: Show breakdown first, then total
+              <>
+                <div className="flex justify-between">
+                  <span>{gstEnabled ? 'Base Fare (excluding GST)' : 'Base Fare'}</span>
               <span className="font-semibold">₹{formatCurrency(summaryBaseFare)}</span>
             </div>
             {summaryExtras > 0 && (
@@ -1504,14 +1631,16 @@ export function BookingInvoice({
             )}
             {gstEnabled && summaryTaxes > 0 && (
               <div className="flex justify-between">
-                <span>{summaryIsIGST ? 'IGST (18%)' : 'GST (18%)'}</span>
+                    <span>{summaryIsIGST ? 'GST @ 18%' : 'GST @ 18%'}</span>
                 <span className="font-semibold">₹{formatCurrency(summaryTaxes)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold border-t pt-2 mt-2 text-base">
-              <span>Total Amount</span>
+                  <span>{gstEnabled ? 'Total Amount (including GST)' : 'Total Amount'}</span>
               <span>₹{formatCurrency(summaryTotal)}</span>
             </div>
+              </>
+            )}
           </div>
 
           <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>

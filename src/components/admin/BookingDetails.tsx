@@ -142,13 +142,57 @@ export function BookingDetails({
 
       <Tabs defaultValue="details" value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="w-full border-b justify-start">
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="edit" disabled={isEditDisabled}>Edit</TabsTrigger>
-          <TabsTrigger value="advanced" disabled={isEditDisabled}>Advanced Settings</TabsTrigger>
-          <TabsTrigger value="vehicle" disabled={isAssignmentDisabled}>Assign Fleet Vehicle</TabsTrigger>
-          <TabsTrigger value="driver" disabled={isAssignmentDisabled}>Assign Driver</TabsTrigger>
-          <TabsTrigger value="invoice" disabled={isInvoiceDisabled}>Invoice</TabsTrigger>
-          <TabsTrigger value="whatsapp" disabled={isWhatsAppDisabled}>WhatsApp</TabsTrigger>
+          <TabsTrigger 
+            value="details"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Details
+          </TabsTrigger>
+          <TabsTrigger 
+            value="edit" 
+            disabled={isEditDisabled}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Edit
+          </TabsTrigger>
+          <TabsTrigger 
+            value="advanced" 
+            disabled={isEditDisabled}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Advanced Settings
+          </TabsTrigger>
+          <TabsTrigger 
+            value="vehicle" 
+            disabled={isAssignmentDisabled}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Assign Fleet Vehicle
+          </TabsTrigger>
+          <TabsTrigger 
+            value="driver" 
+            disabled={isAssignmentDisabled}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Assign Driver
+          </TabsTrigger>
+          <TabsTrigger 
+            value="invoice" 
+            disabled={isInvoiceDisabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
+            Invoice
+          </TabsTrigger>
+          <TabsTrigger 
+            value="whatsapp" 
+            disabled={isWhatsAppDisabled}
+            onClick={(e) => e.stopPropagation()}
+          >
+            WhatsApp
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="py-2">
@@ -311,7 +355,11 @@ export function BookingDetails({
           <BookingInvoice 
             booking={booking}
             onGenerateInvoice={onGenerateInvoice}
-            onClose={() => handleTabChange('details')}
+            onClose={() => {
+              // Don't close the popup, just switch back to details tab
+              // The popup should only close when user clicks the X button
+              handleTabChange('details');
+            }}
             isSubmitting={isSubmitting}
             pdfUrl={pdfUrl}
             invoiceState={invoiceState}
