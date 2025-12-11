@@ -96,6 +96,36 @@ function logInvoiceError($message, $data = []) {
  */
 function calculateGstBreakdown(array $input): array
 {
+    // #region agent log
+    // Calculate path to workspace root: from src/backend/php-templates/api/admin/ go up 5 levels
+    $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+    $logDir = dirname($logPath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logEntry = json_encode([
+        'id' => 'log_' . time() . '_calc_entry',
+        'timestamp' => round(microtime(true) * 1000),
+        'location' => 'generate-invoice.php:97',
+        'message' => 'calculateGstBreakdown ENTRY',
+        'data' => [
+            'gstEnabled' => $input['gstEnabled'] ?? false,
+            'includeTax' => $input['includeTax'] ?? false,
+            'gstRate' => $input['gstRate'] ?? 0.18,
+            'extraCharges' => $input['extraCharges'] ?? 0,
+            'baseHint' => $input['baseHint'] ?? 0,
+            'totalHint' => $input['totalHint'] ?? 0,
+            'originalTotal' => $input['originalTotal'] ?? 0,
+            'isIGST' => $input['isIGST'] ?? false
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'A'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    // #endregion
+    
     $gstEnabled = (bool)($input['gstEnabled'] ?? false);
     $includeTax = (bool)($input['includeTax'] ?? false);
     $gstRate = $gstEnabled ? (float)($input['gstRate'] ?? 0.18) : 0.0;
@@ -236,12 +266,67 @@ function calculateGstBreakdown(array $input): array
         $result['gstOnExtraCharges'] = 0;
     }
 
+    // #region agent log
+    $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+    $logDir = dirname($logPath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logEntry = json_encode([
+        'id' => 'log_' . time() . '_calc_exit',
+        'timestamp' => round(microtime(true) * 1000),
+        'location' => 'generate-invoice.php:239',
+        'message' => 'calculateGstBreakdown EXIT',
+        'data' => [
+            'baseFare' => $result['baseFare'],
+            'taxAmount' => $result['taxAmount'],
+            'cgstAmount' => $result['cgstAmount'],
+            'sgstAmount' => $result['sgstAmount'],
+            'totalAmount' => $result['totalAmount'],
+            'taxableSubtotal' => $result['taxableSubtotal'],
+            'gstOnBaseFare' => $result['gstOnBaseFare'],
+            'gstOnExtraCharges' => $result['gstOnExtraCharges'],
+            'verification' => 'Base(' . $result['baseFare'] . ') + Extra(' . $extraCharges . ') + Tax(' . $result['taxAmount'] . ') = ' . ($result['baseFare'] + $extraCharges + $result['taxAmount']) . ', Expected: ' . $result['totalAmount']
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'A'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    // #endregion
+
     return $result;
 }
 
 
 
 try {
+    // #region agent log - Test logging at script start
+    $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+    $logDir = dirname($logPath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $testLogEntry = json_encode([
+        'id' => 'log_' . time() . '_script_start',
+        'timestamp' => round(microtime(true) * 1000),
+        'location' => 'generate-invoice.php:244',
+        'message' => 'SCRIPT START - Invoice generation initiated',
+        'data' => [
+            'requestMethod' => $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
+            'logPath' => $logPath,
+            'logDirExists' => is_dir($logDir) ? 'YES' : 'NO',
+            'logPathWritable' => is_writable($logDir) ? 'YES' : 'NO'
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'TEST'
+    ]) . "\n";
+    @file_put_contents($logPath, $testLogEntry, FILE_APPEND);
+    // #endregion
+    
     // Get booking ID
     $bookingId = null;
     $gstEnabled = false;
@@ -659,6 +744,38 @@ try {
     $taxableAmount = $gstComputation['taxableSubtotal'];
     $gstOnBaseFare = $gstComputation['gstOnBaseFare'];
     $totalGstOnExtraCharges = $gstComputation['gstOnExtraCharges'];
+    
+    // #region agent log
+    $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+    $logDir = dirname($logPath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logEntry = json_encode([
+        'id' => 'log_' . time() . '_after_gst',
+        'timestamp' => round(microtime(true) * 1000),
+        'location' => 'generate-invoice.php:663',
+        'message' => 'Values AFTER GST computation',
+        'data' => [
+            'baseFare' => $baseFare,
+            'extraCharges' => $totalExtraCharges,
+            'taxAmount' => $taxAmount,
+            'cgstAmount' => $cgstAmount,
+            'sgstAmount' => $sgstAmount,
+            'finalTotal' => $finalTotal,
+            'taxableSubtotal' => $taxableAmount,
+            'gstEnabled' => $gstEnabled,
+            'includeTax' => $includeTax,
+            'verification_sum' => $baseFare + $totalExtraCharges + $taxAmount,
+            'verification_cgst_sgst' => $cgstAmount + $sgstAmount
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    // #endregion
     
     logInvoiceError("GST computation summary (new engine)", [
         'base_fare' => $baseFare,
@@ -1799,6 +1916,27 @@ try {
                 ]);
                 
                 // Correct base fare for HTML display (this is the pre-tax amount)
+                // #region agent log
+                $logPath = __DIR__ . '/../../../../../.cursor/debug.log';
+                $logEntry = json_encode([
+                    'id' => 'log_' . time() . '_overwrite_base',
+                    'timestamp' => round(microtime(true) * 1000),
+                    'location' => 'generate-invoice.php:1878',
+                    'message' => 'OVERWRITE: Base fare corrected for tax-inclusive',
+                    'data' => [
+                        'old_baseFare' => $baseFare,
+                        'new_baseFare' => $expectedBaseFare,
+                        'old_taxAmount' => $taxAmount,
+                        'old_finalTotal' => $finalTotal,
+                        'totalToVerify' => $totalToVerify,
+                        'expectedTaxableAmount' => $expectedTaxableAmount
+                    ],
+                    'sessionId' => 'debug-session',
+                    'runId' => 'run1',
+                    'hypothesisId' => 'F'
+                ]) . "\n";
+                @file_put_contents($logPath, $logEntry, FILE_APPEND);
+                // #endregion
                 $baseFare = $expectedBaseFare;
                 $grossAmount = $baseFare + $totalExtraCharges;
                 
@@ -1854,6 +1992,40 @@ try {
         'verification' => 'Base (' . $baseFare . ') + Extra (' . $totalExtraCharges . ') + Tax (' . $taxAmount . ') = ' . ($baseFare + $totalExtraCharges + $taxAmount) . ', Expected Total: ' . $finalTotal
     ]);
     
+    // #region agent log
+    $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+    $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+    $logDir = dirname($logPath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $logEntry = json_encode([
+        'id' => 'log_' . time() . '_before_html',
+        'timestamp' => round(microtime(true) * 1000),
+        'location' => 'generate-invoice.php:1836',
+        'message' => 'Values BEFORE HTML generation (summary & breakdown)',
+        'data' => [
+            'baseFare' => $baseFare,
+            'extraCharges' => $totalExtraCharges,
+            'taxAmount' => $taxAmount,
+            'cgstAmount' => $cgstAmount,
+            'sgstAmount' => $sgstAmount,
+            'finalTotal' => $finalTotal,
+            'gstEnabled' => $gstEnabled,
+            'includeTax' => $includeTax,
+            'expectedGstRate' => $gstEnabled ? 0.18 : 0,
+            'calculatedGstFromTaxable' => $gstEnabled ? round(($baseFare + $totalExtraCharges) * 0.18, 2) : 0,
+            'cgstPlusSgst' => $cgstAmount + $sgstAmount,
+            'verification_sum' => $baseFare + $totalExtraCharges + $taxAmount,
+            'verification_cgst_sgst' => $cgstAmount + $sgstAmount
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'C'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    // #endregion
+    
     $invoiceHtml .= '
             <h3 class="section-title">Fare Breakdown</h3>
             <table class="fare-table">
@@ -1899,6 +2071,30 @@ try {
     // Display GST as a single line "GST @ 18%" (simplified format)
     if ($gstEnabled && $taxAmount > 0) {
         $gstLabel = 'GST @ 18%';
+        // #region agent log
+        $logPath = __DIR__ . '/../../../../.cursor/debug.log';
+        $logEntry = json_encode([
+            'id' => 'log_' . time() . '_breakdown_gst',
+            'timestamp' => round(microtime(true) * 1000),
+            'location' => 'generate-invoice.php:1900',
+            'message' => 'Breakdown section: GST line item',
+            'data' => [
+                'gstLabel' => $gstLabel,
+                'taxAmount' => $taxAmount,
+                'cgstAmount' => $cgstAmount,
+                'sgstAmount' => $sgstAmount,
+                'cgstPlusSgst' => $cgstAmount + $sgstAmount,
+                'baseFare' => $baseFare,
+                'extraCharges' => $totalExtraCharges,
+                'taxableAmount' => $baseFare + $totalExtraCharges,
+                'expectedGst' => round(($baseFare + $totalExtraCharges) * 0.18, 2)
+            ],
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => 'D'
+        ]) . "\n";
+        @file_put_contents($logPath, $logEntry, FILE_APPEND);
+        // #endregion
         $invoiceHtml .= '
                 <tr>
                     <td>' . $gstLabel . '</td>
@@ -2084,6 +2280,28 @@ try {
         $totalLabel = $gstEnabled 
             ? 'Total Amount (including GST)'  // Tax-exclusive: GST is added on top
             : 'Total Amount';
+        // #region agent log
+        $logPath = __DIR__ . '/../../../../.cursor/debug.log';
+        $logEntry = json_encode([
+            'id' => 'log_' . time() . '_breakdown_total',
+            'timestamp' => round(microtime(true) * 1000),
+            'location' => 'generate-invoice.php:2083',
+            'message' => 'Breakdown section: Total row',
+            'data' => [
+                'totalLabel' => $totalLabel,
+                'finalTotal' => $finalTotal,
+                'baseFare' => $baseFare,
+                'extraCharges' => $totalExtraCharges,
+                'taxAmount' => $taxAmount,
+                'calculatedSum' => $baseFare + $totalExtraCharges + $taxAmount,
+                'originalBookingTotal' => $originalBookingTotal
+            ],
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => 'E'
+        ]) . "\n";
+        @file_put_contents($logPath, $logEntry, FILE_APPEND);
+        // #endregion
         $invoiceHtml .= '
                 <tr class="total-row">
                     <td><strong>' . $totalLabel . '</strong></td>
@@ -2221,6 +2439,45 @@ try {
     // NEVER send totalAmount as baseAmount
     $responseBaseAmount = $baseFare; // Always use the calculated base fare
     
+    // CRITICAL: Final verification - ensure CGST + SGST = taxAmount (accounting for rounding)
+    // This ensures the response values are consistent
+    if ($gstEnabled && !$isIGST && $taxAmount > 0) {
+        $cgstSgstSum = round($cgstAmount + $sgstAmount, 2);
+        $difference = abs($cgstSgstSum - $taxAmount);
+        if ($difference > 0.01) {
+            // Recalculate CGST/SGST to ensure they sum to taxAmount exactly
+            $halfTax = $taxAmount / 2;
+            $cgstAmount = round($halfTax, 2);
+            $sgstAmount = round($taxAmount - $cgstAmount, 2);
+            logInvoiceError("CRITICAL: CGST+SGST mismatch corrected before response", [
+                'old_cgst' => $cgstAmount,
+                'old_sgst' => $sgstAmount,
+                'old_sum' => $cgstSgstSum,
+                'tax_amount' => $taxAmount,
+                'difference' => $difference,
+                'corrected_cgst' => $cgstAmount,
+                'corrected_sgst' => $sgstAmount,
+                'corrected_sum' => $cgstAmount + $sgstAmount
+            ]);
+        }
+    }
+    
+    // CRITICAL: Final verification - ensure Base + Extra + Tax = Total (accounting for rounding)
+    $calculatedTotal = round($baseFare + $totalExtraCharges + $taxAmount, 2);
+    $totalDifference = abs($calculatedTotal - $finalTotal);
+    if ($totalDifference > 0.01 && $gstEnabled) {
+        logInvoiceError("WARNING: Total amount mismatch before response", [
+            'base_fare' => $baseFare,
+            'extra_charges' => $totalExtraCharges,
+            'tax_amount' => $taxAmount,
+            'calculated_total' => $calculatedTotal,
+            'final_total' => $finalTotal,
+            'difference' => $totalDifference,
+            'gst_enabled' => $gstEnabled,
+            'include_tax' => $includeTax
+        ]);
+    }
+    
     // Prepare response data
     $responseData = [
         'status' => 'success',
@@ -2233,6 +2490,9 @@ try {
             'totalAmount' => $finalTotal,
             'baseAmount' => $responseBaseAmount, // CRITICAL: Always base fare, never total
             'taxAmount' => $taxAmount,
+            'cgstAmount' => $cgstAmount, // CRITICAL: Send CGST amount for frontend consistency
+            'sgstAmount' => $sgstAmount, // CRITICAL: Send SGST amount for frontend consistency
+            'igstAmount' => $igstAmount,
             'gstEnabled' => $gstEnabled,
             'isIGST' => $isIGST,
             'includeTax' => $includeTax,

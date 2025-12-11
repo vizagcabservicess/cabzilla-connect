@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BookingDetails } from './BookingDetails';
 import { Booking, BookingStatus } from '@/types/api';
@@ -27,26 +27,80 @@ export function BookingDetailsModal({
   onStatusChange,
   isSubmitting
 }: BookingDetailsModalProps) {
-  // Control body scroll when modal is open
+  // Control body scroll when modal is open and track switch interactions
   useEffect(() => {
     if (isOpen) {
       // Prevent body scrolling when modal is open
       document.body.style.overflow = 'hidden';
+      
+      // Add global event listeners to catch switch interactions
+      // CRITICAL FIX: Set flags in capture phase BEFORE dialog handlers run
+      // Don't stop propagation - let events reach Switch, but prevent dialog from closing
+      const handleSwitchClick = (e: MouseEvent | PointerEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button[role="switch"]') || 
+            target.closest('[id*="toggle"]') ||
+            target.closest('label[for*="toggle"]')) {
+          // CRITICAL: Set flags IMMEDIATELY in capture phase so dialog handlers see them
+          isInteractingWithSwitch.current = true;
+          lastInteractionTime.current = Date.now();
+          // Don't stop propagation - let event reach Switch component
+        }
+      };
+      
+      const handleSwitchChange = (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button[role="switch"]') || 
+            target.closest('[id*="toggle"]')) {
+          isInteractingWithSwitch.current = true;
+          lastInteractionTime.current = Date.now();
+        }
+      };
+      
+      // Listen for clicks and changes on switches
+      document.addEventListener('click', handleSwitchClick, true);
+      document.addEventListener('pointerdown', handleSwitchClick, true);
+      document.addEventListener('change', handleSwitchChange, true);
+      
+      return () => {
+        document.body.style.overflow = 'unset';
+        document.removeEventListener('click', handleSwitchClick, true);
+        document.removeEventListener('pointerdown', handleSwitchClick, true);
+        document.removeEventListener('change', handleSwitchChange, true);
+        if (switchInteractionTimeout.current) {
+          clearTimeout(switchInteractionTimeout.current);
+        }
+      };
     } else {
       // Re-enable body scrolling when modal closes
       document.body.style.overflow = 'unset';
     }
-    
-    // Cleanup function to ensure body scroll is restored when component unmounts
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, [isOpen]);
 
   if (!booking) return null;
 
-  // Prevent modal from closing when clicking outside if submitting
+  // Track if we're interacting with a switch to prevent dialog from closing
+  const isInteractingWithSwitch = useRef(false);
+  const switchInteractionTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastInteractionTime = useRef<number>(0);
+
+  // Prevent modal from closing when clicking outside if submitting or interacting with switch
   const handleOpenChange = (open: boolean) => {
+    // Don't close if we're interacting with a switch or submitting
+    // Also check if a switch interaction happened recently (within last 500ms)
+    const timeSinceInteraction = Date.now() - lastInteractionTime.current;
+    if (isInteractingWithSwitch.current || timeSinceInteraction < 500) {
+      // Clear any existing timeout
+      if (switchInteractionTimeout.current) {
+        clearTimeout(switchInteractionTimeout.current);
+      }
+      // Reset the flag after a delay to allow state updates to complete
+      switchInteractionTimeout.current = setTimeout(() => {
+        isInteractingWithSwitch.current = false;
+      }, 500);
+      // Prevent closing - force the dialog to stay open
+      return;
+    }
     // Only close if explicitly closing (not submitting)
     if (!isSubmitting && !open) {
       onClose();
@@ -60,19 +114,101 @@ export function BookingDetailsModal({
     if (target) {
       // Check if the click is inside the dialog content area
       const dialogContent = target.closest('[role="dialog"]');
+      // Check for any interactive elements inside the dialog
+      const isInsideDialog = target.closest('.booking-details-modal-content') ||
+                            target.closest('[data-radix-dialog-content]') ||
+                            target.closest('button[role="switch"]') || 
+                            target.closest('[data-state]') ||
+                            target.closest('label[for*="toggle"]') ||
+                            target.closest('.flex.items-center.space-x-2') ||
+                            target.closest('[id*="toggle"]') ||
+                            target.closest('input') ||
+                            target.closest('button') ||
+                            target.closest('select') ||
+                            target.closest('[role="tab"]') ||
+                            target.closest('[role="tabpanel"]');
       // If clicking inside the dialog (not on the backdrop), prevent closing
-      if (dialogContent) {
+      if (dialogContent || isInsideDialog) {
+        if (isInsideDialog) {
+          isInteractingWithSwitch.current = true;
+          lastInteractionTime.current = Date.now();
+          // CRITICAL FIX: Don't prevent default on switch clicks - let them work normally
+          // Only prevent default if clicking on backdrop (outside dialog)
+          const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
+          if (!isSwitch) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return false;
+        }
         event.preventDefault();
+        event.stopPropagation();
+        return false;
       }
+    }
+    return true;
+  };
+
+  // More aggressive prevention - block onOpenChange from closing unless explicitly requested
+  const handleDialogOpenChange = (open: boolean) => {
+    // If trying to close, check if we should allow it
+    if (!open) {
+      // Don't close if submitting
+      if (isSubmitting) {
+        return;
+      }
+      // Don't close if we recently interacted with a switch
+      const timeSinceInteraction = Date.now() - lastInteractionTime.current;
+      if (isInteractingWithSwitch.current || timeSinceInteraction < 2000) {
+        // Force dialog to stay open by not calling onClose
+        return;
+      }
+      // Only close if explicitly requested (user clicked X or pressed ESC intentionally)
+      onClose();
+    } else {
+      // Opening - allow it
+      // This shouldn't happen as isOpen is controlled, but handle it just in case
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent 
         className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50"
-        onInteractOutside={handleInteractOutside}
-        onPointerDownOutside={handleInteractOutside}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement;
+          // Check if clicking on a switch
+          const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
+          if (isSwitch) {
+            // CRITICAL: Prevent dialog from closing when clicking on switch
+            e.preventDefault();
+            return;
+          }
+          // Only prevent if clicking on backdrop, not on dialog content
+          const isOnBackdrop = !target.closest('[role="dialog"]') && 
+                               !target.closest('.booking-details-modal-content');
+          if (!isOnBackdrop) {
+            // Clicking inside dialog - prevent closing
+            e.preventDefault();
+          }
+        }}
+        onPointerDownOutside={(e) => {
+          const target = e.target as HTMLElement;
+          // Check if clicking on a switch
+          const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
+          if (isSwitch) {
+            // CRITICAL: Prevent dialog from closing when clicking on switch
+            e.preventDefault();
+            return;
+          }
+          // Only prevent if clicking on backdrop, not on dialog content
+          const isOnBackdrop = !target.closest('[role="dialog"]') && 
+                               !target.closest('.booking-details-modal-content');
+          if (!isOnBackdrop) {
+            // Clicking inside dialog - prevent closing
+            e.preventDefault();
+          }
+        }}
         onEscapeKeyDown={(e) => {
           // Allow ESC to close only if not submitting
           if (isSubmitting) {
