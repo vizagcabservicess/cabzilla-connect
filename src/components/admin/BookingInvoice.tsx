@@ -170,16 +170,39 @@ export function BookingInvoice({
   // CRITICAL: For GST-inclusive mode, NEVER use invoiceData.baseAmount as it's the back-calculated pre-tax base
   // For GST-inclusive, we need the original locked fare (from localStorage or booking.fare) as the GST-inclusive base fare
   const baseFare = useMemo(() => {
-    // CRITICAL: For GST-inclusive mode, skip invoiceData.baseAmount
-    // invoiceData.baseAmount is the back-calculated pre-tax base (e.g., ₹864.41)
-    // But we need the original locked fare (e.g., ₹1,322.03) for GST-inclusive calculations
-    // Only use invoiceData.baseAmount for GST-exclusive mode where it represents the actual base fare
+    // #region agent log
+    console.log('🔍 baseFare useMemo RECALCULATING', {
+      gstEnabled,
+      includeTax,
+      invoiceData_baseAmount: invoiceData?.baseAmount,
+      bookingFare: booking.fare,
+      bookingTotalAmount: booking.totalAmount,
+      note: 'Checking all sources for base fare'
+    });
+    // #endregion
+    
+    // CRITICAL FIX: For tax-exclusive mode, NEVER use invoiceData.baseAmount
+    // invoiceData.baseAmount might be from a previous tax-inclusive calculation (718.19)
+    // For tax-exclusive, we need the original pre-tax base fare (₹2,000) from booking.fare or localStorage
+    // Only use invoiceData.baseAmount for GST-disabled mode where it's reliable
     if (gstEnabled && includeTax) {
       // GST-INCLUSIVE: Skip invoiceData.baseAmount, use original locked fare instead
       // This ensures baseFare stays stable at the original locked fare (₹1,322.03)
+      // #region agent log
+      console.log('🔍 GST-INCLUSIVE: Skipping invoiceData.baseAmount, will use original locked fare');
+      // #endregion
+    } else if (gstEnabled && !includeTax) {
+      // GST-EXCLUSIVE: NEVER use invoiceData.baseAmount - it might be stale from tax-inclusive mode
+      // Use booking.fare or localStorage instead (the correct pre-tax base fare)
+      // #region agent log
+      console.log('🔍 GST-EXCLUSIVE: Skipping invoiceData.baseAmount (might be stale), will use booking.fare or localStorage');
+      // #endregion
     } else {
-      // GST-EXCLUSIVE or GST-DISABLED: Use invoiceData.baseAmount if available
+      // GST-DISABLED: Use invoiceData.baseAmount if available (it's reliable in this mode)
       if (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0) {
+        // #region agent log
+        console.log('🔍 GST-DISABLED: Using invoiceData.baseAmount', {baseAmount: invoiceData.baseAmount});
+        // #endregion
         return invoiceData.baseAmount;
       }
     }
@@ -345,7 +368,43 @@ export function BookingInvoice({
     ? invoiceData.totalAmount
     : null;
 
-  const exclusiveBaseFallback = Number((originalTotalAmount > 0 ? originalTotalAmount - summaryExtras : fallbackBaseFare).toFixed(2));
+  // CRITICAL: For tax-exclusive, base should be pre-tax base fare (₹2,000)
+  // Use baseFare (from localStorage/booking) directly, NOT originalTotalAmount - extras
+  const exclusiveBaseFallback = useMemo(() => {
+    if (gstEnabled && !includeTax) {
+      // Tax-exclusive mode: Use baseFare directly (this is the locked/pre-tax base fare)
+      // baseFare is already the correct pre-tax base (₹2,000), don't subtract extras
+      if (baseFare > 0) {
+        const calculated = Number(baseFare.toFixed(2));
+        console.log('🔍 exclusiveBaseFallback: Using baseFare for tax-exclusive', {
+          baseFare,
+          calculated,
+          bookingFare: booking.fare,
+          summaryExtras,
+          note: 'For tax-exclusive, baseFare (₹2,000) is the pre-tax base fare, extras are separate'
+        });
+        return calculated;
+      }
+      // Fallback to booking.fare if baseFare is not available
+      if (typeof booking.fare === 'number' && booking.fare > 0) {
+        const calculated = Number(booking.fare.toFixed(2));
+        console.log('🔍 exclusiveBaseFallback: Using booking.fare as fallback', {
+          bookingFare: booking.fare,
+          calculated,
+          note: 'Using booking.fare as pre-tax base fare'
+        });
+        return calculated;
+      }
+    }
+    // Fallback to baseFare for other modes
+    const fallback = Number(fallbackBaseFare.toFixed(2));
+    console.log('🔍 exclusiveBaseFallback: Using fallbackBaseFare', {
+      fallbackBaseFare,
+      calculated: fallback,
+      note: 'Using fallback base fare'
+    });
+    return fallback;
+  }, [gstEnabled, includeTax, baseFare, booking.fare, summaryExtras, fallbackBaseFare]);
   
   // CRITICAL: For GST-inclusive, use originalTotalAmount which is baseFare (matches backend PDF)
   // NEVER use backendTotalAmount for GST-inclusive - it might be from GST-exclusive invoice
@@ -522,9 +581,23 @@ export function BookingInvoice({
       }
     } else if (gstEnabled && !includeTax) {
       // GST-EXCLUSIVE: Base fare + GST on top (matches backend logic)
-      const baseCandidate = backendBaseAmount ?? exclusiveBaseFallback;
+      // CRITICAL: For tax-exclusive, base should be the pre-tax base fare (₹2,000)
+      // Use baseFare directly (the locked fare), NOT backendBaseAmount which might be from tax-inclusive mode
+      // exclusiveBaseFallback already uses baseFare, so prefer that over backendBaseAmount
+      const baseCandidate = exclusiveBaseFallback > 0 ? exclusiveBaseFallback : (backendBaseAmount ?? baseFare);
       const base = Number(Math.max(0, baseCandidate).toFixed(2));
+      
+      console.log('🔍 GST-EXCLUSIVE: Base fare selection', {
+        baseFare,
+        backendBaseAmount,
+        exclusiveBaseFallback,
+        baseCandidate,
+        finalBase: base,
+        summaryExtras,
+        note: 'For tax-exclusive, base should be pre-tax base fare (₹2,000), not back-calculated from inclusive total'
+      });
       const subtotal = Number((base + summaryExtras).toFixed(2));
+      
       // CRITICAL FIX: For tax-exclusive, always calculate GST as percentage of subtotal
       // Don't use backendTaxAmount as it might be from tax-inclusive mode
       const calculatedTaxes = Number((subtotal * GST_RATE).toFixed(2));
@@ -533,21 +606,26 @@ export function BookingInvoice({
       const taxes = backendTaxAmount !== null && Math.abs(backendTaxAmount - calculatedTaxes) < 0.01
         ? Number(backendTaxAmount.toFixed(2))
         : calculatedTaxes;
+      
       // CRITICAL FIX: For tax-exclusive, always calculate total as subtotal + taxes
       // Don't use backendTotalAmount as it might be from a previous tax-inclusive calculation
       const calculatedTotal = Number((subtotal + taxes).toFixed(2));
       const total = backendTotalAmount !== null && Math.abs(backendTotalAmount - calculatedTotal) < 0.01
         ? backendTotalAmount  // Only use backendTotalAmount if it matches our calculation
         : calculatedTotal;    // Otherwise use calculated value
+      
       summaryBaseFare = base;
       summaryTaxes = taxes;
       summaryTotal = Number(total.toFixed(2));
       
-      console.log('🔍 GST-EXCLUSIVE Summary Calculation', {
+      console.log('🔍 GST-EXCLUSIVE Summary Calculation (DETAILED)', {
         baseCandidate,
+        backendBaseAmount,
+        exclusiveBaseFallback,
         base,
         summaryExtras,
         subtotal,
+        GST_RATE,
         calculatedTaxes,
         backendTaxAmount,
         taxes,
@@ -558,7 +636,16 @@ export function BookingInvoice({
         summaryTaxes,
         summaryTotal,
         usingCalculatedGST: backendTaxAmount === null || Math.abs(backendTaxAmount - calculatedTaxes) >= 0.01,
-        note: 'Tax-exclusive: GST = (Base + Extras) * 18% (should be different from tax-inclusive GST)'
+        usingCalculatedTotal: backendTotalAmount === null || Math.abs(backendTotalAmount - calculatedTotal) >= 0.01,
+        verification: {
+          expectedGST: subtotal * GST_RATE,
+          expectedTotal: subtotal + taxes,
+          actualGST: summaryTaxes,
+          actualTotal: summaryTotal,
+          gstMatches: Math.abs(summaryTaxes - calculatedTaxes) < 0.01,
+          totalMatches: Math.abs(summaryTotal - calculatedTotal) < 0.01
+        },
+        note: 'Tax-exclusive: GST = (Base + Extras) * 18%, Total = Base + Extras + GST (should be HIGHER than tax-inclusive)'
       });
     } else {
       // GST DISABLED
@@ -576,6 +663,15 @@ export function BookingInvoice({
   // Don't use backendTaxAmount directly as it might be from the wrong mode (tax-inclusive vs tax-exclusive)
   // summaryTaxes is already calculated correctly in summaryValues useMemo based on the current mode
   const displayTaxAmount = summaryTaxes;
+  
+  console.log('🔍 displayTaxAmount calculation', {
+    summaryTaxes,
+    backendTaxAmount,
+    gstEnabled,
+    includeTax,
+    mode: gstEnabled && includeTax ? 'tax-inclusive' : gstEnabled && !includeTax ? 'tax-exclusive' : 'gst-disabled',
+    note: 'Using summaryTaxes which is calculated correctly for current mode'
+  });
   
   // CRITICAL: Verify backend values are being used correctly
   if (backendTaxAmount !== null && backendCgstAmount !== null && backendSgstAmount !== null) {
@@ -833,6 +929,19 @@ export function BookingInvoice({
           }
           igstValue = 0;
         }
+        
+        console.log('🔍 CGST/SGST calculation for breakdown', {
+          summaryTaxes,
+          backendCgstAmount,
+          backendSgstAmount,
+          backendTaxAmount,
+          cgstValue,
+          sgstValue,
+          igstValue,
+          includeTax,
+          mode: includeTax ? 'tax-inclusive' : 'tax-exclusive',
+          note: 'Using summaryTaxes (correct for current mode) for CGST/SGST split'
+        });
 
         if (summaryIsIGST) {
               const targets = igstCells.length > 0 ? igstCells : genericGstCells;
@@ -978,6 +1087,56 @@ export function BookingInvoice({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id, loading, invoiceData, isSubmitting, hasAttemptedGeneration]);
   
+  // CRITICAL FIX: Regenerate invoice when includeTax or gstEnabled changes
+  // This ensures the backend recalculates with the correct mode (tax-inclusive vs tax-exclusive)
+  useEffect(() => {
+    // Only regenerate if we have an existing invoice and the mode has changed
+    if (invoiceData && booking && booking.id && !loading && !isSubmitting) {
+      const previousIncludeTax = invoiceData.includeTax ?? invoiceData.include_tax ?? null;
+      const previousGstEnabled = invoiceData.gstEnabled ?? invoiceData.gst_enabled ?? null;
+      const currentMode = gstEnabled ? (includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST';
+      const previousMode = previousGstEnabled ? (previousIncludeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST';
+      
+      // #region agent log
+      console.log('🔍 includeTax or gstEnabled changed - checking if regeneration needed', {
+        gstEnabled,
+        includeTax,
+        previousIncludeTax,
+        previousGstEnabled,
+        currentMode,
+        previousMode,
+        modeChanged: currentMode !== previousMode,
+        includeTaxChanged: includeTax !== previousIncludeTax,
+        gstEnabledChanged: gstEnabled !== previousGstEnabled,
+        note: 'Regenerating to get correct backend calculations for new mode'
+      });
+      // #endregion
+      
+      // Only regenerate if the mode actually changed
+      if (currentMode !== previousMode || includeTax !== previousIncludeTax || gstEnabled !== previousGstEnabled) {
+        // #region agent log
+        console.log('🔍 Mode changed - regenerating invoice', {currentMode, previousMode});
+        // #endregion
+        // Reset invoice data to trigger regeneration
+        setInvoiceData(null);
+        setRawHtmlContent(null);
+        setHasAttemptedGeneration(false);
+        // Use setTimeout to ensure state is fully updated before regenerating
+        setTimeout(() => {
+          // #region agent log
+          console.log('🔍 Calling handleGenerateInvoice with current state', {gstEnabled, includeTax});
+          // #endregion
+          handleGenerateInvoice(true);
+        }, 50); // Small delay to ensure state is fully updated
+      } else {
+        // #region agent log
+        console.log('🔍 Mode did not change - skipping regeneration', {currentMode, previousMode});
+        // #endregion
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeTax, gstEnabled]);
+  
   // Reset hasAttemptedGeneration when booking changes
   useEffect(() => {
     setHasAttemptedGeneration(false);
@@ -1024,14 +1183,15 @@ export function BookingInvoice({
         return;
       }
       
+      // #region agent log
       console.log('🔥 INVOICE GENERATION DEBUG:');
       console.log('Booking ID:', booking.id);
-      console.log('Booking object:', booking);
       console.log('Locked Base Fare (frontend):', baseFare);
       console.log('Booking totalAmount:', booking.totalAmount);
       console.log('Booking fare:', booking.fare);
       console.log('Extra charges total:', extraChargesTotal);
-      console.log('GST Settings:', { gstEnabled, isIGST, includeTax });
+      console.log('GST Settings:', { gstEnabled, isIGST, includeTax, includeTaxType: typeof includeTax });
+      // #endregion
       
       // CRITICAL: Pass the locked base fare to prevent backend recalculation
       const extendedGstDetails = gstEnabled ? {
@@ -1047,7 +1207,16 @@ export function BookingInvoice({
         extraChargesTotal: extraChargesTotal
       };
       
+      // #region agent log
       console.log('Extended GST Details being sent:', extendedGstDetails);
+      console.log('🔍 About to call onGenerateInvoice with:', {
+        gstEnabled,
+        isIGST,
+        includeTax,
+        includeTaxType: typeof includeTax,
+        customInvoiceNumber: customInvoiceNumber.trim() || undefined
+      });
+      // #endregion
                  
       const result = await onGenerateInvoice(
         gstEnabled, 
@@ -1060,6 +1229,18 @@ export function BookingInvoice({
       console.log('📨 Invoice generation result received:', result);
       console.log('📊 Result data structure:', result?.data);
       
+      // CRITICAL: Log backend debug info for production troubleshooting
+      if (result?._debug) {
+        console.log('🔍 BACKEND DEBUG INFO (Production Troubleshooting):', result._debug);
+        console.log('🔍 Calculation Mode:', result._debug.calculationMode);
+        console.log('🔍 Backend Verification:', result._debug.verification);
+        if (result._debug.verification) {
+          const v = result._debug.verification;
+          console.log('🔍 Expected Total:', v.expectedTotal, 'Actual Total:', v.totalAmount, 'Match:', Math.abs(v.expectedTotal - v.totalAmount) < 0.01);
+          console.log('🔍 CGST+SGST Sum:', v.cgstSgstSum, 'Tax Amount:', v.taxAmount, 'Match:', v.matchesTaxAmount);
+        }
+      }
+      
       // Check if result is null (error case)
       if (!result) {
         throw new Error('Invoice generation returned null - check backend logs for details');
@@ -1069,12 +1250,21 @@ export function BookingInvoice({
         const rawHtml = result.data.invoiceHtml ?? result.data.invoice_html ?? null;
         const sanitizedHtml = sanitizeInvoiceHtml(rawHtml);
         // CRITICAL: Normalize all field names to camelCase for consistent access
+        // CRITICAL FIX: For tax-exclusive mode, don't use backend baseAmount if it's stale
+        // Backend baseAmount might be from a previous tax-inclusive calculation
+        // For tax-exclusive, preserve the correct baseFare (from booking.fare or localStorage)
+        const backendBaseAmount = result.data.baseAmount ?? result.data.base_amount;
+        const shouldUseBackendBaseAmount = !(gstEnabled && !includeTax); // Don't use for tax-exclusive
+        
         const invoicePayload = {
           ...result.data,
           invoiceHtml: sanitizedHtml ?? rawHtml,
           invoice_html: sanitizedHtml ?? rawHtml,
           // Normalize field names - use camelCase with fallback to snake_case
-          baseAmount: result.data.baseAmount ?? result.data.base_amount ?? baseFare,
+          // CRITICAL: For tax-exclusive, use baseFare (correct pre-tax base) instead of backend baseAmount
+          baseAmount: shouldUseBackendBaseAmount && backendBaseAmount 
+            ? backendBaseAmount 
+            : baseFare, // Use current baseFare for tax-exclusive mode
           taxAmount: result.data.taxAmount ?? result.data.tax_amount ?? 0,
           totalAmount: result.data.totalAmount ?? result.data.total_amount ?? 0,
           totalExtraCharges: result.data.totalExtraCharges ?? result.data.total_extra_charges ?? 0,
@@ -1082,6 +1272,19 @@ export function BookingInvoice({
           sgstAmount: result.data.sgstAmount ?? result.data.sgst_amount ?? 0,
           igstAmount: result.data.igstAmount ?? result.data.igst_amount ?? 0
         };
+        
+        // #region agent log
+        console.log('🔍 Invoice payload baseAmount decision:', {
+          gstEnabled,
+          includeTax,
+          mode: gstEnabled ? (includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST',
+          backendBaseAmount,
+          currentBaseFare: baseFare,
+          shouldUseBackendBaseAmount,
+          finalBaseAmount: invoicePayload.baseAmount,
+          note: 'For tax-exclusive, preserving correct baseFare instead of potentially stale backend baseAmount'
+        });
+        // #endregion
         console.log('📦 Invoice data being set (NORMALIZED):', {
           baseAmount: invoicePayload.baseAmount,
           taxAmount: invoicePayload.taxAmount,
@@ -1325,6 +1528,9 @@ export function BookingInvoice({
   };
 
   const handleGstToggle = (checked: boolean) => {
+    // #region agent log
+    console.log('🔍 handleGstToggle CALLED', {checked,currentGstEnabled:gstEnabled,currentIncludeTax:includeTax});
+    // #endregion
     // When GST is disabled, ensure includeTax doesn't affect calculations
     // When GST is enabled, default to includeTax = true
     onInvoiceStateChange({
@@ -1405,6 +1611,9 @@ export function BookingInvoice({
   const renderInvoiceSettings = () => {
     // Force re-render when state changes
     const forceRenderKey = `${invoiceData?.id || 'new'}-${gstEnabled}-${customInvoiceNumber}-${gstDetails.gstNumber}-${gstDetails.companyName}-${gstDetails.companyAddress}`;
+    // #region agent log
+    // Production logging: renderInvoiceSettings RENDER
+    // #endregion
     
     return (
       <div 
@@ -1430,7 +1639,22 @@ export function BookingInvoice({
             id="gst-toggle"
             key={`gst-toggle-${forceRenderKey}`}
             checked={gstEnabled}
-            onCheckedChange={handleGstToggle}
+            onCheckedChange={(checked) => {
+              // #region agent log
+              console.log('🔍 Switch onCheckedChange FIRED', {checked,currentGstEnabled:gstEnabled});
+              // #endregion
+              handleGstToggle(checked);
+            }}
+            onClick={(e) => {
+              // #region agent log
+              console.log('🔍 Switch onClick FIRED', {targetTag:(e.target as HTMLElement)?.tagName,targetId:(e.target as HTMLElement)?.id});
+              // #endregion
+            }}
+            onPointerDown={(e) => {
+              // #region agent log
+              console.log('🔍 Switch onPointerDown FIRED', {targetTag:(e.target as HTMLElement)?.tagName,targetId:(e.target as HTMLElement)?.id});
+              // #endregion
+            }}
           />
           <Label htmlFor="gst-toggle">Include GST (18%)</Label>
         </div>
@@ -1444,6 +1668,12 @@ export function BookingInvoice({
             onCheckedChange={(checked) => {
               // Only allow tax toggle changes when GST is enabled
               if (gstEnabled) {
+                console.log('🔍 Tax toggle changed - updating state', {
+                  currentIncludeTax: includeTax,
+                  newIncludeTax: checked,
+                  gstEnabled,
+                  note: 'State change will trigger invoice regeneration via useEffect'
+                });
                 onInvoiceStateChange({...invoiceState, includeTax: checked});
               }
             }}

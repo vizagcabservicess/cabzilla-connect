@@ -38,9 +38,15 @@ export function BookingDetailsModal({
       // Don't stop propagation - let events reach Switch, but prevent dialog from closing
       const handleSwitchClick = (e: MouseEvent | PointerEvent) => {
         const target = e.target as HTMLElement;
+        // #region agent log
+        console.log('🔍 handleSwitchClick ENTRY (capture phase)', {targetTag:target?.tagName,targetId:target?.id,targetRole:target?.getAttribute('role'),closestSwitch:!!target.closest('button[role="switch"]'),closestToggle:!!target.closest('[id*="toggle"]'),closestLabel:!!target.closest('label[for*="toggle"]')});
+        // #endregion
         if (target.closest('button[role="switch"]') || 
             target.closest('[id*="toggle"]') ||
             target.closest('label[for*="toggle"]')) {
+          // #region agent log
+          console.log('🔍 handleSwitchClick SETTING FLAGS (capture phase)', {targetTag:target?.tagName,targetId:target?.id});
+          // #endregion
           // CRITICAL: Set flags IMMEDIATELY in capture phase so dialog handlers see them
           isInteractingWithSwitch.current = true;
           lastInteractionTime.current = Date.now();
@@ -111,6 +117,9 @@ export function BookingDetailsModal({
   // This includes tabs, toggles, buttons, inputs, etc.
   const handleInteractOutside = (event: Event) => {
     const target = event.target as HTMLElement;
+    // #region agent log
+    // Production logging: handleInteractOutside ENTRY
+    // #endregion
     if (target) {
       // Check if the click is inside the dialog content area
       const dialogContent = target.closest('[role="dialog"]');
@@ -130,6 +139,9 @@ export function BookingDetailsModal({
       // If clicking inside the dialog (not on the backdrop), prevent closing
       if (dialogContent || isInsideDialog) {
         if (isInsideDialog) {
+          // #region agent log
+          console.log('🔍 handleInteractOutside TRACKING (NOT preventing default on switch)', {targetTag:target?.tagName,targetId:target?.id,isSwitch:!!target.closest('button[role="switch"]')});
+          // #endregion
           isInteractingWithSwitch.current = true;
           lastInteractionTime.current = Date.now();
           // CRITICAL FIX: Don't prevent default on switch clicks - let them work normally
@@ -149,20 +161,82 @@ export function BookingDetailsModal({
     return true;
   };
 
+  // Track if close button was clicked
+  const closeButtonClicked = useRef(false);
+  
+  // Add global listener to detect close button clicks
+  useEffect(() => {
+    if (isOpen) {
+      const handleCloseButtonClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        // Check if click is on close button (X icon or its parent button)
+        const isCloseButton = target.closest('button[data-radix-dialog-close]') ||
+                             (target.closest('button') && target.closest('button')?.querySelector('svg')) ||
+                             target.closest('[aria-label*="close" i]') ||
+                             target.closest('.sr-only')?.textContent?.toLowerCase().includes('close');
+        if (isCloseButton) {
+          // #region agent log
+          console.log('🔍 Close button (X) detected - setting flag', {targetTag: target?.tagName, targetId: target?.id});
+          // #endregion
+          closeButtonClicked.current = true;
+          // Reset after a short delay to allow onOpenChange to process
+          setTimeout(() => {
+            closeButtonClicked.current = false;
+          }, 100);
+        }
+      };
+      
+      document.addEventListener('click', handleCloseButtonClick, true);
+      return () => {
+        document.removeEventListener('click', handleCloseButtonClick, true);
+      };
+    }
+  }, [isOpen]);
+  
   // More aggressive prevention - block onOpenChange from closing unless explicitly requested
+  // BUT allow close button (X) to always work
   const handleDialogOpenChange = (open: boolean) => {
+    // #region agent log
+    console.log('🔍 handleDialogOpenChange CALLED', {
+      open,
+      isSubmitting,
+      isInteractingWithSwitch: isInteractingWithSwitch.current,
+      lastInteractionTime: lastInteractionTime.current,
+      timeSinceInteraction: Date.now() - lastInteractionTime.current,
+      closeButtonClicked: closeButtonClicked.current
+    });
+    // #endregion
     // If trying to close, check if we should allow it
     if (!open) {
-      // Don't close if submitting
-      if (isSubmitting) {
+      // CRITICAL: Always allow close if close button was clicked
+      if (closeButtonClicked.current) {
+        // #region agent log
+        console.log('🔍 handleDialogOpenChange ALLOWING CLOSE (close button clicked)');
+        // #endregion
+        closeButtonClicked.current = false; // Reset flag
+        onClose();
         return;
       }
-      // Don't close if we recently interacted with a switch
+      
+      // Don't close if submitting
+      if (isSubmitting) {
+        // #region agent log
+        console.log('🔍 handleDialogOpenChange BLOCKED (submitting)');
+        // #endregion
+        return;
+      }
+      // Don't close if we recently interacted with a switch (but allow close button)
       const timeSinceInteraction = Date.now() - lastInteractionTime.current;
-      if (isInteractingWithSwitch.current || timeSinceInteraction < 2000) {
+      if (isInteractingWithSwitch.current || timeSinceInteraction < 500) {
+        // #region agent log
+        console.log('🔍 handleDialogOpenChange BLOCKED (switch interaction)', {isInteractingWithSwitch:isInteractingWithSwitch.current,timeSinceInteraction});
+        // #endregion
         // Force dialog to stay open by not calling onClose
         return;
       }
+      // #region agent log
+      console.log('🔍 handleDialogOpenChange ALLOWING CLOSE');
+      // #endregion
       // Only close if explicitly requested (user clicked X or pressed ESC intentionally)
       onClose();
     } else {
@@ -177,9 +251,15 @@ export function BookingDetailsModal({
         className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50"
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement;
+          // #region agent log
+          console.log('🔍 onInteractOutside CALLED', {targetTag:target?.tagName,targetId:target?.id,isSwitch:!!(target.closest('button[role="switch"]') || target.closest('[id*="toggle"]'))});
+          // #endregion
           // Check if clicking on a switch
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
           if (isSwitch) {
+            // #region agent log
+            console.log('🔍 onInteractOutside PREVENTING (switch click)');
+            // #endregion
             // CRITICAL: Prevent dialog from closing when clicking on switch
             e.preventDefault();
             return;
@@ -194,9 +274,15 @@ export function BookingDetailsModal({
         }}
         onPointerDownOutside={(e) => {
           const target = e.target as HTMLElement;
+          // #region agent log
+          console.log('🔍 onPointerDownOutside CALLED', {targetTag:target?.tagName,targetId:target?.id,isSwitch:!!(target.closest('button[role="switch"]') || target.closest('[id*="toggle"]'))});
+          // #endregion
           // Check if clicking on a switch
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
           if (isSwitch) {
+            // #region agent log
+            console.log('🔍 onPointerDownOutside PREVENTING (switch click)');
+            // #endregion
             // CRITICAL: Prevent dialog from closing when clicking on switch
             e.preventDefault();
             return;

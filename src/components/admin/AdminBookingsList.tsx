@@ -575,17 +575,39 @@ export function AdminBookingsList() {
       // Generate invoice using the proper endpoint
       const apiUrl = getApiUrl('/api/admin/generate-invoice.php');
       
+      // #region agent log
       console.log('📤 Generating invoice for booking:', selectedBooking.id);
-      console.log('GST Settings:', { gstEnabled, isIGST, includeTax, customInvoiceNumber });
+      console.log('GST Settings:', { gstEnabled, isIGST, includeTax, customInvoiceNumber, includeTaxType: typeof includeTax, includeTaxUndefined: includeTax === undefined });
+      // #endregion
+      
+      // CRITICAL FIX: Don't default to true - if includeTax is undefined, it means GST is disabled
+      // Only default to true if gstEnabled is true AND includeTax is undefined
+      const finalIncludeTax = includeTax !== undefined 
+        ? includeTax 
+        : (gstEnabled ? true : false); // Only default to true if GST is enabled
+      
+      // #region agent log
+      console.log('🔍 includeTax parameter processing:', {
+        received: includeTax,
+        receivedType: typeof includeTax,
+        gstEnabled,
+        finalIncludeTax,
+        note: 'Final value being sent to backend'
+      });
+      // #endregion
       
       const requestBody: any = {
         bookingId: selectedBooking.id,
         gstEnabled: gstEnabled || false,
         isIGST: isIGST || false,
-        includeTax: includeTax !== undefined ? includeTax : true,
+        includeTax: finalIncludeTax,
         invoiceNumber: customInvoiceNumber || '',
         gstDetails: gstDetails || {}
       };
+      
+      // #region agent log
+      console.log('📤 Request body being sent to backend:', requestBody);
+      // #endregion
       
       // Extract lockedBaseFare from gstDetails if present
       if (gstDetails && typeof gstDetails === 'object' && 'lockedBaseFare' in gstDetails) {

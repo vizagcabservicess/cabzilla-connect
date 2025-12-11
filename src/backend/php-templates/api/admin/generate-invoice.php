@@ -361,8 +361,75 @@ try {
             $isIGST = filter_var($data['isIGST'], FILTER_VALIDATE_BOOLEAN);
         }
         
+        // #region agent log
+        $workspaceRoot = realpath(__DIR__ . '/../../../../../');
+        $logPath = $workspaceRoot . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
+        $logDir = dirname($logPath);
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        $logEntry = json_encode([
+            'id' => 'log_' . time() . '_includeTax_received',
+            'timestamp' => round(microtime(true) * 1000),
+            'location' => 'generate-invoice.php:364',
+            'message' => 'includeTax parameter received from frontend',
+            'data' => [
+                'includeTax_raw' => $data['includeTax'] ?? 'NOT_SET',
+                'includeTax_type' => isset($data['includeTax']) ? gettype($data['includeTax']) : 'NOT_SET',
+                'includeTax_isset' => isset($data['includeTax']),
+                'includeTax_before_filter' => isset($data['includeTax']) ? $data['includeTax'] : 'NOT_SET',
+                'gstEnabled' => $gstEnabled,
+                'bookingId' => $bookingId ?? 'NOT_SET'
+            ],
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => 'D'
+        ]) . "\n";
+        @file_put_contents($logPath, $logEntry, FILE_APPEND);
+        // #endregion
+        
         if (isset($data['includeTax'])) {
             $includeTax = filter_var($data['includeTax'], FILTER_VALIDATE_BOOLEAN);
+            // #region agent log
+            $logEntry = json_encode([
+                'id' => 'log_' . time() . '_includeTax_processed',
+                'timestamp' => round(microtime(true) * 1000),
+                'location' => 'generate-invoice.php:380',
+                'message' => 'includeTax parameter processed',
+                'data' => [
+                    'includeTax_raw' => $data['includeTax'],
+                    'includeTax_after_filter' => $includeTax,
+                    'includeTax_type' => gettype($includeTax),
+                    'gstEnabled' => $gstEnabled,
+                    'mode' => $gstEnabled ? ($includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST',
+                    'bookingId' => $bookingId ?? 'NOT_SET'
+                ],
+                'sessionId' => 'debug-session',
+                'runId' => 'run1',
+                'hypothesisId' => 'D'
+            ]) . "\n";
+            @file_put_contents($logPath, $logEntry, FILE_APPEND);
+            // #endregion
+        } else {
+            // #region agent log
+            $logEntry = json_encode([
+                'id' => 'log_' . time() . '_includeTax_default',
+                'timestamp' => round(microtime(true) * 1000),
+                'location' => 'generate-invoice.php:395',
+                'message' => 'includeTax NOT SET - using default',
+                'data' => [
+                    'includeTax_default' => $includeTax,
+                    'gstEnabled' => $gstEnabled,
+                    'mode' => $gstEnabled ? ($includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST',
+                    'bookingId' => $bookingId ?? 'NOT_SET',
+                    'note' => 'includeTax was not in request, using default value'
+                ],
+                'sessionId' => 'debug-session',
+                'runId' => 'run1',
+                'hypothesisId' => 'D'
+            ]) . "\n";
+            @file_put_contents($logPath, $logEntry, FILE_APPEND);
+            // #endregion
         }
         
         if (isset($data['invoiceNumber'])) {
@@ -2499,6 +2566,31 @@ try {
             'extraCharges' => $extraChargesArr,
             'totalExtraCharges' => $totalExtraCharges,
             'invoiceHtml' => $invoiceHtml
+        ],
+        // CRITICAL: Add debug info for production troubleshooting
+        '_debug' => [
+            'calculationMode' => $gstEnabled ? ($includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST',
+            'originalBookingTotal' => $originalBookingTotal,
+            'baseHint' => $baseHint ?? null,
+            'totalHint' => $totalHint ?? null,
+            'calculatedBaseFare' => $baseFare,
+            'calculatedTaxAmount' => $taxAmount,
+            'calculatedTotal' => $finalTotal,
+            'responseBaseAmount' => $responseBaseAmount,
+            'verification' => [
+                'baseAmount' => $responseBaseAmount,
+                'taxAmount' => $taxAmount,
+                'totalAmount' => $finalTotal,
+                'cgstAmount' => $cgstAmount,
+                'sgstAmount' => $sgstAmount,
+                'expectedTotal' => $gstEnabled && !$includeTax 
+                    ? ($responseBaseAmount + $totalExtraCharges + $taxAmount)  // Tax-exclusive: base + extras + tax
+                    : ($gstEnabled && $includeTax 
+                        ? ($responseBaseAmount + $totalExtraCharges)  // Tax-inclusive: base + extras (tax already included)
+                        : ($responseBaseAmount + $totalExtraCharges)),  // No GST: base + extras
+                'cgstSgstSum' => $cgstAmount + $sgstAmount,
+                'matchesTaxAmount' => abs(($cgstAmount + $sgstAmount) - $taxAmount) < 0.01
+            ]
         ]
     ];
     
