@@ -279,28 +279,28 @@ const PaymentPage = () => {
       
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
           <div className="max-w-3xl mx-auto">
             <button 
               onClick={handleGoBack} 
-              className="flex items-center text-blue-600 mb-4"
+              className="flex items-center text-blue-600 mb-4 text-sm sm:text-base"
             >
               <ArrowLeft size={16} className="mr-1" />
               <span>Back</span>
             </button>
             
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h1 className="text-2xl font-medium mb-6">Complete Your Payment</h1>
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <h1 className="text-xl sm:text-2xl font-medium mb-4 sm:mb-6">Complete Your Payment</h1>
               
               {!bookingDetails ? (
                 <div className="flex justify-center items-center py-12">
                   <span className="text-gray-500">Loading booking details...</span>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div className="border rounded-md p-4 bg-gray-50">
-                    <h2 className="font-semibold text-lg mb-2">Booking Summary</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="border rounded-md p-3 sm:p-4 bg-gray-50">
+                    <h2 className="font-semibold text-base sm:text-lg mb-3 sm:mb-2">Booking Summary</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <p className="text-sm text-gray-500">Trip Type</p>
                         <p className="font-medium">{bookingDetails.tripType} ({bookingDetails.tripMode})</p>
@@ -322,27 +322,28 @@ const PaymentPage = () => {
                         <p className="font-medium">{bookingDetails.pickupDate ? new Date(bookingDetails.pickupDate).toLocaleString() : 'N/A'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-medium text-lg">{formatPrice(bookingDetails.totalPrice || 0)}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">Amount</p>
+                        <p className="font-medium text-base sm:text-lg">{formatPrice(bookingDetails.totalPrice || 0)}</p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex flex-col items-center p-6 border rounded-md">
-                    <CreditCard size={48} className="text-blue-500 mb-3" />
-                    <h3 className="text-xl font-semibold mb-1">Payment Summary</h3>
+                  <div className="flex flex-col items-center p-4 sm:p-6 border rounded-md">
+                    <CreditCard size={40} className="sm:hidden text-blue-500 mb-2" />
+                    <CreditCard size={48} className="hidden sm:block text-blue-500 mb-3" />
+                    <h3 className="text-lg sm:text-xl font-semibold mb-1">Payment Summary</h3>
                     <div className="w-full max-w-md mx-auto mb-4">
-                      <div className="border rounded-lg p-4 bg-gray-50">
+                      <div className="border rounded-lg p-3 sm:p-4 bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium">Payment Mode:</span>
-                          <span className="font-semibold capitalize">{paymentMode === 'partial' ? 'Part Pay (30%)' : 'Full Pay'}</span>
+                          <span className="font-medium text-sm sm:text-base">Payment Mode:</span>
+                          <span className="font-semibold capitalize text-sm sm:text-base">{paymentMode === 'partial' ? 'Part Pay (30%)' : 'Full Pay'}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="font-medium">Amount to Pay:</span>
-                          <span className="font-semibold text-lg">{formatPrice(currentAmount)}</span>
+                          <span className="font-medium text-sm sm:text-base">Amount to Pay:</span>
+                          <span className="font-semibold text-base sm:text-lg">{formatPrice(currentAmount)}</span>
                         </div>
                         {paymentMode === 'partial' && (
-                          <div className="mt-2 text-sm text-gray-600">
+                          <div className="mt-2 text-xs sm:text-sm text-gray-600">
                             <p>Remaining amount: {formatPrice(fullAmount - partialAmount)} (to be paid to driver)</p>
                           </div>
                         )}
@@ -353,7 +354,7 @@ const PaymentPage = () => {
                       onClick={handlePayment} 
                       disabled={!sdkReady || isLoading || !bookingDetails}
                       size="lg"
-                      className="w-full md:w-auto px-8"
+                      className="w-full sm:w-auto px-6 sm:px-8 text-sm sm:text-base h-11 sm:h-12"
                     >
                       {isLoading ? (
                         <div className="flex items-center">
@@ -369,20 +370,22 @@ const PaymentPage = () => {
               )}
               
               {paymentStatus === 'success' && (
-                <div className="flex flex-col items-center py-8">
-                  <CheckCircle size={64} className="text-green-500 mb-4" />
-                  <h2 className="text-2xl font-medium text-green-700 mb-2">Payment Successful!</h2>
-                  <p className="text-gray-600 mb-4 text-center">Your booking has been confirmed. You will be redirected to the confirmation page.</p>
-                  <p className="text-sm text-gray-500 mb-4">Transaction ID: {paymentResponse?.razorpay_payment_id}</p>
+                <div className="flex flex-col items-center py-6 sm:py-8 px-2">
+                  <CheckCircle size={48} className="sm:hidden text-green-500 mb-3" />
+                  <CheckCircle size={64} className="hidden sm:block text-green-500 mb-4" />
+                  <h2 className="text-xl sm:text-2xl font-medium text-green-700 mb-2 text-center">Payment Successful!</h2>
+                  <p className="text-sm sm:text-base text-gray-600 mb-4 text-center px-2">Your booking has been confirmed. You will be redirected to the confirmation page.</p>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-4 text-center break-all px-2">Transaction ID: {paymentResponse?.razorpay_payment_id}</p>
                 </div>
               )}
               
               {paymentStatus === 'failed' && (
-                <div className="flex flex-col items-center py-8">
-                  <XCircle size={64} className="text-red-500 mb-4" />
-                  <h2 className="text-2xl font-medium text-red-700 mb-2">Payment Failed</h2>
-                  <p className="text-gray-600 mb-4 text-center">We couldn't process your payment. Please try again or use a different payment method.</p>
-                  <Button onClick={handleTryAgain} variant="outline" className="mt-2">
+                <div className="flex flex-col items-center py-6 sm:py-8 px-2">
+                  <XCircle size={48} className="sm:hidden text-red-500 mb-3" />
+                  <XCircle size={64} className="hidden sm:block text-red-500 mb-4" />
+                  <h2 className="text-xl sm:text-2xl font-medium text-red-700 mb-2 text-center">Payment Failed</h2>
+                  <p className="text-sm sm:text-base text-gray-600 mb-4 text-center px-2">We couldn't process your payment. Please try again or use a different payment method.</p>
+                  <Button onClick={handleTryAgain} variant="outline" className="mt-2 w-full sm:w-auto">
                     Try Again
                   </Button>
                 </div>
