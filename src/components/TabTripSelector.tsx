@@ -194,9 +194,9 @@ export function TabTripSelector({
     <div className="space-y-2 sm:space-y-4" id="tab-trip-selector">
       {/* Tab bar with top border/line - Hidden when only one tab is visible */}
       {(!visibleTabs || visibleTabs.length > 1) && (
-        <div className="mb-4 sm:mb-6">
+        <div className="mb-2 sm:mb-4">
           <div className="relative w-full flex justify-center">
-            <div className="flex w-full bg-gray-100 rounded-full p-1.5 border border-gray-200 shadow-sm">
+            <div className="flex w-full bg-gray-50 sm:bg-gray-100 rounded-lg sm:rounded-full p-0.5 sm:p-1 border border-gray-200" style={{boxShadow: 'none'}}>
               {tabs.map((tab, idx) => {
                 const isActive = selectedTab === tab.id;
                 return (
@@ -207,11 +207,11 @@ export function TabTripSelector({
                         tabRefs.current[idx] = element;
                       }
                     }}
-                    className={`flex-1 min-w-0 py-3 sm:py-3.5 px-4 sm:px-6 flex items-center justify-center rounded-full font-semibold transition-all duration-300 text-sm sm:text-base text-center focus:outline-none ${isActive ? "bg-white text-red-600 shadow-md z-10 font-bold" : "bg-transparent text-gray-600 hover:text-gray-900 font-medium"}`}
+                    className={`flex-1 min-w-0 py-2.5 sm:py-2 px-2 sm:px-4 flex items-center justify-center rounded-md sm:rounded-full font-bold sm:font-medium transition-colors duration-200 text-sm sm:text-sm text-center focus:outline-none ${isActive ? "bg-white border border-blue-600 shadow-sm z-10 text-blue-700 font-bold" : "bg-transparent text-gray-600 font-semibold sm:font-medium"}`}
                     onClick={() => handleTabChange(tab.id)}
                     style={{ zIndex: isActive ? 2 : 1 }}
                   >
-                    <span className="leading-tight">{tab.label}</span>
+                    <span className="leading-tight font-bold sm:font-medium">{tab.label}</span>
                   </button>
                 );
               })}
@@ -222,24 +222,28 @@ export function TabTripSelector({
       {/* Trip mode radio group (Outstation and Tour) */}
       {(selectedTab === 'outstation' || selectedTab === 'tour') && (
         <motion.div 
-          className="flex gap-2 sm:gap-3 mt-3 sm:mt-4 justify-center"
+          className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="flex bg-gray-50/80 backdrop-blur-sm rounded-full p-1.5 border border-gray-200/30 shadow-sm" style={{boxShadow: '0 2px 8px rgba(0,0,0,0.04)'}}>
-            {[{label: 'One Way', value: 'one-way'}, {label: 'Round Trip', value: 'round-trip'}].map(option => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => onTripModeChange(option.value as 'one-way' | 'round-trip')}
-                className={`flex items-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full transition-all duration-300 focus:outline-none text-sm sm:text-base font-semibold
-                  ${tripMode === option.value ? 'bg-white text-blue-700 shadow-lg font-bold' : 'bg-transparent text-gray-600 hover:text-gray-900 font-medium'}`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {[{label: 'One Way', value: 'one-way'}, {label: 'Round Trip', value: 'round-trip'}].map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onTripModeChange(option.value as 'one-way' | 'round-trip')}
+              className={`flex items-center gap-2 px-4 sm:px-3 py-2 sm:py-1 rounded-lg sm:rounded-full border transition-colors duration-200 focus:outline-none text-sm sm:text-xs font-bold sm:font-medium
+                ${tripMode === option.value ? 'bg-white border-blue-600 text-blue-700 shadow-sm font-bold' : 'bg-gray-50 border-gray-300 text-gray-700 font-semibold sm:font-medium'}`}
+            >
+              <span className="relative flex h-4 w-4">
+                <span className={`inline-block w-4 h-4 rounded-full border-2 ${tripMode === option.value ? 'border-blue-600 bg-white' : 'border-gray-400 bg-gray-100'}`}></span>
+                {tripMode === option.value && (
+                  <span className="absolute left-1/2 top-1/2 w-2 h-2 bg-blue-600 rounded-full -translate-x-1/2 -translate-y-1/2"></span>
+                )}
+              </span>
+              {option.label}
+            </button>
+          ))}
         </motion.div>
       )}
     </div>
