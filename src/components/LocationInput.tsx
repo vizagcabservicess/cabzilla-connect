@@ -6,6 +6,7 @@ import { X, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import type { Location } from '@/lib/locationData';
 import type { TripType } from '@/lib/tripTypes';
+import { cn } from '@/lib/utils';
 
 // Vizag coordinates
 const VIZAG_LAT = 17.6868;
@@ -298,11 +299,11 @@ export function LocationInput({
      const isTourTrip = tripType === 'tour';
      
      if (isPickupLocation && isTourTrip) {
-       return "Please select a location within 15km of Visakhapatnam";
+       return "Please select a location within 15km of Vizag";
      } else if (isPickupLocation) {
-       return "Please select a location within 35km of Visakhapatnam";
+       return "Please select a location within 35km of Vizag";
      } else if (isAirportTransfer) {
-       return "Please select a location within 35km of Visakhapatnam";
+       return "Please select a location within 35km of Vizag";
      }
      // For outstation drop locations, no subtitle needed
      return "";
@@ -325,7 +326,7 @@ export function LocationInput({
       {label && (isFocused || inputValue) && (
         <label
           htmlFor={id}
-          className={`absolute left-10 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200`}
+          className={`absolute left-3 -top-2 text-[10px] bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200`}
           style={{
             background: 'white',
             paddingLeft: '0.25rem',
@@ -334,10 +335,10 @@ export function LocationInput({
           }}
         >
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}
-      <div className="ios-search-input-wrapper relative">
+      <div className="ios-search-input-wrapper relative w-full h-full flex items-center">
         <Input
           id={id}
           ref={inputRef}
@@ -346,15 +347,31 @@ export function LocationInput({
           placeholder={!isFocused && !inputValue ? label : ''}
           disabled={disabled}
           readOnly={readOnly}
-          style={{ fontSize: isDesktop ? '1.2rem' : '1rem', height: '3.5rem' }}
-          className="border-gray-300 focus:ring-blue-500 focus:border-blue-500 pr-10 ios-search-input"
+          style={{ 
+            fontSize: isDesktop ? '1rem' : '0.875rem', 
+            height: '100%',
+            border: 'none',
+            boxShadow: 'none',
+            outline: 'none',
+            padding: '0',
+            lineHeight: '48px',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap'
+          }}
+          className={cn(
+            '!border-0 !shadow-none rounded-none !p-0',
+            'focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none',
+            'pr-10 ios-search-input bg-transparent h-full truncate',
+            className
+          )}
           onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
           onBlur={e => { handleInputBlur(); setIsFocused(false); }}
         />
         {inputValue && !readOnly && (
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-2"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-800 focus:outline-none p-1 z-30 bg-white rounded-full hover:bg-gray-100 transition-colors shadow-sm"
             onClick={() => {
               setInputValue("");
               if (onChange) onChange("");
@@ -371,7 +388,7 @@ export function LocationInput({
         )}
       </div>
       {subtitleText && (
-        <p className="text-xs text-gray-500 mt-1 text-left">{subtitleText}</p>
+        <p className="text-[10px] text-gray-400 mt-0.5 text-left leading-tight">{subtitleText}</p>
       )}
       
       {showSuggestions && filteredSuggestions.length > 0 && (

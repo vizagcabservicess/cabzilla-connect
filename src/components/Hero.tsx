@@ -14,7 +14,7 @@ import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
-import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car, ArrowUpDown, ArrowUp, Calendar, Plane, Train, Building } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -33,6 +33,11 @@ import { calculateDistanceMatrix } from '@/lib/distanceService';
 
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { formatDateForAPI } from '@/lib/dateUtils';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -238,6 +243,35 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     const now = new Date();
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     return oneHourFromNow;
+  };
+
+  // Handler for Today button - set to current time + 1 hour
+  const handleTodayClick = () => {
+    const oneHourFromNow = getMinimumAllowedDate();
+    setPickupDate(oneHourFromNow);
+  };
+
+  // Handler for Tomorrow button - set to tomorrow at 9 AM
+  const handleTomorrowClick = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    setPickupDate(tomorrow);
+  };
+
+  // Check if current date is today
+  const isToday = () => {
+    const now = new Date();
+    const pickup = new Date(pickupDate);
+    return pickup.toDateString() === now.toDateString();
+  };
+
+  // Check if current date is tomorrow
+  const isTomorrow = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const pickup = new Date(pickupDate);
+    return pickup.toDateString() === tomorrow.toDateString();
   };
 
   // Edit handlers for booking summary
@@ -1348,6 +1382,43 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     setIsTabSwitching(false);
   };
 
+  // Swap pickup and drop locations
+  const handleSwapLocations = () => {
+    const tempLocation = pickupLocation;
+    const newPickup = dropLocation;
+    const newDrop = tempLocation;
+    
+    setPickupLocation(newPickup);
+    setDropLocation(newDrop);
+    
+    // Update session storage
+    if (newPickup) {
+      sessionStorage.setItem('pickupLocation', JSON.stringify(newPickup));
+    } else {
+      sessionStorage.removeItem('pickupLocation');
+    }
+    if (newDrop) {
+      sessionStorage.setItem('dropLocation', JSON.stringify(newDrop));
+    } else {
+      sessionStorage.removeItem('dropLocation');
+    }
+  };
+
+  // Handle date shortcuts
+  const handleDateShortcut = (type: 'today' | 'tomorrow') => {
+    const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    
+    if (type === 'today') {
+      setPickupDate(oneHourFromNow);
+    } else {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(9, 0, 0, 0);
+      setPickupDate(tomorrow);
+    }
+  };
+
   // Add a wrapper to setSelectedCab that also scrolls to summary
   const setSelectedCab = (cab: CabType) => {
     setSelectedCabState(cab);
@@ -1591,216 +1662,268 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       </section>
       )}
 
-      {/* Booking Widget Section - Mobile: positioned after banner, Desktop: centered in banner */}
+      {/* Booking Widget Section - Mobile: positioned after banner, Desktop: centered on banner */}
       <section id="booking-widget" className={`
         ${!isSearchActive && currentStep === 1 
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
         } w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
-          <div className="w-full sm:max-w-6xl sm:mx-auto">
-            <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-8`}>
+          <div className="w-full sm:max-w-6xl lg:max-w-7xl sm:mx-auto">
+            {/* Full width booking widget */}
+            <div className="w-full">
+              {/* Booking Widget */}
+              <div className={`bg-transparent rounded-none sm:rounded-none shadow-none border-0 p-0 sm:p-0`}>
               
               
               {!showGuestDetailsForm ? (
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
-                    <div className="space-y-6 sm:space-y-8">
-                      {/* Trip Type Selector */}
-                      <div className="w-full mb-6">
-                        <TabTripSelector
-                          selectedTab={ensureCustomerTripType(tripType)}
-                          tripMode={tripMode}
-                          onTabChange={handleTabChange}
-                          onTripModeChange={setTripMode}
-                          visibleTabs={visibleTabs}
-                        />
-                      </div>
+                    <div className="space-y-4">
+                    
 
-                      {/* Main Booking Container - Bus booking style */}
-                      <div key={`booking-form-mobile-${editTrigger}`} className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
+                      {/* Main Booking Container - Abhibus style */}
+                      <div key={`booking-form-mobile-${editTrigger}`} className="bg-white border border-gray-200 rounded-xl shadow-xl p-4 lg:p-6 mb-4">
+                        {/* Tabs and Tagline Row - Abhibus Style */}
+                        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4 pb-3 border-b border-gray-200">
+                          {/* Trip Type Selector - Abhibus style tabs with icons */}
+                          <div className="flex-1 w-full lg:w-auto">
+                            <div className="flex items-end gap-1 border-b-2 border-gray-200">
+                              {(['outstation', 'local', 'airport', 'tour'] as const)
+                                .filter(tab => !visibleTabs || visibleTabs.includes(tab))
+                                .map((tab) => {
+                                  const isActive = ensureCustomerTripType(tripType) === tab;
+                                  const tabIcons = {
+                                    'outstation': Car,
+                                    'local': Car,
+                                    'airport': Plane,
+                                    'tour': Building
+                                  };
+                                  const Icon = tabIcons[tab];
+                                  return (
+                                    <button
+                                      key={tab}
+                                      onClick={() => handleTabChange(tab)}
+                                      className={`relative px-4 py-3 flex items-center gap-2 font-semibold text-sm transition-all duration-200 ${
+                                        isActive 
+                                          ? 'text-blue-600' 
+                                          : 'text-gray-500 hover:text-gray-700'
+                                      }`}
+                                    >
+                                      <Icon className={`h-4 w-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                                      <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                                      {isActive && (
+                                        <div className="absolute bottom-[-2px] left-0 right-0 h-0.5 bg-blue-600 z-10"></div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                          
+                          {/* Tagline - Right side of tabs */}
+                          <div className="hidden lg:block flex-shrink-0">
+                            <p className="text-sm text-gray-700 font-semibold whitespace-nowrap">
+                              Vizag's Fastest Cab Booking Platform
+                            </p>
+                          </div>
+                        </div>
+
                         {/* Airport Direction Label */}
                         {tripType === 'airport' && airportDirectionLabel && (
-                          <div className="px-4 pt-4 pb-2">
-                            <div className="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                          <div className="mb-3">
+                            <div className="text-xs font-medium text-blue-700 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
                               {airportDirectionLabel}
                             </div>
                           </div>
                         )}
                         
-
-                        <div className="flex flex-col lg:flex-row items-stretch gap-0">
-                          {/* From Location */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-4">
-                              {/* Removed icon and 'Enter' text */}
-                              <div className="flex-1 min-w-0">
-                                                                 <LocationInput
-                                   key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                                   label="Pickup location"
-                                   placeholder="Enter Pickup location"
-                                   value={pickupLocation ? { ...pickupLocation } : undefined}
-                                   onLocationChange={handlePickupLocationChange}
-                                   isPickupLocation={true}
-                                   tripType={tripType}
-                                   className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                                 />
+                        {/* Input Fields Row - Abhibus Style - 6 Fields in Single Row */}
+                        <div className="flex flex-col lg:flex-row lg:flex-nowrap items-stretch gap-2 lg:gap-2.5">
+                          {/* From Location - Field 1 */}
+                          <div className="flex-[1.2] min-w-[140px] relative w-full lg:w-auto group">
+                            <div className="relative">
+                              <label className="absolute left-3 -top-2.5 text-xs font-medium text-gray-600 bg-white px-1.5 z-20 group-focus-within:text-blue-600 transition-colors">Pickup location</label>
+                              <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                                <MapPin className="h-5 w-5 text-gray-500" />
                               </div>
-                            </div>
-                          </div>
-
-                          {/* Vertical Divider */}
-                          {(tripType === 'outstation' || tripType === 'airport') && (
-                            <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-                          )}
-
-                          {/* To Location */}
-                          {(tripType === 'outstation' || tripType === 'airport') && (
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 p-4">
-                                {/* Removed icon and 'Enter' text */}
-                                <div className="flex-1 min-w-0">
-                                                                     <LocationInput
-                                     key={`drop-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                                     label="Drop location"
-                                     placeholder="Enter Drop location"
-                                     value={dropLocation ? { ...dropLocation } : undefined}
-                                     onLocationChange={handleDropLocationChange}
-                                     isPickupLocation={false}
-                                     tripType={tripType}
-                                     className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                                   />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Package Selection for Local */}
-                          {tripType === 'local' && (
-                            <>
-                              <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center relative w-full h-full p-4">
-                                  {(isPackageFocused || hourlyPackage) && (
-                                    <label
-                                      className="absolute left-4 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
-                                      style={{
-                                        background: 'white',
-                                        paddingLeft: '0.5rem',
-                                        paddingRight: '0.25rem',
-                                        zIndex: 10,
-                                        top: '0.6rem', // Fine-tuned for alignment
-                                        marginLeft: '0.75rem',
-                                      }}
-                                    >
-                                      Package
-                                    </label>
-                                  )}
-                                  <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                    <SelectTrigger
-                                      className="h-[3.5rem] pl-4 text-[1rem] lg:text-[1.2rem] flex items-center border border-gray-300 bg-white font-semibold"
-                                      style={{
-                                        alignItems: 'center',
-                                        paddingTop: 0,
-                                        paddingBottom: 0,
-                                        lineHeight: '1.2',
-                                        marginTop: isDesktop ? '-18.5px' : '0px',
-                                      }}
-                                      onFocus={() => setIsPackageFocused(true)}
-                                      onBlur={() => setIsPackageFocused(false)}
-                                    >
-                                      <SelectValue placeholder="Package" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {hourlyPackageOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </>
-                          )}
-
-                          {/* Vertical Divider */}
-                          <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-
-                          {/* Date Picker */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-4">
-                             
-                              <div className="flex-1 min-w-0">
-                                <DateTimePicker
-                                  date={pickupDate}
-                                  onDateChange={setPickupDate}
-                                  minDate={getMinimumAllowedDate()}
-                                  className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
+                              <div className="pl-11 pr-3 h-12 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 group-focus-within:border-blue-500 transition-colors flex items-center overflow-hidden">
+                                <LocationInput
+                                  key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                                  placeholder="Pickup location"
+                                  value={pickupLocation ? { ...pickupLocation } : undefined}
+                                  onLocationChange={handlePickupLocationChange}
+                                  isPickupLocation={true}
+                                  tripType={tripType}
+                                  className="border-0 bg-transparent !p-0 text-sm font-normal text-gray-700 placeholder:text-gray-500 focus:ring-0 w-full h-full shadow-none"
                                 />
                               </div>
                             </div>
                           </div>
 
-                          {/* Return Date for Round Trip */}
-                          {tripType === 'outstation' && tripMode === 'round-trip' && (
-                            <>
-                              <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 p-4">
-                                  
-                                  <div className="flex-1 min-w-0">
-                                    <DateTimePicker
-                                      date={returnDate}
-                                      onDateChange={handleReturnDateChange}
-                                      minDate={pickupDate}
-                                      disabled={!isReturnTimeEnabled || isCheckingTravelTime}
-                                      className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
-                                    />
-                                  </div>
+                          {/* To Location - Field 3 */}
+                          {(tripType === 'outstation' || tripType === 'airport') && (
+                            <div className="flex-[1.2] min-w-[140px] relative w-full lg:w-auto group">
+                              <div className="relative">
+                                <label className="absolute left-3 -top-2.5 text-xs font-medium text-gray-600 bg-white px-1.5 z-20 group-focus-within:text-blue-600 transition-colors">Drop location</label>
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                                  <MapPin className="h-5 w-5 text-gray-500" />
+                                </div>
+                                <div className="pl-11 pr-3 h-12 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 group-focus-within:border-blue-500 transition-colors flex items-center overflow-hidden">
+                                  <LocationInput
+                                    key={`drop-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                    placeholder="Drop location"
+                                    value={dropLocation ? { ...dropLocation } : undefined}
+                                    onLocationChange={handleDropLocationChange}
+                                    isPickupLocation={false}
+                                    tripType={tripType}
+                                    className="border-0 bg-transparent !p-0 text-sm font-normal text-gray-700 placeholder:text-gray-500 focus:ring-0 w-full h-full shadow-none"
+                                  />
                                 </div>
                               </div>
-                            </>
+                            </div>
                           )}
+
+                          {/* Package Selection for Local - Field 3 */}
+                          {tripType === 'local' && (
+                            <div className="flex-[1.2] min-w-[140px] relative w-full lg:w-auto">
+                              <div className="pl-3 pr-3 h-12 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors flex items-center">
+                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                                  <SelectTrigger className="h-full border-0 bg-transparent p-0 text-sm font-normal focus:ring-0 w-full shadow-none">
+                                    <SelectValue placeholder="Package" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {hourlyPackageOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* One Way / Round Trip buttons - Separate field before Date */}
+                          {(tripType === 'outstation' || tripType === 'tour') && (
+                            <div className="hidden lg:flex gap-1 flex-shrink-0 self-center">
+                              <button
+                                onClick={() => setTripMode('one-way')}
+                                className={`px-3 py-1.5 h-12 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                                  tripMode === 'one-way'
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                One Way
+                              </button>
+                              <button
+                                onClick={() => setTripMode('round-trip')}
+                                className={`px-3 py-1.5 h-12 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                                  tripMode === 'round-trip'
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                Round Trip
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Date Picker - Field 4 */}
+                          <div className="flex-[1.1] min-w-[160px] relative w-full lg:w-auto">
+                            <div className="pl-3 pr-3 h-12 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors flex items-center">
+                              <DateTimePicker
+                                date={pickupDate}
+                                onDateChange={setPickupDate}
+                                minDate={getMinimumAllowedDate()}
+                                label="Departure"
+                                className="border-0 bg-transparent p-0 text-sm font-normal text-gray-700 focus:ring-0 w-full h-full shadow-none"
+                              />
+                            </div>
+                            {/* One Way / Round Trip buttons - Mobile only, below field */}
+                            {(tripType === 'outstation' || tripType === 'tour') && (
+                              <div className="lg:hidden flex gap-1 mt-2 justify-center">
+                                <button
+                                  onClick={() => setTripMode('one-way')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                                    tripMode === 'one-way'
+                                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  One Way
+                                </button>
+                                <button
+                                  onClick={() => setTripMode('round-trip')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                                    tripMode === 'round-trip'
+                                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  Round Trip
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Return Date for Round Trip - Field 5 */}
+                          {tripType === 'outstation' && tripMode === 'round-trip' && (
+                            <div className="flex-[1.1] min-w-[160px] relative w-full lg:w-auto">
+                              <div className="pl-3 pr-3 h-12 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors flex items-center">
+                                <DateTimePicker
+                                  date={returnDate}
+                                  onDateChange={handleReturnDateChange}
+                                  minDate={pickupDate}
+                                  disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                                  label="Return"
+                                  className="border-0 bg-transparent p-0 text-sm font-normal text-gray-700 focus:ring-0 w-full h-full shadow-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Search Button - Field 6 */}
+                          <div className="flex-shrink-0 w-full lg:w-auto lg:min-w-[120px]">
+                            <Button
+                              onClick={handleContinue}
+                              disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
+                              className="w-full lg:w-auto h-12 px-6 lg:px-8 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                            >
+                              {isLoading ? (
+                                <div className="flex items-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  <span>Searching...</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center">
+                                  <span>Search</span>
+                                  <ChevronRight className="w-4 h-4 ml-1" />
+                                </div>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                         
                         {/* Error Message */}
                         {validationError && (
-                          <div className="text-red-600 text-sm mt-3 px-4 py-2 bg-red-50 rounded-lg">{validationError}</div>
+                          <div className="text-red-600 text-xs mt-3 px-4 py-2 bg-red-50 rounded-lg border border-red-200 font-medium">{validationError}</div>
                         )}
                       </div>
 
-                     {/* Loading State */}
-                     {isCalculatingDistance && (
-                       <div className="flex items-center justify-center py-4">
-                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                         <p className="text-gray-600 font-medium">Calculating route distance...</p>
-                       </div>
-                     )}
-
-                      {/* Search Button - Bus booking style */}
-                      <div className="flex justify-center mt-6">
-                        <Button
-                          onClick={handleContinue}
-                          disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 text-base font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300 mb-6"
-                          style={{ minHeight: '40px' }}
-                        >
-                          {isLoading ? (
-                            <div className="flex items-center">
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                              <span>Searching...</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center">
-                              <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                              </svg>
-                              Search Cabs
-                            </div>
-                          )}
-                        </Button>
+                      {/* Tagline - Mobile only, below booking widget */}
+                      <div className="lg:hidden text-center mt-4">
+                        <p className="text-sm text-gray-600 font-medium">India's Fastest Cab Booking Platform</p>
                       </div>
+
+                      {/* Loading State */}
+                      {isCalculatingDistance && (
+                        <div className="flex items-center justify-center py-3">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
+                          <p className="text-gray-600 text-sm font-medium">Calculating route distance...</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2131,6 +2254,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>

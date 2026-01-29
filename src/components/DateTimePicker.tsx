@@ -133,7 +133,7 @@ export function DateTimePicker({
       {/* Floating label implementation: only show when focused or has value */}
       {label && (isFocused || date) && (
         <label
-          className="absolute left-4 -top-2.5 text-xs bg-white px-1 text-gray-900 z-10 pointer-events-none transition-all duration-200 font-semibold"
+          className="absolute left-3 -top-2 text-[10px] bg-white px-1 text-gray-900 z-10 pointer-events-none transition-all duration-200 font-medium"
           style={{
             background: 'white',
             paddingLeft: '0.25rem',
@@ -150,21 +150,25 @@ export function DateTimePicker({
             ref={buttonRef}
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal bg-white",
-              "border-gray-200 hover:bg-gray-50",
+              "w-full justify-start text-left font-normal bg-transparent",
+              "!border-0 !shadow-none",
+              "hover:bg-transparent",
               !date && "text-gray-400",
               disabled && "opacity-60 cursor-not-allowed pointer-events-none",
-              "h-[3.5rem]",
-              "text-[1rem]",
-              "relative"
+              "h-full",
+              "text-sm",
+              "relative",
+              "flex items-center",
+              className
             )}
+            style={{ border: 'none', boxShadow: 'none', lineHeight: '1.5' }}
             disabled={disabled}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           >
-            <div className="flex items-center gap-2 w-full">
-              <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="truncate w-full" style={{ fontSize: '1rem' }}>
+            <div className="flex items-center gap-2 w-full h-full min-h-[48px]">
+              <CalendarIcon className="h-5 w-5 text-gray-500 flex-shrink-0" />
+              <span className="truncate text-sm text-gray-700 leading-none">
                 {date ? format(date, "PPP, hh:mm a") : (isFocused ? '' : label)}
               </span>
             </div>
