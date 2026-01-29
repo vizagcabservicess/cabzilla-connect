@@ -300,7 +300,7 @@ export function Navbar() {
     return (
       <div
         ref={megaMenuRef}
-        className="fixed bg-white/98 backdrop-blur-md text-gray-900 shadow-xl rounded-2xl p-0 flex z-50 border border-gray-200/50"
+        className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-50 border border-gray-200"
         tabIndex={-1}
         style={{ 
           minHeight: isOutstation ? 400 : (isCompany || isSupport) ? 200 : 260,
@@ -320,7 +320,7 @@ export function Navbar() {
                 <Link
                   key={item.label}
                   to={item.to}
-                  className="flex items-center w-full text-left px-3 py-3 rounded-xl font-semibold transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 text-gray-700"
+                  className="flex items-center w-full text-left px-3 py-3 rounded-lg font-medium transition-colors hover:bg-blue-50 hover:text-blue-700 text-gray-700"
                   onClick={() => setMegaMenuOpen(null)}
                 >
                   {item.label}
@@ -336,7 +336,7 @@ export function Navbar() {
                 <Link
                   key={item.label}
                   to={item.to}
-                  className={`flex items-center w-full text-left px-3 py-3 rounded-xl mb-1 font-semibold transition-all duration-200 ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700 shadow-sm' : 'hover:bg-gray-100'}`}
+                  className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
                   onMouseEnter={() => setActiveLeftIndex(idx)}
                   onClick={() => setMegaMenuOpen(null)}
                 >
@@ -382,7 +382,7 @@ export function Navbar() {
                         <Link
                           key={tour.tourId}
                           to={getTourUrl(tour)}
-                          className="block py-3 px-4 rounded-xl hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-semibold text-gray-700 hover:border-blue-300 text-left"
+                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
                           onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
@@ -417,7 +417,7 @@ export function Navbar() {
                         <Link
                           key={tour.tourId}
                           to={getTourUrl(tour)}
-                          className="block py-3 px-4 rounded-xl hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-semibold text-gray-700 hover:border-blue-300 text-left"
+                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
                           onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
@@ -433,7 +433,7 @@ export function Navbar() {
                       <Link 
                         key={i} 
                         to="#" 
-                        className="block py-1 px-2 rounded-lg hover:bg-blue-50 transition-all duration-200 font-medium"
+                        className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors"
                         onClick={() => setMegaMenuOpen(null)}
                       >
                         {sub}
@@ -450,7 +450,7 @@ export function Navbar() {
   }
 
   return (
-    <nav className="bg-white/95 backdrop-blur-sm shadow-lg fixed top-0 left-0 right-0 z-[9999] w-full border-b border-gray-200/50">
+    <nav className="bg-white shadow-lg fixed top-0 left-0 right-0 z-[9999] w-full">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
@@ -465,7 +465,7 @@ export function Navbar() {
               <div key={cat} className="relative">
                 <button
                   ref={buttonRefs[cat]}
-                  className={`flex items-center transition-all duration-200 font-semibold focus:outline-none ${megaMenuOpen === cat ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
+                  className={`flex items-center transition-colors font-medium focus:outline-none ${megaMenuOpen === cat ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
                   onClick={() => {
                     setMegaMenuOpen(megaMenuOpen === cat ? null : cat);
                     setActiveCategory(cat);
@@ -474,9 +474,9 @@ export function Navbar() {
                 >
                   {cat}
                   {megaMenuOpen === cat ? (
-                    <ChevronUp className="ml-1 h-4 w-4 transition-transform duration-200" />
+                    <ChevronUp className="ml-1 h-4 w-4" />
                   ) : (
-                    <ChevronDown className="ml-1 h-4 w-4 transition-transform duration-200" />
+                    <ChevronDown className="ml-1 h-4 w-4" />
                   )}
                 </button>
                                  {megaMenuOpen === cat && createPortal(renderMegaMenu(cat), document.body)}
@@ -486,7 +486,7 @@ export function Navbar() {
             {/* Standalone: Hire Driver */}
             <Link
               to="/hire-driver"
-              className={`transition-all duration-200 font-semibold ${megaMenuOpen === 'Hire Driver' ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
+              className={`transition-colors font-medium ${megaMenuOpen === 'Hire Driver' ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
             >
               Hire Driver
             </Link>
@@ -495,9 +495,9 @@ export function Navbar() {
             <div className="flex items-center space-x-4 text-sm">
               <a 
                 href="tel:+919966363662" 
-                className="flex items-center bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 hover:text-blue-800 transition-all duration-200 font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md border border-blue-200/50"
+                className="flex items-center bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all duration-200 font-medium px-3 py-2 rounded-lg border border-blue-200 hover:border-blue-300"
               >
-                <Phone className="h-4 w-4 mr-1.5" />
+                <Phone className="h-4 w-4 mr-1" />
                 9966363662
               </a>
             </div>
@@ -530,10 +530,10 @@ export function Navbar() {
               </>
             ) : (
               <div className="flex items-center space-x-4">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-all duration-200 font-semibold">
+                <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">
                   Login
                 </Link>
-                <Link to="/signup" className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2.5 px-6 rounded-full hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-semibold shadow-md hover:shadow-lg">
+                <Link to="/signup" className="bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors font-medium">
                   Sign Up
                 </Link>
               </div>
