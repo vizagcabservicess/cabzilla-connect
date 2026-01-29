@@ -16,6 +16,8 @@ export interface DateTimePickerProps {
   className?: string;
   label?: string;
   disabled?: boolean;
+  /** Desktop-only: label above (light grey), bordered trigger */
+  variant?: 'mobile' | 'desktop';
 }
 
 export function DateTimePicker({ 
@@ -24,8 +26,10 @@ export function DateTimePicker({
   minDate, 
   className,
   label = 'Date of journey',
-  disabled = false
+  disabled = false,
+  variant = 'mobile',
 }: DateTimePickerProps) {
+  const isDesktopVariant = variant === 'desktop';
   const isMobile = useIsMobile();
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -130,16 +134,17 @@ export function DateTimePicker({
 
   return (
     <div className="relative w-full">
-      {/* Floating label implementation: only show when focused or has value */}
-      {label && (isFocused || date) && (
+      {/* Desktop variant: static label above (darker for readability) */}
+      {isDesktopVariant && label && (
+        <label className="block text-xs text-gray-600 font-medium mb-1 pointer-events-none">
+          {label}
+        </label>
+      )}
+      {/* Mobile: floating label when focused/has value */}
+      {!isDesktopVariant && label && (isFocused || date) && (
         <label
           className="absolute left-4 -top-2.5 text-xs bg-white px-1 text-gray-900 z-10 pointer-events-none transition-all duration-200 font-semibold"
-          style={{
-            background: 'white',
-            paddingLeft: '0.25rem',
-            paddingRight: '0.25rem',
-            zIndex: 10,
-          }}
+          style={{ background: 'white', paddingLeft: '0.25rem', paddingRight: '0.25rem', zIndex: 10 }}
         >
           {label}
         </label>
@@ -150,22 +155,28 @@ export function DateTimePicker({
             ref={buttonRef}
             variant={"outline"}
             className={cn(
-              "w-full justify-start text-left font-normal bg-white",
-              "border-gray-200 hover:bg-gray-50",
-              !date && "text-gray-400",
-              disabled && "opacity-60 cursor-not-allowed pointer-events-none",
-              "h-[3.5rem]",
-              "text-[1rem]",
-              "relative"
+              "w-full justify-start text-left",
+              "relative",
+              isDesktopVariant
+                ? "h-[2.75rem] text-sm border border-gray-200 rounded-md bg-white hover:bg-gray-50 pl-3 min-w-[11rem]"
+                : "h-[3.5rem] text-[1rem] font-normal bg-white border-gray-200 hover:bg-gray-50"
             )}
             disabled={disabled}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           >
-            <div className="flex items-center gap-2 w-full">
-              <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="truncate w-full" style={{ fontSize: '1rem' }}>
-                {date ? format(date, "PPP, hh:mm a") : (isFocused ? '' : label)}
+            <div className="flex items-center gap-2 w-full min-w-0">
+              <CalendarIcon className="flex-shrink-0 h-4 w-4 text-gray-500" />
+              <span
+                className={cn(
+                  "text-gray-800 font-medium",
+                  isDesktopVariant ? "text-[0.9375rem]" : "truncate w-full"
+                )}
+                style={{ fontSize: isDesktopVariant ? '0.9375rem' : '1rem' }}
+              >
+                {date
+                  ? (isDesktopVariant ? format(date, "MMM d, h:mm a") : format(date, "PPP, hh:mm a"))
+                  : (isFocused ? '' : (isDesktopVariant ? (label === 'Return' ? 'Return' : 'Select') : label))}
               </span>
             </div>
           </Button>
