@@ -1699,7 +1699,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                   )}
                                   <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
                                     <SelectTrigger
-                                      className="h-[3.5rem] pl-4 text-[1rem] lg:text-[1.2rem] flex items-center border border-gray-300 bg-white font-semibold"
+                                      className="h-[3.5rem] pl-4 text-[1rem] lg:text-[1.2rem] flex items-center border border-gray-300 bg-white font-bold"
                                       style={{
                                         alignItems: 'center',
                                         paddingTop: 0,
@@ -1873,7 +1873,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             <div className="flex-1 min-w-0 flex flex-col gap-1">
                               <label className="text-xs text-gray-600 font-medium">Package</label>
                               <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                <SelectTrigger className="h-[2.75rem] border border-gray-200 rounded-md bg-white text-sm">
+                                <SelectTrigger className="h-[2.75rem] border border-gray-200 rounded-md bg-white text-sm font-bold">
                                   <SelectValue placeholder="Package" />
                                 </SelectTrigger>
                                 <SelectContent>

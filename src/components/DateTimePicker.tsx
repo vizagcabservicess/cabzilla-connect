@@ -169,7 +169,7 @@ export function DateTimePicker({
               <CalendarIcon className="flex-shrink-0 h-4 w-4 text-gray-500" />
               <span
                 className={cn(
-                  "text-gray-800 font-medium",
+                  "text-gray-800 font-bold",
                   isDesktopVariant ? "text-[0.9375rem]" : "truncate w-full"
                 )}
                 style={{ fontSize: isDesktopVariant ? '0.9375rem' : '1rem' }}

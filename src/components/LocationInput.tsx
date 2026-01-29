@@ -364,8 +364,8 @@ export function LocationInput({
           className={cn(
             "pr-10 ios-search-input",
             isDesktopVariant
-              ? "border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent text-gray-800 font-medium placeholder:text-gray-400"
-              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+              ? "border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent text-gray-800 font-bold placeholder:text-gray-400"
+              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500 font-bold"
           )}
           onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
           onBlur={() => { handleInputBlur(); setIsFocused(false); }}
