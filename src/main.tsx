@@ -1,22 +1,14 @@
-
-import React, { StrictMode, lazy, Suspense, startTransition } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import './lib/fonts';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
+import App from './App';
 import './utils/globalErrorHandler'; // Initialize global error handler
 
 // Note: Consent mode is initialized in index.html with default granted state
 // This is intentional for production environment
-
-// Check if we're on the homepage
-const isHomepage = window.location.pathname === '/' || window.location.pathname === '';
-
-// Lazy load the main App component with proper error handling
-const App = lazy(() => import('./App').then(module => ({ default: module.default })));
 
 // DEV PATCH: Always set a valid JWT and user in localStorage for testing
 if (import.meta.env.MODE === 'development') {
@@ -58,15 +50,24 @@ const queryClient = new QueryClient({
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 
-// Performance optimization: Use React.lazy and Suspense with proper error handling
+// App is eager so homepage renders as soon as the bundle runs (no second chunk wait)
 root.render(
   <ErrorBoundary>
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        <Suspense fallback={isHomepage ? <HeroSkeleton /> : <PageSkeleton />}>
-          <App />
-        </Suspense>
+        <App />
       </QueryClientProvider>
     </HelmetProvider>
   </ErrorBoundary>
 );
+
+// Load fonts after first paint so they don't block FCP (critical CSS uses system font)
+const loadFontsAfterPaint = () => {
+  const cb = () => import('./lib/fonts');
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(cb, { timeout: 2000 });
+  } else {
+    setTimeout(cb, 1);
+  }
+};
+loadFontsAfterPaint();

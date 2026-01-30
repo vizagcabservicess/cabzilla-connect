@@ -28,16 +28,24 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Use Vite's built-in hash system for cache busting
     rollupOptions: {
       output: {
-        // Standard hash-based naming for reliable cache busting
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.') || [];
           const ext = info[info.length - 1] || 'asset';
           return `assets/[name]-[hash].${ext}`;
+        },
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('react/') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            if (id.includes('@tanstack/react-query') || id.includes('react-helmet-async') || id.includes('axios')) {
+              return 'vendor';
+            }
+          }
         },
       },
     },

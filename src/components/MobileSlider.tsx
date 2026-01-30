@@ -47,7 +47,7 @@ export function MobileSlider({
         navigation={showNavigation}
         pagination={showPagination ? { clickable: true } : false}
         className="mobile-slider"
-        style={{ paddingBottom: '20px' }}
+        style={{ paddingBottom: '36px' }}
       >
         {children.map((child, index) => (
           <SwiperSlide key={index}>
@@ -68,15 +68,15 @@ interface ServiceCardProps {
 export function ServiceCard({ service, onClick }: ServiceCardProps) {
   return (
     <Card 
-      className="group hover:shadow-lg transition-all duration-300 border-0 bg-white rounded-xl overflow-hidden cursor-pointer relative h-[200px]"
+      className="group hover:shadow-lg transition-all duration-300 border-0 bg-white rounded-xl overflow-hidden cursor-pointer relative min-h-[220px]"
       onClick={onClick}
     >
-      <CardContent className="p-3 relative h-full flex flex-col">
+      <CardContent className="p-4 pb-5 relative h-full flex flex-col">
         {/* Background Pattern */}
         <div className={`absolute inset-0 ${service.bgColor} opacity-30`}></div>
         
         {/* Content */}
-        <div className="relative z-10 flex flex-col h-full">
+        <div className="relative z-10 flex flex-col h-full min-h-0">
           {/* Category Tag and Icon */}
           <div className="flex justify-between items-start mb-2">
             <div className="bg-gray-800 text-white px-2 py-1 rounded-full text-sm font-medium">
@@ -102,13 +102,13 @@ export function ServiceCard({ service, onClick }: ServiceCardProps) {
           )}
 
           {/* Description */}
-          <p className="text-sm text-gray-600 mb-2 leading-relaxed flex-grow">
+          <p className="text-sm text-gray-600 mb-2 leading-relaxed flex-grow min-h-0">
             {service.description}
           </p>
 
           {/* Features */}
           {service.features.length > 0 && (
-            <div className="space-y-0.5 mb-3">
+            <div className="space-y-0.5 mb-3 flex-shrink-0">
               {service.features.slice(0, 2).map((feature, idx) => (
                 <div key={idx} className="text-xs text-gray-500 flex items-center gap-1">
                   <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
@@ -119,7 +119,7 @@ export function ServiceCard({ service, onClick }: ServiceCardProps) {
           )}
 
           {/* Book Now Button */}
-          <div className="mt-auto">
+          <div className="mt-auto pt-3">
             <button 
               className="w-full bg-white border border-gray-300 rounded-full px-4 py-2 text-gray-800 font-medium hover:bg-gray-50 transition-colors shadow-sm text-sm"
               onClick={(e) => {

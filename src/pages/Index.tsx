@@ -10,8 +10,6 @@ import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
-import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
-import { SiX } from 'react-icons/si';
 import { useSearchParams } from 'react-router-dom';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
@@ -84,7 +82,7 @@ const Index = () => {
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-gray-50 flex flex-col pt-20">
+      <div className="min-h-screen bg-white flex flex-col pt-20">
         <Navbar />
         <main className="flex-1">
           <Hero

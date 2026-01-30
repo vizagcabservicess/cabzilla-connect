@@ -122,7 +122,7 @@ const TempoTravellerRentalPage = () => {
           </div>
 
           {/* Related Services */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-white rounded-xl shadow-sm p-6 pb-8 md:pb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Explore Our Tempo Traveller Services</h2>
             <ResponsiveGrid gridCols="grid-cols-1 md:grid-cols-2 lg:grid-cols-4" className="gap-4">
               <ServiceCard 

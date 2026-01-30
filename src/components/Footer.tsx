@@ -1,5 +1,5 @@
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
-import { SiX } from 'react-icons/si';
+import { IconX } from '@/components/IconX';
 import { Link } from 'react-router-dom';
 
 const Footer = () => {
@@ -189,7 +189,7 @@ const Footer = () => {
                 <FaYoutube className="text-3xl" />
               </a>
               <a href="https://twitter.com/vizagtaxihub" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-200 transition-colors transform hover:scale-110">
-                <SiX className="text-3xl" />
+                <IconX className="text-3xl" />
               </a>
             </div>
             <div className="text-sm text-gray-400">Made with ❤️ in Vizag</div>

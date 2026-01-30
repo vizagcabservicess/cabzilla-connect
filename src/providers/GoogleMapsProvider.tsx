@@ -63,40 +63,45 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
       return () => clearInterval(checkLoading);
     }
 
-    // Create loader only if it doesn't exist
-    if (!globalLoader) {
-      isLoading = true;
-      globalLoader = new Loader({
-        apiKey: finalApiKey,
-        version: 'weekly',
-        libraries: ['places'],
-        // Add additional options to handle iframe issues
-        mapIds: ['DEMO_MAP_ID'], // Optional: Add a map ID if you have one
-      });
-
-      globalLoader.load()
-        .then(() => {
-          isLoadedGlobal = true;
-          isLoading = false;
-          setIsLoaded(true);
-          console.log('Google Maps loaded successfully');
-        })
-        .catch((err) => {
-          isLoading = false;
-          
-          // Handle specific iframe sandbox errors
-          if (err.message && err.message.includes('sandboxed')) {
-            const sandboxError = new Error(
-              'Google Maps cannot load due to iframe sandbox restrictions. ' +
-              'Please ensure the iframe has allow-scripts permission or load the page directly.'
-            );
-            setError(sandboxError);
-            console.error('Google Maps iframe sandbox error:', err);
-          } else {
-            setError(err);
-            console.error('Error loading Google Maps:', err);
-          }
+    // Defer load until browser is idle so mobile main thread isn't blocked (better TBT/FCP)
+    const scheduleLoad = () => {
+      if (!globalLoader) {
+        globalLoader = new Loader({
+          apiKey: finalApiKey,
+          version: 'weekly',
+          libraries: ['places'],
+          mapIds: ['DEMO_MAP_ID'],
         });
+        isLoading = true;
+        globalLoader.load()
+          .then(() => {
+            isLoadedGlobal = true;
+            isLoading = false;
+            setIsLoaded(true);
+            console.log('Google Maps loaded successfully');
+          })
+          .catch((err) => {
+            isLoading = false;
+            if (err.message && err.message.includes('sandboxed')) {
+              const sandboxError = new Error(
+                'Google Maps cannot load due to iframe sandbox restrictions. ' +
+                'Please ensure the iframe has allow-scripts permission or load the page directly.'
+              );
+              setError(sandboxError);
+              console.error('Google Maps iframe sandbox error:', err);
+            } else {
+              setError(err);
+              console.error('Error loading Google Maps:', err);
+            }
+          });
+      }
+    };
+    if (typeof requestIdleCallback !== 'undefined') {
+      const id = requestIdleCallback(scheduleLoad, { timeout: 3000 });
+      return () => cancelIdleCallback(id);
+    } else {
+      const t = setTimeout(scheduleLoad, 100);
+      return () => clearTimeout(t);
     }
   }, [apiKey]);
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExternalLink, Star, Users, Heart } from 'lucide-react';
 import { FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
-import { SiX } from 'react-icons/si';
+import { IconX } from '@/components/IconX';
 
 export function SocialMediaSection() {
   const socialLinks = [
@@ -28,7 +28,7 @@ export function SocialMediaSection() {
       name: 'X',
       url: 'https://twitter.com/vizagtaxihub',
       color: 'from-gray-900 to-black',
-      icon: SiX
+      icon: IconX
     }
   ];
 

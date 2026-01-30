@@ -12,8 +12,8 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 
-// Lazy load all pages for better performance
-const Index = lazy(() => import('./pages/Index'));
+// Homepage loaded eagerly to avoid "Failed to fetch dynamically imported module" (no separate Index chunk)
+import Index from './pages/Index';
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
@@ -235,7 +235,9 @@ function Root() {
     <>
       <ScrollToTop />
       <RedirectHandler>
-        <Outlet />
+        <Suspense fallback={<RouteLoadingSpinner />}>
+          <Outlet />
+        </Suspense>
       </RedirectHandler>
       
       {/* Global WhatsApp Floating Button - Desktop Only */}
@@ -260,11 +262,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <Suspense fallback={<HeroSkeleton />}>
-            <Index />
-          </Suspense>
-        ),
+        element: <Index />,
       },
       {
         path: 'login',

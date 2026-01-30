@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bus, Users, Building, Heart, MapPin, Star, Car, Shield, Tag } from 'lucide-react';
+import { Bus, Users, Building, Heart, MapPin, Star, Car, Shield } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
 import { Link } from 'react-router-dom';
@@ -21,8 +21,7 @@ export function TempoTravellerShowcase() {
       features: ["12-18 seater options", "AC comfort", "Professional drivers"],
       bgColor: "bg-gradient-to-br from-blue-50 to-blue-100",
       iconColor: "text-blue-600",
-      link: "/tempo-traveller-rental-vizag",
-      promoCode: "TEMPO500"
+      link: "/tempo-traveller-rental-vizag"
     },
     {
       icon: Users,
@@ -32,8 +31,7 @@ export function TempoTravellerShowcase() {
       features: ["17 passenger capacity", "AC comfort", "Luggage space"],
       bgColor: "bg-gradient-to-br from-green-50 to-green-100",
       iconColor: "text-green-600",
-      link: "/17-seater-tempo-traveller-vizag",
-      promoCode: "SEVENTEEN500"
+      link: "/17-seater-tempo-traveller-vizag"
     },
     {
       icon: Users,
@@ -43,8 +41,7 @@ export function TempoTravellerShowcase() {
       features: ["12 passenger capacity", "AC comfort", "Economical"],
       bgColor: "bg-gradient-to-br from-purple-50 to-purple-100",
       iconColor: "text-purple-600",
-      link: "/12-seater-tempo-traveller-vizag",
-      promoCode: "TWELVE400"
+      link: "/12-seater-tempo-traveller-vizag"
     },
     {
       icon: Users,
@@ -54,8 +51,7 @@ export function TempoTravellerShowcase() {
       features: ["Custom packages", "Group discounts", "Event planning"],
       bgColor: "bg-gradient-to-br from-orange-50 to-orange-100",
       iconColor: "text-orange-600",
-      link: "/group-travel-tempo-traveller-vizag",
-      promoCode: "GROUP600"
+      link: "/group-travel-tempo-traveller-vizag"
     },
     {
       icon: Building,
@@ -65,8 +61,7 @@ export function TempoTravellerShowcase() {
       features: ["Business class comfort", "Professional drivers", "Corporate packages"],
       bgColor: "bg-gradient-to-br from-indigo-50 to-indigo-100",
       iconColor: "text-indigo-600",
-      link: "/corporate-tempo-traveller-vizag",
-      promoCode: "CORP500"
+      link: "/corporate-tempo-traveller-vizag"
     },
     {
       icon: Heart,
@@ -76,8 +71,7 @@ export function TempoTravellerShowcase() {
       features: ["Decorated vehicles", "Wedding packages", "Professional service"],
       bgColor: "bg-gradient-to-br from-pink-50 to-pink-100",
       iconColor: "text-pink-600",
-      link: "/wedding-tempo-traveller-vizag",
-      promoCode: "WEDDING600"
+      link: "/wedding-tempo-traveller-vizag"
     },
     {
       icon: MapPin,
@@ -87,8 +81,7 @@ export function TempoTravellerShowcase() {
       features: ["Pilgrimage packages", "Religious sites", "Comfortable travel"],
       bgColor: "bg-gradient-to-br from-yellow-50 to-yellow-100",
       iconColor: "text-yellow-600",
-      link: "/pilgrimage-tempo-traveller-vizag",
-      promoCode: "PILGRIM400"
+      link: "/pilgrimage-tempo-traveller-vizag"
     },
     {
       icon: Car,
@@ -98,8 +91,7 @@ export function TempoTravellerShowcase() {
       features: ["Various capacities", "AC comfort", "Professional drivers"],
       bgColor: "bg-gradient-to-br from-teal-50 to-teal-100",
       iconColor: "text-teal-600",
-      link: "/mini-bus-travels-vizag",
-      promoCode: "MINIBUS400"
+      link: "/mini-bus-travels-vizag"
     }
   ];
 
@@ -159,7 +151,7 @@ export function TempoTravellerShowcase() {
                 <Card 
                   className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
                 >
-                  <CardContent className="p-5 relative h-full flex flex-col">
+                  <CardContent className="p-5 pb-6 relative h-full flex flex-col">
                     {/* Background Pattern */}
                     <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
@@ -181,21 +173,13 @@ export function TempoTravellerShowcase() {
                         {service.offer}
                       </h3>
 
-                      {/* Promo Code Button */}
-                      <div className="mb-3">
-                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                          <Tag className="h-4 w-4" />
-                          {service.promoCode}
-                        </div>
-                      </div>
-
                       {/* Description */}
                       <p className="text-sm text-gray-600 mb-2 flex-grow">
                         {service.description}
                       </p>
 
                       {/* Features */}
-                      <div className="space-y-1.5 mt-2 flex-grow">
+                      <div className="space-y-1.5 mt-2 flex-grow min-h-0">
                         {service.features.map((feature, idx) => (
                           <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
@@ -205,7 +189,7 @@ export function TempoTravellerShowcase() {
                       </div>
 
                       {/* Book Button */}
-                      <div className="mt-auto pt-4">
+                      <div className="mt-auto pt-5 pb-0.5">
                         <Link 
                           to={service.link}
                           className="block w-full relative overflow-hidden rounded-full text-center text-gray-800 transition-all duration-300 glassmorphism-button flex items-center justify-center"
@@ -285,14 +269,6 @@ export function TempoTravellerShowcase() {
                       {service.offer}
                     </h3>
 
-                    {/* Promo Code Button */}
-                    <div className="mb-3">
-                      <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                        <Tag className="h-4 w-4" />
-                        {service.promoCode}
-                      </div>
-                    </div>
-
                     {/* Description */}
                     <p className="text-sm text-gray-600 mb-2 flex-grow">
                       {service.description}
@@ -340,7 +316,7 @@ export function TempoTravellerShowcase() {
                 <Card 
                   className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
                 >
-                  <CardContent className="p-5 relative h-full flex flex-col">
+                  <CardContent className="p-5 pb-6 relative h-full flex flex-col">
                     {/* Background Pattern */}
                     <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
@@ -362,21 +338,13 @@ export function TempoTravellerShowcase() {
                         {service.offer}
                       </h3>
 
-                      {/* Promo Code Button */}
-                      <div className="mb-3">
-                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                          <Tag className="h-4 w-4" />
-                          {service.promoCode}
-                        </div>
-                      </div>
-
                       {/* Description */}
                       <p className="text-sm text-gray-600 mb-2 flex-grow">
                         {service.description}
                       </p>
 
                       {/* Features */}
-                      <div className="space-y-1.5 mt-2 flex-grow">
+                      <div className="space-y-1.5 mt-2 flex-grow min-h-0">
                         {service.features.map((feature, idx) => (
                           <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
@@ -386,7 +354,7 @@ export function TempoTravellerShowcase() {
                       </div>
 
                       {/* Book Button */}
-                      <div className="mt-auto pt-4">
+                      <div className="mt-auto pt-5 pb-0.5">
                         <Link 
                           to={service.link}
                           className="block w-full relative overflow-hidden rounded-full text-center text-gray-800 transition-all duration-300 glassmorphism-button flex items-center justify-center"
@@ -403,7 +371,7 @@ export function TempoTravellerShowcase() {
           </Swiper>
           
           {/* Custom Pagination with Dots and Counter */}
-          <div className="flex justify-center items-center mt-4">
+          <div className="flex justify-center items-center mt-6 py-4">
             <div className="flex items-center gap-1">
               {tempoTravellerServices.map((_, index) => {
                 // Show the counter pill in place of the active dot

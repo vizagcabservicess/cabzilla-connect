@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard, Tag, Bus, Plane, Route, UserCheck } from 'lucide-react';
+import { Car, Clock, MapPin, Users, Star, Shield, Smartphone, CreditCard, Bus, Plane, Route, UserCheck } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
 import { useNavigate } from 'react-router-dom';
@@ -18,8 +18,7 @@ export function ServicesShowcase() {
       icon: Car,
       title: "Local Trips",
       offer: "Save up to ₹200 on local packages",
-      validity: "Valid till 31 OCT",
-      promoCode: "LOCAL200",
+      validity: "",
       description: "Hourly packages for city exploration",
       features: ["8hrs/80km - ₹2,400", "10hrs/100km - ₹3,000", "Professional drivers"],
       bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
@@ -31,8 +30,7 @@ export function ServicesShowcase() {
       icon: Route,
       title: "Outstation Travel",
       offer: "Save up to ₹300 on long journeys",
-      validity: "Valid till 31 OCT",
-      promoCode: "OUT300",
+      validity: "",
       description: "Comfortable long-distance journeys",
       features: ["Hyderabad - 650km", "Chennai - 800km", "Bangalore - 1000km"],
       bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
@@ -44,8 +42,7 @@ export function ServicesShowcase() {
       icon: Plane,
       title: "Airport Transfers",
       offer: "Save up to ₹200 on airport rides",
-      validity: "Valid till 31 OCT",
-      promoCode: "AIR200",
+      validity: "",
       description: "Reliable airport connectivity",
       features: ["On-time guarantee", "Flight tracking", "Fixed rates"],
       bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
@@ -57,8 +54,7 @@ export function ServicesShowcase() {
       icon: Bus,
       title: "Tempo Traveller Rental",
       offer: "Save up to ₹500 on group travel",
-      validity: "Valid till 31 Dec",
-      promoCode: "TEMPO500",
+      validity: "",
       description: "Perfect for group travel and events",
       features: ["12-18 seater options", "AC comfort", "Professional drivers"],
       bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
@@ -70,8 +66,7 @@ export function ServicesShowcase() {
       icon: UserCheck,
       title: "Hire a Driver",
       offer: "Save up to ₹100 with professional drivers",
-      validity: "Valid till 31 Dec",
-      promoCode: "DRIVER100",
+      validity: "",
       description: "Professional drivers for your vehicle",
       features: ["Licensed drivers", "Flexible hours", "Safe & reliable"],
       bgColor: "bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]",
@@ -118,10 +113,9 @@ export function ServicesShowcase() {
                     <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
                     
-                    {/* Content */}
-                    <div className="relative z-10 flex flex-col h-full">
-                      {/* Category Tag and Icon */}
-                      <div className="flex justify-between items-start mb-3">
+                    {/* Content - flex so description fills space and features stay at bottom */}
+                    <div className="relative z-10 flex flex-col h-full min-h-0">
+                      <div className="flex justify-between items-start mb-3 flex-shrink-0">
                         <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
                           {service.title}
                         </div>
@@ -130,34 +124,22 @@ export function ServicesShowcase() {
                         </div>
                       </div>
 
-                      {/* Main Offer */}
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight flex-shrink-0">
                         {service.offer}
                       </h3>
 
-                      {/* Validity */}
-                      <p className="text-sm text-gray-600 mb-3">
-                        {service.validity}
-                      </p>
+                      {service.validity ? (
+                        <p className="text-sm text-gray-600 mb-3 flex-shrink-0">{service.validity}</p>
+                      ) : null}
 
-                      {/* Promo Code Button */}
-                      <div className="mb-3">
-                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                          <Tag className="h-4 w-4" />
-                          {service.promoCode}
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-sm text-gray-600 mb-2 flex-grow">
+                      <p className="text-sm text-gray-600 mb-2 flex-grow min-h-0">
                         {service.description}
                       </p>
 
-                      {/* Features */}
-                      <div className="space-y-1.5 mt-2">
+                      <div className="space-y-1.5 mt-2 flex-shrink-0">
                         {service.features.map((feature, idx) => (
-                          <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                          <div key={idx} className="text-xs text-gray-600 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0" />
                             <span>{feature}</span>
                           </div>
                         ))}
@@ -217,10 +199,9 @@ export function ServicesShowcase() {
                   <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
                   
-                  {/* Content */}
-                  <div className="relative z-10 flex flex-col h-full">
-                    {/* Category Tag and Icon */}
-                    <div className="flex justify-between items-start mb-3">
+                  {/* Content - flex so description fills space and features stay at bottom */}
+                  <div className="relative z-10 flex flex-col h-full min-h-0">
+                    <div className="flex justify-between items-start mb-3 flex-shrink-0">
                       <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
                         {service.title}
                       </div>
@@ -229,34 +210,22 @@ export function ServicesShowcase() {
                       </div>
                     </div>
 
-                    {/* Main Offer */}
-                    <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight flex-shrink-0">
                       {service.offer}
                     </h3>
 
-                    {/* Validity */}
-                    <p className="text-sm text-gray-600 mb-3">
-                      {service.validity}
-                    </p>
+                    {service.validity ? (
+                      <p className="text-sm text-gray-600 mb-3 flex-shrink-0">{service.validity}</p>
+                    ) : null}
 
-                    {/* Promo Code Button */}
-                    <div className="mb-3">
-                      <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                        <Tag className="h-4 w-4" />
-                        {service.promoCode}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-sm text-gray-600 mb-2 flex-grow">
+                    <p className="text-sm text-gray-600 mb-2 flex-grow min-h-0">
                       {service.description}
                     </p>
 
-                    {/* Features */}
-                    <div className="space-y-1.5 mt-2">
+                    <div className="space-y-1.5 mt-2 flex-shrink-0">
                       {service.features.map((feature, idx) => (
-                        <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                        <div key={idx} className="text-xs text-gray-600 flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0" />
                           <span>{feature}</span>
                         </div>
                       ))}
@@ -290,10 +259,9 @@ export function ServicesShowcase() {
                     <div className={`absolute inset-0 ${service.bgColor} opacity-50`}></div>
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
                     
-                    {/* Content */}
-                    <div className="relative z-10 flex flex-col h-full">
-                      {/* Category Tag and Icon */}
-                      <div className="flex justify-between items-start mb-3">
+                    {/* Content - flex so description fills space and features stay at bottom */}
+                    <div className="relative z-10 flex flex-col h-full min-h-0">
+                      <div className="flex justify-between items-start mb-3 flex-shrink-0">
                         <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
                           {service.title}
                         </div>
@@ -302,34 +270,22 @@ export function ServicesShowcase() {
                         </div>
                       </div>
 
-                      {/* Main Offer */}
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight flex-shrink-0">
                         {service.offer}
                       </h3>
 
-                      {/* Validity */}
-                      <p className="text-sm text-gray-600 mb-3">
-                        {service.validity}
-                      </p>
+                      {service.validity ? (
+                        <p className="text-sm text-gray-600 mb-3 flex-shrink-0">{service.validity}</p>
+                      ) : null}
 
-                      {/* Promo Code Button */}
-                      <div className="mb-3">
-                        <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
-                          <Tag className="h-4 w-4" />
-                          {service.promoCode}
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <p className="text-sm text-gray-600 mb-2 flex-grow">
+                      <p className="text-sm text-gray-600 mb-2 flex-grow min-h-0">
                         {service.description}
                       </p>
 
-                      {/* Features */}
-                      <div className="space-y-1.5 mt-2">
+                      <div className="space-y-1.5 mt-2 flex-shrink-0">
                         {service.features.map((feature, idx) => (
-                          <div key={idx} className="text-xs text-gray-500 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                          <div key={idx} className="text-xs text-gray-600 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full flex-shrink-0" />
                             <span>{feature}</span>
                           </div>
                         ))}

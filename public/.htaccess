@@ -48,13 +48,13 @@ RewriteRule .* - [R=200,L]
         Header always set Expires "0"
     </FilesMatch>
     
-    # Long-term caching for hashed assets (Vite's built-in hash system)
-    <FilesMatch ".*-[a-f0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$">
+    # Long-term caching for hashed assets (Vite: name-hash.ext, hash is alphanumeric)
+    <FilesMatch ".*-[a-zA-Z0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
         Header always set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
     
-    # No cache for non-hashed assets
-    <FilesMatch "\.(js|css)$">
+    # No cache for non-hashed JS/CSS only
+    <FilesMatch "^(?!.*-[a-zA-Z0-9]{8,}\.(js|css)$).*\.(js|css)$">
         Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
         Header always set Pragma "no-cache"
         Header always set Expires "0"

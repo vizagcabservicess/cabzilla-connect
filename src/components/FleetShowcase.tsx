@@ -3,7 +3,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Car, Users, MapPin, CheckCircle, Star, Shield, Bus, Plane, Tag } from 'lucide-react';
+import { Car, Users, MapPin, CheckCircle, Star, Shield, Bus, Plane } from 'lucide-react';
 import { getVehicleData } from '@/services/vehicleDataService';
 import { Link } from 'react-router-dom';
 import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
@@ -89,15 +89,6 @@ export function FleetShowcase() {
     if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return Car;
     if (type.toLowerCase().includes('tempo')) return Bus;
     return Car;
-  }
-
-  // Helper to get promo code
-  function getPromoCode(vehicle: any, index: number) {
-    const type = getType(vehicle);
-    if (type.toLowerCase().includes('sedan')) return 'SEDAN200';
-    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'SUV300';
-    if (type.toLowerCase().includes('tempo')) return 'TEMPO500';
-    return `FLEET${index + 1}00`;
   }
 
   // Helper to get offer text
