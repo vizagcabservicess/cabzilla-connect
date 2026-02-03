@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
     
     <!-- STATIC FALLBACKS (Helmet will override on hydrated routes) -->
     <title>Vizag Taxi Hub - Outstation, Local & Airport Cabs in Visakhapatnam</title>
@@ -52,12 +52,12 @@
       @media (min-width: 768px) { .skel-hero { min-height: 28rem; } }
     </style>
     
-    <!-- Resource hints for better performance -->
+    <!-- Resource hints - preconnect limited to 4 for best performance -->
     <link rel="preconnect" href="https://vizagtaxihub.com" />
     <link rel="preconnect" href="https://maps.googleapis.com" />
     <link rel="preconnect" href="https://maps.gstatic.com" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
-    <link rel="preconnect" href="https://checkout.razorpay.com" />
+    <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
     <link rel="dns-prefetch" href="https://www.clarity.ms" />
     <link rel="dns-prefetch" href="https://analytics.google.com" />
     

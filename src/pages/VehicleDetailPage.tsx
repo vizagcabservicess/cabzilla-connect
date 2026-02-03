@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLoaderData } from 'react-router-dom';
 import { ArrowLeft, Car, Users, Fuel, Loader2, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,11 +14,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { getVehicleData } from '@/services/vehicleDataService';
 import { GalleryItem } from '@/types/cab';
 import { vehicleGalleryAPI } from '@/services/api/vehicleGalleryAPI';
 import { Helmet } from 'react-helmet-async';
-import { getVehicleUrl, getVehicleDisplayName } from '@/utils/vehicleUrlUtils';
+import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
+import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
+import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 
 // Lazy load heavy components with prefetch and defer
 const ImageGallery = lazy(() => import('@/components/vehicle/ImageGallery'));
@@ -35,13 +36,15 @@ const criticalStyles = `
   .vehicle-hero { min-height: 400px; width: 100%; display: block; contain: layout; }
   .vehicle-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0; contain: layout; }
   .vehicle-meta { display: flex; gap: 1.5rem; align-items: center; min-height: 24px; contain: layout; }
-  .image-gallery-container { min-height: 400px; width: 100%; display: block; contain: layout; }
+  .image-gallery-container { width: 100%; aspect-ratio: 16/10; display: block; contain: layout; }
+  .rate-card-container { contain: layout; }
+  .vehicle-tabs-container { contain: layout; }
   .loading-skeleton { background: #f3f4f6; border-radius: 8px; animation: pulse 2s infinite; contain: layout; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   @media (max-width: 768px) {
     .vehicle-title { font-size: 1.5rem; }
     .vehicle-meta { flex-direction: column; gap: 0.5rem; }
-    .image-gallery-container { min-height: 300px; }
+    .image-gallery-container { aspect-ratio: 16/10; }
   }
 `;
 
@@ -75,10 +78,19 @@ interface VehicleData {
 const VehicleDetailPage = () => {
   const { vehicleSlug } = useParams();
   const navigate = useNavigate();
-  const [vehicle, setVehicle] = useState<VehicleData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [similarVehicles, setSimilarVehicles] = useState<any[]>([]);
+  const loaderData = useLoaderData() as VehicleLoaderData | { error: string } | undefined;
+  const [vehicle, setVehicle] = useState<VehicleData | null>(() => {
+    if (loaderData && 'vehicle' in loaderData) return loaderData.vehicle as VehicleData;
+    return null;
+  });
+  const [error, setError] = useState<string | null>(() => {
+    if (loaderData && 'error' in loaderData) return loaderData.error;
+    return null;
+  });
+  const [similarVehicles, setSimilarVehicles] = useState<any[]>(() => {
+    if (loaderData && 'similarVehicles' in loaderData) return loaderData.similarVehicles;
+    return [];
+  });
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
 
   // Memoize expensive calculations - must be before early returns
@@ -219,100 +231,25 @@ const VehicleDetailPage = () => {
     window.location.href = 'tel:+919966363662';
   };
 
+  // Load gallery in background (vehicle comes from route loader)
   useEffect(() => {
-    const loadVehicleData = async () => {
-      if (!vehicleSlug) {
-        setError('Vehicle not provided');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const allVehicles = await getVehicleData(true, true);
-        
-        // Try to find vehicle by URL slug
-        const foundVehicle = allVehicles.find(v => {
-          const vehicleUrl = getVehicleUrl(v);
-          const urlSlug = vehicleUrl.replace('/vehicle/', '');
-          return urlSlug === vehicleSlug;
-        });
-
-        if (!foundVehicle) {
-          setError(`Vehicle "${vehicleSlug}" not found`);
-          setLoading(false);
-          return;
-        }
-
-        const vehicleData: VehicleData = {
-          id: foundVehicle.id || vehicleSlug,
-          name: foundVehicle.name,
-          capacity: foundVehicle.capacity,
-          fuelType: foundVehicle.fuelType,
-          tags: ['Comfort Ride', foundVehicle.ac ? 'AC' : 'Non-AC', foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact'],
-          overview: foundVehicle.description,
-          inclusions: foundVehicle.inclusions || foundVehicle.amenities || ['Driver', 'Fuel', foundVehicle.ac ? 'AC' : 'Non-AC', 'Tolls', 'Parking'],
-          exclusions: foundVehicle.exclusions || ['Personal expenses', 'Extra meals', 'Additional sightseeing', 'Shopping expenses'],
-          features: foundVehicle.amenities || [foundVehicle.ac ? 'AC' : 'Non-AC', 'Music System', 'Charging Point']
-        };
-
-        setVehicle(vehicleData);
-
-        // Load gallery images from database
-        const gallery = await vehicleGalleryAPI.getGallery(vehicleData.id);
-        console.log('Loaded gallery for vehicle details:', gallery);
-        
-        // If no gallery images found, use the main vehicle image as fallback
-        if (gallery.length === 0 && foundVehicle.image) {
-          setGalleryImages([{ url: foundVehicle.image, alt: foundVehicle.name }]);
+    if (!vehicle?.id) return;
+    vehicleGalleryAPI
+      .getGallery(vehicle.id)
+      .then((gallery) => {
+        if (gallery.length === 0 && vehicle.image) {
+          setGalleryImages([{ url: vehicle.image, alt: vehicle.name }]);
         } else {
           setGalleryImages(gallery);
         }
+      })
+      .catch(() => {
+        if (vehicle.image) {
+          setGalleryImages([{ url: vehicle.image, alt: vehicle.name }]);
+        }
+      });
+  }, [vehicle?.id, vehicle?.image, vehicle?.name]);
 
-        const similar = allVehicles
-          .filter(v => v.id !== foundVehicle.id && v.isActive !== false)
-          .slice(0, 3)
-          .map(v => ({
-            id: v.id,
-            name: v.name,
-            capacity: `${v.capacity} Passengers`,
-            price: `₹${v.pricePerKm || 12}/km`,
-            image: v.image || "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
-          }));
-        
-        setSimilarVehicles(similar);
-
-      } catch (err) {
-        console.error('Error loading vehicle data:', err);
-        setError('Failed to load vehicle details. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadVehicleData();
-  }, [vehicleSlug]);
-
-  if (loading) {
-    return (
-      <>
-        <Helmet>
-          <title>Loading Vehicle Details - Vizag Taxi Hub</title>
-          <meta name="description" content="Loading vehicle details and information..." />
-        </Helmet>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          </div>
-          <MobileNavigation />
-        </div>
-      </>
-    );
-  }
-  
   if (error) {
     return (
       <>
@@ -368,12 +305,9 @@ const VehicleDetailPage = () => {
         {/* Critical CSS for above-the-fold content */}
         <style>{criticalStyles}</style>
         
-        {/* Critical resource hints for LCP optimization - reduced for faster parsing */}
-        <link rel="preload" href="/cars/tempo.png" as="image" type="image/png" />
-        
-        {/* Preload only the most critical image */}
+        {/* Preload LCP image early - use optimized URL when backend supports it */}
         {vehicle?.image && (
-          <link rel="preload" as="image" href={vehicle.image} />
+          <link rel="preload" as="image" href={getOptimizedImageUrl(vehicle.image)} fetchPriority="high" />
         )}
         {structuredData && (
           <script type="application/ld+json">
@@ -423,7 +357,7 @@ const VehicleDetailPage = () => {
       
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        
+        <main id="main-content">
         <div className="container mx-auto px-4 py-8 max-w-7xl  pt-16 md:pt-24 pb-16 md:pb-32">
           <Breadcrumb className="mb-6">
             <BreadcrumbList>
@@ -447,33 +381,29 @@ const VehicleDetailPage = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-              {/* Critical above-the-fold content - optimized for LCP */}
-              <div className="image-gallery-container">
-                {/* Show vehicle image immediately for LCP optimization */}
-                {vehicle?.image && (
-                  <img
-                    src={vehicle.image}
-                    alt={`${vehicle.name} - Professional taxi service in Visakhapatnam`}
-                    width="100%"
-                    height="400"
-                    style={{ 
-                      width: '100%', 
-                      height: '400px', 
-                      objectFit: 'cover',
-                      borderRadius: '8px',
-                      display: 'block',
-                      contain: 'layout style paint'
-                    }}
-                    loading="eager"
-                    data-lcp-candidate="true"
-                  />
-                )}
-                
-                {/* Defer gallery component */}
-                <Suspense fallback={<div></div>}>
-                  <ImageGallery 
-                    images={galleryImages} 
+              {/* Single image area - no duplication */}
+              <div className="image-gallery-container" style={{ aspectRatio: '16/10' }}>
+                <Suspense fallback={
+                  vehicle?.image ? (
+                    <div className="w-full overflow-hidden rounded-lg" style={{ aspectRatio: '16/10' }}>
+                      <img
+                        src={getOptimizedImageUrl(vehicle.image)}
+                        alt={`${vehicle.name} - Professional taxi service in Visakhapatnam`}
+                        width={800}
+                        height={500}
+                        className="w-full h-full object-cover rounded-lg"
+                        loading="eager"
+                        fetchPriority="high"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full rounded-lg animate-pulse bg-gray-200" style={{ aspectRatio: '16/10' }} />
+                  )
+                }>
+                  <ImageGallery
+                    images={galleryImages}
                     vehicleName={vehicle.name}
+                    heroImage={vehicle.image}
                   />
                 </Suspense>
               </div>
@@ -508,9 +438,9 @@ const VehicleDetailPage = () => {
                 </div>
               </div>
 
-              <div className="rate-card-container">
+              <div className="rate-card-container min-h-[420px]">
                 <Suspense fallback={
-                  <div className="loading-skeleton" style={{ height: '120px', width: '100%' }}>
+                  <div className="loading-skeleton" style={{ height: '420px', width: '100%' }}>
                     <div style={{ 
                       height: '100%', 
                       background: '#f3f4f6',
@@ -518,12 +448,12 @@ const VehicleDetailPage = () => {
                     }}></div>
                   </div>
                 }>
-                  <RateCard vehicleId={vehicle.id} />
+                  <RateCard vehicleId={vehicle.id} vehicleName={vehicle.name} />
                 </Suspense>
               </div>
 
-              <div className="vehicle-tabs-container">
-                <Suspense fallback={<div className="loading-skeleton" style={{ height: '200px', width: '100%' }}></div>}>
+              <div className="vehicle-tabs-container min-h-[280px]">
+                <Suspense fallback={<div className="loading-skeleton" style={{ height: '280px', width: '100%' }}></div>}>
               <VehicleTabs 
                 overview={vehicle.overview} 
                 inclusions={vehicle.inclusions}
@@ -702,23 +632,28 @@ const VehicleDetailPage = () => {
               )}
 
               {/* Defer VehicleTours to reduce initial scripting load */}
-              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-32 rounded-lg"></div>}>
+              <div className="min-h-[180px]">
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[180px] rounded-lg"></div>}>
               <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
               </Suspense>
+              </div>
             </div>
 
             <div className="lg:col-span-1 space-y-6">
-              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-48 rounded-lg"></div>}>
-              <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
-              </Suspense>
-              
-              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-32 rounded-lg"></div>}>
-              <SimilarVehicles vehicles={similarVehicles} />
-              </Suspense>
+              <div className="min-h-[420px]">
+                <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[420px] rounded-lg"></div>}>
+                  <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
+                </Suspense>
+              </div>
+              <div className="min-h-[320px]">
+                <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[320px] rounded-lg"></div>}>
+                  <SimilarVehicles vehicles={similarVehicles} />
+                </Suspense>
+              </div>
             </div>
           </div>
         </div>
-        
+        </main>
         <Footer />
         <MobileNavigation />
       </div>

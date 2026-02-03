@@ -2,6 +2,25 @@
  * Utility functions for generating vehicle URLs
  */
 
+/** Known vehicle slug -> LCP image path for early preload (before API returns) */
+const SLUG_TO_IMAGE_PATH: Record<string, string> = {
+  'innova-crysta': '/cars/innova.png',
+  'sedan': '/cars/sedan.png',
+  'ertiga': '/cars/ertiga.png',
+  'tempo-traveller': '/cars/tempo.png',
+  'toyota-glanza': '/cars/toyota.png',
+  'amaze': '/cars/amaze.png',
+  'swift-dzire': '/cars/sedan.png',
+};
+
+/** Get likely LCP image URL for a vehicle slug - for early preload during loading */
+export function getPreloadImageUrlForSlug(slug: string | undefined): string | null {
+  if (!slug) return null;
+  const path = SLUG_TO_IMAGE_PATH[slug];
+  if (!path) return null;
+  return `https://vizagtaxihub.com${path}`;
+}
+
 // Mapping from vehicle_id to URL-friendly names
 const vehicleUrlMapping: Record<string, string> = {
   'sedan': 'sedan',

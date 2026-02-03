@@ -54,20 +54,9 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
 
         const formattedRates: VehicleRate[] = [];
 
-        // Add local package rates
+        // Add local package rates (8hrs/80km only - City Tour 4hr/40km removed)
         if (localFares.length > 0) {
           const localFare = localFares[0];
-          console.log('Processing local fare:', localFare);
-          
-          if (localFare.price4hrs40km && localFare.price4hrs40km > 0) {
-            formattedRates.push({
-              tripType: "City Tour",
-              baseFare: `₹${localFare.price4hrs40km}`,
-              distanceIncluded: "4hrs/40km",
-              notes: "AC, Driver, Fuel, Parking extra",
-              bookingType: "local"
-            });
-          }
           
           if (localFare.price8hrs80km && localFare.price8hrs80km > 0) {
             formattedRates.push({
@@ -216,9 +205,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
         } 
       });
     } else if (rate.bookingType === 'local') {
-      navigate('/', { 
+      navigate('/local-taxi', { 
         state: { 
-          tripType: 'local',
           selectedVehicle: vehicleId,
           vehicleName: vehicleName
         } 
@@ -244,9 +232,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
         } 
       });
     } else if (selectedRate && selectedRate.bookingType === 'local') {
-      navigate('/', { 
+      navigate('/local-taxi', { 
         state: { 
-          tripType: 'local',
           selectedVehicle: vehicleId,
           vehicleName: vehicleName
         } 
@@ -295,12 +282,22 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
             {rates.map((rate, index) => (
               <div
                 key={index}
+                role="button"
+                tabIndex={0}
+                aria-label={`${rate.tripType}: ${rate.baseFare}, ${rate.distanceIncluded}. Select to view details.`}
+                aria-pressed={selectedRate?.tripType === rate.tripType}
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                   selectedRate?.tripType === rate.tripType
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
                 onClick={() => setSelectedRate(rate)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedRate(rate);
+                  }
+                }}
               >
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-sm">{rate.tripType}</span>
@@ -337,6 +334,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
         <Button 
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
           onClick={handleBooking}
+          aria-label={`Book ${vehicleName} for ${selectedRate?.tripType || 'selected trip'}`}
         >
           <MapPin className="h-4 w-4 mr-2" />
           Book {vehicleName}

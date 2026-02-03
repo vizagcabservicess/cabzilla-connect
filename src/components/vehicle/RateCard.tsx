@@ -1,12 +1,14 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 
 interface RateCardProps {
   vehicleId?: string;
+  vehicleName?: string;
 }
 
 interface FareRow {
@@ -14,11 +16,14 @@ interface FareRow {
   baseFare: string;
   distance: string;
   duration: string;
+  bookingType?: 'local' | 'airport' | 'outstation' | 'tour';
+  tourId?: string;
 }
 
-const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
+const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
   const [fares, setFares] = useState<FareRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAllFares = async () => {
@@ -34,23 +39,19 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             tourAPI.getTourFares().catch(() => [])
           ]);
 
-          // Add local fares
+          // Add local fare (8hrs/80km only - City Tour 4hr/40km removed)
           if (localFares.length > 0 && vehicleId) {
-            const localFare = localFares.find(f => f.vehicle_id === vehicleId);
-            if (localFare && localFare.price_4hrs_40km && parseFloat(localFare.price_4hrs_40km) > 0) {
+            const localFare = localFares.find(f => f.vehicle_id === vehicleId) || localFares[0];
+            const price8hr = localFare?.price_8hrs_80km ?? localFare?.price8hrs80km;
+            const extraKm = localFare?.price_extra_km ?? localFare?.priceExtraKm ?? 0;
+            const extraHr = localFare?.price_extra_hour ?? localFare?.priceExtraHour ?? 0;
+            if (localFare && price8hr && parseFloat(String(price8hr)) > 0) {
               fareRows.push({
-                tripType: "City Tour (4hr/40km)",
-                baseFare: `₹${parseFloat(localFare.price_4hrs_40km).toFixed(0)}`,
-                distance: `Extra @ ₹${parseFloat(localFare.price_extra_km).toFixed(0)}/km`,
-                duration: `Extra @ ₹${parseFloat(localFare.price_extra_hour).toFixed(0)}/hr`
-              });
-            }
-            if (localFare && localFare.price_8hrs_80km && parseFloat(localFare.price_8hrs_80km) > 0) {
-              fareRows.push({
-                tripType: "City Tour (8hr/80km)",
-                baseFare: `₹${parseFloat(localFare.price_8hrs_80km).toFixed(0)}`,
-                distance: `Extra @ ₹${parseFloat(localFare.price_extra_km).toFixed(0)}/km`,
-                duration: `Extra @ ₹${parseFloat(localFare.price_extra_hour).toFixed(0)}/hr`
+                tripType: "Local (8hrs/80km)",
+                baseFare: `₹${parseFloat(String(price8hr)).toFixed(0)}`,
+                distance: `Extra @ ₹${parseFloat(String(extraKm)).toFixed(0)}/km`,
+                duration: `Extra @ ₹${parseFloat(String(extraHr)).toFixed(0)}/hr`,
+                bookingType: "local"
               });
             }
           }
@@ -67,7 +68,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                     tripType: "Outstation",
                     baseFare: `₹${vehicleData.pricing.outstation.pricePerKm}/km`,
                     distance: "Min 300 km",
-                    duration: "13 hours"
+                    duration: "13 hours",
+                    bookingType: "outstation"
                   });
                 }
               }
@@ -80,14 +82,15 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
           if (airportFares.length > 0) {
             const airportFare = airportFares[0];
             const airportPrice = airportFare.basePrice || airportFare.pickupPrice || airportFare.tier1Price;
-            if (airportPrice && airportPrice > 0) {
-              fareRows.push({
-                tripType: "Airport Transfer",
-                baseFare: `₹${airportPrice}`,
-                distance: "One way",
-                duration: "N/A"
-              });
-            }
+          if (airportPrice && airportPrice > 0) {
+            fareRows.push({
+              tripType: "Airport Transfer",
+              baseFare: `₹${airportPrice}`,
+              distance: "One way",
+              duration: "N/A",
+              bookingType: "airport"
+            });
+          }
           }
 
           // Add tour fares with proper duration display
@@ -110,7 +113,9 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
                     tripType: tour.tourName,
                     baseFare: `₹${tourPrice}`,
                     distance: distanceText,
-                    duration: durationText
+                    duration: durationText,
+                    bookingType: "tour",
+                    tourId: tour.tourId
                   });
                 }
               }
@@ -122,22 +127,25 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
         if (fareRows.length === 0) {
           fareRows.push(
             {
-              tripType: "City Tour",
+              tripType: "Local (8hrs/80km)",
               baseFare: "₹12/km",
               distance: "Min 80 km",
-              duration: "4 hours"
+              duration: "8 hours",
+              bookingType: "local"
             },
             {
               tripType: "Outstation",
               baseFare: "₹18/km",
               distance: "Min 300 km",
-              duration: "13 hours"
+              duration: "13 hours",
+              bookingType: "outstation"
             },
             {
               tripType: "Airport Transfer",
               baseFare: "₹15/km",
               distance: "One way",
-              duration: "N/A"
+              duration: "N/A",
+              bookingType: "airport"
             }
           );
         }
@@ -161,6 +169,24 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
 
     fetchAllFares();
   }, [vehicleId]);
+
+  const handleRowClick = (fare: FareRow) => {
+    if (fare.bookingType === 'tour' && fare.tourId) {
+      navigate(getTourUrl({ tourId: fare.tourId }));
+    } else if (fare.bookingType === 'outstation') {
+      navigate('/outstation-taxi', {
+        state: { selectedVehicle: vehicleId, vehicleName }
+      });
+    } else if (fare.bookingType === 'airport') {
+      navigate('/airport-taxi', {
+        state: { selectedVehicle: vehicleId, vehicleName }
+      });
+    } else if (fare.bookingType === 'local') {
+      navigate('/local-taxi', {
+        state: { selectedVehicle: vehicleId, vehicleName }
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -200,7 +226,20 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId }) => {
             </thead>
             <tbody>
               {fares.map((fare, index) => (
-                <tr key={index} className="border-b last:border-b-0 hover:bg-gray-50">
+                <tr
+                  key={index}
+                  className="border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleRowClick(fare)}
+                  role="button"
+                  aria-label={`${fare.tripType}: ${fare.baseFare}, ${fare.distance}. Click to book.`}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleRowClick(fare);
+                    }
+                  }}
+                >
                   <td className="py-3 px-2 font-medium">{fare.tripType}</td>
                   <td className="py-3 px-2 text-blue-600 font-semibold">{fare.baseFare}</td>
                   <td className="py-3 px-2 text-gray-600">{fare.distance}</td>

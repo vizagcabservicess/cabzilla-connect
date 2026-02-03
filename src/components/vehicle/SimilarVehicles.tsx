@@ -57,6 +57,9 @@ const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({
                     <img 
                       src={vehicle.image} 
                       alt={vehicle.name}
+                      width={80}
+                      height={64}
+                      loading="lazy"
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;

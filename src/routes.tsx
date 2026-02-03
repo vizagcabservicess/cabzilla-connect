@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBrowserRouter, Outlet, useLocation, Navigate } from 'react-router-dom';
+import { vehicleLoader } from './loaders/vehicleLoader';
 import { lazy, Suspense, startTransition } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
@@ -545,6 +546,7 @@ const router = createBrowserRouter([
 
       {
         path: 'vehicle/:vehicleSlug',
+        loader: vehicleLoader,
         element: <VehicleDetailPage />,
       },
       {
