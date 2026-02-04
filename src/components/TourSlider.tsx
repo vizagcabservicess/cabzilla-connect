@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { tourAPI } from '@/services/api/tourAPI';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { useNavigate } from 'react-router-dom';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -224,7 +225,7 @@ export function TourSlider() {
                         </div>
                         <Button
                           className="w-full mt-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold"
-                          onClick={() => navigate(`/tour/${tour.tourId || tour.id}`)}
+                          onClick={() => navigate(getTourUrl({ tourId: tour.tourId || tour.id, tourName: tour.name }))}
                         >
                           Book This Tour
                         </Button>

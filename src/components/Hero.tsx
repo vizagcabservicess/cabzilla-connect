@@ -1322,15 +1322,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       });
       return;
     }
-    
+
     setShowGuestDetailsForm(true);
-    
+
+    // Scroll to top so user sees "Complete Your Booking" (reliable on mobile and desktop)
     setTimeout(() => {
-      const contactSection = document.querySelector('form');
-      if (contactSection) {
-        contactSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }, 200);
   };
 
   function handleBackToSelection() {
@@ -1603,7 +1603,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         ${!isSearchActive && currentStep === 1 
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
-        } w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
+        } ${((isSearchActive || hideBackground) && currentStep === 1) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
             <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-4`}>

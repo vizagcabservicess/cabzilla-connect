@@ -465,3 +465,21 @@ margin-top: 4px !important;
     padding-bottom: 5rem !important;
   }
 }
+
+/* Spacing for booking form view - when form is shown (edit mode or dedicated taxi pages) */
+#booking-widget.hero-edit-form-spacing {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+@media (min-width: 640px) {
+  #booking-widget.hero-edit-form-spacing {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+}
+@media (min-width: 768px) {
+  #booking-widget.hero-edit-form-spacing {
+    padding-top: 5rem;
+    padding-bottom: 5rem;
+  }
+}

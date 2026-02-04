@@ -186,23 +186,15 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     setSelectedRate(rate);
     
     // Navigate based on booking type
-    if (rate.bookingType === 'tour' && rate.tourId) {
-      navigate(getTourUrl({ tourId: rate.tourId }));
+    if (rate.bookingType === 'tour' && (rate.tourId || rate.tripType)) {
+      navigate(getTourUrl({ tourId: rate.tourId, tourName: rate.tripType }));
     } else if (rate.bookingType === 'outstation') {
-      navigate('/', { 
-        state: { 
-          tripType: 'outstation',
-          selectedVehicle: vehicleId,
-          vehicleName: vehicleName
-        } 
+      navigate('/outstation-taxi', {
+        state: { selectedVehicle: vehicleId, vehicleName }
       });
     } else if (rate.bookingType === 'airport') {
-      navigate('/', { 
-        state: { 
-          tripType: 'airport',
-          selectedVehicle: vehicleId,
-          vehicleName: vehicleName
-        } 
+      navigate('/airport-taxi', {
+        state: { selectedVehicle: vehicleId, vehicleName }
       });
     } else if (rate.bookingType === 'local') {
       navigate('/local-taxi', { 
@@ -215,8 +207,8 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
   };
 
   const handleBooking = () => {
-    if (selectedRate && selectedRate.bookingType === 'tour' && selectedRate.tourId) {
-      navigate(`/tours/${selectedRate.tourId}`);
+    if (selectedRate && selectedRate.bookingType === 'tour' && (selectedRate.tourId || selectedRate.tripType)) {
+      navigate(getTourUrl({ tourId: selectedRate.tourId, tourName: selectedRate.tripType }));
     } else if (selectedRate && selectedRate.bookingType === 'outstation') {
       navigate('/outstation-taxi', { 
         state: { 

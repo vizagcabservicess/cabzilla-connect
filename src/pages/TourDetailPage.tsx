@@ -36,7 +36,7 @@ import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
-import { getTourIdFromSlug, getTourUrl } from '@/utils/tourUrlUtils';
+import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug } from '@/utils/tourUrlUtils';
 
 interface VehicleWithPricing extends CabType {
   price: number;
@@ -188,49 +188,56 @@ const TourDetailPage = () => {
     }
   }, [tourSlug]);
 
+  // Scroll to top when booking form is shown (ensures correct position after React renders)
+  useEffect(() => {
+    if (showBookingForm) {
+      const scroll = () => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      };
+      requestAnimationFrame(() => {
+        scroll();
+        setTimeout(scroll, 100);
+      });
+    }
+  }, [showBookingForm]);
+
   const loadTourDetail = async () => {
     if (!tourSlug) return;
     try {
       setIsLoading(true);
-      
+
       // First, try to get all tours to find the correct tour ID
       const allTours = await tourDetailAPI.getTours();
-      console.log('All available tours:', allTours);
-      
+
       // Find the tour that matches our URL slug
       const matchingTour = allTours.find(tour => {
         const tourUrl = getTourUrl(tour);
         const urlSlug = tourUrl.replace('/tours/', '');
         return urlSlug === tourSlug;
       });
-      
-      if (matchingTour) {
-        // Get the detailed tour information
-        const tourDetail = await tourDetailAPI.getTourDetail(matchingTour.tourId);
-        console.log('Fetched Tour Detail:', tourDetail);
-        if (tourDetail) {
-          setTour(tourDetail);
-        } else {
-          toast({
-            title: "Tour not found",
-            description: "The requested tour could not be found",
-            variant: "destructive",
-          });
-        }
+
+      // Build list of IDs to try (matchingTour first, then slug variants)
+      const slugVariants = getTourIdVariantsForSlug(tourSlug);
+      const idsToTry: string[] = matchingTour
+        ? [matchingTour.tourId, ...slugVariants.filter(id => id !== matchingTour.tourId)]
+        : slugVariants;
+
+      let tourDetail = null;
+      for (const tourId of idsToTry) {
+        tourDetail = await tourDetailAPI.getTourDetail(tourId);
+        if (tourDetail) break;
+      }
+
+      if (tourDetail) {
+        setTour(tourDetail);
       } else {
-        // Fallback: try the original method
-        const tourId = getTourIdFromSlug(tourSlug);
-        const tourDetail = await tourDetailAPI.getTourDetail(tourId);
-        console.log('Fetched Tour Detail (fallback):', tourDetail);
-        if (tourDetail) {
-          setTour(tourDetail);
-        } else {
-          toast({
-            title: "Tour not found",
-            description: "The requested tour could not be found",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Tour not found",
+          description: "The requested tour could not be found",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('Error loading tour detail:', error);
@@ -782,7 +789,7 @@ const TourDetailPage = () => {
                       </Button>
                       <Button
                         className="flex-1"
-                        onClick={() => setShowBookingForm(true)}
+                        onClick={handleBookNow}
                       >
                         Book Now
                       </Button>
@@ -801,7 +808,11 @@ const TourDetailPage = () => {
                   isLoading={isSubmitting}
                   onBack={() => {
                     setShowBookingForm(false);
-                    // Don't reset selectedVehicle - keep it for the booking summary
+                    setTimeout(() => {
+                      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                      document.documentElement.scrollTop = 0;
+                      document.body.scrollTop = 0;
+                    }, 200);
                   }}
                 />
               </div>

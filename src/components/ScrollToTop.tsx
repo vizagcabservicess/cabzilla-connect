@@ -5,8 +5,10 @@ export function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    // Scroll to top when pathname changes
+    // Scroll to top when pathname changes (mobile-friendly)
     window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     
     // Track page view for analytics if consent is given
     if (typeof window !== 'undefined' && window.gtag) {

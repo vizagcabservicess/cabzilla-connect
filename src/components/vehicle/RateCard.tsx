@@ -18,6 +18,7 @@ interface FareRow {
   duration: string;
   bookingType?: 'local' | 'airport' | 'outstation' | 'tour';
   tourId?: string;
+  tourName?: string;
 }
 
 const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
@@ -115,7 +116,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
                     distance: distanceText,
                     duration: durationText,
                     bookingType: "tour",
-                    tourId: tour.tourId
+                    tourId: tour.tourId,
+                    tourName: tour.tourName
                   });
                 }
               }
@@ -171,8 +173,8 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
   }, [vehicleId]);
 
   const handleRowClick = (fare: FareRow) => {
-    if (fare.bookingType === 'tour' && fare.tourId) {
-      navigate(getTourUrl({ tourId: fare.tourId }));
+    if (fare.bookingType === 'tour' && (fare.tourId || fare.tourName)) {
+      navigate(getTourUrl({ tourId: fare.tourId, tourName: fare.tourName || fare.tripType }));
     } else if (fare.bookingType === 'outstation') {
       navigate('/outstation-taxi', {
         state: { selectedVehicle: vehicleId, vehicleName }

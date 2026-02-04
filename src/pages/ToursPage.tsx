@@ -117,8 +117,8 @@ const ToursPage = () => {
     }
   };
 
-  const handleTourSelect = (tourId: string) => {
-    navigate(getTourUrl({ tourId }));
+  const handleTourSelect = (tour: TourListItem) => {
+    navigate(getTourUrl({ tourId: tour.tourId, tourName: tour.tourName }));
   };
 
   const handleModifySearch = () => {
@@ -231,7 +231,7 @@ const ToursPage = () => {
             <TourCard
               key={tour.tourId}
               tour={buildTourCardProps(tour)}
-              onClick={() => handleTourSelect(tour.tourId)}
+              onClick={() => handleTourSelect(tour)}
             />
           ))
         ) : (
