@@ -449,6 +449,9 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
 
 /**
  * Calculate fare breakdown for outstation round trip bookings.
+ * Uses calendar dates (not total hours): each distinct date from pickup through return counts as a billing day.
+ * Example: Pickup Feb 6 9:33 AM, Return Feb 8 8:19 PM → 3 chargeable days (Feb 6, 7, 8).
+ *
  * @param {Object} params
  * @param {Date} params.pickupDate - Pickup date/time
  * @param {Date} params.returnDate - Return date/time
@@ -474,10 +477,13 @@ export function calculateOutstationRoundTripFare({
   driverAllowancePerDay: number
 }) {
   // 1. KM included per calendar day: 300 KM
-  // 2. calendarDays = ceil((returnDate - pickupDate) / (24 * 60 * 60 * 1000)), min 1
+  // 2. calendarDays = distinct calendar dates from pickup date through return date (inclusive)
+  //    Any midnight crossing = new billing day. Do NOT use total hours.
+  const pickupDateOnly = new Date(pickupDate.getFullYear(), pickupDate.getMonth(), pickupDate.getDate());
+  const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
-  let calendarDays = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / MS_PER_DAY);
-  if (calendarDays < 1) calendarDays = 1;
+  const dayDiff = Math.floor((returnDateOnly.getTime() - pickupDateOnly.getTime()) / MS_PER_DAY);
+  let calendarDays = Math.max(1, dayDiff + 1);
   // 3. includedKM = calendarDays × 300
   const includedKM = calendarDays * 300;
   // 4. baseFare = includedKM × perKmRate
