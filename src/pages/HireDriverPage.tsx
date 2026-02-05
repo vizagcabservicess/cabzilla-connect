@@ -440,7 +440,7 @@ Best regards,
                           <SelectValue placeholder="Select duration" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="half-day">Half Day (4 hours)</SelectItem>
+                          <SelectItem value="half-day">Half Day</SelectItem>
                           <SelectItem value="full-day">Full Day (8-12 hours)</SelectItem>
                           <SelectItem value="multi-day">Multi Day</SelectItem>
                         </SelectContent>

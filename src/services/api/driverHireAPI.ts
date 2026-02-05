@@ -27,9 +27,26 @@ export const driverHireAPI = {
    */
   submitRequest: async (requestData: DriverHireRequest): Promise<DriverHireResponse> => {
     try {
+      const pickupDateStr = requestData.pickupDateTime
+        ? (typeof requestData.pickupDateTime === 'string'
+            ? requestData.pickupDateTime
+            : (requestData.pickupDateTime as Date).toISOString())
+        : '';
+      const payload = {
+        name: requestData.name,
+        phone: requestData.phone,
+        email: requestData.email || '',
+        pickupLocation: requestData.pickupLocation || '',
+        pickupDateTime: pickupDateStr,
+        pickup_location: requestData.pickupLocation || '',
+        pickup_date_time: pickupDateStr,
+        serviceType: requestData.serviceType,
+        duration: requestData.duration,
+        requirements: requestData.requirements || '',
+      };
       const response = await axios.post(
         `${API_BASE_URL}/api/driver-hire-request.php`,
-        requestData,
+        payload,
         {
           headers: {
             'Content-Type': 'application/json',

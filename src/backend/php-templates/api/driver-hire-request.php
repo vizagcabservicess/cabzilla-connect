@@ -87,7 +87,7 @@ if (!empty($errors)) {
     sendJsonResponse(['status' => 'error', 'message' => 'Validation failed', 'errors' => $errors], 400);
 }
 
-// Ensure the driver_hire_requests table exists
+// Ensure the driver_hire_requests table exists and has required columns
 try {
     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'driver_hire_requests'");
     if ($tableCheckResult->num_rows === 0) {
@@ -109,6 +109,14 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
         
         $conn->query($createTableSql);
+    } else {
+        // Ensure pickup columns exist (for tables created before pickup fields were added)
+        $colCheck = $conn->query("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'driver_hire_requests' AND COLUMN_NAME = 'pickup_location'");
+        $row = $colCheck ? $colCheck->fetch_assoc() : null;
+        if ($row && (int)($row['cnt'] ?? 0) === 0) {
+            $conn->query("ALTER TABLE driver_hire_requests ADD COLUMN pickup_location VARCHAR(255)");
+            $conn->query("ALTER TABLE driver_hire_requests ADD COLUMN pickup_datetime DATETIME");
+        }
     }
 } catch (Exception $e) {
     error_log("Error checking/creating driver_hire_requests table: " . $e->getMessage());
@@ -125,10 +133,10 @@ try {
         throw new Exception("Failed to prepare statement: " . $conn->error);
     }
     
-    // Prepare variables for binding (to avoid reference issues)
+    // Prepare variables for binding - support both camelCase and snake_case from frontend
     $email = $input['email'] ?? '';
-    $pickupLocation = $input['pickupLocation'] ?? '';
-    $pickupDateTime = $input['pickupDateTime'] ?? null;
+    $pickupLocation = $input['pickup_location'] ?? $input['pickupLocation'] ?? '';
+    $pickupDateTime = $input['pickup_date_time'] ?? $input['pickupDateTime'] ?? null;
     $requirements = $input['requirements'] ?? '';
     
     // Convert pickupDateTime to MySQL format if provided
@@ -136,16 +144,18 @@ try {
     if ($pickupDateTime) {
         $pickupDateTimeFormatted = date('Y-m-d H:i:s', strtotime($pickupDateTime));
     }
+    // bind_param requires non-null strings in PHP 8.1+; use empty string for nullable DATETIME
+    $pickupDateTimeForBind = $pickupDateTimeFormatted !== null ? $pickupDateTimeFormatted : '';
     
     // Log the values being inserted for debugging
-    error_log("Inserting driver hire request - Name: {$input['name']}, Phone: {$input['phone']}, Email: {$email}, Pickup Location: {$pickupLocation}, Pickup DateTime: {$pickupDateTimeFormatted}, Service: {$input['serviceType']}, Duration: {$input['duration']}, Requirements: {$requirements}");
+    error_log("Inserting driver hire request - Name: {$input['name']}, Phone: {$input['phone']}, Email: {$email}, Pickup Location: {$pickupLocation}, Pickup DateTime: {$pickupDateTimeForBind}, Service: {$input['serviceType']}, Duration: {$input['duration']}, Requirements: {$requirements}");
     
     $stmt->bind_param("ssssssss", 
         $input['name'],
         $input['phone'],
         $email,
         $pickupLocation,
-        $pickupDateTimeFormatted,
+        $pickupDateTimeForBind,
         $input['serviceType'],
         $input['duration'],
         $requirements
@@ -165,6 +175,12 @@ try {
     $selectStmt->execute();
     $result = $selectStmt->get_result();
     $request = $result->fetch_assoc();
+    // Ensure pickup fields reach the email template (support multiple key names)
+    $request['pickup_location'] = $request['pickup_location'] ?? $pickupLocation;
+    $request['pickupLocation'] = $request['pickup_location'];
+    $request['pickup_datetime'] = $request['pickup_datetime'] ?? $pickupDateTimeFormatted;
+    $request['pickup_date_time'] = $request['pickup_datetime'];
+    $request['pickupDateTime'] = $request['pickup_datetime'];
     
     // Send emails
     try {
