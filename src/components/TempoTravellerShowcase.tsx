@@ -97,7 +97,7 @@ export function TempoTravellerShowcase() {
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .glassmorphism-button {
           background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
           backdrop-filter: blur(20px);
@@ -128,7 +128,7 @@ export function TempoTravellerShowcase() {
           transform: translateX(100%);
         }
       `}</style>
-      <section className="pt-4 md:pt-8 pb-0 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <section className="pt-4 md:pt-8 pb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
