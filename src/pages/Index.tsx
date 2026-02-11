@@ -94,10 +94,10 @@ const Index = () => {
           {/* Main Content with Optimized Spacing */}
           {!isSearch && (
             <div className="space-y-8 md:space-y-12">
-              <ServicesShowcase />
+              <DestinationsShowcase />
               <FleetShowcase />
               <TempoTravellerShowcase />
-              <DestinationsShowcase />
+              <ServicesShowcase />
              
               <WhyChooseUs />
               <PopularRoutes />
