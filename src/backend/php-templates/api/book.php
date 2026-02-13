@@ -271,6 +271,8 @@ try {
         logBooking("WARNING: Using mock booking response due to database error");
     }
     
+    // NOTE: Pending payment emails are sent only when user cancels payment or closes browser (see send-pending-notification.php)
+    
     // Send success response
     $response = [
         'status' => 'success',

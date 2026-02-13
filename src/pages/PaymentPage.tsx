@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import {
   RazorpayResponse
 } from '@/services/razorpayService';
 import { bookingAPI } from '@/services/api';
+import { API_BASE_URL } from '@/config';
 import { Booking } from '@/types/api';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { Button } from '@/components/ui/button';
@@ -20,39 +21,103 @@ import { formatPrice } from '@/lib/cabData';
 const PaymentPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success' | 'failed'>('pending');
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
+  const [isFetchingBooking, setIsFetchingBooking] = useState(false);
+
+  // Notify when user closes browser/tab without completing payment (sendBeacon works in beforeunload)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (paymentStatus !== 'success' && bookingDetails?.bookingId) {
+        const payload = JSON.stringify({ booking_id: bookingDetails.bookingId, reason: 'browser_closed' });
+        const url = `${API_BASE_URL.replace(/\/$/, '')}/api/send-pending-notification.php`;
+        navigator.sendBeacon?.(url, new Blob([payload], { type: 'application/json' }));
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [bookingDetails?.bookingId, paymentStatus]);
 
   useEffect(() => {
-    // Load booking details from sessionStorage
-    const storedDetails = sessionStorage.getItem('bookingDetails');
-    if (storedDetails) {
-      try {
-        const details = JSON.parse(storedDetails);
-        // Always use the latest totalPrice from sessionStorage
-        if (typeof details.totalPrice === 'number') {
-          details.totalPrice = details.totalPrice;
-        } else {
-          // fallback: try to get from summary or set to 0
-          details.totalPrice = 0;
+    const loadBooking = async () => {
+      // 1. Try sessionStorage first (user came from booking flow)
+      const storedDetails = sessionStorage.getItem('bookingDetails');
+      if (storedDetails) {
+        try {
+          const details = JSON.parse(storedDetails);
+          details.totalPrice = typeof details.totalPrice === 'number' ? details.totalPrice : (details.totalAmount || 0);
+          setBookingDetails(details);
+          loadRazorpaySDK();
+          return;
+        } catch (error) {
+          console.error('Error parsing booking details:', error);
         }
-        setBookingDetails(details);
-        // Load the Razorpay SDK
-        loadRazorpaySDK();
-      } catch (error) {
-        console.error('Error parsing booking details:', error);
-        toast.error('Could not load booking details. Please try again.');
-        navigate('/');
       }
-    } else {
-      // If no booking details, redirect to home
+
+      // 2. Try URL param (user clicked "Complete Payment Now" from email)
+      const bookingIdFromUrl = searchParams.get('bookingId');
+      const expParam = searchParams.get('exp');
+      if (bookingIdFromUrl) {
+        if (expParam) {
+          const expiryTime = parseInt(expParam, 10) * 1000;
+          if (Date.now() > expiryTime) {
+            toast.error('This payment link has expired. Please contact us at +91 9966363662 to complete payment.');
+            navigate('/');
+            return;
+          }
+        }
+        setIsFetchingBooking(true);
+        try {
+          const bookingData = await bookingAPI.getBookingById(bookingIdFromUrl);
+          const paymentStatusFromApi = bookingData.payment_status ?? bookingData.paymentStatus ?? bookingData.status;
+          if (bookingData && !['paid', 'completed'].includes(String(paymentStatusFromApi || '').toLowerCase())) {
+            const details = {
+              bookingId: bookingData.id,
+              bookingNumber: bookingData.bookingNumber || bookingData.booking_number,
+              pickupLocation: typeof bookingData.pickupLocation === 'string' ? { name: bookingData.pickupLocation, address: '' } : bookingData.pickupLocation,
+              dropLocation: typeof bookingData.dropLocation === 'string' ? { name: bookingData.dropLocation, address: '' } : bookingData.dropLocation,
+              pickupDate: bookingData.pickupDate || bookingData.pickup_date,
+              returnDate: bookingData.returnDate || bookingData.return_date,
+              selectedCab: { name: bookingData.cabType || bookingData.cab_type || 'Standard' },
+              totalPrice: bookingData.totalAmount ?? bookingData.total_amount ?? 0,
+              tripType: bookingData.tripType || bookingData.trip_type,
+              tripMode: bookingData.tripMode || bookingData.trip_mode,
+              guestDetails: {
+                name: bookingData.passengerName || bookingData.passenger_name,
+                phone: bookingData.passengerPhone || bookingData.passenger_phone,
+                email: bookingData.passengerEmail || bookingData.passenger_email,
+                countryCode: bookingData.passengerCountryCode || '+91',
+              },
+            };
+            setBookingDetails(details);
+            sessionStorage.setItem('bookingDetails', JSON.stringify(details));
+            sessionStorage.setItem('paymentMode', 'partial');
+            loadRazorpaySDK();
+          } else {
+            toast.error('This booking has already been paid.');
+            navigate('/');
+          }
+        } catch (error) {
+          console.error('Error fetching booking:', error);
+          toast.error('Could not load booking. Please check the link or start a new booking.');
+          navigate('/');
+        } finally {
+          setIsFetchingBooking(false);
+        }
+        return;
+      }
+
+      // 3. No sessionStorage and no URL param
       toast.error('No booking information found. Please start a new booking.');
       navigate('/');
-    }
-  }, [navigate]);
+    };
+
+    loadBooking();
+  }, [navigate, searchParams]);
 
   const loadRazorpaySDK = async () => {
     try {
@@ -125,8 +190,9 @@ const PaymentPage = () => {
           amount: amount
         },
         () => {
-          // Handle modal dismissal
+          // Handle modal dismissal - notify admin and customer that payment was cancelled
           setIsLoading(false);
+          bookingAPI.notifyPendingPayment(bookingDetails.bookingId, 'cancelled').catch(() => {});
           toast('Payment cancelled. You can try again later.');
         }
       );
@@ -294,7 +360,7 @@ const PaymentPage = () => {
               
               {!bookingDetails ? (
                 <div className="flex justify-center items-center py-12">
-                  <span className="text-gray-500">Loading booking details...</span>
+                  <span className="text-gray-500">{isFetchingBooking ? 'Loading your booking...' : 'Loading booking details...'}</span>
                 </div>
               ) : (
                 <div className="space-y-4 sm:space-y-6">

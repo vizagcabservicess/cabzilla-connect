@@ -840,6 +840,205 @@ function sendAdminNotificationEmail($booking) {
 }
 
 /**
+ * Generate HTML for customer email when booking is pending payment
+ */
+function generatePendingPaymentCustomerEmail($booking) {
+    $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
+    $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
+    $dropLocation = is_array($booking['dropLocation'] ?? null) ? ($booking['dropLocation']['name'] ?? 'N/A') : ($booking['dropLocation'] ?? 'N/A');
+    $pickupDate = formatDateTimeForEmail($booking['pickupDate'] ?? null);
+    $cabType = $booking['cabType'] ?? 'N/A';
+    $totalAmount = isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A';
+    $passengerName = $booking['passengerName'] ?? 'N/A';
+    $tripType = $booking['tripType'] ?? 'Standard';
+    $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
+    $formattedTripType = ucfirst($tripType);
+    if (!empty($tripMode)) {
+        $formattedTripMode = str_replace('-', ' ', $tripMode);
+        $formattedTripMode = ucwords($formattedTripMode);
+        $formattedTripType .= " ($formattedTripMode)";
+    }
+    $bookingId = $booking['id'] ?? '';
+    $expiresAt = $booking['paymentLinkExpiresAt'] ?? null;
+    $baseUrl = 'https://vizagtaxihub.com/payment';
+    if ($bookingId) {
+        $params = ['bookingId' => $bookingId];
+        if ($expiresAt) {
+            $params['exp'] = $expiresAt;
+        }
+        $paymentUrl = $baseUrl . '?' . http_build_query($params);
+    } else {
+        $paymentUrl = $baseUrl;
+    }
+
+    $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Your Payment - Booking #$bookingNumber</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; }
+        .detail-row { margin-bottom: 12px; }
+        .detail-label { font-weight: bold; color: #555; }
+        .cta-button { display: inline-block; background: #4CAF50; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+        .footer { margin-top: 25px; text-align: center; color: #777; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Booking Pending - Complete Your Payment</h1>
+            <p style="font-size: 18px; font-weight: bold;">Booking #$bookingNumber</p>
+            <p>Your booking details have been saved. Please complete your advance payment to confirm.</p>
+        </div>
+        <div class="content">
+            <h3>Booking Summary</h3>
+            <div class="detail-row"><span class="detail-label">Trip:</span> $formattedTripType</div>
+            <div class="detail-row"><span class="detail-label">From:</span> $pickupLocation</div>
+            <div class="detail-row"><span class="detail-label">To:</span> $dropLocation</div>
+            <div class="detail-row"><span class="detail-label">Date & Time:</span> $pickupDate</div>
+            <div class="detail-row"><span class="detail-label">Vehicle:</span> $cabType</div>
+            <div class="detail-row"><span class="detail-label">Amount:</span> ₹$totalAmount</div>
+            <p style="margin-top: 25px;">Click the button below to complete your payment securely:</p>
+            <a href="$paymentUrl" class="cta-button">Complete Payment Now</a>
+            <p style="font-size: 12px; color: #888; margin-top: 10px;">This link is valid for 30 minutes.</p>
+            <p style="font-size: 14px; color: #666;">If you have any questions, contact us at +91 9966363662 or info@vizagtaxihub.com</p>
+        </div>
+        <div class="footer">
+            <p>Thank you for choosing Vizag Taxi Hub!</p>
+            <p>© 2025 Vizag Taxi Hub. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+HTML;
+    return $html;
+}
+
+/**
+ * Generate HTML for admin notification when booking is pending payment
+ */
+function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment') {
+    $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
+    $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
+    $dropLocation = is_array($booking['dropLocation'] ?? null) ? ($booking['dropLocation']['name'] ?? 'N/A') : ($booking['dropLocation'] ?? 'N/A');
+    $pickupDate = formatDateTimeForEmail($booking['pickupDate'] ?? null);
+    $cabType = $booking['cabType'] ?? 'N/A';
+    $totalAmount = isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A';
+    $passengerName = $booking['passengerName'] ?? 'N/A';
+    $passengerPhone = $booking['passengerPhone'] ?? 'N/A';
+    $passengerEmail = $booking['passengerEmail'] ?? 'N/A';
+    $tripType = $booking['tripType'] ?? 'Standard';
+    $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
+    $formattedTripType = ucfirst($tripType);
+    if (!empty($tripMode)) {
+        $formattedTripMode = str_replace('-', ' ', $tripMode);
+        $formattedTripType .= " ($formattedTripMode)";
+    }
+    $statusBadge = $reason === 'cancelled' || $reason === 'abandoned' 
+        ? '<span style="background:#F44336;color:white;padding:4px 10px;border-radius:4px;">Payment Cancelled/Abandoned</span>'
+        : '<span style="background:#FF9800;color:white;padding:4px 10px;border-radius:4px;">Awaiting Payment</span>';
+
+    $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Pending - #$bookingNumber</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #FF9800; color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f9f9f9; padding: 25px; border: 1px solid #ddd; border-top: none; }
+        .detail-row { margin-bottom: 10px; }
+        .detail-label { font-weight: bold; width: 140px; display: inline-block; color: #555; }
+        .admin-action { margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #FF9800; }
+        .button { display: inline-block; background: #4285F4; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-top: 10px; }
+        .footer { margin-top: 20px; text-align: center; color: #777; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Booking Pending Payment</h1>
+            <p style="font-size: 18px; font-weight: bold;">Booking #$bookingNumber</p>
+            <p>$statusBadge</p>
+        </div>
+        <div class="content">
+            <h3>Customer Details</h3>
+            <div class="detail-row"><span class="detail-label">Name:</span> $passengerName</div>
+            <div class="detail-row"><span class="detail-label">Phone:</span> $passengerPhone</div>
+            <div class="detail-row"><span class="detail-label">Email:</span> $passengerEmail</div>
+            <h3 style="margin-top: 20px;">Trip Details</h3>
+            <div class="detail-row"><span class="detail-label">Route:</span> $pickupLocation → $dropLocation</div>
+            <div class="detail-row"><span class="detail-label">Type:</span> $formattedTripType</div>
+            <div class="detail-row"><span class="detail-label">Date/Time:</span> $pickupDate</div>
+            <div class="detail-row"><span class="detail-label">Vehicle:</span> $cabType</div>
+            <div class="detail-row"><span class="detail-label">Amount:</span> ₹$totalAmount</div>
+            <div class="admin-action">
+                <p><strong>Action Required:</strong> Customer has not completed payment. Follow up or assign driver once payment is received.</p>
+                <a href="https://vizagtaxihub.com/admin" class="button">Go to Admin Dashboard</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Vizag Taxi Hub - Automated Notification</p>
+        </div>
+    </div>
+</body>
+</html>
+HTML;
+    return $html;
+}
+
+/**
+ * Send pending payment email to customer (booking created but payment not completed)
+ */
+function sendPendingPaymentEmailToCustomer($booking) {
+    $email = $booking['passengerEmail'] ?? $booking['passenger_email'] ?? null;
+    if (empty($email)) {
+        if (function_exists('logError')) {
+            logError("Cannot send pending email - no customer email", ['booking_number' => $booking['bookingNumber'] ?? 'unknown']);
+        }
+        return false;
+    }
+    $subject = "Complete Your Payment - Booking #" . ($booking['bookingNumber'] ?? 'N/A');
+    $htmlBody = generatePendingPaymentCustomerEmail($booking);
+    $headers = ['X-Priority' => '1', 'X-MSMail-Priority' => 'High', 'Importance' => 'High'];
+    $success = sendEmailAllMethods($email, $subject, $htmlBody) ?: sendEmail($email, $subject, $htmlBody, '', $headers);
+    if (function_exists('logError')) {
+        logError("Pending payment email to customer", ['success' => $success ? 'yes' : 'no', 'booking_number' => $booking['bookingNumber'] ?? 'N/A']);
+    }
+    return $success;
+}
+
+/**
+ * Send pending payment notification to admin
+ * @param array $booking Booking data
+ * @param string $reason 'awaiting_payment' | 'cancelled' | 'abandoned'
+ */
+function sendPendingPaymentNotificationToAdmin($booking, $reason = 'awaiting_payment') {
+    $adminEmails = ['info@vizagtaxihub.com'];
+    $subject = "Booking Pending Payment - #" . ($booking['bookingNumber'] ?? 'N/A');
+    $htmlBody = generatePendingPaymentAdminEmail($booking, $reason);
+    $headers = ['X-Priority' => '1', 'X-MSMail-Priority' => 'High', 'Importance' => 'High'];
+    $success = false;
+    foreach ($adminEmails as $adminEmail) {
+        $success = sendEmailAllMethods($adminEmail, $subject, $htmlBody) ?: sendEmail($adminEmail, $subject, $htmlBody, '', $headers);
+        if ($success) break;
+    }
+    if (function_exists('logError')) {
+        logError("Pending payment notification to admin", ['success' => $success ? 'yes' : 'no', 'booking_number' => $booking['bookingNumber'] ?? 'N/A']);
+    }
+    return $success;
+}
+
+/**
  * Format date consistently with frontend (handles timezone properly)
  */
 function formatDateTimeForEmail($dateString) {

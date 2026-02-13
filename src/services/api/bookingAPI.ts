@@ -291,6 +291,23 @@ export const bookingAPI = {
   },
   
   /**
+   * Notify that booking payment was abandoned/cancelled - triggers pending payment emails to admin and customer
+   */
+  notifyPendingPayment: async (bookingId: number | string, reason: 'cancelled' | 'abandoned' = 'abandoned') => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/send-pending-notification.php`,
+        { booking_id: bookingId, reason },
+        { headers: { 'Content-Type': 'application/json' }, timeout: 5000 }
+      );
+      return response.data;
+    } catch (error) {
+      console.warn('Failed to send pending notification:', error);
+      return { success: false };
+    }
+  },
+
+  /**
    * Cancel booking
    */
   cancelBooking: async (bookingId: number | string) => {
