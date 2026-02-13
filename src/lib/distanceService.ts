@@ -192,7 +192,14 @@ async function calculateDirectionsDistance(
   }
 }
 
-// Function to validate and normalize location objects
+// Treat (0,0) or missing coords as invalid so we never pass them to Google APIs
+function hasValidCoordinates(loc: any): boolean {
+  if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return false;
+  if (isNaN(loc.lat) || isNaN(loc.lng)) return false;
+  return !(loc.lat === 0 && loc.lng === 0);
+}
+
+// Function to validate and normalize location objects; preserves correct coordinates
 function validateLocation(location: any): Location {
   if (!location) {
     console.warn("Invalid location provided for distance calculation, using default");
@@ -208,15 +215,18 @@ function validateLocation(location: any): Location {
       popularityScore: 50
     };
   }
-  
+
+  const lat = hasValidCoordinates(location) ? location.lat : DEFAULT_LAT;
+  const lng = hasValidCoordinates(location) ? location.lng : DEFAULT_LNG;
+
   return {
     id: typeof location.id === 'string' ? location.id : `loc_${Date.now()}`,
     name: safeGetString(location, 'name') || 'Unknown Location',
     address: safeGetString(location, 'address') || safeGetString(location, 'name') || 'Unknown Address',
     city: safeGetString(location, 'city') || 'Visakhapatnam',
     state: safeGetString(location, 'state') || 'Andhra Pradesh',
-    lat: typeof location.lat === 'number' && !isNaN(location.lat) ? location.lat : DEFAULT_LAT,
-    lng: typeof location.lng === 'number' && !isNaN(location.lng) ? location.lng : DEFAULT_LNG,
+    lat,
+    lng,
     type: typeof location.type === 'string' ? location.type as any : 'other',
     popularityScore: typeof location.popularityScore === 'number' ? location.popularityScore : 50
   };

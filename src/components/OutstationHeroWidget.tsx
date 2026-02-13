@@ -68,8 +68,15 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
   let pickup = initialPickup;
   let drop = initialDrop;
 
+  // Read shared/query params (for auto search, dates, etc.)
+  const searchParams = new URLSearchParams(location.search);
+  const autoParam = searchParams.get('auto');
+  const autoTriggerSearch = autoParam === '1' || autoParam === 'true';
+  const dateParam = searchParams.get('date');
+  const returnDateParam = searchParams.get('returnDate');
+  const modeParam = searchParams.get('mode');
+
   if (!pickup || !drop) {
-    const searchParams = new URLSearchParams(location.search);
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
     if (fromParam && toParam) {
@@ -87,12 +94,25 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
     }
   }
 
-  // Redirect to home if drop is not a known city
+  // Parse coordinates from URL when present (from shared links)
+  const fromLat = searchParams.get('fromLat');
+  const fromLng = searchParams.get('fromLng');
+  const toLat = searchParams.get('toLat');
+  const toLng = searchParams.get('toLng');
+  const pickupLat = fromLat != null && fromLng != null ? parseFloat(fromLat) : NaN;
+  const pickupLng = fromLat != null && fromLng != null ? parseFloat(fromLng) : NaN;
+  const dropLat = toLat != null && toLng != null ? parseFloat(toLat) : NaN;
+  const dropLng = toLat != null && toLng != null ? parseFloat(toLng) : NaN;
+  const hasUrlPickupCoords = !isNaN(pickupLat) && !isNaN(pickupLng) && !(pickupLat === 0 && pickupLng === 0);
+  const hasUrlDropCoords = !isNaN(dropLat) && !isNaN(dropLng) && !(dropLat === 0 && dropLng === 0);
+  const hasUrlCoords = hasUrlPickupCoords || hasUrlDropCoords;
+
+  // Redirect to home only if drop is not a known city and we have no URL coordinates
   React.useEffect(() => {
-    if (drop && !CITY_LOOKUP[drop]) {
+    if (drop && !CITY_LOOKUP[drop] && !hasUrlCoords) {
       navigate('/', { replace: true });
     }
-  }, [drop, navigate]);
+  }, [drop, navigate, hasUrlCoords]);
 
   // Use a stable key that only changes when pickup/drop change
   const heroKey = useMemo(() => (pickup && drop ? `${pickup}-${drop}` : 'default'), [pickup, drop]);
@@ -104,6 +124,10 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
   if (pickup && drop) {
     const pickupData = getLocationData(pickup);
     const dropData = getLocationData(drop);
+    const parsedPickupDate = dateParam ? new Date(dateParam) : undefined;
+    const parsedReturnDate = returnDateParam ? new Date(returnDateParam) : undefined;
+    const tripMode = modeParam === 'round-trip' ? 'round-trip' : 'one-way';
+
     const prefillData = {
       pickupLocation: {
         name: pickup,
@@ -111,8 +135,8 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
         id: 'prefill-pickup',
         city: pickupData.city,
         state: pickupData.state,
-        lat: pickupData.lat,
-        lng: pickupData.lng,
+        lat: hasUrlPickupCoords ? pickupLat : pickupData.lat,
+        lng: hasUrlPickupCoords ? pickupLng : pickupData.lng,
         type: 'other' as const,
         popularityScore: 0,
       },
@@ -122,14 +146,16 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
         id: 'prefill-drop',
         city: dropData.city,
         state: dropData.state,
-        lat: dropData.lat,
-        lng: dropData.lng,
+        lat: hasUrlDropCoords ? dropLat : dropData.lat,
+        lng: hasUrlDropCoords ? dropLng : dropData.lng,
         type: 'other' as const,
         popularityScore: 0,
       },
       tripType: 'outstation',
-      tripMode: 'one-way',
-      autoTriggerSearch: false
+      tripMode,
+      pickupDate: parsedPickupDate ? parsedPickupDate.toISOString() : undefined,
+      returnDate: parsedReturnDate ? parsedReturnDate.toISOString() : undefined,
+      autoTriggerSearch
     };
     sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
   } else {

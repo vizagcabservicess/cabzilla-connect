@@ -240,6 +240,44 @@ export const popularLocations: Location[] = [
   ...apDestinations
 ];
 
+// Map URL slugs to known locations (for prefill from query params)
+const SLUG_TO_LOCATION_ID: Record<string, string> = {
+  'visakhapatnam-vtz-international-airport': 'vizag_airport',
+  'vizag-airport': 'vizag_airport',
+  'vizag_airport': 'vizag_airport',
+  'mvp-colony': 'mvp_colony',
+  'mvp_colony': 'mvp_colony',
+  'rk-beach': 'rk_beach',
+  'vizag-rtc': 'vizag_rtc',
+  'vizag-railway': 'vizag_railway',
+  'vizag-railway-station': 'vizag_railway',
+  'jagadamba-junction': 'jagadamba_junction',
+  'gajuwaka': 'gajuwaka',
+  'nad-junction': 'nad_junction',
+};
+
+// Default Vizag center coords when slug doesn't match
+const DEFAULT_VIZAG_LAT = 17.7215;
+const DEFAULT_VIZAG_LNG = 83.2248;
+
+export function getLocationBySlug(slug: string): Partial<Location> & { lat: number; lng: number } {
+  const normalizedSlug = slug.toLowerCase().trim().replace(/_/g, '-');
+  const locationId = SLUG_TO_LOCATION_ID[normalizedSlug] || SLUG_TO_LOCATION_ID[slug];
+  const loc = locationId
+    ? vizagLocations.find(l => l.id === locationId) || apDestinations.find(l => l.id === locationId)
+    : null;
+  if (loc) {
+    return { ...loc, lat: loc.lat, lng: loc.lng };
+  }
+  return {
+    lat: DEFAULT_VIZAG_LAT,
+    lng: DEFAULT_VIZAG_LNG,
+    name: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+  };
+}
+
 // Helper function to check if a location is within Visakhapatnam
 export const isVizagLocation = (location: Location): boolean => {
   if (!location) return false;

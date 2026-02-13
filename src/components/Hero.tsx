@@ -356,7 +356,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   // Handle autoTriggerSearch functionality
   useEffect(() => {
-    if (savedData.autoTriggerSearch && pickupLocation && dropLocation && isFormValid) {
+    const hasRoutePrefillData = !!sessionStorage.getItem('routePrefillData');
+    const shouldAutoSearch = savedData.autoTriggerSearch || hasRoutePrefillData;
+
+    if (shouldAutoSearch && pickupLocation && dropLocation && isFormValid) {
       // Auto-trigger search after a short delay to ensure all state is properly set
       const timer = setTimeout(() => {
         setCurrentStep(2);
@@ -1963,7 +1966,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       <div className="mb-4 bg-[#f8faf5] border border-[#e0e7d9] rounded-xl w-full max-w-full overflow-hidden px-4 py-3 shadow-sm">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <button onClick={() => setCurrentStep(1)} className="text-gray-700 hover:text-blue-600 focus:outline-none">
+                            <button
+                              onClick={() => {
+                                sessionStorage.removeItem('routePrefillData');
+                                sessionStorage.removeItem('pickupLocation');
+                                sessionStorage.removeItem('dropLocation');
+                                sessionStorage.removeItem('pickupDate');
+                                sessionStorage.removeItem('returnDate');
+                                navigate('/');
+                              }}
+                              className="text-gray-700 hover:text-blue-600 focus:outline-none"
+                              title="Back to home"
+                            >
                               <ArrowLeft className="w-5 h-5" />
                             </button>
                             <div className="flex flex-col">

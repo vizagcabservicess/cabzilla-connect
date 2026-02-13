@@ -51,23 +51,27 @@ const GoogleMapComponent = ({
     position: "relative" as const
   };
   
-  // Safely extract coordinates and create valid LatLngLiteral objects
-  const getValidCoordinates = (location: any) => {
+  // Use the location's actual coordinates; only fall back to default for invalid (0,0) or missing
+  const getValidCoordinates = (location: any): { lat: number; lng: number } => {
     if (!location) return { lat: DEFAULT_LAT, lng: DEFAULT_LNG };
-    
-    const lat = typeof location.lat === 'number' && !isNaN(location.lat) 
-      ? location.lat 
-      : DEFAULT_LAT;
-      
-    const lng = typeof location.lng === 'number' && !isNaN(location.lng)
-      ? location.lng
-      : DEFAULT_LNG;
-      
-    return { lat, lng };
+    const hasValid =
+      typeof location.lat === 'number' && !isNaN(location.lat) &&
+      typeof location.lng === 'number' && !isNaN(location.lng) &&
+      !(location.lat === 0 && location.lng === 0);
+    return hasValid
+      ? { lat: location.lat, lng: location.lng }
+      : { lat: DEFAULT_LAT, lng: DEFAULT_LNG };
   };
-  
+
   const pickupCoords = getValidCoordinates(pickupLocation);
   const dropCoords = getValidCoordinates(dropLocation);
+
+  // Check if coords are valid for routing (not 0,0 or identical invalid points)
+  const hasValidCoords = (loc: any) =>
+    loc && typeof loc.lat === 'number' && typeof loc.lng === 'number' &&
+    !isNaN(loc.lat) && !isNaN(loc.lng) && (loc.lat !== 0 || loc.lng !== 0);
+  const samePoint = Math.abs(pickupCoords.lat - dropCoords.lat) < 1e-6 &&
+    Math.abs(pickupCoords.lng - dropCoords.lng) < 1e-6;
   
   // Set the center to the pickup location
   const center = pickupCoords;
@@ -86,39 +90,47 @@ const GoogleMapComponent = ({
   // Calculate and display directions when both locations and services are available
   useEffect(() => {
     if (!map || !directionsService || !google || distanceCalculated.current) return;
-    
+
     const fetchDirections = async () => {
       const cacheKey = generateCacheKey(pickupCoords, dropCoords);
-      
+
       // Check cache first
       if (directionsCache.has(cacheKey)) {
         console.log("Using cached directions");
         setDirections(directionsCache.get(cacheKey)!);
         return;
       }
-      
+
+      // Same point or invalid coords: show map with markers only, report 0 km
+      if (samePoint || (!hasValidCoords(pickupLocation) && !hasValidCoords(dropLocation))) {
+        setDirections(null);
+        if (onDistanceCalculated) onDistanceCalculated(0, 0);
+        distanceCalculated.current = true;
+        return;
+      }
+
       try {
         console.log("Calculating directions between:", pickupCoords, dropCoords);
-        
+
         const results = await directionsService.route({
           origin: pickupCoords,
           destination: dropCoords,
           travelMode: google.maps.TravelMode.DRIVING
         });
-        
+
         // Cache the results
         directionsCache.set(cacheKey, results);
         setDirections(results);
-        
+
       } catch (err) {
         console.error("Error calculating directions:", err);
         setError("Failed to calculate route");
         toast.error("Could not calculate route between locations");
       }
     };
-    
+
     fetchDirections();
-  }, [map, directionsService, pickupCoords, dropCoords, google, tripType]);
+  }, [map, directionsService, pickupCoords, dropCoords, google, tripType, samePoint, pickupLocation, dropLocation, onDistanceCalculated]);
   
   // Reset the calculated flag when locations or tripType change
   useEffect(() => {

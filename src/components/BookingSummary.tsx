@@ -4,7 +4,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2 } from 'lucide-react';
+import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
 import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
@@ -1088,6 +1088,204 @@ export const BookingSummary = ({
     summaryTotal = outstationBreakdown.totalFare;
   }
 
+  const canShareOnWhatsApp =
+    !!pickupLocation && !!pickupDate && !!selectedCab && summaryTotal > 0;
+
+  const buildBookingUrl = () => {
+    if (typeof window === 'undefined') {
+      return 'https://vizagtaxihub.com';
+    }
+
+    const origin = window.location.origin.includes('localhost')
+      ? 'https://vizagtaxihub.com'
+      : window.location.origin;
+
+    // For outstation trips, build a prefilled URL so guests land on the outstation page
+    if (tripType === 'outstation' && pickupLocation && dropLocation) {
+      const slugify = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+      const fromSlug = slugify(pickupLocation.name);
+      const toSlug = slugify(dropLocation.name);
+
+      // Route pattern in routes.tsx: 'outstation-taxi/:from-to-:to'
+      const url = new URL(`${origin}/outstation-taxi/${fromSlug}-to-${toSlug}`);
+
+      // Include coordinates so map and distance use exact pickup/drop positions
+      const hasValidPickupCoords =
+        typeof pickupLocation.lat === 'number' && !isNaN(pickupLocation.lat) &&
+        typeof pickupLocation.lng === 'number' && !isNaN(pickupLocation.lng) &&
+        !(pickupLocation.lat === 0 && pickupLocation.lng === 0);
+      const hasValidDropCoords =
+        typeof dropLocation.lat === 'number' && !isNaN(dropLocation.lat) &&
+        typeof dropLocation.lng === 'number' && !isNaN(dropLocation.lng) &&
+        !(dropLocation.lat === 0 && dropLocation.lng === 0);
+      if (hasValidPickupCoords) {
+        url.searchParams.set('fromLat', String(pickupLocation.lat));
+        url.searchParams.set('fromLng', String(pickupLocation.lng));
+      }
+      if (hasValidDropCoords) {
+        url.searchParams.set('toLat', String(dropLocation.lat));
+        url.searchParams.set('toLng', String(dropLocation.lng));
+      }
+
+      if (pickupDate) {
+        url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
+      }
+      if (tripMode) {
+        url.searchParams.set('mode', tripMode);
+      }
+      // Include return date for round-trip so the link restores the correct return date
+      if (tripMode === 'round-trip' && returnDate) {
+        url.searchParams.set('returnDate', returnDate.toISOString());
+      }
+      url.searchParams.set('auto', '1');
+
+      return url.toString();
+    }
+
+    // For local trips, use local-taxi page with query params
+    if (tripType === 'local' && pickupLocation) {
+      const slugify = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+      const fromSlug = slugify(pickupLocation.name);
+      const toSlug = slugify(dropLocation?.name || pickupLocation.name);
+
+      // Use base /local-taxi route with query params, so it always matches
+      const url = new URL(`${origin}/local-taxi`);
+      url.searchParams.set('from', fromSlug);
+      url.searchParams.set('to', toSlug);
+      if (pickupDate) {
+        url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
+      }
+      url.searchParams.set('auto', '1');
+      return url.toString();
+    }
+
+    // For airport trips, use airport-taxi page with query params
+    if (tripType === 'airport' && pickupLocation && dropLocation) {
+      const slugify = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+      const fromSlug = slugify(pickupLocation.name);
+      const toSlug = slugify(dropLocation.name);
+
+      const url = new URL(`${origin}/airport-taxi`);
+      url.searchParams.set('from', fromSlug);
+      url.searchParams.set('to', toSlug);
+      const hasValidPickupCoords =
+        typeof pickupLocation.lat === 'number' && !isNaN(pickupLocation.lat) &&
+        typeof pickupLocation.lng === 'number' && !isNaN(pickupLocation.lng) &&
+        !(pickupLocation.lat === 0 && pickupLocation.lng === 0);
+      const hasValidDropCoords =
+        typeof dropLocation.lat === 'number' && !isNaN(dropLocation.lat) &&
+        typeof dropLocation.lng === 'number' && !isNaN(dropLocation.lng) &&
+        !(dropLocation.lat === 0 && dropLocation.lng === 0);
+      if (hasValidPickupCoords) {
+        url.searchParams.set('fromLat', String(pickupLocation.lat));
+        url.searchParams.set('fromLng', String(pickupLocation.lng));
+      }
+      if (hasValidDropCoords) {
+        url.searchParams.set('toLat', String(dropLocation.lat));
+        url.searchParams.set('toLng', String(dropLocation.lng));
+      }
+      if (pickupDate) {
+        url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
+      }
+      url.searchParams.set('auto', '1');
+      return url.toString();
+    }
+
+    // Fallback: use current page URL
+    return window.location.href;
+  };
+
+  const buildWhatsAppMessage = () => {
+    const tripLabel =
+      tripType === 'outstation'
+        ? `Outstation (${tripMode === 'round-trip' ? 'Round-Trip' : 'One-Way'})`
+        : tripType === 'local'
+        ? `Local - ${hourlyPackage || 'Package'}`
+        : tripType.charAt(0).toUpperCase() + tripType.slice(1);
+
+    const distanceText =
+      tripType === 'outstation' && tripMode === 'round-trip'
+        ? `${distance * 2} KM (actual distance)`
+        : `${distance} KM`;
+
+    const lines: (string | undefined)[] = [
+      '🚖 Cab quote from Vizag Taxi Hub',
+      '',
+      `Trip: ${tripLabel}`,
+      pickupLocation ? `Pickup: ${pickupLocation.name}` : undefined,
+      pickupLocation?.address &&
+        pickupLocation.address !== pickupLocation.name
+        ? `Pickup address: ${pickupLocation.address}`
+        : undefined,
+      tripType !== 'local' &&
+        tripType !== 'tour' &&
+        dropLocation
+        ? `Drop-off: ${dropLocation.name}`
+        : undefined,
+      dropLocation?.address &&
+        dropLocation.address !== dropLocation.name
+        ? `Drop-off address: ${dropLocation.address}`
+        : undefined,
+      pickupDate
+        ? `Pickup date: ${format(pickupDate, 'EEE, MMM d, yyyy - h:mm a')}`
+        : undefined,
+      tripType === 'outstation' &&
+        tripMode === 'round-trip' &&
+        returnDate
+        ? `Return date: ${format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}`
+        : undefined,
+      distance > 0 ? `Total distance: ${distanceText}` : undefined,
+      '',
+      selectedCab ? `Vehicle: ${selectedCab.name}` : undefined,
+      '',
+      `Base fare: ${formatPrice(summaryBaseFare)}`,
+      summaryDriverAllowance > 0
+        ? `Driver allowance: ${formatPrice(summaryDriverAllowance)}`
+        : undefined,
+      summaryNightAllowance > 0
+        ? `Night allowance: ${formatPrice(summaryNightAllowance)}`
+        : undefined,
+      summaryExtraDistanceCharges > 0
+        ? `Extra distance charges: ${formatPrice(summaryExtraDistanceCharges)}${
+            extraDistance > 0 ? ` (${extraDistance} KM)` : ''
+          }`
+        : undefined,
+      '',
+      `Total Price: ${formatPrice(summaryTotal)}`,
+      '',
+      'Parking and tolls fees are extra.',
+      '',
+      'View / book this trip:',
+      buildBookingUrl()
+    ];
+
+    return lines.filter(Boolean).join('\n');
+  };
+
+  const handleWhatsappShare = () => {
+    if (!canShareOnWhatsApp) return;
+    const message = buildWhatsAppMessage();
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    if (typeof window !== 'undefined') {
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   // Compute dynamic values for inclusions/exclusions section
   let computedExtraKmCharge = 0;
   if (tripType === 'local') {
@@ -1441,6 +1639,21 @@ export const BookingSummary = ({
                 </div>
               </>
             )}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleWhatsappShare}
+                disabled={!canShareOnWhatsApp}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-[12px] font-medium ${
+                  canShareOnWhatsApp
+                    ? 'bg-green-500 hover:bg-green-600 text-white'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Share summary on WhatsApp
+              </button>
+            </div>
             {isLoading && (
               <div className="mt-3 text-center">
                 <p className="text-sm text-blue-500 animate-pulse">Calculating latest fare...</p>
