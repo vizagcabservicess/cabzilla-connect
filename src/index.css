@@ -444,6 +444,7 @@ margin-top: 4px !important;
   #booking-summary {
     margin-bottom: 1rem !important;
     padding-bottom: 1rem !important;
+    scroll-margin-top: 1rem; /* Offset when smooth-scrolling from vehicle selection */
   }
 
   /* Fix for Hero component Book Now button */

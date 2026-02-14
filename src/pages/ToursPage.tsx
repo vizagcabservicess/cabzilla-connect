@@ -276,7 +276,7 @@ const ToursPage = () => {
       
       <div className="min-h-screen bg-white flex flex-col">
         <Navbar />
-        <main className="flex-1 pt-16">
+        <main className="flex-1 pt-20">
           
           {/* Hero Section - Only show when not searching */}
           {!searchInitiated && (

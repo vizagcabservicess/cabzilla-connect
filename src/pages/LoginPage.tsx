@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50 pt-20">
       <Navbar />
       
       <div className="container mx-auto py-20 px-4">

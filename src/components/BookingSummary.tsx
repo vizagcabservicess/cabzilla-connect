@@ -1133,7 +1133,7 @@ export const BookingSummary = ({
       }
 
       if (pickupDate) {
-        url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
+        url.searchParams.set('date', pickupDate.toISOString());
       }
       if (tripMode) {
         url.searchParams.set('mode', tripMode);

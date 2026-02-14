@@ -46,12 +46,14 @@ export function OutstationTaxiPrefilledPage() {
         <link rel="canonical" href={`https://vizagtaxihub.com/outstation-taxi/${from}/${to}`} />
       </Helmet>
       
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white pt-24 md:pt-28 pb-12 md:pb-16">
         <Navbar />
-        <OutstationHeroWidget 
-          initialPickup={pickupLocation} 
-          initialDrop={dropLocation} 
-        />
+        <section className="pt-4 md:pt-6 pb-6 md:pb-10">
+          <OutstationHeroWidget 
+            initialPickup={pickupLocation} 
+            initialDrop={dropLocation} 
+          />
+        </section>
         {/* A footer could be added here if needed */}
       </div>
     </>

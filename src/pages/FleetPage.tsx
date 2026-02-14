@@ -117,7 +117,7 @@ export default function FleetPage() {
       
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
-        <main className="flex-1 pt-16">
+        <main className="flex-1 pt-20">
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background py-16">
           <div className="container mx-auto px-6 sm:px-8 lg:px-12 text-center">

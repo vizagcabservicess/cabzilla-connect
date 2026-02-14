@@ -169,7 +169,7 @@ const CancellationRefundPolicyPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50 pt-20">
       <Navbar />
       <Helmet>
         <title>Cancellation & Refund Policy - Vizag Taxi Hub</title>

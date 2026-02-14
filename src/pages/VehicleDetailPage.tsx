@@ -358,7 +358,7 @@ const VehicleDetailPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <main id="main-content">
-        <div className="container mx-auto px-4 py-8 max-w-7xl  pt-16 md:pt-24 pb-16 md:pb-32">
+        <div className="container mx-auto px-4 py-8 max-w-7xl  pt-20 md:pt-28 pb-16 md:pb-32">
           <Breadcrumb className="mb-6">
             <BreadcrumbList>
               <BreadcrumbItem>

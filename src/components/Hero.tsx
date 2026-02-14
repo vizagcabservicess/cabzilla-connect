@@ -524,11 +524,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // returnDate is NOT in dependencies to avoid infinite loops
   }, [pickupLocation, dropLocation, pickupDate, tripType, tripMode]);
 
-  // Validate returnDate when user manually edits it
+  // Validate returnDate when user manually edits it (round-trip only)
   useEffect(() => {
+    if (tripType !== 'outstation' || tripMode !== 'round-trip') {
+      setValidationError(null);
+      return;
+    }
     if (
-      tripType === 'outstation' &&
-      tripMode === 'round-trip' &&
       pickupLocation && dropLocation &&
       pickupDate &&
       returnDate &&
@@ -1243,6 +1245,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
   let totalPrice = calculatePrice();
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
+  const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
@@ -1371,11 +1374,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Add a wrapper to setSelectedCab that also scrolls to summary
   const setSelectedCab = (cab: CabType) => {
     setSelectedCabState(cab);
-    setTimeout(() => {
-      if (bookingSummaryRef.current) {
-        bookingSummaryRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
+    // Use requestAnimationFrame to ensure DOM has updated, then smooth scroll to booking summary
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        bookingSummaryRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest'
+        });
+      });
+    });
   };
 
   // Test function to manually trigger automatic switching (for debugging)
@@ -1452,8 +1460,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     <div className="relative">
       {/* Mobile Edit Form Overlay */}
       {isMobile && showMobileEditForm && (
-        <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
-          <div className=" top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -1467,7 +1475,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
             <div className="w-16"></div> {/* Spacer for center alignment */}
           </div>
           
-                     <div className="p-4 mt-8">
+                     <div className="p-4 pb-28 mt-8">
            
             
             {/* Trip Type Selector */}
@@ -1606,7 +1614,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         ${!isSearchActive && currentStep === 1 
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
-        } ${((isSearchActive || hideBackground) && currentStep === 1) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
+        } ${((isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
             <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-4`}>
@@ -1980,15 +1988,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             >
                               <ArrowLeft className="w-5 h-5" />
                             </button>
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-1">
-                                <span className="font-bold text-sm sm:text-base text-gray-900">
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <div className="flex flex-col md:flex-row md:items-center md:gap-1 gap-0.5">
+                                <span className="font-bold text-sm sm:text-base text-gray-900 break-words">
                                   {pickupLocation?.name || 'Pickup'}
                                 </span>
                                 {pickupLocation && dropLocation && (
                                   <>
-                                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                    <span className="font-bold text-sm sm:text-base text-gray-900 truncate">
+                                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 hidden md:block" />
+                                    <span className="font-bold text-sm sm:text-base text-gray-900 break-words md:truncate md:max-w-[180px]">
+                                      <span className="text-gray-500 font-normal md:hidden">to </span>
                                       {dropLocation?.name || 'Drop'}
                                     </span>
                                   </>
@@ -2078,7 +2087,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                {/* Distance and Time Info - moved below edit module */}
                         {(tripType === 'outstation' || tripType === 'airport') && distance > 0 && duration > 0 && (
                           <div className="text-xs text-gray-500 font-medium">
-                            Rates for {displayDistance} Kms approx distance | {Math.round(duration / 60)} hr(s) approx time
+                            Rates for {displayDistance} Kms approx distance | {Math.round(displayDuration / 60)} hr(s) approx time
                           </div>
                         )}
                             {!isMobile && (tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (

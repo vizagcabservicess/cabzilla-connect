@@ -9,7 +9,7 @@ interface OutstationHeroProps {
 
 export function OutstationHero({ initialPickup, initialDrop, onSearch }: OutstationHeroProps) {
   return (
-    <div className="flex justify-center items-center min-h-[60vh] w-full">
+    <div className="flex justify-center items-center min-h-[60vh] w-full mt-[46px]">
       <div className="w-full max-w-8xl px-4">
         <OutstationHeroWidget initialPickup={initialPickup} initialDrop={initialDrop} onSearch={onSearch} />
       </div>

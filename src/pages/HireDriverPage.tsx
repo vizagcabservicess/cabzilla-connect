@@ -315,7 +315,7 @@ Best regards,
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-background pt-16">
+      <div className="min-h-screen bg-background pt-20">
         <Navbar />
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background pt-16 py-8">

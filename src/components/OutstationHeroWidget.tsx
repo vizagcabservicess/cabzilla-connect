@@ -124,7 +124,17 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
   if (pickup && drop) {
     const pickupData = getLocationData(pickup);
     const dropData = getLocationData(drop);
-    const parsedPickupDate = dateParam ? new Date(dateParam) : undefined;
+    const parsedPickupDate = dateParam ? (() => {
+      const d = dateParam.trim();
+      if (d.includes('T') || d.includes('Z')) {
+        return new Date(d);
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        const [y, m, day] = d.split('-').map(Number);
+        return new Date(y, m - 1, day, 7, 0, 0);
+      }
+      return new Date(d);
+    })() : undefined;
     const parsedReturnDate = returnDateParam ? new Date(returnDateParam) : undefined;
     const tripMode = modeParam === 'round-trip' ? 'round-trip' : 'one-way';
 

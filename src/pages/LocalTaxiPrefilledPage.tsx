@@ -46,7 +46,7 @@ export function LocalTaxiPrefilledPage() {
         <link rel="canonical" href={`https://vizagtaxihub.com/local-taxi/${from}/${to}`} />
       </Helmet>
       
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white pt-24 md:pt-28">
         <Navbar />
         <LocalHeroWidget 
           initialPickup={pickupLocation} 

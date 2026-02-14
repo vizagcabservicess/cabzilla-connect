@@ -68,7 +68,7 @@ const SeventeenSeaterTempoTravellerPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         
-        <div className="container mx-auto px-4 py-8 max-w-7xl pt-16 md:pt-24 pb-16 md:pb-32">
+        <div className="container mx-auto px-4 py-8 max-w-7xl pt-20 md:pt-28 pb-16 md:pb-32">
           {/* Hero Section */}
           <div className="bg-gradient-to-r from-green-600 to-green-800 text-white rounded-xl p-8 mb-8">
             <h1 className="text-2xl md:text-3xl font-bold mb-4">17 Seater Tempo Traveller in Vizag</h1>
