@@ -1525,6 +1525,19 @@ export const BookingSummary = ({
           </div>
 
           <div className="border-b pb-4">
+            {!selectedCab ? (
+              <div className="bg-gray-50 rounded-lg p-4 mb-3 text-center">
+                <p className="text-sm text-gray-600">Select a vehicle to see fare details</p>
+                <button
+                  type="button"
+                  disabled
+                  className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-full text-[12px] font-medium bg-gray-200 text-gray-500 cursor-not-allowed"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Share summary on WhatsApp
+                </button>
+              </div>
+            ) : (
             <div className="bg-blue-50 rounded-lg p-4 mb-3">
               <div className="flex items-center gap-4">
                 {/* Car Image */}
@@ -1567,8 +1580,10 @@ export const BookingSummary = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
+          {selectedCab && (
           <div className="space-y-2">
             {tripType === 'local' ? (
               <>
@@ -1660,6 +1675,7 @@ export const BookingSummary = ({
               </div>
             )}
           </div>
+          )}
           <div className="text-[12px] text-gray-500 mt-2">Parking and tolls fees are extra.</div>
 
           {/* Inclusions/Exclusions */}

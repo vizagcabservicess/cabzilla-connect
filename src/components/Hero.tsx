@@ -201,7 +201,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     });
     setReturnDate(newDate || null);
   }, [returnDate]);
-  const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || (cabTypes.length > 0 ? cabTypes[0] : null));
+  // Don't auto-select first vehicle - user must explicitly select to see booking summary
+  const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || null);
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
@@ -279,10 +280,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         setDynamicVehicles(vehicles);
         setVehiclesLoaded(true);
         
-        // Auto-select first vehicle if none is selected and we have vehicles
-        if (!selectedCab && vehicles.length > 0) {
-          setSelectedCab(vehicles[0]);
-        }
+        // Don't auto-select - user must explicitly select a vehicle
         
         // Add a global function for manual testing
         (window as any).refreshVehicles = () => {
@@ -299,10 +297,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         setDynamicVehicles(cabTypes);
         setVehiclesLoaded(true);
         
-        // Auto-select first vehicle from fallback if none is selected
-        if (!selectedCab && cabTypes.length > 0) {
-          setSelectedCab(cabTypes[0]);
-        }
+        // Don't auto-select - user must explicitly select a vehicle
       }
     };
     
@@ -1172,9 +1167,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   };
 
   function calculatePrice() {
-    // If no vehicle is selected, try to get the first available vehicle for pricing
-    const currentCab = selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null);
-    if (!currentCab) return 0;
+    if (!selectedCab) return 0;
+    const currentCab = selectedCab;
     
     let totalPrice = 0;
     
@@ -1428,10 +1422,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           // If no vehicles are available, clear selection
           setSelectedCab(null);
         }
-      } else if (availableVehicles.length > 0) {
-        // If no vehicle is selected but vehicles are available, auto-select the first one
-        setSelectedCab(availableVehicles[0]);
       }
+      // Don't auto-select when none selected - user must explicitly choose a vehicle
     }
   }, [pickupDate, returnDate, selectedCab, dynamicVehicles, vehiclesLoaded]);
 
@@ -1494,7 +1486,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
               <div className="flex flex-col items-stretch gap-0">
                 {/* From Location */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 p-4">
+                  <div className="flex items-center gap-2 p-3">
                     {/* Removed icon and 'Enter' text */}
                     <div className="flex-1 min-w-0">
                                              <LocationInput
@@ -1514,7 +1506,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                 {/* To Location */}
                 {(tripType === 'outstation' || tripType === 'airport') && (
                   <div className="flex-1 min-w-0 border-t border-gray-200">
-                    <div className="flex items-center gap-2 p-4">
+                    <div className="flex items-center gap-2 p-3">
                       {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                                                  <LocationInput
@@ -1534,7 +1526,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
                 {/* Date Picker */}
                 <div className="flex-1 min-w-0 border-t border-gray-200">
-                  <div className="flex items-center gap-2 p-4">
+                  <div className="flex items-center gap-2 p-3">
                     <div className="flex-1 min-w-0">
                       <DateTimePicker
                         date={pickupDate}
@@ -1549,7 +1541,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                 {/* Return Date for Round Trip */}
                 {tripType === 'outstation' && tripMode === 'round-trip' && (
                   <div className="flex-1 min-w-0 border-t border-gray-200">
-                    <div className="flex items-center gap-2 p-4">
+                    <div className="flex items-center gap-2 p-3">
                       <div className="flex-1 min-w-0">
                         <DateTimePicker
                           date={returnDate}
@@ -1617,7 +1609,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         } ${((isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
-            <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 sm:p-4`}>
+            <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3`}>
               
               
               {!showGuestDetailsForm ? (
@@ -1644,7 +1636,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                         <div className="flex flex-col lg:flex-row items-stretch gap-0">
                           {/* From Location */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-4">
+                            <div className="flex items-center gap-2 p-3">
                               {/* Removed icon and 'Enter' text */}
                               <div className="flex-1 min-w-0">
                                                                  <LocationInput
@@ -1669,7 +1661,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           {/* To Location */}
                           {(tripType === 'outstation' || tripType === 'airport') && (
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 p-4">
+                              <div className="flex items-center gap-2 p-3">
                                 {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                                                      <LocationInput
@@ -1692,7 +1684,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             <>
                               <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center relative w-full h-full p-4">
+                                <div className="flex items-center relative w-full h-full p-3">
                                   {(isPackageFocused || hourlyPackage) && (
                                     <label
                                       className="absolute left-4 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
@@ -1741,7 +1733,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
 
                           {/* Date Picker */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-4">
+                            <div className="flex items-center gap-2 p-3">
                              
                               <div className="flex-1 min-w-0">
                                 <DateTimePicker
@@ -1759,7 +1751,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                             <>
                               <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 p-4">
+                                <div className="flex items-center gap-2 p-3">
                                   
                                   <div className="flex-1 min-w-0">
                                     <DateTimePicker
@@ -2130,7 +2122,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               dropLocation={dropLocation} 
                               pickupDate={pickupDate} 
                               returnDate={returnDate} 
-                              selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)} 
+                              selectedCab={selectedCab} 
                               distance={distance} 
                               tripType={tripType} 
                               tripMode={tripMode} 
@@ -2274,7 +2266,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       dropLocation={dropLocation}
                       pickupDate={pickupDate}
                       returnDate={returnDate}
-                      selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)}
+                      selectedCab={selectedCab}
                       distance={distance}
                       totalPrice={totalPrice}
                       tripType={tripType}
@@ -2330,7 +2322,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                   dropLocation={dropLocation}
                   pickupDate={pickupDate}
                   returnDate={returnDate}
-                  selectedCab={selectedCab || (dynamicVehicles.length > 0 ? dynamicVehicles[0] : null)}
+                  selectedCab={selectedCab}
                   distance={distance}
                   totalPrice={totalPrice}
                   tripType={tripType}

@@ -82,7 +82,7 @@ const Index = () => {
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-white flex flex-col pt-24">
+      <div className="min-h-screen bg-white flex flex-col pt-20">
         <Navbar />
         <main className="flex-1">
           <Hero
