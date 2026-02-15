@@ -106,6 +106,9 @@ const Footer = () => {
                 <Link to="/12-seater-tempo-traveller-vizag" className="hover:text-white transition-colors block">12 Seater Tempo Traveller</Link>
               </li>
               <li>
+                <Link to="/18-seater-tempo-traveller-vizag" className="hover:text-white transition-colors block">18 Seater Tempo Traveller</Link>
+              </li>
+              <li>
                 <Link to="/group-travel-tempo-traveller-vizag" className="hover:text-white transition-colors block">Group Travel</Link>
               </li>
               <li>
@@ -119,6 +122,12 @@ const Footer = () => {
               </li>
               <li>
                 <Link to="/mini-bus-travels-vizag" className="hover:text-white transition-colors block">Mini Bus Travels</Link>
+              </li>
+              <li>
+                <Link to="/araku-tour-packages-vizag" className="hover:text-white transition-colors block">Araku Tour Packages</Link>
+              </li>
+              <li>
+                <Link to="/vizag-to-araku-bus" className="hover:text-white transition-colors block">Vizag to Araku Bus</Link>
               </li>
             </ul>
           </div>

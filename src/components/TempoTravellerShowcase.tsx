@@ -45,6 +45,16 @@ export function TempoTravellerShowcase() {
     },
     {
       icon: Users,
+      title: "18 Seater Tempo Traveller",
+      offer: "Large group travel solutions",
+      description: "18-seater tempo traveller for biggest groups",
+      features: ["18 passenger capacity", "AC comfort", "Maximum capacity"],
+      bgColor: "bg-gradient-to-br from-cyan-50 to-cyan-100",
+      iconColor: "text-cyan-600",
+      link: "/18-seater-tempo-traveller-vizag"
+    },
+    {
+      icon: Users,
       title: "Group Travel",
       offer: "Specialized group travel solutions",
       description: "Tailored group travel packages for all occasions",
