@@ -173,6 +173,7 @@ export class URLRedirectService {
     { from: '/lambasingi-tour', to: '/tours/lambasingi-tour', type: 'permanent', statusCode: 301 },
     { from: '/lambasingi', to: '/tours/lambasingi-tour', type: 'permanent', statusCode: 301 },
     { from: '/vizag-city-tour', to: '/tours/vizag-north-city-tour', type: 'permanent', statusCode: 301 },
+    { from: '/visakhapatnam-city-tour', to: '/tours/vizag-north-city-tour', type: 'permanent', statusCode: 301 },
     { from: '/city-tour', to: '/tours/vizag-north-city-tour', type: 'permanent', statusCode: 301 },
     
     // Old vehicle-specific routes

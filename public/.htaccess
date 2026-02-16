@@ -386,6 +386,7 @@ RewriteRule ^araku-valley$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^lambasingi-tour$ /tours/lambasingi-tour [R=301,L]
 RewriteRule ^lambasingi$ /tours/lambasingi-tour [R=301,L]
 RewriteRule ^vizag-city-tour$ /tours/vizag-north-city-tour [R=301,L]
+RewriteRule ^visakhapatnam-city-tour$ /tours/vizag-north-city-tour [R=301,L]
 RewriteRule ^city-tour$ /tours/vizag-north-city-tour [R=301,L]
 
 # Legacy tour ID redirects to new tour name URLs
