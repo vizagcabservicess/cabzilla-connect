@@ -23,6 +23,9 @@ const Footer = () => {
               <li>
                 <Link to="/tours" className="hover:text-white transition-colors block">Tour Packages</Link>
               </li>
+              <li>
+                <Link to="/group-tours" className="hover:text-white transition-colors block">Group Tours</Link>
+              </li>
             </ul>
           </div>
           
@@ -68,6 +71,9 @@ const Footer = () => {
               </li>
               <li>
                 <Link to="/tours/vizag-south-city-tour" className="hover:text-white transition-colors block">Vizag South City Tour</Link>
+              </li>
+              <li>
+                <Link to="/group-tours" className="hover:text-white transition-colors block">Group Tours</Link>
               </li>
             </ul>
           </div>

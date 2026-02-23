@@ -1,7 +1,11 @@
-
 {
-    "require": {
-        "phpmailer/phpmailer": "^6.8",
-        "dompdf/dompdf": "^2.0"
-    }
+  "name": "vizagtaxihub/group-tour-backend",
+  "description": "Group Tour API backend dependencies",
+  "require": {
+    "phpmailer/phpmailer": "^6.8",
+    "dompdf/dompdf": "^2.0"
+  },
+  "autoload": {
+    "classmap": []
+  }
 }

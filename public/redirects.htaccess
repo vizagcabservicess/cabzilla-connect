@@ -161,6 +161,11 @@ RewriteRule ^vizag-to-bhubaneswar$ /outstation-taxi/visakhapatnam-to-bhubaneswar
 RewriteRule ^vizag-to-kolkata$ /outstation-taxi/visakhapatnam-to-kolkata [R=301,L]
 RewriteRule ^vizag-to-raipur$ /outstation-taxi/visakhapatnam-to-raipur [R=301,L]
 
+# Group Tour - Tempo Traveller seat sharing
+RewriteRule ^group-tour$ /group-tours [R=301,L]
+RewriteRule ^tempo-traveller-booking$ /group-tours [R=301,L]
+RewriteRule ^seat-sharing$ /group-tours [R=301,L]
+
 # Old tour-specific routes
 RewriteRule ^araku-tour$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^araku-valley$ /tours/araku-valley-tour [R=301,L]

@@ -51,10 +51,12 @@ const megaMenuData = {
       { label: 'Outstation', to: '/outstation-taxi' },
       { label: 'Airport Transfer', to: '/airport-taxi' },
       { label: 'Tour Packages', to: '/tours' },
+      { label: 'Group Tours', to: '/group-tours' },
       { 
         label: 'Tempo Traveller Rental', 
         to: '/tempo-traveller-rental-vizag',
         subItems: [
+          { label: 'Seat Sharing (Book Seats)', to: '/group-tours' },
           { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
           { label: '17 Seater Tempo Traveller', to: '/17-seater-tempo-traveller-vizag' },
           { label: '12 Seater Tempo Traveller', to: '/12-seater-tempo-traveller-vizag' },
@@ -70,6 +72,8 @@ const megaMenuData = {
       { label: 'Hourly Packages', items: ['8hrs/80km', '10hrs/100km', 'Professional drivers'] },
       { label: 'Long Distance', items: ['Hyderabad', 'Chennai', 'Bangalore'] },
       { label: 'Airport Info', items: ['On-time guarantee', 'Flight tracking', 'Fixed rates'] },
+      { label: 'Tour Features', items: ['Professional guides', 'Sightseeing included', 'Best rates'] },
+      { label: 'Group Tour Benefits', items: ['Save up to 60% on shared travel', 'Popular routes: Araku, Lambasingi', 'Book individual seats online', 'Tempo Traveller & AC vehicles'] },
       { label: 'Tempo Traveller Services', items: ['12-18 seater options', 'Group travel', 'Wedding transport', 'Corporate events'] },
     ],
   },
@@ -144,7 +148,8 @@ const serviceLinks = [
   { name: 'Local Taxi', href: '/local-taxi', description: 'City tours and local trips' },
   { name: 'Outstation', href: '/outstation-taxi', description: 'Inter-city travel' },
   { name: 'Airport Transfer', href: '/airport-taxi', description: 'Airport pickup & drop' },
-  { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' }
+  { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' },
+  { name: 'Group Tours', href: '/group-tours', description: 'Shared tours – save up to 60%' }
 ];
 
 export function Navbar() {
@@ -300,7 +305,7 @@ export function Navbar() {
     return (
       <div
         ref={megaMenuRef}
-        className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-50 border border-gray-200"
+        className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-[9998] border border-gray-200"
         tabIndex={-1}
         style={{ 
           minHeight: isOutstation ? 400 : (isCompany || isSupport) ? 200 : 260,
@@ -601,6 +606,10 @@ export function Navbar() {
                         <Link to="/tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Calendar className="h-4 w-4" />
                           <span>Tour Packages</span>
+                        </Link>
+                        <Link to="/group-tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
+                          <Calendar className="h-4 w-4" />
+                          <span>Group Tours</span>
                         </Link>
                       </div>
                     )}

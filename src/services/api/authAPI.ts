@@ -60,7 +60,6 @@ class AuthAPI {
   private initializeToken() {
     try {
       this.token = localStorage.getItem('auth_token');
-      console.log('DEBUG: AuthAPI initialized with token:', this.token ? 'present' : 'null');
     } catch (e) {
       console.error("Could not access localStorage:", e);
     }
@@ -73,7 +72,6 @@ class AuthAPI {
     } else {
       localStorage.removeItem('auth_token');
     }
-    console.log('DEBUG: AuthAPI token set:', token ? 'present' : 'null');
   }
 
   async login(credentials: LoginRequest): Promise<AuthResponse> {

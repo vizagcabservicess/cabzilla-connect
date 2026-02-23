@@ -182,6 +182,23 @@ RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 
+# Admin Group Tour Management
+RewriteRule ^api/admin/group-tour-management/?$ /api/admin/group-tour-management.php [L,NC,QSA]
+RewriteRule ^api/admin/group-tour-bookings/?$ /api/admin/group-tour-bookings.php [L,NC,QSA]
+RewriteRule ^api/admin/group-tour-seats/?$ /api/admin/group-tour-seats.php [L,NC,QSA]
+
+# Group Tour API - Tempo Traveller seat sharing
+RewriteRule ^api/group-tour/list-routes/?$ /api/group-tour/list-routes.php [L,NC,QSA]
+RewriteRule ^api/group-tour/list-dates/?$ /api/group-tour/list-dates.php [L,NC,QSA]
+RewriteRule ^api/group-tour/search-tours/?$ /api/group-tour/search-tours.php [L,NC,QSA]
+RewriteRule ^api/group-tour/seat-availability/?$ /api/group-tour/seat-availability.php [L,NC,QSA]
+RewriteRule ^api/group-tour/boarding-points/?$ /api/group-tour/boarding-points.php [L,NC,QSA]
+RewriteRule ^api/group-tour/reserve-seats/?$ /api/group-tour/reserve-seats.php [L,NC,QSA]
+RewriteRule ^api/group-tour/create-order/?$ /api/group-tour/create-order.php [L,NC,QSA]
+RewriteRule ^api/group-tour/verify-payment/?$ /api/group-tour/verify-payment.php [L,NC,QSA]
+RewriteRule ^api/group-tour/booking-details/?$ /api/group-tour/booking-details.php [L,NC,QSA]
+RewriteRule ^api/group-tour/webhook/?$ /api/group-tour/webhook.php [L,NC,QSA]
+
 # Other admin API endpoints
 RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]

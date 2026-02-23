@@ -14,19 +14,24 @@ export const getApiUrl = (path: string = ''): string => {
   const apiDirectories = ['/api/pooling', '/api/admin', '/api/user'];
   const isApiDirectory = apiDirectories.some(dir => normalizedPath.startsWith(dir + '/') || normalizedPath === dir);
 
-  // If the path already has .php, don't add it again
-  if (normalizedPath.includes('.php')) {
+  // Split path and query string - .php must go before ?, not after
+  const [pathPart, queryPart] = normalizedPath.split('?');
+  const hasQuery = queryPart !== undefined;
+
+  // If the path part already has .php, don't add it again
+  if (pathPart.includes('.php')) {
     const fullUrl = `${apiBaseUrl}${normalizedPath}`.replace(/([^:]\/)+/g, '$1');
     return fullUrl;
   }
 
-  // Add .php extension if the path is an API endpoint and doesn't already have an extension, doesn't end with a slash, and is not a known API directory
+  // Add .php before query string if this is an API endpoint
   if (
-    normalizedPath.includes('/api/') &&
-    !normalizedPath.endsWith('/') &&
+    pathPart.includes('/api/') &&
+    !pathPart.endsWith('/') &&
     !isApiDirectory
   ) {
-    return `${apiBaseUrl}${normalizedPath}.php`.replace(/([^:]\/)+/g, '$1');
+    const withPhp = hasQuery ? `${pathPart}.php?${queryPart}` : `${pathPart}.php`;
+    return `${apiBaseUrl}${withPhp}`.replace(/([^:]\/)+/g, '$1');
   }
 
   // Remove any duplicate slashes that might occur when joining

@@ -25,7 +25,6 @@ if (import.meta.env.MODE === 'development') {
   // Also set the token in authAPI instance
   import('./services/api/authAPI').then(({ authAPI }) => {
     authAPI.setToken(devToken);
-    console.log('DEBUG: Set dev token in authAPI instance');
   });
 }
 

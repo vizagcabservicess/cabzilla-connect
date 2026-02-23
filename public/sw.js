@@ -133,10 +133,9 @@ async function clearCache(url) {
     // Notify main thread
     self.clients.matchAll().then(clients => {
       clients.forEach(client => {
-        client.postMessage({
-          type: 'CACHE_CLEARED',
-          url: url
-        });
+        try {
+          client.postMessage({ type: 'CACHE_CLEARED', url: url });
+        } catch (e) { /* ignore postMessage errors to sandboxed/iframe clients */ }
       });
     });
   } catch (error) {
@@ -157,9 +156,9 @@ async function clearAllCaches() {
     // Notify main thread
     self.clients.matchAll().then(clients => {
       clients.forEach(client => {
-        client.postMessage({
-          type: 'ALL_CACHES_CLEARED'
-        });
+        try {
+          client.postMessage({ type: 'ALL_CACHES_CLEARED' });
+        } catch (e) { /* ignore postMessage errors to sandboxed/iframe clients */ }
       });
     });
   } catch (error) {

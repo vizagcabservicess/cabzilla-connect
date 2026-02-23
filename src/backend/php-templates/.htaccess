@@ -28,11 +28,13 @@ RewriteRule .* - [R=200,L]
 
 # Set secure CORS headers for all responses - SECURITY: Restrict to trusted domains only
 <IfModule mod_headers.c>
-    # SECURITY: Only allow trusted domains
+    # SECURITY: Only allow trusted domains (production + localhost for dev)
     SetEnvIf Origin "^https://vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
     SetEnvIf Origin "^https://www\.vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
+    SetEnvIf Origin "^http://localhost(.*)$" ALLOWED_ORIGIN=$0
+    SetEnvIf Origin "^http://127\.0\.0\.1(.*)$" ALLOWED_ORIGIN=$0
     Header always set Access-Control-Allow-Origin "%{ALLOWED_ORIGIN}e" env=ALLOWED_ORIGIN
-    Header always set Access-Control-Allow-Origin "https://vizagtaxihub.com" env=!ALLOWED_ORIGIN
+    Header always set Access-Control-Allow-Origin "https://www.vizagtaxihub.com" env=!ALLOWED_ORIGIN
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First"
     Header always set Access-Control-Max-Age "86400"
@@ -178,6 +180,21 @@ RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
 RewriteRule ^api/bookings/?$ /api/bookings.php [L,NC,QSA]
 
+# Admin Group Tour Management
+RewriteRule ^api/admin/group-tour-management/?$ /api/admin/group-tour-management.php [L,NC,QSA]
+RewriteRule ^api/admin/group-tour-bookings/?$ /api/admin/group-tour-bookings.php [L,NC,QSA]
+
+# Group Tour API - Tempo Traveller seat sharing
+RewriteRule ^api/group-tour/list-routes/?$ /api/group-tour/list-routes.php [L,NC,QSA]
+RewriteRule ^api/group-tour/list-dates/?$ /api/group-tour/list-dates.php [L,NC,QSA]
+RewriteRule ^api/group-tour/search-tours/?$ /api/group-tour/search-tours.php [L,NC,QSA]
+RewriteRule ^api/group-tour/seat-availability/?$ /api/group-tour/seat-availability.php [L,NC,QSA]
+RewriteRule ^api/group-tour/reserve-seats/?$ /api/group-tour/reserve-seats.php [L,NC,QSA]
+RewriteRule ^api/group-tour/create-order/?$ /api/group-tour/create-order.php [L,NC,QSA]
+RewriteRule ^api/group-tour/verify-payment/?$ /api/group-tour/verify-payment.php [L,NC,QSA]
+RewriteRule ^api/group-tour/booking-details/?$ /api/group-tour/booking-details.php [L,NC,QSA]
+RewriteRule ^api/group-tour/webhook/?$ /api/group-tour/webhook.php [L,NC,QSA]
+
 # Other admin API endpoints
 RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]
@@ -208,6 +225,9 @@ RewriteRule ^admin/?$ /index.html [L]
 RewriteRule ^admin/(.*)$ /index.html [L]
 RewriteRule ^booking/(.*)$ /index.html [L]
 RewriteRule ^receipt/(.*)$ /index.html [L]
+# Group Tour - Tempo Traveller seat sharing
+RewriteRule ^group-tours/?$ /index.html [L]
+RewriteRule ^group-tours/(.*)$ /index.html [L]
 
 # URL Redirects for Old URLs - Handle 404 errors from Google search results
 # Old vehicle pages (now redirected to fleet)

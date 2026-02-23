@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, Outlet, useLocation, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Outlet, useLocation, useSearchParams, Navigate } from 'react-router-dom';
 import { vehicleLoader } from './loaders/vehicleLoader';
 import { lazy, Suspense, startTransition } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
@@ -101,6 +101,7 @@ const PoolingPage = lazy(() => import('./pages/PoolingPage'));
 const PoolingBookingPage = lazy(() => import('./pages/PoolingBookingPage'));
 const PoolingDashboard = lazy(() => import('./pages/admin/PoolingDashboard'));
 const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashboard'));
+const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursManagementPage'));
 const CreateRidePage = lazy(() => import('./components/pooling/CreateRidePage'));
 const BookingsPage = lazy(() => import('./pages/BookingsPage'));
 const FaresPage = lazy(() => import('./pages/FaresPage'));
@@ -148,6 +149,12 @@ const EighteenSeaterTempoTravellerPage = lazy(() => import('./pages/EighteenSeat
 const MiniBusTravelsPage = lazy(() => import('./pages/MiniBusTravelsPage'));
 const ArakuTourPackagesPage = lazy(() => import('./pages/ArakuTourPackagesPage'));
 const VizagToArakuBusPage = lazy(() => import('./pages/VizagToArakuBusPage'));
+const GroupTourLandingPage = lazy(() => import('./pages/group-tour/GroupTourLandingPage'));
+const GroupTourSearchPage = lazy(() => import('./pages/group-tour/GroupTourSearchPage'));
+const GroupTourSeatSelectionPage = lazy(() => import('./pages/group-tour/GroupTourSeatSelectionPage'));
+const GroupTourBoardingPointPage = lazy(() => import('./pages/group-tour/GroupTourBoardingPointPage'));
+const GroupTourPassengerDetailsPage = lazy(() => import('./pages/group-tour/GroupTourPassengerDetailsPage'));
+const GroupTourConfirmationPage = lazy(() => import('./pages/group-tour/GroupTourConfirmationPage'));
 const PrivilegeManagement = lazy(() => import('./components/admin/PrivilegeManagement').then(module => ({ default: module.PrivilegeManagement })));
 
 // Loading component for route transitions
@@ -163,6 +170,7 @@ const LazyRoute = ({ component: Component }: { component: React.LazyExoticCompon
 // Root component that includes ScrollToTop and RedirectHandler
 function Root() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const getWhatsAppMessage = () => {
     const path = location.pathname;
@@ -182,6 +190,19 @@ function Root() {
     if (path.startsWith('/tours/') && path !== '/tours') {
       const tourId = path.split('/tours/')[1];
       return `Hi Kumar! I would like to know more about tour package ${tourId}`;
+    }
+    
+    // Check for group tour pages - enquiry with route info
+    if (path.startsWith('/group-tours/')) {
+      const pickup = searchParams.get('pickup') || '';
+      const dropoff = searchParams.get('dropoff') || '';
+      const date = searchParams.get('date') || '';
+      if (pickup && dropoff) {
+        const routeText = `${pickup} to ${dropoff}`;
+        const dateText = date ? ` for ${date}` : '';
+        return `Hi! I am enquiring about the group tour from ${routeText}${dateText}`;
+      }
+      return 'Hi! I am enquiring about the group tour';
     }
     
     // Check for booking-related pages
@@ -345,6 +366,10 @@ const router = createBrowserRouter([
           {
             path: 'create-booking',
             element: <AdminBookingCreationPage />,
+          },
+          {
+            path: 'group-tours',
+            element: <GroupToursManagementPage />,
           },
           {
             path: 'vehicles',
@@ -597,6 +622,31 @@ const router = createBrowserRouter([
       {
         path: 'vizag-to-araku-bus',
         element: <LazyRoute component={VizagToArakuBusPage} />,
+      },
+      // Group Tour - Tempo Traveller seat sharing
+      {
+        path: 'group-tours',
+        element: <LazyRoute component={GroupTourLandingPage} />,
+      },
+      {
+        path: 'group-tours/search',
+        element: <LazyRoute component={GroupTourSearchPage} />,
+      },
+      {
+        path: 'group-tours/seat-selection/:tourId',
+        element: <LazyRoute component={GroupTourSeatSelectionPage} />,
+      },
+      {
+        path: 'group-tours/boarding-point/:tourId',
+        element: <LazyRoute component={GroupTourBoardingPointPage} />,
+      },
+      {
+        path: 'group-tours/passenger-details/:tourId',
+        element: <LazyRoute component={GroupTourPassengerDetailsPage} />,
+      },
+      {
+        path: 'group-tours/confirmation/:bookingId',
+        element: <LazyRoute component={GroupTourConfirmationPage} />,
       },
       {
         path: 'careers',

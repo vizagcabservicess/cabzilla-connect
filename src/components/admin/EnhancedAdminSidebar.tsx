@@ -24,7 +24,8 @@ import {
   BadgePercent,
   Info,
   Shield,
-  Building2
+  Building2,
+  Bus
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -73,6 +74,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <CalendarPlus size={20} />, 
       path: '/admin/create-booking',
       show: canCreateBookings()
+    },
+    { 
+      id: 'group-tours', 
+      label: 'Group Tours', 
+      icon: <Bus size={20} />, 
+      path: '/admin/group-tours',
+      show: canViewBookings() || canCreateBookings() || isAdmin() || isSuperAdmin()
     },
     
     // Fleet Management

@@ -31,7 +31,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // CRITICAL: Restore token to authAPI instance FIRST
         if (storedToken) {
           authAPI.setToken(storedToken);
-          console.log('DEBUG: Restored authAPI.token from localStorage:', storedToken.substring(0, 20) + '...');
         }
         
         // Always verify token validity with server (not just in production)
@@ -42,12 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(userData);
               // Update localStorage with fresh user data
               localStorage.setItem('user', JSON.stringify(userData));
-              console.log('DEBUG: Successfully validated token and updated user');
             } else {
               // Token is invalid, clear it
               authAPI.logout();
               setUser(null);
-              console.log('DEBUG: Token validation failed - cleared invalid token');
             }
           } catch (error) {
             console.error('Token validation failed:', error);

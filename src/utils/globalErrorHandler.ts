@@ -31,6 +31,8 @@ class GlobalErrorHandler {
         console.error('Unhandled dynamic import error:', error);
         this.handleDynamicImportError(error);
         event.preventDefault(); // Prevent default error handling
+      } else if (this.isPostMessageOriginError(error)) {
+        event.preventDefault(); // Suppress Razorpay/cross-origin postMessage noise
       }
     });
 
@@ -41,8 +43,21 @@ class GlobalErrorHandler {
         console.error('Dynamic import error:', error);
         this.handleDynamicImportError(error);
         event.preventDefault();
+      } else if (this.isPostMessageOriginError(error)) {
+        // Suppress known postMessage SecurityError (Razorpay iframe / cross-origin)
+        event.preventDefault();
+        event.stopPropagation();
       }
     });
+  }
+
+  private isPostMessageOriginError(error: any): boolean {
+    if (!error || typeof error.message !== 'string') return false;
+    return (
+      error.name === 'SecurityError' &&
+      error.message.includes('postMessage') &&
+      (error.message.includes("target origin") || error.message.includes("origin"))
+    );
   }
 
   private isDynamicImportError(error: any): boolean {
