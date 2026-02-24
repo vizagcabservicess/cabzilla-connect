@@ -23,9 +23,62 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { groupTourAPI, type GroupTour, type GroupTourBooking, type BoardingPoint } from '@/services/api/groupTourAPI';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Bus, Phone, Mail, LayoutGrid, Ban, MapPin, GripVertical, IndianRupee, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Bus, Phone, Mail, LayoutGrid, Ban, MapPin, GripVertical, IndianRupee, RotateCcw, FileDown } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 const today = new Date().toISOString().slice(0, 10);
+
+function formatBookingDateTime(createdAt: string | undefined): string {
+  if (!createdAt) return '-';
+  try {
+    const d = new Date(createdAt);
+    return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return createdAt;
+  }
+}
+
+function buildWhatsAppShareUrl(b: {
+  customer_phone: string;
+  customer_name: string;
+  booking_number: string;
+  pickup_location: string;
+  dropoff_location: string;
+  travel_date: string;
+  seats: string[];
+  seat_count: number;
+  boarding_point_name?: string | null;
+  boarding_point_time?: string | null;
+  drop_point_name?: string | null;
+  total_amount: number;
+}): string {
+  const phone = b.customer_phone.replace(/\D/g, '');
+  const phoneNum = phone.startsWith('91') ? phone : '91' + phone;
+  const seatsStr = b.seats?.length ? b.seats.join(', ') : `S1-S${b.seat_count}`;
+  const pickupPoint = b.boarding_point_name || b.pickup_location || '-';
+  const pickupTime = b.boarding_point_time || '-';
+  const destination = b.dropoff_location || '-';
+  const dropPoint = b.drop_point_name || (b.boarding_point_name ? 'Same' : '-');
+  const msg = [
+    `Hi ${b.customer_name}!`,
+    '',
+    'Your booking is confirmed.',
+    '',
+    `Booking #: ${b.booking_number}`,
+    `Route: ${b.pickup_location} → ${b.dropoff_location}`,
+    `Date: ${b.travel_date}`,
+    `Seats: ${seatsStr}`,
+    `Pickup Point: ${pickupPoint}`,
+    `Pickup Time: ${pickupTime}`,
+    `Destination: ${destination}`,
+    `Drop Point: ${dropPoint}`,
+    `Amount: ₹${b.total_amount.toLocaleString('en-IN')}`,
+    '',
+    'Thank you for choosing Vizag Taxi Hub.',
+    'Contact: +91 9966363662',
+  ].join('\n');
+  return `https://wa.me/${phoneNum}?text=${encodeURIComponent(msg)}`;
+}
 
 export default function GroupToursManagementPage() {
   const [activeTab, setActiveTab] = useState<string>('tours');
@@ -49,6 +102,7 @@ export default function GroupToursManagementPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [seatsDialogLoading, setSeatsDialogLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: '',
     pickup_location: '',
@@ -323,6 +377,18 @@ export default function GroupToursManagementPage() {
     }
   };
 
+  const handleDownloadInvoice = async (b: GroupTourBooking) => {
+    setDownloadingInvoiceId(b.id);
+    try {
+      await groupTourAPI.adminDownloadInvoice(b.id);
+      toast.success('Invoice downloaded');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to download invoice');
+    } finally {
+      setDownloadingInvoiceId(null);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this tour? Seat reservations will be lost.')) return;
     try {
@@ -535,14 +601,15 @@ export default function GroupToursManagementPage() {
                   <TableRow>
                     <TableHead>Booking ID</TableHead>
                     <TableHead>Route</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Travel Date</TableHead>
+                    <TableHead>Booked On</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Seats</TableHead>
                     <TableHead>Boarding</TableHead>
                     <TableHead>Drop</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
+                    <TableHead className="w-48">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -553,6 +620,9 @@ export default function GroupToursManagementPage() {
                         {b.pickup_location} → {b.dropoff_location}
                       </TableCell>
                       <TableCell>{b.travel_date}</TableCell>
+                      <TableCell className="text-xs text-gray-600">
+                        {formatBookingDateTime(b.created_at)}
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-0.5">
                           <p className="font-medium">{b.customer_name}</p>
@@ -566,7 +636,11 @@ export default function GroupToursManagementPage() {
                       </TableCell>
                       <TableCell>{b.seats?.join(', ') || b.seat_count}</TableCell>
                       <TableCell className="text-xs">
-                        {b.boarding_point_name ? <><span className="font-medium">{b.boarding_point_name}</span>{b.boarding_point_time ? <><br /><span className="text-gray-500">{b.boarding_point_time}</span></> : null}</> : '-'}
+                        {(b.boarding_point_name || b.boarding_point_time) ? <>
+                          {b.boarding_point_name && <span className="font-medium">{b.boarding_point_name}</span>}
+                          {b.boarding_point_name && b.boarding_point_time && <br />}
+                          {b.boarding_point_time && <span className="text-gray-500">{b.boarding_point_name ? b.boarding_point_time : `Pickup: ${b.boarding_point_time}`}</span>}
+                        </> : '-'}
                       </TableCell>
                       <TableCell className="text-xs">{b.drop_point_name || (b.boarding_point_name ? 'Same' : '-')}</TableCell>
                       <TableCell className="text-right font-medium">₹{b.total_amount.toLocaleString('en-IN')}</TableCell>
@@ -582,18 +656,39 @@ export default function GroupToursManagementPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {['paid', 'pending'].includes(b.status) && (
+                        <div className="flex flex-wrap gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
-                            onClick={() => handleCancelBooking(b)}
-                            disabled={cancellingId === b.id}
+                            className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+                            onClick={() => window.open(buildWhatsAppShareUrl(b), '_blank')}
                           >
-                            {cancellingId === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                            {cancellingId === b.id ? 'Cancelling...' : 'Cancel'}
+                            <FaWhatsapp className="h-4 w-4" />
+                            WhatsApp
                           </Button>
-                        )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => handleDownloadInvoice(b)}
+                            disabled={downloadingInvoiceId === b.id}
+                          >
+                            {downloadingInvoiceId === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                            {downloadingInvoiceId === b.id ? '...' : 'Invoice'}
+                          </Button>
+                          {['paid', 'pending'].includes(b.status) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                              onClick={() => handleCancelBooking(b)}
+                              disabled={cancellingId === b.id}
+                            >
+                              {cancellingId === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                              {cancellingId === b.id ? 'Cancelling...' : 'Cancel'}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

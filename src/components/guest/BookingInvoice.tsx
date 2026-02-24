@@ -45,6 +45,7 @@ interface Booking {
   paymentMethod?: string;
   tripType?: string;
   tripMode?: string;
+  bookingType?: string;
   extraCharges?: Array<{
     type: string;
     amount: number;
@@ -366,7 +367,13 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
     }
   };
   const getVehicleType = () => booking.vehicle_type || booking.cab_type || booking.cabType || 'N/A';
-  const getPaymentMethod = () => booking.payment_method || booking.paymentMethod || 'N/A';
+  const getPaymentMethod = () => {
+    const method = (booking as { payment_method?: string; paymentMethod?: string; payment_status?: string }).payment_method
+      || (booking as { payment_method?: string; paymentMethod?: string; payment_status?: string }).paymentMethod;
+    if (method && method !== 'N/A') return method;
+    const paid = (booking as { payment_status?: string }).payment_status === 'paid' || booking.status === 'confirmed';
+    return paid ? 'Online' : (method || 'N/A');
+  };
   const getTripType = () => booking.tripType || 'N/A';
   const getTripMode = () => booking.tripMode || '';
 
@@ -392,7 +399,7 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
   }
   baseFare = effectiveBaseFare;
 
-  // Only render summary after backend invoice HTML is loaded and parsed
+  // Loading or error state
   if (!invoiceHtml) {
     return (
       <Dialog open={true} onOpenChange={onClose}>
@@ -400,161 +407,71 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           <DialogHeader className="border-b border-border pb-4">
             <DialogTitle className="text-lg font-semibold text-center">INVOICE</DialogTitle>
           </DialogHeader>
-          <div className="py-8 text-center text-lg">Loading invoice...</div>
+          <div className="py-8 text-center text-lg">
+            {loadingInvoice ? 'Loading invoice...' : (invoiceError || 'No invoice found for this booking.')}
+          </div>
         </DialogContent>
       </Dialog>
     );
   }
 
-  // --- Top summary section ---
-  // Use the parsed summaryBaseFare and summaryExtraCharges if available
+  // --- Minimal 3-column layout ---
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="border-b border-border pb-4">
-          <DialogTitle className="text-base font-semibold text-center">
-            INVOICE
-          </DialogTitle>
+        <DialogHeader className="border-b border-border pb-2">
+          <DialogTitle className="text-base font-semibold text-center">INVOICE</DialogTitle>
         </DialogHeader>
-        <div className="space-y-8 py-6">
-          <div className="flex flex-col gap-1 mb-2">
-            <div className="flex justify-between">
-              <span>Base Fare</span>
-              <span className="font-semibold text-lg text-yellow-700">₹{formatCurrency(effectiveBaseFare)}</span>
+        <div className="space-y-3 py-3">
+          {/* 3-Column Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold border-b pb-1">Customer</h3>
+              <p className="text-sm">{getGuestName()}</p>
+              <p className="text-sm">{getGuestPhone()}</p>
+              <p className="text-sm">{getGuestEmail()}</p>
             </div>
-            {effectiveExtraCharges > 0 && (
-              <div className="flex justify-between">
-                <span>Extra Charges</span>
-                <span className="font-semibold text-lg text-yellow-700">₹{formatCurrency(effectiveExtraCharges)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Customer and Trip Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Customer Details</h3>
-              <div className="space-y-3">
-                <div>
-                  <span className="font-semibold text-sm">Name:</span>
-                  <p className="text-base">{getGuestName()}</p>
-                </div>
-                <div>
-                  <span className="font-semibold text-sm">Phone:</span>
-                  <p className="text-base">{getGuestPhone()}</p>
-                </div>
-                <div>
-                  <span className="font-semibold text-sm">Email:</span>
-                  <p className="text-base">{getGuestEmail()}</p>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold border-b pb-1">Trip</h3>
+              <p className="text-sm">{getPickupLocation()} → {getDropLocation()}</p>
+              <p className="text-sm">{getPickupDate()} {getPickupTime()}</p>
+              <p className="text-sm">
+                {booking.bookingType === 'group_tour' || getTripType() === 'group_tour' ? 'Group Tour' : getTripType()}
+              </p>
             </div>
-
-            <div>
-              <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Trip Summary</h3>
-              <div className="space-y-3">
-                <div>
-                  <span className="font-semibold text-sm">Trip Type:</span>
-                  <p className="text-base">{getTripType()} {getTripMode() && `(${getTripMode()})`}</p>
-                </div>
-                <div>
-                  <span className="font-semibold text-sm">Date:</span>
-                  <p className="text-base">{getPickupDate()} {getPickupTime()}</p>
-                </div>
-                <div>
-                  <span className="font-semibold text-sm">Vehicle:</span>
-                  <p className="text-base">{getVehicleType()}</p>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold border-b pb-1">Fare</h3>
+              <p className="text-sm">Base: ₹{formatCurrency(effectiveBaseFare)}</p>
+              {effectiveExtraCharges > 0 && <p className="text-sm">Extras: ₹{formatCurrency(effectiveExtraCharges)}</p>}
+              <p className="text-sm font-semibold">Total: ₹{formatCurrency(totalWithTaxes)}</p>
+              <p className="text-sm capitalize">Payment: {getPaymentMethod()}</p>
             </div>
           </div>
 
-          {/* Trip Details Section */}
-          <div>
-            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Trip Details</h3>
-            <div className="grid grid-cols-1 gap-3">
-              <div>
-                <span className="font-semibold text-sm">Pickup:</span>
-                <p className="text-base">{getPickupLocation()}</p>
-              </div>
-              <div>
-                <span className="font-semibold text-sm">Drop:</span>
-                <p className="text-base">{getDropLocation()}</p>
-              </div>
-              <div>
-                <span className="font-semibold text-sm">Pickup Time:</span>
-                <p className="text-base">{getPickupTime()}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Fare Breakdown */}
-          <div>
-            <h3 className="text-lg font-bold mb-4 border-b border-border pb-2">Fare Breakdown</h3>
-            <div className="bg-muted/20 rounded-lg overflow-hidden">
+          {/* Compact Fare Table (for GST/extra charges) */}
+          {(gstEnabled || extraChargesArr.length > 0) && (
+            <div className="text-sm">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold">Description</th>
-                    <th className="text-right py-3 px-4 font-semibold">Amount</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  <tr className="border-b border-border/50">
-                    <td className="py-3 px-4">Base Fare</td>
-                    <td className="py-3 px-4 text-right">₹ {(typeof summaryBaseFare === 'number' ? summaryBaseFare : baseFare).toLocaleString('en-IN')}</td>
-                  </tr>
-                  {extraChargesArr.length > 0 && 
-                    extraChargesArr.map((charge, index) => (
-                      <tr key={index} className="border-b border-border/50">
-                        <td className="py-3 px-4 text-sm">
-                          {charge.type || 'Extra Charge'}: {charge.description || 'Additional service'}
-                        </td>
-                        <td className="py-3 px-4 text-right">₹ {safeNumber(charge.amount).toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))
-                  }
                   {gstEnabled && (
-                    <tr className="border-b border-border/50">
-                      <td className="py-3 px-4">GST (18%)</td>
-                      <td className="py-3 px-4 text-right">₹ {taxes.toLocaleString('en-IN')}</td>
-                    </tr>
+                    <tr><td className="py-1">GST (18%)</td><td className="text-right py-1">₹{taxes.toLocaleString('en-IN')}</td></tr>
                   )}
-                  <tr className="border-b border-border font-semibold text-lg bg-muted/30">
-                    <td className="py-4 px-4">Total Amount</td>
-                    <td className="py-4 px-4 text-right">₹ {totalWithTaxes.toLocaleString('en-IN')}</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-3 px-4">Payment Method</td>
-                    <td className="py-3 px-4 text-right capitalize">{getPaymentMethod()}</td>
-                  </tr>
                 </tbody>
               </table>
             </div>
-          </div>
+          )}
 
-          {/* Company Information */}
-          <div className="bg-muted/20 p-6 rounded-lg">
-            <h3 className="text-lg font-bold mb-3">Company Information</h3>
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>Vizag Taxi Hub</p>
-              <p>Visakhapatnam, Andhra Pradesh</p>
-              <p>Phone: +91 9876543210</p>
-              <p>Email: info@vizagtaxihub.com</p>
-              <p>Website: www.vizagtaxihub.com</p>
+          {/* Company & Footer - Compact */}
+          <div className="bg-muted/20 p-3 rounded text-sm text-muted-foreground flex flex-wrap justify-between items-center gap-2">
+            <div>
+              <p className="font-semibold text-foreground">Vizag Taxi Hub</p>
+              <p>Visakhapatnam | +91 9966363662 | info@vizagtaxihub.com</p>
             </div>
-          </div>
-
-          <div className="text-center border-t border-border pt-6 mt-8">
-            <p className="text-lg font-semibold text-blue-600 mb-2">Thank you for choosing Vizag Taxi Hub!</p>
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>For inquiries, please contact: info@vizagtaxihub.com | +91 9966363662</p>
-              <p>Generated on: {new Date().toLocaleDateString('en-GB')} {new Date().toLocaleTimeString('en-GB', { hour12: false })}</p>
-            </div>
+            <p className="text-xs">Thank you for choosing Vizag Taxi Hub!</p>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-6 border-t border-border">
+          <div className="flex gap-3 pt-3 border-t border-border">
             <Button 
               onClick={generatePDF} 
               disabled={isGeneratingPDF}

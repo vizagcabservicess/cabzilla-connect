@@ -87,9 +87,10 @@ if (isset($_GET['dev_mode']) && $_GET['dev_mode'] === 'true') {
     exit;
 }
 
-// Get user ID from JWT token with improved handling
+// Get user ID and email from JWT token with improved handling
 $headers = getallheaders();
 $userId = null;
+$userEmail = null;
 $isAdmin = false;
 $authSuccess = false;
 
@@ -113,43 +114,24 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     }
     
     try {
+        $payload = null;
         if (function_exists('verifyJwtToken')) {
             logMessage("Using verifyJwtToken function");
             $payload = verifyJwtToken($token);
-            if ($payload && isset($payload['user_id'])) {
-                $userId = $payload['user_id'];
-                $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                $authSuccess = true;
-                logMessage("JWT verification successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
-            } else {
-                logMessage("JWT verification failed, invalid payload");
-            }
         } else {
             logMessage("verifyJwtToken function not available, trying manual parsing");
-            // Try to parse JWT manually
             $tokenParts = explode('.', $token);
             if (count($tokenParts) === 3) {
                 $payload = json_decode(base64_decode(strtr($tokenParts[1], '-_', '+/')), true);
-                if ($payload && isset($payload['user_id'])) {
-                    $userId = $payload['user_id'];
-                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                    $authSuccess = true;
-                    logMessage("Manual JWT parsing successful", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
-                } else if ($payload && isset($payload['id'])) {
-                    $userId = $payload['id'];
-                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                    $authSuccess = true;
-                    logMessage("Manual JWT parsing successful (using 'id' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
-                } else if ($payload && isset($payload['sub'])) {
-                    $userId = $payload['sub'];
-                    $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-                    $authSuccess = true;
-                    logMessage("Manual JWT parsing successful (using 'sub' field)", ['userId' => $userId, 'isAdmin' => $isAdmin ? 'yes' : 'no']);
-                } else {
-                    logMessage("Manual JWT parsing failed, invalid payload", ['payload_keys' => json_encode(array_keys($payload ?? []))]);
-                }
-            } else {
-                logMessage("Token doesn't have 3 parts, can't parse manually");
+            }
+        }
+        if ($payload) {
+            $userId = $payload['user_id'] ?? $payload['userId'] ?? $payload['id'] ?? $payload['sub'] ?? null;
+            $userEmail = $payload['email'] ?? null;
+            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            if ($userId) {
+                $authSuccess = true;
+                logMessage("JWT verification successful", ['userId' => $userId, 'hasEmail' => !empty($userEmail)]);
             }
         }
     } catch (Exception $e) {
@@ -314,7 +296,117 @@ try {
     }
     
     logMessage("Found bookings for user", ['count' => count($bookings), 'user_id' => $userId]);
-    
+
+    // Fetch group tour bookings for this user (match by customer_email)
+    $userEmailForMatch = $userEmail;
+    if (!$userEmailForMatch && $userId) {
+        // Fallback: look up email from user table
+        foreach (['user', 'users'] as $userTable) {
+            $ueStmt = @$conn->prepare("SELECT email FROM `$userTable` WHERE id = ? LIMIT 1");
+            if ($ueStmt) {
+                $ueStmt->bind_param('i', $userId);
+                if ($ueStmt->execute() && ($ueRow = $ueStmt->get_result()->fetch_assoc())) {
+                    $userEmailForMatch = trim($ueRow['email'] ?? '');
+                }
+                $ueStmt->close();
+                if ($userEmailForMatch) break;
+            }
+        }
+    }
+    if ($userEmailForMatch) {
+        $gtExists = @$conn->query("SHOW TABLES LIKE 'group_tour_bookings'");
+        if ($gtExists && $gtExists->num_rows > 0) {
+            $gtSql = "SELECT gtb.id, gtb.booking_number, gtb.total_amount, gtb.seat_count, gtb.customer_name, gtb.customer_email, gtb.customer_phone, gtb.status, gtb.created_at,
+                t.pickup_location, t.dropoff_location, t.travel_date,
+                bp.name as boarding_point_name, bp.boarding_time as boarding_point_time,
+                (SELECT bp2.boarding_time FROM group_tour_boarding_points bp2 WHERE bp2.tour_id = gtb.tour_id ORDER BY COALESCE(bp2.sort_order, 999), bp2.id ASC LIMIT 1) as default_bp_time
+                FROM group_tour_bookings gtb
+                INNER JOIN group_tour_tours t ON t.id = gtb.tour_id
+                LEFT JOIN group_tour_boarding_points bp ON bp.id = gtb.boarding_point_id
+                WHERE LOWER(TRIM(gtb.customer_email)) = LOWER(TRIM(?))
+                ORDER BY gtb.created_at DESC";
+            $gtStmt = @$conn->prepare($gtSql);
+            if (!$gtStmt) {
+                $gtSql = "SELECT gtb.id, gtb.booking_number, gtb.total_amount, gtb.seat_count, gtb.customer_name, gtb.customer_email, gtb.customer_phone, gtb.status, gtb.created_at,
+                    t.pickup_location, t.dropoff_location, t.travel_date
+                    FROM group_tour_bookings gtb
+                    INNER JOIN group_tour_tours t ON t.id = gtb.tour_id
+                    WHERE LOWER(TRIM(gtb.customer_email)) = LOWER(TRIM(?))
+                    ORDER BY gtb.created_at DESC";
+                $gtStmt = $conn->prepare($gtSql);
+            }
+            if ($gtStmt) {
+                $gtStmt->bind_param('s', $userEmailForMatch);
+                if ($gtStmt->execute()) {
+                    $gtRes = $gtStmt->get_result();
+                    while ($gtRow = $gtRes->fetch_assoc()) {
+                        $statusMap = ['paid' => 'confirmed', 'pending' => 'pending', 'failed' => 'cancelled', 'refunded' => 'cancelled'];
+                        $bookingStatus = $statusMap[$gtRow['status'] ?? 'pending'] ?? 'pending';
+                        $seatsRes = @$conn->query("SELECT seat_id FROM group_tour_booking_seats WHERE booking_id = " . (int)$gtRow['id'] . " ORDER BY seat_id");
+                        $seats = [];
+                        if ($seatsRes) {
+                            while ($sr = $seatsRes->fetch_assoc()) $seats[] = $sr['seat_id'];
+                        }
+                        $seatsStr = implode(', ', $seats) ?: ('S1-S' . (int)$gtRow['seat_count']);
+                        $pickup = $gtRow['pickup_location'] ?? '';
+                        $drop = $gtRow['dropoff_location'] ?? '';
+                        $bdate = $gtRow['travel_date'] ?? $gtRow['created_at'];
+                        $bpTime = !empty($gtRow['boarding_point_time']) ? trim($gtRow['boarding_point_time']) : (!empty($gtRow['default_bp_time']) ? trim($gtRow['default_bp_time']) : null);
+                        $bpName = !empty($gtRow['boarding_point_name']) ? trim($gtRow['boarding_point_name']) : null;
+                        $pickupDateVal = $bdate;
+                        if ($bpTime && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bdate)) {
+                            $pickupDateVal = $bdate . 'T' . $bpTime;
+                        }
+                        $bookings[] = [
+                            'id' => 1000000 + (int)$gtRow['id'],
+                            'userId' => (int)$userId,
+                            'bookingNumber' => $gtRow['booking_number'],
+                            'pickupLocation' => $bpName ?: $pickup,
+                            'pickup_location' => $bpName ?: $pickup,
+                            'dropLocation' => $drop,
+                            'drop_location' => $drop,
+                            'pickupDate' => $pickupDateVal,
+                            'pickup_date' => $pickupDateVal,
+                            'returnDate' => null,
+                            'cabType' => 'Group Tour',
+                            'distance' => 0,
+                            'tripType' => 'group_tour',
+                            'tripMode' => 'one-way',
+                            'totalAmount' => (float)$gtRow['total_amount'],
+                            'status' => $bookingStatus,
+                            'passengerName' => $gtRow['customer_name'],
+                            'passengerPhone' => $gtRow['customer_phone'],
+                            'passengerEmail' => $gtRow['customer_email'],
+                            'additionalRequirements' => 'Seats: ' . $seatsStr,
+                            'tourId' => null,
+                            'tourName' => null,
+                            'payment_status' => ($gtRow['status'] === 'paid') ? 'paid' : 'pending',
+                            'payment_method' => ($gtRow['status'] === 'paid') ? 'Online' : 'Pending',
+                            'advance_paid_amount' => 0,
+                            'createdAt' => $gtRow['created_at'],
+                            'created_at' => $gtRow['created_at'],
+                            'updatedAt' => $gtRow['created_at'],
+                            'updated_at' => $gtRow['created_at'],
+                            'bookingType' => 'group_tour',
+                            'travel_date' => $bdate,
+                            'boarding_point_time' => $bpTime,
+                            'boarding_point_name' => $bpName,
+                        ];
+                    }
+                    $gtStmt->close();
+                    usort($bookings, function ($a, $b) {
+                        $da = strtotime($a['createdAt'] ?? 0);
+                        $db = strtotime($b['createdAt'] ?? 0);
+                        return $db - $da;
+                    });
+                    logMessage("Merged group tour bookings", ['total' => count($bookings)]);
+                } else {
+                    $gtStmt->close();
+                }
+            }
+        }
+    }
+
     // For new users who have no bookings yet, return an empty array with success
     if (count($bookings) === 0) {
         logMessage("No bookings found for user, returning empty array", ['user_id' => $userId]);

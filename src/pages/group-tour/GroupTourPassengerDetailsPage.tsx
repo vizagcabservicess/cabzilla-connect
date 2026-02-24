@@ -11,7 +11,6 @@ import { groupTourAPI, type GroupTour } from '@/services/api/groupTourAPI';
 import { initRazorpay, openRazorpayCheckout, type RazorpayResponse } from '@/services/razorpayService';
 import { toast } from 'sonner';
 import { Loader2, MapPin, Calendar, Users, ArrowLeft, ChevronDown, ChevronUp, User } from 'lucide-react';
-import { INDIAN_STATES } from '@/lib/indianStates';
 import { countryCodes } from '@/lib/countryCodes';
 
 const STORAGE_KEY = 'groupTourSeatSelection';
@@ -50,13 +49,7 @@ export default function GroupTourPassengerDetailsPage() {
   const [contactPhone, setContactPhone] = useState('');
   const [selectedCountryCode, setSelectedCountryCode] = useState(() => countryCodes[0]);
   const [contactEmail, setContactEmail] = useState('');
-  const [stateOfResidence, setStateOfResidence] = useState('');
   const [whatsappUpdates, setWhatsappUpdates] = useState(true);
-  const [hasGst, setHasGst] = useState(false);
-  const [gstin, setGstin] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [businessAddress, setBusinessAddress] = useState('');
-  const [businessEmail, setBusinessEmail] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [phoneError, setPhoneError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -158,33 +151,6 @@ export default function GroupTourPassengerDetailsPage() {
       toast.error('Please enter a valid email address');
       return;
     }
-    if (hasGst) {
-      if (!stateOfResidence) {
-        toast.error('Please select your state of residence (required for GST tax invoicing)');
-        return;
-      }
-      if (!gstin.trim()) {
-        toast.error('Please enter GSTIN');
-        return;
-      }
-      if (!businessName.trim()) {
-        toast.error('Please enter business name');
-        return;
-      }
-      if (!businessAddress.trim()) {
-        toast.error('Please enter business address');
-        return;
-      }
-      if (!businessEmail.trim()) {
-        toast.error('Please enter business email');
-        return;
-      }
-      if (!isValidEmail(businessEmail)) {
-        toast.error('Please enter a valid business email address');
-        return;
-      }
-    }
-
     if (!termsAccepted) {
       toast.error('Please accept Terms & conditions and Privacy policy to continue');
       return;
@@ -300,12 +266,7 @@ export default function GroupTourPassengerDetailsPage() {
             age: parseInt(passengers[seatId]?.age ?? '0', 10) || null,
             gender: (passengers[seatId]?.gender === 'male' || passengers[seatId]?.gender === 'female') ? passengers[seatId].gender : null,
           })),
-          state_of_residence: stateOfResidence || undefined,
           whatsapp_updates: whatsappUpdates,
-          gstin: hasGst && gstin.trim() ? gstin.trim() : undefined,
-          business_name: hasGst && businessName.trim() ? businessName.trim() : undefined,
-          business_address: hasGst && businessAddress.trim() ? businessAddress.trim() : undefined,
-          business_email: hasGst && businessEmail.trim() ? businessEmail.trim() : undefined,
         }
       );
       setPaying(false);
@@ -480,50 +441,6 @@ export default function GroupTourPassengerDetailsPage() {
                     <Switch checked={whatsappUpdates} onCheckedChange={setWhatsappUpdates} className="scale-90" />
                   </div>
                 </div>
-              </div>
-
-              {/* GST section */}
-              <div className="rounded-xl p-4 border border-white/50 shadow-lg" style={cardStyle}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-800">I have a GST number</h3>
-                    <p className="text-xs text-slate-500">Optional</p>
-                  </div>
-                  <Checkbox checked={hasGst} onCheckedChange={(c) => setHasGst(!!c)} className="rounded scale-90" />
-                </div>
-                {hasGst && (
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <Label className="text-xs text-slate-600">State of Residence <span className="text-red-500">*</span></Label>
-                      <p className="text-xs text-slate-500 mb-0.5">Required for GST Tax Invoicing</p>
-                      <select value={stateOfResidence} onChange={(e) => setStateOfResidence(e.target.value)} className="w-full h-9 rounded-lg border border-input bg-background px-2.5 text-xs mt-0.5">
-                        <option value="">Select state</option>
-                        {INDIAN_STATES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">GSTIN <span className="text-red-500">*</span></Label>
-                      <Input placeholder="GSTIN" value={gstin} onChange={(e) => setGstin(e.target.value)} className="rounded-lg h-9 text-sm mt-0.5" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Business Name <span className="text-red-500">*</span></Label>
-                      <Input placeholder="Business Name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="rounded-lg h-9 text-sm mt-0.5" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Business Address <span className="text-red-500">*</span></Label>
-                      <Input placeholder="Business Address" value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} className="rounded-lg h-9 text-sm mt-0.5" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Business Email <span className="text-red-500">*</span></Label>
-                      <Input type="email" placeholder="Business Email" value={businessEmail} onChange={(e) => setBusinessEmail(e.target.value)} className="rounded-lg h-9 text-sm mt-0.5" />
-                    </div>
-                    <div className="rounded-md bg-amber-100 border border-amber-200 px-3 py-2 text-amber-800 text-xs">
-                      In case of invalid/cancelled GSTIN, this booking shall be considered as personal booking
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Terms acceptance */}

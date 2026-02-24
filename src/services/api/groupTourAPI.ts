@@ -1,5 +1,9 @@
+import React from 'react';
 import axios from 'axios';
+import { pdf } from '@react-pdf/renderer';
+import { saveAs } from 'file-saver';
 import { getApiUrl } from '@/config/api';
+import GroupTourInvoicePDF from '@/components/invoice/GroupTourInvoicePDF';
 
 const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
@@ -269,6 +273,26 @@ export const groupTourAPI = {
   adminCancelBooking: async (bookingId: number): Promise<void> => {
     const res = await axios.post(adminBookingsBase(), { action: 'cancel', booking_id: bookingId }, { headers: adminHeaders() });
     if (!res.data?.success) throw new Error(res.data?.error || 'Failed to cancel booking');
+  },
+
+  /** Download invoice as PDF. For group tour bookings, pass raw id (1000000 + id is used internally). */
+  adminDownloadInvoice: async (groupTourBookingId: number): Promise<void> => {
+    const bookingId = 1000000 + groupTourBookingId;
+    const url = getApiUrl(`/api/admin/get-invoice.php?booking_id=${bookingId}`);
+    let res;
+    try {
+      res = await axios.get(url, { headers: adminHeaders() });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to fetch invoice';
+      throw new Error(msg);
+    }
+    if (res.data?.status !== 'success' || !res.data?.invoice) {
+      throw new Error(res.data?.message || 'Failed to fetch invoice');
+    }
+    const invoiceData = res.data.invoice;
+    const blob = await pdf(React.createElement(GroupTourInvoicePDF, { data: invoiceData })).toBlob();
+    const bookingNumber = (invoiceData.booking_number || `invoice-${groupTourBookingId}`).replace(/[^a-zA-Z0-9\-]/g, '');
+    saveAs(blob, `invoice-${bookingNumber}.pdf`);
   },
 
   adminGetSeatOccupancy: async (tourId: number): Promise<{

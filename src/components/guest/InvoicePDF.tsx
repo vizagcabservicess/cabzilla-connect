@@ -6,16 +6,16 @@ const styles = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
     fontSize: 10,
-    padding: 30,
+    padding: 20,
     backgroundColor: '#ffffff',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 12,
     borderBottom: 1,
     borderBottomColor: '#3B82F6',
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
   logo: {
     fontSize: 20,
@@ -38,23 +38,23 @@ const styles = StyleSheet.create({
   detailsSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   detailsColumn: {
     width: '45%',
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 4,
     color: '#374151',
     borderBottom: 1,
     borderBottomColor: '#E5E7EB',
-    paddingBottom: 3,
+    paddingBottom: 2,
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   label: {
     width: '40%',
@@ -66,8 +66,8 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   billingSection: {
-    marginTop: 15,
-    marginBottom: 15,
+    marginTop: 10,
+    marginBottom: 10,
   },
   billingTable: {
     borderTop: 0,
@@ -76,16 +76,16 @@ const styles = StyleSheet.create({
   billingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
     borderBottom: 1,
     borderBottomColor: '#F3F4F6',
   },
   billingRowTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
     backgroundColor: '#F9FAFB',
     fontWeight: 'bold',
     fontSize: 11,
@@ -93,32 +93,32 @@ const styles = StyleSheet.create({
   extraChargeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
+    paddingVertical: 2,
+    paddingHorizontal: 12,
     fontSize: 9,
     color: '#6B7280',
   },
   footer: {
-    marginTop: 20,
-    padding: 10,
+    marginTop: 12,
+    padding: 8,
     backgroundColor: '#F9FAFB',
     borderRadius: 3,
   },
   footerTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 3,
     color: '#374151',
   },
   footerText: {
     fontSize: 9,
     color: '#6B7280',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   thankYou: {
     textAlign: 'center',
-    marginTop: 20,
-    fontSize: 12,
+    marginTop: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#3B82F6',
   },
@@ -238,7 +238,10 @@ export const InvoicePDF = ({ booking, subtotal, extraChargesTotal, taxes, totalW
   };
   
   const getPaymentMethod = () => {
-    return booking?.payment_method || booking?.paymentMethod || 'N/A';
+    const method = booking?.payment_method || booking?.paymentMethod;
+    if (method && method !== 'N/A') return method;
+    const paid = (booking as { payment_status?: string })?.payment_status === 'paid' || booking?.status === 'confirmed';
+    return paid ? 'Online' : (method || 'N/A');
   };
 
   // Get extra charges array

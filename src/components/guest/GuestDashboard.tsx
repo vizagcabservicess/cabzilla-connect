@@ -67,8 +67,8 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
         const transformedBookings = userBookings.map((booking: any) => ({
           id: booking.id || booking.booking_id,
           bookingNumber: booking.booking_number || booking.bookingNumber || booking.id,
-          pickupLocation: booking.pickup_location || booking.pickupLocation,
-          dropLocation: booking.drop_location || booking.dropLocation,
+          pickupLocation: booking.pickup_location || booking.pickupLocation || '',
+          dropLocation: booking.drop_location || booking.dropLocation || '',
           pickupDate: booking.pickup_date || booking.pickupDate,
           pickupTime: booking.pickup_time || booking.pickupTime,
           passengerName: booking.passenger_name || booking.passengerName || booking.guest_name || booking.name,
@@ -82,12 +82,15 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
           totalAmount: booking.total_amount || booking.totalAmount || booking.fare || 0,
           status: booking.status,
           payment_status: booking.payment_status || booking.paymentStatus || 'pending',
+          payment_method: booking.payment_method || booking.paymentMethod,
           driverName: booking.driver_name || booking.driverName,
           driverPhone: booking.driver_phone || booking.driverPhone,
           vehicleNumber: booking.vehicle_number || booking.vehicleNumber,
           extraCharges: booking.extra_charges || booking.extraCharges || {},
           createdAt: booking.created_at || booking.createdAt,
-          updatedAt: booking.updated_at || booking.updatedAt
+          updatedAt: booking.updated_at || booking.updatedAt,
+          bookingType: booking.bookingType,
+          additionalRequirements: booking.additionalRequirements,
         }));
         
         setBookings(transformedBookings);
