@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -9,7 +9,7 @@ import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { groupTourAPI, type GroupTour } from '@/services/api/groupTourAPI';
 import { toast } from 'sonner';
-import { MapPin, Calendar, Users, Loader2, ArrowLeft, ChevronDown, ChevronUp, Check, X, Info, Camera, Car, Flag } from 'lucide-react';
+import { MapPin, Calendar, Users, Loader2, ArrowLeft, ChevronDown, ChevronUp, Check, X, Info, Camera, Car, Flag, IndianRupee, Share2, Clock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,9 +29,29 @@ export default function GroupTourSearchPage() {
   const [galleryPopupIndex, setGalleryPopupIndex] = useState(0);
   const [expandedHighlights, setExpandedHighlights] = useState<Record<string, boolean>>({});
   const [expandedItinerary, setExpandedItinerary] = useState<Record<string, boolean>>({});
-  const [expandedAccordions, setExpandedAccordions] = useState<Record<string, boolean>>({});
   const [policyOpen, setPolicyOpen] = useState(false);
   const [activeTourId, setActiveTourId] = useState<number | null>(null);
+  const [activeInfoTab, setActiveInfoTab] = useState<Record<number, string>>({});
+  const touchStartXRef = useRef<number>(0);
+
+  // Auto-scroll gallery for the visible tour when it has multiple images
+  useEffect(() => {
+    if (!activeTourId || tours.length === 0) return;
+    const tour = tours.find((t) => t.id === activeTourId);
+    if (!tour) return;
+    const featured = tour.featured_image_url;
+    const gallery = tour.gallery_images ?? [];
+    const images = featured && !gallery.includes(featured) ? [featured, ...gallery] : gallery.length > 0 ? gallery : (featured ? [featured] : []);
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      setSelectedImageIndex((prev) => {
+        const curr = prev[activeTourId] ?? 0;
+        const next = (curr + 1) % images.length;
+        return { ...prev, [activeTourId]: next };
+      });
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeTourId, tours]);
 
   // Intersection Observer: which tour card is in view for the fixed rate card
   useEffect(() => {
@@ -54,10 +74,6 @@ export default function GroupTourSearchPage() {
     setActiveTourId(tours[0].id);
     return () => observer.disconnect();
   }, [tours]);
-
-  const toggleAccordion = (key: string) => {
-    setExpandedAccordions((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   const fetchTours = useCallback(() => {
     if (!pickup || !dropoff || !date) return;
@@ -240,27 +256,47 @@ export default function GroupTourSearchPage() {
       })()}
 
       <Navbar />
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 pt-24 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 pt-0 md:pt-20 pb-8 overflow-x-hidden">
       <div className={`container mx-auto px-4 ${!loading && tours.length > 0 ? 'md:pr-80' : ''}`}>
-        <Link
-          to="/group-tours"
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Link>
-        <div
-          className="rounded-xl p-3 mb-4 border border-white/50 shadow-md"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.5) 100%)',
-            backdropFilter: 'blur(12px)',
-          }}
-        >
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">Search results</h2>
-          <p className="text-slate-600 text-sm">
-            {pickup} → {dropoff} • {date}
-          </p>
+        {/* Back + Search results - desktop only; mobile: Back on gallery, route in info card */}
+        <div className="hidden md:block">
+          <Link
+            to="/group-tours"
+            className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900 mb-1 text-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Link>
+          <div className="rounded-xl p-2 mb-2 md:p-3 md:mb-4 bg-white border border-slate-200 shadow-sm">
+            <h2 className="text-lg md:text-xl font-semibold text-slate-800">Search results</h2>
+            <p className="text-slate-600 text-sm mt-0.5">{pickup} → {dropoff} • {date}</p>
+          </div>
         </div>
+
+        {/* Mobile sticky dark footer - Screenshot 2 style */}
+        {!loading && tours.length > 0 && (() => {
+          const activeTour = tours.find((t) => t.id === activeTourId) ?? tours[0];
+          const price = activeTour.price_from ?? activeTour.price_per_seat;
+          return (
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 text-white px-4 py-4 safe-area-pb flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-slate-300">Starting From</p>
+                <p className="text-lg font-bold">
+                  ₹{price.toLocaleString('en-IN')} per seat
+                </p>
+              </div>
+              <Button
+                onClick={() => handleSelectTour(activeTour)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 shrink-0"
+              >
+                CONTINUE
+              </Button>
+            </div>
+          );
+        })()}
+
+        {/* Bottom padding when footer is visible on mobile */}
+        {!loading && tours.length > 0 && <div className="md:hidden h-20" />}
 
         {loading ? (
           <div className="flex justify-center py-20">
@@ -278,19 +314,67 @@ export default function GroupTourSearchPage() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 -mx-4 md:mx-0">
             {tours.map((tour) => (
               <div
                 key={tour.id}
                 data-tour-card
                 data-tour-id={tour.id}
-                className="rounded-xl bg-white/80 backdrop-blur border border-white/60 shadow-md hover:shadow-lg transition-shadow"
+                className="rounded-none md:rounded-xl bg-white md:bg-white/80 backdrop-blur border-0 md:border border-slate-200 md:border-white/60 shadow-md md:shadow-md hover:shadow-lg transition-shadow overflow-hidden"
               >
                 <div className="flex flex-col">
-                  {/* Full-width gallery: main image left + 4-grid right (overflow-hidden here only - not on card, so sticky works) */}
+                  {/* Gallery - mobile: hero image; Desktop: grid */}
                   {(tour.featured_image_url || (tour.gallery_images?.length ?? 0) > 0) && (
-                    <div className="w-full flex flex-col md:grid md:grid-cols-[2fr_1fr_1fr] md:grid-rows-2 md:gap-1 md:aspect-[2/1] md:min-h-[260px] md:max-h-[420px] overflow-hidden rounded-t-xl">
-                      <div className="relative h-48 md:h-full md:row-span-2 md:col-span-1 bg-slate-200 overflow-hidden">
+                    <div className="w-full flex flex-col md:grid md:grid-cols-[2fr_1fr_1fr] md:grid-rows-2 md:gap-1 md:aspect-[2/1] md:min-h-[260px] md:max-h-[420px] overflow-hidden rounded-none md:rounded-t-xl">
+                      <div
+                        className="relative h-[50vh] md:h-full md:row-span-2 md:col-span-1 bg-slate-200 overflow-hidden md:min-h-[200px] touch-pan-y"
+                        onTouchStart={(e) => {
+                          touchStartXRef.current = e.touches[0]?.clientX ?? 0;
+                        }}
+                        onTouchEnd={(e) => {
+                          const endX = e.changedTouches[0]?.clientX ?? 0;
+                          const startX = touchStartXRef.current;
+                          const diff = startX - endX;
+                          const imgs = getGalleryImages(tour);
+                          if (imgs.length <= 1) return;
+                          if (diff > 50) {
+                            setSelectedImageIndex((prev) => ({
+                              ...prev,
+                              [tour.id]: Math.min(imgs.length - 1, (prev[tour.id] ?? 0) + 1),
+                            }));
+                          } else if (diff < -50) {
+                            setSelectedImageIndex((prev) => ({
+                              ...prev,
+                              [tour.id]: Math.max(0, (prev[tour.id] ?? 0) - 1),
+                            }));
+                          }
+                        }}
+                      >
+                        {/* Back button - Burj style overlay on gallery (mobile) */}
+                        <Link
+                          to="/group-tours"
+                          className="absolute top-3 left-3 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow-md flex items-center justify-center md:hidden"
+                          aria-label="Back"
+                        >
+                          <ArrowLeft className="h-5 w-5 text-slate-800" />
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = window.location.href;
+                            const text = `${tour.title || tour.pickup_location + ' → ' + tour.dropoff_location} - ₹${(tour.price_from ?? tour.price_per_seat)?.toLocaleString('en-IN')} per seat`;
+                            if (navigator.share) {
+                              navigator.share({ title: 'Group Tour', text, url }).catch(() => {});
+                            } else {
+                              navigator.clipboard?.writeText(url);
+                              toast.success('Link copied');
+                            }
+                          }}
+                          className="absolute top-3 right-3 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow-md flex items-center justify-center"
+                          aria-label="Share"
+                        >
+                          <Share2 className="h-5 w-5 text-slate-800" />
+                        </button>
                         {getMainImage(tour) && (
                           <img
                             key={selectedImageIndex[tour.id] ?? 0}
@@ -301,8 +385,9 @@ export default function GroupTourSearchPage() {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
                         )}
-                        {getGalleryImages(tour).length > 1 && (
+                        {getGalleryImages(tour).length > 1 ? (
                           <>
+                            {/* Prev/Next - desktop only; mobile uses dots */}
                             <button
                               type="button"
                               onClick={() =>
@@ -311,7 +396,7 @@ export default function GroupTourSearchPage() {
                                   [tour.id]: Math.max(0, (prev[tour.id] ?? 0) - 1),
                                 }))
                               }
-                              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center"
+                              className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white items-center justify-center"
                             >
                               <ChevronLeft className="h-5 w-5" />
                             </button>
@@ -323,14 +408,32 @@ export default function GroupTourSearchPage() {
                                   [tour.id]: Math.min(getGalleryImages(tour).length - 1, (prev[tour.id] ?? 0) + 1),
                                 }))
                               }
-                              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center"
+                              className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white items-center justify-center"
                             >
                               <ChevronRight className="h-5 w-5" />
                             </button>
-                            <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/60 text-white text-xs font-medium">
+                            <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/60 text-white text-xs font-medium hidden md:block">
                               {((selectedImageIndex[tour.id] ?? 0) + 1)} / {getGalleryImages(tour).length}
                             </div>
                           </>
+                        ) : null}
+                        {/* Mobile: carousel dots on image only, above info card overlap (Burj style) */}
+                        {getGalleryImages(tour).length >= 1 && (
+                          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 md:hidden">
+                            {getGalleryImages(tour).map((_, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setSelectedImageIndex((prev) => ({ ...prev, [tour.id]: i }))}
+                                className={`w-2.5 h-2.5 rounded-full transition-colors drop-shadow-sm ${
+                                  (selectedImageIndex[tour.id] ?? 0) === i
+                                    ? 'bg-white'
+                                    : 'bg-white/50'
+                                }`}
+                                aria-label={`View image ${i + 1}`}
+                              />
+                            ))}
+                          </div>
                         )}
                       </div>
                       {/* 4-image grid on right (~1/3 width - Bhutan style) - direct grid children for equal height */}
@@ -368,214 +471,206 @@ export default function GroupTourSearchPage() {
                           </button>
                         );
                       })}
-                      {/* Mobile thumbnails below gallery (desktop uses 4-grid) */}
-                      {getGalleryImages(tour).length > 1 && (
-                        <div className="md:hidden flex gap-1.5 p-2 overflow-x-auto">
-                          {getGalleryImages(tour).map((url, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => setSelectedImageIndex((prev) => ({ ...prev, [tour.id]: i }))}
-                              className={`shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-colors ${
-                                (selectedImageIndex[tour.id] ?? 0) === i ? 'border-blue-500' : 'border-transparent'
-                              }`}
-                            >
-                              <img src={url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
-                  {/* Tour details below gallery */}
-                  <div className="w-full p-4 sm:p-5 border-t border-slate-100 rounded-b-xl">
+                  {/* Tour details - Burj Khalifa style info card */}
+                  <div className="w-full p-5 sm:p-6 bg-white md:border-t md:border-slate-100 rounded-t-3xl md:rounded-t-none rounded-b-xl -mt-12 md:mt-0 pt-8 md:pt-5 shadow-xl md:shadow-none relative z-10">
                     <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6">
                       <div className="flex-1 min-w-0">
-                        {/* Tour title - large & prominent */}
-                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 leading-tight flex items-center gap-2">
-                          <MapPin className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600 shrink-0" />
-                          {tour.title?.trim() || `${tour.pickup_location} → ${tour.dropoff_location}`}
-                        </h2>
-                        {tour.title?.trim() && (
-                          <p className="text-sm text-slate-600 mt-1">{tour.pickup_location} → {tour.dropoff_location}</p>
-                        )}
-                        {/* Journey Date, Seats Availability & Starting Location & Time */}
-                        <div className="mt-4 space-y-2">
-                          <p className="flex items-center gap-2 text-slate-600 text-sm">
-                            <Calendar className="h-4 w-4 text-slate-500 shrink-0" />
-                            <span>Journey Date: {tour.travel_date}</span>
-                          </p>
-                          <p className="flex items-center gap-2 text-slate-600 text-sm">
-                            <Users className="h-4 w-4 text-slate-500 shrink-0" />
-                            <span>Seats Availability: {tour.available_seats} seats available</span>
-                          </p>
-                          {((tour as any).first_boarding_point_name || (tour as any).first_boarding_time) && (
-                            <p className="flex items-center gap-2 text-slate-600 text-sm">
-                              <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
-                              <span>Starting Location & Time: {(tour as any).first_boarding_point_name || 'Boarding'}{(tour as any).first_boarding_time ? ` • ${(tour as any).first_boarding_time}` : ''}</span>
+                        {/* Title row: title left, badge right (Burj style) */}
+                        <div className="flex items-start justify-between gap-4 mb-1">
+                          <div className="min-w-0">
+                            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
+                              {tour.title?.trim() || `${tour.pickup_location} → ${tour.dropoff_location}`}
+                            </h2>
+                            <p className="text-sm text-slate-600 mt-1">
+                              {tour.pickup_location} → {tour.dropoff_location}
                             </p>
+                          </div>
+                          <span className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-semibold">
+                            Save up to 60%
+                          </span>
+                        </div>
+
+                        {/* Key details list - Burj style with icons */}
+                        <div className="mt-4 space-y-3">
+                          <div className="flex items-center gap-3 text-slate-600">
+                            <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
+                            <span className="text-sm">{tour.pickup_location} → {tour.dropoff_location}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-slate-600">
+                            <Calendar className="h-4 w-4 text-slate-500 shrink-0" />
+                            <span className="text-sm">Journey Date: {tour.travel_date}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-slate-600">
+                            <IndianRupee className="h-4 w-4 text-slate-500 shrink-0" />
+                            <span className="text-sm">Fare starts at ₹{(tour.price_from ?? tour.price_per_seat).toLocaleString('en-IN')}/per seat</span>
+                          </div>
+                          {((tour as any).first_boarding_point_name || (tour as any).first_boarding_time) && (
+                            <div className="flex items-center gap-3 text-slate-600">
+                              <Clock className="h-4 w-4 text-slate-500 shrink-0" />
+                              <span className="text-sm">{(tour as any).first_boarding_point_name || 'Boarding'}{(tour as any).first_boarding_time ? ` • ${(tour as any).first_boarding_time}` : ''}</span>
+                            </div>
                           )}
                         </div>
-                        {/* Inclusions summary - Transfer, Sightseeing, Pickup, Drop (2x2 layout) */}
-                        <div className="mt-5 pt-5 border-t border-slate-100">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
-                            <div className="flex items-center gap-3">
-                              <Car className="h-5 w-5 text-slate-600 shrink-0" />
-                              <span className="text-sm text-slate-600">Transfer Included</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Camera className="h-5 w-5 text-slate-600 shrink-0" />
-                              <span className="text-sm text-slate-600">Sightseeing Included</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <MapPin className="h-5 w-5 text-slate-600 shrink-0" />
-                              <span className="text-sm text-slate-600">Pickup Included</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Flag className="h-5 w-5 text-slate-600 shrink-0" />
-                              <span className="text-sm text-slate-600">Drop Included</span>
-                            </div>
+
+                        {/* Navigation tabs - Burj style */}
+                        <div className="mt-5 border-b border-slate-200">
+                          <div className="flex gap-6 overflow-x-auto pb-px -mb-px [&::-webkit-scrollbar]:hidden">
+                            {['overview', 'itinerary', 'highlights', 'inclusions'].map((tab) => {
+                              const active = (activeInfoTab[tour.id] ?? 'overview') === tab;
+                              return (
+                                <button
+                                  key={tab}
+                                  type="button"
+                                  onClick={() => setActiveInfoTab((prev) => ({ ...prev, [tour.id]: tab }))}
+                                  className={`shrink-0 pb-3 text-sm font-medium capitalize border-b-2 transition-colors ${
+                                    active
+                                      ? 'border-blue-600 text-blue-600'
+                                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                                  }`}
+                                >
+                                  {tab === 'inclusions' ? "What's included" : tab}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                        {/* Itinerary - accordion on mobile, expanded on desktop */}
-                        {(tour.itinerary?.length ?? 0) > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1.5">Itinerary</p>
-                            <div className="space-y-1.5">
-                              {tour.itinerary?.map((item, i) => {
-                                const key = `${tour.id}-${i}`;
-                                const expanded = expandedItinerary[key];
-                                return (
-                                  <div
-                                    key={i}
-                                    className="rounded-md bg-slate-50 border border-slate-100 p-2.5"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleItineraryDay(tour.id, i)}
-                                      className="w-full flex items-center gap-3 text-left md:cursor-default"
-                                    >
-                                      <span className="shrink-0 px-2.5 py-1 rounded-full bg-amber-700/90 text-white text-xs font-bold">
-                                        DAY {item.day}
-                                      </span>
-                                      <span className="flex-1 text-sm font-medium text-slate-800">{item.title}</span>
-                                      <span className="md:hidden shrink-0">
-                                        {expanded ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
-                                      </span>
-                                    </button>
-                                    {item.description && (
-                                      <p className={`mt-2 ml-0 md:ml-14 text-sm text-slate-600 ${expanded ? 'block' : 'hidden md:block'}`}>{item.description}</p>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        {/* Package highlights - expanded on desktop, accordion on mobile */}
-                        {(tour.highlights?.length ?? 0) > 0 && (
-                          <div className="mt-3 rounded-md border border-slate-200 overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => toggleAccordion(`highlights-${tour.id}`)}
-                              className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 md:hover:bg-slate-50 transition-colors text-left md:pointer-events-none"
-                            >
-                              <span className="text-sm font-medium text-blue-600 uppercase tracking-wide">Package highlights</span>
-                              <span className="md:hidden shrink-0">
-                                {expandedAccordions[`highlights-${tour.id}`] === true ? (
-                                  <ChevronUp className="h-4 w-4 text-slate-500" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 text-slate-500" />
-                                )}
-                              </span>
-                            </button>
-                            <div className={`px-3 py-2.5 bg-white border-t border-slate-100 ${expandedAccordions[`highlights-${tour.id}`] === true ? 'block' : 'hidden md:block'}`}>
-                              <ul className="space-y-1">
-                                {tour.highlights?.slice(0, 10).map((h, i) => {
-                                  const isLong = h.length > HIGHLIGHT_TRUNCATE_LEN;
-                                  const expanded = expandedHighlights[`${tour.id}-${i}`];
-                                  const displayText = isLong && !expanded ? h.slice(0, HIGHLIGHT_TRUNCATE_LEN) + '...' : h;
-                                  return (
-                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                                      <span className="text-green-600 mt-0.5 shrink-0">✓</span>
-                                      <span>
-                                        {displayText}
-                                        {isLong && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); toggleHighlight(tour.id, i); }}
-                                            className="ml-1 text-blue-600 hover:text-blue-700 font-medium text-xs"
-                                          >
-                                            {expanded ? 'Read less' : 'Read more'}
-                                          </button>
-                                        )}
-                                      </span>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          </div>
-                        )}
-                        {/* What's inside the package - expanded on desktop, accordion on mobile */}
-                        {((tour.inclusions?.length ?? 0) > 0 || (tour.exclusions?.length ?? 0) > 0) && (
-                          <div className="mt-3 rounded-md border border-slate-200 overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => toggleAccordion(`package-${tour.id}`)}
-                              className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 md:hover:bg-slate-50 transition-colors text-left md:pointer-events-none"
-                            >
-                              <span className="text-sm font-medium text-blue-600 uppercase tracking-wide">What&apos;s inside the package?</span>
-                              <span className="md:hidden shrink-0">
-                                {expandedAccordions[`package-${tour.id}`] === true ? (
-                                  <ChevronUp className="h-4 w-4 text-slate-500" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 text-slate-500" />
-                                )}
-                              </span>
-                            </button>
-                            <div className={`px-3 py-2.5 bg-white border-t border-slate-100 ${expandedAccordions[`package-${tour.id}`] === true ? 'block' : 'hidden md:block'}`}>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {(tour.inclusions?.length ?? 0) > 0 && (
-                                  <div>
-                                    <p className="text-sm font-bold text-slate-800 mb-2">Inclusions</p>
-                                    <ul className="space-y-1.5">
-                                      {tour.inclusions?.map((inc, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                                          <Check className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                                          {inc}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                                {(tour.exclusions?.length ?? 0) > 0 && (
-                                  <div>
-                                    <p className="text-sm font-bold text-slate-800 mb-2">Exclusions</p>
-                                    <ul className="space-y-1.5">
-                                      {tour.exclusions?.map((exc, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                                          <X className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                                          {exc}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
+
+                        {/* Tab content */}
+                        {(activeInfoTab[tour.id] ?? 'overview') === 'overview' && (
+                          <div className="mt-5 pt-1">
+                            <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
+                              <div className="flex items-center gap-3">
+                                <Car className="h-5 w-5 text-slate-500 shrink-0" />
+                                <span>Transfer Included</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Camera className="h-5 w-5 text-slate-500 shrink-0" />
+                                <span>Sightseeing Included</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <MapPin className="h-5 w-5 text-slate-500 shrink-0" />
+                                <span>Pickup Included</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Flag className="h-5 w-5 text-slate-500 shrink-0" />
+                                <span>Drop Included</span>
                               </div>
                             </div>
+                            <p className="mt-4 text-sm text-slate-600">
+                              {tour.available_seats} seats available • Group tour by Tempo Traveller
+                            </p>
+                          </div>
+                        )}
+
+                        {(activeInfoTab[tour.id] ?? 'overview') === 'itinerary' && (
+                          <div className="mt-5 pt-1 space-y-3">
+                            {(tour.itinerary?.length ?? 0) > 0 ? tour.itinerary?.map((item, i) => {
+                              const key = `${tour.id}-${i}`;
+                              const expanded = expandedItinerary[key];
+                              return (
+                                <div key={i} className="rounded-lg border border-slate-100 overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleItineraryDay(tour.id, i)}
+                                    className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-50 transition-colors"
+                                  >
+                                    {item.day ? (
+                                      <span className="shrink-0 px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-bold">
+                                        DAY {item.day}
+                                      </span>
+                                    ) : null}
+                                    <span className="flex-1 text-sm font-medium text-slate-800">{item.title}</span>
+                                    {expanded ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+                                  </button>
+                                  {item.description && (
+                                    <p className={`px-3 pb-3 text-sm text-slate-600 ${expanded ? 'block' : 'hidden'}`}>{item.description}</p>
+                                  )}
+                                </div>
+                              );
+                            }) : (
+                              <p className="text-sm text-slate-500 py-4">No itinerary available.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {(activeInfoTab[tour.id] ?? 'overview') === 'highlights' && (
+                          <div className="mt-5 pt-1">
+                            {(tour.highlights?.length ?? 0) > 0 ? (
+                            <ul className="space-y-2">
+                              {tour.highlights?.slice(0, 10).map((h, i) => {
+                                const isLong = h.length > HIGHLIGHT_TRUNCATE_LEN;
+                                const expanded = expandedHighlights[`${tour.id}-${i}`];
+                                const displayText = isLong && !expanded ? h.slice(0, HIGHLIGHT_TRUNCATE_LEN) + '...' : h;
+                                return (
+                                  <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                                    <span className="text-green-600 mt-0.5 shrink-0">✓</span>
+                                    <span>
+                                      {displayText}
+                                      {isLong && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); toggleHighlight(tour.id, i); }}
+                                          className="ml-1 text-blue-600 hover:text-blue-700 font-medium text-xs"
+                                        >
+                                          {expanded ? 'Read less' : 'Read more'}
+                                        </button>
+                                      )}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            ) : (
+                              <p className="text-sm text-slate-500 py-4">No highlights available.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {(activeInfoTab[tour.id] ?? 'overview') === 'inclusions' && (
+                          <div className="mt-5 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {(tour.inclusions?.length ?? 0) > 0 && (
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800 mb-2">Inclusions</p>
+                                <ul className="space-y-2">
+                                  {tour.inclusions?.map((inc, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                                      <Check className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                                      {inc}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {(tour.exclusions?.length ?? 0) > 0 && (
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800 mb-2">Exclusions</p>
+                                <ul className="space-y-2">
+                                  {tour.exclusions?.map((exc, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                                      <X className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                                      {exc}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {((tour.inclusions?.length ?? 0) === 0 && (tour.exclusions?.length ?? 0) === 0) && (
+                              <p className="text-sm text-slate-500 py-4 col-span-full">No inclusions/exclusions listed.</p>
+                            )}
                           </div>
                         )}
                       </div>
-                      {/* Rate card - inline on mobile/tablet; fixed card on desktop (md+) */}
-                      <div className="flex flex-col sm:flex-row md:hidden items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0 mt-4 pt-4 border-t border-slate-100 sm:border-t-0 sm:mt-0 sm:pt-0">
+                      {/* Rate card - desktop only; mobile uses sticky footer */}
+                      <div className="hidden md:flex flex-col shrink-0">
                         <p className="text-xl font-bold text-blue-700">
                           Starting from ₹{(tour.price_from ?? tour.price_per_seat).toLocaleString('en-IN')}
                           <span className="font-normal text-sm text-slate-500 ml-1">per seat</span>
                         </p>
                         <Button
                           onClick={() => handleSelectTour(tour)}
-                          className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto md:w-full"
+                          className="mt-3 bg-blue-600 hover:bg-blue-700 w-full"
                         >
                           Select Seats
                         </Button>

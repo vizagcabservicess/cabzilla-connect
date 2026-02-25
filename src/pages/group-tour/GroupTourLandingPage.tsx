@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -13,6 +13,7 @@ import {
 import { Calendar as CalendarIcon, MapPin, Search, ChevronDown, ChevronUp, Bus, Users, Calendar, Shield } from 'lucide-react';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { groupTourAPI, type RouteOption } from '@/services/api/groupTourAPI';
+import { PopularGroupTours } from '@/components/PopularGroupTours';
 import { format } from 'date-fns';
 
 export default function GroupTourLandingPage() {
@@ -222,7 +223,8 @@ export default function GroupTourLandingPage() {
                 </div>
                 <Button
                   type="submit"
-                  className="h-9 shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-4"
+                  disabled={!pickup.trim() || !dropoff.trim() || !date}
+                  className="h-9 shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Search className="mr-2 h-3.5 w-3.5" />
                   Search Group Tours
@@ -233,100 +235,9 @@ export default function GroupTourLandingPage() {
         </section>
 
         {/* Popular Group Tours */}
-        <section className="py-12 sm:py-16 bg-white border-t border-slate-100">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-                  Popular Group Tours
-                </h2>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Check out our best-selling group tours
-                </p>
-              </div>
-              <Link
-                to="/group-tours/search"
-                className="text-blue-600 hover:text-blue-700 font-medium text-xs flex items-center gap-1"
-              >
-                View All Tours
-                <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedRoutes.slice(0, 4).map((route, i) => {
-                const gradients = [
-                  'from-teal-600 via-cyan-700 to-blue-900',
-                  'from-amber-600 via-orange-600 to-rose-700',
-                  'from-emerald-600 via-green-700 to-teal-900',
-                  'from-violet-600 via-purple-700 to-indigo-900',
-                ];
-                const bgClass = gradients[i % gradients.length];
-                const searchUrl = `/group-tours/search?${new URLSearchParams({
-                  pickup: route.pickup_location,
-                  dropoff: route.dropoff_location,
-                  date: route.first_date || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-                })}`;
-                const destName = route.title?.trim() || route.dropoff_location || route.label;
-                return (
-                  <Link
-                    key={i}
-                    to={searchUrl}
-                    className="group block rounded-2xl overflow-hidden bg-white border border-slate-100 shadow-sm hover:shadow-xl transition-all"
-                  >
-                    <div className={`relative h-44 sm:h-48 bg-gradient-to-br ${bgClass}`}>
-                      {route.featured_image_url && (
-                        <img
-                          src={route.featured_image_url}
-                          alt=""
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      )}
-                      <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-medium shadow">
-                        {route.first_date
-                          ? format(new Date(route.first_date + 'T12:00:00'), 'dd MMM')
-                          : 'Available'}
-                      </div>
-                    </div>
-                    <div className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                      <div>
-                        <h3 className="font-semibold text-slate-800 text-base group-hover:text-blue-600 transition-colors">
-                          {destName}
-                        </h3>
-                        <p className="text-slate-500 text-xs mt-0.5 font-medium">
-                          Save up to 60%
-                        </p>
-                      </div>
-                      <div className="text-left md:text-right shrink-0">
-                        <p className="text-xl font-bold text-slate-800">
-                          ₹{route.price_from != null ? route.price_from.toLocaleString('en-IN') : '—'}
-                        </p>
-                        <p className="text-slate-500 text-xs mt-0.5">
-                          per seat
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-              {sortedRoutes.length === 0 && (
-                [...Array(4)].map((_, i) => (
-                  <div key={i} className="rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 animate-pulse">
-                    <div className="h-44 sm:h-48 bg-slate-200" />
-                    <div className="p-4">
-                      <div className="h-5 bg-slate-200 rounded w-3/4" />
-                      <div className="h-4 bg-slate-200 rounded w-1/2 mt-2" />
-                      <div className="h-3 bg-slate-200 rounded w-1/3 mt-2" />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
+        <div className="border-t border-slate-100 bg-white pt-8 sm:pt-12">
+          <PopularGroupTours />
+        </div>
 
         {/* VEHICLE & BOOKING POLICY */}
         <section className="py-12 sm:py-16 bg-white border-t border-slate-100">

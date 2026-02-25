@@ -862,19 +862,20 @@ export default function GroupToursManagementPage() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium">Itinerary (one per line, format: DAY N: Title)</label>
+                <label className="text-sm font-medium">Itinerary (one per line)</label>
+                <p className="text-xs text-gray-500 mt-0.5 mb-1">Optional format: DAY N: Title. Or write freely with timings, e.g. &quot;06:00 - Departure from RTC&quot;</p>
                 <textarea
-                  value={form.itinerary.map((i) => `DAY ${i.day}: ${i.title}`).join('\n')}
+                  value={form.itinerary.map((i) => (i.day ? `DAY ${i.day}: ${i.title}` : i.title)).join('\n')}
                   onChange={(e) => {
                     const lines = e.target.value.split('\n').filter(Boolean);
-                    const parsed = lines.map((line, idx) => {
+                    const parsed = lines.map((line) => {
                       const m = line.match(/^DAY\s*(\d+)\s*:\s*(.+)$/i);
-                      return m ? { day: m[1], title: m[2].trim() } : { day: String(idx + 1), title: line.trim() };
+                      return m ? { day: m[1], title: m[2].trim() } : { day: '', title: line.trim() };
                     });
                     setForm((f) => ({ ...f, itinerary: parsed }));
                   }}
-                  placeholder={'DAY 1: Departure from pickup location\nDAY 2: Arrival at destination'}
-                  rows={3}
+                  placeholder={'DAY 1: Departure from pickup location at 06:00\n10:30 - Arrival at Araku Valley\nDAY 2: Full day sightseeing (09:00–17:00)'}
+                  rows={5}
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>

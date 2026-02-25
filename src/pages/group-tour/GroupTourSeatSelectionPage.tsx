@@ -121,10 +121,54 @@ export default function GroupTourSeatSelectionPage() {
     );
   }
 
+  const handleContinue = () => {
+    if (selectedSeats.length === 0) {
+      toast.error('Please select at least one seat');
+      return;
+    }
+    if (boardingPoints.length > 0 && !selectedBoardingPoint) {
+      toast.error('Please select a boarding point');
+      setBoardingPanelOpen(true);
+      return;
+    }
+    sessionStorage.setItem('groupTourSeatSelection', JSON.stringify({
+      tourId,
+      selectedSeats,
+      seatPrices: selectedSeats.reduce((acc, sid) => {
+        acc[sid] = seats[sid]?.price ?? basePrice;
+        return acc;
+      }, {} as Record<string, number>),
+      boarding_point_id: selectedBoardingPoint?.id && selectedBoardingPoint.id > 0 ? selectedBoardingPoint.id : 0,
+      pickup: pickup || tour.pickup_location,
+      dropoff: dropoff || tour.dropoff_location,
+      date: date || tour.travel_date,
+    }));
+    navigate(`/group-tours/passenger-details/${tourId}?pickup=${encodeURIComponent(pickup)}&dropoff=${encodeURIComponent(dropoff)}&date=${date}`);
+  };
+
   return (
     <>
       <Navbar />
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 pt-24 pb-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100 pt-24 pb-24 md:pb-6">
+      {/* Mobile sticky footer - Starting From + CONTINUE (screenshot 1 style) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 text-white px-4 py-4 safe-area-pb flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs text-slate-300">Starting From</p>
+          <p className="text-lg font-bold">
+            {selectedSeats.length > 0
+              ? `₹${totalAmount.toLocaleString('en-IN')}${selectedSeats.length > 1 ? ` (${selectedSeats.length} seats)` : ' per seat'}`
+              : `₹${basePrice.toLocaleString('en-IN')} per seat`}
+          </p>
+        </div>
+        <Button
+          onClick={handleContinue}
+          disabled={selectedSeats.length === 0 || (boardingPoints.length > 0 && !selectedBoardingPoint)}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-8 shrink-0"
+        >
+          CONTINUE
+        </Button>
+      </div>
+
       <div className="container mx-auto px-4">
         <Link
           to={`/group-tours/search?pickup=${encodeURIComponent(pickup)}&dropoff=${encodeURIComponent(dropoff)}&date=${date}`}
@@ -374,30 +418,7 @@ export default function GroupTourSeatSelectionPage() {
                 </div>
               </div>
               <Button
-                onClick={() => {
-                  if (selectedSeats.length === 0) {
-                    toast.error('Please select at least one seat');
-                    return;
-                  }
-                  if (boardingPoints.length > 0 && !selectedBoardingPoint) {
-                    toast.error('Please select a boarding point');
-                    setBoardingPanelOpen(true);
-                    return;
-                  }
-                  sessionStorage.setItem('groupTourSeatSelection', JSON.stringify({
-                    tourId,
-                    selectedSeats,
-                    seatPrices: selectedSeats.reduce((acc, sid) => {
-                      acc[sid] = seats[sid]?.price ?? basePrice;
-                      return acc;
-                    }, {} as Record<string, number>),
-                    boarding_point_id: selectedBoardingPoint?.id && selectedBoardingPoint.id > 0 ? selectedBoardingPoint.id : 0,
-                    pickup: pickup || tour.pickup_location,
-                    dropoff: dropoff || tour.dropoff_location,
-                    date: date || tour.travel_date,
-                  }));
-                  navigate(`/group-tours/passenger-details/${tourId}?pickup=${encodeURIComponent(pickup)}&dropoff=${encodeURIComponent(dropoff)}&date=${date}`);
-                }}
+                onClick={handleContinue}
                 disabled={selectedSeats.length === 0 || (boardingPoints.length > 0 && !selectedBoardingPoint)}
                 className="w-full mt-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 py-3.5 rounded-lg text-sm font-semibold"
               >
