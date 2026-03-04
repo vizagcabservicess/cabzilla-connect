@@ -48,6 +48,7 @@ export const MobileNavigation = () => {
       '/vision-mission': 'Vision & Mission',
       '/careers': 'Careers',
       '/hire-driver': 'Hire Driver',
+      '/hire-driver-terms': 'Hire Driver Terms',
       '/rentals': 'Car Rentals',
       '/vehicles': 'Vehicles',
       '/drivers': 'Drivers',
@@ -111,6 +112,7 @@ export const MobileNavigation = () => {
     const messages = {
       '/': 'Hi Kumar! I would like to know more about your taxi services',
       '/hire-driver': 'Hi Kumar! I would like to hire a driver',
+      '/hire-driver-terms': 'Hi Kumar! I have a question about the Hire-a-Driver terms and conditions',
       '/tours': 'Hi Kumar! I would like to know more about your tour packages',
       '/fleet': 'Hi Kumar! I would like to know more about your fleet',
       '/careers': 'Hi Kumar! I would like to know more about career opportunities',

@@ -138,6 +138,7 @@ const CareersPage = lazy(() => import('./pages/CareersPage'));
 const OurStoryPage = lazy(() => import('./pages/OurStoryPage'));
 const VisionMissionPage = lazy(() => import('./pages/VisionMissionPage'));
 const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
+const HireDriverTermsPage = lazy(() => import('./pages/HireDriverTermsPage').then(module => ({ default: module.HireDriverTermsPage })));
 const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
 const SeventeenSeaterTempoTravellerPage = lazy(() => import('./pages/SeventeenSeaterTempoTravellerPage'));
 const TwelveSeaterTempoTravellerPage = lazy(() => import('./pages/TwelveSeaterTempoTravellerPage'));
@@ -219,6 +220,7 @@ function Root() {
     const messages = {
       '/': 'Hi Kumar! I would like to know more about your taxi services',
       '/hire-driver': 'Hi Kumar! I would like to hire a driver',
+      '/hire-driver-terms': 'Hi Kumar! I have a question about the Hire-a-Driver terms and conditions',
       '/tours': 'Hi Kumar! I would like to know more about your tour packages',
       '/fleet': 'Hi Kumar! I would like to know more about your fleet',
       '/careers': 'Hi Kumar! I would like to know more about career opportunities',
@@ -664,6 +666,10 @@ const router = createBrowserRouter([
       {
         path: 'hire-driver',
         element: <HireDriverPage />,
+      },
+      {
+        path: 'hire-driver-terms',
+        element: <HireDriverTermsPage />,
       },
 
       // Catch-all route for 404s

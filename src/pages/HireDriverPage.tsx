@@ -15,6 +15,7 @@ import { driverHireAPI } from '@/services/api/driverHireAPI';
 import { DriverSlider } from '@/components/DriverSlider';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { FaWhatsapp } from 'react-icons/fa';
 
@@ -459,6 +460,10 @@ Best regards,
                     />
                   </div>
                   
+                  <p className="text-sm text-muted-foreground text-center">
+                    By submitting, you agree to our{' '}
+                    <Link to="/hire-driver-terms" className="text-primary underline hover:no-underline">Hire-a-Driver Terms & Conditions</Link>.
+                  </p>
                   <Button 
                     type="submit" 
                     size="lg" 
