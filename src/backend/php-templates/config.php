@@ -25,6 +25,13 @@ define('DB_PASS', $_ENV['DB_PASS'] ?? null);
 // JWT Configuration - CRITICAL: Use environment variable only
 define('JWT_SECRET', $_ENV['JWT_SECRET'] ?? null);
 
+// WhatsApp Cloud API Configuration
+define('WHATSAPP_PHONE_NUMBER_ID', $_ENV['WHATSAPP_PHONE_NUMBER_ID'] ?? null);
+define('WHATSAPP_ACCESS_TOKEN', $_ENV['WHATSAPP_ACCESS_TOKEN'] ?? null);
+define('WHATSAPP_ADMIN_PHONE', $_ENV['WHATSAPP_ADMIN_PHONE'] ?? '919966363662');
+define('WHATSAPP_TEMPLATE_NAME', $_ENV['WHATSAPP_TEMPLATE_NAME'] ?? 'abandoned_payment_alert');
+define('WHATSAPP_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_TEMPLATE_LANGUAGE'] ?? 'en');
+
 // SECURITY: Fail if critical credentials not configured
 if (!DB_HOST || !DB_NAME || !DB_USER || !DB_PASS || !JWT_SECRET) {
     error_log('CRITICAL: Database or JWT credentials not configured in environment');

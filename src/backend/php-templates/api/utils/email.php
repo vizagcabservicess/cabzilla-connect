@@ -921,6 +921,37 @@ HTML;
 }
 
 /**
+ * Build WhatsApp message for abandoned payment notification to admin
+ */
+function buildAbandonedPaymentWhatsAppMessage($booking) {
+    $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
+    $dropLocation = is_array($booking['dropLocation'] ?? null) ? ($booking['dropLocation']['name'] ?? 'N/A') : ($booking['dropLocation'] ?? 'N/A');
+    $pickupDate = formatDateTimeForEmail($booking['pickupDate'] ?? null);
+    $cabType = $booking['cabType'] ?? 'N/A';
+    $totalAmount = isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A';
+    $passengerName = $booking['passengerName'] ?? 'N/A';
+    $passengerPhone = $booking['passengerPhone'] ?? 'N/A';
+    $passengerEmail = $booking['passengerEmail'] ?? 'N/A';
+    $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
+    $tripType = $booking['tripType'] ?? 'Standard';
+    $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
+    $formattedTripType = ucfirst($tripType);
+    if (!empty($tripMode)) {
+        $formattedTripMode = str_replace('-', ' ', $tripMode);
+        $formattedTripMode = ucwords($formattedTripMode);
+        $formattedTripType .= " ($formattedTripMode)";
+    }
+    $msg = "⚠️ *Customer Left Without Payment*\n\n";
+    $msg .= "Booking #$bookingNumber - Customer entered details, clicked Proceed to Payment, but did not complete payment.\n\n";
+    $msg .= "*Customer:*\n$passengerName\n📱 $passengerPhone\n📧 $passengerEmail\n\n";
+    $msg .= "*Trip:*\n📍 From: $pickupLocation\n📍 To: $dropLocation\n";
+    $msg .= "📅 $pickupDate\n🚗 $cabType ($formattedTripType)\n";
+    $msg .= "💰 Amount: ₹$totalAmount\n\n";
+    $msg .= "Follow up: https://vizagtaxihub.com/admin";
+    return $msg;
+}
+
+/**
  * Generate HTML for admin notification when booking is pending payment
  */
 function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment') {
@@ -940,9 +971,17 @@ function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment'
         $formattedTripMode = str_replace('-', ' ', $tripMode);
         $formattedTripType .= " ($formattedTripMode)";
     }
-    $statusBadge = $reason === 'cancelled' || $reason === 'abandoned' 
-        ? '<span style="background:#F44336;color:white;padding:4px 10px;border-radius:4px;">Payment Cancelled/Abandoned</span>'
+    $isAbandoned = in_array($reason, ['cancelled', 'abandoned', 'browser_closed', 'user_cancelled']);
+    $statusBadge = $isAbandoned
+        ? '<span style="background:#F44336;color:white;padding:4px 10px;border-radius:4px;">Customer Left Without Payment</span>'
         : '<span style="background:#FF9800;color:white;padding:4px 10px;border-radius:4px;">Awaiting Payment</span>';
+    $headerTitle = $isAbandoned ? 'Customer Left Without Payment' : 'Booking Pending Payment';
+    $headerSubtext = $isAbandoned
+        ? 'Customer entered all details, clicked Proceed to Payment, but did not complete payment or cancelled.'
+        : 'A booking is awaiting payment.';
+    $actionText = $isAbandoned
+        ? 'Customer had left without payment along with all the details above. Contact the customer to complete the booking.'
+        : 'Customer has not completed payment. Follow up or assign driver once payment is received.';
 
     $html = <<<HTML
 <!DOCTYPE html>
@@ -950,7 +989,7 @@ function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Booking Pending - #$bookingNumber</title>
+    <title>$headerTitle - #$bookingNumber</title>
     <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -966,8 +1005,9 @@ function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment'
 <body>
     <div class="container">
         <div class="header">
-            <h1>Booking Pending Payment</h1>
+            <h1>$headerTitle</h1>
             <p style="font-size: 18px; font-weight: bold;">Booking #$bookingNumber</p>
+            <p>$headerSubtext</p>
             <p>$statusBadge</p>
         </div>
         <div class="content">
@@ -982,7 +1022,7 @@ function generatePendingPaymentAdminEmail($booking, $reason = 'awaiting_payment'
             <div class="detail-row"><span class="detail-label">Vehicle:</span> $cabType</div>
             <div class="detail-row"><span class="detail-label">Amount:</span> ₹$totalAmount</div>
             <div class="admin-action">
-                <p><strong>Action Required:</strong> Customer has not completed payment. Follow up or assign driver once payment is received.</p>
+                <p><strong>Action Required:</strong> $actionText</p>
                 <a href="https://vizagtaxihub.com/admin" class="button">Go to Admin Dashboard</a>
             </div>
         </div>
@@ -1024,7 +1064,10 @@ function sendPendingPaymentEmailToCustomer($booking) {
  */
 function sendPendingPaymentNotificationToAdmin($booking, $reason = 'awaiting_payment') {
     $adminEmails = ['info@vizagtaxihub.com'];
-    $subject = "Booking Pending Payment - #" . ($booking['bookingNumber'] ?? 'N/A');
+    $isAbandoned = in_array($reason, ['cancelled', 'abandoned', 'browser_closed', 'user_cancelled']);
+    $subject = $isAbandoned
+        ? "⚠️ Customer Left Without Payment - #" . ($booking['bookingNumber'] ?? 'N/A')
+        : "Booking Pending Payment - #" . ($booking['bookingNumber'] ?? 'N/A');
     $htmlBody = generatePendingPaymentAdminEmail($booking, $reason);
     $headers = ['X-Priority' => '1', 'X-MSMail-Priority' => 'High', 'Importance' => 'High'];
     $success = false;

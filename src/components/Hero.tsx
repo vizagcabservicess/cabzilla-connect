@@ -1280,8 +1280,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       const response = await bookingAPI.createBooking(bookingData);
       
       const bookingDataForStorage = {
-        bookingId: response.data?.id || response.id || response.booking_id,
-        bookingNumber: response.data?.bookingNumber || response.bookingNumber || response.data?.booking_number || response.booking_number,
+        bookingId: response.data?.data?.id ?? response.data?.id ?? response.id ?? response.booking_id,
+        bookingNumber: response.data?.data?.bookingNumber ?? response.data?.bookingNumber ?? response.bookingNumber ?? response.data?.booking_number ?? response.booking_number,
         pickupLocation,
         dropLocation,
         pickupDate: formatDateForAPI(pickupDate),

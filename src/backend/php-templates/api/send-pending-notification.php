@@ -109,12 +109,38 @@ try {
         echo json_encode(['success' => true, 'message' => 'Notification already sent recently']);
         exit;
     }
+    $effectiveReason = in_array($reason, ['cancelled', 'user_cancelled']) ? 'cancelled' : 'abandoned';
     sendPendingPaymentEmailToCustomer($booking);
-    sendPendingPaymentNotificationToAdmin($booking, in_array($reason, ['cancelled', 'user_cancelled']) ? 'cancelled' : 'abandoned');
+    sendPendingPaymentNotificationToAdmin($booking, $effectiveReason);
     file_put_contents($cacheFile, (string)time());
 
-    file_put_contents($logDir . '/send_pending_' . date('Y-m-d') . '.log', date('Y-m-d H:i:s') . " Sent for booking $bookingId\n", FILE_APPEND);
-    echo json_encode(['success' => true, 'message' => 'Pending notification emails sent']);
+    // Send WhatsApp notification to admin (phone: +91 9966363662)
+    try {
+        if (function_exists('buildAbandonedPaymentWhatsAppMessage')) {
+            $whatsappMsg = buildAbandonedPaymentWhatsAppMessage($booking);
+            $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'vizagtaxihub.com');
+            $whatsappUrl = rtrim($baseUrl, '/') . '/api/admin/send-whatsapp.php';
+            $payload = json_encode([
+                'phone' => '919966363662',
+                'messageType' => 'abandoned_payment_admin',
+                'data' => $booking
+            ]);
+            $ctx = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/json\r\n",
+                    'content' => $payload,
+                    'timeout' => 5
+                ]
+            ]);
+            @file_get_contents($whatsappUrl, false, $ctx);
+        }
+    } catch (Throwable $wx) {
+        file_put_contents($logDir . '/send_pending_' . date('Y-m-d') . '.log', date('Y-m-d H:i:s') . " WhatsApp notify failed: " . $wx->getMessage() . "\n", FILE_APPEND);
+    }
+
+    file_put_contents($logDir . '/send_pending_' . date('Y-m-d') . '.log', date('Y-m-d H:i:s') . " Sent for booking $bookingId (email+whatsapp)\n", FILE_APPEND);
+    echo json_encode(['success' => true, 'message' => 'Pending notification emails and WhatsApp sent']);
 } catch (Throwable $e) {
     error_log('send-pending-notification error: ' . $e->getMessage());
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);

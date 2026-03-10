@@ -134,6 +134,34 @@ function generateInvoice($booking, $invoiceUrl = '') {
     return $message;
 }
 
+// Template for abandoned payment - to notify admin
+function generateAbandonedPaymentAdmin($booking) {
+    $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
+    $dropLocation = is_array($booking['dropLocation'] ?? null) ? ($booking['dropLocation']['name'] ?? 'N/A') : ($booking['dropLocation'] ?? 'N/A');
+    $pickupDate = !empty($booking['pickupDate']) ? date('d M Y, h:i A', strtotime($booking['pickupDate'])) : 'N/A';
+    $cabType = $booking['cabType'] ?? 'N/A';
+    $totalAmount = isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A';
+    $passengerName = $booking['passengerName'] ?? 'N/A';
+    $passengerPhone = $booking['passengerPhone'] ?? 'N/A';
+    $passengerEmail = $booking['passengerEmail'] ?? 'N/A';
+    $bookingNumber = $booking['bookingNumber'] ?? 'N/A';
+    $tripType = $booking['tripType'] ?? 'Standard';
+    $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
+    $formattedTripType = ucfirst($tripType);
+    if (!empty($tripMode)) {
+        $formattedTripMode = str_replace('-', ' ', $tripMode);
+        $formattedTripType .= ' (' . ucwords($formattedTripMode) . ')';
+    }
+    $msg = "⚠️ *Customer Left Without Payment*\n\n";
+    $msg .= "Booking #$bookingNumber - Customer entered details, clicked Proceed to Payment, but did not complete.\n\n";
+    $msg .= "*Customer:*\n$passengerName\n📱 $passengerPhone\n📧 $passengerEmail\n\n";
+    $msg .= "*Trip:*\n📍 From: $pickupLocation\n📍 To: $dropLocation\n";
+    $msg .= "📅 $pickupDate\n🚗 $cabType ($formattedTripType)\n";
+    $msg .= "💰 Amount: ₹$totalAmount\n\n";
+    $msg .= "Follow up: https://vizagtaxihub.com/admin";
+    return $msg;
+}
+
 // Template for quotation
 function generateQuotation($tripDetails, $fare) {
     $date = date('Y-m-d', strtotime($tripDetails['date']));
@@ -179,53 +207,140 @@ try {
             $fare = $messageData['fare'] ?? 0;
             $message = generateQuotation($messageData, $fare);
             break;
+
+        case 'abandoned_payment_admin':
+            $message = generateAbandonedPaymentAdmin($messageData);
+            break;
             
         default:
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid message type'], 400);
             break;
     }
     
-    // Log the message being sent
     logMessage("WhatsApp message prepared", [
         'phone' => $phone,
         'type' => $messageType,
         'message' => $message
     ]);
     
-    /*
-     * This is where you would integrate with WhatsApp Business API
-     * For example, using Twilio, MessageBird, etc.
-     * 
-     * For now, we'll simulate success since actual integration
-     * requires WhatsApp Business account approval
-     */
+    // Send via Meta WhatsApp Cloud API
+    $phoneNumberId = defined('WHATSAPP_PHONE_NUMBER_ID') ? WHATSAPP_PHONE_NUMBER_ID : null;
+    $accessToken = defined('WHATSAPP_ACCESS_TOKEN') ? WHATSAPP_ACCESS_TOKEN : null;
     
-    // Example of what the Twilio API call would look like:
-    /*
-    $twilioAccountSid = 'YOUR_TWILIO_ACCOUNT_SID';
-    $twilioAuthToken = 'YOUR_TWILIO_AUTH_TOKEN';
-    $twilioWhatsAppNumber = 'whatsapp:+14155238886'; // Your Twilio WhatsApp number
+    if (empty($phoneNumberId) || empty($accessToken)) {
+        logMessage("WhatsApp Cloud API credentials not configured", [
+            'has_phone_id' => !empty($phoneNumberId),
+            'has_token' => !empty($accessToken)
+        ]);
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'WhatsApp Cloud API credentials not configured. Set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN in .env'
+        ], 500);
+    }
     
-    $client = new Client($twilioAccountSid, $twilioAuthToken);
-    $result = $client->messages->create(
-        'whatsapp:+' . $phone,
-        [
-            'from' => $twilioWhatsAppNumber,
-            'body' => $message
-        ]
-    );
-    */
+    $apiUrl = "https://graph.facebook.com/v22.0/{$phoneNumberId}/messages";
     
-    // For now, simulate success
-    sendJsonResponse([
-        'status' => 'success',
-        'message' => 'WhatsApp message prepared successfully',
-        'data' => [
-            'phone' => $phone,
-            'messageType' => $messageType,
-            'messagePreview' => substr($message, 0, 100) . '...'
-        ]
+    // For abandoned_payment_admin: use template (required for business-initiated messages)
+    // Set WHATSAPP_TEMPLATE_NAME in .env - use "hello_world" for quick test, or create "abandoned_payment_alert"
+    $templateName = defined('WHATSAPP_TEMPLATE_NAME') && WHATSAPP_TEMPLATE_NAME ? WHATSAPP_TEMPLATE_NAME : null;
+    
+    if ($messageType === 'abandoned_payment_admin' && $templateName) {
+        if ($templateName === 'hello_world') {
+            $payload = json_encode([
+                'messaging_product' => 'whatsapp',
+                'to' => $phone,
+                'type' => 'template',
+                'template' => ['name' => 'hello_world', 'language' => ['code' => 'en_US']]
+            ]);
+        } else {
+            $booking = $messageData ?? [];
+            $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
+            $dropLocation = is_array($booking['dropLocation'] ?? null) ? ($booking['dropLocation']['name'] ?? 'N/A') : ($booking['dropLocation'] ?? 'N/A');
+            $pickupDate = !empty($booking['pickupDate']) ? date('d M Y, h:i A', strtotime($booking['pickupDate'])) : 'N/A';
+            $formattedTripType = ucfirst($booking['tripType'] ?? 'Standard');
+            if (!empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
+                $formattedTripType .= ' (' . ucwords(str_replace('-', ' ', $booking['trip_mode'] ?? $booking['tripMode'] ?? '')) . ')';
+            }
+            // Template: Header 1 var + Body 4 vars
+            // Header: {{1}} = Booking number
+            // Body: {{1}} Passenger, {{2}} Contact, {{3}} Trip, {{4}} Amount (body vars are 1-indexed separately)
+            $contact = trim(($booking['passengerPhone'] ?? '') . ' | ' . ($booking['passengerEmail'] ?? ''));
+            if ($contact === '|' || trim(str_replace('|', '', $contact)) === '') $contact = 'N/A';
+            $tripDetails = $pickupLocation . ' → ' . $dropLocation . ' | ' . $pickupDate . ' | ' . ($booking['cabType'] ?? 'N/A') . ' (' . $formattedTripType . ')';
+            $payload = json_encode([
+                'messaging_product' => 'whatsapp',
+                'to' => $phone,
+                'type' => 'template',
+                'template' => [
+                    'name' => $templateName,
+                    'language' => ['code' => (defined('WHATSAPP_TEMPLATE_LANGUAGE') ? WHATSAPP_TEMPLATE_LANGUAGE : 'en')],
+                    'components' => [
+                        ['type' => 'header', 'parameters' => [
+                            ['type' => 'text', 'text' => $booking['bookingNumber'] ?? 'N/A']
+                        ]],
+                        ['type' => 'body', 'parameters' => [
+                            ['type' => 'text', 'text' => $booking['passengerName'] ?? 'N/A'],
+                            ['type' => 'text', 'text' => $contact],
+                            ['type' => 'text', 'text' => $tripDetails],
+                            ['type' => 'text', 'text' => '₹' . (isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A')]
+                        ]]
+                    ]
+                ]
+            ]);
+        }
+    } else {
+        $payload = json_encode([
+            'messaging_product' => 'whatsapp',
+            'to' => $phone,
+            'type' => 'text',
+            'text' => ['body' => $message]
+        ]);
+    }
+    
+    $ch = curl_init($apiUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $accessToken
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10
     ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    
+    $responseData = json_decode($response, true);
+    
+    logMessage("WhatsApp Cloud API response", [
+        'http_code' => $httpCode,
+        'response' => $responseData,
+        'curl_error' => $curlError ?: null
+    ]);
+    
+    if ($httpCode >= 200 && $httpCode < 300 && isset($responseData['messages'][0]['id'])) {
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'WhatsApp message sent successfully',
+            'data' => [
+                'phone' => $phone,
+                'messageType' => $messageType,
+                'whatsapp_message_id' => $responseData['messages'][0]['id']
+            ]
+        ]);
+    } else {
+        $errorMsg = $responseData['error']['message'] ?? $curlError ?: 'Unknown error';
+        logMessage("WhatsApp send failed", ['error' => $errorMsg, 'http_code' => $httpCode]);
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'Failed to send WhatsApp message: ' . $errorMsg,
+            'data' => ['http_code' => $httpCode]
+        ], 500);
+    }
     
 } catch (Exception $e) {
     logMessage("WhatsApp message error", ['error' => $e->getMessage()]);

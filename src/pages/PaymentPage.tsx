@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
@@ -11,12 +11,12 @@ import {
   RazorpayResponse
 } from '@/services/razorpayService';
 import { bookingAPI } from '@/services/api';
-import { API_BASE_URL } from '@/config';
 import { Booking } from '@/types/api';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/cabData';
+import { API_BASE_URL } from '@/config';
 
 const PaymentPage = () => {
   const navigate = useNavigate();
@@ -28,19 +28,50 @@ const PaymentPage = () => {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success' | 'failed'>('pending');
   const [paymentResponse, setPaymentResponse] = useState<RazorpayResponse | null>(null);
   const [isFetchingBooking, setIsFetchingBooking] = useState(false);
+  const hasNotifiedAbandoned = useRef(false);
+  // Refs ensure event handlers always have current values (avoids stale closures)
+  const bookingIdRef = useRef<number | string | null>(null);
+  const paymentStatusRef = useRef<string>(paymentStatus);
+  bookingIdRef.current = bookingDetails?.bookingId ?? null;
+  paymentStatusRef.current = paymentStatus;
 
-  // Notify when user closes browser/tab without completing payment (sendBeacon works in beforeunload)
+  const sendAbandonedNotification = (reason: string) => {
+    const bid = bookingIdRef.current;
+    if (paymentStatusRef.current === 'success' || !bid || hasNotifiedAbandoned.current) return;
+    hasNotifiedAbandoned.current = true;
+    // Use API_BASE_URL - window.location.origin fails when app is on CDN/different host
+    const url = `${API_BASE_URL}/api/send-pending-notification.php`;
+    const payload = JSON.stringify({ booking_id: bid, reason });
+    // Use both sendBeacon and fetch keepalive for max reliability (server dedupes in 5 min)
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+    }
+    fetch(url, {
+      method: 'POST',
+      body: payload,
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+    }).catch(() => {});
+  };
+
+  // Notify when user closes browser/tab or navigates away (beforeunload + pagehide)
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (paymentStatus !== 'success' && bookingDetails?.bookingId) {
-        const payload = JSON.stringify({ booking_id: bookingDetails.bookingId, reason: 'browser_closed' });
-        const url = `${API_BASE_URL.replace(/\/$/, '')}/api/send-pending-notification.php`;
-        navigator.sendBeacon?.(url, new Blob([payload], { type: 'application/json' }));
-      }
+    const handleUnload = () => sendAbandonedNotification('browser_closed');
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload); // More reliable on mobile
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [bookingDetails?.bookingId, paymentStatus]);
+  }, []);
+
+  // Notify when user navigates away within SPA (e.g. clicks navbar, back)
+  useEffect(() => {
+    return () => {
+      sendAbandonedNotification('abandoned');
+    };
+  }, []);
 
   useEffect(() => {
     const loadBooking = async () => {
@@ -283,6 +314,11 @@ const PaymentPage = () => {
   };
 
   const handleGoBack = () => {
+    // Notify admin that customer left without payment (abandoned)
+    if (paymentStatus !== 'success' && bookingDetails?.bookingId && !hasNotifiedAbandoned.current) {
+      hasNotifiedAbandoned.current = true;
+      bookingAPI.notifyPendingPayment(bookingDetails.bookingId, 'abandoned').catch(() => {});
+    }
     // Check if we came from a tour booking
     const storedDetails = sessionStorage.getItem('bookingDetails');
     if (storedDetails) {
