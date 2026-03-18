@@ -1636,6 +1636,18 @@ try {
         }
     }
 
+    // Trip type display: only show one-way/round-trip for outstation; local uses hourly packages
+    $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
+    // Infer "local" when trip_type is empty but hourly package indicators present (e.g. 8hr/80km)
+    if ($tripTypeRaw === '' && (!empty($booking['hourly_package']) || isset($booking['no_of_hours']) || isset($booking['estimated_hours']))) {
+        $tripTypeRaw = 'local';
+    }
+    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'N/A';
+    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode']) && !empty($booking['tripMode'])) {
+        $tripMode = $booking['trip_mode'] ?? $booking['tripMode'];
+        $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
+    }
+
     // Create HTML content for invoice - compact layout for single-page PDF
     $invoiceHtml = '<!DOCTYPE html>
 <html>
@@ -1657,6 +1669,14 @@ try {
         .fare-table th:last-child, .fare-table td:last-child { width: 80px; text-align: right; }
         .fare-table th { background-color: #f5f5f5; }
         .total-row { font-weight: bold; }
+        .tax-details-title { font-size: 11px; font-weight: bold; color: #c00; margin: 12px 0 6px 0; }
+        .tax-details-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; }
+        .tax-details-table th, .tax-details-table td { padding: 3px 6px; border-bottom: 1px solid #ddd; }
+        .tax-details-table th { background-color: #f9f9f9; font-weight: 600; }
+        .tax-details-table td { text-align: center; }
+        .tax-details-table th { text-align: center; }
+        .tax-details-table .total-col { border-left: 1px solid #ccc; font-weight: bold; }
+        .tax-details-summary { font-weight: bold; border-top: 1px solid #333; }
         .footer { margin-top: 10px; text-align: center; font-size: 9px; color: #666; border-top: 1px solid #eee; padding-top: 8px; }
         .tax-note { font-size: 9px; color: #666; font-style: italic; margin-top: 2px; }
         .compact-p { margin: 2px 0; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
@@ -1704,7 +1724,7 @@ try {
             </div>
             <div>
                 <h3 class="section-title">Trip Summary</h3>
-                <p class="compact-p"><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type'] ?? 'N/A') . (isset($booking['trip_mode']) && $booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
+                <p class="compact-p"><strong>Trip Type:</strong> ' . $tripTypeLabel . '</p>
                 <p class="compact-p"><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
                 <p class="compact-p"><strong>Vehicle:</strong> ' . htmlspecialchars($booking['cab_type'] ?? 'N/A') . '</p>
                 <p class="compact-p"><strong>No. of Hours:</strong> ' . $noOfHours . '</p>
@@ -2499,6 +2519,78 @@ try {
     
     $invoiceHtml .= '
             </table>';
+    
+    // Tax Details table - shown below fare breakdown when GST is enabled
+    // Taxable Value must be pre-GST: for inclusive use total/1.18, for exclusive use base+extras
+    if ($gstEnabled && $taxAmount > 0) {
+        $taxableForDetails = round($taxableAmount, 2);
+        $invoiceHtml .= '
+            <div class="tax-details-title">Tax Details</div>
+            <table class="tax-details-table">';
+        if ($isIGST) {
+            $invoiceHtml .= '
+                <tr>
+                    <th>HSN</th>
+                    <th>Taxable Value</th>
+                    <th colspan="2">IGST</th>
+                    <th class="total-col">Total(₹)</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                    <th></th>
+                </tr>
+                <tr>
+                    <td>' . htmlspecialchars($hsnCode) . '</td>
+                    <td>' . number_format($taxableForDetails, 2) . '</td>
+                    <td>18%</td>
+                    <td>' . number_format($taxAmount, 2) . '</td>
+                    <td class="total-col">' . number_format($taxAmount, 2) . '</td>
+                </tr>
+                <tr class="tax-details-summary">
+                    <td colspan="4" style="text-align: left;"><strong>Trip charges</strong></td>
+                    <td class="total-col">' . number_format($finalTotal, 2) . '</td>
+                </tr>';
+        } else {
+            $invoiceHtml .= '
+                <tr>
+                    <th>HSN</th>
+                    <th>Taxable Value</th>
+                    <th colspan="2">CGST</th>
+                    <th colspan="2">SGST/UTGST</th>
+                    <th>Total Tax</th>
+                    <th class="total-col">Total(₹)</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+                <tr>
+                    <td>' . htmlspecialchars($hsnCode) . '</td>
+                    <td>' . number_format($taxableForDetails, 2) . '</td>
+                    <td>9%</td>
+                    <td>' . number_format($cgstAmount, 2) . '</td>
+                    <td>9%</td>
+                    <td>' . number_format($sgstAmount, 2) . '</td>
+                    <td>' . number_format($taxAmount, 2) . '</td>
+                    <td class="total-col">' . number_format($taxAmount, 2) . '</td>
+                </tr>
+                <tr class="tax-details-summary">
+                    <td colspan="7" style="text-align: left;"><strong>Trip charges</strong></td>
+                    <td class="total-col">' . number_format($finalTotal, 2) . '</td>
+                </tr>';
+        }
+        $invoiceHtml .= '
+            </table>';
+    }
             
     if (!$includeTax && $gstEnabled) {
         $invoiceHtml .= '

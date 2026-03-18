@@ -5,8 +5,7 @@ import { usePoolingAuth } from '@/providers/PoolingAuthProvider';
 import { GoogleMapsProvider } from '@/providers/GoogleMapsProvider';
 import GuestDashboard from '@/components/pooling/GuestDashboard';
 
-// Use the actual API key that's already being used in the system
-const GOOGLE_MAPS_API_KEY = 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4';
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 export default function GuestDashboardPage() {
   const { user, isAuthenticated, isLoading } = usePoolingAuth();

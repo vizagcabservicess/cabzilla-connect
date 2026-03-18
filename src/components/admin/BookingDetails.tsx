@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -79,14 +79,21 @@ export function BookingDetails({
 
   const [invoiceState, setInvoiceState] = useState(getStoredInvoiceState);
 
-  // Save invoice state to localStorage whenever it changes
-  useEffect(() => {
+  // Persist immediately when state changes - avoids losing data if popup closes before effect runs
+  // useCallback keeps reference stable to prevent BookingInvoice's fetchLatestInvoice from re-running on every render
+  const onInvoiceStateChange = useCallback((newState: Parameters<typeof setInvoiceState>[0]) => {
+    setInvoiceState(newState);
     try {
-      localStorage.setItem(`invoice-settings-${booking.id}`, JSON.stringify(invoiceState));
+      localStorage.setItem(`invoice-settings-${booking.id}`, JSON.stringify(newState));
     } catch (error) {
       console.error('Error saving invoice settings:', error);
     }
-  }, [invoiceState, booking.id]);
+  }, [booking.id]);
+
+  // Reset invoice state when switching to a different booking
+  useEffect(() => {
+    setInvoiceState(getStoredInvoiceState());
+  }, [booking.id]);
 
   useEffect(() => {
     console.log('BookingDetails booking.updatedAt:', booking.updatedAt, 'extraCharges:', booking.extraCharges);
@@ -365,7 +372,7 @@ export function BookingDetails({
             isSubmitting={isSubmitting}
             pdfUrl={pdfUrl}
             invoiceState={invoiceState}
-            onInvoiceStateChange={setInvoiceState}
+            onInvoiceStateChange={onInvoiceStateChange}
           />
         </TabsContent>
 

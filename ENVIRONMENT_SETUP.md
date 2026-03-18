@@ -5,7 +5,7 @@
 To fix Google Maps issues, create a `.env` file in the root directory with the following content:
 
 ```env
-VITE_GOOGLE_MAPS_API_KEY=AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 ```
 
 ## Steps to Fix:

@@ -501,6 +501,14 @@ try {
     .extra-charges-table th:last-child, .extra-charges-table td:last-child {
         text-align: right;
     }
+    .tax-details-title { font-size: 11px; font-weight: bold; color: #c00; margin: 12px 0 6px 0; }
+    .tax-details-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 10px; }
+    .tax-details-table th, .tax-details-table td { padding: 3px 6px; border-bottom: 1px solid #ddd; }
+    .tax-details-table th { background-color: #f9f9f9; font-weight: 600; }
+    .tax-details-table td { text-align: center; }
+    .tax-details-table th { text-align: center; }
+    .tax-details-table .total-col { border-left: 1px solid #ccc; font-weight: bold; }
+    .tax-details-summary { font-weight: bold; border-top: 1px solid #333; }
     
     @page { size: A4; margin: 8mm; }
     @media print {
@@ -508,6 +516,17 @@ try {
         .invoice-container { page-break-inside: avoid; }
     }
     ";
+
+    // Trip type label: support trip_type/tripType, infer Local from hourly package when empty
+    $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
+    if ($tripTypeRaw === '' && (strpos($booking['hourly_package'] ?? '', 'hr') !== false || !empty($booking['no_of_hours']) || !empty($booking['estimated_hours']))) {
+        $tripTypeRaw = 'local';
+    }
+    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'Local';
+    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
+        $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
+        $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
+    }
 
     // Create HTML content for the invoice
     $content = '
@@ -547,7 +566,7 @@ try {
                     <p class="compact-p"><strong>Phone:</strong> '.htmlspecialchars($booking['passenger_phone'] ?? 'N/A').'</p>
                     <p class="compact-p"><strong>Email:</strong> '.htmlspecialchars($booking['passenger_email'] ?? 'N/A').'</p></div></td>
                 <td><div style="width:100%;"><h3 class="section-title">Trip Summary</h3>
-                    <p class="compact-p"><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').(isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
+                    <p class="compact-p"><strong>Trip Type:</strong> '.$tripTypeLabel.'</p>
                     <p class="compact-p"><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
                     <p class="compact-p"><strong>Vehicle:</strong> '.htmlspecialchars($booking['cab_type'] ?? 'N/A').'</p>
                     <p class="compact-p"><strong>No. of Hours:</strong> '.$noOfHours.'</p>
@@ -621,6 +640,76 @@ try {
                         <td><span class="rupee-symbol">₹</span> '.number_format($fareTotalWithTax, 2).'</td>
                     </tr>
                 </table>';
+
+    if ($gstEnabled && $taxAmount > 0) {
+        $taxableForDetails = round($taxableAmount, 2); // Pre-GST amount: total/1.18 for inclusive, base+extras for exclusive
+        $content .= '
+                <div class="tax-details-title">Tax Details</div>
+                <table class="tax-details-table">';
+        if ($isIGST) {
+            $content .= '
+                    <tr>
+                        <th>HSN</th>
+                        <th>Taxable Value</th>
+                        <th colspan="2">IGST</th>
+                        <th class="total-col">Total(₹)</th>
+                    </tr>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th>Rate</th>
+                        <th>Amount</th>
+                        <th></th>
+                    </tr>
+                    <tr>
+                        <td>'.htmlspecialchars($hsnCode).'</td>
+                        <td>'.number_format($taxableForDetails, 2).'</td>
+                        <td>18%</td>
+                        <td>'.number_format($taxAmount, 2).'</td>
+                        <td class="total-col">'.number_format($taxAmount, 2).'</td>
+                    </tr>
+                    <tr class="tax-details-summary">
+                        <td colspan="4" style="text-align: left;"><strong>Trip charges</strong></td>
+                        <td class="total-col">'.number_format($fareTotalWithTax, 2).'</td>
+                    </tr>';
+        } else {
+            $content .= '
+                    <tr>
+                        <th>HSN</th>
+                        <th>Taxable Value</th>
+                        <th colspan="2">CGST</th>
+                        <th colspan="2">SGST/UTGST</th>
+                        <th>Total Tax</th>
+                        <th class="total-col">Total(₹)</th>
+                    </tr>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th>Rate</th>
+                        <th>Amount</th>
+                        <th>Rate</th>
+                        <th>Amount</th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                    <tr>
+                        <td>'.htmlspecialchars($hsnCode).'</td>
+                        <td>'.number_format($taxableForDetails, 2).'</td>
+                        <td>9%</td>
+                        <td>'.number_format($cgstAmount, 2).'</td>
+                        <td>9%</td>
+                        <td>'.number_format($sgstAmount, 2).'</td>
+                        <td>'.number_format($taxAmount, 2).'</td>
+                        <td class="total-col">'.number_format($taxAmount, 2).'</td>
+                    </tr>
+                    <tr class="tax-details-summary">
+                        <td colspan="7" style="text-align: left;"><strong>Trip charges</strong></td>
+                        <td class="total-col">'.number_format($fareTotalWithTax, 2).'</td>
+                    </tr>';
+        }
+        $content .= '
+                </table>';
+    }
 
     if ($gstEnabled) {
         $content .= '

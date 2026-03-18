@@ -25,10 +25,10 @@ export function GoogleMapsProvider({ children, apiKey }: GoogleMapsProviderProps
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Use the provided API key or fallback to the production key
+    // Require API key from env - no hardcoded fallback (security)
     const finalApiKey = apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY' && apiKey !== ''
-      ? apiKey 
-      : 'AIzaSyDqhYmgEp_DafM1jKJ8XHTgEdLXCg-fGy4';
+      ? apiKey
+      : '';
     
     if (!finalApiKey) {
       setError(new Error('Google Maps API key is required'));

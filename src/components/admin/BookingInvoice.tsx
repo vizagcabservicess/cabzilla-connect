@@ -184,30 +184,24 @@ export function BookingInvoice({
     });
     // #endregion
     
-    // CRITICAL FIX: For tax-exclusive mode, NEVER use invoiceData.baseAmount
-    // invoiceData.baseAmount might be from a previous tax-inclusive calculation (718.19)
-    // For tax-exclusive, we need the original pre-tax base fare (₹2,000) from booking.fare or localStorage
-    // Only use invoiceData.baseAmount for GST-disabled mode where it's reliable
-    if (gstEnabled && includeTax) {
-      // GST-INCLUSIVE: Skip invoiceData.baseAmount, use original locked fare instead
-      // This ensures baseFare stays stable at the original locked fare (₹1,322.03)
-      // #region agent log
-      console.log('🔍 GST-INCLUSIVE: Skipping invoiceData.baseAmount, will use original locked fare');
-      // #endregion
-    } else if (gstEnabled && !includeTax) {
-      // GST-EXCLUSIVE: NEVER use invoiceData.baseAmount - it might be stale from tax-inclusive mode
-      // Use booking.fare or localStorage instead (the correct pre-tax base fare)
-      // #region agent log
-      console.log('🔍 GST-EXCLUSIVE: Skipping invoiceData.baseAmount (might be stale), will use booking.fare or localStorage');
-      // #endregion
-    } else {
-      // GST-DISABLED: Use invoiceData.baseAmount if available (it's reliable in this mode)
-      if (invoiceData && typeof invoiceData.baseAmount === 'number' && invoiceData.baseAmount > 0) {
-        // #region agent log
-        console.log('🔍 GST-DISABLED: Using invoiceData.baseAmount', {baseAmount: invoiceData.baseAmount});
-        // #endregion
-        return invoiceData.baseAmount;
-      }
+    // CRITICAL: When we have a saved invoice with matching mode, use its base_amount as source of truth.
+    // This prevents recalculation on reopen - the DB invoice is canonical.
+    const invoiceMatchesMode =
+      invoiceData &&
+      typeof invoiceData.baseAmount === 'number' &&
+      invoiceData.baseAmount > 0 &&
+      (invoiceData.gstEnabled ?? invoiceData.gst_enabled) === gstEnabled &&
+      (invoiceData.includeTax ?? invoiceData.include_tax) === includeTax;
+    if (invoiceMatchesMode) {
+      const base = invoiceData.baseAmount;
+      localStorage.setItem(originalBaseFareKey, base.toString());
+      console.log('🔍 Using invoice base_amount (saved invoice matches mode)', {
+        base,
+        gstEnabled,
+        includeTax,
+        note: 'DB invoice is source of truth - no recalculation'
+      });
+      return base;
     }
     
     // CRITICAL: When GST is disabled (neutral), base fare should be original booking total
@@ -916,20 +910,19 @@ export function BookingInvoice({
               return invoicePayload;
             });
             
-            // Only update state if there's no stored state in localStorage
-            const hasStoredState = localStorage.getItem(`invoice-settings-${booking.id}`);
-            if (!hasStoredState) {
-              // Update form state from the fetched invoice only if no localStorage data exists
-              const fetchedGstEnabled = !!data.invoice.gst_enabled;
+            // Use invoice for display (invoiceData, rawHtml). For form state: prefer localStorage so user changes persist.
+            // Only sync invoiceState from DB when we have NO stored settings - prevents overwriting user's unsaved changes.
+            const hasStoredSettings = !!localStorage.getItem(`invoice-settings-${booking.id}`);
+            if (!hasStoredSettings) {
+              const fetchedGstEnabled = !!(data.invoice.gst_enabled ?? data.invoice.gstEnabled);
               const fetchedGstDetails = {
-                gstNumber: data.invoice.gst_number || '',
-                companyName: data.invoice.company_name || '',
-                companyAddress: data.invoice.company_address || ''
+                gstNumber: data.invoice.gst_number || data.invoice.gstNumber || '',
+                companyName: data.invoice.company_name || data.invoice.companyName || '',
+                companyAddress: data.invoice.company_address || data.invoice.companyAddress || ''
               };
-              const fetchedInvoiceNumber = data.invoice.invoice_number || '';
-              const fetchedIncludeTax = !!data.invoice.include_tax;
-              const fetchedIsIGST = !!data.invoice.is_igst;
-              
+              const fetchedInvoiceNumber = data.invoice.invoice_number || data.invoice.invoiceNumber || '';
+              const fetchedIncludeTax = !!(data.invoice.include_tax ?? data.invoice.includeTax ?? true);
+              const fetchedIsIGST = !!(data.invoice.is_igst ?? data.invoice.isIGST);
               onInvoiceStateChange({
                 ...invoiceState,
                 gstEnabled: fetchedGstEnabled,
