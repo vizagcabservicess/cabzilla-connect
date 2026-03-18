@@ -175,7 +175,7 @@ try {
             break;
             
         case 'revenue':
-            // Get revenue statistics
+            // Get revenue statistics (exclude cancelled)
             if ($detailed) {
                 $sqlBase = "SELECT id, booking_number, passenger_name, passenger_phone, total_amount, payment_method, payment_status";
                 
@@ -184,7 +184,7 @@ try {
                     $sqlBase .= ", gst_enabled, extra_charges, gst_number, company_name, company_address, total_amount as taxable_value";
                 }
                 
-                $sqlBase .= ", created_at FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?";
+                $sqlBase .= ", created_at FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? AND (status IS NULL OR status != 'cancelled')";
                 
                 // Filter by payment method if specified
                 if (!empty($paymentMethod)) {
@@ -224,11 +224,11 @@ try {
                 }
                 $reportData = $transactions;
             } else {
-                // Summary revenue report
+                // Summary revenue report (exclude cancelled bookings)
                 $summaryData = [];
                 
-                // Base query parts
-                $whereClause = "DATE(created_at) BETWEEN ? AND ?";
+                // Base query parts - exclude cancelled from revenue
+                $whereClause = "DATE(created_at) BETWEEN ? AND ? AND (status IS NULL OR status != 'cancelled')";
                 $params = [$startDate, $endDate];
                 $types = "ss";
                 

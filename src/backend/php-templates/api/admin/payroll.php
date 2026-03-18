@@ -411,6 +411,8 @@ function getPayrollEntries($conn) {
             
             $entries[] = [
                 'id' => $row['id'],
+                'driverName' => $driverName,
+                'driver_name' => $driverName,
                 'driverId' => $row['driver_id'],
                 'date' => $row['date'],
                 'description' => $row['description'],

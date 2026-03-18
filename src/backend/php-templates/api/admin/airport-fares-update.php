@@ -224,46 +224,70 @@ try {
         file_put_contents($logFile, "[$timestamp] Created new vehicle: $vehicleId, $vehicleName\n", FILE_APPEND);
     }
     
-    // Insert or update airport_transfer_fares table
+    // Use explicit UPDATE first (case-insensitive) - matches outstation-fares-update fix for persistence
     $updateSql = "
-        INSERT INTO airport_transfer_fares 
-        (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        ON DUPLICATE KEY UPDATE 
-        base_price = VALUES(base_price),
-        price_per_km = VALUES(price_per_km),
-        pickup_price = VALUES(pickup_price),
-        drop_price = VALUES(drop_price),
-        tier1_price = VALUES(tier1_price),
-        tier2_price = VALUES(tier2_price),
-        tier3_price = VALUES(tier3_price),
-        tier4_price = VALUES(tier4_price),
-        extra_km_charge = VALUES(extra_km_charge),
+        UPDATE airport_transfer_fares SET
+        base_price = ?,
+        price_per_km = ?,
+        pickup_price = ?,
+        drop_price = ?,
+        tier1_price = ?,
+        tier2_price = ?,
+        tier3_price = ?,
+        tier4_price = ?,
+        extra_km_charge = ?,
         updated_at = NOW()
+        WHERE LOWER(TRIM(vehicle_id)) = LOWER(TRIM(?))
     ";
-    
-    $stmt = $conn->prepare($updateSql);
-    if (!$stmt) {
-        throw new Exception("Prepare update statement failed: " . $conn->error);
+    $updateStmt = $conn->prepare($updateSql);
+    if ($updateStmt) {
+        $updateStmt->bind_param(
+            "ddddddddds",
+            $basePrice,
+            $pricePerKm,
+            $pickupPrice,
+            $dropPrice,
+            $tier1Price,
+            $tier2Price,
+            $tier3Price,
+            $tier4Price,
+            $extraKmCharge,
+            $vehicleId
+        );
+        $updateStmt->execute();
+        $affected = $conn->affected_rows;
+    } else {
+        $affected = 0;
     }
-    
-    $stmt->bind_param(
-        "sddddddddd", 
-        $vehicleId, 
-        $basePrice, 
-        $pricePerKm, 
-        $pickupPrice, 
-        $dropPrice, 
-        $tier1Price, 
-        $tier2Price, 
-        $tier3Price, 
-        $tier4Price, 
-        $extraKmCharge
-    );
-    
-    if (!$stmt->execute()) {
-        throw new Exception("Failed to update airport_transfer_fares: " . $stmt->error);
+
+    // Insert only when no row was updated
+    if ($affected === 0) {
+        $insertSql = "
+            INSERT INTO airport_transfer_fares 
+            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ";
+        $stmt = $conn->prepare($insertSql);
+        if (!$stmt) {
+            throw new Exception("Prepare insert statement failed: " . $conn->error);
+        }
+        $stmt->bind_param(
+            "sddddddddd",
+            $vehicleId,
+            $basePrice,
+            $pricePerKm,
+            $pickupPrice,
+            $dropPrice,
+            $tier1Price,
+            $tier2Price,
+            $tier3Price,
+            $tier4Price,
+            $extraKmCharge
+        );
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to insert airport_transfer_fares: " . $stmt->error);
+        }
     }
     
     file_put_contents($logFile, "[$timestamp] Updated airport_transfer_fares for vehicle: $vehicleId\n", FILE_APPEND);

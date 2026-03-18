@@ -54,11 +54,61 @@ function ensureFuelRecordsTableExists($conn) {
     $conn->query($sql);
 }
 
+// Migrate existing fuel_records table: add missing columns if table was created by older schema (db_setup, fleet_vehicles)
+function ensureFuelRecordsColumns($conn) {
+    $result = $conn->query("SHOW COLUMNS FROM fuel_records");
+    if (!$result) return;
+    $columns = [];
+    while ($row = $result->fetch_assoc()) {
+        $columns[$row['Field']] = true;
+    }
+
+    $alters = [];
+    if (!isset($columns['quantity']) && isset($columns['quantity_liters'])) {
+        $alters[] = "ADD COLUMN quantity DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER vehicle_id";
+    }
+    if (!isset($columns['price_per_unit']) && isset($columns['price_per_liter'])) {
+        $alters[] = "ADD COLUMN price_per_unit DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER quantity";
+    }
+    if (!isset($columns['odometer']) && isset($columns['odometer_reading'])) {
+        $alters[] = "ADD COLUMN odometer INT(11) NOT NULL DEFAULT 0 AFTER total_cost";
+    }
+    if (!isset($columns['fuel_station']) && isset($columns['station'])) {
+        $alters[] = "ADD COLUMN fuel_station VARCHAR(100) NULL AFTER odometer";
+    }
+    if (!isset($columns['fuel_type'])) {
+        $alters[] = "ADD COLUMN fuel_type ENUM('Petrol', 'Diesel', 'CNG', 'Electric') NOT NULL DEFAULT 'Petrol' AFTER fuel_station";
+    }
+    if (!empty($alters)) {
+        $conn->query("ALTER TABLE fuel_records " . implode(", ", $alters));
+    }
+
+    // If table has old column names only (no quantity/price_per_unit/odometer/fuel_station), use those for INSERT
+    return $columns;
+}
+
+// Build INSERT for fuel_records - supports both new (quantity, price_per_unit, odometer, fuel_station) and old (quantity_liters, price_per_liter, odometer_reading, station) schema
+function getFuelRecordInsertColumns($columns) {
+    $qtyCol = isset($columns['quantity']) ? 'quantity' : (isset($columns['quantity_liters']) ? 'quantity_liters' : 'quantity');
+    $priceCol = isset($columns['price_per_unit']) ? 'price_per_unit' : (isset($columns['price_per_liter']) ? 'price_per_liter' : 'price_per_unit');
+    $odoCol = isset($columns['odometer']) ? 'odometer' : (isset($columns['odometer_reading']) ? 'odometer_reading' : 'odometer');
+    $stationCol = isset($columns['fuel_station']) ? 'fuel_station' : (isset($columns['station']) ? 'station' : 'fuel_station');
+    $fuelTypeCol = isset($columns['fuel_type']) ? 'fuel_type' : null;
+
+    $cols = ['vehicle_id', 'fill_date', $qtyCol, $priceCol, 'total_cost', $odoCol];
+    $cols[] = $stationCol;
+    if ($fuelTypeCol) $cols[] = $fuelTypeCol;
+    $cols = array_merge($cols, ['mileage', 'payment_method', 'bank_name', 'last_four_digits', 'notes']);
+    $cols = array_filter($cols); // remove nulls
+    return $cols;
+}
+
 // Handle GET request - Fetch fuel records
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
+        ensureFuelRecordsColumns($conn);
         
         // Build query with filters
         $sql = "SELECT fr.*, 
@@ -163,6 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Connect to database
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         ensureFuelRecordsTableExists($conn);
+        ensureFuelRecordsColumns($conn);
         
         // Prepare data
         $vehicleId = $data['vehicleId'];
@@ -185,10 +236,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $lastFourDigits = isset($data['paymentDetails']['lastFourDigits']) ? $data['paymentDetails']['lastFourDigits'] : null;
         }
         
-        // Insert new fuel record
+        // Insert new fuel record (columns must match ensureFuelRecordsTableExists)
         $stmt = $conn->prepare("INSERT INTO fuel_records (
-            vehicle_id, fill_date, quantity_liters, price_per_liter, total_cost, 
-            odometer_reading, station, fuel_type, mileage, payment_method, 
+            vehicle_id, fill_date, quantity, price_per_unit, total_cost, 
+            odometer, fuel_station, fuel_type, mileage, payment_method, 
             bank_name, last_four_digits, notes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
@@ -406,27 +457,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     }
 }
 
-// Helper function to format a fuel record
+// Helper function to format a fuel record - supports both quantity/quantity_liters and price_per_unit/price_per_liter schemas
 function formatFuelRecord($row) {
+    if (!is_array($row)) return null;
     $paymentDetails = null;
-    
-    if ($row['payment_method'] === 'Card' && ($row['bank_name'] || $row['last_four_digits'])) {
+    $pm = $row['payment_method'] ?? null;
+    if ($pm === 'Card' && (($row['bank_name'] ?? null) || ($row['last_four_digits'] ?? null))) {
         $paymentDetails = [
-            'bankName' => $row['bank_name'],
-            'lastFourDigits' => $row['last_four_digits']
+            'bankName' => $row['bank_name'] ?? null,
+            'lastFourDigits' => $row['last_four_digits'] ?? null
         ];
     }
-    
+    $qty = $row['quantity_liters'] ?? $row['quantity'] ?? 0;
+    $price = $row['price_per_liter'] ?? $row['price_per_unit'] ?? 0;
     return [
-        'id' => $row['id'],
-        'vehicleId' => $row['vehicle_id'],
-        'fillDate' => $row['fill_date'],
-        'quantity' => (float)$row['quantity_liters'],
-        'pricePerUnit' => (float)$row['price_per_liter'],
-        'totalCost' => (float)$row['total_cost'],
-        'odometer' => (int)$row['odometer_reading'],
-        'fuelStation' => $row['station'],
-        'fuelType' => $row['fuel_type'],
+        'id' => $row['id'] ?? null,
+        'vehicleId' => $row['vehicle_id'] ?? null,
+        'fillDate' => $row['fill_date'] ?? null,
+        'quantity' => (float)(is_numeric($qty) ? $qty : 0),
+        'pricePerUnit' => (float)(is_numeric($price) ? $price : 0),
+        'quantityLiters' => (float)(is_numeric($qty) ? $qty : 0),
+        'pricePerLiter' => (float)(is_numeric($price) ? $price : 0),
+        'totalCost' => (float)(is_numeric($row['total_cost'] ?? 0) ? $row['total_cost'] : 0),
+        'odometer' => (int)($row['odometer_reading'] ?? $row['odometer'] ?? 0),
+        'fuelStation' => $row['station'] ?? $row['fuel_station'] ?? null,
+        'fuelType' => $row['fuel_type'] ?? 'Petrol',
         'mileage' => $row['mileage'] ? (float)$row['mileage'] : null,
         'paymentMethod' => $row['payment_method'],
         'paymentDetails' => $paymentDetails,

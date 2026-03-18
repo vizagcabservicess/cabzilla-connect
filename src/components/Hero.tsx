@@ -452,7 +452,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
         setIsCheckingTravelTime(false);
         return;
       }
-      // Both locations are filled, call API and set returnDate
+      // Enable return date picker immediately when locations are filled (don't block on API)
+      setIsReturnTimeEnabled(true);
+      const fallbackMinReturn = new Date(pickupDate.getTime() + 60 * 60 * 1000); // 1 hour after pickup
+      setMinValidReturnTime(prev => prev ?? fallbackMinReturn);
       setIsCheckingTravelTime(true);
       (async () => {
         try {
@@ -499,17 +502,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
             setValidationError(null);
           } else {
             console.log('[TRAVEL TIME CALC] API error:', result.status);
-            setIsReturnTimeEnabled(false);
-            setMinValidReturnTime(null);
-            setReturnDateWithLogging(null);
-            setValidationError('Could not validate travel time. Please try again.');
+            setMinValidReturnTime(fallbackMinReturn);
+            setReturnDateWithLogging(prev => prev && prev >= pickupDate ? prev : fallbackMinReturn);
+            setValidationError(null);
           }
         } catch (err) {
           console.error('[TRAVEL TIME CALC] Exception:', err);
-          setIsReturnTimeEnabled(false);
-          setMinValidReturnTime(null);
-          setReturnDateWithLogging(null);
-          setValidationError('Could not validate travel time. Please try again.');
+          setMinValidReturnTime(fallbackMinReturn);
+          setReturnDateWithLogging(prev => prev && prev >= pickupDate ? prev : fallbackMinReturn);
+          setValidationError(null);
         } finally {
           setIsCheckingTravelTime(false);
         }
@@ -1510,7 +1511,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                       {/* Removed icon and 'Enter' text */}
                       <div className="flex-1 min-w-0">
                                                  <LocationInput
-                           key={`drop-mobile-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                           key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                            label="Drop location"
                            placeholder="Enter Drop location"
                            value={dropLocation ? { ...dropLocation } : undefined}
@@ -1547,7 +1548,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           date={returnDate}
                           onDateChange={handleReturnDateChange}
                           minDate={pickupDate}
-                          disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                          disabled={!isReturnTimeEnabled}
                           className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                           label="Return date of journey"
                         />
@@ -1665,7 +1666,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 {/* Removed icon and 'Enter' text */}
                                 <div className="flex-1 min-w-0">
                                                                      <LocationInput
-                                     key={`drop-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                     key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                      label="Drop location"
                                      placeholder="Enter Drop location"
                                      value={dropLocation ? { ...dropLocation } : undefined}
@@ -1758,7 +1759,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                       date={returnDate}
                                       onDateChange={handleReturnDateChange}
                                       minDate={pickupDate}
-                                      disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                                      disabled={!isReturnTimeEnabled}
                                       className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
                                     />
                                   </div>
@@ -1825,7 +1826,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           {(tripType === 'outstation' || tripType === 'airport') && (
                             <div className="flex-1 min-w-0">
                               <LocationInput
-                                key={`drop-desk-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                key={`drop-desk-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                 label="Drop location"
                                 placeholder="Enter a location"
                                 value={dropLocation ? { ...dropLocation } : undefined}
@@ -1903,7 +1904,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 onDateChange={handleReturnDateChange}
                                 minDate={pickupDate}
                                 label="Return"
-                                disabled={!isReturnTimeEnabled || isCheckingTravelTime}
+                                disabled={!isReturnTimeEnabled}
                                 variant="desktop"
                               />
                             </div>

@@ -14,11 +14,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { authAPI } from '@/services/api/authAPI';
+import { useAuth } from '@/providers/AuthProvider';
+import { getAuthErrorMessage } from '@/lib/authLogic';
 import { SignupRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { toast } from 'sonner';
-import { UserRole } from '@/types/pooling';
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -28,6 +28,7 @@ const signupSchema = z.object({
 });
 
 export function SignupForm() {
+  const { signup } = useAuth();
   const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -52,8 +53,7 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        const response = await authAPI.signup({ ...values, role: 'customer' });
-        console.log('Registration API response:', response);
+        const response = await signup({ ...values, role: 'customer' });
 
         if (response && response.email_verification_required) {
           // Email verification required - update the loading toast
@@ -95,7 +95,7 @@ export function SignupForm() {
       
       uiToast({
         title: "Signup Failed",
-        description: error instanceof Error ? error.message : "Something went wrong during signup",
+        description: getAuthErrorMessage(error),
         variant: "destructive",
         duration: 5000,
       });

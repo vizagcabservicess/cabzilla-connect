@@ -126,13 +126,15 @@ try {
                 break;
         }
         
-        // Add status filter if provided
+        // Add status filter if provided; otherwise exclude cancelled from counts/revenue
         if (!empty($statusFilter) && $statusFilter !== 'all') {
             if (strpos($dateCondition, 'WHERE') !== false) {
                 $dateCondition .= " AND status = '" . $conn->real_escape_string($statusFilter) . "'";
             } else {
                 $dateCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "'";
             }
+        } else {
+            $dateCondition .= " AND (status IS NULL OR status != 'cancelled')";
         }
         
         // Log the SQL condition being used

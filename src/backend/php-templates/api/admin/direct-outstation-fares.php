@@ -26,20 +26,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Function to get database connection
-function getDbConnection() {
-    try {
-        $host = 'localhost';
-        $dbname = 'u644605165_db_be'; 
-        $username = 'u644605165_usr_be';
-        $password = 'Vizag@1213';
-        
-        $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $conn;
-    } catch (Exception $e) {
-        throw new Exception("Database connection error: " . $e->getMessage());
+// Use same DB as outstation-fares-update.php so read/write stay in sync
+require_once __DIR__ . '/../../config.php';
+if (!function_exists('getPdoConnection')) {
+    function getPdoConnection() {
+        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+        $pdo = new PDO($dsn, DB_USER, DB_PASS);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("SET time_zone = '+05:30'");
+        return $pdo;
     }
+}
+function getDbConnection() {
+    return getPdoConnection();
 }
 
 // Log message to file
@@ -272,10 +271,21 @@ try {
     
     // Handle POST request to update outstation fares
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // Accept both JSON (mobile/web) and form-urlencoded
+        $postData = $_POST;
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (strpos($contentType, 'application/json') !== false) {
+            $rawInput = file_get_contents('php://input');
+            $jsonData = json_decode($rawInput, true);
+            if (is_array($jsonData)) {
+                $postData = $jsonData;
+                logMessage("Parsed JSON input: " . substr($rawInput, 0, 200));
+            }
+        }
         // Get vehicle ID from various possible sources
-        $rawVehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : 
-                    (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : 
-                    (isset($_POST['id']) ? $_POST['id'] : null));
+        $rawVehicleId = isset($postData['vehicleId']) ? $postData['vehicleId'] : 
+                    (isset($postData['vehicle_id']) ? $postData['vehicle_id'] : 
+                    (isset($postData['id']) ? $postData['id'] : null));
         
         logMessage("Original vehicle ID received: " . $rawVehicleId);
         
@@ -338,61 +348,61 @@ try {
         $vehicleId = strtolower($vehicleId);
         logMessage("Normalized vehicle ID to lowercase: $vehicleId");
         
-        // Get outstation fare values with fallbacks
-        $oneWayBasePrice = isset($_POST['oneWayBasePrice']) && is_numeric($_POST['oneWayBasePrice']) ? 
-                          floatval($_POST['oneWayBasePrice']) : 
-                          (isset($_POST['basePrice']) && is_numeric($_POST['basePrice']) ? 
-                          floatval($_POST['basePrice']) : 0);
+        // Get outstation fare values with fallbacks (use $postData for JSON compat)
+        $oneWayBasePrice = isset($postData['oneWayBasePrice']) && is_numeric($postData['oneWayBasePrice']) ? 
+                          floatval($postData['oneWayBasePrice']) : 
+                          (isset($postData['basePrice']) && is_numeric($postData['basePrice']) ? 
+                          floatval($postData['basePrice']) : 0);
                           
-        $oneWayPricePerKm = isset($_POST['oneWayPricePerKm']) && is_numeric($_POST['oneWayPricePerKm']) ? 
-                           floatval($_POST['oneWayPricePerKm']) : 
-                           (isset($_POST['pricePerKm']) && is_numeric($_POST['pricePerKm']) ? 
-                           floatval($_POST['pricePerKm']) : 0);
+        $oneWayPricePerKm = isset($postData['oneWayPricePerKm']) && is_numeric($postData['oneWayPricePerKm']) ? 
+                           floatval($postData['oneWayPricePerKm']) : 
+                           (isset($postData['pricePerKm']) && is_numeric($postData['pricePerKm']) ? 
+                           floatval($postData['pricePerKm']) : 0);
                           
-        $roundTripBasePrice = isset($_POST['roundTripBasePrice']) && is_numeric($_POST['roundTripBasePrice']) ? 
-                             floatval($_POST['roundTripBasePrice']) : 
-                             (isset($_POST['roundtrip_base_price']) && is_numeric($_POST['roundtrip_base_price']) ? 
-                             floatval($_POST['roundtrip_base_price']) : $oneWayBasePrice * 0.9);
+        $roundTripBasePrice = isset($postData['roundTripBasePrice']) && is_numeric($postData['roundTripBasePrice']) ? 
+                             floatval($postData['roundTripBasePrice']) : 
+                             (isset($postData['roundtrip_base_price']) && is_numeric($postData['roundtrip_base_price']) ? 
+                             floatval($postData['roundtrip_base_price']) : $oneWayBasePrice * 0.9);
                              
-        $roundTripPricePerKm = isset($_POST['roundTripPricePerKm']) && is_numeric($_POST['roundTripPricePerKm']) ? 
-                              floatval($_POST['roundTripPricePerKm']) : 
-                              (isset($_POST['roundtrip_price_per_km']) && is_numeric($_POST['roundtrip_price_per_km']) ? 
-                              floatval($_POST['roundtrip_price_per_km']) : $oneWayPricePerKm * 0.85);
+        $roundTripPricePerKm = isset($postData['roundTripPricePerKm']) && is_numeric($postData['roundTripPricePerKm']) ? 
+                              floatval($postData['roundTripPricePerKm']) : 
+                              (isset($postData['roundtrip_price_per_km']) && is_numeric($postData['roundtrip_price_per_km']) ? 
+                              floatval($postData['roundtrip_price_per_km']) : $oneWayPricePerKm * 0.85);
                      
-        $driverAllowance = isset($_POST['driverAllowance']) && is_numeric($_POST['driverAllowance']) ? 
-                          floatval($_POST['driverAllowance']) : 
-                          (isset($_POST['driver_allowance']) && is_numeric($_POST['driver_allowance']) ? 
-                          floatval($_POST['driver_allowance']) : 300);
+        $driverAllowance = isset($postData['driverAllowance']) && is_numeric($postData['driverAllowance']) ? 
+                          floatval($postData['driverAllowance']) : 
+                          (isset($postData['driver_allowance']) && is_numeric($postData['driver_allowance']) ? 
+                          floatval($postData['driver_allowance']) : 300);
                           
-        $nightHaltCharge = isset($_POST['nightHaltCharge']) && is_numeric($_POST['nightHaltCharge']) ? 
-                          floatval($_POST['nightHaltCharge']) : 
-                          (isset($_POST['night_halt_charge']) && is_numeric($_POST['night_halt_charge']) ? 
-                          floatval($_POST['night_halt_charge']) : 700);
+        $nightHaltCharge = isset($postData['nightHaltCharge']) && is_numeric($postData['nightHaltCharge']) ? 
+                          floatval($postData['nightHaltCharge']) : 
+                          (isset($postData['night_halt_charge']) && is_numeric($postData['night_halt_charge']) ? 
+                          floatval($postData['night_halt_charge']) : 700);
         
-                 // Extract tier pricing values - allow 0 values but use defaults if not set
-         $tier1Price = isset($_POST['tier1Price']) && is_numeric($_POST['tier1Price']) ? floatval($_POST['tier1Price']) : 3500;
-         $tier2Price = isset($_POST['tier2Price']) && is_numeric($_POST['tier2Price']) ? floatval($_POST['tier2Price']) : 4200;
-         $tier3Price = isset($_POST['tier3Price']) && is_numeric($_POST['tier3Price']) ? floatval($_POST['tier3Price']) : 4900;
-         $tier4Price = isset($_POST['tier4Price']) && is_numeric($_POST['tier4Price']) ? floatval($_POST['tier4Price']) : 5600;
-         $extraKmCharge = isset($_POST['extraKmCharge']) && is_numeric($_POST['extraKmCharge']) ? floatval($_POST['extraKmCharge']) : 14;
+        // Extract tier pricing values - allow 0 values but use defaults if not set
+        $tier1Price = isset($postData['tier1Price']) && is_numeric($postData['tier1Price']) ? floatval($postData['tier1Price']) : 3500;
+        $tier2Price = isset($postData['tier2Price']) && is_numeric($postData['tier2Price']) ? floatval($postData['tier2Price']) : 4200;
+        $tier3Price = isset($postData['tier3Price']) && is_numeric($postData['tier3Price']) ? floatval($postData['tier3Price']) : 4900;
+        $tier4Price = isset($postData['tier4Price']) && is_numeric($postData['tier4Price']) ? floatval($postData['tier4Price']) : 5600;
+        $extraKmCharge = isset($postData['extraKmCharge']) && is_numeric($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 14;
         
         // Extract tier distance ranges
-        $tier1MinKm = isset($_POST['tier1MinKm']) && is_numeric($_POST['tier1MinKm']) ? intval($_POST['tier1MinKm']) : 35;
-        $tier1MaxKm = isset($_POST['tier1MaxKm']) && is_numeric($_POST['tier1MaxKm']) ? intval($_POST['tier1MaxKm']) : 50;
-        $tier2MinKm = isset($_POST['tier2MinKm']) && is_numeric($_POST['tier2MinKm']) ? intval($_POST['tier2MinKm']) : 51;
-        $tier2MaxKm = isset($_POST['tier2MaxKm']) && is_numeric($_POST['tier2MaxKm']) ? intval($_POST['tier2MaxKm']) : 75;
-        $tier3MinKm = isset($_POST['tier3MinKm']) && is_numeric($_POST['tier3MinKm']) ? intval($_POST['tier3MinKm']) : 76;
-        $tier3MaxKm = isset($_POST['tier3MaxKm']) && is_numeric($_POST['tier3MaxKm']) ? intval($_POST['tier3MaxKm']) : 100;
-        $tier4MinKm = isset($_POST['tier4MinKm']) && is_numeric($_POST['tier4MinKm']) ? intval($_POST['tier4MinKm']) : 101;
-        $tier4MaxKm = isset($_POST['tier4MaxKm']) && is_numeric($_POST['tier4MaxKm']) ? intval($_POST['tier4MaxKm']) : 149;
+        $tier1MinKm = isset($postData['tier1MinKm']) && is_numeric($postData['tier1MinKm']) ? intval($postData['tier1MinKm']) : 35;
+        $tier1MaxKm = isset($postData['tier1MaxKm']) && is_numeric($postData['tier1MaxKm']) ? intval($postData['tier1MaxKm']) : 50;
+        $tier2MinKm = isset($postData['tier2MinKm']) && is_numeric($postData['tier2MinKm']) ? intval($postData['tier2MinKm']) : 51;
+        $tier2MaxKm = isset($postData['tier2MaxKm']) && is_numeric($postData['tier2MaxKm']) ? intval($postData['tier2MaxKm']) : 75;
+        $tier3MinKm = isset($postData['tier3MinKm']) && is_numeric($postData['tier3MinKm']) ? intval($postData['tier3MinKm']) : 76;
+        $tier3MaxKm = isset($postData['tier3MaxKm']) && is_numeric($postData['tier3MaxKm']) ? intval($postData['tier3MaxKm']) : 100;
+        $tier4MinKm = isset($postData['tier4MinKm']) && is_numeric($postData['tier4MinKm']) ? intval($postData['tier4MinKm']) : 101;
+        $tier4MaxKm = isset($postData['tier4MaxKm']) && is_numeric($postData['tier4MaxKm']) ? intval($postData['tier4MaxKm']) : 149;
         
-        // Debug: Log the raw POST data for tier pricing
-        logMessage("Raw POST data for tier pricing: " . json_encode([
-            'tier1Price' => $_POST['tier1Price'] ?? 'NOT_SET',
-            'tier2Price' => $_POST['tier2Price'] ?? 'NOT_SET',
-            'tier3Price' => $_POST['tier3Price'] ?? 'NOT_SET',
-            'tier4Price' => $_POST['tier4Price'] ?? 'NOT_SET',
-            'extraKmCharge' => $_POST['extraKmCharge'] ?? 'NOT_SET'
+        // Debug: Log the parsed data for tier pricing
+        logMessage("Parsed fare data for tier pricing: " . json_encode([
+            'tier1Price' => $tier1Price,
+            'tier2Price' => $tier2Price,
+            'tier3Price' => $tier3Price,
+            'tier4Price' => $tier4Price,
+            'extraKmCharge' => $extraKmCharge
         ]));
         
         logMessage("Tier pricing values: tier1Price=$tier1Price, tier2Price=$tier2Price, tier3Price=$tier3Price, tier4Price=$tier4Price, extraKmCharge=$extraKmCharge");

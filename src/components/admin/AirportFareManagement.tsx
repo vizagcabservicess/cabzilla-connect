@@ -8,6 +8,7 @@ import AirportFareForm from '@/components/admin/AirportFareForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader, RefreshCw, Database, Save } from 'lucide-react';
 import { airportFareAPI, AirportFare } from '@/services/api/airportFareAPI';
+import { fareService } from '@/services/fareService';
 
 const AirportFareManagement: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
@@ -145,6 +146,7 @@ const AirportFareManagement: React.FC = () => {
     setLoading(true);
     try {
       await airportFareAPI.updateAirportFare(fareToSave);
+      fareService.clearCache();
       toast({
         title: "Success",
         description: "Airport fares saved successfully.",

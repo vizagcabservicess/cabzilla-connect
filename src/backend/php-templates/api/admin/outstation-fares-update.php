@@ -8,7 +8,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
 header('X-API-Version: 1.0.3');
 
 // Include database configuration
@@ -208,29 +208,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             while ($fare = $fareStmt->fetch_assoc()) {
                 $vehicleId = $fare['vehicle_id'];
                 
-                // If we have the vehicle in our list, update its fare data
+                // Find matching vehicle key (case-insensitive: vehicles may have "Ertiga", fares have "ertiga")
+                $matchKey = null;
                 if (isset($vehicles[$vehicleId])) {
-                    $vehicles[$vehicleId]['oneWayBasePrice'] = (float)$fare['base_price'];
-                    $vehicles[$vehicleId]['oneWayPricePerKm'] = (float)$fare['price_per_km'];
-                    $vehicles[$vehicleId]['roundTripBasePrice'] = (float)$fare['roundtrip_base_price'];
-                    $vehicles[$vehicleId]['roundTripPricePerKm'] = (float)$fare['roundtrip_price_per_km'];
-                    $vehicles[$vehicleId]['driverAllowance'] = (float)$fare['driver_allowance'];
-                    $vehicles[$vehicleId]['nightHaltCharge'] = (float)$fare['night_halt_charge'];
+                    $matchKey = $vehicleId;
+                } else {
+                    $vehicleIdLower = strtolower($vehicleId);
+                    foreach (array_keys($vehicles) as $k) {
+                        if (strtolower($k) === $vehicleIdLower) {
+                            $matchKey = $k;
+                            break;
+                        }
+                    }
+                }
+                
+                if ($matchKey !== null) {
+                    $vehicles[$matchKey]['oneWayBasePrice'] = (float)$fare['base_price'];
+                    $vehicles[$matchKey]['oneWayPricePerKm'] = (float)$fare['price_per_km'];
+                    $vehicles[$matchKey]['roundTripBasePrice'] = (float)$fare['roundtrip_base_price'];
+                    $vehicles[$matchKey]['roundTripPricePerKm'] = (float)$fare['roundtrip_price_per_km'];
+                    $vehicles[$matchKey]['driverAllowance'] = (float)$fare['driver_allowance'];
+                    $vehicles[$matchKey]['nightHaltCharge'] = (float)$fare['night_halt_charge'];
                     // Tier pricing fields - map to frontend field names
-                    $vehicles[$vehicleId]['tier1Price'] = (float)$fare['tier1_price'];
-                    $vehicles[$vehicleId]['tier2Price'] = (float)$fare['tier2_price'];
-                    $vehicles[$vehicleId]['tier3Price'] = (float)$fare['tier3_price'];
-                    $vehicles[$vehicleId]['tier4Price'] = (float)$fare['tier4_price'];
-                    $vehicles[$vehicleId]['extraKmCharge'] = (float)$fare['extra_km_charge'];
-                    $vehicles[$vehicleId]['tier1MinKm'] = (int)$fare['tier1_min_km'];
-                    $vehicles[$vehicleId]['tier1MaxKm'] = (int)$fare['tier1_max_km'];
-                    $vehicles[$vehicleId]['tier2MinKm'] = (int)$fare['tier2_min_km'];
-                    $vehicles[$vehicleId]['tier2MaxKm'] = (int)$fare['tier2_max_km'];
-                    $vehicles[$vehicleId]['tier3MinKm'] = (int)$fare['tier3_min_km'];
-                    $vehicles[$vehicleId]['tier3MaxKm'] = (int)$fare['tier3_max_km'];
-                    $vehicles[$vehicleId]['tier4MinKm'] = (int)$fare['tier4_min_km'];
-                    $vehicles[$vehicleId]['tier4MaxKm'] = (int)$fare['tier4_max_km'];
-                    $vehicles[$vehicleId]['updated_at'] = $fare['updated_at'];
+                    $vehicles[$matchKey]['tier1Price'] = (float)$fare['tier1_price'];
+                    $vehicles[$matchKey]['tier2Price'] = (float)$fare['tier2_price'];
+                    $vehicles[$matchKey]['tier3Price'] = (float)$fare['tier3_price'];
+                    $vehicles[$matchKey]['tier4Price'] = (float)$fare['tier4_price'];
+                    $vehicles[$matchKey]['extraKmCharge'] = (float)$fare['extra_km_charge'];
+                    $vehicles[$matchKey]['tier1MinKm'] = (int)$fare['tier1_min_km'];
+                    $vehicles[$matchKey]['tier1MaxKm'] = (int)$fare['tier1_max_km'];
+                    $vehicles[$matchKey]['tier2MinKm'] = (int)$fare['tier2_min_km'];
+                    $vehicles[$matchKey]['tier2MaxKm'] = (int)$fare['tier2_max_km'];
+                    $vehicles[$matchKey]['tier3MinKm'] = (int)$fare['tier3_min_km'];
+                    $vehicles[$matchKey]['tier3MaxKm'] = (int)$fare['tier3_max_km'];
+                    $vehicles[$matchKey]['tier4MinKm'] = (int)$fare['tier4_min_km'];
+                    $vehicles[$matchKey]['tier4MaxKm'] = (int)$fare['tier4_max_km'];
+                    $vehicles[$matchKey]['updated_at'] = $fare['updated_at'];
                 }
                 // If not in our list (unusual), add it
                 else {
@@ -265,15 +278,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
         }
         
+        // Optional: include raw DB row for ertiga when ?debug=1 (for persistence debugging)
+        $debug = [];
+        if (!empty($_GET['debug'])) {
+            $dbgStmt = $conn->prepare("SELECT * FROM outstation_fares WHERE LOWER(vehicle_id) = 'ertiga'");
+            if ($dbgStmt) {
+                $dbgStmt->execute();
+                $dbgRow = $dbgStmt->get_result()->fetch_assoc();
+                if ($dbgRow) {
+                    $debug['ertiga_from_db'] = $dbgRow;
+                }
+            }
+        }
+
         // Return the fares
-        echo json_encode([
+        $response = [
             'status' => 'success',
             'fares' => $vehicles,
             'count' => count($vehicles),
             'includeInactive' => true,
             'isAdminMode' => true,
             'timestamp' => time()
-        ]);
+        ];
+        if (!empty($debug)) {
+            $response['_debug'] = $debug;
+        }
+        echo json_encode($response);
         exit;
     } catch (Exception $e) {
         error_log("Error retrieving outstation fares: " . $e->getMessage());
@@ -463,41 +493,36 @@ try {
     $conn->begin_transaction();
     
     try {
-        // FIRST always update outstation_fares table - this is our primary source of truth
-        $upsertFaresStmt = $conn->prepare("
-            INSERT INTO outstation_fares 
-            (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, 
-             tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
-             tier1_min_km, tier1_max_km, tier2_min_km, tier2_max_km, tier3_min_km, tier3_max_km, tier4_min_km, tier4_max_km, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-            base_price = VALUES(base_price),
-            price_per_km = VALUES(price_per_km),
-            roundtrip_base_price = VALUES(roundtrip_base_price),
-            roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
-            driver_allowance = VALUES(driver_allowance),
-            night_halt_charge = VALUES(night_halt_charge),
-            tier1_price = VALUES(tier1_price),
-            tier2_price = VALUES(tier2_price),
-            tier3_price = VALUES(tier3_price),
-            tier4_price = VALUES(tier4_price),
-            extra_km_charge = VALUES(extra_km_charge),
-            tier1_min_km = VALUES(tier1_min_km),
-            tier1_max_km = VALUES(tier1_max_km),
-            tier2_min_km = VALUES(tier2_min_km),
-            tier2_max_km = VALUES(tier2_max_km),
-            tier3_min_km = VALUES(tier3_min_km),
-            tier3_max_km = VALUES(tier3_max_km),
-            tier4_min_km = VALUES(tier4_min_km),
-            tier4_max_km = VALUES(tier4_max_km),
-            updated_at = NOW()
+        // Use explicit UPDATE first - ON DUPLICATE KEY may fail if table has composite/complex unique keys (e.g. admin_id)
+        $updateFaresStmt = $conn->prepare("
+            UPDATE outstation_fares SET
+                base_price = ?,
+                price_per_km = ?,
+                roundtrip_base_price = ?,
+                roundtrip_price_per_km = ?,
+                driver_allowance = ?,
+                night_halt_charge = ?,
+                tier1_price = ?,
+                tier2_price = ?,
+                tier3_price = ?,
+                tier4_price = ?,
+                extra_km_charge = ?,
+                tier1_min_km = ?,
+                tier1_max_km = ?,
+                tier2_min_km = ?,
+                tier2_max_km = ?,
+                tier3_min_km = ?,
+                tier3_max_km = ?,
+                tier4_min_km = ?,
+                tier4_max_km = ?,
+                updated_at = NOW()
+            WHERE LOWER(TRIM(vehicle_id)) = LOWER(TRIM(?))
         ");
         
-        $upsertFaresStmt->bind_param("sddddddddddiiiiiiii", 
-            $vehicleId, 
-            $oneWayBasePrice, 
-            $oneWayPricePerKm, 
-            $roundTripBasePrice, 
+        $updateFaresStmt->bind_param("dddddddddddiiiiiiiis",
+            $oneWayBasePrice,
+            $oneWayPricePerKm,
+            $roundTripBasePrice,
             $roundTripPricePerKm,
             $driverAllowance,
             $nightHaltCharge,
@@ -513,11 +538,48 @@ try {
             $tier3MinKm,
             $tier3MaxKm,
             $tier4MinKm,
-            $tier4MaxKm
+            $tier4MaxKm,
+            $vehicleId
         );
         
-        $upsertFaresStmt->execute();
-        error_log("Updated outstation_fares table for vehicle: $vehicleId with these values: base_price=$oneWayBasePrice, price_per_km=$oneWayPricePerKm");
+        $updateFaresStmt->execute();
+        $affected = $updateFaresStmt->affected_rows;
+        error_log("UPDATE outstation_fares: affected_rows=$affected for vehicle=$vehicleId, base_price=$oneWayBasePrice, price_per_km=$oneWayPricePerKm");
+        
+        if ($affected === 0) {
+            // No existing row - INSERT
+            $insertFaresStmt = $conn->prepare("
+                INSERT INTO outstation_fares 
+                (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, 
+                 tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+                 tier1_min_km, tier1_max_km, tier2_min_km, tier2_max_km, tier3_min_km, tier3_max_km, tier4_min_km, tier4_max_km)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $insertFaresStmt->bind_param("sdddddddddddiiiiiiii",
+                $vehicleId,
+                $oneWayBasePrice,
+                $oneWayPricePerKm,
+                $roundTripBasePrice,
+                $roundTripPricePerKm,
+                $driverAllowance,
+                $nightHaltCharge,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
+                $extraKmCharge,
+                $tier1MinKm,
+                $tier1MaxKm,
+                $tier2MinKm,
+                $tier2MaxKm,
+                $tier3MinKm,
+                $tier3MaxKm,
+                $tier4MinKm,
+                $tier4MaxKm
+            );
+            $insertFaresStmt->execute();
+            error_log("INSERT outstation_fares: new row for vehicle=$vehicleId");
+        }
         error_log("Tier pricing saved: tier1_price=$tier1Price, tier2_price=$tier2Price, tier3_price=$tier3Price, tier4_price=$tier4Price, extra_km_charge=$extraKmCharge");
         
         // Also update vehicle_pricing table for compatibility - BUT this is now secondary

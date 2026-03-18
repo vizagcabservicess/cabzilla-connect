@@ -246,6 +246,19 @@ function fetchExpenses($conn) {
         
         $expenses = [];
         while ($row = $result->fetch_assoc()) {
+            $vehicleNumber = null;
+            if (isset($row['vehicle_id']) && !empty($row['vehicle_id'])) {
+                $vstmt = $conn->prepare("SELECT vehicle_number FROM fleet_vehicles WHERE id = ? LIMIT 1");
+                if ($vstmt) {
+                    $vid = $row['vehicle_id'];
+                    $vstmt->bind_param("s", $vid);
+                    $vstmt->execute();
+                    $vres = $vstmt->get_result();
+                    if ($vres && $vrow = $vres->fetch_assoc()) {
+                        $vehicleNumber = $vrow['vehicle_number'];
+                    }
+                }
+            }
             $expenses[] = [
                 'id' => $row['id'],
                 'date' => $row['date'],
@@ -254,13 +267,15 @@ function fetchExpenses($conn) {
                 'type' => 'expense',
                 'category' => $row['category'],
                 'paymentMethod' => $row['payment_method'],
+                'vehicleId' => $row['vehicle_id'] ?? null,
+                'vehicleNumber' => $vehicleNumber,
                 'vendor' => $row['vendor'],
                 'billNumber' => $row['bill_number'],
                 'billDate' => $row['bill_date'],
                 'notes' => $row['notes'],
                 'status' => $row['status'],
-                'isRecurring' => (bool) $row['is_recurring'],
-                'recurringFrequency' => $row['recurring_frequency'],
+                'isRecurring' => (bool) ($row['is_recurring'] ?? 0),
+                'recurringFrequency' => $row['recurring_frequency'] ?? null,
                 'created_at' => $row['created_at'],
                 'updated_at' => $row['updated_at']
             ];
@@ -597,22 +612,15 @@ function addExpense($conn, $data) {
             }
         }
         
-        // Insert new expense into financial_ledger table
-        $sql = "INSERT INTO financial_ledger (
-                    type, date, description, amount, category, 
-                    payment_method, vendor, bill_number, bill_date, 
-                    notes, status, is_recurring, recurring_frequency, 
-                    created_at, updated_at
-                ) VALUES (
-                    'expense', ?, ?, ?, ?, 
-                    ?, ?, ?, ?, 
-                    ?, ?, ?, ?,
-                    NOW(), NOW()
-                )";
-        
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            throw new Exception("Prepare failed: " . $conn->error);
+        // Ensure vehicle_id column exists (for tables created before this column was added)
+        $hasVehicleId = false;
+        $checkCol = $conn->query("SHOW COLUMNS FROM financial_ledger LIKE 'vehicle_id'");
+        if ($checkCol && $checkCol->num_rows > 0) {
+            $hasVehicleId = true;
+        } else {
+            @$conn->query("ALTER TABLE financial_ledger ADD COLUMN vehicle_id VARCHAR(50) NULL AFTER payment_method");
+            $checkCol2 = $conn->query("SHOW COLUMNS FROM financial_ledger LIKE 'vehicle_id'");
+            $hasVehicleId = ($checkCol2 && $checkCol2->num_rows > 0);
         }
         
         // Prepare parameters
@@ -621,6 +629,7 @@ function addExpense($conn, $data) {
         $date = $data['date'];
         $category = $data['category'];
         $paymentMethod = $data['paymentMethod'] ?? '';
+        $vehicleId = !empty($data['vehicleId']) ? (string) $data['vehicleId'] : '';
         $vendor = $data['vendor'] ?? '';
         $billNumber = $data['billNumber'] ?? '';
         $billDate = $data['billDate'] ?? null;
@@ -629,16 +638,64 @@ function addExpense($conn, $data) {
         $isRecurring = isset($data['isRecurring']) && $data['isRecurring'] ? 1 : 0;
         $recurringFrequency = $data['recurringFrequency'] ?? null;
         
-        $stmt->bind_param(
-            "ssdsssssssis",
-            $date, $description, $amount, $category,
-            $paymentMethod, $vendor, $billNumber, $billDate,
-            $notes, $status, $isRecurring, $recurringFrequency
-        );
+        if ($hasVehicleId) {
+            // Insert with vehicle_id
+            $sql = "INSERT INTO financial_ledger (
+                        type, date, description, amount, category,
+                        payment_method, vehicle_id, vendor, bill_number, bill_date,
+                        notes, status, is_recurring, recurring_frequency,
+                        created_at, updated_at
+                    ) VALUES (
+                        'expense', ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        NOW(), NOW()
+                    )";
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param(
+                    "ssdsssssssssis",
+                    $date, $description, $amount, $category,
+                    $paymentMethod, $vehicleId, $vendor, $billNumber, $billDate,
+                    $notes, $status, $isRecurring, $recurringFrequency
+                );
+                $result = $stmt->execute();
+            } else {
+                $result = false;
+            }
+        } else {
+            $stmt = null;
+            $result = false;
+        }
         
-        $result = $stmt->execute();
+        // Fallback: insert without vehicle_id if above failed (e.g. column doesn't exist)
+        if (!$result || !$stmt) {
+            $sql = "INSERT INTO financial_ledger (
+                        type, date, description, amount, category,
+                        payment_method, vendor, bill_number, bill_date,
+                        notes, status, is_recurring, recurring_frequency,
+                        created_at, updated_at
+                    ) VALUES (
+                        'expense', ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        NOW(), NOW()
+                    )";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                throw new Exception("Prepare failed: " . $conn->error);
+            }
+            $stmt->bind_param(
+                "ssdsssssssis",
+                $date, $description, $amount, $category,
+                $paymentMethod, $vendor, $billNumber, $billDate,
+                $notes, $status, $isRecurring, $recurringFrequency
+            );
+            $result = $stmt->execute();
+        }
+        
         if (!$result) {
-            throw new Exception("Execute failed: " . $stmt->error);
+            throw new Exception("Execute failed: " . ($stmt ? $stmt->error : $conn->error));
         }
         
         if ($stmt->affected_rows > 0) {
@@ -653,6 +710,7 @@ function addExpense($conn, $data) {
                 'type' => 'expense',
                 'category' => $category,
                 'paymentMethod' => $paymentMethod,
+                'vehicleId' => $vehicleId,
                 'vendor' => $vendor,
                 'billNumber' => $billNumber,
                 'billDate' => $billDate,
@@ -720,6 +778,12 @@ function handlePutRequest($conn) {
         if (isset($data['paymentMethod'])) {
             $setFields[] = "payment_method = ?";
             $params[] = $data['paymentMethod'];
+            $types .= "s";
+        }
+        
+        if (array_key_exists('vehicleId', $data)) {
+            $setFields[] = "vehicle_id = ?";
+            $params[] = !empty($data['vehicleId']) ? $data['vehicleId'] : '';
             $types .= "s";
         }
         

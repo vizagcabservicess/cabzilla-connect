@@ -109,7 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const response = await authAPI.login({ email, password });
-      console.log('DEBUG: Login response', response);
       
       // Check for token expiration in response
       if (response.token && isTokenExpired(response.token)) {
@@ -122,11 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.token) {
         authAPI.setToken(response.token);
       }
-      // Debug: Check localStorage after login
-      console.log('DEBUG: localStorage["auth_token"] after login:', localStorage.getItem('auth_token'));
-      console.log('DEBUG: localStorage["user"] after login:', localStorage.getItem('user'));
-      
-      // Return the response for the LoginForm to access user data
       return response;
     } catch (error) {
       console.error('Login error:', error);
@@ -145,6 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       throw error;
     }
+  };
+
+  const signup = async (userData: RegisterRequest) => {
+    const response = await authAPI.signup(userData);
+    if (response.success && response.token && response.user) {
+      setUser(response.user);
+      authAPI.setToken(response.token);
+    }
+    return response;
   };
 
   const socialLogin = async (provider: 'google' | 'facebook') => {
@@ -297,7 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: loading,
     isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
     login,
-    signup: authAPI.signup, // Fixed method name
+    signup,
     socialLogin,
     socialSignup,
     socialSignupWithData,

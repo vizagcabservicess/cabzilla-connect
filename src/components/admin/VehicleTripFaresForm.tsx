@@ -19,6 +19,7 @@ import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from 'sonner';
 import { directVehicleOperation } from '@/utils/apiHelper';
+import { fareService } from '@/services/fareService';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -404,6 +405,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           nightHaltCharge
         );
         
+        fareService.clearCache();
         toast.success(`Updated outstation fares for ${selectedVehicle}`);
       } else if (tripType === 'local') {
         if (extraKmRate <= 0 || package4hr40km <= 0 || package8hr80km <= 0) {
@@ -421,6 +423,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           extraKmCharge: extraKmRate
         });
         
+        fareService.clearCache();
         toast.success(`Updated local fares for ${selectedVehicle}`);
       } else if (tripType === 'airport') {
         if (pickupPrice <= 0 || dropPrice <= 0) {
@@ -439,6 +442,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           tier4Price: tier4Price
         });
         
+        fareService.clearCache();
         toast.success(`Updated airport fares for ${selectedVehicle}`);
       }
       

@@ -98,6 +98,17 @@ if (!function_exists('getDbConnection')) {
     }
 }
 
+// PDO connection - same DB as getDbConnection, for endpoints that require PDO (e.g. direct-outstation-fares)
+if (!function_exists('getPdoConnection')) {
+    function getPdoConnection() {
+        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+        $conn = new PDO($dsn, DB_USER, DB_PASS);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $conn->exec("SET time_zone = '+05:30'");
+        return $conn;
+    }
+}
+
 // JSON Response Helper with CORS headers
 if (!function_exists('sendJsonResponse')) {
     function sendJsonResponse($data, $statusCode = 200) {

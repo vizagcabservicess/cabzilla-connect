@@ -56,16 +56,19 @@ switch ($period) {
 try {
     $metrics = [];
     
-    // Total bookings
-    $sql = "SELECT COUNT(*) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?";
+    // Exclude cancelled bookings from revenue and counts (cancelled = no revenue)
+    $excludeCancelled = " AND (status IS NULL OR status != 'cancelled')";
+    
+    // Total bookings (exclude cancelled)
+    $sql = "SELECT COUNT(*) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?" . $excludeCancelled;
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ss", $startDate, $endDate);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
     $metrics['totalBookings'] = (int)($result['total'] ?? 0);
     
-    // Total revenue
-    $sql = "SELECT SUM(total_amount) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?";
+    // Total revenue (exclude cancelled)
+    $sql = "SELECT SUM(total_amount) as total FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?" . $excludeCancelled;
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ss", $startDate, $endDate);
     $stmt->execute();
@@ -90,9 +93,9 @@ try {
         $metrics['activeVehicles'] = 8; // Default fallback value if table doesn't exist
     }
     
-    // Booking trends (daily bookings for the period)
+    // Booking trends (daily bookings for the period, exclude cancelled)
     $sql = "SELECT DATE(created_at) as date, COUNT(*) as count, SUM(total_amount) as revenue 
-            FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? 
+            FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?" . $excludeCancelled . " 
             GROUP BY DATE(created_at) ORDER BY DATE(created_at)";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ss", $startDate, $endDate);
@@ -122,9 +125,9 @@ try {
     }
     $metrics['bookingsByStatus'] = $bookingsByStatus;
     
-    // Revenue by trip type
+    // Revenue by trip type (exclude cancelled)
     $sql = "SELECT trip_type, COUNT(*) as bookings, SUM(total_amount) as revenue 
-            FROM bookings WHERE DATE(created_at) BETWEEN ? AND ? 
+            FROM bookings WHERE DATE(created_at) BETWEEN ? AND ?" . $excludeCancelled . " 
             GROUP BY trip_type ORDER BY revenue DESC";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ss", $startDate, $endDate);

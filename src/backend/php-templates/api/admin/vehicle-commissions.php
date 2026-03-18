@@ -73,123 +73,80 @@ try {
             $payment = $result->fetch_assoc();
             sendResponse(['status' => 'success', 'data' => [$payment]]);
         }
-        else if (isset($_GET['vehicle_id'])) {
-            // Get commission payments for a specific vehicle
-            $vehicleId = intval($_GET['vehicle_id']);
-            $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 100;
-            $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
-            
-            $stmt = $conn->prepare("SELECT cp.*, b.booking_number, b.passenger_name, b.pickup_date
-                                    FROM fleet_commission_payments cp
-                                    LEFT JOIN bookings b ON cp.booking_id = b.id
-                                    WHERE cp.vehicle_id = ?
-                                    ORDER BY cp.created_at DESC
-                                    LIMIT ? OFFSET ?");
-            $stmt->bind_param("iii", $vehicleId, $limit, $offset);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            $payments = [];
-            while ($row = $result->fetch_assoc()) {
-                $payments[] = $row;
-            }
-            
-            // Count total records for pagination
-            $countStmt = $conn->prepare("SELECT COUNT(*) as total FROM fleet_commission_payments WHERE vehicle_id = ?");
-            $countStmt->bind_param("i", $vehicleId);
-            $countStmt->execute();
-            $countResult = $countStmt->get_result();
-            $totalCount = $countResult->fetch_assoc()['total'];
-            
-            sendResponse([
-                'status' => 'success',
-                'data' => $payments,
-                'pagination' => [
-                    'total' => intval($totalCount),
-                    'limit' => $limit,
-                    'offset' => $offset
-                ]
-            ]);
-        }
         else {
-            // Get all commission payments with optional filters
+            // List commission payments with optional filters (vehicle, status, date range)
+            // Single path for both "All" and specific vehicle to guarantee identical filter behavior
             $filters = [];
             $params = [];
             $bindTypes = "";
-            
+
+            if (isset($_GET['vehicle_id']) && $_GET['vehicle_id'] !== '' && $_GET['vehicle_id'] !== '0') {
+                $vehicleId = intval($_GET['vehicle_id']);
+                if ($vehicleId > 0) {
+                    $filters[] = "cp.vehicle_id = ?";
+                    $params[] = $vehicleId;
+                    $bindTypes .= "i";
+                }
+            }
+
             if (isset($_GET['status']) && in_array($_GET['status'], ['pending', 'paid', 'cancelled'])) {
                 $filters[] = "cp.status = ?";
                 $params[] = $_GET['status'];
                 $bindTypes .= "s";
             }
-            
-            if (isset($_GET['start_date'])) {
-                $filters[] = "b.pickup_date >= ?";
+
+            if (isset($_GET['start_date']) && $_GET['start_date']) {
+                $filters[] = "DATE(COALESCE(b.pickup_date, cp.created_at)) >= ?";
                 $params[] = $_GET['start_date'];
                 $bindTypes .= "s";
             }
-            
-            if (isset($_GET['end_date'])) {
-                $filters[] = "b.pickup_date <= ?";
+
+            if (isset($_GET['end_date']) && $_GET['end_date']) {
+                $filters[] = "DATE(COALESCE(b.pickup_date, cp.created_at)) <= ?";
                 $params[] = $_GET['end_date'];
                 $bindTypes .= "s";
             }
-            
+
             $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 100;
             $offset = isset($_GET['offset']) ? intval($_GET['offset']) : 0;
-            
             $whereClause = !empty($filters) ? "WHERE " . implode(" AND ", $filters) : "";
-            
-            $query = "SELECT cp.*, b.booking_number, b.passenger_name, b.pickup_date, 
-                      v.name AS vehicle_name, v.vehicle_number
-                      FROM fleet_commission_payments cp
-                      LEFT JOIN bookings b ON cp.booking_id = b.id
-                      LEFT JOIN fleet_vehicles v ON cp.vehicle_id = v.id
-                      $whereClause
-                      ORDER BY cp.created_at DESC
-                      LIMIT ? OFFSET ?";
-            
-            $stmt = $conn->prepare($query);
-            
-            // Add pagination parameters
-            $bindTypes .= "ii";
+
             $params[] = $limit;
             $params[] = $offset;
-            
+            $bindTypes .= "ii";
+
+            $stmt = $conn->prepare("SELECT cp.*, b.booking_number, b.passenger_name, b.pickup_date,
+                    v.name AS vehicle_name, v.vehicle_number
+                    FROM fleet_commission_payments cp
+                    LEFT JOIN bookings b ON cp.booking_id = b.id
+                    LEFT JOIN fleet_vehicles v ON cp.vehicle_id = v.id
+                    $whereClause
+                    ORDER BY cp.created_at DESC
+                    LIMIT ? OFFSET ?");
             if (!empty($params)) {
                 $stmt->bind_param($bindTypes, ...$params);
             }
-            
             $stmt->execute();
             $result = $stmt->get_result();
-            
+
             $payments = [];
             while ($row = $result->fetch_assoc()) {
                 $payments[] = $row;
             }
-            
-            // Count total records for pagination
-            $countQuery = "SELECT COUNT(*) as total 
-                           FROM fleet_commission_payments cp
-                           LEFT JOIN bookings b ON cp.booking_id = b.id
-                           $whereClause";
-            
-            $countStmt = $conn->prepare($countQuery);
-            
-            if (!empty($params)) {
-                // Remove the pagination parameters
-                array_pop($params);
-                array_pop($params);
-                
-                if (!empty($params)) {
-                    $countStmt->bind_param(substr($bindTypes, 0, -2), ...$params);
-                }
+
+            $countParams = array_slice($params, 0, -2);
+            $countTypes = substr($bindTypes, 0, -2);
+            $countStmt = $conn->prepare("SELECT COUNT(*) as total
+                    FROM fleet_commission_payments cp
+                    LEFT JOIN bookings b ON cp.booking_id = b.id
+                    $whereClause");
+            if (!empty($countParams)) {
+                $countStmt->bind_param($countTypes, ...$countParams);
             }
-            
             $countStmt->execute();
             $countResult = $countStmt->get_result();
             $totalCount = $countResult->fetch_assoc()['total'];
-            
+
             sendResponse([
                 'status' => 'success',
                 'data' => $payments,
@@ -435,6 +392,18 @@ try {
             $updateFields[] = "notes = ?";
             $queryParams[] = $data['notes'];
             $bindTypes .= "s";
+        }
+        
+        if (isset($data['commission_amount'])) {
+            $updateFields[] = "commission_amount = ?";
+            $queryParams[] = floatval($data['commission_amount']);
+            $bindTypes .= "d";
+        }
+        
+        if (isset($data['commission_percentage'])) {
+            $updateFields[] = "commission_percentage = ?";
+            $queryParams[] = floatval($data['commission_percentage']);
+            $bindTypes .= "d";
         }
         
         if (empty($updateFields)) {

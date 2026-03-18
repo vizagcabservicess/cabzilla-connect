@@ -498,6 +498,12 @@ export const BookingSummary = ({
       return;
     }
 
+    if (!selectedCab) {
+      console.warn('BookingSummary: Cannot calculate fare details - no cab selected');
+      setShowDetailsLoading(false);
+      return;
+    }
+
     // For outstation one-way trips, use the fareData from useFare hook (which has tier pricing)
     if (tripType === 'outstation' && tripMode === 'one-way' && fareData?.totalPrice > 0) {
       console.log('BookingSummary: Using tier pricing from useFare hook for outstation one-way:', fareData.totalPrice);

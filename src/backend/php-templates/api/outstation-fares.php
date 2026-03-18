@@ -21,6 +21,30 @@ function log_debug($message) {
     error_log("[outstation-fares.php] " . $message);
 }
 
+// Default tier prices matching web app (35-50, 51-75, 76-100, 101-149 km)
+function get_default_tier_prices($vehicleId, $vehicleName, $basePrice) {
+    $v = strtolower($vehicleId . ' ' . $vehicleName);
+    if (stripos($v, 'sedan') !== false || stripos($v, 'swift') !== false || stripos($v, 'dzire') !== false ||
+        stripos($v, 'glanza') !== false || stripos($v, 'amaze') !== false || stripos($v, 'etios') !== false) {
+        return ['tier1Price' => 3500, 'tier2Price' => 4200, 'tier3Price' => 4900, 'tier4Price' => 5600];
+    }
+    if (stripos($v, 'ertiga') !== false || stripos($v, 'suv') !== false) {
+        return ['tier1Price' => 4500, 'tier2Price' => 5400, 'tier3Price' => 6300, 'tier4Price' => 7200];
+    }
+    if (stripos($v, 'innova') !== false || stripos($v, 'crysta') !== false) {
+        return ['tier1Price' => 5500, 'tier2Price' => 6500, 'tier3Price' => 7500, 'tier4Price' => 8500];
+    }
+    if (stripos($v, 'tempo') !== false || stripos($v, 'traveller') !== false) {
+        return ['tier1Price' => 6500, 'tier2Price' => 7800, 'tier3Price' => 9100, 'tier4Price' => 10400];
+    }
+    return [
+        'tier1Price' => (int)($basePrice * 0.83),
+        'tier2Price' => (int)($basePrice * 1.0),
+        'tier3Price' => (int)($basePrice * 1.17),
+        'tier4Price' => (int)($basePrice * 1.33),
+    ];
+}
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -338,7 +362,15 @@ try {
             'nightHaltCharge' => (float)$row['night_halt_charge'],
             'driverAllowance' => (float)$row['driver_allowance'],
             'roundTripBasePrice' => (float)$row['roundtrip_base_price'],
-            'roundTripPricePerKm' => (float)$row['roundtrip_price_per_km']
+            'roundTripPricePerKm' => (float)$row['roundtrip_price_per_km'],
+            'tier1Price' => isset($row['tier1_price']) ? (float)$row['tier1_price'] : null,
+            'tier2Price' => isset($row['tier2_price']) ? (float)$row['tier2_price'] : null,
+            'tier3Price' => isset($row['tier3_price']) ? (float)$row['tier3_price'] : null,
+            'tier4Price' => isset($row['tier4_price']) ? (float)$row['tier4_price'] : null,
+            'tier1_price' => isset($row['tier1_price']) ? (float)$row['tier1_price'] : null,
+            'tier2_price' => isset($row['tier2_price']) ? (float)$row['tier2_price'] : null,
+            'tier3_price' => isset($row['tier3_price']) ? (float)$row['tier3_price'] : null,
+            'tier4_price' => isset($row['tier4_price']) ? (float)$row['tier4_price'] : null,
         ];
     }
     
@@ -386,13 +418,19 @@ try {
             if ($onewayResult && $onewayResult->num_rows > 0) {
                 $onewayRow = $onewayResult->fetch_assoc();
                 
+                $bp = (float)$onewayRow['base_fare'];
+                $ppk = (float)$onewayRow['price_per_km'];
                 $fare = [
-                    'basePrice' => (float)$onewayRow['base_fare'],
-                    'pricePerKm' => (float)$onewayRow['price_per_km'],
+                    'basePrice' => $bp,
+                    'pricePerKm' => $ppk,
                     'nightHaltCharge' => (float)$onewayRow['night_halt_charge'],
                     'driverAllowance' => (float)$onewayRow['driver_allowance'],
                     'roundTripBasePrice' => 0,
-                    'roundTripPricePerKm' => 0
+                    'roundTripPricePerKm' => 0,
+                    'tier1Price' => round($bp * 0.83),
+                    'tier2Price' => round($bp),
+                    'tier3Price' => round($bp * 1.17),
+                    'tier4Price' => round($bp * 1.33),
                 ];
                 
                 // Add round-trip values if available

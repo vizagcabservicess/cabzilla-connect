@@ -1,22 +1,29 @@
 <?php
+// CORS must be set first, before any output - handle preflight immediately
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+header('Access-Control-Max-Age: 86400');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../common/db_helper.php';
 require_once __DIR__ . '/../utils/security.php';
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Set security headers
-setSecurityHeaders();
+// Set security headers (must not override CORS)
+if (function_exists('setSecurityHeaders')) {
+    setSecurityHeaders();
+}
 
 // Log only basic request info for security
-secureLog("Login attempt", "INFO", ['ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
+if (function_exists('secureLog')) {
+    secureLog("Login attempt", "INFO", ['ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

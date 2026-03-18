@@ -107,13 +107,15 @@ try {
     $params = [$startDate, $endDate];
     $types = "ss";
     
-    // Add status filter if provided
+    // Add status filter if provided; otherwise exclude cancelled from revenue/counts
     if ($statusFilter) {
         $conditions .= " AND status = ?";
         $params[] = $statusFilter;
         $types .= "s";
         
         logError("Status filter added", ['status' => $statusFilter]);
+    } else {
+        $conditions .= " AND (status IS NULL OR status != 'cancelled')";
     }
     
     // Get total bookings in the period with optional status filter

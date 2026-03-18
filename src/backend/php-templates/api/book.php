@@ -261,6 +261,20 @@ try {
         
         $stmt->close();
         $conn->close();
+
+        // Notify super_admin users of new booking (non-blocking)
+        try {
+            if (file_exists(__DIR__ . '/utils/push.php')) {
+                require_once __DIR__ . '/utils/push.php';
+                sendPushToSuperAdmins(
+                    $booking['bookingNumber'],
+                    $booking['passengerName'] ?? '',
+                    $booking['pickupLocation'] ?? null
+                );
+            }
+        } catch (Throwable $e) {
+            logBooking("Push notification failed (non-fatal)", $e->getMessage());
+        }
     } catch (Exception $dbError) {
         // Log database error but don't expose details to client
         logBooking("DATABASE ERROR: " . $dbError->getMessage(), [

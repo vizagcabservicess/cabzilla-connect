@@ -28,6 +28,7 @@ import {
   initializeOutstationFareTables,
   syncOutstationFareTables 
 } from '@/services/outstationFareService';
+import { fareService } from '@/services/fareService';
 
 const OutstationFareManagement: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
@@ -214,6 +215,7 @@ const OutstationFareManagement: React.FC = () => {
       const success = await updateOutstationFare(dataToSave);
       
               if (success) {
+          fareService.clearCache();
           toast({
             title: "Success",
             description: "Outstation fare saved successfully.",

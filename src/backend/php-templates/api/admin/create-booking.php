@@ -354,6 +354,20 @@ try {
     $result = $selectStmt->get_result();
     $booking = $result->fetch_assoc();
     
+    // Notify super_admin users of new booking (non-blocking)
+    try {
+        if (file_exists(__DIR__ . '/../utils/push.php')) {
+            require_once __DIR__ . '/../utils/push.php';
+            sendPushToSuperAdmins(
+                $bookingNumber,
+                $requestData['passengerName'] ?? '',
+                $requestData['pickupLocation'] ?? null
+            );
+        }
+    } catch (Throwable $e) {
+        error_log('Push notification failed (non-fatal): ' . $e->getMessage());
+    }
+
     // Format response
     $response = [
         'status' => 'success',

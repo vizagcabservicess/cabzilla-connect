@@ -62,11 +62,17 @@ const TourDetailPage = () => {
   // Load pickup details from session storage or navigation state
   const loadPickupData = () => {
     try {
-      // Check navigation state first (when coming from Hero component)
+      // Check navigation state first (when coming from Hero or ToursPage)
       const navigationState = location.state as any;
       if (navigationState && navigationState.pickupLocation) {
+        const loc = navigationState.pickupLocation;
+        const locationName = typeof loc === 'object' && loc?.name ? loc.name : String(loc);
+        const isInVizag = typeof loc === 'object' && loc?.isInVizag !== undefined ? loc.isInVizag : true;
+        const location = typeof loc === 'object'
+          ? { ...loc, name: locationName, isInVizag }
+          : { name: locationName, isInVizag: true };
         return {
-          location: { name: navigationState.pickupLocation, isInVizag: true },
+          location,
           date: navigationState.pickupDate ? new Date(navigationState.pickupDate) : new Date()
         };
       }

@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => ({
       '/api': {
         target: 'https://www.vizagtaxihub.com',
         changeOrigin: true,
-        secure: process.env.NODE_ENV !== 'development',
+        secure: true,
       },
     },
     allowedHosts: [

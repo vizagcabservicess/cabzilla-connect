@@ -18,6 +18,7 @@ import {
   syncAirportFares, 
   initializeDatabaseTables 
 } from '@/services/fareManagementService';
+import { fareService } from '@/services/fareService';
 import { 
   Select,
   SelectContent,
@@ -241,6 +242,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         await updateAirportFares(dataToSave);
       }
       
+      fareService.clearCache();
       toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
       
       lastFetchTime.current = Date.now();

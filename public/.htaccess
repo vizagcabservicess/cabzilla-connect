@@ -29,9 +29,11 @@ RewriteRule .* - [R=200,L]
 
 # Set secure CORS headers for all responses - SECURITY: Restrict to trusted domains only
 <IfModule mod_headers.c>
-    # SECURITY: Only allow trusted domains
+    # SECURITY: Only allow trusted domains + localhost for development (Expo web, mobile app dev)
     SetEnvIf Origin "^https://vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
     SetEnvIf Origin "^https://www\.vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
+    SetEnvIf Origin "^http://localhost(:\d+)?$" ALLOWED_ORIGIN=$0
+    SetEnvIf Origin "^http://127\.0\.0\.1(:\d+)?$" ALLOWED_ORIGIN=$0
     Header always set Access-Control-Allow-Origin "%{ALLOWED_ORIGIN}e" env=ALLOWED_ORIGIN
     Header always set Access-Control-Allow-Origin "https://vizagtaxihub.com" env=!ALLOWED_ORIGIN
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"

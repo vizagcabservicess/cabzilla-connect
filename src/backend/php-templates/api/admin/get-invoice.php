@@ -112,40 +112,104 @@ try {
             }
         }
     } else {
-        // Regular cab booking
-        $bookingStmt = $conn->prepare('SELECT * FROM bookings WHERE id = ?');
-        $bookingStmt->bind_param('i', $bookingId);
-        $bookingStmt->execute();
-        $bookingResult = $bookingStmt->get_result();
-        if ($bookingResult->num_rows > 0) {
-            $booking = $bookingResult->fetch_assoc();
-            $total = (float)($booking['total_amount'] ?? 0);
-            $adv = (float)($booking['advance_paid_amount'] ?? 0);
-            $invoiceHtml = '<table><tbody>';
-            $invoiceHtml .= '<tr><td>Base Fare</td><td>₹ ' . number_format(max(0, $total - $adv), 2) . '</td></tr>';
-            if ($adv > 0) $invoiceHtml .= '<tr><td>Advance Paid</td><td>₹ ' . number_format($adv, 2) . '</td></tr>';
-            $invoiceHtml .= '<tr><td>Total Amount</td><td>₹ ' . number_format($total, 2) . '</td></tr></tbody></table>';
-            $invoiceData = [
-                'id' => $bookingId,
-                'booking_id' => $bookingId,
-                'invoice_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
-                'booking_number' => $booking['booking_number'],
-                'passenger_name' => $booking['passenger_name'] ?? '',
-                'passenger_phone' => $booking['passenger_phone'] ?? '',
-                'passenger_email' => $booking['passenger_email'] ?? '',
-                'pickup_location' => $booking['pickup_location'] ?? '',
-                'drop_location' => $booking['drop_location'] ?? '',
-                'pickup_date' => $booking['pickup_date'] ?? '',
-                'total_amount' => $total,
-                'advance_paid_amount' => $adv,
-                'payment_status' => $booking['payment_status'] ?? 'pending',
-                'status' => $booking['status'] ?? 'pending',
-                'trip_type' => $booking['trip_type'] ?? '',
-                'cab_type' => $booking['cab_type'] ?? '',
-                'created_at' => $booking['created_at'] ?? '',
-                'updated_at' => $booking['updated_at'] ?? $booking['created_at'] ?? '',
-                'invoice_html' => $invoiceHtml,
-            ];
+        // Regular cab booking: first check if a generated invoice exists (persists GST values)
+        $invExists = @$conn->query("SHOW TABLES LIKE 'invoices'");
+        if ($invExists && $invExists->num_rows > 0) {
+            $invStmt = $conn->prepare('SELECT * FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1');
+            $invStmt->bind_param('i', $bookingId);
+            $invStmt->execute();
+            $invResult = $invStmt->get_result();
+            $invStmt->close();
+            if ($invResult->num_rows > 0) {
+                $inv = $invResult->fetch_assoc();
+                $booking = null;
+                $bStmt = $conn->prepare('SELECT * FROM bookings WHERE id = ?');
+                $bStmt->bind_param('i', $bookingId);
+                $bStmt->execute();
+                $bRes = $bStmt->get_result();
+                if ($bRes->num_rows > 0) $booking = $bRes->fetch_assoc();
+                $bStmt->close();
+                $baseAmount = (float)($inv['base_amount'] ?? 0);
+                $taxAmount = (float)($inv['tax_amount'] ?? 0);
+                $totalAmount = (float)($inv['total_amount'] ?? 0);
+                $totalExtraCharges = $totalAmount > 0 ? round($totalAmount - $baseAmount - $taxAmount, 2) : 0;
+                if ($totalExtraCharges < 0) $totalExtraCharges = 0;
+                $cgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount / 2, 2) : 0;
+                $sgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount - $cgstAmount, 2) : 0;
+                $igstAmount = ($inv['is_igst'] ?? 0) ? $taxAmount : 0;
+                $invoiceData = [
+                    'id' => (int)$inv['id'],
+                    'booking_id' => $bookingId,
+                    'invoice_number' => $inv['invoice_number'] ?? ('INV-' . date('Ymd') . '-' . $bookingId),
+                    'booking_number' => $booking['booking_number'] ?? '',
+                    'passenger_name' => $booking['passenger_name'] ?? '',
+                    'passenger_phone' => $booking['passenger_phone'] ?? '',
+                    'passenger_email' => $booking['passenger_email'] ?? '',
+                    'pickup_location' => $booking['pickup_location'] ?? '',
+                    'drop_location' => $booking['drop_location'] ?? '',
+                    'pickup_date' => $booking['pickup_date'] ?? '',
+                    'total_amount' => $totalAmount,
+                    'base_amount' => $baseAmount,
+                    'tax_amount' => $taxAmount,
+                    'total_extra_charges' => $totalExtraCharges,
+                    'cgst_amount' => $cgstAmount,
+                    'sgst_amount' => $sgstAmount,
+                    'igst_amount' => $igstAmount,
+                    'gst_enabled' => (bool)($inv['gst_enabled'] ?? 0),
+                    'is_igst' => (bool)($inv['is_igst'] ?? 0),
+                    'include_tax' => (bool)($inv['include_tax'] ?? 1),
+                    'gst_number' => $inv['gst_number'] ?? '',
+                    'company_name' => $inv['company_name'] ?? '',
+                    'company_address' => $inv['company_address'] ?? '',
+                    'payment_status' => $booking['payment_status'] ?? 'pending',
+                    'status' => $booking['status'] ?? 'pending',
+                    'trip_type' => $booking['trip_type'] ?? '',
+                    'cab_type' => $booking['cab_type'] ?? '',
+                    'created_at' => $inv['created_at'] ?? '',
+                    'updated_at' => $inv['updated_at'] ?? $inv['created_at'] ?? '',
+                    'invoice_html' => $inv['invoice_html'] ?? '',
+                ];
+                if ($booking && isset($booking['advance_paid_amount'])) {
+                    $invoiceData['advance_paid_amount'] = (float)$booking['advance_paid_amount'];
+                }
+            }
+        }
+        if (!$invoiceData) {
+            $bookingStmt = $conn->prepare('SELECT * FROM bookings WHERE id = ?');
+            $bookingStmt->bind_param('i', $bookingId);
+            $bookingStmt->execute();
+            $bookingResult = $bookingStmt->get_result();
+            if ($bookingResult->num_rows > 0) {
+                $booking = $bookingResult->fetch_assoc();
+                $bookingStmt->close();
+                $total = (float)($booking['total_amount'] ?? 0);
+                $adv = (float)($booking['advance_paid_amount'] ?? 0);
+                $invoiceHtml = '<table><tbody>';
+                $invoiceHtml .= '<tr><td>Base Fare</td><td>₹ ' . number_format(max(0, $total - $adv), 2) . '</td></tr>';
+                if ($adv > 0) $invoiceHtml .= '<tr><td>Advance Paid</td><td>₹ ' . number_format($adv, 2) . '</td></tr>';
+                $invoiceHtml .= '<tr><td>Total Amount</td><td>₹ ' . number_format($total, 2) . '</td></tr></tbody></table>';
+                $invoiceData = [
+                    'id' => $bookingId,
+                    'booking_id' => $bookingId,
+                    'invoice_number' => 'INV-' . date('Ymd') . '-' . $bookingId,
+                    'booking_number' => $booking['booking_number'],
+                    'passenger_name' => $booking['passenger_name'] ?? '',
+                    'passenger_phone' => $booking['passenger_phone'] ?? '',
+                    'passenger_email' => $booking['passenger_email'] ?? '',
+                    'pickup_location' => $booking['pickup_location'] ?? '',
+                    'drop_location' => $booking['drop_location'] ?? '',
+                    'pickup_date' => $booking['pickup_date'] ?? '',
+                    'total_amount' => $total,
+                    'advance_paid_amount' => $adv,
+                    'payment_status' => $booking['payment_status'] ?? 'pending',
+                    'status' => $booking['status'] ?? 'pending',
+                    'trip_type' => $booking['trip_type'] ?? '',
+                    'cab_type' => $booking['cab_type'] ?? '',
+                    'created_at' => $booking['created_at'] ?? '',
+                    'updated_at' => $booking['updated_at'] ?? $booking['created_at'] ?? '',
+                    'invoice_html' => $invoiceHtml,
+                ];
+            }
         }
     }
 

@@ -1,17 +1,20 @@
 <?php
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../common/db_helper.php';
-require_once __DIR__ . '/../utils/email-verification.php';
-
-header('Content-Type: application/json');
+// CORS first - handle preflight before any includes
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+header('Access-Control-Max-Age: 86400');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
+
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
+require_once __DIR__ . '/../utils/email-verification.php';
+
+header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -30,19 +33,22 @@ foreach ($required as $field) {
     }
 }
 
-// Accept role from input, default to 'guest' if not provided or invalid
-$valid_roles = ['guest', 'provider', 'admin'];
-$role = isset($input['role']) ? strtolower($input['role']) : 'guest';
+// Accept role from input, default to 'customer' for web/mobile signup
+$valid_roles = ['customer', 'user', 'guest', 'provider', 'admin', 'driver'];
+$role = isset($input['role']) ? strtolower(trim($input['role'])) : 'customer';
 if (!in_array($role, $valid_roles)) {
-    // Map possible UI labels to valid roles
-    if (strpos($role, 'guest') !== false) {
+    if (strpos($role, 'customer') !== false || strpos($role, 'user') !== false) {
+        $role = 'customer';
+    } else if (strpos($role, 'guest') !== false) {
         $role = 'guest';
     } else if (strpos($role, 'provider') !== false) {
         $role = 'provider';
     } else if (strpos($role, 'admin') !== false) {
         $role = 'admin';
+    } else if (strpos($role, 'driver') !== false) {
+        $role = 'driver';
     } else {
-        $role = 'guest';
+        $role = 'customer';
     }
 }
 

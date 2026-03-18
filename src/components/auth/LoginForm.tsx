@@ -11,6 +11,7 @@ import { SocialLoginButtons } from './SocialLoginButtons';
 import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
 import { getDashboardUrl } from '@/utils/authUtils';
+import { getAuthErrorMessage, isEmailVerificationError } from '@/lib/authLogic';
 
 export function LoginForm() {
   const { login, socialLogin } = useAuth();
@@ -43,8 +44,7 @@ export function LoginForm() {
         navigate(dashboardUrl);
       }, 500);
     } catch (error: any) {
-      // Check if it's an email verification error
-      if (error?.response?.data?.email_verification_required) {
+      if (isEmailVerificationError(error)) {
         toast.error('Email verification required', {
           id: 'login-toast',
           description: 'Please verify your email address before logging in. Check your inbox for a verification email.',
@@ -56,7 +56,7 @@ export function LoginForm() {
       } else {
         toast.error('Login failed', {
           id: 'login-toast',
-          description: error instanceof Error ? error.message : 'Authentication failed'
+          description: getAuthErrorMessage(error)
         });
       }
     } finally {
@@ -108,7 +108,7 @@ export function LoginForm() {
     } catch (error) {
       toast.error('Google login failed', {
         id: 'social-login-toast',
-        description: error instanceof Error ? error.message : 'Authentication failed'
+        description: getAuthErrorMessage(error)
       });
     } finally {
       setIsLoading(false);

@@ -88,11 +88,19 @@ try {
         $types .= "s";
     }
     
+    // Filter by computed payment_status (matches displayed status, avoids pending/partial swap)
     if ($status) {
+        $paidExpr = "(COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))";
+        $remainingExpr = "(b.total_amount - " . $paidExpr . ")";
         if ($status === 'pending') {
-            $query .= " AND (b.payment_status IS NULL OR b.payment_status = 'payment_pending')";
+            // Computed pending: no payment received (paid = 0), not cancelled
+            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " = 0";
+        } else if ($status === 'partial') {
+            // Computed partial: some paid, some remaining
+            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " > 0 AND " . $remainingExpr . " > 0";
         } else if ($status === 'paid') {
-            $query .= " AND b.payment_status = 'payment_received'";
+            // Computed paid: fully paid (paid >= total)
+            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " >= b.total_amount AND " . $paidExpr . " > 0";
         } else if ($status === 'cancelled') {
             $query .= " AND b.status = 'cancelled'";
         }

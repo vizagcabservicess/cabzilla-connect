@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from 'framer-motion';
 import { Navbar } from "@/components/Navbar";
@@ -39,14 +39,7 @@ const ToursPage = () => {
   const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   
-  // Load tours on component mount if location state is provided
-  useEffect(() => {
-    if (locationState?.pickupLocation && locationState?.pickupDate) {
-      handleSearchTours();
-    }
-  }, []);
-  
-  const handleSearchTours = async () => {
+  const handleSearchTours = useCallback(async () => {
     if (!pickupLocation) {
       toast({
         title: "No pickup location",
@@ -115,10 +108,19 @@ const ToursPage = () => {
       setIsLoadingTours(false);
       setIsSearching(false);
     }
-  };
+  }, [pickupLocation, pickupDate, toast]);
+
+  // Load tours on component mount when coming from Hero with location state
+  useEffect(() => {
+    if (locationState?.pickupLocation && locationState?.pickupDate) {
+      handleSearchTours();
+    }
+  }, [locationState?.pickupLocation, locationState?.pickupDate, handleSearchTours]);
 
   const handleTourSelect = (tour: TourListItem) => {
-    navigate(getTourUrl({ tourId: tour.tourId, tourName: tour.tourName }));
+    navigate(getTourUrl({ tourId: tour.tourId, tourName: tour.tourName }), {
+      state: { pickupLocation, pickupDate }
+    });
   };
 
   const handleModifySearch = () => {

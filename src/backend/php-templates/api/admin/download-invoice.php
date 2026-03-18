@@ -22,7 +22,7 @@ if (!validateAdminAuth()) {
     exit;
 }
 
-$bookingId = isset($_GET['booking_id']) ? intval($_GET['booking_id']) : 0;
+$bookingId = isset($_GET['booking_id']) ? intval($_GET['booking_id']) : (isset($_GET['id']) ? intval($_GET['id']) : 0);
 if (!$bookingId) {
     http_response_code(400);
     header('Content-Type: application/json');

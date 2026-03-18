@@ -148,27 +148,26 @@ export function LocationInput({
     if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
     
     try {
-      
-      // Create a circle around Vizag city center
-      const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-      
-      // Use 35km radius for autocomplete to allow all locations
-      // Distance validation will be handled separately in the place_changed listener
-      const circle = new google.maps.Circle({
-        center: vizagCenter,
-        radius: MAX_DISTANCE_KM * 1000, // Always use 35km for autocomplete
-      });
-      
-      const strictBounds = circle.getBounds() as google.maps.LatLngBounds;
-      
-      // Configure Autocomplete options with stable bounds
+      // For outstation drop: no bounds = India-wide search (Kakinada, Vijayawada, etc.)
+      // For pickup / airport drop / tour: bias toward Vizag (35km)
+      const isOutstationDrop = tripType === 'outstation' && !isPickupLocation;
+
       const options: google.maps.places.AutocompleteOptions = {
         types: ["geocode", "establishment"],
         componentRestrictions: { country: "in" },
-        bounds: strictBounds,
-        strictBounds: isPickupLocation, // Only enforce strict bounds for pickup locations
       };
-      
+
+      if (!isOutstationDrop) {
+        const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+        const circle = new google.maps.Circle({
+          center: vizagCenter,
+          radius: MAX_DISTANCE_KM * 1000,
+        });
+        const bounds = circle.getBounds() as google.maps.LatLngBounds;
+        options.bounds = bounds;
+        options.strictBounds = isPickupLocation; // Only enforce strict bounds for pickup
+      }
+
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
       
       // Add place_changed listener
@@ -188,9 +187,9 @@ export function LocationInput({
           const isAirportTransfer = tripType === 'airport';
           const isTourTrip = tripType === 'tour';
           
-          // For tour trips, pickup location must be within 15km
-          if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 15)) {
-            toast("For tour trips, pickup location must be within 15km of Visakhapatnam. Please select a location within 15km radius.");
+          // For tour trips, pickup location must be within 35km (matches ToursPage)
+          if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 35)) {
+            toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
             setInputValue("");
             if (onChange) onChange("");
             if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
@@ -242,7 +241,7 @@ export function LocationInput({
         console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
       }
     }
-     }, [isLoaded, google, inputRef.current, isPickupLocation, onLocationChange, onChange]);
+     }, [isLoaded, google, inputRef.current, isPickupLocation, tripType, onLocationChange, onChange]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -262,9 +261,9 @@ export function LocationInput({
      const isTourTrip = tripType === 'tour';
      
      // Validate location before accepting it
-     // For tour trips, pickup location must be within 15km
-     if (isTourTrip && isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng, 15)) {
-       toast("For tour trips, pickup location must be within 15km of Visakhapatnam. Please select a location within 15km radius.");
+     // For tour trips, pickup location must be within 35km (matches ToursPage)
+     if (isTourTrip && isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng, 35)) {
+       toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
        return;
      }
      
@@ -303,7 +302,7 @@ export function LocationInput({
      const isTourTrip = tripType === 'tour';
      
      if (isPickupLocation && isTourTrip) {
-       return "Please select a location within 15km of Visakhapatnam";
+       return "Please select a location within 35km of Visakhapatnam";
      } else if (isPickupLocation) {
        return "Please select a location within 35km of Visakhapatnam";
      } else if (isAirportTransfer) {
