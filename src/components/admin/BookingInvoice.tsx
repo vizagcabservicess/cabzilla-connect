@@ -104,11 +104,12 @@ interface InvoiceState {
   includeTax: boolean;
   customInvoiceNumber: string;
   gstDetails: GSTDetails;
+  adminNotes: string;
 }
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string) => Promise<any>;
+  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string, adminNotes?: string) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
@@ -120,6 +121,8 @@ interface GSTDetails {
   gstNumber: string;
   companyName: string;
   companyAddress: string;
+  /** When Price excluding tax: quoted base fare (before GST). Enter to get different total from inclusive. */
+  quotedBaseFare?: string;
 }
 
 export function BookingInvoice({
@@ -138,7 +141,7 @@ export function BookingInvoice({
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
   
   // Use lifted state from props
-  const { gstEnabled, isIGST, includeTax, customInvoiceNumber, gstDetails } = invoiceState;
+  const { gstEnabled, isIGST, includeTax, customInvoiceNumber, gstDetails, adminNotes } = invoiceState;
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<string>("html");
@@ -352,11 +355,11 @@ export function BookingInvoice({
     ? invoiceData.totalExtraCharges
     : fallbackExtras;
 
-  const backendBaseAmount = typeof invoiceData?.baseAmount === 'number' && invoiceData.baseAmount > 0
-    ? invoiceData.baseAmount
+  const backendBaseAmount = (typeof invoiceData?.baseAmount === 'number' || typeof invoiceData?.base_amount === 'number')
+    ? Number(invoiceData.baseAmount ?? invoiceData.base_amount ?? 0)
     : null;
-  const backendTaxAmount = typeof invoiceData?.taxAmount === 'number' && invoiceData.taxAmount >= 0
-    ? invoiceData.taxAmount
+  const backendTaxAmount = (typeof invoiceData?.taxAmount === 'number' || typeof invoiceData?.tax_amount === 'number')
+    ? Number(invoiceData.taxAmount ?? invoiceData.tax_amount ?? 0)
     : null;
   const backendCgstAmount = typeof invoiceData?.cgstAmount === 'number' && invoiceData.cgstAmount >= 0
     ? invoiceData.cgstAmount
@@ -364,8 +367,8 @@ export function BookingInvoice({
   const backendSgstAmount = typeof invoiceData?.sgstAmount === 'number' && invoiceData.sgstAmount >= 0
     ? invoiceData.sgstAmount
     : null;
-  const backendTotalAmount = typeof invoiceData?.totalAmount === 'number' && invoiceData.totalAmount > 0
-    ? invoiceData.totalAmount
+  const backendTotalAmount = (typeof invoiceData?.totalAmount === 'number' || typeof invoiceData?.total_amount === 'number')
+    ? Number(invoiceData.totalAmount ?? invoiceData.total_amount ?? 0)
     : null;
 
   // When we have stored invoice, derive extras from total - base - tax if not present (ensures correct value on reopen)
@@ -505,161 +508,55 @@ export function BookingInvoice({
     ? !!(invoiceData?.includeTax ?? invoiceData?.include_tax)
     : includeTax;
 
-  // Wrap summary calculation in useMemo to ensure it's recalculated when dependencies change
-  // and to provide stable references for sanitizeInvoiceHtml callback
-  // CRITICAL: Inline logic to match backend PDF exactly - use baseFare directly for GST-inclusive
+  // GST calculation: single source of truth - ALWAYS use stored invoice values when available.
+  // This prevents values changing on popup reopen due to recalculation with different inputs.
   const summaryValues = useMemo(() => {
     let summaryBaseFare: number;
     let summaryTaxes: number;
     let summaryTotal: number;
 
+    // When we have stored invoice (from get-invoice API), use it EXCLUSIVELY - no recalculation
+    const hasStoredInvoice =
+      backendBaseAmount != null &&
+      backendTaxAmount != null &&
+      backendTotalAmount != null &&
+      backendTotalAmount > 0;
+
+    if (hasStoredInvoice) {
+      summaryBaseFare = Number(backendBaseAmount.toFixed(2));
+      summaryTaxes = Number(backendTaxAmount.toFixed(2));
+      summaryTotal = Number(backendTotalAmount.toFixed(2));
+      return { summaryBaseFare, summaryTaxes, summaryTotal };
+    }
+
+    // No stored invoice - calculate from booking data
     if (effectiveGstEnabled && effectiveIncludeTax) {
-      // GST-INCLUSIVE: Total amount already includes GST
-      // CRITICAL FIX: Use backend's baseAmount, taxAmount, and totalAmount directly to ensure consistency
-      // The backend has already calculated the correct pre-tax base fare that matches the breakdown
-      if (backendBaseAmount !== null && backendTaxAmount !== null && backendTotalAmount !== null) {
-        // Use backend's calculated values directly - this ensures summary matches breakdown exactly
-        summaryBaseFare = Number(backendBaseAmount.toFixed(2));
-        // CRITICAL FIX: For tax-inclusive, calculate GST from the inclusive total
-        // Tax-inclusive: GST = total - (total / (1 + GST_RATE))
-        // Don't use backendTaxAmount directly as it might be from tax-exclusive mode
-        const expectedInclusiveTotal = baseFare + summaryExtras;
-        const calculatedTotal = Number(expectedInclusiveTotal.toFixed(2));
-        const preTaxTotal = Number((calculatedTotal / (1 + GST_RATE)).toFixed(2));
-        const calculatedGST = Number((calculatedTotal - preTaxTotal).toFixed(2));
-        // Only use backendTaxAmount if it matches our calculated GST for tax-inclusive
-        // Otherwise, use calculated GST to ensure it's correct for this mode
-        summaryTaxes = Math.abs(backendTaxAmount - calculatedGST) < 0.01
-          ? Number(backendTaxAmount.toFixed(2))
-          : calculatedGST;
-        // Only use backendTotalAmount if it's close to our calculated inclusive total
-        // Otherwise, use calculated value to ensure consistency
-        summaryTotal = Math.abs(backendTotalAmount - calculatedTotal) < 0.01
-          ? Number(backendTotalAmount.toFixed(2))
-          : calculatedTotal;
-        
-        console.log('🔍 GST-INCLUSIVE: Using backend values with GST recalculation (CRITICAL FIX)', {
-          backendBaseAmount,
-          backendTaxAmount,
-          backendTotalAmount,
-          summaryBaseFare,
-          calculatedGST,
-          summaryTaxes,
-          summaryTotal,
-          baseFare,
-          summaryExtras,
-          calculatedInclusiveTotal: calculatedTotal,
-          preTaxTotal,
-          usingCalculatedGST: Math.abs(backendTaxAmount - calculatedGST) >= 0.01,
-          usingCalculatedTotal: Math.abs(backendTotalAmount - calculatedTotal) >= 0.01,
-          note: 'Tax-inclusive: GST extracted from inclusive total (should be different from tax-exclusive GST)'
-        });
-      } else {
-        // Fallback: Calculate if backend values not available
-        const inclusiveTotal = baseFare + summaryExtras;
-        const total = Number(inclusiveTotal.toFixed(2));
-        
-        let totalGST: number;
-        let preTaxTotal: number;
-        
-        if (backendTaxAmount !== null) {
-          totalGST = Number(backendTaxAmount.toFixed(2));
-          preTaxTotal = Number((total - totalGST).toFixed(2));
-        } else {
-          preTaxTotal = Number((total / (1 + GST_RATE)).toFixed(2));
-          totalGST = Number((total - preTaxTotal).toFixed(2));
-        }
-        
-        const baseFareInclusive = baseFare;
-        const extrasInclusive = summaryExtras;
-        const totalInclusive = baseFareInclusive + extrasInclusive;
-        
-        const preTaxBase = totalInclusive > 0 
-          ? Number(((baseFareInclusive / totalInclusive) * preTaxTotal).toFixed(2))
-          : Number((baseFareInclusive / (1 + GST_RATE)).toFixed(2));
-        
-        summaryBaseFare = preTaxBase;
-        summaryTaxes = totalGST;
-        summaryTotal = total;
-        
-        // Debug logging for GST-inclusive calculation (fallback path only)
-        console.log('🔍 GST-INCLUSIVE Summary Calculation (GST calculated on each component):', {
-          baseFareInclusive,
-          extrasInclusive,
-          totalInclusive: total,
-          preTaxBase,
-          preTaxTotal,
-          totalGST,
-          summaryBaseFare,
-          summaryTaxes,
-          summaryTotal,
-          bookingTotalAmount: booking.totalAmount,
-          note: 'GST-inclusive: Using baseFare+extras (₹14,000) as GST-inclusive total, NOT booking.totalAmount (₹16,520) which might be GST-exclusive'
-        });
-      }
-    } else if (gstEnabled && !includeTax) {
-      // GST-EXCLUSIVE: Base fare + GST on top (matches backend logic)
-      // CRITICAL: When we have stored invoice values from get-invoice (reopen), use them directly.
-      // This prevents recalculation that ignores tolls/extra charges and ensures persistence.
-      const hasStoredInvoice =
-        backendBaseAmount != null &&
-        backendBaseAmount > 0 &&
-        backendTaxAmount != null &&
-        backendTaxAmount >= 0 &&
-        backendTotalAmount != null &&
-        backendTotalAmount > 0;
-      // Use effectiveSummaryExtras (derives extras from total - base - tax when missing) so consistency passes on reopen
-      const extrasForCheck = effectiveSummaryExtras;
-      const storedTotalConsistent =
-        hasStoredInvoice &&
-        Math.abs(backendTotalAmount - (backendBaseAmount + extrasForCheck + backendTaxAmount)) < 0.02;
-
-      if (hasStoredInvoice && storedTotalConsistent) {
-        // Use stored values directly - no recalculation (fixes reopen showing wrong GST)
-        summaryBaseFare = Number(backendBaseAmount.toFixed(2));
-        summaryTaxes = Number(backendTaxAmount.toFixed(2));
-        summaryTotal = Number(backendTotalAmount.toFixed(2));
-      } else {
-        // No stored invoice or inconsistent - calculate: taxableAmount = base + extras, GST = taxableAmount * 18%
-        const baseCandidate = exclusiveBaseFallback > 0 ? exclusiveBaseFallback : (backendBaseAmount ?? baseFare);
-        const base = Number(Math.max(0, baseCandidate).toFixed(2));
-        const subtotal = Number((base + summaryExtras).toFixed(2));
-        const calculatedTaxes = Number((subtotal * GST_RATE).toFixed(2));
-        const taxes =
-          backendTaxAmount != null && Math.abs(backendTaxAmount - calculatedTaxes) < 0.01
-            ? Number(backendTaxAmount.toFixed(2))
-            : calculatedTaxes;
-        const calculatedTotal = Number((subtotal + taxes).toFixed(2));
-        const total =
-          backendTotalAmount != null && Math.abs(backendTotalAmount - calculatedTotal) < 0.01
-            ? backendTotalAmount
-            : calculatedTotal;
-
-        summaryBaseFare = base;
-        summaryTaxes = taxes;
-        summaryTotal = Number(total.toFixed(2));
-
-      console.log('🔍 GST-EXCLUSIVE Summary Calculation', {
-        hasStoredInvoice,
-        storedTotalConsistent,
-        backendBaseAmount,
-        backendTaxAmount,
-        backendTotalAmount,
-        extrasForCheck,
-        summaryBaseFare,
-        summaryTaxes,
-        summaryTotal
-      });
-      }
+      const inclusiveTotal = baseFare + summaryExtras;
+      const total = Number(inclusiveTotal.toFixed(2));
+      const preTaxTotal = Number((total / (1 + GST_RATE)).toFixed(2));
+      const totalGST = Number((total - preTaxTotal).toFixed(2));
+      const totalInclusive = baseFare + summaryExtras;
+      const preTaxBase = totalInclusive > 0
+        ? Number(((baseFare / totalInclusive) * preTaxTotal).toFixed(2))
+        : Number((baseFare / (1 + GST_RATE)).toFixed(2));
+      summaryBaseFare = Number(Math.max(0, preTaxBase).toFixed(2));
+      summaryTaxes = totalGST;
+      summaryTotal = total;
+    } else if (effectiveGstEnabled && !effectiveIncludeTax) {
+      const base = Number(Math.max(0, exclusiveBaseFallback || baseFare).toFixed(2));
+      const subtotal = Number((base + summaryExtras).toFixed(2));
+      const taxes = Number((subtotal * GST_RATE).toFixed(2));
+      summaryBaseFare = base;
+      summaryTaxes = taxes;
+      summaryTotal = Number((subtotal + taxes).toFixed(2));
     } else {
-      // GST DISABLED
-      summaryBaseFare = backendBaseAmount ?? Math.max(0, fallbackBaseFare);
+      summaryBaseFare = Math.max(0, fallbackBaseFare);
       summaryTaxes = 0;
-      summaryTotal = backendTotalAmount ?? Number((summaryBaseFare + summaryExtras).toFixed(2));
+      summaryTotal = Number((summaryBaseFare + summaryExtras).toFixed(2));
     }
 
     return { summaryBaseFare, summaryTaxes, summaryTotal };
-  }, [effectiveGstEnabled, effectiveIncludeTax, baseFare, summaryExtras, effectiveSummaryExtras, GST_RATE, backendBaseAmount, exclusiveBaseFallback, backendTaxAmount, backendCgstAmount, backendSgstAmount, backendTotalAmount, fallbackBaseFare, booking.totalAmount]);
+  }, [effectiveGstEnabled, effectiveIncludeTax, baseFare, summaryExtras, GST_RATE, backendBaseAmount, backendTaxAmount, backendTotalAmount, exclusiveBaseFallback, fallbackBaseFare]);
 
   const { summaryBaseFare, summaryTaxes, summaryTotal } = summaryValues;
   
@@ -1034,6 +931,7 @@ export function BookingInvoice({
               const fetchedIsIGST = !!data.invoice.is_igst;
               
               onInvoiceStateChange({
+                ...invoiceState,
                 gstEnabled: fetchedGstEnabled,
                 gstDetails: fetchedGstDetails,
                 customInvoiceNumber: fetchedInvoiceNumber,
@@ -1054,10 +952,12 @@ export function BookingInvoice({
             const prefillGstDetails = (booking as any).gstDetails || null;
             if (!localStorage.getItem(`invoice-settings-${booking.id}`) && (prefillGstEnabled || prefillGstDetails)) {
               onInvoiceStateChange({
+                ...invoiceState,
                 gstEnabled: prefillGstEnabled,
                 isIGST: false,
                 includeTax: true,
                 customInvoiceNumber: '',
+                adminNotes: (invoiceState?.adminNotes as string) || (booking as any).adminNotes || '',
                 gstDetails: {
                   gstNumber: prefillGstDetails?.gstNumber || '',
                   companyName: prefillGstDetails?.companyName || '',
@@ -1197,15 +1097,20 @@ export function BookingInvoice({
       console.log('GST Settings:', { gstEnabled, isIGST, includeTax, includeTaxType: typeof includeTax });
       // #endregion
       
-      // CRITICAL: Pass the locked base fare to prevent backend recalculation
+      // When exclusive: quotedBaseFare overrides - use for different total. When inclusive: lockedBaseFare ignored.
+      const quotedBase = !includeTax && gstDetails.quotedBaseFare
+        ? parseFloat(String(gstDetails.quotedBaseFare).trim())
+        : null;
       const extendedGstDetails = gstEnabled ? {
         ...gstDetails,
-        lockedBaseFare: baseFare,  // Include the locked base fare
-        originalTotalAmount: booking.totalAmount, // For comparison
-        originalFare: booking.fare, // Original fare field
-        extraChargesTotal: extraChargesTotal // Extra charges
+        lockedBaseFare: baseFare,
+        quotedBaseFare: quotedBase ?? undefined,
+        originalTotalAmount: booking.totalAmount,
+        originalFare: booking.fare,
+        extraChargesTotal: extraChargesTotal
       } : {
         lockedBaseFare: baseFare,
+        quotedBaseFare: quotedBase ?? undefined,
         originalTotalAmount: booking.totalAmount,
         originalFare: booking.fare,
         extraChargesTotal: extraChargesTotal
@@ -1227,7 +1132,8 @@ export function BookingInvoice({
         extendedGstDetails, 
         isIGST,
         includeTax,
-        customInvoiceNumber.trim() || undefined
+        customInvoiceNumber.trim() || undefined,
+        (adminNotes || '').trim() || undefined
       );
       
       console.log('📨 Invoice generation result received:', result);
@@ -1417,6 +1323,9 @@ export function BookingInvoice({
       params.append('gstNumber', gstDetails.gstNumber);
       params.append('companyName', gstDetails.companyName);
       params.append('companyAddress', gstDetails.companyAddress || '');
+    }
+    if ((adminNotes || '').trim()) {
+      params.append('adminNotes', (adminNotes || '').trim());
     }
     
     return getApiUrl(`${endpoint}?${params.toString()}`);
@@ -1687,6 +1596,28 @@ export function BookingInvoice({
             {!gstEnabled && " (Enable GST first)"}
           </Label>
         </div>
+
+        {gstEnabled && !includeTax && (
+          <div>
+            <Label htmlFor="quotedBaseFare">Quoted base fare (excl. tax)</Label>
+            <Input
+              id="quotedBaseFare"
+              name="quotedBaseFare"
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="e.g. 6214 - enter to get different total"
+              value={gstDetails.quotedBaseFare ?? ''}
+              onChange={(e) => onInvoiceStateChange({
+                ...invoiceState,
+                gstDetails: { ...gstDetails, quotedBaseFare: e.target.value }
+              })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Optional. Enter the base fare you quoted (before GST) to show a different total than inclusive mode.
+            </p>
+          </div>
+        )}
         
         {gstEnabled && (
           <div className="space-y-3" key={`gst-section-${forceRenderKey}`}>
@@ -1743,6 +1674,17 @@ export function BookingInvoice({
             </RadioGroup>
            </div>
          )}
+         <div>
+           <Label htmlFor="adminNotes">Admin Notes</Label>
+           <textarea
+             id="adminNotes"
+             className="mt-1 w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+             value={adminNotes || ''}
+             onChange={(e) => onInvoiceStateChange({...invoiceState, adminNotes: e.target.value})}
+             placeholder="Optional - Notes shown at bottom of invoice (e.g. Driver night allowance included.)"
+           />
+           <p className="text-xs text-gray-500 mt-1">Only shown when not empty. Appears above the footer.</p>
+         </div>
          <div className="space-y-2">
            <Button 
              variant="outline" 

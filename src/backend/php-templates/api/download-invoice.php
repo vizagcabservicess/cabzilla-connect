@@ -130,6 +130,7 @@ try {
     $includeTax = isset($_GET['includeTax']) ? filter_var($_GET['includeTax'], FILTER_VALIDATE_BOOLEAN) : true;
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
     $lockedBaseFare = isset($_GET['lockedBaseFare']) ? floatval($_GET['lockedBaseFare']) : null;
+    $requestAdminNotes = isset($_GET['adminNotes']) && is_string($_GET['adminNotes']) ? trim($_GET['adminNotes']) : null;
     
     // Check for direct download flag - special handling for ensuring proper download
     $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
@@ -379,28 +380,63 @@ try {
     // Final total
     $grandTotal = round($fareTotalWithTax, 2);
 
-    // Instead of searching for CSS, use inline CSS for reliability
+    // HSN Code - default 996423, configurable via admin_settings
+    $hsnCode = '996423';
+    try {
+        $hsnRes = @$conn->query("SELECT setting_value FROM admin_settings WHERE setting_key = 'invoice_hsn_code' AND setting_value != '' LIMIT 1");
+        if ($hsnRes && $hsnRes->num_rows > 0) {
+            $hsnCode = trim($hsnRes->fetch_assoc()['setting_value'] ?? '996423');
+        }
+    } catch (Exception $e) {}
+    $gstinDisplay = !empty($gstNumber) ? $gstNumber : '37AATFV5320K1ZL';
+
+    // Booking metrics - from DB only
+    $noOfHours = '--';
+    if (!empty($booking['hourly_package']) && preg_match('/(\d+)hr/i', $booking['hourly_package'], $m)) {
+        $noOfHours = $m[1];
+    }
+    if (isset($booking['no_of_hours']) && $booking['no_of_hours'] !== '' && $booking['no_of_hours'] !== null) {
+        $noOfHours = $booking['no_of_hours'];
+    }
+    if (isset($booking['estimated_hours']) && $booking['estimated_hours'] !== '' && $booking['estimated_hours'] !== null) {
+        $noOfHours = $booking['estimated_hours'];
+    }
+    $noOfKm = (isset($booking['distance']) && $booking['distance'] !== '' && $booking['distance'] !== null && (float)$booking['distance'] > 0)
+        ? number_format((float)$booking['distance'], 0) : '--';
+
+    // Admin notes: request (invoice-level) > booking.admin_notes > admin_settings
+    $adminNotes = '';
+    if ($requestAdminNotes !== null && $requestAdminNotes !== '') {
+        $adminNotes = $requestAdminNotes;
+    } elseif (isset($booking['admin_notes']) && trim($booking['admin_notes'] ?? '') !== '') {
+        $adminNotes = trim($booking['admin_notes']);
+    } else {
+        try {
+            $notesRes = @$conn->query("SELECT setting_value FROM admin_settings WHERE setting_key = 'invoice_admin_notes' AND setting_value != '' LIMIT 1");
+            if ($notesRes && $notesRes->num_rows > 0) {
+                $adminNotes = trim($notesRes->fetch_assoc()['setting_value'] ?? '');
+            }
+        } catch (Exception $e) {}
+    }
+
+    // Compact CSS for single-page PDF - fit within A4 page margins
     $cssContent = "
+    * { box-sizing: border-box; }
     body { 
         font-family: DejaVu Sans, Arial, sans-serif; 
-        line-height: 1.4; 
+        line-height: 1.3; 
         margin: 0; 
-        padding: 40px 20px; 
+        padding: 4px; 
         color: #333;
-        font-size: 9pt;
-        background-color: #f8f9fa;
-        text-align: center;
+        font-size: 11px;
     }
     .invoice-container { 
-        width: 800px; 
-        max-width: 800px; 
+        width: 100%;
+        max-width: 190mm;
         margin: 0 auto; 
-        padding: 30px 40px;
-        background-color: #ffffff;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        border-radius: 6px;
-        text-align: left;
-        display: inline-block;
+        padding: 6px;
+        page-break-inside: avoid;
+        overflow: hidden;
     }
     .invoice-header { 
         width: 100%; 
@@ -415,45 +451,20 @@ try {
     .company-info { 
         text-align: right; 
     }
-    h1 { 
-        font-size: 18pt; 
-        margin: 0 0 5px 0; 
-    }
-    h2 { 
-        font-size: 14pt; 
-        margin: 0 0 5px 0; 
-    }
-    h3 { 
-        font-size: 11pt; 
-        margin: 10px 0 5px 0; 
-    }
-    .section-title {
-        margin-bottom: 5px;
-        padding-bottom: 3px;
-        border-bottom: 1px solid #eee;
-    }
-    .customer-section { 
-        margin-bottom: 10px; 
-    }
-    .customer-section > div {
-        padding-right: 15px;
-    }
-    p { 
-        margin: 3px 0; 
-    }
-    .fare-table { 
-        width: 100%; 
-        border-collapse: collapse; 
-        margin: 10px 0; 
-    }
-    .fare-table th, .fare-table td { 
-        padding: 5px; 
-        text-align: left; 
-        border-bottom: 1px solid #eee; 
-    }
-    .fare-table th:last-child, .fare-table td:last-child { 
-        text-align: right; 
-    }
+    h1 { font-size: 18pt; margin: 0 0 5px 0; }
+    h2 { font-size: 14pt; margin: 0 0 5px 0; }
+    h3 { font-size: 11px; margin: 0 0 4px 0; }
+    .section-title { margin: 0 0 4px 0; padding-bottom: 2px; border-bottom: 1px solid #ddd; font-size: 11px; font-weight: bold; }
+    .two-col { width: 100%; margin-bottom: 8px; table-layout: fixed; }
+    .two-col td { width: 50%; vertical-align: top; padding: 0 6px 0 0; word-wrap: break-word; overflow-wrap: break-word; }
+    .compact-p { margin: 2px 0; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
+    .admin-notes { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 12px; page-break-inside: avoid; }
+    .admin-notes .section-title { font-weight: 600; margin-bottom: 4px; }
+    .notes-content { color: #444; line-height: 1.4; word-break: break-word; }
+    .fare-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11px; table-layout: fixed; }
+    .fare-table th, .fare-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #eee; word-wrap: break-word; overflow-wrap: break-word; }
+    .fare-table th:first-child, .fare-table td:first-child { width: auto; }
+    .fare-table th:last-child, .fare-table td:last-child { width: 80px; text-align: right; word-wrap: normal; }
     .total-row { 
         font-weight: bold; 
         background-color: #f9f9f9; 
@@ -491,27 +502,10 @@ try {
         text-align: right;
     }
     
-    /* Responsive design */
-    @media (max-width: 900px) {
-        body {
-            padding: 20px 10px;
-        }
-        .invoice-container {
-            width: 100%;
-            max-width: 100%;
-            padding: 20px 15px;
-            box-shadow: none;
-            border-radius: 0;
-        }
-    }
-    
-    @media (max-width: 480px) {
-        body {
-            padding: 10px 5px;
-        }
-        .invoice-container {
-            padding: 15px 10px;
-        }
+    @page { size: A4; margin: 8mm; }
+    @media print {
+        body { margin: 0; padding: 4px; }
+        .invoice-container { page-break-inside: avoid; }
     }
     ";
 
@@ -528,67 +522,51 @@ try {
     </head>
     <body>
         <div class="invoice-container">
-            <div style="border: 1px solid #000; padding: 5px; margin-bottom: 15px;">
-                <table width="100%" cellpadding="2" cellspacing="0">
+            <div style="border: 1px solid #000; padding: 4px; margin-bottom: 8px;">
+                <table width="100%" cellpadding="2" cellspacing="0" style="font-size:11px; table-layout:fixed;">
                     <tr>
-                        <td width="40%" valign="top">
-                            <p><strong>Seller/Service Provider:</strong></p>
-                            <p><strong>VIZAG TAXI HUB</strong></p>
-                            <p>44-66-22/4, Singalamma Puram, Kailasapuram,<br>
-                            Visakhapatnam, Andhra Pradesh - 530024</p>' . 
-                            ($gstEnabled ? '<p><strong>GSTIN: 37AATFV5320K1ZL</strong></p>' : '') . '
+                        <td width="38%" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
+                            <p class="compact-p"><strong>Seller/Service Provider:</strong></p>
+                            <p class="compact-p"><strong>VIZAG TAXI HUB</strong></p>
+                            <p class="compact-p">44-66-22/4, Singalamma Puram, Kailasapuram, Visakhapatnam, Andhra Pradesh - 530024</p>' .
+                            ($gstEnabled ? '<p class="compact-p"><strong>GSTIN: '.htmlspecialchars($gstinDisplay).'</strong></p><p class="compact-p"><strong>HSN Code: '.$hsnCode.'</strong></p>' : '') . '
                         </td>
-                        
-                        <td width="20%" align="center" valign="top">
-                            <h2>' . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . '</h2>
-                            <p>Original for Recipient</p>
-                        </td>
-                        
-                        <td width="40%" align="right" valign="top">
-                            <p><strong>Invoice #:</strong> '.$invoiceNumber.'</p>
-                            <p><strong>Date:</strong> '.date('d M Y', strtotime($currentDate)).'</p>
-                            <p><strong>Booking #:</strong> '.($booking['booking_number'] ?? 'N/A').'</p>
+                        <td width="24%" align="center" valign="top"><h2 style="margin:0;font-size:14px;">'.($gstEnabled ? 'TAX INVOICE' : 'INVOICE').'</h2><p class="compact-p">Original for Recipient</p></td>
+                        <td width="38%" align="right" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
+                            <p class="compact-p"><strong>Invoice #:</strong> '.$invoiceNumber.'</p>
+                            <p class="compact-p"><strong>Date:</strong> '.date('d M Y', strtotime($currentDate)).'</p>
+                            <p class="compact-p"><strong>Booking #:</strong> '.($booking['booking_number'] ?? 'N/A').'</p>
                         </td>
                     </tr>
                 </table>
             </div>
-            
-            <div style="margin-bottom: 20px;">
-                <table width="100%" cellpadding="5" cellspacing="0">
-                    <tr>
-                        <td width="50%" valign="top">
-                            <h3>Customer Details</h3>
-                            <p><strong>Name:</strong> '.($booking['passenger_name'] ?? 'N/A').'</p>
-                            <p><strong>Phone:</strong> '.($booking['passenger_phone'] ?? 'N/A').'</p>
-                            <p><strong>Email:</strong> '.($booking['passenger_email'] ?? 'N/A').'</p>
-                        </td>
-                        
-                        <td width="50%" valign="top">
-                            <h3>Trip Summary</h3>
-                            <p><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').
-                            (isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
-                            <p><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                            <p><strong>Vehicle:</strong> '.($booking['cab_type'] ?? 'N/A').'</p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <div class="trip-details">
-                    <h3 class="section-title">Trip Details</h3>
-                    <p><strong>Pickup:</strong> '.($booking['pickup_location'] ?? 'N/A').'</p>
-                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p><strong>Drop:</strong> '.$booking['drop_location'].'</p>' : '').'
-                    <p><strong>Pickup Time:</strong> '.(isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                </div>';
 
-    if ($gstEnabled && !empty($gstNumber)) {
-        $content .= '
-                <div class="gst-details" style="margin: 20px 0; padding: 10px; border: 1px solid #eee; background: #f9f9f9;">
+            <table class="two-col" width="100%" style="margin-bottom:8px;"><tr>
+                <td><div style="width:100%;"><h3 class="section-title">Customer Details</h3>
+                    <p class="compact-p"><strong>Name:</strong> '.htmlspecialchars($booking['passenger_name'] ?? 'N/A').'</p>
+                    <p class="compact-p"><strong>Phone:</strong> '.htmlspecialchars($booking['passenger_phone'] ?? 'N/A').'</p>
+                    <p class="compact-p"><strong>Email:</strong> '.htmlspecialchars($booking['passenger_email'] ?? 'N/A').'</p></div></td>
+                <td><div style="width:100%;"><h3 class="section-title">Trip Summary</h3>
+                    <p class="compact-p"><strong>Trip Type:</strong> '.ucfirst($booking['trip_type'] ?? 'N/A').(isset($booking['trip_mode']) && !empty($booking['trip_mode']) ? ' ('.ucfirst($booking['trip_mode']).')' : '').'</p>
+                    <p class="compact-p"><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
+                    <p class="compact-p"><strong>Vehicle:</strong> '.htmlspecialchars($booking['cab_type'] ?? 'N/A').'</p>
+                    <p class="compact-p"><strong>No. of Hours:</strong> '.$noOfHours.'</p>
+                    <p class="compact-p"><strong>No. of Kilometers:</strong> '.$noOfKm.'</p></div></td>
+            </tr></table>
+
+            <table class="two-col" width="100%" style="margin-bottom:8px;"><tr>
+                <td><div style="width:100%;"><h3 class="section-title">Trip Details</h3>
+                    <p class="compact-p"><strong>Pickup:</strong> '.htmlspecialchars($booking['pickup_location'] ?? 'N/A').'</p>
+                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p class="compact-p"><strong>Drop:</strong> '.htmlspecialchars($booking['drop_location']).'</p>' : '').'
+                    <p class="compact-p"><strong>Pickup Time:</strong> '.(isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A').'</p></div></td>
+                <td><div style="width:100%;">'.($gstEnabled && !empty($gstNumber) ? '
                     <h3 class="section-title">GST Details</h3>
-                    <p><strong>GST Number:</strong> '.htmlspecialchars($gstNumber).'</p>
-                    <p><strong>Company Name:</strong> '.htmlspecialchars($companyName).'</p>
-                    '.(!empty($companyAddress) ? '<p><strong>Company Address:</strong> '.htmlspecialchars($companyAddress).'</p>' : '').'
-                </div>';
-    }
+                    <p class="compact-p"><strong>GST Number:</strong> '.htmlspecialchars($gstNumber).'</p>
+                    <p class="compact-p"><strong>Company Name:</strong> '.htmlspecialchars($companyName).'</p>
+                    '.(!empty($companyAddress) ? '<p class="compact-p"><strong>Company Address:</strong> '.htmlspecialchars($companyAddress).'</p>' : '').'
+                ' : '').'</div></td>
+            </tr></table>';
+
 
     $content .= '
                 <h3 class="section-title">Fare Breakdown</h3>
@@ -646,16 +624,22 @@ try {
 
     if ($gstEnabled) {
         $content .= '
-                <p class="tax-note" style="font-size: 0.9em; color: #666;">This invoice includes GST as per applicable rates. '.
-                ($isIGST ? 'IGST 18%' : 'CGST 9% + SGST 9%').' has been applied.</p>';
+                <p class="tax-note" style="font-size: 9px; color: #666;">This invoice includes GST as per applicable rates. '.($isIGST ? 'IGST 18%' : 'CGST 9% + SGST 9%').' has been applied.</p>';
+    }
+
+    if ($adminNotes !== '') {
+        $content .= '
+            <div class="admin-notes">
+                <div class="section-title">Admin Notes</div>
+                <div class="notes-content">'.nl2br(htmlspecialchars($adminNotes)).'</div>
+            </div>';
     }
 
     $content .= '
             </div>
-            
-            <div class="footer">
+            <div class="footer" style="margin-top:10px;font-size:9px;">
                 <p>Thank you for choosing Vizag Taxi Hub</p>
-                <p>For inquiries, please contact: info@vizagtaxihub.com | +91 9966363662</p>
+                <p>For inquiries: info@vizagtaxihub.com | +91 9966363662</p>
                 <p>Generated on: '.date('d M Y H:i:s').'</p>
             </div>
         </div>

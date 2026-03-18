@@ -20,6 +20,14 @@ let cachedVehicles: {
 let lastSuccessfulRefresh = 0;
 let pendingRefreshPromise: Promise<CabType[]> | null = null;
 
+/** Normalize API vehicle data: ensure pricePerKm from price_per_km, consistent field names */
+function normalizeVehicles(vehicles: CabType[]): CabType[] {
+  return vehicles.map((v) => {
+    const pricePerKm = v.pricePerKm ?? (v as any).price_per_km;
+    return { ...v, pricePerKm };
+  });
+}
+
 // Add throttling for cache clearing to prevent cascading refreshes
 let lastCacheClearTime = 0;
 const CACHE_CLEAR_THROTTLE = 3000; // 3 seconds minimum between cache clears
@@ -221,15 +229,15 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
       }
     }
     
-    // If we have vehicles from an API, cache them and return
+    // If we have vehicles from an API, normalize and cache them
     if (vehicles && vehicles.length > 0) {
-      // Cache the result
-      cachedVehicles.api = { data: vehicles, timestamp: Date.now() };
+      const normalized = normalizeVehicles(vehicles);
+      cachedVehicles.api = { data: normalized, timestamp: Date.now() };
       lastSuccessfulRefresh = Date.now();
       
       // Cache in localStorage too
       try {
-        localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
+        localStorage.setItem('cachedVehicles', JSON.stringify(normalized));
         localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
       } catch (e) {
         console.warn('Could not cache vehicles in localStorage:', e);
@@ -237,20 +245,20 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
       
       // Cache by tripType for faster access
       try {
-        localStorage.setItem('cabOptions_all', JSON.stringify(vehicles));
+        localStorage.setItem('cabOptions_all', JSON.stringify(normalized));
         localStorage.setItem('cabOptions_all_timestamp', Date.now().toString());
       } catch (e) {
         console.warn('Could not cache by trip type:', e);
       }
       
-      console.log(`Refreshed and cached ${vehicles.length} vehicles`);
+      console.log(`Refreshed and cached ${normalized.length} vehicles`);
       
       // Notify listeners
       window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-        detail: { count: vehicles.length, source: 'api', timestamp: Date.now() }
+        detail: { count: normalized.length, source: 'api', timestamp: Date.now() }
       }));
       
-      return vehicles;
+      return normalized;
     }
     
     // If direct API calls failed, try the static JSON file as a fallback

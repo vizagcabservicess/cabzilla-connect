@@ -10,7 +10,7 @@ import { getVehicleData } from '@/services/vehicleDataService';
 import { Link } from 'react-router-dom';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
+import { getVehicleUrl, getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
 
 export default function FleetPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,11 +42,19 @@ export default function FleetPage() {
     return 'other';
   }
 
-  // Helper to get price (per KM or base price)
-  function getPrice(vehicle: any) {
-    if (vehicle.pricePerKm) return `₹${vehicle.pricePerKm}`;
-    if (vehicle.basePrice) return `₹${vehicle.basePrice}`;
-    if (vehicle.price) return `₹${vehicle.price}`;
+  // Helper to get price (per KM or base price) - handles price_per_km and known fallbacks
+  function getPrice(vehicle: any): string {
+    const perKm = vehicle.pricePerKm ?? vehicle.price_per_km;
+    if (perKm != null && perKm > 0) return `₹${Number(perKm)}`;
+    if (vehicle.basePrice && vehicle.basePrice > 0) return `₹${vehicle.basePrice}`;
+    if (vehicle.price && vehicle.price > 0) return `₹${vehicle.price}`;
+    const name = String(vehicle.name || '').toLowerCase();
+    if (name.includes('glanza') || name.includes('toyota glanza')) return '₹14';
+    if (name.includes('swift') || name.includes('dzire') || name.includes('amaze')) return '₹14';
+    if (name.includes('ertiga')) return '₹18';
+    if (name.includes('innova')) return '₹20';
+    if (name.includes('tempo')) return '₹35';
+    if (name.includes('luxury')) return '₹25';
     return '₹--';
   }
 
@@ -181,20 +189,29 @@ export default function FleetPage() {
                             {getCapacity(vehicle)}
                           </Badge>
                         </div>
-                        {/* Vehicle Image or Icon */}
-                        {vehicle.image && typeof vehicle.image === 'string' && vehicle.image.trim() !== '' ? (
-                          <img
-                            src={vehicle.image}
-                            alt={vehicle.name}
-                            className="absolute inset-0 w-full h-full object-cover rounded-2xl"
-                            style={{ zIndex: 1 }}
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-20 h-20 md:w-24 md:h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm z-10">
-                            <Car className="h-10 w-10 md:h-12 md:w-12 text-gray-700" />
-                          </div>
-                        )}
+                        {/* Vehicle Image or Icon - use getVehicleImageUrl for absolute URLs and fallbacks */}
+                        {(() => {
+                          const imgUrl = getVehicleImageUrl(vehicle);
+                          const placeholder = (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-200/80 rounded-2xl z-0">
+                              <Car className="h-16 w-16 md:h-20 md:w-20 text-gray-400" />
+                            </div>
+                          );
+                          if (imgUrl) {
+                            return (
+                              <>
+                                <img
+                                  src={imgUrl}
+                                  alt={vehicle.name}
+                                  className="absolute inset-0 w-full h-full object-cover rounded-2xl z-10"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                                {placeholder}
+                              </>
+                            );
+                          }
+                          return placeholder;
+                        })()}
                         <div className="absolute bottom-4 left-4 flex items-center text-gray-700">
                           <MapPin className="h-4 w-4 mr-1" />
                           <span className="text-sm font-medium">Visakhapatnam</span>

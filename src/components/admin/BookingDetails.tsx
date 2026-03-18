@@ -48,6 +48,7 @@ export function BookingDetails({
         if (storedEmpty && bookingHasGst) {
           return {
             ...parsed,
+            adminNotes: parsed?.adminNotes ?? '',
             gstEnabled: Boolean((booking as any).gstEnabled),
             gstDetails: {
               gstNumber: (booking as any).gstDetails?.gstNumber || '',
@@ -56,7 +57,7 @@ export function BookingDetails({
             }
           };
         }
-        return parsed;
+        return { adminNotes: '', ...parsed };
       }
     } catch (error) {
       console.error('Error loading stored invoice settings:', error);
@@ -67,6 +68,7 @@ export function BookingDetails({
       isIGST: false,
       includeTax: true,
       customInvoiceNumber: '',
+      adminNotes: (booking as any).adminNotes || '',
       gstDetails: {
         gstNumber: (booking as any).gstDetails?.gstNumber || '',
         companyName: (booking as any).gstDetails?.companyName || '',

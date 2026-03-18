@@ -207,37 +207,44 @@ function calculateGstBreakdown(array $input): array
     } else {
         /**
          * GST-EXCLUSIVE MODE
-         * Base fare is pre-tax. GST must be added on top.
-         * Formula:
-         *  - GST Amount = (Base + Extras) × 18%
-         *  - Total      = Base + Extras + GST
+         * Base + extras are the QUOTED pre-tax amounts. Total = (base + extras) * 1.18.
+         * When baseHint (from fare or lockedBaseFare) exists: use it as base, CALCULATE total.
+         * When baseHint is 0: fall back to deriving from originalTotal (same as inclusive).
+         * This produces DIFFERENT results from inclusive when base differs from (total/1.18 - extras).
          */
         if ($baseHint > 0) {
+            // EXCLUSIVE: Use quoted base, calculate total = (base + extras) * 1.18
             $base = $baseHint;
-        } elseif ($originalTotal > 0) {
-            $base = max(0, $originalTotal - $extraCharges);
-        } elseif ($totalHint > 0) {
-            // totalHint might include GST if it came from a previous invoice
-            $extractedSubtotal = round($totalHint / (1 + $gstRate), 2);
-            $base = max(0, $extractedSubtotal - $extraCharges);
+            $taxableSubtotal = round($base + $extraCharges, 2);
+            $taxAmount = round($taxableSubtotal * $gstRate, 2);
+            $finalTotal = round($taxableSubtotal + $taxAmount, 2);
+            logInvoiceError("GST-exclusive: using baseHint (quoted base), calculated total", [
+                'base' => $base,
+                'extraCharges' => $extraCharges,
+                'taxableSubtotal' => $taxableSubtotal,
+                'taxAmount' => $taxAmount,
+                'finalTotal' => $finalTotal,
+                'formula' => '(base+extras)*1.18'
+            ]);
         } else {
-            $base = 0;
+            // No baseHint: derive from originalTotal (same as inclusive)
+            $inclusiveTotal = ($originalTotal > 0) ? $originalTotal : (($totalHint > 0) ? $totalHint : 0);
+            $inclusiveTotal = round($inclusiveTotal, 2);
+            if ($inclusiveTotal > 0) {
+                $taxableSubtotal = round($inclusiveTotal / (1 + $gstRate), 2);
+                $base = max(0, round($taxableSubtotal - $extraCharges, 2));
+                $taxAmount = round($inclusiveTotal - $taxableSubtotal, 2);
+                $finalTotal = $inclusiveTotal;
+            } else {
+                $base = 0;
+                $taxableSubtotal = $extraCharges;
+                $taxAmount = round($taxableSubtotal * $gstRate, 2);
+                $finalTotal = round($taxableSubtotal + $taxAmount, 2);
+            }
+            logInvoiceError("GST-exclusive: no baseHint, derived from originalTotal", [
+                'base' => $base, 'extraCharges' => $extraCharges, 'finalTotal' => $finalTotal
+            ]);
         }
-
-        $taxableSubtotal = round($base + $extraCharges, 2);
-        $taxAmount = round($taxableSubtotal * $gstRate, 2);
-        $finalTotal = round($taxableSubtotal + $taxAmount, 2);
-
-        logInvoiceError("GST-exclusive breakdown", [
-            'base' => $base,
-            'extraCharges' => $extraCharges,
-            'taxableSubtotal' => $taxableSubtotal,
-            'taxAmount' => $taxAmount,
-            'finalTotal' => $finalTotal,
-            'baseHint' => $baseHint,
-            'originalTotal' => $originalTotal,
-            'totalHint' => $totalHint
-        ]);
     }
 
     $result['baseFare'] = round($base, 2);
@@ -335,6 +342,7 @@ try {
     $includeTax = true;
     $customInvoiceNumber = '';
     $lockedBaseFare = null;
+    $requestAdminNotes = null;
     $gstRate = 0.18; // GST rate is 18% (CGST 9% + SGST 9% or IGST 18%)
     
     // Handle both GET and POST methods
@@ -457,7 +465,10 @@ try {
                 'lockedBaseFare' => $lockedBaseFare
             ]);
         }
-    } 
+        if (isset($data['adminNotes']) && is_string($data['adminNotes'])) {
+            $requestAdminNotes = trim($data['adminNotes']);
+        }
+    }
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (isset($_GET['id'])) {
             $bookingId = (int)$_GET['id'];
@@ -490,6 +501,9 @@ try {
         
         if (isset($_GET['lockedBaseFare'])) {
             $lockedBaseFare = floatval($_GET['lockedBaseFare']);
+        }
+        if (isset($_GET['adminNotes']) && is_string($_GET['adminNotes'])) {
+            $requestAdminNotes = trim($_GET['adminNotes']);
         }
     }
     
@@ -700,26 +714,15 @@ try {
     // For tax-exclusive mode, prefer 'fare' field over 'total_amount' as fare is pre-GST
     $originalBookingTotal = null;
     
-    // For tax-exclusive mode, prefer fare field (pre-GST base fare)
-    if ($gstEnabled && !$includeTax && isset($booking['fare']) && $booking['fare'] > 0) {
-        $originalBookingTotal = (float)$booking['fare'];
-        logInvoiceError("Tax-exclusive: Using fare field as original booking total", [
-            'fare' => $originalBookingTotal,
-            'total_amount' => isset($booking['total_amount']) ? $booking['total_amount'] : 'not set',
-            'note' => 'For tax-exclusive, fare field (₹18,814) is the base fare, not total_amount'
-        ]);
-    } else {
-        // For tax-inclusive or no GST, use total_amount
-        if (isset($booking['total_amount']) && $booking['total_amount'] > 0) {
-            $originalBookingTotal = (float)$booking['total_amount'];
-        } elseif (isset($booking['totalAmount']) && $booking['totalAmount'] > 0) {
-            $originalBookingTotal = (float)$booking['totalAmount'];
-        } elseif (isset($booking['amount']) && $booking['amount'] > 0) {
-            $originalBookingTotal = (float)$booking['amount'];
-        } elseif (isset($booking['fare']) && $booking['fare'] > 0) {
-            // Fallback to fare if total_amount not available
-            $originalBookingTotal = (float)$booking['fare'];
-        }
+    // CRITICAL: originalBookingTotal = customer-paid amount (final total). Always use total_amount.
+    // For both include/exclude modes we derive base from this - ensures same output for same booking.
+    $totalAmt = $booking['total_amount'] ?? $booking['totalAmount'] ?? $booking['amount'] ?? null;
+    if ($totalAmt !== null && (float)$totalAmt > 0) {
+        $originalBookingTotal = (float)$totalAmt;
+    } elseif (isset($booking['fare']) && (float)$booking['fare'] > 0 && $totalExtraCharges >= 0) {
+        // No total_amount: assume fare is base, implied total = (base + extras) * 1.18 when GST
+        $fare = (float)$booking['fare'];
+        $originalBookingTotal = $gstEnabled ? round(($fare + $totalExtraCharges) * 1.18, 2) : ($fare + $totalExtraCharges);
     }
     
     logInvoiceError("Original booking total captured", [
@@ -732,6 +735,30 @@ try {
         'mode' => $gstEnabled ? ($includeTax ? 'TAX-INCLUSIVE' : 'TAX-EXCLUSIVE') : 'NO-GST',
         'note' => 'This is the source of truth for base fare calculation'
     ]);
+    
+    // FALLBACK: When regenerating tax-inclusive with no lockedBaseFare in request, use existing invoice base
+    // Prevents base from changing when frontend sends stale/missing lockedBaseFare
+    if ($gstEnabled && $includeTax && ($lockedBaseFare === null || $lockedBaseFare <= 0) && isset($conn) && !$demoMode) {
+        $invStmt = $conn->prepare("SELECT base_amount FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
+        if ($invStmt) {
+            $invStmt->bind_param("i", $booking['id']);
+            if ($invStmt->execute()) {
+                $invRes = $invStmt->get_result();
+                if ($invRes && $invRes->num_rows > 0) {
+                    $invRow = $invRes->fetch_assoc();
+                    $existingBase = (float)($invRow['base_amount'] ?? 0);
+                    if ($existingBase > 0) {
+                        $lockedBaseFare = $existingBase;
+                        logInvoiceError("Regeneration fallback: Using existing invoice base_amount as lockedBaseFare", [
+                            'lockedBaseFare' => $lockedBaseFare,
+                            'booking_id' => $booking['id']
+                        ]);
+                    }
+                }
+            }
+            $invStmt->close();
+        }
+    }
     
     // Calculate tax components using the new GST engine
     $baseFare = 0;
@@ -750,32 +777,33 @@ try {
     // For tax-inclusive, base fare will be calculated from original total
     $baseHint = 0;
     
-    // Priority 1: Use locked base fare if provided (user-entered value)
-    if ($lockedBaseFare !== null && $lockedBaseFare > 0) {
-        $baseHint = (float)$lockedBaseFare;
+    // CRITICAL: baseHint = pre-GST base fare (quoted amount before tax)
+    // INCLUSIVE: baseHint=0 - we always derive base from total (originalBookingTotal).
+    // EXCLUSIVE: baseHint = quoted base; total = (base+extras)*1.18.
+    //   Priority: quotedBaseFare (user entered) > booking.fare > lockedBaseFare > derive from total
+    $quotedBaseFare = null;
+    if (is_array($gstDetails) && isset($gstDetails['quotedBaseFare']) && (float)$gstDetails['quotedBaseFare'] > 0) {
+        $quotedBaseFare = (float)$gstDetails['quotedBaseFare'];
     }
-    // Priority 2: For tax-exclusive, original total IS the base fare
-    elseif ($gstEnabled && !$includeTax && $originalBookingTotal !== null && $originalBookingTotal > 0) {
-        // Tax-exclusive: Base fare = original booking total (₹4,450)
-        // GST will be applied on top of this
-        $baseHint = max(0, $originalBookingTotal - $totalExtraCharges);
-        logInvoiceError("Tax-exclusive: Using original booking total as base fare", [
-            'originalBookingTotal' => $originalBookingTotal,
-            'totalExtraCharges' => $totalExtraCharges,
-            'baseHint' => $baseHint,
-            'note' => 'Original total (₹4,450) becomes base fare, GST will be added on top'
-        ]);
-    }
-    // Priority 3: Use booking fare or base_fare
-    elseif (isset($booking['fare']) && $booking['fare'] > 0) {
+    if ($includeTax) {
+        $baseHint = 0; // Inclusive: always derive from total
+    } elseif ($quotedBaseFare !== null && $quotedBaseFare > 0) {
+        $baseHint = $quotedBaseFare;
+        logInvoiceError("EXCLUSIVE: Using quotedBaseFare (user entered)", ['baseHint' => $baseHint]);
+    } elseif (isset($booking['fare']) && (float)$booking['fare'] > 0) {
         $baseHint = (float)$booking['fare'];
-    }
-    elseif (isset($booking['base_fare']) && $booking['base_fare'] > 0) {
+        logInvoiceError("EXCLUSIVE: Using booking.fare as quoted base", ['baseHint' => $baseHint]);
+    } elseif ($lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseHint = (float)$lockedBaseFare;
+        logInvoiceError("EXCLUSIVE: Using lockedBaseFare as baseHint", ['baseHint' => $baseHint]);
+    } elseif (isset($booking['base_fare']) && (float)$booking['base_fare'] > 0) {
         $baseHint = (float)$booking['base_fare'];
-    }
-    // Priority 4: Fallback to original total
-    elseif ($originalBookingTotal !== null && $originalBookingTotal > 0) {
-        $baseHint = max(0, $originalBookingTotal - $totalExtraCharges);
+        logInvoiceError("EXCLUSIVE: Using booking.base_fare as baseHint", ['baseHint' => $baseHint]);
+    } else {
+        // No quoted base: derive from total (same result as inclusive)
+        $baseHint = ($originalBookingTotal !== null && $originalBookingTotal > 0)
+            ? max(0, round($originalBookingTotal / (1 + $gstRate), 2) - $totalExtraCharges)
+            : 0;
     }
     
     $totalHintCandidates = [];
@@ -811,6 +839,46 @@ try {
     $taxableAmount = $gstComputation['taxableSubtotal'];
     $gstOnBaseFare = $gstComputation['gstOnBaseFare'];
     $totalGstOnExtraCharges = $gstComputation['gstOnExtraCharges'];
+
+    // FALLBACK: When base is 0 but we have a positive total, derive base from total_amount
+    // This fixes bookings where total_amount exists but fare/base_fare columns are missing or zero
+    if ($baseFare <= 0 && $finalTotal > 0) {
+        $fallbackTotal = (float)(
+            $booking['total_amount'] ?? $booking['totalAmount'] ?? $booking['amount'] ?? 0
+        );
+        if ($fallbackTotal <= 0 && isset($data['gstDetails']['originalTotalAmount'])) {
+            $fallbackTotal = (float)$data['gstDetails']['originalTotalAmount'];
+        }
+        if ($fallbackTotal <= 0 && isset($data['originalTotalAmount'])) {
+            $fallbackTotal = (float)$data['originalTotalAmount'];
+        }
+        if ($fallbackTotal > 0) {
+            $taxableFromTotal = round($fallbackTotal / (1 + $gstRate), 2);
+            $baseFare = max(0, round($taxableFromTotal - $totalExtraCharges, 2));
+            $taxableAmount = round($baseFare + $totalExtraCharges, 2);
+            $taxAmount = round($taxableAmount * $gstRate, 2);
+            $finalTotal = round($taxableAmount + $taxAmount, 2);
+            if (!$isIGST) {
+                $half = round($taxAmount / 2, 2);
+                $cgstAmount = $half;
+                $sgstAmount = round($taxAmount - $half, 2);
+                $igstAmount = 0;
+            } else {
+                $igstAmount = $taxAmount;
+                $cgstAmount = 0;
+                $sgstAmount = 0;
+            }
+            $gstOnBaseFare = $taxableAmount > 0 ? round($taxAmount * ($baseFare / $taxableAmount), 2) : $taxAmount;
+            $totalGstOnExtraCharges = round($taxAmount - $gstOnBaseFare, 2);
+            logInvoiceError("Base fare was 0 - derived from total_amount", [
+                'fallbackTotal' => $fallbackTotal,
+                'derivedBaseFare' => $baseFare,
+                'totalExtraCharges' => $totalExtraCharges,
+                'taxAmount' => $taxAmount,
+                'finalTotal' => $finalTotal
+            ]);
+        }
+    }
     
     // #region agent log
     $workspaceRoot = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
@@ -844,6 +912,32 @@ try {
     @file_put_contents($logPath, $logEntry, FILE_APPEND);
     // #endregion
     
+    // CRITICAL: When tax-inclusive AND lockedBaseFare provided - match PDF logic exactly
+    // PDF uses: total = base + extras (gross), tax = (gross/1.18)*0.18 for display
+    // MUST use lockedBaseFare as base (not gstComputation base which derives from originalBookingTotal)
+    if ($gstEnabled && $includeTax && $lockedBaseFare !== null && $lockedBaseFare > 0) {
+        $baseFare = $lockedBaseFare;  // Use locked base - prevents regeneration from changing it
+        $grossForPdfMatch = round($baseFare + $totalExtraCharges, 2);
+        $taxableForPdf = round($grossForPdfMatch / (1 + $gstRate), 2);
+        $taxAmount = round($grossForPdfMatch - $taxableForPdf, 2);
+        $finalTotal = $grossForPdfMatch;
+        $grossAmount = $grossForPdfMatch;
+        $taxableAmount = $taxableForPdf;
+        if (!$isIGST) {
+            $half = round($taxAmount / 2, 2);
+            $cgstAmount = $half;
+            $sgstAmount = round($taxAmount - $half, 2);
+        }
+        logInvoiceError("TAX-INCLUSIVE with lockedBaseFare: Using PDF logic (total=base+extras)", [
+            'base_fare' => $baseFare,
+            'gross' => $grossForPdfMatch,
+            'tax_amount' => $taxAmount,
+            'final_total' => $finalTotal,
+            'cgst' => $cgstAmount,
+            'sgst' => $sgstAmount
+        ]);
+    }
+
     logInvoiceError("GST computation summary (new engine)", [
         'base_fare' => $baseFare,
         'extra_charges' => $totalExtraCharges,
@@ -1501,7 +1595,48 @@ try {
         ]);
     }
     
-    // Create HTML content for invoice
+    // HSN Code - default 996423, configurable via admin_settings
+    $hsnCode = '996423';
+    if (isset($conn) && !$demoMode) {
+        $hsnRes = @$conn->query("SELECT setting_value FROM admin_settings WHERE setting_key = 'invoice_hsn_code' AND setting_value != '' LIMIT 1");
+        if ($hsnRes && $hsnRes->num_rows > 0) {
+            $hsnCode = trim($hsnRes->fetch_assoc()['setting_value'] ?? '996423');
+        }
+    }
+    $gstinDisplay = ($gstEnabled && is_array($gstDetails) && !empty($gstDetails['gstNumber']))
+        ? htmlspecialchars($gstDetails['gstNumber']) : '37AATFV5320K1ZL';
+
+    // Booking metrics - fetch from DB only, no recalculation
+    $noOfHours = '--';
+    if (!empty($booking['hourly_package'])) {
+        if (preg_match('/(\d+)hr/i', $booking['hourly_package'], $m)) {
+            $noOfHours = $m[1];
+        }
+    }
+    if (isset($booking['no_of_hours']) && $booking['no_of_hours'] !== '' && $booking['no_of_hours'] !== null) {
+        $noOfHours = $booking['no_of_hours'];
+    }
+    if (isset($booking['estimated_hours']) && $booking['estimated_hours'] !== '' && $booking['estimated_hours'] !== null) {
+        $noOfHours = $booking['estimated_hours'];
+    }
+    $noOfKm = (isset($booking['distance']) && $booking['distance'] !== '' && $booking['distance'] !== null && (float)$booking['distance'] > 0)
+        ? number_format((float)$booking['distance'], 0) : '--';
+
+    // Admin notes: request (invoice-level) > booking.admin_notes > admin_settings (hide if empty)
+    $adminNotes = '';
+    if (isset($requestAdminNotes) && $requestAdminNotes !== '' && $requestAdminNotes !== null) {
+        $adminNotes = $requestAdminNotes;
+    } elseif (isset($booking['admin_notes']) && trim($booking['admin_notes'] ?? '') !== '') {
+        $adminNotes = trim($booking['admin_notes']);
+    } elseif (isset($conn) && !$demoMode) {
+        $notesStmt = @$conn->query("SELECT setting_value FROM admin_settings WHERE setting_key = 'invoice_admin_notes' AND setting_value != '' LIMIT 1");
+        if ($notesStmt && $notesStmt->num_rows > 0) {
+            $notesRow = $notesStmt->fetch_assoc();
+            $adminNotes = trim($notesRow['setting_value'] ?? '');
+        }
+    }
+
+    // Create HTML content for invoice - compact layout for single-page PDF
     $invoiceHtml = '<!DOCTYPE html>
 <html>
 <head>
@@ -1511,98 +1646,87 @@ try {
     <meta http-equiv="Expires" content="0">
     <title>Invoice #' . $invoiceNumber . ' - ' . time() . '</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; line-height: 1.6; }
-        .invoice-container { max-width: 800px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
-        .invoice-header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-        .company-info { text-align: right; }
-        .invoice-body { margin-bottom: 30px; }
-        .customer-details, .invoice-summary { margin-bottom: 20px; }
-        .section-title { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; }
-        .trip-details { margin-bottom: 30px; }
-        .fare-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .fare-table th, .fare-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        .fare-table th { background-color: #f9f9f9; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 4px; color: #333; font-size: 11px; line-height: 1.3; }
+        .invoice-container { max-width: 190mm; width: 100%; margin: 0 auto; padding: 8px; page-break-inside: avoid; overflow: hidden; }
+        .section-title { font-size: 11px; font-weight: bold; margin: 0 0 4px 0; padding-bottom: 2px; border-bottom: 1px solid #ddd; }
+        .two-col { display: table; width: 100%; margin-bottom: 8px; table-layout: fixed; }
+        .two-col > div { display: table-cell; width: 50%; vertical-align: top; padding-right: 8px; word-wrap: break-word; overflow-wrap: break-word; }
+        .fare-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11px; table-layout: fixed; }
+        .fare-table th, .fare-table td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #eee; word-wrap: break-word; overflow-wrap: break-word; }
+        .fare-table th:last-child, .fare-table td:last-child { width: 80px; text-align: right; }
+        .fare-table th { background-color: #f5f5f5; }
         .total-row { font-weight: bold; }
-        .gst-details { border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9; margin-bottom: 20px; }
-        .gst-title { font-weight: bold; margin-bottom: 10px; }
-        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
-        .tax-note { font-size: 0.8em; color: #666; font-style: italic; margin-top: 5px; }
+        .footer { margin-top: 10px; text-align: center; font-size: 9px; color: #666; border-top: 1px solid #eee; padding-top: 8px; }
+        .tax-note { font-size: 9px; color: #666; font-style: italic; margin-top: 2px; }
+        .compact-p { margin: 2px 0; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
+        .admin-notes { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 12px; page-break-inside: avoid; }
+        .admin-notes .section-title { font-weight: 600; margin-bottom: 4px; }
+        .notes-content { color: #444; line-height: 1.4; word-break: break-word; }
         @media print {
-            body { margin: 0; padding: 0; }
-            .invoice-container { box-shadow: none; border: none; padding: 20px; }
-            @page { size: A4; margin: 10mm; }
+            body { margin: 0; padding: 4px; }
+            .invoice-container { box-shadow: none; padding: 8px; page-break-inside: avoid; }
+            @page { size: A4; margin: 8mm; }
         }
     </style>
 </head>
 <body>
     <div class="invoice-container">
-        <div style="border: 1px solid #000; padding: 5px; margin-bottom: 15px;">
-            <table width="100%" cellpadding="2" cellspacing="0">
+        <div style="border: 1px solid #000; padding: 4px; margin-bottom: 8px;">
+            <table width="100%" cellpadding="2" cellspacing="0" style="font-size:11px; table-layout:fixed;">
                 <tr>
-                    <td width="40%" valign="top">
-                        <p><strong>Seller/Service Provider:</strong></p>
-                        <p><strong>VIZAG TAXI HUB</strong></p>
-                        <p>44-66-22/4, Singalamma Puram, Kailasapuram,<br>
-                        Visakhapatnam, Andhra Pradesh - 530024</p>' . 
-                        ($gstEnabled 
-                            ? '<p><strong>GSTIN: 37AATFV5320K1ZL</strong></p>
-                               <p><strong>PAN: AATFV5320K</strong></p>
-                               <p><strong>HSN/SAC: 996423</strong></p>'
+                    <td width="38%" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
+                        <p class="compact-p"><strong>Seller/Service Provider:</strong></p>
+                        <p class="compact-p"><strong>VIZAG TAXI HUB</strong></p>
+                        <p class="compact-p">44-66-22/4, Singalamma Puram, Kailasapuram, Visakhapatnam, Andhra Pradesh - 530024</p>' .
+                        ($gstEnabled
+                            ? '<p class="compact-p"><strong>GSTIN: ' . $gstinDisplay . '</strong></p>
+                               <p class="compact-p"><strong>HSN Code: ' . $hsnCode . '</strong></p>'
                             : ''
                         ) . '
                     </td>
-                    
-                    <td width="20%" align="center" valign="top">
-                        <h2>' . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . '</h2>
-                        <p>Original for Recipient</p>
-                    </td>
-                    
-                    <td width="40%" align="right" valign="top">
-                        <p><strong>Invoice #:</strong> ' . $invoiceNumber . '</p>
-                        <p><strong>Date:</strong> ' . date('d M Y', strtotime($currentDate)) . '</p>
-                        <p><strong>Booking #:</strong> ' . $booking['booking_number'] . '</p>
+                    <td width="24%" align="center" valign="top"><h2 style="margin:0;font-size:14px;">' . ($gstEnabled ? 'TAX INVOICE' : 'INVOICE') . '</h2><p class="compact-p">Original for Recipient</p></td>
+                    <td width="38%" align="right" valign="top" style="word-wrap:break-word;overflow-wrap:break-word;">
+                        <p class="compact-p"><strong>Invoice #:</strong> ' . $invoiceNumber . '</p>
+                        <p class="compact-p"><strong>Date:</strong> ' . date('d M Y', strtotime($currentDate)) . '</p>
+                        <p class="compact-p"><strong>Booking #:</strong> ' . $booking['booking_number'] . '</p>
                     </td>
                 </tr>
             </table>
         </div>
-        
-        <div style="margin-bottom: 20px;">
-            <table width="100%" cellpadding="5" cellspacing="0">
-                <tr>
-                    <td width="50%" valign="top">
-                        <h3>Customer Details</h3>
-                        <p><strong>Name:</strong> ' . $booking['passenger_name'] . '</p>
-                        <p><strong>Phone:</strong> ' . $booking['passenger_phone'] . '</p>
-                        <p><strong>Email:</strong> ' . $booking['passenger_email'] . '</p>
-                    </td>
-                    
-                    <td width="50%" valign="top">
-                        <h3>Trip Summary</h3>
-                        <p><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type']) . ($booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
-                        <p><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
-                        <p><strong>Vehicle:</strong> ' . $booking['cab_type'] . '</p>
-                    </td>
-                </tr>
-            </table>
-            
-            <div class="trip-details">
-                <h3 class="section-title">Trip Details</h3>
-                <p><strong>Pickup:</strong> ' . $booking['pickup_location'] . '</p>
-                ' . ($booking['drop_location'] ? '<p><strong>Drop:</strong> ' . $booking['drop_location'] . '</p>' : '') . '
-                <p><strong>Pickup Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
-            </div>';
-            
 
-            
-    if ($gstEnabled && $gstDetails) {
-        $invoiceHtml .= '
-            <div class="gst-details">
-                <div class="gst-title">GST Details</div>
-                <p><strong>GST Number:</strong> ' . htmlspecialchars($gstDetails['gstNumber']) . '</p>
-                <p><strong>Company Name:</strong> ' . htmlspecialchars($gstDetails['companyName']) . '</p>
-                <p><strong>Company Address:</strong> ' . htmlspecialchars($gstDetails['companyAddress']) . '</p>
-            </div>';
-    }
+        <div class="two-col" style="margin-bottom:8px;">
+            <div>
+                <h3 class="section-title">Customer Details</h3>
+                <p class="compact-p"><strong>Name:</strong> ' . htmlspecialchars($booking['passenger_name']) . '</p>
+                <p class="compact-p"><strong>Phone:</strong> ' . htmlspecialchars($booking['passenger_phone']) . '</p>
+                <p class="compact-p"><strong>Email:</strong> ' . htmlspecialchars($booking['passenger_email']) . '</p>
+            </div>
+            <div>
+                <h3 class="section-title">Trip Summary</h3>
+                <p class="compact-p"><strong>Trip Type:</strong> ' . ucfirst($booking['trip_type'] ?? 'N/A') . (isset($booking['trip_mode']) && $booking['trip_mode'] ? ' (' . ucfirst($booking['trip_mode']) . ')' : '') . '</p>
+                <p class="compact-p"><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
+                <p class="compact-p"><strong>Vehicle:</strong> ' . htmlspecialchars($booking['cab_type'] ?? 'N/A') . '</p>
+                <p class="compact-p"><strong>No. of Hours:</strong> ' . $noOfHours . '</p>
+                <p class="compact-p"><strong>No. of Kilometers:</strong> ' . $noOfKm . '</p>
+            </div>
+        </div>
+
+        <div class="two-col" style="margin-bottom:8px;">
+            <div>
+                <h3 class="section-title">Trip Details</h3>
+                <p class="compact-p"><strong>Pickup:</strong> ' . htmlspecialchars($booking['pickup_location']) . '</p>
+                ' . (isset($booking['drop_location']) && $booking['drop_location'] ? '<p class="compact-p"><strong>Drop:</strong> ' . htmlspecialchars($booking['drop_location']) . '</p>' : '') . '
+                <p class="compact-p"><strong>Pickup Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
+            </div>
+            <div>' .
+            ($gstEnabled && $gstDetails ? '
+                <h3 class="section-title">GST Details</h3>
+                <p class="compact-p"><strong>GST Number:</strong> ' . htmlspecialchars($gstDetails['gstNumber']) . '</p>
+                <p class="compact-p"><strong>Company Name:</strong> ' . htmlspecialchars($gstDetails['companyName']) . '</p>
+                <p class="compact-p"><strong>Company Address:</strong> ' . htmlspecialchars($gstDetails['companyAddress']) . '</p>' : '') . '
+            </div>
+        </div>';
             
     // ============================================================================
     // CRITICAL: FINAL CALCULATION BEFORE HTML GENERATION
@@ -1939,7 +2063,8 @@ try {
     // CRITICAL FINAL VERIFICATION: Before HTML generation, ensure base fare is correct for tax-inclusive mode
     // If we have an existing invoice and tax is inclusive, base fare should be back-calculated from original booking total
     // This ensures the HTML shows the correct pre-tax base fare, not the locked value from database
-    if ($gstEnabled && $includeTax) {
+    // SKIP when lockedBaseFare is set: we already applied PDF logic (total = base + extras)
+    if ($gstEnabled && $includeTax && ($lockedBaseFare === null || $lockedBaseFare <= 0)) {
         // Get the total amount to use for back-calculation
         $totalToVerify = $originalBookingTotal;
         if ($totalToVerify === null || $totalToVerify <= 0) {
@@ -2135,38 +2260,25 @@ try {
         $invoiceHtml .= '\n                <tr>\n                    <td colspan="2" style="text-align:center; color:#888;">No extra charges</td>\n                </tr>';
     }
     
-    // Display GST as a single line "GST @ 18%" (simplified format)
+    // Display GST - use CGST/SGST rows to match PDF structure
     if ($gstEnabled && $taxAmount > 0) {
-        $gstLabel = 'GST @ 18%';
-        // #region agent log
-        $logPath = __DIR__ . '/../../../../.cursor/debug.log';
-        $logEntry = json_encode([
-            'id' => 'log_' . time() . '_breakdown_gst',
-            'timestamp' => round(microtime(true) * 1000),
-            'location' => 'generate-invoice.php:1900',
-            'message' => 'Breakdown section: GST line item',
-            'data' => [
-                'gstLabel' => $gstLabel,
-                'taxAmount' => $taxAmount,
-                'cgstAmount' => $cgstAmount,
-                'sgstAmount' => $sgstAmount,
-                'cgstPlusSgst' => $cgstAmount + $sgstAmount,
-                'baseFare' => $baseFare,
-                'extraCharges' => $totalExtraCharges,
-                'taxableAmount' => $baseFare + $totalExtraCharges,
-                'expectedGst' => round(($baseFare + $totalExtraCharges) * 0.18, 2)
-            ],
-            'sessionId' => 'debug-session',
-            'runId' => 'run1',
-            'hypothesisId' => 'D'
-        ]) . "\n";
-        @file_put_contents($logPath, $logEntry, FILE_APPEND);
-        // #endregion
-        $invoiceHtml .= '
+        if ($isIGST) {
+            $invoiceHtml .= '
                 <tr>
-                    <td>' . $gstLabel . '</td>
+                    <td>IGST (18%)</td>
                     <td style="text-align: right;">₹ ' . number_format($taxAmount, 2) . '</td>
                 </tr>';
+        } else {
+            $invoiceHtml .= '
+                <tr>
+                    <td>CGST (9%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($cgstAmount, 2) . '</td>
+                </tr>
+                <tr>
+                    <td>SGST (9%)</td>
+                    <td style="text-align: right;">₹ ' . number_format($sgstAmount, 2) . '</td>
+                </tr>';
+        }
     }
     
     // ABSOLUTE FINAL CHECK: Right before inserting finalTotal into HTML
@@ -2246,13 +2358,16 @@ try {
     
     // CRITICAL VALIDATION: Ensure finalTotal is correct before generating HTML
     // For GST-exclusive: Total MUST be Base + Extra + Tax
-    // For GST-inclusive: Total should be the original booking total (inclusive total), not calculated
-    // CRITICAL: finalTotal should NEVER equal baseFare when GST is enabled
-    if ($gstEnabled) {
+    // For GST-inclusive with lockedBaseFare: Total = Base + Extras (PDF logic) - DO NOT override
+    // For GST-inclusive without lockedBaseFare: Total should be the original booking total
+    // CRITICAL: finalTotal should NEVER equal baseFare when GST is enabled (unless PDF logic applies)
+    $usePdfLogicForTotal = $gstEnabled && $includeTax && $lockedBaseFare !== null && $lockedBaseFare > 0;
+    if ($gstEnabled && !$usePdfLogicForTotal) {
         if ($includeTax) {
-            // GST-INCLUSIVE MODE: Total should be the original booking total (₹18,814)
+            // GST-INCLUSIVE MODE (no locked base): Total should be the original booking total (₹18,814)
             // Base fare is pre-tax (₹15,944.07), so Base + Extra + Tax should equal original total
             // CRITICAL: Use original booking total as final total, don't recalculate
+            // SKIP when lockedBaseFare is set - we already applied PDF logic (total = base + extras)
             
             // Double-check: finalTotal should NOT equal baseFare when there's tax
             if ($taxAmount > 0.01 && abs($finalTotal - $baseFare) < 0.01) {
@@ -2389,14 +2504,22 @@ try {
         $invoiceHtml .= '
             <p class="tax-note">Note: This invoice shows base amounts excluding tax. Taxes will be charged separately.</p>';
     }
-            
+
+    if ($adminNotes !== '') {
+        $invoiceHtml .= '
+        <div class="admin-notes">
+            <div class="section-title">Admin Notes</div>
+            <div class="notes-content">' . nl2br(htmlspecialchars($adminNotes)) . '</div>
+        </div>';
+    }
+
     $invoiceHtml .= '
         </div>
-        
+
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub.</p>
             <p>For any questions regarding this invoice, please contact support@vizagtaxihub.com</p>
-            <p style="font-size: 10px; color: #999; margin-top: 20px;">Generated on: ' . date('Y-m-d H:i:s') . ' (Timestamp: ' . time() . ')</p>
+            <p style="font-size: 9px; color: #999; margin-top: 6px;">Generated on: ' . date('Y-m-d H:i:s') . '</p>
         </div>
     </div>
 </body>
@@ -2639,6 +2762,7 @@ try {
                     invoice_number VARCHAR(50) NOT NULL,
                     invoice_date DATE NOT NULL,
                     base_amount DECIMAL(10,2) NOT NULL,
+                    extra_charges DECIMAL(10,2) DEFAULT 0,
                     tax_amount DECIMAL(10,2) NOT NULL,
                     total_amount DECIMAL(10,2) NOT NULL,
                     gst_enabled TINYINT(1) DEFAULT 0,
@@ -2654,6 +2778,12 @@ try {
                     KEY (booking_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             ");
+            
+            // Ensure extra_charges column exists (for existing installations)
+            $checkExtraCol = $conn->query("SHOW COLUMNS FROM invoices LIKE 'extra_charges'");
+            if (!$checkExtraCol || $checkExtraCol->num_rows === 0) {
+                @$conn->query("ALTER TABLE invoices ADD COLUMN extra_charges DECIMAL(10,2) DEFAULT 0 AFTER base_amount");
+            }
             
             // Check if invoice already exists for this booking
             $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
@@ -2695,6 +2825,7 @@ try {
                         invoice_number = ?,
                         invoice_date = ?, 
                         base_amount = ?, 
+                        extra_charges = ?,
                         tax_amount = ?, 
                         total_amount = ?,
                         gst_enabled = ?,
@@ -2731,12 +2862,13 @@ try {
                     'preserving_existing' => ($preservedBaseFare !== null) ? 'YES' : 'NO',
                     'note' => $preservedBaseFare !== null ? 'Base fare is LOCKED - using preserved value in DB' : 'Base fare will be updated'
                 ]);
-                // 14 params: s = string, d = double, i = int
+                // 15 params: s = string, d = double, i = int
                 $stmt->bind_param(
-                    "ssdddiiiisssdi",
+                    "ssddddiiiisssdi",
                     $invoiceNumber,
                     $currentDate,
-                    $baseFareForDB,  // Use preserved base fare, not recalculated
+                    $baseFareForDB,
+                    $totalExtraCharges,
                     $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,
@@ -2767,13 +2899,13 @@ try {
                     ]);
                 }
             } else {
-                // Insert new invoice
+                // Insert new invoice - base_amount and extra_charges stored separately for GST/non-GST clarity
                 $stmt = $conn->prepare("
                     INSERT INTO invoices (
-                        booking_id, invoice_number, invoice_date, base_amount, 
+                        booking_id, invoice_number, invoice_date, base_amount, extra_charges,
                         tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
                         gst_number, company_name, company_address, invoice_html, gst_amount
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
@@ -2784,13 +2916,14 @@ try {
                 $companyAddressVal = isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
                 $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
-                // 14 params: i = int, s = string, d = double
+                // 15 params: i = int, s = string, d = double
                 $stmt->bind_param(
-                    "issdddiiiisssd",
+                    "issdddddiiiisssd",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
                     $baseFare,
+                    $totalExtraCharges,
                     $taxAmountVal,
                     $finalTotal,
                     $gstEnabledInt,
@@ -2891,53 +3024,16 @@ try {
                     'rows_affected' => $updateBookingStmt->affected_rows
                 ]);
             }
-            // CRITICAL: Do NOT update the booking's total_amount if we preserved the original total
-            // The booking's total_amount should remain as it was originally set
-            // Only update if we're NOT preserving the original total (i.e., new calculation)
-            if (!$preservedOriginalTotal || $originalBookingTotal === null) {
-                // Now update the price/total_amount in the bookings table
-                try {
-                    logInvoiceError("Attempting to update booking price", [
-                        'booking_id' => $booking['id'],
-                        'total_amount' => $finalTotal,
-                        'preserved_original' => $preservedOriginalTotal ? 'YES' : 'NO'
-                    ]);
-                    $updatePriceStmt = $conn->prepare("
-                        UPDATE bookings SET
-                            total_amount = ?
-                        WHERE id = ?
-                    ");
-                    $updatePriceStmt->bind_param(
-                        "di",
-                        $finalTotal,
-                        $booking['id']
-                    );
-                    $successPrice = $updatePriceStmt->execute();
-                    if (!$successPrice || $updatePriceStmt->error) {
-                        logInvoiceError('Error updating booking price', [
-                            'error' => $updatePriceStmt->error,
-                            'success' => $successPrice ? 'true' : 'false',
-                            'booking_id' => $booking['id'],
-                            'total_amount' => $finalTotal
-                        ]);
-                    } else {
-                        logInvoiceError('Booking price updated successfully', [
-                            'booking_id' => $booking['id'],
-                            'total_amount' => $finalTotal,
-                            'rows_affected' => $updatePriceStmt->affected_rows
-                        ]);
-                    }
-                } catch (Exception $e) {
-                    logInvoiceError('Error updating booking price', ['error' => $e->getMessage()]);
-                }
-            } else {
-                logInvoiceError('Skipping booking total_amount update - preserving original value', [
-                    'booking_id' => $booking['id'],
-                    'original_booking_total' => $originalBookingTotal,
-                    'final_total' => $finalTotal,
-                    'preserved_original' => 'YES'
-                ]);
-            }
+            // CRITICAL: NEVER update bookings.total_amount from invoice - this causes base fare to change
+            // and totals to auto-increment when switching between GST/non-GST modes.
+            // The booking total_amount is the SOURCE OF TRUTH from when the booking was created.
+            // Invoice totals are DERIVED - we must not overwrite the booking with our calculation.
+            logInvoiceError("Skipping booking total_amount update - invoices must not mutate booking financial data", [
+                'booking_id' => $booking['id'],
+                'original_booking_total' => $originalBookingTotal,
+                'invoice_final_total' => $finalTotal,
+                'note' => 'Prevents compounding when switching GST/non-GST modes'
+            ]);
         } catch (Exception $e) {
             logInvoiceError("Error updating booking with invoice settings", ['error' => $e->getMessage()]);
         }

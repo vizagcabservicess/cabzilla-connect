@@ -152,6 +152,24 @@ $defaultVehicles = [
         'inactiveDates' => []
     ],
     [
+        'id' => 'toyota_glanza',
+        'vehicleId' => 'toyota_glanza',
+        'name' => 'Toyota Glanza',
+        'capacity' => 4,
+        'luggageCapacity' => 2,
+        'price' => 4200,
+        'basePrice' => 4200,
+        'pricePerKm' => 14,
+        'image' => 'https://vizagtaxihub.com/uploads/toyota-glanza-vizagtaxihub.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System'],
+        'description' => 'Comfortable sedan suitable for 4 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'inactiveDates' => []
+    ],
+    [
         'id' => 'innova_crysta',
         'vehicleId' => 'innova_crysta',
         'name' => 'Innova Crysta',
@@ -160,7 +178,7 @@ $defaultVehicles = [
         'price' => 3800,
         'basePrice' => 3800,
         'pricePerKm' => 20,
-        'image' => '/cars/innova.png',
+        'image' => 'https://vizagtaxihub.com/uploads/img_68a32a68407e75.04067794.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
         'description' => 'Premium SUV with ample space for 7 passengers.',
         'ac' => true,

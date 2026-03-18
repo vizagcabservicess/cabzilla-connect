@@ -567,7 +567,8 @@ export function AdminBookingsList() {
     gstDetails?: any,
     isIGST?: boolean,
     includeTax?: boolean,
-    customInvoiceNumber?: string
+    customInvoiceNumber?: string,
+    adminNotes?: string
   ) => {
     if (!selectedBooking) return null;
     setIsSubmitting(true);
@@ -602,7 +603,8 @@ export function AdminBookingsList() {
         isIGST: isIGST || false,
         includeTax: finalIncludeTax,
         invoiceNumber: customInvoiceNumber || '',
-        gstDetails: gstDetails || {}
+        gstDetails: gstDetails || {},
+        adminNotes: (adminNotes || '').trim() || undefined
       };
       
       // #region agent log

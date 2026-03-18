@@ -95,6 +95,13 @@ try {
         $changes[] = "Added gst_amount column to invoices table";
     }
     
+    // Add extra_charges column to invoices - store base fare and extra charges separately
+    $checkExtraCharges = $conn->query("SHOW COLUMNS FROM invoices LIKE 'extra_charges'");
+    if (!$checkExtraCharges || $checkExtraCharges->num_rows === 0) {
+        $conn->query("ALTER TABLE invoices ADD COLUMN extra_charges DECIMAL(10,2) DEFAULT 0 AFTER base_amount");
+        $changes[] = "Added extra_charges column to invoices table";
+    }
+    
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Database schema updated successfully',

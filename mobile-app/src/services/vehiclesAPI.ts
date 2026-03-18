@@ -21,12 +21,13 @@ export interface Vehicle {
   image?: string;
 }
 
+const ASSET_BASE = 'https://vizagtaxihub.com';
 const FALLBACK_VEHICLES: Vehicle[] = [
-  { id: 'sedan', name: 'Swift Dzire', capacity: 4, luggageCapacity: 3, fuelType: 'Petrol', amenities: ['AC', 'Music System', 'Charging Point'], price: 4200, pricePerKm: 14, image: `${BASE}/cars/sedan.png` },
-  { id: 'ertiga', name: 'Ertiga', capacity: 6, luggageCapacity: 3, fuelType: 'CNG', amenities: ['AC', 'Music System', 'Charging Point'], price: 5400, pricePerKm: 18, image: `${BASE}/cars/ertiga.png` },
-  { id: 'glanza', name: 'Toyota Glanza', capacity: 4, luggageCapacity: 2, fuelType: 'Petrol', amenities: ['AC', 'Music System', 'Charging Point'], price: 4200, pricePerKm: 14, image: `${BASE}/cars/sedan.png` },
-  { id: 'innova_crysta', name: 'Innova Crysta', capacity: 7, luggageCapacity: 4, fuelType: 'Diesel', amenities: ['AC', 'Music System', 'Charging Point', 'Extra Legroom'], price: 6000, pricePerKm: 20, image: `${BASE}/cars/innova.png` },
-  { id: 'tempo_traveller', name: 'Tempo Traveller', capacity: 17, luggageCapacity: 8, fuelType: 'Diesel', amenities: ['AC', 'Music System', 'Charging Point', 'Pushback Seats'], price: 10500, pricePerKm: 35, image: `${BASE}/cars/tempo.png` },
+  { id: 'sedan', name: 'Swift Dzire', capacity: 4, luggageCapacity: 3, fuelType: 'Petrol', amenities: ['AC', 'Music System', 'Charging Point'], price: 4200, pricePerKm: 14, image: `${ASSET_BASE}/cars/sedan.png` },
+  { id: 'ertiga', name: 'Ertiga', capacity: 6, luggageCapacity: 3, fuelType: 'CNG', amenities: ['AC', 'Music System', 'Charging Point'], price: 5400, pricePerKm: 18, image: `${ASSET_BASE}/cars/ertiga.png` },
+  { id: 'glanza', name: 'Toyota Glanza', capacity: 4, luggageCapacity: 2, fuelType: 'Petrol', amenities: ['AC', 'Music System', 'Charging Point'], price: 4200, pricePerKm: 14, image: `${ASSET_BASE}/uploads/toyota-glanza-vizagtaxihub.png` },
+  { id: 'innova_crysta', name: 'Innova Crysta', capacity: 7, luggageCapacity: 4, fuelType: 'Diesel', amenities: ['AC', 'Music System', 'Charging Point', 'Extra Legroom'], price: 6000, pricePerKm: 20, image: `${ASSET_BASE}/uploads/img_68a32a68407e75.04067794.png` },
+  { id: 'tempo_traveller', name: 'Tempo Traveller', capacity: 17, luggageCapacity: 8, fuelType: 'Diesel', amenities: ['AC', 'Music System', 'Charging Point', 'Pushback Seats'], price: 10500, pricePerKm: 35, image: `${ASSET_BASE}/cars/tempo.png` },
 ];
 
 const endpoints = [
@@ -39,6 +40,16 @@ const endpoints = [
 function withCacheBust(url: string): string {
   const sep = url.includes('?') ? '&' : '?';
   return `${url}${sep}_t=${Date.now()}`;
+}
+
+/** Resolve image URL - convert relative paths to absolute */
+function resolveImageUrl(raw: string | undefined): string | undefined {
+  if (!raw || typeof raw !== 'string' || !raw.trim()) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const base = BASE || API_BASE_URL || 'https://www.vizagtaxihub.com';
+  return `${base.replace(/\/$/, '')}${path}`;
 }
 
 export async function loadVehicles(): Promise<Vehicle[]> {
@@ -55,6 +66,8 @@ export async function loadVehicles(): Promise<Vehicle[]> {
         return arr.map((v: any) => {
           const id = String(v.id || v.vehicleId || '').toLowerCase().replace(/-/g, '_');
           const fallback = FALLBACK_VEHICLES.find(f => f.name.toLowerCase().includes((v.name || '').toLowerCase()) || f.id === id);
+          const rawImage = v.image || fallback?.image;
+          const image = resolveImageUrl(rawImage);
           return {
             id: v.id || v.vehicleId,
             name: v.name || fallback?.name || 'Cab',
@@ -63,8 +76,8 @@ export async function loadVehicles(): Promise<Vehicle[]> {
             fuelType: v.fuelType ?? fallback?.fuelType ?? 'Petrol',
             amenities: v.amenities ?? fallback?.amenities ?? ['AC', 'Music System', 'Charging Point'],
             price: v.price || v.basePrice || 0,
-            pricePerKm: v.pricePerKm ?? fallback?.pricePerKm,
-            image: v.image || fallback?.image,
+            pricePerKm: v.pricePerKm ?? v.price_per_km ?? fallback?.pricePerKm,
+            image,
           };
         });
       }

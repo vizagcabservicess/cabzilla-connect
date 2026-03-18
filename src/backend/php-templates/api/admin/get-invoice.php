@@ -132,7 +132,10 @@ try {
                 $baseAmount = (float)($inv['base_amount'] ?? 0);
                 $taxAmount = (float)($inv['tax_amount'] ?? 0);
                 $totalAmount = (float)($inv['total_amount'] ?? 0);
-                $totalExtraCharges = $totalAmount > 0 ? round($totalAmount - $baseAmount - $taxAmount, 2) : 0;
+                // Use stored extra_charges when available; fallback to derived value for legacy invoices
+                $totalExtraCharges = isset($inv['extra_charges']) && (float)$inv['extra_charges'] >= 0
+                    ? (float)$inv['extra_charges']
+                    : ($totalAmount > 0 ? round($totalAmount - $baseAmount - $taxAmount, 2) : 0);
                 if ($totalExtraCharges < 0) $totalExtraCharges = 0;
                 $cgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount / 2, 2) : 0;
                 $sgstAmount = $taxAmount > 0 && !($inv['is_igst'] ?? 0) ? round($taxAmount - $cgstAmount, 2) : 0;
