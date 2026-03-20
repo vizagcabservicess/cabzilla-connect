@@ -1515,8 +1515,11 @@ export function BookingInvoice({
   }
 
   const renderInvoiceSettings = () => {
-    // Force re-render when state changes
-    const forceRenderKey = `${invoiceData?.id || 'new'}-${gstEnabled}-${customInvoiceNumber}-${gstDetails.gstNumber}-${gstDetails.companyName}-${gstDetails.companyAddress}`;
+    // Stable key for form structure - must NOT include user-typed values (gstNumber, companyName, etc.)
+    // or inputs will remount on every keystroke, causing focus loss
+    const stableFormKey = `${invoiceData?.id || 'new'}-${gstEnabled}-${includeTax}`;
+    // forceRenderKey for container/switches; stableFormKey for inputs (avoids remount on keystroke)
+    const forceRenderKey = stableFormKey;
     // #region agent log
     // Production logging: renderInvoiceSettings RENDER
     // #endregion
@@ -1530,7 +1533,7 @@ export function BookingInvoice({
           <Label htmlFor="custom-invoice">Custom Invoice Number</Label>
           <Input 
             id="custom-invoice"
-            key={`custom-invoice-${forceRenderKey}`}
+            key={`custom-invoice-${stableFormKey}`}
             value={customInvoiceNumber || ''}
             onChange={(e) => onInvoiceStateChange({...invoiceState, customInvoiceNumber: e.target.value})}
             placeholder="Optional - Leave blank for auto-generated number"
@@ -1619,7 +1622,7 @@ export function BookingInvoice({
               <Input 
                 id="gstNumber"
                 name="gstNumber"
-                key={`gstNumber-${forceRenderKey}`}
+                key={`gstNumber-${stableFormKey}`}
                 value={gstDetails.gstNumber || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter GST number"
@@ -1631,7 +1634,7 @@ export function BookingInvoice({
               <Input 
                 id="companyName"
                 name="companyName"
-                key={`companyName-${forceRenderKey}`}
+                key={`companyName-${stableFormKey}`}
                 value={gstDetails.companyName || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter company name"
@@ -1643,7 +1646,7 @@ export function BookingInvoice({
               <Input 
                 id="companyAddress"
                 name="companyAddress"
-                key={`companyAddress-${forceRenderKey}`}
+                key={`companyAddress-${stableFormKey}`}
                 value={gstDetails.companyAddress || ''}
                 onChange={handleGstDetailsChange}
                 placeholder="Enter company address"

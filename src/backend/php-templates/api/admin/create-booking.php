@@ -78,13 +78,20 @@ if (json_last_error() !== JSON_ERROR_NONE) {
     exit;
 }
 
-// Validate required fields
-$requiredFields = ['pickupLocation', 'cabType', 'pickupDate', 'passengerName', 'passengerPhone', 'passengerEmail', 'tripType', 'tripMode', 'totalAmount'];
+// Validate required fields - tripType can be inferred from distance/returnDate when missing
+$requiredFields = ['pickupLocation', 'cabType', 'pickupDate', 'passengerName', 'passengerPhone', 'passengerEmail', 'tripMode', 'totalAmount'];
 foreach ($requiredFields as $field) {
     if (!isset($requestData[$field]) || empty($requestData[$field])) {
         sendJsonResponse(['status' => 'error', 'message' => "Missing required field: $field"], 400);
         exit;
     }
+}
+// tripType: required unless we can infer from distance > 35 or returnDate
+$tripTypeVal = trim($requestData['tripType'] ?? $requestData['trip_type'] ?? '');
+$canInferTripType = ((float)($requestData['distance'] ?? 0) > 35) || !empty($requestData['returnDate'] ?? null);
+if ($tripTypeVal === '' && !$canInferTripType) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Missing required field: tripType (or provide distance > 35 km or returnDate for outstation)'], 400);
+    exit;
 }
 
 // Connect to database
@@ -178,6 +185,15 @@ try {
     
     $createdBy = isset($requestData['createdBy']) ? $requestData['createdBy'] : 'admin';
     $tourId = isset($requestData['tourId']) ? $requestData['tourId'] : null;
+
+    // Trip type: accept tripType (camelCase) or trip_type (snake_case)
+    $tripType = trim($requestData['tripType'] ?? $requestData['trip_type'] ?? '');
+    if ($tripType === '' && ($distance > 35 || !empty($returnDate))) {
+        $tripType = 'outstation';
+    }
+    if ($tripType === '') {
+        $tripType = 'outstation';
+    }
     
     // Additional validation for tour bookings
     if (isset($requestData['tripType']) && $requestData['tripType'] === 'tour' && empty($tourId)) {
@@ -265,7 +281,7 @@ try {
         $returnDate,
         $requestData['cabType'],
         $distance,
-        $requestData['tripType'],
+        $tripType,
         $requestData['tripMode'],
         $requestData['totalAmount'],
         $status,

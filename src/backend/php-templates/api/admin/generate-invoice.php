@@ -1636,14 +1636,22 @@ try {
         }
     }
 
-    // Trip type display: only show one-way/round-trip for outstation; local uses hourly packages
+    // Trip type display: infer from context when empty; override "local" when clearly outstation
     $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
-    // Infer "local" when trip_type is empty but hourly package indicators present (e.g. 8hr/80km)
-    if ($tripTypeRaw === '' && (!empty($booking['hourly_package']) || isset($booking['no_of_hours']) || isset($booking['estimated_hours']))) {
-        $tripTypeRaw = 'local';
+    $dist = (float)($booking['distance'] ?? 0);
+    $hasReturnDate = !empty($booking['return_date'] ?? $booking['returnDate'] ?? null);
+    $hasHourlyPackage = !empty($booking['hourly_package']) || isset($booking['no_of_hours']) || isset($booking['estimated_hours']);
+    if ($tripTypeRaw === '') {
+        if ($dist > 35 || $hasReturnDate) {
+            $tripTypeRaw = 'outstation';
+        } elseif ($hasHourlyPackage) {
+            $tripTypeRaw = 'local';
+        }
+    } elseif ($tripTypeRaw === 'local' && ($dist > 35 || $hasReturnDate)) {
+        $tripTypeRaw = 'outstation';
     }
     $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'N/A';
-    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode']) && !empty($booking['tripMode'])) {
+    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
         $tripMode = $booking['trip_mode'] ?? $booking['tripMode'];
         $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
     }
@@ -1736,7 +1744,7 @@ try {
             <div>
                 <h3 class="section-title">Trip Details</h3>
                 <p class="compact-p"><strong>Pickup:</strong> ' . htmlspecialchars($booking['pickup_location']) . '</p>
-                ' . (isset($booking['drop_location']) && $booking['drop_location'] ? '<p class="compact-p"><strong>Drop:</strong> ' . htmlspecialchars($booking['drop_location']) . '</p>' : '') . '
+                ' . (isset($booking['drop_location']) && $booking['drop_location'] ? '<p class="compact-p"><strong>Destination:</strong> ' . htmlspecialchars($booking['drop_location']) . '</p>' : '') . '
                 <p class="compact-p"><strong>Pickup Time:</strong> ' . date('d M Y, h:i A', strtotime($booking['pickup_date'])) . '</p>
             </div>
             <div>' .
@@ -2876,6 +2884,15 @@ try {
             if (!$checkExtraCol || $checkExtraCol->num_rows === 0) {
                 @$conn->query("ALTER TABLE invoices ADD COLUMN extra_charges DECIMAL(10,2) DEFAULT 0 AFTER base_amount");
             }
+            $checkGstRateCol = $conn->query("SHOW COLUMNS FROM invoices LIKE 'gst_rate'");
+            if (!$checkGstRateCol || $checkGstRateCol->num_rows === 0) {
+                @$conn->query("ALTER TABLE invoices ADD COLUMN gst_rate DECIMAL(5,2) DEFAULT NULL AFTER gst_amount");
+            }
+            // Ensure gst_rate column exists for GST report
+            $checkGstRate = $conn->query("SHOW COLUMNS FROM invoices LIKE 'gst_rate'");
+            if (!$checkGstRate || $checkGstRate->num_rows === 0) {
+                @$conn->query("ALTER TABLE invoices ADD COLUMN gst_rate DECIMAL(5,2) DEFAULT NULL AFTER gst_amount");
+            }
             
             // Check if invoice already exists for this booking
             $checkStmt = $conn->prepare("SELECT id FROM invoices WHERE booking_id = ? ORDER BY id DESC LIMIT 1");
@@ -2928,6 +2945,7 @@ try {
                         company_address = ?,
                         invoice_html = ?,
                         gst_amount = ?,
+                        gst_rate = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ");
@@ -2940,6 +2958,7 @@ try {
                 $companyAddressVal = isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
                 $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
+                $gstRateVal = ($gstEnabled && isset($gstRate) && $gstRate > 0) ? round($gstRate * 100, 2) : null;
                 // Add debug logging before SQL
                 logInvoiceError('Invoice SQL values (UPDATE)', [
                     'base_fare_for_db' => $baseFareForDB,
@@ -2954,9 +2973,9 @@ try {
                     'preserving_existing' => ($preservedBaseFare !== null) ? 'YES' : 'NO',
                     'note' => $preservedBaseFare !== null ? 'Base fare is LOCKED - using preserved value in DB' : 'Base fare will be updated'
                 ]);
-                // 15 params: s = string, d = double, i = int
+                // 16 params: s = string, d = double, i = int
                 $stmt->bind_param(
-                    "ssddddiiiisssdi",
+                    "ssddddiiiisssddi",
                     $invoiceNumber,
                     $currentDate,
                     $baseFareForDB,
@@ -2971,6 +2990,7 @@ try {
                     $companyAddressVal,
                     $invoiceHtml,
                     $gstAmountVal,
+                    $gstRateVal,
                     $invoiceRow['id']
                 );
                 
@@ -2996,8 +3016,8 @@ try {
                     INSERT INTO invoices (
                         booking_id, invoice_number, invoice_date, base_amount, extra_charges,
                         tax_amount, total_amount, gst_enabled, is_igst, include_tax, 
-                        gst_number, company_name, company_address, invoice_html, gst_amount
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        gst_number, company_name, company_address, invoice_html, gst_amount, gst_rate
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $gstEnabledInt = $gstEnabled ? 1 : 0;
                 $isIgstInt = $isIGST ? 1 : 0;
@@ -3008,9 +3028,10 @@ try {
                 $companyAddressVal = isset($gstDetails['companyAddress']) ? $gstDetails['companyAddress'] : '';
                 $taxAmountVal = isset($taxAmount) ? $taxAmount : 0;
                 $gstAmountVal = isset($taxAmount) ? $taxAmount : 0;
-                // 15 params: i = int, s = string, d = double
+                $gstRateVal = ($gstEnabled && isset($gstRate) && $gstRate > 0) ? round($gstRate * 100, 2) : null;
+                // 16 params: i = int, s = string, d = double
                 $stmt->bind_param(
-                    "issdddddiiiisssd",
+                    "issdddddiiiisssdd",
                     $booking['id'],
                     $invoiceNumber,
                     $currentDate,
@@ -3025,7 +3046,8 @@ try {
                     $companyNameVal,
                     $companyAddressVal,
                     $invoiceHtml,
-                    $gstAmountVal
+                    $gstAmountVal,
+                    $gstRateVal
                 );
                 
                 $success = $stmt->execute();

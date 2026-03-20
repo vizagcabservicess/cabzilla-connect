@@ -347,13 +347,19 @@ export function AdminCreateBookingScreen() {
       Alert.alert('Error', 'Total amount must be greater than 0');
       return;
     }
-    const dist = parseFloat(distance) || 0;
+    const oneWayKm = parseFloat(distance) || 0;
+    // For round-trip outstation, send total km (one-way × 2) to backend
+    const distToSend =
+      tripType === 'outstation' && tripMode === 'round-trip' && oneWayKm > 0
+        ? Math.round(oneWayKm * 2)
+        : oneWayKm;
     const discountAmount =
       discountType === 'percentage' && discountValue > 0
         ? Math.round(basePrice * (discountValue / 100))
         : discountType === 'fixed' && discountValue > 0
           ? discountValue
           : 0;
+    const amountToStore = discountAmount > 0 ? priceAfterDiscount : basePrice;
     setSubmitting(true);
     try {
       const dropStr = (dropLocation?.address || dropLocation?.name || '').trim();
@@ -372,8 +378,8 @@ export function AdminCreateBookingScreen() {
         passengerPhone: passengerPhone.trim(),
         passengerEmail: passengerEmail.trim(),
         additionalRequirements: additionalRequirements.trim() || undefined,
-        distance: dist > 0 ? dist : undefined,
-        totalAmount: basePrice,
+        distance: distToSend > 0 ? distToSend : undefined,
+        totalAmount: amountToStore,
         hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
         discountAmount,
         discountType: discountType !== 'none' ? discountType : undefined,
@@ -629,15 +635,28 @@ export function AdminCreateBookingScreen() {
             </ScrollView>
           )}
 
-          {/* Distance (outstation / airport) */}
+          {/* Distance (outstation / airport) - round-trip shows total km (one-way × 2) */}
           {(tripType === 'outstation' || tripType === 'airport') && (
             <>
-              <Text style={styles.label}>Distance (km)</Text>
+              <Text style={styles.label}>
+                Distance (km){tripMode === 'round-trip' ? ' (total round-trip)' : ''}
+              </Text>
               <TextInput
                 style={styles.input}
-                value={distance}
-                onChangeText={setDistance}
-                placeholder="e.g. 120"
+                value={
+                  tripMode === 'round-trip'
+                    ? String(Math.round(parseFloat(distance || '0') * 2))
+                    : distance
+                }
+                onChangeText={(t) => {
+                  const v = parseFloat(t) || 0;
+                  if (tripMode === 'round-trip') {
+                    setDistance(v > 0 ? String(v / 2) : t);
+                  } else {
+                    setDistance(t);
+                  }
+                }}
+                placeholder={tripMode === 'round-trip' ? 'e.g. 340' : 'e.g. 120'}
                 keyboardType="numeric"
                 placeholderTextColor={colors.gray600}
               />

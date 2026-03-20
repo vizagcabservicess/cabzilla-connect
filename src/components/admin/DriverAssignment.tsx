@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { Booking } from '@/types/api';
 import { Driver } from '@/types/api';
@@ -15,6 +14,7 @@ import {
 import { MessageCircle } from "lucide-react";
 import { commissionAPI } from '@/services/api/commissionAPI';
 import { fleetAPI } from '@/services/api/fleetAPI';
+import { getApiUrl } from '@/config/api';
 
 interface DriverAssignmentProps {
   booking: Booking;
@@ -50,7 +50,7 @@ export function DriverAssignment({
     const fetchDrivers = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/admin/get-drivers.php');
+        const response = await fetch(getApiUrl('/api/admin/get-drivers.php'));
         const result = await response.json();
         
         if (response.ok && result.status === 'success' && Array.isArray(result.data)) {
@@ -81,15 +81,13 @@ export function DriverAssignment({
     // Fetch fleet vehicles from the same endpoint as FleetVehicleAssignment
     const fetchFleetVehicles = async () => {
       try {
-        const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
-        const response = await fetch(apiUrl).then(res => res.json());
+        const apiUrl = getApiUrl('/api/admin/fleet_vehicles.php/vehicles');
+        const response = await fetch(apiUrl).then((res) => res.json());
         const vehicles = response.vehicles || [];
-        // Filter to only show true fleet vehicles (with vehicleNumber, name, and year)
-        const filteredFleetVehicles = vehicles.filter((v) =>
-          typeof v.vehicleNumber === 'string' && v.vehicleNumber.trim() !== '' &&
-          typeof v.name === 'string' && v.name.trim() !== '' &&
-          typeof v.year === 'number' && v.year > 1900
-        );
+        const filteredFleetVehicles = vehicles.filter((v) => {
+          const num = v.vehicleNumber || v.vehicle_number;
+          return typeof num === 'string' && num.trim() !== '';
+        });
         setVehicles(filteredFleetVehicles);
       } catch (error) {
         setVehicles([]);
@@ -190,7 +188,7 @@ export function DriverAssignment({
     }
     try {
       await onAssign({
-        bookingId: booking.id,
+        bookingId: String(booking.id),
         driverId: selectedDriver,
         driverName,
         driverPhone,
@@ -267,22 +265,20 @@ export function DriverAssignment({
           <div className="space-y-4">
             <div>
               <Label htmlFor="driver-select">Select Driver</Label>
-              <Select
+              <select
+                id="driver-select"
                 value={selectedDriver}
-                onValueChange={handleDriverSelect}
+                onChange={(e) => handleDriverSelect(e.target.value)}
                 disabled={isSubmitting || loading}
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SelectTrigger id="driver-select">
-                  <SelectValue placeholder="Select a driver" />
-                </SelectTrigger>
-                <SelectContent>
-                  {drivers.map((driver) => (
-                    <SelectItem key={driver.id} value={driver.id.toString()}>
-                      {driver.name} - {driver.status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="">Select a driver</option>
+                {drivers.map((driver) => (
+                  <option key={driver.id} value={String(driver.id)}>
+                    {driver.name} - {driver.status}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -307,22 +303,20 @@ export function DriverAssignment({
 
             <div>
               <Label htmlFor="vehicle-select">Select Fleet Vehicle</Label>
-              <Select
+              <select
+                id="vehicle-select"
                 value={selectedVehicleId}
-                onValueChange={handleVehicleSelect}
+                onChange={(e) => handleVehicleSelect(e.target.value)}
                 disabled={isSubmitting || vehicles.length === 0}
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SelectTrigger id="vehicle-select">
-                  <SelectValue placeholder="Select a fleet vehicle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicles.map((v) => (
-                    <SelectItem key={v.id} value={v.id.toString()}>
-                      {v.vehicleNumber || v.vehicle_number} - {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="">Select a fleet vehicle</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={String(v.id)}>
+                    {v.vehicleNumber || v.vehicle_number} - {v.name || v.model || 'Vehicle'}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {commissionData && (

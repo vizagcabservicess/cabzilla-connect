@@ -517,12 +517,23 @@ try {
     }
     ";
 
-    // Trip type label: support trip_type/tripType, infer Local from hourly package when empty
+    // Trip type label: support trip_type/tripType, infer/override from context
     $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
-    if ($tripTypeRaw === '' && (strpos($booking['hourly_package'] ?? '', 'hr') !== false || !empty($booking['no_of_hours']) || !empty($booking['estimated_hours']))) {
-        $tripTypeRaw = 'local';
+    $dist = (float)($booking['distance'] ?? 0);
+    $hasReturnDate = !empty($booking['return_date'] ?? $booking['returnDate'] ?? null);
+    $hasHourlyPackage = strpos($booking['hourly_package'] ?? '', 'hr') !== false || !empty($booking['no_of_hours']) || !empty($booking['estimated_hours']);
+    if ($tripTypeRaw === '') {
+        // Infer when empty: outstation if distance > 35 or return date; local if hourly package
+        if ($dist > 35 || $hasReturnDate) {
+            $tripTypeRaw = 'outstation';
+        } elseif ($hasHourlyPackage) {
+            $tripTypeRaw = 'local';
+        }
+    } elseif ($tripTypeRaw === 'local' && ($dist > 35 || $hasReturnDate)) {
+        // Override: stored "local" but clearly outstation (distance/round-trip) - e.g. mobile create-booking bug
+        $tripTypeRaw = 'outstation';
     }
-    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'Local';
+    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'N/A';
     if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
         $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
         $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
@@ -576,7 +587,7 @@ try {
             <table class="two-col" width="100%" style="margin-bottom:8px;"><tr>
                 <td><div style="width:100%;"><h3 class="section-title">Trip Details</h3>
                     <p class="compact-p"><strong>Pickup:</strong> '.htmlspecialchars($booking['pickup_location'] ?? 'N/A').'</p>
-                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p class="compact-p"><strong>Drop:</strong> '.htmlspecialchars($booking['drop_location']).'</p>' : '').'
+                    '.(isset($booking['drop_location']) && !empty($booking['drop_location']) ? '<p class="compact-p"><strong>Destination:</strong> '.htmlspecialchars($booking['drop_location']).'</p>' : '').'
                     <p class="compact-p"><strong>Pickup Time:</strong> '.(isset($booking['pickup_date']) ? date('d M Y, h:i A', strtotime($booking['pickup_date'])) : 'N/A').'</p></div></td>
                 <td><div style="width:100%;">'.($gstEnabled && !empty($gstNumber) ? '
                     <h3 class="section-title">GST Details</h3>

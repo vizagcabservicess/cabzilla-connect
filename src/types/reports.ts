@@ -12,6 +12,14 @@ export interface ReportFilterParams {
   withGst?: boolean;
   paymentMethod?: string;
   onlyGstEnabled?: boolean;
+  /** Profit dashboard filters */
+  vehicleId?: string;
+  driverId?: string;
+  serviceType?: string;
+  /** Trip/booking status (e.g. bookings & Non-GST rows tied to bookings) */
+  tripStatus?: string;
+  /** Payment status bucket: paid | partial | pending */
+  paymentStatus?: string;
 }
 
 // Booking report data types
@@ -26,6 +34,11 @@ export interface BookingStatusCount {
 export interface BookingsByDate {
   date: string;
   count: number;
+  completed?: number;
+  cancelled?: number;
+  confirmed?: number;
+  assigned?: number;
+  pending?: number;
 }
 
 export interface BookingsReportData {
@@ -231,6 +244,39 @@ export interface FuelsReportData {
   byPaymentMethod: PaymentMethodSummary;
 }
 
+// Profit report data types
+export interface ProfitKpis {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  profitMargin: number;
+  totalTrips: number;
+  avgRevenuePerTrip: number;
+}
+
+export interface DailyChartPoint {
+  date: string;
+  revenue: number;
+  expense: number;
+  profit: number;
+}
+
+export interface ProfitReportData {
+  kpis: ProfitKpis;
+  dailyChart: DailyChartPoint[];
+  revenueBreakdown: Record<string, number>;
+  expenseBreakdown: Record<string, number>;
+  vehicleProfit: Array<{ vehicle: string; vehicleId: number | string; revenue: number; expense: number; profit: number }>;
+  driverProfit: Array<{ driver: string; driverId: number | string; trips: number; revenue: number; expense: number; profit: number }>;
+  areaReport: Array<{ area: string; trips: number; revenue: number }>;
+  todaySnapshot: { revenue: number; expense: number; profit: number };
+  filters?: {
+    vehicles: Array<{ id: number | string; name: string; vehicle_number?: string }>;
+    drivers: Array<{ id: number | string; name: string }>;
+    serviceTypes: string[];
+  };
+}
+
 export type ReportData = 
   | BookingsReportData
   | RevenueReportData
@@ -240,7 +286,8 @@ export type ReportData =
   | NonGstReportData
   | MaintenanceReportData
   | LedgerReportData
-  | FuelsReportData;
+  | FuelsReportData
+  | ProfitReportData;
 
 // API response types
 export interface ApiSuccessResponse<T> {

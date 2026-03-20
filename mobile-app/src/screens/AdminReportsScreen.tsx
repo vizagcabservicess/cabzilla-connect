@@ -34,8 +34,10 @@ const REPORT_TYPES = [
   { id: 'bookings', label: 'Bookings' },
   { id: 'drivers', label: 'Drivers' },
   { id: 'vehicles', label: 'Vehicles' },
+  { id: 'gst', label: 'GST' },
+  { id: 'nongst', label: 'Non-GST' },
   { id: 'ledger', label: 'Ledger' },
-  { id: 'fuels', label: 'Fuel' },
+  { id: 'fuels', label: 'Fuels' },
   { id: 'maintenance', label: 'Maintenance' },
 ] as const;
 

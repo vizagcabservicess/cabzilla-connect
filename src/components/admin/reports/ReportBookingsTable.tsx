@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -8,14 +8,48 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { format } from 'date-fns';
 import { BookingsReportData, BookingsByDate } from '@/types/reports';
+import { fetchBookingsByDate } from '@/services/reportsAPI';
+import { Loader2 } from 'lucide-react';
 
 interface ReportBookingsTableProps {
   data: BookingsReportData;
+  onDateClick?: (date: string) => void;
+  /** Applied report filters — drill-down uses same trip/payment filters as summary */
+  drillDownFilters?: { tripStatus: string; paymentStatus: string };
 }
 
-export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
+export function ReportBookingsTable({ data, onDateClick, drillDownFilters }: ReportBookingsTableProps) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dayBookings, setDayBookings] = useState<any[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+
+  const handleDateClick = useCallback(async (date: string) => {
+    if (onDateClick) {
+      onDateClick(date);
+      return;
+    }
+    setSelectedDate(date);
+    setLoadingBookings(true);
+    setDayBookings([]);
+    try {
+      const bookings = await fetchBookingsByDate(date, {
+        tripStatus: drillDownFilters?.tripStatus,
+        paymentStatus: drillDownFilters?.paymentStatus,
+      });
+      setDayBookings(bookings);
+    } finally {
+      setLoadingBookings(false);
+    }
+  }, [onDateClick, drillDownFilters?.tripStatus, drillDownFilters?.paymentStatus]);
   // Process data to ensure it's in the correct format
   let dailyBookings: BookingsByDate[] = [];
   
@@ -29,13 +63,14 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
   // Calculate totals from the daily bookings
   const totalBookings = dailyBookings.reduce((sum, item) => sum + (item.count || 0), 0);
   
-  // Get status counts from data if available
-  const bookingsByStatus = data?.bookingsByStatus || {
-    completed: 0,
-    cancelled: 0,
-    confirmed: 0,
-    assigned: 0,
-    pending: 0
+  // Get status counts from data if available (ensure numeric to avoid NaN%)
+  const statusCounts = data?.bookingsByStatus || {};
+  const bookingsByStatus = {
+    completed: Number(statusCounts.completed ?? 0),
+    cancelled: Number(statusCounts.cancelled ?? 0),
+    confirmed: Number(statusCounts.confirmed ?? 0),
+    assigned: Number(statusCounts.assigned ?? 0),
+    pending: Number(statusCounts.pending ?? 0)
   };
   
   // Format date for display
@@ -73,14 +108,18 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
           </TableHeader>
           <TableBody>
             {dailyBookings.map((row, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">{formatReportDate(row.date)}</TableCell>
+              <TableRow
+                key={index}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleDateClick(row.date)}
+              >
+                <TableCell className="font-medium text-primary">{formatReportDate(row.date)}</TableCell>
                 <TableCell className="text-right">{row.count || 0}</TableCell>
-                <TableCell className="text-right">-</TableCell>
-                <TableCell className="text-right">-</TableCell>
-                <TableCell className="text-right">-</TableCell>
-                <TableCell className="text-right">-</TableCell>
-                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">{row.completed ?? '-'}</TableCell>
+                <TableCell className="text-right">{row.cancelled ?? '-'}</TableCell>
+                <TableCell className="text-right">{row.confirmed ?? '-'}</TableCell>
+                <TableCell className="text-right">{row.assigned ?? '-'}</TableCell>
+                <TableCell className="text-right">{row.pending ?? '-'}</TableCell>
               </TableRow>
             ))}
             <TableRow className="bg-muted/50 font-medium">
@@ -95,6 +134,67 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={!!selectedDate} onOpenChange={(open) => !open && setSelectedDate(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" aria-describedby="bookings-dialog-desc">
+          <DialogHeader>
+            <DialogTitle>
+              Bookings for {selectedDate ? format(new Date(selectedDate), 'dd MMM yyyy') : ''}
+            </DialogTitle>
+            <DialogDescription id="bookings-dialog-desc">
+              View booking details for the selected date.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingBookings ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : dayBookings.length === 0 ? (
+            <p className="text-muted-foreground py-4">No bookings found for this date.</p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Booking #</TableHead>
+                    <TableHead>Passenger</TableHead>
+                    <TableHead>Pickup</TableHead>
+                    <TableHead>Drop</TableHead>
+                    <TableHead>Pickup Date</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dayBookings.map((b: Record<string, unknown>) => (
+                    <TableRow key={String(b.id)}>
+                      <TableCell className="font-medium">{String(b.booking_number ?? '-')}</TableCell>
+                      <TableCell>{String(b.passenger_name ?? '-')}</TableCell>
+                      <TableCell className="max-w-[120px] truncate" title={String(b.pickup_location ?? '')}>{String(b.pickup_location ?? '-')}</TableCell>
+                      <TableCell className="max-w-[120px] truncate" title={String(b.drop_location ?? '')}>{String(b.drop_location ?? '-')}</TableCell>
+                      <TableCell>{b.pickup_date ? format(new Date(String(b.pickup_date)), 'dd MMM yyyy') : '-'}</TableCell>
+                      <TableCell>{String(b.pickup_time ?? '-')}</TableCell>
+                      <TableCell className="text-right">₹{Number(b.total_amount ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          String(b.status ?? '').toLowerCase() === 'completed' ? 'bg-green-100 text-green-800' :
+                          String(b.status ?? '').toLowerCase() === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          String(b.status ?? '').toLowerCase() === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                          String(b.status ?? '').toLowerCase() === 'assigned' ? 'bg-amber-100 text-amber-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {String(b.status ?? 'pending')}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       
       <div className="mt-6">
         <h3 className="text-lg font-medium mb-2">Summary</h3>
@@ -121,6 +221,7 @@ export function ReportBookingsTable({ data }: ReportBookingsTableProps) {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

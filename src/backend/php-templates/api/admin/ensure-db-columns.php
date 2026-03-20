@@ -102,6 +102,13 @@ try {
         $changes[] = "Added extra_charges column to invoices table";
     }
     
+    // Add gst_rate column to invoices - store the actual GST % used (5, 12, or 18)
+    $checkGstRate = $conn->query("SHOW COLUMNS FROM invoices LIKE 'gst_rate'");
+    if (!$checkGstRate || $checkGstRate->num_rows === 0) {
+        $conn->query("ALTER TABLE invoices ADD COLUMN gst_rate DECIMAL(5,2) DEFAULT NULL AFTER gst_amount");
+        $changes[] = "Added gst_rate column to invoices table";
+    }
+    
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Database schema updated successfully',

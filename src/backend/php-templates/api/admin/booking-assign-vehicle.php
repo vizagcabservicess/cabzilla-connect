@@ -210,10 +210,23 @@ try {
             logDebug("Created assignment #$assignmentId for booking #$bookingId with vehicle $vehicleId" . ($driverId ? " and driver $driverId" : ""));
         }
         
-        // Update the booking table with vehicle_id and update status to confirmed
-        $updateBookingSql = "UPDATE bookings SET fleet_vehicle_id = ?, status = 'confirmed', updated_at = NOW() WHERE id = ?";
+        // Get vehicle_number from fleet_vehicles for the booking
+        $vehicleNum = null;
+        $vehicleStmt = $conn->prepare("SELECT vehicle_number FROM fleet_vehicles WHERE id = ? LIMIT 1");
+        if ($vehicleStmt) {
+            $vehicleStmt->bind_param("s", $vehicleId);
+            $vehicleStmt->execute();
+            $vr = $vehicleStmt->get_result();
+            if ($vr && $vr->num_rows > 0) {
+                $vehicleNum = $vr->fetch_assoc()['vehicle_number'];
+            }
+            $vehicleStmt->close();
+        }
+
+        // Update the booking table with fleet_vehicle_id, vehicle_number, and status
+        $updateBookingSql = "UPDATE bookings SET fleet_vehicle_id = ?, vehicle_number = COALESCE(?, vehicle_number), status = 'confirmed', updated_at = NOW() WHERE id = ?";
         $updateBookingStmt = $conn->prepare($updateBookingSql);
-        $updateBookingStmt->bind_param("si", $vehicleId, $bookingId);
+        $updateBookingStmt->bind_param("ssi", $vehicleId, $vehicleNum, $bookingId);
         
         if (!$updateBookingStmt->execute()) {
             logDebug("Warning: Could not update booking table: " . $updateBookingStmt->error);

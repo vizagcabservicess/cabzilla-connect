@@ -14,11 +14,7 @@ import {
   LedgerReportData,
   FuelsReportData
 } from '@/types/reports';
-
-// Get base API URL based on environment
-const getApiBaseUrl = (): string => {
-  return 'https://www.vizagtaxihub.com';
-};
+import { apiBaseUrl } from '@/config/api';
 
 /**
  * Fetch report data from the API
@@ -31,7 +27,12 @@ export async function fetchReport<T extends ReportData>(params: ReportFilterPara
       periodFilter = 'custom',
       withGst = false,
       paymentMethod = '',
-      onlyGstEnabled = false
+      onlyGstEnabled = false,
+      vehicleId = '',
+      driverId = '',
+      serviceType = '',
+      tripStatus = '',
+      paymentStatus = ''
     } = params;
     
     // Build API parameters object
@@ -57,18 +58,37 @@ export async function fetchReport<T extends ReportData>(params: ReportFilterPara
       apiParams.payment_method = paymentMethod;
     }
     
-    // Add parameter for GST filtering
-    if (onlyGstEnabled || reportType === 'gst') {
+    // GST-customer filter (revenue etc.) — never send for Non-GST report type
+    if (reportType === 'gst') {
       apiParams.only_gst_enabled = 'true';
+    } else if (onlyGstEnabled && reportType !== 'nongst') {
+      apiParams.only_gst_enabled = 'true';
+    }
+    
+    // Profit dashboard filters
+    if (reportType === 'profit') {
+      if (vehicleId) apiParams.vehicle_id = vehicleId;
+      if (driverId) apiParams.driver_id = driverId;
+      if (serviceType) apiParams.service_type = serviceType;
+    }
+    // Vehicles report filter
+    if (reportType === 'vehicles' && vehicleId) {
+      apiParams.vehicle_id = vehicleId;
+    }
+
+    const ts = (tripStatus || '').trim().toLowerCase();
+    const ps = (paymentStatus || '').trim().toLowerCase();
+    if (ts && ts !== 'all') {
+      apiParams.trip_status = ts;
+    }
+    if (ps && ps !== 'all') {
+      apiParams.payment_status = ps;
     }
     
     // Convert parameters to query string
     const queryString = Object.entries(apiParams)
       .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
       .join('&');
-    
-    // Get API base URL
-    const apiBaseUrl = getApiBaseUrl();
     
     // Build full URL
     const url = `${apiBaseUrl}/api/admin/reports.php?${queryString}`;
@@ -98,6 +118,67 @@ export async function fetchReport<T extends ReportData>(params: ReportFilterPara
     }
   } catch (error) {
     console.error('Error fetching report:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch bookings for a specific date (drill-down from bookings report)
+ */
+export async function fetchBookingsByDate(
+  date: string,
+  filters?: { tripStatus?: string; paymentStatus?: string }
+): Promise<Record<string, unknown>[]> {
+  try {
+    const params = new URLSearchParams({ type: 'bookings', date });
+    const ts = (filters?.tripStatus || '').trim().toLowerCase();
+    const ps = (filters?.paymentStatus || '').trim().toLowerCase();
+    if (ts && ts !== 'all') params.set('trip_status', ts);
+    if (ps && ps !== 'all') params.set('payment_status', ps);
+    const url = `${apiBaseUrl}/api/admin/reports.php?${params}`;
+    const response = await fetch(url, {
+      headers: { 'Cache-Control': 'no-cache', 'X-Force-Refresh': 'true' }
+    });
+    if (!response.ok) throw new Error(`Failed to fetch bookings: ${response.status}`);
+    const json = await response.json() as { status: string; data?: Record<string, unknown>[] };
+    if (json.status === 'success' && Array.isArray(json.data)) return json.data;
+    return [];
+  } catch (error) {
+    console.error('Error fetching bookings by date:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch bookings for a specific vehicle and date range (Vehicles report trip drill-down)
+ */
+export async function fetchBookingsByVehicle(
+  vehicleId: string,
+  startDate: string,
+  endDate: string,
+  filters?: { tripStatus?: string; paymentStatus?: string }
+): Promise<Record<string, unknown>[]> {
+  try {
+    const params = new URLSearchParams({
+      type: 'bookings',
+      vehicle_id: vehicleId,
+      start_date: startDate,
+      end_date: endDate,
+    });
+    const ts = (filters?.tripStatus || '').trim().toLowerCase();
+    const ps = (filters?.paymentStatus || '').trim().toLowerCase();
+    if (ts && ts !== 'all') params.set('trip_status', ts);
+    if (ps && ps !== 'all') params.set('payment_status', ps);
+    const url = `${apiBaseUrl}/api/admin/reports.php?${params}`;
+    const response = await fetch(url, {
+      headers: { 'Cache-Control': 'no-cache', 'X-Force-Refresh': 'true' }
+    });
+    if (!response.ok) throw new Error(`Failed to fetch vehicle bookings: ${response.status}`);
+    const json = await response.json() as { status: string; data?: Record<string, unknown>[] };
+    if (json.status === 'success' && Array.isArray(json.data)) return json.data;
+    return [];
+  } catch (error) {
+    console.error('Error fetching bookings by vehicle:', error);
     throw error;
   }
 }
@@ -215,7 +296,7 @@ export function exportReportToCSV(reportType: string, data: any): void {
         dataToExport = data.drivers || [];
         break;
       case 'vehicles':
-        dataToExport = data.vehicles || [];
+        dataToExport = data.vehicles || data.topVehicles || [];
         break;
       case 'nongst':
         dataToExport = data.bills || [];
@@ -228,6 +309,11 @@ export function exportReportToCSV(reportType: string, data: any): void {
         break;
       case 'fuels':
         dataToExport = data.fuels || [];
+        break;
+      case 'profit':
+        dataToExport = data.vehicleProfit?.length
+          ? [...(data.vehicleProfit || []), ...(data.driverProfit || [])]
+          : data.dailyChart || [];
         break;
       default:
         // If no specific structure, use the data as is

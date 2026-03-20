@@ -113,6 +113,8 @@ export interface Booking {
   pickup_date: string;
   pickupDate?: string;
   return_date?: string;
+  /** Route distance (km) shown at booking / on invoice */
+  distance?: number;
   trip_type: string;
   tripType?: string;
   trip_mode?: string;

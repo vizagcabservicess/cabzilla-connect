@@ -4,6 +4,11 @@ html, body {
 overflow-x: hidden !important;
 }
 
+/* Prevent layout jump when Radix Select/Dialog toggles body scroll (scrollbar width) */
+html {
+  scrollbar-gutter: stable;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

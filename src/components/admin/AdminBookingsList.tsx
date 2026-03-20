@@ -301,9 +301,9 @@ export function AdminBookingsList() {
       } catch (apiError) {
         console.warn('bookingAPI.assignDriver failed, trying direct fetch:', apiError);
       }
-      
-      // Direct fetch for better debugging
-      const directResponse = await fetch('/api/admin/update-booking.php', {
+
+      const driverPayload = driverData as { driverId?: string; driverName: string; driverPhone: string; vehicleNumber: string };
+      const directResponse = await fetch(getApiUrl('/api/admin/assign-driver.php'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -314,7 +314,10 @@ export function AdminBookingsList() {
         },
         body: JSON.stringify({
           bookingId: selectedBooking.id,
-          ...updatedData
+          driverId: driverPayload.driverId,
+          driverName: driverPayload.driverName,
+          driverPhone: driverPayload.driverPhone,
+          vehicleNumber: driverPayload.vehicleNumber
         })
       });
       

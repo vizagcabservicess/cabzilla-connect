@@ -522,7 +522,9 @@ export const adminAPI = {
       gstEnabled?: boolean;
       isIGST?: boolean;
       includeTax?: boolean;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string };
+      lockedBaseFare?: number;
+      adminNotes?: string;
+      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
       customInvoiceNumber?: string;
     }
   ): string => {
@@ -535,8 +537,15 @@ export const adminAPI = {
       isIGST: options?.isIGST ? '1' : '0',
       includeTax: options?.includeTax !== false ? '1' : '0',
     });
-    if (options?.customInvoiceNumber?.trim()) {
-      params.append('invoiceNumber', options.customInvoiceNumber.trim());
+    if ((options?.customInvoiceNumber ?? '').trim()) {
+      params.append('invoiceNumber', (options?.customInvoiceNumber ?? '').trim());
+    }
+    if ((options?.adminNotes ?? '').trim()) {
+      params.append('adminNotes', (options?.adminNotes ?? '').trim());
+    }
+    const lockedBase = options?.lockedBaseFare ?? options?.gstDetails?.lockedBaseFare;
+    if (lockedBase != null && lockedBase > 0) {
+      params.append('lockedBaseFare', String(lockedBase));
     }
     if (options?.gstEnabled && options?.gstDetails) {
       if (options.gstDetails.gstNumber) params.append('gstNumber', options.gstDetails.gstNumber);
@@ -556,7 +565,9 @@ export const adminAPI = {
       gstEnabled?: boolean;
       isIGST?: boolean;
       includeTax?: boolean;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string };
+      lockedBaseFare?: number;
+      adminNotes?: string;
+      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
       customInvoiceNumber?: string;
     }
   ): Promise<{ data: ArrayBuffer; isPdf: boolean }> => {
@@ -615,7 +626,9 @@ export const adminAPI = {
       gstEnabled?: boolean;
       isIGST?: boolean;
       includeTax?: boolean;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string };
+      lockedBaseFare?: number;
+      adminNotes?: string;
+      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
       customInvoiceNumber?: string;
     }
   ): Promise<string> => {
@@ -629,8 +642,15 @@ export const adminAPI = {
       isIGST: options?.isIGST ? '1' : '0',
       includeTax: options?.includeTax !== false ? '1' : '0',
     });
-    if (options?.customInvoiceNumber?.trim()) {
-      params.append('invoiceNumber', options.customInvoiceNumber.trim());
+    if ((options?.customInvoiceNumber ?? '').trim()) {
+      params.append('invoiceNumber', (options?.customInvoiceNumber ?? '').trim());
+    }
+    if ((options?.adminNotes ?? '').trim()) {
+      params.append('adminNotes', (options?.adminNotes ?? '').trim());
+    }
+    const lockedBase = options?.lockedBaseFare ?? options?.gstDetails?.lockedBaseFare;
+    if (lockedBase != null && lockedBase > 0) {
+      params.append('lockedBaseFare', String(lockedBase));
     }
     if (options?.gstEnabled && options?.gstDetails) {
       if (options.gstDetails.gstNumber) params.append('gstNumber', options.gstDetails.gstNumber);
@@ -692,14 +712,16 @@ export const adminAPI = {
     } as AdminInvoice;
   },
 
-  /** Generate invoice for booking - normalizes response (data.data or data.invoice) */
+  /** Generate invoice for booking - normalizes response (data.data or data.invoice). Matches web: passes lockedBaseFare for GST-inclusive. */
   generateInvoice: async (
     bookingId: number,
     options?: {
       gstEnabled?: boolean;
       isIGST?: boolean;
       includeTax?: boolean;
-      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string };
+      lockedBaseFare?: number;
+      adminNotes?: string;
+      gstDetails?: { gstNumber?: string; companyName?: string; companyAddress?: string; lockedBaseFare?: number };
       customInvoiceNumber?: string;
     }
   ): Promise<AdminInvoice> => {
@@ -711,14 +733,24 @@ export const adminAPI = {
       options?.includeTax !== undefined
         ? options.includeTax
         : (options?.gstEnabled ? true : false);
+    const gstDetails = options?.gstDetails ?? {};
+    const lockedBase = options?.lockedBaseFare ?? gstDetails.lockedBaseFare;
+    const mergedGstDetails =
+      lockedBase != null && lockedBase > 0 ? { ...gstDetails, lockedBaseFare: lockedBase } : gstDetails;
     const requestBody: Record<string, unknown> = {
       bookingId,
       gstEnabled: options?.gstEnabled ?? false,
       isIGST: options?.isIGST ?? false,
       includeTax: finalIncludeTax,
       invoiceNumber: options?.customInvoiceNumber ?? '',
-      gstDetails: options?.gstDetails ?? {},
+      gstDetails: mergedGstDetails,
     };
+    if (lockedBase != null && lockedBase > 0) {
+      requestBody.lockedBaseFare = lockedBase;
+    }
+    if ((options?.adminNotes ?? '').trim()) {
+      requestBody.adminNotes = (options?.adminNotes ?? '').trim();
+    }
     const response = await axios.post(url, requestBody, {
       headers: {
         Authorization: `Bearer ${token}`,

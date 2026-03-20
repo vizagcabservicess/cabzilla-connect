@@ -35,6 +35,24 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+/**
+ * Ensure bookings table supports driver assignment (driver_id column, status can be 'assigned').
+ */
+function ensureAssignDriverSchema($conn) {
+    $check = @$conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
+    if ($check && $check->num_rows === 0) {
+        @$conn->query("ALTER TABLE bookings ADD COLUMN driver_id INT(11) NULL");
+    }
+    $st = @$conn->query("SHOW COLUMNS FROM bookings WHERE Field = 'status'");
+    if ($st && $row = $st->fetch_assoc()) {
+        $type = strtolower($row['Type'] ?? '');
+        if (strpos($type, 'enum') !== false && strpos($type, 'assigned') === false) {
+            // Legacy enum without 'assigned' breaks UPDATE status='assigned' — widen to VARCHAR
+            @$conn->query("ALTER TABLE bookings MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending'");
+        }
+    }
+}
+
 // Helper function to log errors
 function logAssignDriverError($message, $data = []) {
     error_log("ASSIGN DRIVER ERROR: $message " . json_encode($data));
@@ -79,6 +97,11 @@ try {
         $driverId = $data['driver_id'];
     }
 
+    $vehicleNumber = isset($data['vehicleNumber']) ? trim($data['vehicleNumber']) : null;
+    if (!$vehicleNumber && isset($data['vehicle_number'])) {
+        $vehicleNumber = trim($data['vehicle_number']);
+    }
+
     if (!$bookingId || !$driverId) {
         error_log('Missing required data: bookingId=' . var_export($bookingId, true) . ', driverId=' . var_export($driverId, true));
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required data (bookingId, driverId)'], 400);
@@ -92,6 +115,8 @@ try {
         logAssignDriverError('Database connection failed');
         sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     }
+
+    ensureAssignDriverSchema($conn);
 
     // Start transaction
     $conn->begin_transaction();
@@ -115,9 +140,10 @@ try {
         
         $driver = $driverResult->fetch_assoc();
         
-        // Check if driver is available
-        if ($driver['status'] !== 'available') {
-            throw new Exception("Driver is not available");
+        // Admin assign: allow available and busy (reassign / multi-trip). Block only offline.
+        $ds = strtolower((string)($driver['status'] ?? ''));
+        if ($ds === 'offline') {
+            throw new Exception("Driver is offline and cannot be assigned");
         }
         
         // Get booking details
@@ -143,7 +169,8 @@ try {
             throw new Exception("Booking status is missing for booking ID: {$bookingId}");
         }
 
-        if (!in_array($booking['status'], ['pending', 'confirmed'])) {
+        $bs = strtolower((string)($booking['status'] ?? ''));
+        if (!in_array($bs, ['pending', 'confirmed', 'assigned'], true)) {
             throw new Exception("Booking cannot be assigned (current status: {$booking['status']})");
         }
         
@@ -163,12 +190,13 @@ try {
             throw new Exception("Failed to prepare booking update statement: " . $conn->error);
         }
         
+        $vehicleToUse = $vehicleNumber ?: (isset($driver['vehicle_number']) ? $driver['vehicle_number'] : $driver['vehicle'] ?? '');
         $updateBookingStmt->bind_param(
             "isssi",
             $driver['id'],
             $driver['name'],
             $driver['phone'],
-            $driver['vehicle'],
+            $vehicleToUse,
             $bookingId
         );
         
@@ -196,7 +224,7 @@ try {
         // Commit transaction
         $conn->commit();
         
-        // Send success response
+        // Send success response ($vehicleToUse set before UPDATE)
         sendJsonResponse([
             'status' => 'success',
             'message' => 'Driver assigned successfully',
@@ -206,7 +234,7 @@ try {
                 'driverId' => (int)$driver['id'],
                 'driverName' => $driver['name'],
                 'driverPhone' => $driver['phone'],
-                'vehicleNumber' => $driver['vehicle'],
+                'vehicleNumber' => $vehicleToUse,
                 'status' => 'assigned',
                 'updatedAt' => date('Y-m-d H:i:s')
             ]

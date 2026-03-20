@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Booking } from '@/types/api';
 import { FleetVehicle } from '@/types/cab';
 import { fleetAPI } from '@/services/api/fleetAPI';
+import { getApiUrl } from '@/config/api';
 import { Loader2 } from 'lucide-react';
 
 interface FleetVehicleAssignmentProps {
@@ -27,25 +27,24 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
   }, []);
 
   useEffect(() => {
-    console.log('Booking vehicleNumber:', booking?.vehicleNumber);
-    console.log('Fleet vehicles:', fleetVehicles.map(v => v.vehicleNumber));
-    if (booking?.vehicleNumber && fleetVehicles.length > 0) {
-      const assigned = fleetVehicles.find(v => v.vehicleNumber === booking.vehicleNumber);
-      if (assigned) {
-        setSelectedVehicleId(assigned.id);
-      }
+    if (!fleetVehicles.length) return;
+    const assigned = fleetVehicles.find(
+      (v) =>
+        (booking.vehicleId && String(v.id) === String(booking.vehicleId)) ||
+        (booking.vehicleNumber && (v.vehicleNumber === booking.vehicleNumber || (v as { vehicle_number?: string }).vehicle_number === booking.vehicleNumber))
+    );
+    if (assigned) {
+      setSelectedVehicleId(String(assigned.id));
     }
-  }, [booking, fleetVehicles]);
+  }, [booking.vehicleId, booking.vehicleNumber, fleetVehicles]);
 
   const fetchFleetVehicles = async () => {
     try {
       setIsLoadingVehicles(true);
       setError(null);
       
-      console.log("Fetching fleet vehicles for assignment");
-      // Fetch from the real fleet vehicles endpoint
-      const apiUrl = '/api/admin/fleet_vehicles.php/vehicles';
-      const response = await fetch(apiUrl).then(res => res.json());
+      const apiUrl = getApiUrl('/api/admin/fleet_vehicles.php/vehicles');
+      const response = await fetch(apiUrl).then((res) => res.json());
       const vehicles = response.vehicles || [];
       setFleetVehicles(vehicles);
       console.log("Fetched fleet vehicles:", vehicles);
@@ -72,7 +71,7 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
       setIsAssigningVehicle(true);
       
       // Find the selected vehicle to get its number
-      const selectedVehicle = fleetVehicles.find(v => v.id === selectedVehicleId);
+      const selectedVehicle = fleetVehicles.find((v) => String(v.id) === selectedVehicleId);
       if (!selectedVehicle) {
         throw new Error("Selected vehicle not found");
       }
@@ -82,8 +81,8 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
       
       // Call the onAssign function with the vehicle details
       await onAssign({
-        vehicleNumber: selectedVehicle.vehicleNumber,
-        vehicleId: selectedVehicle.id
+        vehicleNumber: selectedVehicle.vehicleNumber || (selectedVehicle as { vehicle_number?: string }).vehicle_number || '',
+        vehicleId: String(selectedVehicle.id)
       });
       
       toast.success("Fleet vehicle assigned successfully");
@@ -113,12 +112,10 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
     return `${vehicleNumber} - ${name} ${model} (${year})`;
   };
 
-  // Filter to only show true fleet vehicles (with vehicleNumber, name, and year)
-  const filteredFleetVehicles = fleetVehicles.filter((v) =>
-    typeof v.vehicleNumber === 'string' && v.vehicleNumber.trim() !== '' &&
-    typeof v.name === 'string' && v.name.trim() !== '' &&
-    typeof v.year === 'number' && v.year > 1900
-  );
+  const filteredFleetVehicles = fleetVehicles.filter((v) => {
+    const num = v.vehicleNumber || (v as { vehicle_number?: string }).vehicle_number;
+    return typeof num === 'string' && num.trim() !== '';
+  });
 
   return (
     <Card className="p-6">
@@ -126,25 +123,22 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
       <div className="space-y-4">
         <div>
           <Label htmlFor="fleetVehicle">Select Fleet Vehicle</Label>
-          <Select
+          <select
+            id="fleetVehicle"
             value={selectedVehicleId}
-            onValueChange={handleVehicleSelect}
+            onChange={(e) => handleVehicleSelect(e.target.value)}
             disabled={isLoadingVehicles}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <SelectTrigger id="fleetVehicle" className="w-full">
-              <SelectValue placeholder={isLoadingVehicles ? "Loading fleet vehicles..." : "Select a fleet vehicle"} />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredFleetVehicles.map((vehicle) => (
-                <SelectItem key={vehicle.id} value={vehicle.id}>
-                  {formatVehicleDisplay(vehicle)}
-                </SelectItem>
-              ))}
-              {filteredFleetVehicles.length === 0 && !isLoadingVehicles && (
-                <SelectItem value="none" disabled>No available fleet vehicles</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+            <option value="">
+              {isLoadingVehicles ? 'Loading fleet vehicles...' : 'Select a fleet vehicle'}
+            </option>
+            {filteredFleetVehicles.map((vehicle) => (
+              <option key={vehicle.id} value={String(vehicle.id)}>
+                {formatVehicleDisplay(vehicle)}
+              </option>
+            ))}
+          </select>
           {booking?.vehicleNumber && (
             <div className="text-xs text-green-600 mt-1">
               Currently assigned: {booking.vehicleNumber}

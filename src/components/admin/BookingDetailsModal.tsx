@@ -83,9 +83,7 @@ export function BookingDetailsModal({
     }
   }, [isOpen]);
 
-  if (!booking) return null;
-
-  // Track if we're interacting with a switch to prevent dialog from closing
+  // Track if we're interacting with a switch to prevent dialog from closing (must be before any early return)
   const isInteractingWithSwitch = useRef(false);
   const switchInteractionTimeout = useRef<NodeJS.Timeout | null>(null);
   const lastInteractionTime = useRef<number>(0);
@@ -192,6 +190,8 @@ export function BookingDetailsModal({
       };
     }
   }, [isOpen]);
+
+  if (!booking) return null;
   
   // More aggressive prevention - block onOpenChange from closing unless explicitly requested
   // BUT allow close button (X) to always work
@@ -251,47 +251,37 @@ export function BookingDetailsModal({
         className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content z-[10001] bg-background"
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement;
-          // #region agent log
-          console.log('🔍 onInteractOutside CALLED', {targetTag:target?.tagName,targetId:target?.id,isSwitch:!!(target.closest('button[role="switch"]') || target.closest('[id*="toggle"]'))});
-          // #endregion
-          // Check if clicking on a switch
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
           if (isSwitch) {
-            // #region agent log
-            console.log('🔍 onInteractOutside PREVENTING (switch click)');
-            // #endregion
-            // CRITICAL: Prevent dialog from closing when clicking on switch
             e.preventDefault();
             return;
           }
-          // Only prevent if clicking on backdrop, not on dialog content
-          const isOnBackdrop = !target.closest('[role="dialog"]') && 
-                               !target.closest('.booking-details-modal-content');
+          // Select/dropdown content is portaled to body - treat as "inside" so we don't close
+          const isSelectOrDropdown = target.closest('[role="listbox"]') || target.closest('[role="option"]') || target.closest('[role="menu"]') || target.closest('[data-radix-popper-content-wrapper]');
+          if (isSelectOrDropdown) {
+            e.preventDefault();
+            return;
+          }
+          const isOnBackdrop = !target.closest('[role="dialog"]') && !target.closest('.booking-details-modal-content');
           if (!isOnBackdrop) {
-            // Clicking inside dialog - prevent closing
             e.preventDefault();
           }
         }}
         onPointerDownOutside={(e) => {
           const target = e.target as HTMLElement;
-          // #region agent log
-          console.log('🔍 onPointerDownOutside CALLED', {targetTag:target?.tagName,targetId:target?.id,isSwitch:!!(target.closest('button[role="switch"]') || target.closest('[id*="toggle"]'))});
-          // #endregion
-          // Check if clicking on a switch
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');
           if (isSwitch) {
-            // #region agent log
-            console.log('🔍 onPointerDownOutside PREVENTING (switch click)');
-            // #endregion
-            // CRITICAL: Prevent dialog from closing when clicking on switch
             e.preventDefault();
             return;
           }
-          // Only prevent if clicking on backdrop, not on dialog content
-          const isOnBackdrop = !target.closest('[role="dialog"]') && 
-                               !target.closest('.booking-details-modal-content');
+          // Select/dropdown content is portaled to body - treat as "inside" so we don't close
+          const isSelectOrDropdown = target.closest('[role="listbox"]') || target.closest('[role="option"]') || target.closest('[role="menu"]') || target.closest('[data-radix-popper-content-wrapper]');
+          if (isSelectOrDropdown) {
+            e.preventDefault();
+            return;
+          }
+          const isOnBackdrop = !target.closest('[role="dialog"]') && !target.closest('.booking-details-modal-content');
           if (!isOnBackdrop) {
-            // Clicking inside dialog - prevent closing
             e.preventDefault();
           }
         }}

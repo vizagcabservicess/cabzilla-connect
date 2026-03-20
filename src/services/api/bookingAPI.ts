@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@/config';
+import { getApiUrl } from '@/config/api';
 import { BookingRequest, BookingStatus, Booking } from '@/types/api';
 
 // Helper function to create API URLs that work in both development and production
@@ -384,7 +385,7 @@ export const bookingAPI = {
         vehicleNumber: driverDetails.vehicleNumber
       };
       const response = await axios.post(
-        `${API_BASE_URL}/api/admin/assign-driver.php`,
+        getApiUrl('/api/admin/assign-driver.php'),
         payload,
         {
           headers: {

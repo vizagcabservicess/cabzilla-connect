@@ -199,6 +199,10 @@ try {
             'returnDate' => $row['return_date'],
             'cabType' => $row['cab_type'],
             'distance' => (float)($row['distance'] ?? 0),
+            'extra_per_km' => isset($row['extra_per_km']) && $row['extra_per_km'] !== '' && $row['extra_per_km'] !== null
+                ? (float)$row['extra_per_km'] : null,
+            'km_included' => isset($row['km_included']) && $row['km_included'] !== '' && $row['km_included'] !== null
+                ? (float)$row['km_included'] : null,
             'tripType' => $row['trip_type'],
             'tripMode' => $row['trip_mode'],
             'totalAmount' => (float)$row['total_amount'],
@@ -210,6 +214,7 @@ try {
             'driverName' => $row['driver_name'] ?? null,
             'driverPhone' => $row['driver_phone'] ?? null,
             'vehicleNumber' => $row['vehicle_number'] ?? null,
+            'vehicleId' => isset($row['fleet_vehicle_id']) ? (string)$row['fleet_vehicle_id'] : null,
             'billingAddress' => $row['billing_address'] ?? null,
             'extraCharges' => json_decode($row['extra_charges'] ?? '[]'),
             'tourId' => $row['tour_id'] ?? null,

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -12,7 +12,8 @@ import {
   Receipt, 
   BookOpen, 
   Wrench,
-  Filter
+  Filter,
+  TrendingUp
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
@@ -29,6 +30,7 @@ import { ReportNonGstTable } from './reports/ReportNonGstTable';
 import { ReportMaintenanceTable } from './reports/ReportMaintenanceTable';
 import { ReportLedgerTable } from './reports/ReportLedgerTable';
 import { ReportFuelsTable } from './reports/ReportFuelsTable';
+import { ReportProfitTable } from './reports/ReportProfitTable';
 import { 
   Select,
   SelectContent, 
@@ -56,22 +58,45 @@ import {
   exportReportToCSV
 } from '@/services/reportsAPI';
 import { ReportFilterParams } from '@/types/reports';
+import { apiBaseUrl } from '@/config/api';
+import { REPORT_MODULES } from '@/config/reportModules';
 
 interface ReportGeneratorProps {
   reportType?: string;
   dateRange?: DateRange;
 }
 
-// Payment method options for filtering
+// Payment method options for filtering (Radix Select requires non-empty values)
 const PAYMENT_METHODS = [
-  { value: '', label: 'All Payment Methods' },
+  { value: 'all', label: 'All Payment Methods' },
   { value: 'cash', label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'card', label: 'Card' },
   { value: 'upi', label: 'UPI' },
+  { value: 'razorpay', label: 'Razorpay' },
   { value: 'cheque', label: 'Cheque' },
   { value: 'other', label: 'Other' },
 ];
+
+const TRIP_STATUS_FILTERS = [
+  { value: 'all', label: 'All trip statuses' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const PAYMENT_STATUS_FILTERS = [
+  { value: 'all', label: 'All payment statuses' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'partial', label: 'Partial' },
+  { value: 'pending', label: 'Pending' },
+];
+
+/** Native selects inside the Filters popover avoid Radix Select's RemoveScroll (fixes layout shift / content sliding left). */
+const FILTER_POPOVER_SELECT_CLASS =
+  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function ReportGenerator({ reportType: initialReportType, dateRange: initialDateRange }: ReportGeneratorProps = {}) {
   const [activeTab, setActiveTab] = useState<string>(initialReportType || 'bookings');
@@ -85,14 +110,95 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
   );
   const [periodFilter, setPeriodFilter] = useState<string>('custom');
   const [withGst, setWithGst] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>('');
-  const [onlyGstEnabled, setOnlyGstEnabled] = useState<boolean>(true); // Default to true for GST reports
+  const [paymentMethod, setPaymentMethod] = useState<string>('all');
+  const [onlyGstEnabled, setOnlyGstEnabled] = useState<boolean>(false);
+  const [vehicleId, setVehicleId] = useState<string>('');
+  const [driverId, setDriverId] = useState<string>('');
+  const [serviceType, setServiceType] = useState<string>('');
+  const [tripStatus, setTripStatus] = useState<string>('all');
+  const [paymentStatus, setPaymentStatus] = useState<string>('all');
+  const [filterVehicles, setFilterVehicles] = useState<Array<{ id: string | number; name: string; vehicle_number?: string }>>([]);
   const { toast } = useToast();
 
-  // Effect for loading report data
+  // Ref to hold latest filter values — avoids stale closure when Apply runs before state commits
+  const filtersRef = useRef({
+    vehicleId,
+    driverId,
+    serviceType,
+    dateRange,
+    periodFilter,
+    withGst,
+    paymentMethod,
+    onlyGstEnabled,
+    tripStatus,
+    paymentStatus,
+  });
+  filtersRef.current = {
+    vehicleId,
+    driverId,
+    serviceType,
+    dateRange,
+    periodFilter,
+    withGst,
+    paymentMethod,
+    onlyGstEnabled,
+    tripStatus,
+    paymentStatus,
+  };
+
+  // Fetch vehicles for filter dropdown - use reports filter_options (same API as reports) then fleet API as fallback
+  useEffect(() => {
+    if (activeTab !== 'vehicles' && activeTab !== 'profit') return;
+    const fetchVehicles = async () => {
+      try {
+        // Primary: reports.php?type=filter_options&filter=vehicles (same API that serves reports)
+        const reportsUrl = `${apiBaseUrl}/api/admin/reports.php?type=filter_options&filter=vehicles&period=custom&start_date=${format(dateRange?.from ?? new Date(), 'yyyy-MM-dd')}&end_date=${format(dateRange?.to ?? new Date(), 'yyyy-MM-dd')}`;
+        const res = await fetch(reportsUrl, { headers: { 'Cache-Control': 'no-cache', 'X-Force-Refresh': 'true' } });
+        if (res.ok) {
+          const text = await res.text();
+          if (!text?.trim()) return;
+          const json = JSON.parse(text);
+          const data = json?.data ?? json;
+          const vehicles = data?.vehicles ?? data?.filters?.vehicles ?? [];
+          const list = (Array.isArray(vehicles) ? vehicles : []).map((v: { id: number; name?: string; vehicle_number?: string }) => ({
+            id: v.id,
+            name: String(v.name || v.vehicle_number || `Vehicle ${v.id}`),
+            vehicle_number: v.vehicle_number ?? ''
+          }));
+          if (list.length > 0) {
+            setFilterVehicles(list);
+            return;
+          }
+        }
+        // Fallback: fleet_vehicles API
+        const fleetUrl = `${apiBaseUrl}/api/admin/fleet_vehicles.php/vehicles?includeInactive=true`;
+        const fleetRes = await fetch(fleetUrl, { headers: { 'Cache-Control': 'no-cache' } });
+        if (!fleetRes.ok) return;
+        const fleetJson = await fleetRes.json();
+        const fleetList = (fleetJson?.vehicles || []).map((v: { id: number; name?: string; vehicleNumber?: string; vehicle_number?: string }) => ({
+          id: v.id,
+          name: v.name || v.vehicleNumber || v.vehicle_number || `Vehicle ${v.id}`,
+          vehicle_number: v.vehicleNumber ?? v.vehicle_number ?? ''
+        }));
+        setFilterVehicles(fleetList);
+      } catch {
+        setFilterVehicles([]);
+      }
+    };
+    fetchVehicles();
+  }, [activeTab]);
+
+  // Effect for loading report data when tab changes
   useEffect(() => {
     loadReport();
   }, [activeTab]);
+
+  // Auto-reload when vehicle/driver/service filters change (Vehicles or Profit tab) — pass values explicitly to avoid stale closure
+  useEffect(() => {
+    if (activeTab !== 'vehicles' && activeTab !== 'profit') return;
+    filtersRef.current = { vehicleId, driverId, serviceType, dateRange, periodFilter, withGst, paymentMethod, onlyGstEnabled, tripStatus, paymentStatus };
+    loadReport({ vehicleId: vehicleId || undefined, driverId: driverId || undefined, serviceType: serviceType || undefined });
+  }, [activeTab, vehicleId, driverId, serviceType]);
 
   // Effect to automatically set onlyGstEnabled when switching to GST tab
   useEffect(() => {
@@ -101,18 +207,26 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     }
   }, [activeTab]);
 
-  // Load report data
-  const loadReport = async () => {
+  // Load report data — reads from filtersRef (or explicit overrides) to avoid stale closure
+  const loadReport = async (overrides?: { vehicleId?: string; driverId?: string; serviceType?: string }) => {
     try {
       setLoading(true);
-      
+      const f = filtersRef.current;
+      const vId = overrides?.vehicleId ?? ((activeTab === 'profit' || activeTab === 'vehicles') ? (f.vehicleId || undefined) : undefined);
+      const dId = overrides?.driverId ?? (activeTab === 'profit' ? (f.driverId || undefined) : undefined);
+      const sType = overrides?.serviceType ?? (activeTab === 'profit' ? (f.serviceType || undefined) : undefined);
       const filterParams: ReportFilterParams = {
         reportType: activeTab,
-        dateRange,
-        periodFilter,
-        withGst,
-        paymentMethod,
-        onlyGstEnabled: activeTab === 'gst' ? true : onlyGstEnabled
+        dateRange: f.dateRange,
+        periodFilter: f.periodFilter,
+        withGst: f.withGst,
+        paymentMethod: f.paymentMethod === 'all' ? '' : f.paymentMethod,
+        onlyGstEnabled: activeTab === 'gst' ? true : f.onlyGstEnabled,
+        vehicleId: vId,
+        driverId: dId,
+        serviceType: sType,
+        tripStatus: f.tripStatus === 'all' ? '' : f.tripStatus,
+        paymentStatus: f.paymentStatus === 'all' ? '' : f.paymentStatus,
       };
       
       const data = await fetchReport(filterParams);
@@ -129,6 +243,8 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       // Initialize with empty data structure based on report type
       if (activeTab === 'gst') {
         setReportData({ gstInvoices: [], summary: {} });
+      } else if (activeTab === 'profit') {
+        setReportData({ kpis: {}, dailyChart: [], revenueBreakdown: {}, expenseBreakdown: {}, vehicleProfit: [], driverProfit: [], areaReport: [], todaySnapshot: {}, filters: {} });
       } else {
         setReportData([]);
       }
@@ -137,12 +253,29 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     }
   };
 
+  const syncFiltersRefFromState = () => {
+    filtersRef.current = {
+      vehicleId,
+      driverId,
+      serviceType,
+      dateRange,
+      periodFilter,
+      withGst,
+      paymentMethod,
+      onlyGstEnabled,
+      tripStatus,
+      paymentStatus,
+    };
+  };
+
   const handleApplyFilters = () => {
-    loadReport();
+    syncFiltersRefFromState();
+    void loadReport();
   };
 
   const handleRefresh = () => {
-    loadReport();
+    syncFiltersRefFromState();
+    void loadReport();
   };
 
   const handleExportCSV = () => {
@@ -175,6 +308,18 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     }
   };
 
+  const handleExportPDF = () => {
+    if (activeTab === 'profit' && reportData?.kpis) {
+      window.print();
+    } else {
+      toast({
+        title: "Export PDF",
+        description: "Use Export CSV for this report, or switch to Profit tab and generate a report to print/save as PDF",
+        variant: "default",
+      });
+    }
+  };
+
   const renderReportTable = () => {
     if (loading) {
       return (
@@ -189,6 +334,9 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     const isEmptyData = () => {
       if (activeTab === 'gst') {
         return !reportData || !reportData.gstInvoices || reportData.gstInvoices.length === 0;
+      }
+      if (activeTab === 'profit') {
+        return !reportData || !reportData.kpis;
       }
       
       if (Array.isArray(reportData)) {
@@ -213,13 +361,21 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
 
     switch (activeTab) {
       case 'bookings':
-        return <ReportBookingsTable data={reportData} />;
+        return (
+          <ReportBookingsTable
+            data={reportData}
+            drillDownFilters={{
+              tripStatus,
+              paymentStatus,
+            }}
+          />
+        );
       case 'revenue':
         return <ReportRevenueTable data={reportData} withGst={withGst} />;
       case 'drivers':
         return <ReportDriversTable data={reportData} />;
       case 'vehicles':
-        return <ReportVehiclesTable data={reportData} />;
+        return <ReportVehiclesTable data={reportData} dateRange={dateRange} />;
       case 'gst':
         return <ReportGstTable data={reportData} />;
       case 'nongst':
@@ -230,36 +386,27 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         return <ReportLedgerTable data={reportData} />;
       case 'fuels':
         return <ReportFuelsTable data={reportData} />;
+      case 'profit':
+        return <ReportProfitTable data={reportData} />;
       default:
         return null;
     }
   };
 
-  // Get the appropriate icon for each tab
-  const getTabIcon = (tabValue: string) => {
-    switch (tabValue) {
-      case 'bookings':
-        return <CalendarCheck className="h-4 w-4 mr-2" />;
-      case 'revenue':
-        return <FileText className="h-4 w-4 mr-2" />;
-      case 'drivers':
-        return <Car className="h-4 w-4 mr-2" />;
-      case 'vehicles':
-        return <Car className="h-4 w-4 mr-2" />;
-      case 'gst':
-        return <Receipt className="h-4 w-4 mr-2" />;
-      case 'nongst':
-        return <Receipt className="h-4 w-4 mr-2" />;
-      case 'maintenance':
-        return <Wrench className="h-4 w-4 mr-2" />;
-      case 'ledger':
-        return <BookOpen className="h-4 w-4 mr-2" />;
-      case 'fuels':
-        return <Fuel className="h-4 w-4 mr-2" />;
-      default:
-        return null;
-    }
+  // Icon map for report modules (driven by REPORT_MODULES)
+  const TAB_ICONS: Record<string, React.ReactNode> = {
+    bookings: <CalendarCheck className="h-4 w-4 mr-2" />,
+    revenue: <FileText className="h-4 w-4 mr-2" />,
+    drivers: <Car className="h-4 w-4 mr-2" />,
+    vehicles: <Car className="h-4 w-4 mr-2" />,
+    gst: <Receipt className="h-4 w-4 mr-2" />,
+    nongst: <Receipt className="h-4 w-4 mr-2" />,
+    maintenance: <Wrench className="h-4 w-4 mr-2" />,
+    ledger: <BookOpen className="h-4 w-4 mr-2" />,
+    fuels: <Fuel className="h-4 w-4 mr-2" />,
+    profit: <TrendingUp className="h-4 w-4 mr-2" />,
   };
+  const getTabIcon = (tabValue: string) => TAB_ICONS[tabValue] ?? null;
 
   return (
     <div className="space-y-6">
@@ -269,35 +416,65 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
           <p className="text-muted-foreground">Generate and analyze business reports</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-          <Popover>
+          <Popover modal={false}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full sm:w-auto">
                 <Filter className="mr-2 h-4 w-4" />
                 Filters
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80">
+            <PopoverContent className="w-80" avoidCollisions>
               <div className="space-y-4">
                 <h4 className="font-medium leading-none">Report Filters</h4>
-                <div className="space-y-2">
-                  <Label htmlFor="payment-method">Payment Method</Label>
-                  <Select 
-                    value={paymentMethod} 
-                    onValueChange={(value) => setPaymentMethod(value)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {PAYMENT_METHODS.map(method => (
-                          <SelectItem key={method.value} value={method.value}>
-                            {method.label}
-                          </SelectItem>
+                {(activeTab === 'bookings' || activeTab === 'nongst') && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="trip-status-filter">Trip status</Label>
+                      <select
+                        id="trip-status-filter"
+                        className={FILTER_POPOVER_SELECT_CLASS}
+                        value={tripStatus}
+                        onChange={(e) => setTripStatus(e.target.value)}
+                      >
+                        {TRIP_STATUS_FILTERS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
                         ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="payment-status-filter">Payment status</Label>
+                      <select
+                        id="payment-status-filter"
+                        className={FILTER_POPOVER_SELECT_CLASS}
+                        value={paymentStatus}
+                        onChange={(e) => setPaymentStatus(e.target.value)}
+                      >
+                        {PAYMENT_STATUS_FILTERS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="payment-method-filter">Payment Method</Label>
+                  <select
+                    id="payment-method-filter"
+                    className={FILTER_POPOVER_SELECT_CLASS}
+                    value={paymentMethod || 'all'}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  >
+                    {PAYMENT_METHODS.filter((m) => m.value && m.value.trim() !== '').map((method) => (
+                      <option key={method.value} value={method.value}>
+                        {method.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox 
@@ -308,7 +485,7 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
                   <Label htmlFor="gst-filter">Include GST calculations</Label>
                 </div>
 
-                {activeTab !== 'gst' && (
+                {activeTab !== 'gst' && activeTab !== 'nongst' && (
                   <div className="flex items-center space-x-2">
                     <Checkbox 
                       id="only-gst-enabled-filter" 
@@ -317,6 +494,65 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
                     />
                     <Label htmlFor="only-gst-enabled-filter">Only GST-enabled invoices</Label>
                   </div>
+                )}
+
+                {(activeTab === 'vehicles' || activeTab === 'profit') && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="filter-vehicle">Vehicle</Label>
+                      <select
+                        id="filter-vehicle"
+                        className={FILTER_POPOVER_SELECT_CLASS}
+                        value={vehicleId || 'all'}
+                        onChange={(e) => setVehicleId(e.target.value === 'all' ? '' : e.target.value)}
+                      >
+                        <option value="all">All Vehicles</option>
+                        {((reportData?.filters?.vehicles?.length ? reportData.filters.vehicles : filterVehicles) || [])
+                          .filter((v: { id: string | number; name: string; vehicle_number?: string; vehicleNumber?: string }) => v?.id != null && v?.id !== '')
+                          .map((v: { id: string | number; name: string; vehicle_number?: string; vehicleNumber?: string }) => (
+                            <option key={v.id} value={String(v.id)}>
+                              {v.vehicle_number || v.vehicleNumber || v.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    {activeTab === 'profit' && (
+                    <>
+                    <div className="space-y-2">
+                      <Label htmlFor="filter-driver">Driver</Label>
+                      <select
+                        id="filter-driver"
+                        className={FILTER_POPOVER_SELECT_CLASS}
+                        value={driverId || 'all'}
+                        onChange={(e) => setDriverId(e.target.value === 'all' ? '' : e.target.value)}
+                      >
+                        <option value="all">All Drivers</option>
+                        {(reportData?.filters?.drivers || [])
+                          .filter((d: { id: string | number; name: string }) => d?.id != null && d?.id !== '')
+                          .map((d: { id: string | number; name: string }) => (
+                            <option key={d.id} value={String(d.id)}>{d.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="filter-service-type">Service Type</Label>
+                      <select
+                        id="filter-service-type"
+                        className={FILTER_POPOVER_SELECT_CLASS}
+                        value={serviceType || 'all'}
+                        onChange={(e) => setServiceType(e.target.value === 'all' ? '' : e.target.value)}
+                      >
+                        <option value="all">All Service Types</option>
+                        {(reportData?.filters?.serviceTypes || ['local', 'outstation', 'airport'])
+                          .filter((s: string) => s != null && String(s).trim() !== '')
+                          .map((s: string) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                      </select>
+                    </div>
+                    </>
+                    )}
+                  </>
                 )}
 
                 <Button 
@@ -340,49 +576,29 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
             <Download className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
+          {activeTab === 'profit' && (
+            <Button 
+              variant="outline" 
+              className="w-full sm:w-auto" 
+              onClick={() => window.print()}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Export PDF
+            </Button>
+          )}
         </div>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-3 md:grid-cols-9 gap-1">
-              <TabsTrigger value="bookings" className="flex items-center">
-                <CalendarCheck className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Bookings</span>
-              </TabsTrigger>
-              <TabsTrigger value="revenue" className="flex items-center">
-                <FileText className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Revenue</span>
-              </TabsTrigger>
-              <TabsTrigger value="drivers" className="flex items-center">
-                <Car className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Drivers</span>
-              </TabsTrigger>
-              <TabsTrigger value="vehicles" className="flex items-center">
-                <Car className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Vehicles</span>
-              </TabsTrigger>
-              <TabsTrigger value="gst" className="flex items-center">
-                <Receipt className="h-4 w-4 mr-2 hidden md:block" />
-                <span>GST</span>
-              </TabsTrigger>
-              <TabsTrigger value="nongst" className="flex items-center">
-                <Receipt className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Non-GST</span>
-              </TabsTrigger>
-              <TabsTrigger value="maintenance" className="flex items-center">
-                <Wrench className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Maintenance</span>
-              </TabsTrigger>
-              <TabsTrigger value="ledger" className="flex items-center">
-                <BookOpen className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Ledger</span>
-              </TabsTrigger>
-              <TabsTrigger value="fuels" className="flex items-center">
-                <Fuel className="h-4 w-4 mr-2 hidden md:block" />
-                <span>Fuels</span>
-              </TabsTrigger>
+            <TabsList className="flex flex-wrap gap-1">
+              {REPORT_MODULES.map((mod) => (
+                <TabsTrigger key={mod.id} value={mod.id} className="flex items-center">
+                  {getTabIcon(mod.id)}
+                  <span className="hidden md:inline">{mod.label}</span>
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
         </CardHeader>

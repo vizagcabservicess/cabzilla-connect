@@ -32,6 +32,7 @@ interface GstDetails {
   gstNumber: string;
   companyName: string;
   companyAddress: string;
+  lockedBaseFare?: number;
 }
 
 interface InvoiceState {
@@ -39,15 +40,17 @@ interface InvoiceState {
   isIGST: boolean;
   includeTax: boolean;
   customInvoiceNumber: string;
+  adminNotes: string;
   gstDetails: GstDetails;
 }
 
-/** Web app logic: Base Fare (excluding GST) + Extra Charges + 18% GST = Total. Use tax-exclusive. */
+/** Web app logic: GST-inclusive default when GST enabled; exclusive when disabled. */
 const DEFAULT_INVOICE_STATE: InvoiceState = {
   gstEnabled: false,
   isIGST: false,
   includeTax: false,
   customInvoiceNumber: '',
+  adminNotes: '',
   gstDetails: { gstNumber: '', companyName: '', companyAddress: '' },
 };
 
@@ -57,17 +60,39 @@ function friendlyErrorMessage(e: unknown, fallback: string): string {
   return /JSON\s*parse|Unexpected\s*(character|token)/i.test(raw) ? fallback : raw || fallback;
 }
 
+/** Compute base fare from booking (matches web app baseFare/lockedBaseFare logic). */
+function computeBaseFareFromBooking(booking: Record<string, unknown> | undefined): number {
+  if (!booking) return 0;
+  const total = Number(booking.total_amount ?? booking.totalAmount ?? 0);
+  const fare = Number(booking.fare ?? 0);
+  let extraCharges = (booking.extra_charges ?? booking.extraCharges) as Array<{ amount?: number }> | string | undefined;
+  if (typeof extraCharges === 'string') {
+    try {
+      extraCharges = JSON.parse(extraCharges) as Array<{ amount?: number }>;
+    } catch {
+      extraCharges = undefined;
+    }
+  }
+  const extraTotal = Array.isArray(extraCharges)
+    ? extraCharges.reduce((s, c) => s + (c?.amount ?? 0), 0)
+    : 0;
+  if (fare > 0) return fare;
+  if (total > 0 && extraTotal >= 0) return Math.max(0, total - extraTotal);
+  return total;
+}
+
 function getInitialInvoiceState(booking: Record<string, unknown> | undefined): InvoiceState {
   const gstEnabled = Boolean((booking as any)?.gstEnabled);
   const fromBooking = {
     gstEnabled,
+    adminNotes: String((booking as any)?.adminNotes ?? (booking as any)?.admin_notes ?? ''),
     gstDetails: {
       gstNumber: String((booking as any)?.gstDetails?.gstNumber ?? ''),
       companyName: String((booking as any)?.gstDetails?.companyName ?? ''),
       companyAddress: String((booking as any)?.gstDetails?.companyAddress ?? ''),
     },
-    // Web app uses tax-exclusive: Base (excluding GST) + Extras + 18% GST = Total
-    includeTax: gstEnabled ? false : DEFAULT_INVOICE_STATE.includeTax,
+    // Web app: when GST enabled, default to tax-inclusive (price includes GST)
+    includeTax: gstEnabled ? true : DEFAULT_INVOICE_STATE.includeTax,
   };
   return {
     ...DEFAULT_INVOICE_STATE,
@@ -93,6 +118,7 @@ export function InvoiceScreen() {
   const [invoiceState, setInvoiceState] = useState<InvoiceState>(() =>
     getInitialInvoiceState(booking)
   );
+  const [hasStoredSettings, setHasStoredSettings] = useState<boolean | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -106,13 +132,38 @@ export function InvoiceScreen() {
             ...parsed,
             gstDetails: { ...prev.gstDetails, ...parsed?.gstDetails },
           }));
+          setHasStoredSettings(true);
+        } else {
+          setHasStoredSettings(false);
         }
       } catch {
-        // use default
+        setHasStoredSettings(false);
       }
     };
     load();
   }, [bookingId]);
+
+  /** Sync invoice state from stored invoice when no local settings exist (matches web app) */
+  useEffect(() => {
+    if (!invoice || hasStoredSettings !== false) return;
+    const inv = invoice as Record<string, unknown>;
+    const gstEnabled = Boolean(inv.gstEnabled ?? inv.gst_enabled);
+    const includeTaxVal = inv.includeTax ?? inv.include_tax;
+    const includeTax = includeTaxVal !== undefined ? Boolean(includeTaxVal) : (gstEnabled ? true : false);
+    setInvoiceState((prev) => ({
+      ...prev,
+      gstEnabled,
+      includeTax,
+      isIGST: Boolean(inv.isIGST ?? inv.is_igst ?? prev.isIGST),
+      adminNotes: String(inv.adminNotes ?? inv.admin_notes ?? prev.adminNotes),
+      gstDetails: {
+        ...prev.gstDetails,
+        gstNumber: String(inv.gstNumber ?? inv.gst_number ?? prev.gstDetails.gstNumber),
+        companyName: String(inv.companyName ?? inv.company_name ?? prev.gstDetails.companyName),
+        companyAddress: String(inv.companyAddress ?? inv.company_address ?? prev.gstDetails.companyAddress),
+      },
+    }));
+  }, [invoice, hasStoredSettings]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -142,12 +193,14 @@ export function InvoiceScreen() {
     }
     setGenerating(true);
     try {
+      const lockedBaseFare = computeBaseFareFromBooking(booking);
       const inv = await adminAPI.generateInvoice(bookingId, {
         gstEnabled: invoiceState.gstEnabled,
         isIGST: invoiceState.isIGST,
         includeTax: invoiceState.includeTax,
-        gstDetails: invoiceState.gstDetails,
+        gstDetails: { ...invoiceState.gstDetails, lockedBaseFare },
         customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
+        adminNotes: invoiceState.adminNotes.trim() || undefined,
       });
       setInvoice(inv);
       Alert.alert('Generated', 'Invoice generated successfully');
@@ -181,12 +234,15 @@ export function InvoiceScreen() {
     if (!bookingId) return;
     setLoadingPdf(true);
     try {
+      const lockedBaseFare = computeBaseFareFromBooking(booking);
       const html = await adminAPI.getInvoiceHtml(bookingId, {
         gstEnabled: invoiceState.gstEnabled,
         isIGST: invoiceState.isIGST,
         includeTax: invoiceState.includeTax,
+        lockedBaseFare,
         gstDetails: invoiceState.gstDetails,
         customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
+        adminNotes: invoiceState.adminNotes.trim() || undefined,
       });
       navigation.navigate('WebView', {
         url: '',
@@ -209,12 +265,15 @@ export function InvoiceScreen() {
     if (!bookingId) return;
     setLoadingPdf(true);
     try {
+      const lockedBaseFare = computeBaseFareFromBooking(booking);
       const { data } = await adminAPI.getInvoicePdfBlob(bookingId, {
         gstEnabled: invoiceState.gstEnabled,
         isIGST: invoiceState.isIGST,
         includeTax: invoiceState.includeTax,
+        lockedBaseFare,
         gstDetails: invoiceState.gstDetails,
         customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
+        adminNotes: invoiceState.adminNotes.trim() || undefined,
       });
       const bytes = new Uint8Array(data);
       let base64 = '';
@@ -312,6 +371,31 @@ export function InvoiceScreen() {
               <Text style={styles.label}>Base Fare</Text>
               <Text style={styles.value}>₹{Number(baseFare ?? 0).toLocaleString()}</Text>
             </View>
+            {invoiceState.gstEnabled && Number((invoice as Record<string, unknown>)?.taxAmount ?? (invoice as Record<string, unknown>)?.tax_amount ?? 0) > 0 && (
+              <>
+                {(invoice as Record<string, unknown>)?.isIGST ?? (invoice as Record<string, unknown>)?.is_igst ? (
+                  <View style={styles.row}>
+                    <Text style={styles.label}>IGST (18%)</Text>
+                    <Text style={styles.value}>₹{Number((invoice as Record<string, unknown>)?.taxAmount ?? (invoice as Record<string, unknown>)?.tax_amount ?? 0).toLocaleString()}</Text>
+                  </View>
+                ) : (
+                  <>
+                    {Number((invoice as Record<string, unknown>)?.cgstAmount ?? (invoice as Record<string, unknown>)?.cgst_amount ?? 0) > 0 && (
+                      <View style={styles.row}>
+                        <Text style={styles.label}>CGST (9%)</Text>
+                        <Text style={styles.value}>₹{Number((invoice as Record<string, unknown>)?.cgstAmount ?? (invoice as Record<string, unknown>)?.cgst_amount ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {Number((invoice as Record<string, unknown>)?.sgstAmount ?? (invoice as Record<string, unknown>)?.sgst_amount ?? 0) > 0 && (
+                      <View style={styles.row}>
+                        <Text style={styles.label}>SGST (9%)</Text>
+                        <Text style={styles.value}>₹{Number((invoice as Record<string, unknown>)?.sgstAmount ?? (invoice as Record<string, unknown>)?.sgst_amount ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </>
+            )}
             {Number(advancePaid ?? 0) > 0 && (
               <View style={styles.row}>
                 <Text style={styles.label}>Advance Paid</Text>
@@ -448,6 +532,20 @@ export function InvoiceScreen() {
               />
             </View>
 
+            <View style={styles.gstRow}>
+              <Text style={styles.gstLabel}>Admin Notes</Text>
+              <TextInput
+                style={[styles.gstInput, styles.gstInputMultiline]}
+                value={invoiceState.adminNotes}
+                onChangeText={(t) =>
+                  setInvoiceState((s) => ({ ...s, adminNotes: t }))
+                }
+                placeholder="Optional notes for the invoice"
+                placeholderTextColor={colors.gray400}
+                multiline
+              />
+            </View>
+
             <View style={[styles.gstRow, styles.gstRowSwitch]}>
               <Text style={styles.gstLabel}>Include GST (18%)</Text>
               <Switch
@@ -456,7 +554,8 @@ export function InvoiceScreen() {
                   setInvoiceState((s) => ({
                     ...s,
                     gstEnabled: v,
-                    includeTax: v ? false : s.includeTax,
+                    // When enabling GST, default to inclusive (match web app)
+                    includeTax: v ? true : s.includeTax,
                   }))
                 }
                 trackColor={{ false: colors.gray200, true: colors.primary + '80' }}

@@ -1,6 +1,35 @@
 
 import { Booking } from '@/types/api';
 
+/** True if we should show this value in customer-facing messages (omit N/A clutter). */
+function isPresentableValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim().toLowerCase();
+  return s !== '' && s !== 'n/a' && s !== 'na' && s !== 'null' && s !== 'undefined';
+}
+
+/**
+ * Upper km bound for flat airport tier before per-km surcharge — matches `calculateAirportFare` buckets
+ * (≤10, ≤20, ≤30, ≤40 km tiers; linear extra above 40 km).
+ */
+function airportBeyondKmThresholdForTrip(tripKmRounded: number): number {
+  const d = Math.max(0, Math.round(Number(tripKmRounded) || 0));
+  if (d <= 0) return 40;
+  if (d > 40) return 40;
+  if (d <= 10) return 10;
+  if (d <= 20) return 20;
+  if (d <= 30) return 30;
+  return 40;
+}
+
+function stringifyOptionalNum(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const n = Number(v);
+  if (Number.isFinite(n) && n >= 0) return String(Math.round(n));
+  const s = String(v).trim();
+  return s;
+}
+
 export function formatPhoneNumber(phone: string): string {
   // Remove all non-numeric characters
   const cleaned = phone.replace(/\D/g, '');
@@ -414,8 +443,9 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   }) : 'N/A';
   
 
-  // Calculate distance for round-trip (double the one-way distance)
-  const oneWayDistance = (booking as any).distance || 0;
+  // Calculate distance for round-trip (double the one-way distance); same km as guest saw when booking
+  const oneWayDistance =
+    Number((booking as any).distance ?? booking.distance ?? 0) || 0;
   const isRoundTrip = booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
   const totalDistance = isRoundTrip ? oneWayDistance * 2 : oneWayDistance;
 
@@ -462,19 +492,40 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     }
   }
   
-  // Get airport extra charges
-  let airportExtraKm = 'N/A';
+  // Airport: guest-facing trip km = booking.distance; extra rate = saved extra_per_km (admin "Extra KM Charge") when available
+  const tripKmRounded = Math.max(0, Math.round(Number(oneWayDistance) || 0));
+  let airportExtraKmDisplay = '';
+  let beyondKmForAirportExtra = '';
   if (tripType === 'airport') {
-    airportExtraKm = booking.extra_per_km || (booking as any).extraPerKm || (booking as any).price_per_km || 'N/A';
-    
-    // Fallback inference based on vehicle type
-    if (airportExtraKm === 'N/A') {
+    const rawRate =
+      booking.extra_per_km ??
+      (booking as any).extraPerKm ??
+      (booking as any).airport_extra_km_charge ??
+      (booking as any).airportExtraKmCharge ??
+      (booking as any).extra_km_charge ??
+      (booking as any).airportExtraKm ??
+      null;
+
+    if (rawRate !== null && rawRate !== undefined && String(rawRate).trim() !== '') {
+      airportExtraKmDisplay = stringifyOptionalNum(rawRate) || String(rawRate).trim();
+    }
+
+    const kmiRaw =
+      booking.km_included ??
+      (booking as any).kmIncluded ??
+      (booking as any).included_km ??
+      (booking as any).includedKm;
+    if (kmiRaw !== undefined && kmiRaw !== null && String(kmiRaw).trim() !== '') {
+      beyondKmForAirportExtra = stringifyOptionalNum(kmiRaw) || String(kmiRaw).trim();
+    } else if (tripKmRounded > 0) {
+      beyondKmForAirportExtra = String(airportBeyondKmThresholdForTrip(tripKmRounded));
+    } else {
+      beyondKmForAirportExtra = '40';
+    }
+
+    if (!isPresentableValue(airportExtraKmDisplay)) {
       const vehicleType = vehicleModel.toLowerCase();
-      if (vehicleType.includes('ertiga')) {
-        airportExtraKm = '18';
-      } else {
-        airportExtraKm = '14';
-      }
+      airportExtraKmDisplay = vehicleType.includes('ertiga') ? '18' : '14';
     }
   }
 
@@ -484,6 +535,52 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     destinationDisplay = tripType === 'local' ? 'Local City Ride' : 'As per itinerary';
   }
 
+  const hasWaitingInfo =
+    isPresentableValue(waitingChargePerHour) && isPresentableValue(graceMinutes);
+  const hasNightInfo =
+    isPresentableValue(nightWindow) && isPresentableValue(nightChargeRate);
+  const hasViaStops = isPresentableValue(viaStops);
+
+  let billingAndChargesBlock = `*Billing and Charges*
+📊 *Basis:* ${billingBasis}`;
+  if (hasWaitingInfo) {
+    billingAndChargesBlock += `\n⏳ *Waiting:* ₹${waitingChargePerHour} after ${graceMinutes} min grace`;
+  }
+  if (hasNightInfo) {
+    billingAndChargesBlock += `\n🌙 *Night charges:* ${nightWindow} at ₹${nightChargeRate}`;
+  }
+  if (tripType === 'local') {
+    billingAndChargesBlock += `\n📏 *Kilometers limit:* ${kmIncluded} km included, extra charges applicable beyond given kilometers on pro rate basis`;
+  }
+
+  let routeAndNotesBlock = '';
+  if (hasViaStops || Boolean(allNotes)) {
+    routeAndNotesBlock = '*Route and Notes*';
+    if (hasViaStops) {
+      routeAndNotesBlock += `\n🛣️ *Via/Stops:* ${viaStops}`;
+    }
+    if (allNotes) {
+      routeAndNotesBlock += `\n📝 *Special Notes:*
+${allNotes}`;
+    }
+  }
+
+  const airportChargeLines: string[] = [];
+  if (tripType === 'airport') {
+    airportChargeLines.push('*Airport Charges*');
+    if (tripKmRounded > 0) {
+      airportChargeLines.push(
+        `🛣️ *Booked trip distance:* ${tripKmRounded} km (same as shown when you booked)`
+      );
+    }
+    if (isPresentableValue(airportExtraKmDisplay) && beyondKmForAirportExtra) {
+      airportChargeLines.push(
+        `📈 *Extra km charge:* ₹${airportExtraKmDisplay}/km beyond ${beyondKmForAirportExtra} km`
+      );
+    }
+  }
+  const airportChargesBlock =
+    airportChargeLines.length > 1 ? airportChargeLines.join('\n') : '';
 
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
@@ -499,6 +596,7 @@ Your cab booking has been confirmed:
 ${returnDate ? `📅 *Return date & time:* ${formattedReturnDate}` : ''}
 🚗 *Trip type:* ${tripTypeDisplay}
 ${tripType === 'outstation' ? `📏 *Total distance:* ${totalDistance} km${isRoundTrip ? ' (round-trip)' : ''}` : ''}
+${tripType === 'airport' && tripKmRounded > 0 ? `📏 *Trip distance:* ${tripKmRounded} km` : ''}
 🚗 *Vehicle:* ${vehicleModel} [${vehicleRegNo}]
 👥 *Capacity:* ${vehicleCapacity} passengers
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
@@ -509,7 +607,7 @@ ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalReq
 💰 *Fare (base):* ₹${fareBase}
 💳 *Advance:* ₹${advanceAmount}, mode: ${advanceMode}
 ⏳ *Pending:* ₹${pendingAmount}, payable: ${pendingDue}
-${gstEnabled ? `🏢 *GST Details:* ${gstNumber} (${companyName})` : ''}
+${gstEnabled && isPresentableValue(gstNumber) ? `🏢 *GST Details:* ${gstNumber}${isPresentableValue(companyName) ? ` (${companyName})` : ''}` : ''}
 🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt
 
 *Trip Inclusions & Exclusions*
@@ -527,21 +625,13 @@ ${tripType === 'outstation' ? `*Outstation Charges*
 ⏱️ *Extra charges:* ₹${outstationExtraHour}/hour${isRoundTrip ? ' (12 hours per day for round-trip)' : ''}
 🔧 *Special:* During ghat roads and standby AC will turned off` : ''}
 
-${tripType === 'airport' ? `*Airport Charges*
-📈 *Extra distance:* ₹${airportExtraKm}/km beyond 40 km` : ''}
+${airportChargesBlock ? `${airportChargesBlock}
 
-*Billing and Charges*
-📊 *Basis:* ${billingBasis}
-⏳ *Waiting:* ₹${waitingChargePerHour} after ${graceMinutes} min grace
-🌙 *Night charges:* ${nightWindow} at ₹${nightChargeRate}
-${tripType === 'local' ? `📏 *Kilometers limit:* ${kmIncluded} km included, extra charges applicable beyond given kilometers on pro rate basis` : ''}
+` : ''}${billingAndChargesBlock}
 
-*Route and Notes*
-🛣️ *Via/Stops:* ${viaStops}
-${allNotes ? `📝 *Special Notes:*
-${allNotes}` : ''}
+${routeAndNotesBlock ? `${routeAndNotesBlock}
 
-${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
+` : ''}${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
 ${(booking as any).tour_itinerary.map((day: any) => {
   const activities = Array.isArray(day.activities) ? day.activities.join(', ') : '';
   return `📅 *Day ${day.day}: ${day.title}*
@@ -579,7 +669,8 @@ ${(tripType === 'tour' || tourId || (booking as any).tour_id) ? `*Additional Ter
 📞 *Driver helpline:* +91 9966363662
 📞 *Customer support:* +91 9966363662
 
-*Booking ID:* ${booking.id}
+*Booking #:* ${booking.bookingNumber || booking.id}
+${booking.bookingNumber ? `*Internal ID:* ${booking.id}` : ''}
 
 Thank you for choosing Vizag Taxi Hub. Have a safe and comfortable ride! 🙏`;
 }
@@ -636,7 +727,19 @@ Your driver will contact you shortly. Safe travels! 🙏`;
 
 export function generateInvoiceMessage(booking: Booking, invoiceUrl?: string): string {
   const passengerName = booking.passengerName || booking.guest_name || 'Customer';
-  
+  const pickupRaw = booking.pickup_date || booking.pickupDate;
+  const tripDateStr = pickupRaw
+    ? new Date(pickupRaw).toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '—';
+  const bookingRef = booking.bookingNumber || String(booking.id);
+
   return `🧾 *Invoice - Vizag Taxi Hub*
 
 Hello ${passengerName}!
@@ -644,8 +747,9 @@ Hello ${passengerName}!
 Your invoice is ready:
 
 💰 *Amount:* ₹${booking.fare || booking.totalAmount}
-📋 *Booking ID:* ${booking.id}
-📅 *Date:* ${booking.pickup_date || booking.pickupDate}
+📋 *Booking #:* ${bookingRef}
+📅 *Trip date & time:* ${tripDateStr}
+${booking.bookingNumber ? `🔢 *Reference ID:* ${booking.id}` : ''}
 
 ${invoiceUrl ? `📄 *Download Invoice:* ${invoiceUrl}` : ''}
 
