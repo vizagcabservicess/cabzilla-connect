@@ -192,6 +192,12 @@ export interface Booking {
   tourId?: string;
   tour_name?: string;
   tourName?: string;
+  /** Tour length from tour_fares.days (admin upcoming / reports). */
+  tourDays?: number | null;
+  /** Human-readable tour duration for dashboards (e.g. "2 Days"). */
+  tourDurationLabel?: string | null;
+  /** Normalized trip type label (e.g. Airport Transfer). */
+  tripTypeDisplay?: string;
   tour_itinerary?: TourItineraryDay[];
 }
 

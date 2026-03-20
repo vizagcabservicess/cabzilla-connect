@@ -340,6 +340,32 @@ try {
                     }
                 }
             }
+            // Fetch bookings by driver_id and date range (Drivers report trip drill-down)
+            if (!empty($driverId)) {
+                $bCheck = @$conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
+                if ($bCheck && $bCheck->num_rows > 0) {
+                    $sql = "SELECT id, booking_number, passenger_name, passenger_phone, pickup_location, drop_location, 
+                            pickup_date, DATE_FORMAT(pickup_date, '%H:%i') AS pickup_time, total_amount, status, created_at 
+                            FROM bookings 
+                            WHERE driver_id = ? AND DATE(created_at) BETWEEN ? AND ? ";
+                    $sql .= buildTripStatusSqlClause($conn, $tripStatusFilter, '');
+                    $sql .= buildBookingsReportPaymentFilterSql($conn, $paymentStatusFilter);
+                    $sql .= " ORDER BY created_at DESC";
+                    $stmt = $conn->prepare($sql);
+                    $didInt = ctype_digit((string)$driverId) ? (int)$driverId : 0;
+                    if ($didInt > 0) {
+                        $stmt->bind_param("iss", $didInt, $startDate, $endDate);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        $bookings = [];
+                        while ($row = $result->fetch_assoc()) {
+                            $bookings[] = $row;
+                        }
+                        $reportData = $bookings;
+                        break;
+                    }
+                }
+            }
             // Drill-down: fetch bookings for a single date when date param is provided
             if ($filterDate) {
                 $sql = "SELECT id, booking_number, passenger_name, passenger_phone, pickup_location, drop_location, 
@@ -1379,20 +1405,69 @@ try {
                 }
                 
                 if ($tableExists) {
-                    // Use actual fuel data
-                    $sql = "SELECT id, vehicle_id as vehicleId, fill_date as date, 
-                            quantity_liters as liters, price_per_liter as pricePerLiter, 
-                            total_cost as cost, odometer_reading as odometer, 
-                            station as fuelStation, payment_method as paymentMethod
-                            FROM fuel_records 
-                            WHERE DATE(fill_date) BETWEEN ? AND ?";
+                    // Columns differ across DB versions (quantity vs quantity_liters, etc.)
+                    $frCols = [];
+                    $colRes = @$conn->query("SHOW COLUMNS FROM fuel_records");
+                    if ($colRes) {
+                        while ($c = $colRes->fetch_assoc()) {
+                            $frCols[$c['Field']] = true;
+                        }
+                    }
+                    $qtyExpr = '0';
+                    if (isset($frCols['quantity']) && isset($frCols['quantity_liters'])) {
+                        $qtyExpr = 'COALESCE(NULLIF(fr.quantity, 0), fr.quantity_liters, 0)';
+                    } elseif (isset($frCols['quantity'])) {
+                        $qtyExpr = 'fr.quantity';
+                    } elseif (isset($frCols['quantity_liters'])) {
+                        $qtyExpr = 'fr.quantity_liters';
+                    }
+                    $priceExpr = '0';
+                    if (isset($frCols['price_per_unit']) && isset($frCols['price_per_liter'])) {
+                        $priceExpr = 'COALESCE(NULLIF(fr.price_per_unit, 0), fr.price_per_liter, 0)';
+                    } elseif (isset($frCols['price_per_unit'])) {
+                        $priceExpr = 'fr.price_per_unit';
+                    } elseif (isset($frCols['price_per_liter'])) {
+                        $priceExpr = 'fr.price_per_liter';
+                    }
+                    $odoExpr = isset($frCols['odometer'])
+                        ? 'fr.odometer'
+                        : (isset($frCols['odometer_reading']) ? 'fr.odometer_reading' : '0');
+                    if (isset($frCols['fuel_station']) && isset($frCols['station'])) {
+                        $stationExpr = 'COALESCE(NULLIF(TRIM(fr.fuel_station), \'\'), fr.station)';
+                    } elseif (isset($frCols['fuel_station'])) {
+                        $stationExpr = 'fr.fuel_station';
+                    } elseif (isset($frCols['station'])) {
+                        $stationExpr = 'fr.station';
+                    } else {
+                        $stationExpr = 'NULL';
+                    }
+                    $fuelTypeSelect = isset($frCols['fuel_type']) ? 'fr.fuel_type as fuelType' : 'NULL as fuelType';
+
+                    $fleetJoin = '';
+                    $vehExtraSelect = ', NULL as _fuelVehName, NULL as _fuelVehNumber';
+                    $fvCheckFuel = @$conn->query("SHOW TABLES LIKE 'fleet_vehicles'");
+                    if ($fvCheckFuel && $fvCheckFuel->num_rows > 0) {
+                        $fleetJoin = ' LEFT JOIN fleet_vehicles v ON fr.vehicle_id = v.id ';
+                        $vehExtraSelect = ', v.name as _fuelVehName, v.vehicle_number as _fuelVehNumber';
+                    }
+
+                    // Use actual fuel data (fleet join for registration / display name)
+                    $sql = "SELECT fr.id, fr.vehicle_id as vehicleId, fr.fill_date as date, 
+                            ($qtyExpr) as liters, ($priceExpr) as pricePerLiter, 
+                            fr.total_cost as cost, ($odoExpr) as odometer, 
+                            ($stationExpr) as fuelStation, fr.payment_method as paymentMethod,
+                            $fuelTypeSelect
+                            $vehExtraSelect
+                            FROM fuel_records fr
+                            $fleetJoin
+                            WHERE DATE(fr.fill_date) BETWEEN ? AND ?";
                             
                     // Add payment method filter if specified
                     if (!empty($paymentMethod)) {
-                        $sql .= " AND payment_method = ?";
+                        $sql .= " AND fr.payment_method = ?";
                     }
                     
-                    $sql .= " ORDER BY fill_date DESC";
+                    $sql .= " ORDER BY fr.fill_date DESC";
                     
                     $stmt = $conn->prepare($sql);
                     
@@ -1420,10 +1495,27 @@ try {
                         if ($row['odometer']) {
                             $row['odometer'] = (int)$row['odometer'];
                         }
-                        
-                        // Add vehicle name for display (would come from a vehicles table in real implementation)
-                        $row['vehicleName'] = 'Vehicle ' . $row['vehicleId'];
-                        $row['vehicleNumber'] = $row['vehicleId']; // Duplicate as vehicleNumber for UI compatibility
+                        if (array_key_exists('fuelType', $row) && $row['fuelType'] === null) {
+                            unset($row['fuelType']);
+                        }
+
+                        $vnum = isset($row['_fuelVehNumber']) ? trim((string)$row['_fuelVehNumber']) : '';
+                        $vname = isset($row['_fuelVehName']) ? trim((string)$row['_fuelVehName']) : '';
+                        unset($row['_fuelVehNumber'], $row['_fuelVehName']);
+
+                        if ($vnum !== '') {
+                            $row['vehicle_number'] = $vnum;
+                            $row['vehicleNumber'] = $vnum;
+                            $row['vehicleName'] = $vname !== '' ? ($vname . ' • ' . $vnum) : $vnum;
+                        } elseif ($vname !== '') {
+                            $row['vehicle_number'] = '';
+                            $row['vehicleNumber'] = '';
+                            $row['vehicleName'] = $vname;
+                        } else {
+                            $row['vehicleName'] = 'Vehicle ' . $row['vehicleId'];
+                            $row['vehicle_number'] = '';
+                            $row['vehicleNumber'] = '';
+                        }
                         
                         $fuelRecords[] = $row;
                         

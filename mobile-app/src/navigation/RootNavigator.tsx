@@ -18,6 +18,7 @@ import { SignupScreen } from '../screens/SignupScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 import { AdminBookingsListScreen } from '../screens/AdminBookingsListScreen';
+import { AdminUpcomingTripsScreen } from '../screens/AdminUpcomingTripsScreen';
 import { AdminMenuScreen } from '../screens/AdminMenuScreen';
 import { AdminDriversListScreen } from '../screens/AdminDriversListScreen';
 import { AdminDriverFormScreen } from '../screens/AdminDriverFormScreen';
@@ -65,6 +66,7 @@ function ProfileStack() {
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
       <Stack.Screen name="AdminBookingsList" component={AdminBookingsListScreen} />
+      <Stack.Screen name="AdminUpcomingTrips" component={AdminUpcomingTripsScreen} />
       <Stack.Screen name="AdminMenu" component={AdminMenuScreen} />
       <Stack.Screen name="AdminDriversList" component={AdminDriversListScreen} />
       <Stack.Screen name="AdminDriverAdd" component={AdminDriverFormScreen} />

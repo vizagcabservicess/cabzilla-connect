@@ -2,7 +2,7 @@
  * Admin Fuel - dynamic fuel management matching web FuelManagementPage
  * Fuel prices, stats, records list, add/edit/delete
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,8 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, subDays } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/core';
+import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/core';
+import type { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminExtendedAPI } from '../services/adminExtendedAPI';
@@ -85,7 +86,7 @@ function normalizeFuelRecord(r: Record<string, unknown>): FuelRecord {
   return {
     id: safeId,
     vehicleId: String(r.vehicleId ?? r.vehicle_id ?? ''),
-    fillDate: String(r.fillDate ?? r.fill_date ?? ''),
+    fillDate: String(r.fillDate ?? r.fill_date ?? r.date ?? ''),
     quantity,
     pricePerUnit,
     totalCost: parseNum(r.totalCost ?? r.total_cost ?? 0),
@@ -118,8 +119,12 @@ function calculateMileage(records: FuelRecord[], getQty: (r: FuelRecord) => numb
   return records;
 }
 
+type AdminFuelRoute = RouteProp<RootStackParamList, 'AdminFuel'>;
+
 export function AdminFuelScreen() {
   const navigation = useNavigation<any>();
+  const { params } = useRoute<AdminFuelRoute>();
+  const editRecordIdParam = params?.editRecordId;
   const [prices, setPrices] = useState<FuelPrice[]>([]);
   const [records, setRecords] = useState<FuelRecord[]>([]);
   const [vehicles, setVehicles] = useState<AdminFleetVehicle[]>([]);
@@ -234,6 +239,40 @@ export function AdminFuelScreen() {
     if (cost > 0 && price > 0) return cost / price;
     return 0;
   };
+
+  const openEditRecord = useCallback((r: FuelRecord) => {
+    setEditingRecord(r);
+    setFormVehicleId(String(r.vehicleId));
+    setFormFillDate(new Date(r.fillDate));
+    setFormQuantity(String(getEffectiveQuantity(r)));
+    setFormPricePerUnit(String(getEffectivePricePerUnit(r)));
+    setFormTotalCost(String(r.totalCost ?? ''));
+    setFormOdometer(String(r.odometer ?? ''));
+    setFormFuelStation(r.fuelStation ?? '');
+    setFormFuelType(r.fuelType ?? 'Petrol');
+    setFormPaymentMethod(r.paymentMethod ?? 'Cash');
+    setFormNotes('');
+    setShowRecordForm(true);
+  }, []);
+
+  useEffect(() => {
+    if (loading || editRecordIdParam == null) return;
+    const idStr = String(editRecordIdParam);
+    const rec = records.find((r) => String(r.id) === idStr);
+    if (!rec) {
+      if (!loading && records.length > 0) {
+        Alert.alert(
+          'Fuel record',
+          'Could not find this record in the current list. Open Fuel Management and pull to refresh, or search by vehicle.'
+        );
+        navigation.setParams({ editRecordId: undefined } as Record<string, undefined>);
+      }
+      return;
+    }
+    openEditRecord(rec);
+    navigation.setParams({ editRecordId: undefined } as Record<string, undefined>);
+  }, [loading, records, editRecordIdParam, navigation, openEditRecord]);
+
   const totalCost = filteredRecords.reduce((s, r) => s + (r.totalCost ?? 0), 0);
   const totalLiters = filteredRecords.reduce((s, r) => s + getEffectiveQuantity(r), 0);
   const avgCostPerLiter = totalLiters > 0 ? totalCost / totalLiters : 0;
@@ -259,21 +298,6 @@ export function AdminFuelScreen() {
     setFormFuelStation('');
     setFormFuelType('Petrol');
     setFormPaymentMethod('Cash');
-    setFormNotes('');
-    setShowRecordForm(true);
-  };
-
-  const openEditRecord = (r: FuelRecord) => {
-    setEditingRecord(r);
-    setFormVehicleId(String(r.vehicleId));
-    setFormFillDate(new Date(r.fillDate));
-    setFormQuantity(String(r.quantity ?? ''));
-    setFormPricePerUnit(String(r.pricePerUnit ?? ''));
-    setFormTotalCost(String(r.totalCost ?? ''));
-    setFormOdometer(String(r.odometer ?? ''));
-    setFormFuelStation(r.fuelStation ?? '');
-    setFormFuelType(r.fuelType ?? 'Petrol');
-    setFormPaymentMethod(r.paymentMethod ?? 'Cash');
     setFormNotes('');
     setShowRecordForm(true);
   };

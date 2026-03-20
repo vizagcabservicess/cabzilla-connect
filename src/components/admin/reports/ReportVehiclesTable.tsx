@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { Loader2, ExternalLink, Trash2, Eye } from 'lucide-react';
-import { fetchBookingsByVehicle } from '@/services/reportsAPI';
+import { buildReportDrillRange, fetchBookingsByVehicle } from '@/services/reportsAPI';
 import { bookingAPI } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -56,9 +56,16 @@ interface VehiclesReportData {
 interface ReportVehiclesTableProps {
   data: VehiclesReportData[] | any;
   dateRange?: DateRange | undefined;
+  periodFilter?: string;
+  drillDownFilters?: { tripStatus: string; paymentStatus: string };
 }
 
-export function ReportVehiclesTable({ data, dateRange }: ReportVehiclesTableProps) {
+export function ReportVehiclesTable({
+  data,
+  dateRange,
+  periodFilter = 'custom',
+  drillDownFilters,
+}: ReportVehiclesTableProps) {
   const { toast } = useToast();
   const [selectedVehicle, setSelectedVehicle] = useState<{ id: string; name: string; number: string } | null>(null);
   const [vehicleBookings, setVehicleBookings] = useState<Record<string, unknown>[]>([]);
@@ -80,10 +87,7 @@ export function ReportVehiclesTable({ data, dateRange }: ReportVehiclesTableProp
   const handleTripsClick = useCallback(async (row: VehiclesReportData) => {
     const vehicleId = String(row.vehicle_id ?? '');
     if (!vehicleId) return;
-    const from = dateRange?.from ?? new Date(new Date().setDate(new Date().getDate() - 30));
-    const to = dateRange?.to ?? new Date();
-    const startDate = format(from, 'yyyy-MM-dd');
-    const endDate = format(to, 'yyyy-MM-dd');
+    const range = buildReportDrillRange(periodFilter, dateRange);
 
     setSelectedVehicle({
       id: vehicleId,
@@ -93,7 +97,7 @@ export function ReportVehiclesTable({ data, dateRange }: ReportVehiclesTableProp
     setLoadingBookings(true);
     setVehicleBookings([]);
     try {
-      const bookings = await fetchBookingsByVehicle(vehicleId, startDate, endDate);
+      const bookings = await fetchBookingsByVehicle(vehicleId, range, drillDownFilters);
       setVehicleBookings(bookings);
     } catch (err) {
       toast({
@@ -104,24 +108,19 @@ export function ReportVehiclesTable({ data, dateRange }: ReportVehiclesTableProp
     } finally {
       setLoadingBookings(false);
     }
-  }, [dateRange, toast]);
+  }, [dateRange, drillDownFilters, periodFilter, toast]);
 
   const refreshVehicleBookings = useCallback(async () => {
     if (!selectedVehicle) return;
     setLoadingBookings(true);
     try {
-      const from = dateRange?.from ?? new Date(new Date().setDate(new Date().getDate() - 30));
-      const to = dateRange?.to ?? new Date();
-      const bookings = await fetchBookingsByVehicle(
-        selectedVehicle.id,
-        format(from, 'yyyy-MM-dd'),
-        format(to, 'yyyy-MM-dd')
-      );
+      const range = buildReportDrillRange(periodFilter, dateRange);
+      const bookings = await fetchBookingsByVehicle(selectedVehicle.id, range, drillDownFilters);
       setVehicleBookings(bookings);
     } finally {
       setLoadingBookings(false);
     }
-  }, [selectedVehicle, dateRange]);
+  }, [selectedVehicle, dateRange, drillDownFilters, periodFilter]);
 
   const handleViewBooking = useCallback(async (b: Record<string, unknown>) => {
     try {

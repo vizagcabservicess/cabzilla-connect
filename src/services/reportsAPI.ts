@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
 import { 
   ApiResponse,
   ApiErrorResponse,
@@ -15,6 +16,24 @@ import {
   FuelsReportData
 } from '@/types/reports';
 import { apiBaseUrl } from '@/config/api';
+
+/** Same window as the main report: preset periods use only `period`; custom sends explicit dates. */
+export function buildReportDrillRange(
+  periodFilter: string | undefined,
+  dateRange: DateRange | undefined
+): { period: string; startDate?: string; endDate?: string } {
+  const pf = (periodFilter || 'custom').trim() || 'custom';
+  if (pf === 'custom') {
+    const from = dateRange?.from ?? new Date(new Date().setDate(new Date().getDate() - 30));
+    const to = dateRange?.to ?? new Date();
+    return {
+      period: 'custom',
+      startDate: format(from, 'yyyy-MM-dd'),
+      endDate: format(to, 'yyyy-MM-dd'),
+    };
+  }
+  return { period: pf };
+}
 
 /**
  * Fetch report data from the API
@@ -154,17 +173,19 @@ export async function fetchBookingsByDate(
  */
 export async function fetchBookingsByVehicle(
   vehicleId: string,
-  startDate: string,
-  endDate: string,
+  range: { period: string; startDate?: string; endDate?: string },
   filters?: { tripStatus?: string; paymentStatus?: string }
 ): Promise<Record<string, unknown>[]> {
   try {
     const params = new URLSearchParams({
       type: 'bookings',
       vehicle_id: vehicleId,
-      start_date: startDate,
-      end_date: endDate,
+      period: range.period,
     });
+    if (range.period === 'custom') {
+      if (range.startDate) params.set('start_date', range.startDate);
+      if (range.endDate) params.set('end_date', range.endDate);
+    }
     const ts = (filters?.tripStatus || '').trim().toLowerCase();
     const ps = (filters?.paymentStatus || '').trim().toLowerCase();
     if (ts && ts !== 'all') params.set('trip_status', ts);
@@ -179,6 +200,42 @@ export async function fetchBookingsByVehicle(
     return [];
   } catch (error) {
     console.error('Error fetching bookings by vehicle:', error);
+    throw error;
+  }
+}
+
+/**
+ * Bookings for a driver + period (Drivers report drill-down)
+ */
+export async function fetchBookingsByDriver(
+  driverId: string,
+  range: { period: string; startDate?: string; endDate?: string },
+  filters?: { tripStatus?: string; paymentStatus?: string }
+): Promise<Record<string, unknown>[]> {
+  try {
+    const params = new URLSearchParams({
+      type: 'bookings',
+      driver_id: driverId,
+      period: range.period,
+    });
+    if (range.period === 'custom') {
+      if (range.startDate) params.set('start_date', range.startDate);
+      if (range.endDate) params.set('end_date', range.endDate);
+    }
+    const ts = (filters?.tripStatus || '').trim().toLowerCase();
+    const ps = (filters?.paymentStatus || '').trim().toLowerCase();
+    if (ts && ts !== 'all') params.set('trip_status', ts);
+    if (ps && ps !== 'all') params.set('payment_status', ps);
+    const url = `${apiBaseUrl}/api/admin/reports.php?${params}`;
+    const response = await fetch(url, {
+      headers: { 'Cache-Control': 'no-cache', 'X-Force-Refresh': 'true' }
+    });
+    if (!response.ok) throw new Error(`Failed to fetch driver bookings: ${response.status}`);
+    const json = await response.json() as { status: string; data?: Record<string, unknown>[] };
+    if (json.status === 'success' && Array.isArray(json.data)) return json.data;
+    return [];
+  } catch (error) {
+    console.error('Error fetching bookings by driver:', error);
     throw error;
   }
 }

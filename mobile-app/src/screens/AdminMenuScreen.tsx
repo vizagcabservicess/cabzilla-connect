@@ -31,6 +31,13 @@ type MenuItem = {
 const MENU_ITEMS: MenuItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline', screen: 'AdminDashboard', isFullNative: true },
   { id: 'bookings', label: 'Bookings', icon: 'calendar-outline', screen: 'AdminBookingsList', isFullNative: true },
+  {
+    id: 'upcoming-trips',
+    label: 'Upcoming trips',
+    icon: 'time-outline',
+    screen: 'AdminUpcomingTrips',
+    isFullNative: true,
+  },
   { id: 'create-booking', label: 'Create Booking', icon: 'add-circle-outline', screen: 'AdminCreateBooking', isFullNative: true },
   { id: 'group-tours', label: 'Group Tours', icon: 'bus-outline', screen: 'AdminGroupTours', isFullNative: true },
   { id: 'vehicles', label: 'Vehicles', icon: 'car-outline', screen: 'AdminVehiclesList', isFullNative: true },

@@ -1,14 +1,13 @@
 /**
- * Dynamic report modules configuration — single source of truth for the web app.
- * The Expo app mirrors this in `mobile-app/src/config/reportModules.ts` (same ids/labels;
- * mobile hides the Ledger tab and uses `iconMobile`). Update both when adding a module.
+ * Keep in sync with repo root: src/config/reportModules.ts
+ * Web + mobile use the same module ids and labels; mobile omits Ledger in the UI only.
  */
 export interface ReportModule {
   id: string;
   label: string;
   apiType: string;
-  /** Lucide icon name for web; Ionicons name for mobile */
   iconWeb?: string;
+  /** Ionicons name (outline variants), e.g. `receipt-outline` */
   iconMobile?: string;
 }
 
@@ -18,9 +17,14 @@ export const REPORT_MODULES: ReportModule[] = [
   { id: 'drivers', label: 'Drivers', apiType: 'drivers', iconWeb: 'Car', iconMobile: 'people-outline' },
   { id: 'vehicles', label: 'Vehicles', apiType: 'vehicles', iconWeb: 'Car', iconMobile: 'car-outline' },
   { id: 'gst', label: 'GST', apiType: 'gst', iconWeb: 'Receipt', iconMobile: 'receipt-outline' },
-  { id: 'nongst', label: 'Non-GST', apiType: 'nongst', iconWeb: 'Receipt', iconMobile: 'receipt-outline' },
+  { id: 'nongst', label: 'Non-GST', apiType: 'nongst', iconWeb: 'Receipt', iconMobile: 'document-text-outline' },
   { id: 'maintenance', label: 'Maintenance', apiType: 'maintenance', iconWeb: 'Wrench', iconMobile: 'construct-outline' },
   { id: 'ledger', label: 'Ledger', apiType: 'ledger', iconWeb: 'BookOpen', iconMobile: 'book-outline' },
   { id: 'fuels', label: 'Fuels', apiType: 'fuels', iconWeb: 'Fuel', iconMobile: 'water-outline' },
   { id: 'profit', label: 'Profit', apiType: 'profit', iconWeb: 'TrendingUp', iconMobile: 'trending-up-outline' },
 ];
+
+/** Tabs shown in the mobile Reports screen (Ledger has its own native screen). */
+export const MOBILE_REPORT_MODULES = REPORT_MODULES.filter((m) => m.id !== 'ledger');
+
+export type MobileReportTypeId = (typeof MOBILE_REPORT_MODULES)[number]['id'];

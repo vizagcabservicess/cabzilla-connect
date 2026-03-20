@@ -403,6 +403,95 @@ export const bookingAPI = {
   /**
    * Get pending bookings that need assignment
    */
+  getUpcomingBookings: async (params?: Record<string, string>) => {
+    const headers: Record<string, string> = {
+      'Cache-Control': 'no-cache',
+      'X-Force-Refresh': 'true',
+      'Content-Type': 'application/json',
+    };
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const qs = params ? new URLSearchParams(params).toString() : '';
+    const path = qs
+      ? `${API_BASE_URL}/api/admin/upcoming-bookings.php?${qs}`
+      : `${API_BASE_URL}/api/admin/upcoming-bookings.php`;
+    const response = await axios.get(path, { headers, timeout: 20000 });
+    if (response.data?.status === 'error') {
+      throw new Error(response.data.message || 'Failed to load upcoming bookings');
+    }
+    return response.data as {
+      status: string;
+      bookings: Booking[];
+      count: number;
+      drivers?: string[];
+    };
+  },
+
+  /**
+   * Admin: send plain-text WhatsApp (trip or payment sender line). Requires JWT.
+   */
+  sendAdminTripWhatsApp: async (
+    phone: string,
+    message: string,
+    channel: 'trip' | 'payment' = 'trip',
+  ) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+    };
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/send-trip-whatsapp.php`,
+      { phone, message, channel },
+      { headers, timeout: 45000 },
+    );
+    if (response.data?.status === 'error') {
+      throw new Error(response.data.message || 'WhatsApp send failed');
+    }
+    return response.data as {
+      status: string;
+      message?: string;
+      data?: { whatsapp_message_id?: string; channel?: string };
+    };
+  },
+
+  /**
+   * Admin: send grouped "tomorrow confirmed trips" WhatsApp summary to admin numbers (trip line). Requires JWT.
+   */
+  sendTomorrowAdminWhatsAppBulk: async () => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+    };
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await axios.post(
+      `${API_BASE_URL}/api/admin/send-tomorrow-admin-whatsapp.php`,
+      {},
+      { headers, timeout: 120000 },
+    );
+    if (response.data?.status === 'error') {
+      throw new Error(response.data.message || 'Bulk WhatsApp failed');
+    }
+    return response.data as {
+      status: string;
+      message?: string | null;
+      data?: {
+        booking_count: number;
+        admin_recipients: number;
+        whatsapp_parts: number;
+        notification_log?: string;
+      };
+    };
+  },
+
   getPendingBookings: async () => {
     try {
       const headers = {

@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../utils/whatsapp_cloud_client.php';
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -37,25 +38,8 @@ if (!$data || !isset($data['phone']) || !isset($data['messageType'])) {
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
 }
 
-// Format the phone number for WhatsApp API
-function formatPhone($phone) {
-    // Remove any non-numeric characters
-    $cleaned = preg_replace('/\D/', '', $phone);
-    
-    // Handle Indian phone numbers specifically
-    if (strlen($cleaned) === 10) {
-        // Add India country code if it's a 10-digit number
-        $cleaned = '91' . $cleaned;
-    } else if (substr($cleaned, 0, 1) === '0') {
-        // Remove leading zero and add India code
-        $cleaned = '91' . substr($cleaned, 1);
-    }
-    
-    return $cleaned;
-}
-
 // Extract data from request
-$phone = formatPhone($data['phone']);
+$phone = whatsapp_normalize_phone((string)$data['phone']);
 $messageType = $data['messageType'];
 $messageData = $data['data'] ?? [];
 
@@ -211,47 +195,54 @@ try {
         case 'abandoned_payment_admin':
             $message = generateAbandonedPaymentAdmin($messageData);
             break;
+
+        case 'raw_text':
+            $message = trim($messageData['message'] ?? $messageData['text'] ?? '');
+            if ($message === '') {
+                sendJsonResponse(['status' => 'error', 'message' => 'raw_text requires non-empty message'], 400);
+            }
+            break;
             
         default:
             sendJsonResponse(['status' => 'error', 'message' => 'Invalid message type'], 400);
             break;
     }
     
-    logMessage("WhatsApp message prepared", [
+    $channel = isset($data['channel']) ? strtolower(trim((string)$data['channel'])) : '';
+    if ($channel !== 'trip' && $channel !== 'payment') {
+        $channel = ($messageType === 'abandoned_payment_admin') ? 'payment' : 'trip';
+    }
+
+    logMessage('WhatsApp message prepared', [
         'phone' => $phone,
+        'channel' => $channel,
         'type' => $messageType,
-        'message' => $message
+        'message' => $message,
     ]);
-    
-    // Send via Meta WhatsApp Cloud API
-    $phoneNumberId = defined('WHATSAPP_PHONE_NUMBER_ID') ? WHATSAPP_PHONE_NUMBER_ID : null;
+
     $accessToken = defined('WHATSAPP_ACCESS_TOKEN') ? WHATSAPP_ACCESS_TOKEN : null;
-    
-    if (empty($phoneNumberId) || empty($accessToken)) {
-        logMessage("WhatsApp Cloud API credentials not configured", [
-            'has_phone_id' => !empty($phoneNumberId),
-            'has_token' => !empty($accessToken)
-        ]);
+    if (empty($accessToken)) {
+        logMessage('WhatsApp Cloud API credentials not configured', ['has_token' => false]);
         sendJsonResponse([
             'status' => 'error',
-            'message' => 'WhatsApp Cloud API credentials not configured. Set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN in .env'
+            'message' => 'WhatsApp Cloud API credentials not configured. Set WHATSAPP_ACCESS_TOKEN in .env',
         ], 500);
     }
-    
-    $apiUrl = "https://graph.facebook.com/v22.0/{$phoneNumberId}/messages";
-    
-    // For abandoned_payment_admin: use template (required for business-initiated messages)
-    // Set WHATSAPP_TEMPLATE_NAME in .env - use "hello_world" for quick test, or create "abandoned_payment_alert"
+
+    $senderId = whatsapp_phone_number_id_for_type($channel);
+    if ($senderId === null || $senderId === '') {
+        logMessage('WhatsApp phone number ID missing for channel', ['channel' => $channel]);
+        sendJsonResponse([
+            'status' => 'error',
+            'message' => 'No WHATSAPP_PHONE_NUMBER_ID_* configured for channel: ' . $channel,
+        ], 500);
+    }
+
     $templateName = defined('WHATSAPP_TEMPLATE_NAME') && WHATSAPP_TEMPLATE_NAME ? WHATSAPP_TEMPLATE_NAME : null;
-    
+
     if ($messageType === 'abandoned_payment_admin' && $templateName) {
         if ($templateName === 'hello_world') {
-            $payload = json_encode([
-                'messaging_product' => 'whatsapp',
-                'to' => $phone,
-                'type' => 'template',
-                'template' => ['name' => 'hello_world', 'language' => ['code' => 'en_US']]
-            ]);
+            $apiResult = sendWhatsAppMessage('payment', $phone, 'hello_world', ['language' => 'en_US']);
         } else {
             $booking = $messageData ?? [];
             $pickupLocation = is_array($booking['pickupLocation'] ?? null) ? ($booking['pickupLocation']['name'] ?? 'N/A') : ($booking['pickupLocation'] ?? 'N/A');
@@ -261,86 +252,58 @@ try {
             if (!empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
                 $formattedTripType .= ' (' . ucwords(str_replace('-', ' ', $booking['trip_mode'] ?? $booking['tripMode'] ?? '')) . ')';
             }
-            // Template: Header 1 var + Body 4 vars
-            // Header: {{1}} = Booking number
-            // Body: {{1}} Passenger, {{2}} Contact, {{3}} Trip, {{4}} Amount (body vars are 1-indexed separately)
             $contact = trim(($booking['passengerPhone'] ?? '') . ' | ' . ($booking['passengerEmail'] ?? ''));
-            if ($contact === '|' || trim(str_replace('|', '', $contact)) === '') $contact = 'N/A';
+            if ($contact === '|' || trim(str_replace('|', '', $contact)) === '') {
+                $contact = 'N/A';
+            }
             $tripDetails = $pickupLocation . ' → ' . $dropLocation . ' | ' . $pickupDate . ' | ' . ($booking['cabType'] ?? 'N/A') . ' (' . $formattedTripType . ')';
-            $payload = json_encode([
-                'messaging_product' => 'whatsapp',
-                'to' => $phone,
-                'type' => 'template',
-                'template' => [
-                    'name' => $templateName,
-                    'language' => ['code' => (defined('WHATSAPP_TEMPLATE_LANGUAGE') ? WHATSAPP_TEMPLATE_LANGUAGE : 'en')],
-                    'components' => [
-                        ['type' => 'header', 'parameters' => [
-                            ['type' => 'text', 'text' => $booking['bookingNumber'] ?? 'N/A']
-                        ]],
-                        ['type' => 'body', 'parameters' => [
-                            ['type' => 'text', 'text' => $booking['passengerName'] ?? 'N/A'],
-                            ['type' => 'text', 'text' => $contact],
-                            ['type' => 'text', 'text' => $tripDetails],
-                            ['type' => 'text', 'text' => '₹' . (isset($booking['totalAmount']) ? number_format($booking['totalAmount'], 2) : 'N/A')]
-                        ]]
-                    ]
-                ]
+            $components = [
+                ['type' => 'header', 'parameters' => [
+                    ['type' => 'text', 'text' => $booking['bookingNumber'] ?? 'N/A'],
+                ]],
+                ['type' => 'body', 'parameters' => [
+                    ['type' => 'text', 'text' => $booking['passengerName'] ?? 'N/A'],
+                    ['type' => 'text', 'text' => $contact],
+                    ['type' => 'text', 'text' => $tripDetails],
+                    ['type' => 'text', 'text' => '₹' . (isset($booking['totalAmount']) ? number_format((float)$booking['totalAmount'], 2) : 'N/A')],
+                ]],
+            ];
+            $apiResult = sendWhatsAppMessage('payment', $phone, $templateName, [
+                'language' => defined('WHATSAPP_TEMPLATE_LANGUAGE') ? WHATSAPP_TEMPLATE_LANGUAGE : 'en',
+                'components' => $components,
             ]);
         }
     } else {
-        $payload = json_encode([
-            'messaging_product' => 'whatsapp',
-            'to' => $phone,
-            'type' => 'text',
-            'text' => ['body' => $message]
-        ]);
+        $apiResult = whatsapp_send_text_message($channel, $phone, $message);
     }
-    
-    $ch = curl_init($apiUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $accessToken
-        ],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10
+
+    logMessage('WhatsApp Cloud API response', [
+        'http_code' => $apiResult['http_code'],
+        'ok' => $apiResult['ok'],
+        'message_id' => $apiResult['message_id'],
+        'error' => $apiResult['error_message'],
     ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-    
-    $responseData = json_decode($response, true);
-    
-    logMessage("WhatsApp Cloud API response", [
-        'http_code' => $httpCode,
-        'response' => $responseData,
-        'curl_error' => $curlError ?: null
-    ]);
-    
-    if ($httpCode >= 200 && $httpCode < 300 && isset($responseData['messages'][0]['id'])) {
+
+    if ($apiResult['ok'] && $apiResult['message_id']) {
         sendJsonResponse([
             'status' => 'success',
             'message' => 'WhatsApp message sent successfully',
             'data' => [
                 'phone' => $phone,
+                'channel' => $channel,
                 'messageType' => $messageType,
-                'whatsapp_message_id' => $responseData['messages'][0]['id']
-            ]
+                'whatsapp_message_id' => $apiResult['message_id'],
+            ],
         ]);
-    } else {
-        $errorMsg = $responseData['error']['message'] ?? $curlError ?: 'Unknown error';
-        logMessage("WhatsApp send failed", ['error' => $errorMsg, 'http_code' => $httpCode]);
-        sendJsonResponse([
-            'status' => 'error',
-            'message' => 'Failed to send WhatsApp message: ' . $errorMsg,
-            'data' => ['http_code' => $httpCode]
-        ], 500);
     }
+
+    $errorMsg = $apiResult['error_message'] ?? 'Unknown error';
+    logMessage('WhatsApp send failed', ['error' => $errorMsg, 'http_code' => $apiResult['http_code']]);
+    sendJsonResponse([
+        'status' => 'error',
+        'message' => 'Failed to send WhatsApp message: ' . $errorMsg,
+        'data' => ['http_code' => $apiResult['http_code'], 'response' => $apiResult['response']],
+    ], 500);
     
 } catch (Exception $e) {
     logMessage("WhatsApp message error", ['error' => $e->getMessage()]);

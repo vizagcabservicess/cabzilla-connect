@@ -110,6 +110,7 @@ export function AdminDashboardScreen({ navigation }: Props) {
   };
 
   const openAllBookings = () => navigation.navigate('AdminBookingsList');
+  const openUpcomingTrips = () => navigation.navigate('AdminUpcomingTrips');
   const openAdminMenu = () => navigation.navigate('AdminMenu');
 
   const trends = metrics?.trends ?? [];
@@ -354,6 +355,10 @@ export function AdminDashboardScreen({ navigation }: Props) {
           <Ionicons name="list-outline" size={20} color={colors.primary} />
           <Text style={styles.fullAdminText}>View all bookings</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.upcomingTripsBtn} onPress={openUpcomingTrips} activeOpacity={0.8}>
+          <Ionicons name="time-outline" size={20} color={colors.primary} />
+          <Text style={styles.fullAdminText}>Upcoming trips</Text>
+        </TouchableOpacity>
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -563,6 +568,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#eff6ff',
     borderRadius: 10,
+  },
+  upcomingTripsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   fullAdminText: { fontSize: 15, fontWeight: '600', color: colors.primary },
 });

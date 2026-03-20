@@ -168,7 +168,13 @@ export function BookingDetailScreen() {
 
   const b = (displayBooking ?? booking) as (UserBooking & Record<string, unknown>) | undefined;
   const status = localStatus ?? b?.status ?? '';
-  const bookingId = typeof b?.id === 'number' ? b.id : parseInt(String(b?.id ?? 0), 10);
+  const bookingId =
+    typeof b?.id === 'number' && !Number.isNaN(b.id) && b.id > 0
+      ? b.id
+      : paramBookingId > 0
+        ? paramBookingId
+        : parseInt(String(b?.id ?? 0), 10);
+  const bookingForNav = (b ?? booking) as Record<string, unknown>;
   const bookingNumber = (b?.bookingNumber ?? b?.booking_number) as string | undefined;
   const passengerName = (b?.passengerName ?? b?.passenger_name) as string | undefined;
   const passengerPhone = (b?.passengerPhone ?? b?.passenger_phone) as string | undefined;
@@ -402,13 +408,13 @@ export function BookingDetailScreen() {
   };
 
   const navToEdit = () =>
-    bookingId && navigation.navigate('BookingEdit', { bookingId, booking });
+    bookingId && navigation.navigate('BookingEdit', { bookingId, booking: bookingForNav });
   const navToAssignDriver = () =>
-    bookingId && navigation.navigate('AssignDriver', { bookingId, booking });
+    bookingId && navigation.navigate('AssignDriver', { bookingId, booking: bookingForNav });
   const navToAssignVehicle = () =>
-    bookingId && navigation.navigate('AssignVehicle', { bookingId, booking });
+    bookingId && navigation.navigate('AssignVehicle', { bookingId, booking: bookingForNav });
   const navToInvoice = () =>
-    bookingId && navigation.navigate('BookingInvoice', { bookingId, booking });
+    bookingId && navigation.navigate('BookingInvoice', { bookingId, booking: bookingForNav });
 
   const stepIndex = STEPS.findIndex(
     (s) => s.toLowerCase() === (status || '').toLowerCase()
@@ -418,7 +424,7 @@ export function BookingDetailScreen() {
   const canCancel = (status || '').toLowerCase() !== 'cancelled' && (status || '').toLowerCase() !== 'completed';
   const canDelete = isAdmin && canCancel;
 
-  if (!booking || !b) {
+  if (!b || bookingId <= 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -608,28 +614,28 @@ export function BookingDetailScreen() {
           <View style={styles.adminFlows}>
             <TouchableOpacity
               style={styles.adminFlowBtn}
-              onPress={() => navigation.navigate('BookingEdit', { bookingId, booking })}
+              onPress={() => navigation.navigate('BookingEdit', { bookingId, booking: bookingForNav })}
             >
               <Feather name="edit-2" size={18} color={colors.primary} />
               <Text style={styles.adminFlowText}>Edit Booking</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.adminFlowBtn}
-              onPress={() => navigation.navigate('AssignDriver', { bookingId, booking })}
+              onPress={() => navigation.navigate('AssignDriver', { bookingId, booking: bookingForNav })}
             >
               <Feather name="user" size={18} color={colors.primary} />
               <Text style={styles.adminFlowText}>Assign Driver</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.adminFlowBtn}
-              onPress={() => navigation.navigate('AssignVehicle', { bookingId, booking })}
+              onPress={() => navigation.navigate('AssignVehicle', { bookingId, booking: bookingForNav })}
             >
               <Feather name="truck" size={18} color={colors.primary} />
               <Text style={styles.adminFlowText}>Assign Vehicle</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.adminFlowBtn}
-              onPress={() => navigation.navigate('BookingInvoice', { bookingId, booking })}
+              onPress={() => navigation.navigate('BookingInvoice', { bookingId, booking: bookingForNav })}
             >
               <Feather name="file-text" size={18} color={colors.primary} />
               <Text style={styles.adminFlowText}>View Invoice</Text>

@@ -21,6 +21,7 @@ import {
   Banknote,
   CreditCard,
   CalendarPlus,
+  CalendarClock,
   BadgePercent,
   Info,
   Shield,
@@ -66,6 +67,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       label: 'Bookings', 
       icon: <CalendarDays size={20} />, 
       path: '/admin?tab=bookings',
+      show: canViewBookings()
+    },
+    { 
+      id: 'upcoming-trips', 
+      label: 'Upcoming Trips', 
+      icon: <CalendarClock size={20} />, 
+      path: '/admin/bookings?view=upcoming',
       show: canViewBookings()
     },
     { 

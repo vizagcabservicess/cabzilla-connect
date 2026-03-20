@@ -373,9 +373,23 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
       case 'revenue':
         return <ReportRevenueTable data={reportData} withGst={withGst} />;
       case 'drivers':
-        return <ReportDriversTable data={reportData} />;
+        return (
+          <ReportDriversTable
+            data={reportData}
+            dateRange={dateRange}
+            periodFilter={periodFilter}
+            drillDownFilters={{ tripStatus, paymentStatus }}
+          />
+        );
       case 'vehicles':
-        return <ReportVehiclesTable data={reportData} dateRange={dateRange} />;
+        return (
+          <ReportVehiclesTable
+            data={reportData}
+            dateRange={dateRange}
+            periodFilter={periodFilter}
+            drillDownFilters={{ tripStatus, paymentStatus }}
+          />
+        );
       case 'gst':
         return <ReportGstTable data={reportData} />;
       case 'nongst':

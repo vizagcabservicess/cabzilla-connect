@@ -71,6 +71,8 @@ export type RootStackParamList = {
   Dashboard: undefined;
   AdminDashboard: undefined;
   AdminBookingsList: undefined;
+  /** Same behaviour as web Bookings → Upcoming trips tab */
+  AdminUpcomingTrips: undefined;
   AdminMenu: undefined;
   AdminDriversList: undefined;
   AdminDriverAdd: undefined;
@@ -83,7 +85,7 @@ export type RootStackParamList = {
   AdminFleet: undefined;
   AdminFares: undefined;
   AdminCommission: undefined;
-  AdminFuel: undefined;
+  AdminFuel: { editRecordId?: string | number } | undefined;
   AdminMaintenance: undefined;
   AdminLedger: undefined;
   AdminExpenses: undefined;

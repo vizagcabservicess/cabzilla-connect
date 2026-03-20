@@ -25,12 +25,23 @@ define('DB_PASS', $_ENV['DB_PASS'] ?? null);
 // JWT Configuration - CRITICAL: Use environment variable only
 define('JWT_SECRET', $_ENV['JWT_SECRET'] ?? null);
 
-// WhatsApp Cloud API Configuration
+// WhatsApp Cloud API Configuration (Meta Graph API)
+// One access token per Meta app; two “from” numbers → two phone number IDs.
+// Trip line (+91 93919…): WHATSAPP_PHONE_NUMBER_ID_TRIP | Payment line (+91 85006…): WHATSAPP_PHONE_NUMBER_ID_PAYMENT
+// Legacy: WHATSAPP_PHONE_NUMBER_ID used if TRIP/PAYMENT not set.
+define('WHATSAPP_GRAPH_API_VERSION', $_ENV['WHATSAPP_GRAPH_API_VERSION'] ?? '22.0');
+define('WHATSAPP_PHONE_NUMBER_ID_TRIP', $_ENV['WHATSAPP_PHONE_NUMBER_ID_TRIP'] ?? $_ENV['WHATSAPP_PHONE_NUMBER_ID'] ?? null);
+define('WHATSAPP_PHONE_NUMBER_ID_PAYMENT', $_ENV['WHATSAPP_PHONE_NUMBER_ID_PAYMENT'] ?? null);
 define('WHATSAPP_PHONE_NUMBER_ID', $_ENV['WHATSAPP_PHONE_NUMBER_ID'] ?? null);
 define('WHATSAPP_ACCESS_TOKEN', $_ENV['WHATSAPP_ACCESS_TOKEN'] ?? null);
 define('WHATSAPP_ADMIN_PHONE', $_ENV['WHATSAPP_ADMIN_PHONE'] ?? '919966363662');
+/** Comma-separated E.164 digits (e.g. 9198...,9180...). Falls back to WHATSAPP_ADMIN_PHONE when empty. */
+define('WHATSAPP_ADMIN_PHONES', $_ENV['WHATSAPP_ADMIN_PHONES'] ?? '');
 define('WHATSAPP_TEMPLATE_NAME', $_ENV['WHATSAPP_TEMPLATE_NAME'] ?? 'abandoned_payment_alert');
 define('WHATSAPP_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_TEMPLATE_LANGUAGE'] ?? 'en');
+
+/** Shared secret for cron URLs (e.g. admin tomorrow reminder). Optional; if unset, cron endpoint rejects requests. */
+define('ADMIN_CRON_SECRET', $_ENV['ADMIN_CRON_SECRET'] ?? '');
 
 // SECURITY: Fail if critical credentials not configured
 if (!DB_HOST || !DB_NAME || !DB_USER || !DB_PASS || !JWT_SECRET) {

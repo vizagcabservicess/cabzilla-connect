@@ -95,6 +95,12 @@ export function AdminBookingsListScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.foreground} />
           </TouchableOpacity>
           <Text style={styles.title}>All Bookings</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AdminUpcomingTrips')}
+            style={styles.headerLink}
+          >
+            <Text style={styles.headerLinkText}>Upcoming</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -110,6 +116,13 @@ export function AdminBookingsListScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={styles.title}>All Bookings</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AdminUpcomingTrips')}
+          style={styles.headerLink}
+          accessibilityLabel="Upcoming trips"
+        >
+          <Text style={styles.headerLinkText}>Upcoming</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -196,7 +209,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.gray200,
   },
   backBtn: { padding: 4, marginRight: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.foreground },
+  title: { flex: 1, fontSize: 18, fontWeight: '700', color: colors.foreground },
+  headerLink: { paddingVertical: 6, paddingHorizontal: 4 },
+  headerLinkText: { fontSize: 15, fontWeight: '600', color: colors.primary },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },

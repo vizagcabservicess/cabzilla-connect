@@ -1,5 +1,17 @@
-import { Booking } from '@/types/api';
-import { formatLocationForDisplay } from '@/utils/locationUtils';
+/**
+ * Customer WhatsApp message bodies — parity with web `src/services/whatsappService.ts`.
+ * React Native bundle; do not import web `@/` paths.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Booking = any;
+
+function formatLocationForDisplay(loc: unknown): { name: string } {
+  if (typeof loc === 'string') return { name: (loc || '').trim() };
+  if (loc && typeof loc === 'object' && loc !== null && 'name' in loc) {
+    return { name: String((loc as { name?: string }).name ?? '').trim() };
+  }
+  return { name: '' };
+}
 
 /** True if we should show this value in customer-facing messages (omit N/A clutter). */
 function isPresentableValue(v: unknown): boolean {
@@ -392,9 +404,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   // Get support details - Updated with correct numbers
   const driverHelpline = booking.driver_helpline || '+91 9966363662';
   const customerSupport = booking.customer_support || '+91 9966363662';
-
-  // Generate secure payment receipt link - provide contact information instead of direct access
-  const receiptUrl = `${window.location.origin}/contact?receipt_request=true`;
 
   // Get inclusions and exclusions - handle both array and string formats
   let inclusions = booking.inclusions 

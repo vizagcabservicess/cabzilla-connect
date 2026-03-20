@@ -768,6 +768,11 @@ export const adminExtendedAPI = {
     payment_method?: string;
     gst?: boolean;
     only_gst_enabled?: boolean;
+    trip_status?: string;
+    payment_status?: string;
+    vehicle_id?: string;
+    driver_id?: string;
+    service_type?: string;
   }) => {
     const base = getBase();
     const headers = await authHeaders();
@@ -778,13 +783,140 @@ export const adminExtendedAPI = {
     if (params.payment_method) q.payment_method = params.payment_method;
     if (params.gst) q.gst = 'true';
     if (params.only_gst_enabled) q.only_gst_enabled = 'true';
+    const ts = (params.trip_status || '').trim().toLowerCase();
+    const ps = (params.payment_status || '').trim().toLowerCase();
+    if (ts && ts !== 'all') q.trip_status = ts;
+    if (ps && ps !== 'all') q.payment_status = ps;
+    if (params.vehicle_id) q.vehicle_id = params.vehicle_id;
+    if (params.driver_id) q.driver_id = params.driver_id;
+    if (params.service_type) q.service_type = params.service_type;
     const qs = new URLSearchParams(q).toString();
     const res = await axios.get(`${base}/api/admin/reports.php?${qs}`, {
-      headers,
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+      },
       timeout: 15000,
     });
     if (res.data?.status === 'success') return res.data?.data ?? res.data;
     throw new Error(res.data?.message || 'Failed to load report');
+  },
+
+  /**
+   * Bookings for a vehicle + period/range (matches web ReportVehiclesTable).
+   * For non-custom periods send only `period` — PHP derives start/end (same as main report).
+   */
+  reportsBookingsByVehicle: async (
+    vehicleId: string,
+    range: { period: string; start_date?: string; end_date?: string },
+    filters?: { trip_status?: string; payment_status?: string }
+  ): Promise<Record<string, unknown>[]> => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const q = new URLSearchParams({
+      type: 'bookings',
+      vehicle_id: vehicleId,
+      period: range.period,
+    });
+    if (range.period === 'custom') {
+      if (range.start_date) q.set('start_date', range.start_date);
+      if (range.end_date) q.set('end_date', range.end_date);
+    }
+    const ts = (filters?.trip_status || '').trim().toLowerCase();
+    const ps = (filters?.payment_status || '').trim().toLowerCase();
+    if (ts && ts !== 'all') q.set('trip_status', ts);
+    if (ps && ps !== 'all') q.set('payment_status', ps);
+    const res = await axios.get(`${base}/api/admin/reports.php?${q}`, {
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+      },
+      timeout: 20000,
+    });
+    if (res.data?.status === 'success' && Array.isArray(res.data?.data)) return res.data.data;
+    return [];
+  },
+
+  /** Bookings for a driver + period/range (matches web drivers drill-down; requires reports.php driver_id branch) */
+  reportsBookingsByDriver: async (
+    driverId: string,
+    range: { period: string; start_date?: string; end_date?: string },
+    filters?: { trip_status?: string; payment_status?: string }
+  ): Promise<Record<string, unknown>[]> => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const q = new URLSearchParams({
+      type: 'bookings',
+      driver_id: driverId,
+      period: range.period,
+    });
+    if (range.period === 'custom') {
+      if (range.start_date) q.set('start_date', range.start_date);
+      if (range.end_date) q.set('end_date', range.end_date);
+    }
+    const ts = (filters?.trip_status || '').trim().toLowerCase();
+    const ps = (filters?.payment_status || '').trim().toLowerCase();
+    if (ts && ts !== 'all') q.set('trip_status', ts);
+    if (ps && ps !== 'all') q.set('payment_status', ps);
+    const res = await axios.get(`${base}/api/admin/reports.php?${q}`, {
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+      },
+      timeout: 20000,
+    });
+    if (res.data?.status === 'success' && Array.isArray(res.data?.data)) return res.data.data;
+    return [];
+  },
+
+  /** Bookings drill-down for one day (matches web fetchBookingsByDate) */
+  reportsBookingsByDate: async (
+    date: string,
+    filters?: { trip_status?: string; payment_status?: string }
+  ): Promise<Record<string, unknown>[]> => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const q = new URLSearchParams({ type: 'bookings', date });
+    const ts = (filters?.trip_status || '').trim().toLowerCase();
+    const ps = (filters?.payment_status || '').trim().toLowerCase();
+    if (ts && ts !== 'all') q.set('trip_status', ts);
+    if (ps && ps !== 'all') q.set('payment_status', ps);
+    const res = await axios.get(`${base}/api/admin/reports.php?${q}`, {
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+      },
+      timeout: 15000,
+    });
+    if (res.data?.status === 'success' && Array.isArray(res.data?.data)) return res.data.data;
+    return [];
+  },
+
+  /** Vehicle list for report filters (same as web ReportGenerator filter_options) */
+  reportsFilterVehicles: async (startDate: string, endDate: string): Promise<Array<{ id: number; name?: string; vehicle_number?: string }>> => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const q = new URLSearchParams({
+      type: 'filter_options',
+      filter: 'vehicles',
+      period: 'custom',
+      start_date: startDate,
+      end_date: endDate,
+    });
+    const res = await axios.get(`${base}/api/admin/reports.php?${q}`, {
+      headers: { ...headers, 'Cache-Control': 'no-cache' },
+      timeout: 15000,
+    });
+    if (res.data?.status === 'success') {
+      const payload = res.data?.data ?? res.data;
+      const vehicles = payload?.vehicles ?? payload?.filters?.vehicles ?? [];
+      return Array.isArray(vehicles) ? vehicles : [];
+    }
+    return [];
   },
 
   /** Maintenance - uses fleet vehicles */

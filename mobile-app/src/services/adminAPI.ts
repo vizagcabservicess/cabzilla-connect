@@ -76,6 +76,101 @@ export const adminAPI = {
     return raw.map((b: Record<string, unknown>) => normalizeBooking(b));
   },
 
+  /** Upcoming trips — same as web `bookingAPI.getUpcomingBookings` */
+  getUpcomingBookings: async (
+    params?: Record<string, string>
+  ): Promise<{ bookings: UserBooking[]; count: number; drivers: string[]
+}> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const qs = params && Object.keys(params).length ? new URLSearchParams(params).toString() : '';
+    const url = qs
+      ? `${base}/api/admin/upcoming-bookings.php?${qs}`
+      : `${base}/api/admin/upcoming-bookings.php`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Force-Refresh': 'true',
+      },
+      timeout: 20000,
+    });
+    const data = response.data;
+    if (data?.status === 'error') {
+      throw new Error(data?.message || 'Failed to load upcoming bookings');
+    }
+    const raw = data?.bookings ?? [];
+    const bookings = raw.map((b: Record<string, unknown>) => normalizeBooking(b));
+    return {
+      bookings,
+      count: typeof data?.count === 'number' ? data.count : bookings.length,
+      drivers: Array.isArray(data?.drivers) ? data.drivers.map(String) : [],
+    };
+  },
+
+  /** Plain-text WhatsApp via trip/payment Cloud API line (admin JWT) */
+  sendAdminTripWhatsApp: async (
+    phone: string,
+    message: string,
+    channel: 'trip' | 'payment' = 'trip'
+  ): Promise<unknown> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const url = `${base}/api/admin/send-trip-whatsapp.php`;
+    const response = await axios.post(
+      url,
+      { phone, message, channel },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        timeout: 45000,
+      }
+    );
+    if (response.data?.status === 'error') {
+      throw new Error(response.data?.message || 'WhatsApp send failed');
+    }
+    return response.data;
+  },
+
+  /** Grouped tomorrow summary to admin WhatsApp numbers (admin JWT) */
+  sendTomorrowAdminWhatsAppBulk: async (): Promise<{
+    status: string;
+    message?: string | null;
+    data?: {
+      booking_count: number;
+      admin_recipients: number;
+      whatsapp_parts: number;
+      notification_log?: string;
+    };
+  }> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const url = `${base}/api/admin/send-tomorrow-admin-whatsapp.php`;
+    const response = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        timeout: 120000,
+      }
+    );
+    if (response.data?.status === 'error') {
+      throw new Error(response.data?.message || 'Bulk WhatsApp failed');
+    }
+    return response.data;
+  },
+
   /** Update booking status (admin only). Status: pending, confirmed, assigned, completed, cancelled */
   updateBookingStatus: async (bookingId: number, status: string): Promise<void> => {
     const token = await authAPI.getStoredToken();
