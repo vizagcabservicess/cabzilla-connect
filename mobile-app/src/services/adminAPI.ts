@@ -667,15 +667,15 @@ export const adminAPI = {
     }
   ): Promise<{ data: ArrayBuffer; isPdf: boolean }> => {
     const url = adminAPI.getInvoicePdfUrl(bookingId, options);
+    const token = await authAPI.getStoredToken();
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 30000,
       validateStatus: () => true,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    const ct = String(response.headers['content-type'] || '').toLowerCase();
-    const isPdfByHeader = ct.includes('application/pdf');
     const bytes = new Uint8Array(response.data as ArrayBuffer);
-    // PDF magic bytes: % (37) P (80) D (68) F (70) - (45) - avoid String.fromCharCode spread (can fail on some engines)
+    // Require PDF magic bytes - Content-Type can be wrong (e.g. server returns JSON with pdf header)
     const startsWithPdf =
       bytes.length >= 5 &&
       bytes[0] === 37 &&
@@ -683,16 +683,11 @@ export const adminAPI = {
       bytes[2] === 68 &&
       bytes[3] === 70 &&
       bytes[4] === 45;
-    const isPdf = isPdfByHeader || startsWithPdf;
-    if (isPdf && response.data && (response.data as ArrayBuffer).byteLength > 0) {
+    if (startsWithPdf && response.data && (response.data as ArrayBuffer).byteLength > 0) {
       return { data: response.data as ArrayBuffer, isPdf: true };
     }
-    if (!isPdf && response.data && bytes.length > 0) {
+    if (!startsWithPdf && response.data && bytes.length > 0) {
       const firstChar = String.fromCharCode(bytes[0]);
-      // PDF or binary - never attempt JSON.parse; avoid "Unexpected character: %" errors
-      if (firstChar === '%' || bytes[0] === 37) {
-        throw new Error('Could not get PDF. Please try View Invoice (HTML) instead.');
-      }
       if (firstChar === '{' || firstChar === '[') {
         try {
           const text = new TextDecoder().decode(response.data);
@@ -708,7 +703,7 @@ export const adminAPI = {
     if (!response.data || (response.data as ArrayBuffer).byteLength === 0) {
       throw new Error('Empty response. Generate the invoice first.');
     }
-    return { data: response.data as ArrayBuffer, isPdf };
+    throw new Error('Could not get PDF. Please try View Invoice (HTML) instead.');
   },
 
   /**

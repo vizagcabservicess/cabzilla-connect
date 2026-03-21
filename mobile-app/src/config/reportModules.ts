@@ -19,12 +19,11 @@ export const REPORT_MODULES: ReportModule[] = [
   { id: 'gst', label: 'GST', apiType: 'gst', iconWeb: 'Receipt', iconMobile: 'receipt-outline' },
   { id: 'nongst', label: 'Non-GST', apiType: 'nongst', iconWeb: 'Receipt', iconMobile: 'document-text-outline' },
   { id: 'maintenance', label: 'Maintenance', apiType: 'maintenance', iconWeb: 'Wrench', iconMobile: 'construct-outline' },
-  { id: 'ledger', label: 'Ledger', apiType: 'ledger', iconWeb: 'BookOpen', iconMobile: 'book-outline' },
   { id: 'fuels', label: 'Fuels', apiType: 'fuels', iconWeb: 'Fuel', iconMobile: 'water-outline' },
   { id: 'profit', label: 'Profit', apiType: 'profit', iconWeb: 'TrendingUp', iconMobile: 'trending-up-outline' },
 ];
 
-/** Tabs shown in the mobile Reports screen (Ledger has its own native screen). */
-export const MOBILE_REPORT_MODULES = REPORT_MODULES.filter((m) => m.id !== 'ledger');
+/** Tabs shown in the mobile Reports screen. */
+export const MOBILE_REPORT_MODULES = REPORT_MODULES;
 
 export type MobileReportTypeId = (typeof MOBILE_REPORT_MODULES)[number]['id'];

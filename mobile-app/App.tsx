@@ -1,7 +1,10 @@
 import { useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { NavigationContainer } from '@react-navigation/native';
+
+WebBrowser.maybeCompleteAuthSession();
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from '@expo-google-fonts/inter/useFonts';
 import {

@@ -15,7 +15,6 @@ import {
   Modal,
   Switch,
   Alert,
-  Linking,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, subDays } from 'date-fns';
@@ -25,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { colors } from '../theme/colors';
+import { adminAPI } from '../services/adminAPI';
 import { adminExtendedAPI } from '../services/adminExtendedAPI';
 import { MOBILE_REPORT_MODULES, type MobileReportTypeId } from '../config/reportModules';
 import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
@@ -37,23 +37,6 @@ import {
 
 function reportsApiBase(): string {
   return API_BASE_URL || WEB_APP_BASE_URL;
-}
-
-function gstInvoicePdfUrl(inv: Record<string, unknown>): string {
-  const base = reportsApiBase().replace(/\/$/, '');
-  const bookingId =
-    pickStr(inv, 'bookingId', 'booking_id') || pickStr(inv, 'id');
-  const q = new URLSearchParams({
-    id: bookingId || '',
-    gstEnabled: '1',
-    format: 'pdf',
-    direct_download: '1',
-  });
-  const gstNumber = pickStr(inv, 'gstNumber', 'gst_number');
-  const companyName = pickStr(inv, 'companyName', 'company_name');
-  if (gstNumber) q.append('gstNumber', gstNumber);
-  if (companyName) q.append('companyName', companyName);
-  return `${base}/api/download-invoice.php?${q}`;
 }
 
 function nonGstInvoicePdfUrl(row: Record<string, unknown>): string | null {
@@ -349,29 +332,75 @@ export function AdminReportsScreen() {
     });
   };
 
+  const shareInvoicePdf = async (
+    bookingId: number,
+    inv: Record<string, unknown>,
+    gstEnabled: boolean
+  ) => {
+    const raw = pickStr(inv, 'invoiceNumber', 'invoice_number');
+    const invNo =
+      raw && /^INV-/i.test(String(raw).trim())
+        ? String(raw).trim()
+        : `INV-${format(new Date(), 'yyyyMMdd')}-${bookingId}`;
+    const filename = `Invoice_${invNo.replace(/[^a-zA-Z0-9\-_.]/g, '_')}.pdf`;
+    try {
+      const options = gstEnabled
+        ? {
+            gstEnabled: true,
+            gstDetails: {
+              gstNumber: pickStr(inv, 'gstNumber', 'gst_number') ?? '',
+              companyName: pickStr(inv, 'companyName', 'company_name') ?? '',
+              companyAddress: pickStr(inv, 'companyAddress', 'company_address') ?? '',
+            },
+          }
+        : { gstEnabled: false };
+      const { data } = await adminAPI.getInvoicePdfBlob(bookingId, options);
+      const bytes = new Uint8Array(data);
+      let base64 = '';
+      for (let i = 0; i < bytes.length; i++) base64 += String.fromCharCode(bytes[i]);
+      base64 = btoa(base64);
+      const cacheDir = cacheDirectory;
+      if (!cacheDir) {
+        Alert.alert('Export failed', 'File storage is not available.');
+        return;
+      }
+      const path = `${cacheDir}${filename}`;
+      await writeAsStringAsync(path, base64, { encoding: 'base64' });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Share invoice',
+        });
+      } else {
+        Alert.alert('Saved', `Invoice saved to cache: ${filename}`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not load PDF.';
+      Alert.alert('Download failed', msg);
+    }
+  };
+
   const openNonGstInvoicePdf = (row: Record<string, unknown>) => {
-    const url = nonGstInvoicePdfUrl(row);
-    if (!url) {
+    const bid = pickNum(row, 'bookingId', 'booking_id');
+    if (!bid) {
       Alert.alert('Download', 'This bill has no booking id — PDF download is only for generated invoices.');
       return;
     }
-    void Linking.canOpenURL(url).then((ok) => {
-      if (ok) void Linking.openURL(url);
-      else Alert.alert('Cannot open', 'PDF link is not available.');
-    });
+    void shareInvoicePdf(Math.round(bid), row, false);
   };
 
   const openGstInvoicePdf = (inv: Record<string, unknown>) => {
-    const bookingId = pickStr(inv, 'bookingId', 'booking_id') || pickStr(inv, 'id');
-    if (!bookingId) {
+    const bookingIdStr = pickStr(inv, 'bookingId', 'booking_id') || pickStr(inv, 'id');
+    if (!bookingIdStr) {
       Alert.alert('Download', 'This row has no booking id for PDF download.');
       return;
     }
-    const url = gstInvoicePdfUrl(inv);
-    void Linking.canOpenURL(url).then((ok) => {
-      if (ok) void Linking.openURL(url);
-      else Alert.alert('Cannot open', 'PDF link is not available.');
-    });
+    const bookingId = parseInt(String(bookingIdStr), 10);
+    if (Number.isNaN(bookingId)) {
+      Alert.alert('Download', 'Invalid booking id.');
+      return;
+    }
+    void shareInvoicePdf(bookingId, inv, true);
   };
 
   const selectDateRange = () => {

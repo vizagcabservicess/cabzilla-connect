@@ -17,7 +17,9 @@
 
 2. **Splash screen:** Replace  
    `mobile-app/assets/splash-icon.png`  
-   with your splash screen image.
+   with your splash screen image.  
+   The app uses **`resizeMode: "cover"`** in `app.json` so the image **fills the screen** on tall phones. Use a **wide, full-bleed** design (e.g. 1242×2436 or 1284×2778 px); avoid small centered logos on a huge canvas.  
+   After changing splash settings, **rebuild the native app** (EAS Build or `expo prebuild` + local build)—splash is baked in at build time, not updated on JS refresh alone.
 
 ### Android adaptive icons (optional)
 

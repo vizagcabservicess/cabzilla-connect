@@ -108,6 +108,13 @@ try {
         $conn->query("ALTER TABLE invoices ADD COLUMN gst_rate DECIMAL(5,2) DEFAULT NULL AFTER gst_amount");
         $changes[] = "Added gst_rate column to invoices table";
     }
+
+    // Add google_id to users table for Google OAuth sign-in
+    $checkGoogleId = $conn->query("SHOW COLUMNS FROM users LIKE 'google_id'");
+    if (!$checkGoogleId || $checkGoogleId->num_rows === 0) {
+        $conn->query("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE AFTER password");
+        $changes[] = "Added google_id column to users table";
+    }
     
     sendJsonResponse([
         'status' => 'success',

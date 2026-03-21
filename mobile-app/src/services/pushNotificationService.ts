@@ -35,6 +35,12 @@ export async function getPushToken(): Promise<string | null> {
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
   if (!projectId) {
+    if (__DEV__) {
+      console.warn(
+        '[push] Missing expo.extra.eas.projectId — cannot get Expo push token. ' +
+          'Remote push on Android release builds also requires FCM in EAS. See mobile-app/docs/PUSH_NOTIFICATIONS.md'
+      );
+    }
     return null;
   }
 

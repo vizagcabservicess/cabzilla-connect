@@ -10,7 +10,6 @@ import {
   Fuel, 
   Car, 
   Receipt, 
-  BookOpen, 
   Wrench,
   Filter,
   TrendingUp
@@ -28,7 +27,6 @@ import { ReportVehiclesTable } from './reports/ReportVehiclesTable';
 import { ReportGstTable } from './reports/ReportGstTable';
 import { ReportNonGstTable } from './reports/ReportNonGstTable';
 import { ReportMaintenanceTable } from './reports/ReportMaintenanceTable';
-import { ReportLedgerTable } from './reports/ReportLedgerTable';
 import { ReportFuelsTable } from './reports/ReportFuelsTable';
 import { ReportProfitTable } from './reports/ReportProfitTable';
 import { 
@@ -396,8 +394,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
         return <ReportNonGstTable data={reportData} />;
       case 'maintenance':
         return <ReportMaintenanceTable data={reportData} />;
-      case 'ledger':
-        return <ReportLedgerTable data={reportData} />;
       case 'fuels':
         return <ReportFuelsTable data={reportData} />;
       case 'profit':
@@ -416,7 +412,6 @@ export function ReportGenerator({ reportType: initialReportType, dateRange: init
     gst: <Receipt className="h-4 w-4 mr-2" />,
     nongst: <Receipt className="h-4 w-4 mr-2" />,
     maintenance: <Wrench className="h-4 w-4 mr-2" />,
-    ledger: <BookOpen className="h-4 w-4 mr-2" />,
     fuels: <Fuel className="h-4 w-4 mr-2" />,
     profit: <TrendingUp className="h-4 w-4 mr-2" />,
   };
