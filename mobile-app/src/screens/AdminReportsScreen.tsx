@@ -675,6 +675,25 @@ export function AdminReportsScreen() {
           (sum: number, r: unknown) => sum + safeNum((r as Record<string, unknown>).profit),
           0
         );
+        const totalDriverSalary = arr.reduce(
+          (sum: number, r: unknown) =>
+            sum +
+            safeNum(
+              (r as Record<string, unknown>).driver_salary_total ?? (r as Record<string, unknown>).driverSalaryTotal
+            ),
+          0
+        );
+        const avgDriverSalary =
+          arr.length > 0
+            ? arr.reduce(
+                (sum: number, r: unknown) =>
+                  sum +
+                  safeNum(
+                    (r as Record<string, unknown>).avg_driver_salary ?? (r as Record<string, unknown>).avgDriverSalary
+                  ),
+                0
+              ) / arr.length
+            : 0;
         return (
           <View style={styles.summaryRow}>
             <TouchableOpacity
@@ -702,6 +721,19 @@ export function AdminReportsScreen() {
             >
               <Text style={styles.summaryLabel}>Profit</Text>
               <Text style={styles.summaryValue}>{formatAmount(totalProfit)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.summaryCard}
+              onPress={() =>
+                Alert.alert(
+                  'Driver salary',
+                  `Total driver salary across vehicles: ${formatAmount(totalDriverSalary)}. Fleet average per vehicle: ${formatAmount(avgDriverSalary)}.`
+                )
+              }
+              activeOpacity={0.75}
+            >
+              <Text style={styles.summaryLabel}>Avg driver salary</Text>
+              <Text style={styles.summaryValue}>{formatAmount(avgDriverSalary)}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -1058,6 +1090,10 @@ export function AdminReportsScreen() {
               <Text style={styles.amount}>
                 Rev: {formatAmount(safeNum(rec.total_revenue ?? rec.totalRevenue))} | Profit:{' '}
                 {formatAmount(safeNum(rec.profit))}
+              </Text>
+              <Text style={styles.cardSub}>
+                Avg driver salary: {formatAmount(safeNum(rec.avg_driver_salary ?? rec.avgDriverSalary))} · Expenses:{' '}
+                {formatAmount(safeNum(rec.total_expenses ?? rec.totalExpenses))}
               </Text>
               <Text style={styles.tapCue}>Tap to list trips (like web)</Text>
             </TouchableOpacity>

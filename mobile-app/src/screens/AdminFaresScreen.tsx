@@ -36,9 +36,132 @@ import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
 import { authAPI } from '../services/authAPI';
 import { tourAPI, type TourInfo } from '../services/tourAPI';
 import { adminTourAPI } from '../services/adminTourAPI';
+import { adminAPI, type AdminFleetVehicle } from '../services/adminAPI';
+import { loadVehicles, type Vehicle } from '../services/vehiclesAPI';
 import { EditVehicleTypeModal } from '../components/EditVehicleTypeModal';
 
 const TRIP_TYPES = ['outstation', 'local', 'airport', 'tours'] as const;
+
+// Map fleet vehicle to canonical tour pricing key + display label (matches fareService / TourDetailScreen lookup)
+function fleetVehicleToTourKey(v: AdminFleetVehicle): { key: string; label: string } {
+  const vNum = (v as { vehicle_number?: string }).vehicle_number ?? v.vehicleNumber;
+  const name = String(v.name ?? vNum ?? '').toLowerCase();
+  const vtype = String((v as { vehicleType?: string }).vehicleType ?? (v as { cabTypeId?: string }).cabTypeId ?? '').toLowerCase().replace(/\s+/g, '_');
+  if (name.includes('amaze')) return { key: 'amaze', label: v.name ?? 'Honda Amaze' };
+  if (name.includes('ertiga') || vtype === 'mpv' || vtype === 'minivan') return { key: 'ertiga', label: v.name ?? 'Ertiga' };
+  if (name.includes('innova') || name.includes('crysta') || vtype === 'suv') return { key: 'innova_crysta', label: v.name ?? 'Innova Crysta' };
+  if (name.includes('glanza')) return { key: 'toyota_glanza', label: v.name ?? 'Toyota Glanza' };
+  if (name.includes('tempo') || name.includes('traveller') || vtype === 'tempo') return { key: 'tempo_traveller', label: v.name ?? 'Tempo Traveller' };
+  if (name.includes('swift') || name.includes('dzire') || vtype === 'sedan' || vtype === 'hatchback')
+    return { key: 'sedan', label: v.name ?? 'Swift Dzire' };
+  return { key: vtype || 'sedan', label: v.name ?? vNum ?? (vtype || 'Sedan') };
+}
+
+const DEFAULT_TOUR_VEHICLES: { key: string; label: string }[] = [
+  { key: 'sedan', label: 'Swift Dzire / Sedan' },
+  { key: 'ertiga', label: 'Ertiga / MPV' },
+  { key: 'innova_crysta', label: 'Innova Crysta' },
+  { key: 'tempo_traveller', label: 'Tempo Traveller' },
+  { key: 'toyota_glanza', label: 'Toyota Glanza' },
+  { key: 'amaze', label: 'Honda Amaze' },
+];
+
+/** Map vehicle id/name from loadVehicles (Fleet tab source) to canonical tour pricing key */
+function vehicleToTourKey(v: Vehicle): string {
+  const id = String(v.id ?? '').toLowerCase().replace(/-/g, '_').trim();
+  const name = String(v.name ?? '').toLowerCase();
+  if (name.includes('amaze')) return 'amaze';
+  if (name.includes('ertiga')) return 'ertiga';
+  if (name.includes('innova') || name.includes('crysta')) return 'innova_crysta';
+  if (name.includes('glanza')) return 'toyota_glanza';
+  if (name.includes('tempo') || name.includes('traveller')) return 'tempo_traveller';
+  if (name.includes('swift') || name.includes('dzire') || id === 'sedan') return 'sedan';
+  if (id === 'glanza') return 'toyota_glanza';
+  if (id === 'swift_dzire' || id === 'swift' || id === 'dzire') return 'sedan';
+  return id || 'sedan';
+}
+
+/** Tour vehicle options - same 6 vehicles as Fleet tab (loadVehicles). Filters to fleet types only when fleet has vehicles. */
+function getTourVehiclesForEdit(
+  fleetVehicles: AdminFleetVehicle[],
+  publicVehicles: Vehicle[],
+  _existingPricing: Record<string, number>
+): { key: string; label: string }[] {
+  const seen = new Set<string>();
+  const result: { key: string; label: string }[] = [];
+
+  // 1. Use Fleet tab vehicles (loadVehicles) - full list of 6 with correct names
+  const source = publicVehicles.length > 0 ? publicVehicles : [];
+  for (const v of source) {
+    const key = vehicleToTourKey(v);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push({ key, label: v.name ?? String(v.id ?? '').replace(/_/g, ' ') });
+    }
+  }
+
+  // 2. If no public vehicles, use fleet or default
+  if (result.length === 0) {
+    if (fleetVehicles.length > 0) {
+      for (const v of fleetVehicles) {
+        const { key, label } = fleetVehicleToTourKey(v);
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({ key, label });
+        }
+      }
+    }
+    if (result.length === 0) return DEFAULT_TOUR_VEHICLES;
+  }
+
+  // Optional: when fleet has vehicles, filter to only fleet types (uncomment to restrict)
+  // const filtered = fleetKeys.size > 0 ? result.filter((r) => fleetKeys.has(r.key)) : result;
+  // return filtered.sort((a, b) => a.label.localeCompare(b.label));
+
+  return result.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Get display label for vehicle ID - prefer Fleet tab vehicle names (loadVehicles), then fleet, else formatted id */
+function getVehicleDisplayLabel(vehicleId: string, fleet: AdminFleetVehicle[], publicVehicles?: Vehicle[]): string {
+  const norm = vehicleId.toLowerCase().replace(/-/g, '_').trim();
+  if (publicVehicles?.length) {
+    for (const v of publicVehicles) {
+      if (vehicleToTourKey(v) === norm) return v.name ?? vehicleId;
+    }
+  }
+  for (const v of fleet) {
+    const { key, label } = fleetVehicleToTourKey(v);
+    if (key === norm) return label;
+  }
+  return vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Resolve tour price for a canonical key from existing pricing (handles mpv->ertiga, glanza/toyota_glanza etc.) */
+function resolveTourPrice(pricing: Record<string, number> | undefined, key: string): number {
+  if (!pricing) return 0;
+  const aliases: Record<string, string[]> = {
+    sedan: ['sedan', 'swift_dzire', 'swift', 'dzire'],
+    ertiga: ['ertiga', 'mpv', 'minivan'],
+    innova_crysta: ['innova_crysta', 'innova', 'suv'],
+    tempo_traveller: ['tempo_traveller', 'tempo', 'bus'],
+    toyota_glanza: ['toyota_glanza', 'glanza', 'toyota', 'toyota-glanza'],
+    amaze: ['amaze'],
+  };
+  if (typeof pricing[key] === 'number' && pricing[key] > 0) return pricing[key];
+  for (const alias of aliases[key] ?? []) {
+    const v = pricing[alias];
+    if (typeof v === 'number' && v > 0) return v;
+  }
+  // Case-insensitive fallback: API may return Glanza, Toyota_Glanza, etc.
+  const norm = (s: string) => s.toLowerCase().replace(/-/g, '_').trim();
+  const keyNorm = norm(key);
+  const aliasSet = new Set([keyNorm, ...(aliases[key] ?? []).map(norm)]);
+  for (const [k, v] of Object.entries(pricing)) {
+    if (typeof v !== 'number' || v <= 0) continue;
+    if (aliasSet.has(norm(k))) return v;
+  }
+  return 0;
+}
 
 function formatAmount(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;
@@ -46,16 +169,18 @@ function formatAmount(n: number): string {
 
 function OutstationFareCard({
   vehicleId,
+  vehicleLabel,
   fare,
   onEdit,
   onEditVehicleDetails,
 }: {
   vehicleId: string;
+  vehicleLabel?: string;
   fare: OutstationFare;
   onEdit?: (vehicleId: string, fare: OutstationFare) => void;
   onEditVehicleDetails?: (vehicleId: string) => void;
 }) {
-  const name = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const name = vehicleLabel ?? vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <View style={localStyles.vehicleCard}>
       <View style={localStyles.cardRow}>
@@ -96,18 +221,20 @@ function OutstationFareCard({
 /** Local fare card per vehicle (matches web app - one card per vehicle with package prices and edit) */
 function LocalFareCard({
   vehicleId,
+  vehicleLabel,
   matrix,
   extras,
   onEdit,
   onEditVehicleDetails,
 }: {
   vehicleId: string;
+  vehicleLabel?: string;
   matrix: LocalPackageMatrix;
   extras?: LocalFareExtras;
   onEdit?: (vehicleId: string, p8: number, p10: number, p4: number, extraKm?: number, extraHour?: number) => void;
   onEditVehicleDetails?: (vehicleId: string) => void;
 }) {
-  const name = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const name = vehicleLabel ?? vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const p8 = matrix['8hrs-80km']?.[vehicleId] ?? 0;
   const p10 = matrix['10hrs-100km']?.[vehicleId] ?? 0;
   const p4 = matrix['4hrs-40km']?.[vehicleId] ?? 0;
@@ -152,16 +279,18 @@ function LocalFareCard({
 
 function AirportFareCard({
   vehicleId,
+  vehicleLabel,
   fare,
   onEdit,
   onEditVehicleDetails,
 }: {
   vehicleId: string;
+  vehicleLabel?: string;
   fare: AirportFare;
   onEdit?: (vehicleId: string, fare: AirportFare) => void;
   onEditVehicleDetails?: (vehicleId: string) => void;
 }) {
-  const name = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const name = vehicleLabel ?? vehicleId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   return (
     <View style={localStyles.vehicleCard}>
       <View style={localStyles.cardRow}>
@@ -259,6 +388,8 @@ type EditModalState =
 function EditFareModal({
   editModal,
   saving,
+  fleetVehicles,
+  publicVehicles,
   onClose,
   onSaveOutstation,
   onSaveLocal,
@@ -267,6 +398,8 @@ function EditFareModal({
 }: {
   editModal: EditModalState;
   saving: boolean;
+  fleetVehicles: AdminFleetVehicle[];
+  publicVehicles: Vehicle[];
   onClose: () => void;
   onSaveOutstation: (vehicleId: string, data: Partial<OutstationFare>) => Promise<void>;
   onSaveLocal?: (vehicleId: string, data: { package8hrs80km: number; package10hrs100km: number; package4hrs40km: number; priceExtraKm?: number; priceExtraHour?: number }) => Promise<void>;
@@ -289,6 +422,7 @@ function EditFareModal({
   const [p10, setP10] = useState('');
   const [p4, setP4] = useState('');
   const [tourPricing, setTourPricing] = useState<Record<string, string>>({});
+  const [tourVehicleList, setTourVehicleList] = useState<{ key: string; label: string }[]>([]);
 
   useEffect(() => {
     if (!editModal) return;
@@ -321,12 +455,15 @@ function EditFareModal({
       setExtraHour(String(editModal.extraHour != null ? editModal.extraHour : defHr));
     } else {
       const p: Record<string, string> = {};
-      for (const [k, v] of Object.entries(editModal.tour.pricing ?? {})) {
-        p[k] = String(v ?? '');
+      const tourP = editModal.tour.pricing ?? {};
+      const vehicles = getTourVehiclesForEdit(fleetVehicles, publicVehicles ?? [], tourP);
+      setTourVehicleList(vehicles);
+      for (const { key } of vehicles) {
+        p[key] = String(resolveTourPrice(tourP, key) ?? tourP[key] ?? '');
       }
       setTourPricing(p);
     }
-  }, [editModal]);
+  }, [editModal, fleetVehicles, publicVehicles]);
 
   const handleSave = async () => {
     if (!editModal) return;
@@ -374,7 +511,7 @@ function EditFareModal({
 
   const title =
     editModal.type === 'outstation' || editModal.type === 'airport' || editModal.type === 'local'
-      ? `Edit ${editModal.vehicleId.replace(/_/g, ' ')}`
+      ? `Edit ${getVehicleDisplayLabel(editModal.vehicleId, fleetVehicles, publicVehicles)}`
       : `Edit ${editModal.tour.name}`;
 
   return (
@@ -423,12 +560,12 @@ function EditFareModal({
             )}
             {editModal.type === 'tours' && (
               <>
-                {Object.entries(tourPricing).map(([vehicleId, val]) => (
+                {tourVehicleList.map(({ key, label }) => (
                   <NumInput
-                    key={vehicleId}
-                    label={`${vehicleId.replace(/_/g, ' ')} ₹`}
-                    value={val}
-                    onChange={(v) => setTourPricing((p) => ({ ...p, [vehicleId]: v }))}
+                    key={key}
+                    label={`${label} ₹`}
+                    value={tourPricing[key] ?? ''}
+                    onChange={(v) => setTourPricing((p) => ({ ...p, [key]: v }))}
                   />
                 ))}
               </>
@@ -521,6 +658,15 @@ export function AdminFaresScreen() {
   const [editModal, setEditModal] = useState<EditModalState>(null);
   const [saving, setSaving] = useState(false);
   const [vehicleTypeModal, setVehicleTypeModal] = useState<{ vehicleId: string; vehicleName?: string } | null>(null);
+  const [fleetVehicles, setFleetVehicles] = useState<AdminFleetVehicle[]>([]);
+  const [publicVehicles, setPublicVehicles] = useState<Vehicle[]>([]);
+
+  useEffect(() => {
+    adminAPI.getFleetVehicles(true).then(setFleetVehicles).catch(() => setFleetVehicles([]));
+  }, []);
+  useEffect(() => {
+    loadVehicles().then(setPublicVehicles).catch(() => setPublicVehicles([]));
+  }, []);
 
   const load = async () => {
     const currentTab = tripType;
@@ -682,9 +828,10 @@ export function AdminFaresScreen() {
                 <OutstationFareCard
                   key={vid}
                   vehicleId={vid}
+                  vehicleLabel={getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles)}
                   fare={fare}
                   onEdit={handleEditOutstation}
-                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, vid.replace(/_/g, ' '))}
+                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles))}
                 />
               ))}
             </View>
@@ -705,10 +852,11 @@ export function AdminFaresScreen() {
                     <LocalFareCard
                       key={vehicleId}
                       vehicleId={vehicleId}
+                      vehicleLabel={getVehicleDisplayLabel(vehicleId, fleetVehicles, publicVehicles)}
                       matrix={localMatrix!}
                       extras={localExtras}
                       onEdit={handleEditLocal}
-                      onEditVehicleDetails={(id) => handleEditVehicleDetails(id, vehicleId.replace(/_/g, ' '))}
+                      onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vehicleId, fleetVehicles, publicVehicles))}
                     />
                   ))}
             </View>
@@ -720,9 +868,10 @@ export function AdminFaresScreen() {
                 <AirportFareCard
                   key={vid}
                   vehicleId={vid}
+                  vehicleLabel={getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles)}
                   fare={fare}
                   onEdit={handleEditAirport}
-                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, vid.replace(/_/g, ' '))}
+                  onEditVehicleDetails={(id) => handleEditVehicleDetails(id, getVehicleDisplayLabel(vid, fleetVehicles, publicVehicles))}
                 />
               ))}
             </View>
@@ -748,6 +897,8 @@ export function AdminFaresScreen() {
       <EditFareModal
         editModal={editModal}
         saving={saving}
+        fleetVehicles={fleetVehicles}
+        publicVehicles={publicVehicles}
         onClose={() => setEditModal(null)}
         onSaveLocal={async (vehicleId, data) => {
           setSaving(true);

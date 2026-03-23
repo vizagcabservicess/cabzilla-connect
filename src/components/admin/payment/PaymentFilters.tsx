@@ -23,8 +23,8 @@ interface PaymentFiltersProps {
   onSearch: (searchTerm: string) => void;
   onFilter: (filters: {
     dateRange?: DateRange;
-    status?: PaymentStatus;
-    method?: PaymentMethod;
+    paymentStatus?: PaymentStatus;
+    paymentMethod?: PaymentMethod;
   }) => void;
 }
 
@@ -47,13 +47,13 @@ export function PaymentFilters({ onSearch, onFilter }: PaymentFiltersProps) {
   const handleFilter = () => {
     const filters: {
       dateRange?: DateRange;
-      status?: PaymentStatus;
-      method?: PaymentMethod;
+      paymentStatus?: PaymentStatus;
+      paymentMethod?: PaymentMethod;
     } = {};
     
     if (dateRange) filters.dateRange = dateRange;
-    if (status && status !== 'all') filters.status = status as PaymentStatus;
-    if (method && method !== 'all') filters.method = method as PaymentMethod;
+    if (status && status !== 'all') filters.paymentStatus = status as PaymentStatus;
+    if (method && method !== 'all') filters.paymentMethod = method as PaymentMethod;
     
     onFilter(filters);
   };

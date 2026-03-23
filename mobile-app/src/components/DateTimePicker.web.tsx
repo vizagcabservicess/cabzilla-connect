@@ -24,13 +24,20 @@ function parseDateTimeLocalStr(s: string): Date {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
+function getDefaultMinDate(): Date {
+  const n = new Date();
+  n.setTime(n.getTime() + 60 * 60 * 1000);
+  return n;
+}
+
 export function DateTimePickerComponent({
   label = 'Date of journey',
   date,
   onDateChange,
   minDate,
 }: DateTimePickerComponentProps) {
-  const minStr = minDate ? toDateTimeLocalStr(minDate) : undefined;
+  const effectiveMin = minDate ?? getDefaultMinDate();
+  const minStr = toDateTimeLocalStr(effectiveMin);
 
   return (
     <View style={styles.container}>
@@ -45,7 +52,12 @@ export function DateTimePickerComponent({
           min={minStr}
           onChange={(e) => {
             const v = e.target.value;
-            if (v) onDateChange(parseDateTimeLocalStr(v));
+            if (v) {
+              const parsed = parseDateTimeLocalStr(v);
+              // Webapp logic: reject past time even if HTML min is bypassed
+              if (parsed < effectiveMin) return;
+              onDateChange(parsed);
+            }
           }}
           style={styles.input}
           aria-label={label}

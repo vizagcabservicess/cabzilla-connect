@@ -322,18 +322,18 @@ export function ReportVehiclesTable({
       acc.fuel_cost += Number(row.fuel_cost || 0);
       acc.maintenance_cost += Number(row.maintenance_cost || 0);
       acc.commission += Number(row.commission || 0);
-      acc.avg_driver_salary += Number(row.avg_driver_salary || 0);
+      acc.avg_driver_salary += Number(row.driver_salary_total ?? row.avg_driver_salary ?? 0);
       acc.emi += Number(row.emi || 0);
-      if (acc.total_expenses === undefined && row.total_expenses !== undefined) acc.total_expenses = row.total_expenses;
+      acc.total_expenses += Number(row.total_expenses || row.expenses || 0);
       return acc;
     },
-    { total_trips: 0, total_revenue: 0, fuel_cost: 0, maintenance_cost: 0, commission: 0, avg_driver_salary: 0, emi: 0, total_expenses: undefined } as any
+    { total_trips: 0, total_revenue: 0, fuel_cost: 0, maintenance_cost: 0, commission: 0, avg_driver_salary: 0, emi: 0, total_expenses: 0 }
   );
 
   const netProfit = totals.total_revenue - totals.fuel_cost - totals.maintenance_cost - totals.commission - totals.emi - totals.avg_driver_salary - totals.total_expenses;
   const topRevenue = [...reportData].sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0))[0];
   const topUtilized = [...reportData].sort((a, b) => (b.utilization_rate || 0) - (a.utilization_rate || 0))[0];
-  const totalExpenses = reportData[0]?.total_expenses || 0;
+  const totalExpenses = totals.total_expenses;
 
   const getStatusClass = (status: string) => {
     const s = String(status ?? '').toLowerCase();
@@ -367,7 +367,8 @@ export function ReportVehiclesTable({
             </TableHeader>
             <TableBody>
               {reportData.map((row, index) => {
-                const profit = (row.total_revenue || 0) - (row.fuel_cost || 0) - (row.maintenance_cost || 0) - (row.commission || 0) - (row.emi || 0) - (row.avg_driver_salary || 0) - (row.expenses || 0);
+                const driverCost = row.driver_salary_total ?? row.avg_driver_salary ?? 0;
+                const profit = (row.total_revenue || 0) - (row.fuel_cost || 0) - (row.maintenance_cost || 0) - (row.commission || 0) - (row.emi || 0) - driverCost - (row.expenses || 0);
                 const tripCount = Number(row.total_trips || 0);
                 return (
                   <TableRow key={index}>

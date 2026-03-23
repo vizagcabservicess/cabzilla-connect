@@ -888,38 +888,56 @@ try {
                     $commissions[$row['vehicle_id']] = (float)$row['total_commission'];
                 }
 
-                // 6. Get average driver salary for all drivers in the period
-                $avgDriverSalary = 0;
-                $sql = "SELECT AVG(net_salary) AS avg_driver_salary FROM payroll_entries WHERE status = 'reconciled' AND DATE(date) BETWEEN ? AND ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ss", $startDate, $endDate);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                if ($row = $result->fetch_assoc()) {
-                    $avgDriverSalary = (float)$row['avg_driver_salary'];
+                // 6. Get total monthly driver salary and divide equally across all vehicles in the report
+                $totalMonthlyDriverSalary = 0;
+                $payrollCheck = @$conn->query("SHOW TABLES LIKE 'payroll_entries'");
+                if ($payrollCheck && $payrollCheck->num_rows > 0) {
+                    $sql = "SELECT COALESCE(SUM(net_salary), 0) as total FROM payroll_entries 
+                            WHERE status IN ('reconciled','pending') AND DATE(date) BETWEEN ? AND ?";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ss", $startDate, $endDate);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    if ($row = $result->fetch_assoc()) {
+                        $totalMonthlyDriverSalary = (float)$row['total'];
+                    }
+                }
+                $vehicleCount = count($vehicleStats);
+                $driverSalaryPerVehicle = $vehicleCount > 0 ? round($totalMonthlyDriverSalary / $vehicleCount, 2) : 0;
+
+                // 6b. Get expenses per vehicle (from financial_ledger.vehicle_id)
+                $expensesByVehicle = [];
+                $flVehicleCheck = @$conn->query("SHOW COLUMNS FROM financial_ledger LIKE 'vehicle_id'");
+                $ledgerDateCol = 'date';
+                $ledgerDateCheck = @$conn->query("SHOW COLUMNS FROM financial_ledger LIKE 'transaction_date'");
+                if ($ledgerDateCheck && $ledgerDateCheck->num_rows > 0) {
+                    $ledgerDateCol = 'transaction_date';
+                }
+                if ($flVehicleCheck && $flVehicleCheck->num_rows > 0) {
+                    $sql = "SELECT vehicle_id, SUM(amount) AS total_expense FROM financial_ledger 
+                            WHERE type = 'expense' AND $ledgerDateCol BETWEEN ? AND ? AND (is_deleted = 0 OR is_deleted IS NULL) 
+                            AND vehicle_id IS NOT NULL AND vehicle_id != '' 
+                            GROUP BY vehicle_id";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ss", $startDate, $endDate);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    while ($row = $result->fetch_assoc()) {
+                        $vid = $row['vehicle_id'];
+                        $expensesByVehicle[$vid] = (float)$row['total_expense'];
+                    }
                 }
 
-                // 6b. Get average and total expenses for all expenses in the period
-                $avgExpense = 0;
-                $totalExpense = 0;
-                $sql = "SELECT AVG(amount) AS avg_expense, SUM(amount) AS total_expense FROM financial_ledger WHERE type = 'expense' AND date BETWEEN ? AND ? AND is_deleted = 0";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ss", $startDate, $endDate);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                if ($row = $result->fetch_assoc()) {
-                    $avgExpense = (float)$row['avg_expense'];
-                    $totalExpense = (float)$row['total_expense'];
-                }
-
-                // 7. Merge commission, avg_driver_salary, and expenses into vehicleStats
+                // 7. Merge commission, driver salary (equal share), and expenses into vehicleStats (per-vehicle)
                 foreach ($vehicleStats as $id => &$stat) {
                     $stat['commission'] = $commissions[$id] ?? 0;
-                    $stat['avg_driver_salary'] = $avgDriverSalary;
-                    $stat['expenses'] = $avgExpense;
-                    $stat['total_expenses'] = $totalExpense;
-                    // Updated profit calculation
-                    $stat['profit'] = $stat['total_revenue'] - $stat['fuel_cost'] - $stat['maintenance_cost'] - $stat['commission'] - $stat['emi'] - $stat['avg_driver_salary'] - $stat['expenses'];
+                    $stat['avg_driver_salary'] = $driverSalaryPerVehicle;
+                    $stat['driver_salary_total'] = $driverSalaryPerVehicle;
+                    $vehicleExpense = $expensesByVehicle[$id] ?? $expensesByVehicle[(string)$id] ?? 0;
+                    $stat['expenses'] = $vehicleExpense;
+                    $stat['total_expenses'] = $vehicleExpense;
+                    // Profit uses equal share of driver salary per vehicle
+                    $stat['profit'] = round($stat['total_revenue'] - $stat['fuel_cost'] - $stat['maintenance_cost'] - $stat['commission'] - $stat['emi'] - $driverSalaryPerVehicle - $stat['expenses'], 2);
                 }
                 unset($stat);
 

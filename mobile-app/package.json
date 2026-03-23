@@ -12,6 +12,7 @@
     "build": "expo export --platform web",
     "build:web": "expo export --platform web",
     "build:android": "npx eas build --platform android --profile production",
+    "build:android:preview": "npx eas build --platform android --profile preview",
     "build:ios": "npx eas build --platform ios --profile production",
     "build:all": "npx eas build --platform all --profile production",
     "submit:android": "npx eas submit --platform android --latest",

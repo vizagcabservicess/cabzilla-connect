@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Linking,
+  Share,
   Platform,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -195,18 +195,20 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
             : tripType === 'tour'
               ? tourName || 'Tour'
               : 'Taxi';
-    const text = encodeURIComponent(
+    const text =
       `${tripLabel} Booking\n\n` +
-        `From: ${pickupLocation.name}\n` +
-        `To: ${dropName}\n` +
-        `Date: ${pickupDate.toLocaleString('en-IN')}` +
-        (returnDate ? `\nReturn: ${returnDate.toLocaleString('en-IN')}` : '') +
-        `\nVehicle: ${selectedVehicle.name}\n` +
-        `Distance: ${distance} KM` +
-        (isOutstationRoundTrip ? ' × 2 (round trip)' : '') +
-        `\nTotal: ₹${totalPrice.toLocaleString('en-IN')}`
-    );
-    Linking.openURL(`https://wa.me/919966363662?text=${text}`).catch(() => {});
+      `From: ${pickupLocation.name}\n` +
+      `To: ${dropName}\n` +
+      `Date: ${pickupDate.toLocaleString('en-IN')}` +
+      (returnDate ? `\nReturn: ${returnDate.toLocaleString('en-IN')}` : '') +
+      `\nVehicle: ${selectedVehicle.name}\n` +
+      `Distance: ${distance} KM` +
+      (isOutstationRoundTrip ? ' × 2 (round trip)' : '') +
+      `\nTotal: ₹${totalPrice.toLocaleString('en-IN')}`;
+    Share.share({
+      message: text,
+      title: 'Booking Summary',
+    }).catch(() => {});
   };
 
   const handleBookNow = () => {

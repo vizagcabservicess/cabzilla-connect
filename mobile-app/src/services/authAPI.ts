@@ -132,9 +132,17 @@ class AuthAPI {
     return data;
   }
 
+  async forgotPassword(email: string): Promise<{ status: string; message?: string }> {
+    const response = await axios.post(`${AUTH_BASE}/forgot-password.php`, { email }, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return response.data;
+  }
+
   async logout(): Promise<void> {
+    this.token = null;
     try {
-      const token = await this.getStoredToken();
+      const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
         await axios.post(
           `${AUTH_BASE}/logout.php`,
@@ -145,7 +153,8 @@ class AuthAPI {
     } catch {
       // Ignore logout API errors
     } finally {
-      this.setToken(null);
+      this.token = null;
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
       await SecureStore.deleteItemAsync(USER_KEY);
     }
   }

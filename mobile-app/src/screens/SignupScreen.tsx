@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,7 +45,7 @@ export function SignupScreen() {
         picture: socialUser.picture,
       });
       if (response.success) {
-        navigation.goBack();
+        navigation.navigate('ProfileHome');
       } else {
         setError(response.error || response.message || 'Google signup failed');
       }
@@ -88,13 +89,17 @@ export function SignupScreen() {
       });
       if (response?.email_verification_required) {
         setError('');
-        navigation.navigate('Login', {
-          message: 'Account created! Please verify your email before logging in.',
-        });
+        Alert.alert(
+          'Verify your email',
+          "We've sent a verification link to your email address. Please check your inbox and click the link to verify your account. Once verified, you can log in.",
+          [{ text: 'OK', onPress: () => navigation.navigate('Login', { message: 'Verify your email to log in.' }) }]
+        );
       } else if (response?.success || response?.message?.includes('successful')) {
-        navigation.navigate('Login', {
-          message: 'Account created! You can now log in.',
-        });
+        Alert.alert(
+          'Verify your email',
+          "We've sent a verification link to your email address. Please check your inbox and click the link to verify your account. Once verified, you can log in.",
+          [{ text: 'OK', onPress: () => navigation.navigate('Login', { message: 'Verify your email to log in.' }) }]
+        );
       } else {
         setError(response?.error || response?.message || 'Signup failed');
       }

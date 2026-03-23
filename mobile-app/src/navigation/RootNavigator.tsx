@@ -11,10 +11,11 @@ import { PassengerInfoScreen } from '../screens/PassengerInfoScreen';
 import { PaymentScreen } from '../screens/PaymentScreen';
 import { ServicesScreen } from '../screens/ServicesScreen';
 import { HireDriverScreen } from '../screens/HireDriverScreen';
-import { CallScreen } from '../screens/CallScreen';
+import { FleetVehiclesScreen } from '../screens/FleetVehiclesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { SignupScreen } from '../screens/SignupScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 import { AdminBookingsListScreen } from '../screens/AdminBookingsListScreen';
@@ -63,6 +64,7 @@ function ProfileStack() {
       <Stack.Screen name="ProfileHome" component={ProfileScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
       <Stack.Screen name="AdminBookingsList" component={AdminBookingsListScreen} />
@@ -144,6 +146,8 @@ export function RootNavigator() {
         headerShown: false,
         tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: '#9CA3AF',
+        tabBarLabelStyle: { fontSize: 11, textAlign: 'center' },
+        tabBarItemStyle: { flex: 1 },
       }}
     >
       <Tab.Screen
@@ -155,25 +159,26 @@ export function RootNavigator() {
         }}
       />
       <Tab.Screen
-        name="Services"
-        component={ServicesStack}
+        name="FleetVehicles"
+        component={FleetVehiclesScreen}
         options={{
-          title: 'Services',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="grid" focused={focused} />,
+          title: 'Fleet',
+          tabBarIcon: ({ focused }) => <TabBarIcon name="car" focused={focused} />,
         }}
       />
       <Tab.Screen
-        name="Call"
-        component={CallScreen}
+        name="HireDriver"
+        component={HireDriverScreen}
         options={{
-          title: 'Call Now',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="call" focused={focused} />,
+          title: 'Hire Driver',
+          tabBarIcon: ({ focused }) => <TabBarIcon name="people" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileStack}
         options={{
+          title: 'Profile',
           tabBarIcon: ({ focused }) => <TabBarIcon name="person" focused={focused} />,
         }}
       />

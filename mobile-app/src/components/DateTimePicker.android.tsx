@@ -47,10 +47,19 @@ export function DateTimePickerComponent({
     if (selected && pendingDate) {
       const combined = new Date(pendingDate);
       combined.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+      // Webapp logic: reject past time - require at least 1 hour advance for today
+      if (combined < min) {
+        setPendingDate(null);
+        return;
+      }
       onDateChange(combined);
     }
     setPendingDate(null);
   };
+
+  // When date is today, time picker must respect min (1hr from now)
+  const isPendingDateToday = pendingDate && min && pendingDate.toDateString() === min.toDateString();
+  const timePickerMin = isPendingDateToday ? min : undefined;
 
   const handleOpen = () => {
     setShowDate(true);
@@ -82,12 +91,17 @@ export function DateTimePickerComponent({
         <DateTimePicker
           value={pendingDate ? (() => {
             const d = new Date(pendingDate);
-            d.setHours(date.getHours(), date.getMinutes(), 0, 0);
+            const proposed = new Date(d);
+            proposed.setHours(date.getHours(), date.getMinutes(), 0, 0);
+            // Ensure value is not before min when date is today
+            const safe = timePickerMin && proposed < timePickerMin ? timePickerMin : proposed;
+            d.setHours(safe.getHours(), safe.getMinutes(), 0, 0);
             return d;
           })() : date}
           mode="time"
           display="default"
           onChange={handleTimeChange}
+          minimumDate={timePickerMin}
         />
       )}
     </View>

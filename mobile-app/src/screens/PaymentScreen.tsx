@@ -1,8 +1,9 @@
 /**
  * Payment / Confirm Booking - Step 3
  * Matches web: shows summary, creates booking via API, opens Razorpay for partial payment
+ * Notifies admin via WhatsApp/email when payment is abandoned (same as web).
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -85,14 +86,34 @@ export function PaymentScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<{ bookingNumber: string; bookingId: number } | null>(null);
 
+  const pendingBookingIdRef = useRef<number | null>(null);
+  const hasNotifiedAbandonedRef = useRef(false);
+  const paymentSuccessRef = useRef(false);
+
   const pickupDate = new Date(pickupDateTs);
   const dropName = dropLocation?.name || pickupLocation.name;
+
+  const sendAbandonedNotification = (reason: 'abandoned' | 'cancelled') => {
+    const bid = pendingBookingIdRef.current;
+    if (paymentSuccessRef.current || !bid || hasNotifiedAbandonedRef.current) return;
+    hasNotifiedAbandonedRef.current = true;
+    bookingAPI.notifyPendingPayment(bid, reason).catch(() => {});
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      sendAbandonedNotification('abandoned');
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const handlePaymentSuccess = async (
     data: RazorpayResponse,
     bookingId: number,
     bookingNumber: string
   ) => {
+    paymentSuccessRef.current = true;
+    pendingBookingIdRef.current = null;
     try {
       const ok = await verifyRazorpayPayment(
         data.razorpay_payment_id,
@@ -142,7 +163,10 @@ export function PaymentScreen({ route, navigation }: Props) {
         checkoutOptions,
         (data) => handlePaymentSuccess(data, bookingId, bookingNumber),
         handlePaymentFailure,
-        () => setLoading(false)
+        () => {
+          setLoading(false);
+          sendAbandonedNotification('abandoned');
+        }
       );
       return;
     }
@@ -161,7 +185,10 @@ export function PaymentScreen({ route, navigation }: Props) {
       {
         onSuccess: (data: RazorpayResponse) => handlePaymentSuccess(data, bookingId, bookingNumber),
         onFailure: handlePaymentFailure,
-        onClose: () => setLoading(false),
+        onClose: () => {
+          setLoading(false);
+          sendAbandonedNotification('abandoned');
+        },
       }
     );
   };
@@ -201,8 +228,9 @@ export function PaymentScreen({ route, navigation }: Props) {
       const data = res?.data;
       const bookingNumber = data?.bookingNumber || data?.booking_number || 'N/A';
       const bookingId = data?.id ?? 0;
+      pendingBookingIdRef.current = bookingId;
 
-      if (paymentMode === 'partial' && amountToPay > 0) {
+      if (amountToPay > 0) {
         const order = await createRazorpayOrder(amountToPay, bookingId);
         if (!order) {
           Alert.alert('Payment Error', 'Could not create payment order. Please try again.');
@@ -211,6 +239,8 @@ export function PaymentScreen({ route, navigation }: Props) {
         }
         openRazorpayAndPay(bookingId, bookingNumber, order);
       } else {
+        paymentSuccessRef.current = true;
+        pendingBookingIdRef.current = null;
         setSuccess({ bookingNumber, bookingId });
         setLoading(false);
       }
@@ -313,7 +343,7 @@ export function PaymentScreen({ route, navigation }: Props) {
         <Text style={styles.payNote}>
           {paymentMode === 'partial'
             ? `Pay ₹${amountToPay.toLocaleString('en-IN')} now (30%), rest to driver at pickup.`
-            : 'Pay full amount to driver at pickup.'}
+            : `Pay ₹${amountToPay.toLocaleString('en-IN')} now (full amount) via secure payment.`}
         </Text>
         <TouchableOpacity
           style={[styles.confirmBtn, loading && styles.confirmBtnDisabled]}

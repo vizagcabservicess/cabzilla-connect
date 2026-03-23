@@ -13,8 +13,10 @@ import {
   Platform,
   Linking,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/core';
+import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from './AuthProvider';
@@ -104,6 +106,30 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
 
   const handleCall = () => {
     Linking.openURL(`tel:${PHONE}`).catch(() => {});
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          closeMenu();
+          await logout();
+          const tabNav = navigation.getParent();
+          tabNav?.dispatch(CommonActions.reset({
+            index: 0,
+            routes: [
+              { name: 'Main', state: { routes: [{ name: 'Home', params: { showAuthSheet: true } }] } },
+              { name: 'FleetVehicles' },
+              { name: 'HireDriver' },
+              { name: 'Profile' },
+            ],
+          }));
+        },
+      },
+    ]);
   };
 
   return (
@@ -269,11 +295,7 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
               {isAuthenticated && (
                 <TouchableOpacity
                   style={[styles.menuItem, styles.logoutItem]}
-                  onPress={() =>
-                    navAndClose(() => {
-                      logout();
-                    })
-                  }
+                  onPress={handleLogout}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="log-out-outline" size={20} color="#dc2626" />

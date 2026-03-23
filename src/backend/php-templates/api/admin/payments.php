@@ -34,11 +34,22 @@ try {
     // Parse filter parameters
     $fromDate = isset($_GET['from_date']) ? $_GET['from_date'] : null;
     $toDate = isset($_GET['to_date']) ? $_GET['to_date'] : null;
+    $dateField = isset($_GET['date_field']) ? $_GET['date_field'] : 'pickup_date';
+    if (!in_array($dateField, ['pickup_date', 'created_at'])) {
+        $dateField = 'pickup_date';
+    }
     $status = isset($_GET['status']) ? $_GET['status'] : null;
     $method = isset($_GET['method']) ? $_GET['method'] : null;
     $customerId = isset($_GET['customer_id']) ? $_GET['customer_id'] : null;
     $search = isset($_GET['search']) ? $_GET['search'] : null;
     
+    // Paid sum from Razorpay `payments` table + offline/admin advance on booking
+    // Epsilon (0.01) avoids float/decimal edge cases; legacy `payment_status` matches admin create-booking & old rows
+    $paidExpr = "(COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))";
+    $totalExpr = "COALESCE(b.total_amount, 0)";
+    $remainingExpr = "({$totalExpr} - {$paidExpr})";
+    $legacyPaidSql = "LOWER(TRIM(COALESCE(b.payment_status, ''))) IN ('paid','payment_received','successful','paid_full')";
+
     // Build the base query
     $query = "
         SELECT 
@@ -48,12 +59,13 @@ try {
             b.passenger_phone AS customer_phone,
             b.passenger_email AS customer_email,
             b.total_amount AS amount,
-            (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) AS paid_amount,
-            (b.total_amount - (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))) AS remaining_amount,
+            {$paidExpr} AS paid_amount,
+            {$remainingExpr} AS remaining_amount,
             CASE
                 WHEN b.status = 'cancelled' THEN 'cancelled'
-                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) >= b.total_amount AND (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'paid'
-                WHEN (COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0)) > 0 THEN 'partial'
+                WHEN {$legacyPaidSql} THEN 'paid'
+                WHEN {$paidExpr} >= ({$totalExpr} - 0.01) AND {$paidExpr} > 0.01 AND {$totalExpr} > 0 THEN 'paid'
+                WHEN {$paidExpr} > 0.01 THEN 'partial'
                 ELSE 'pending'
             END AS payment_status,
             b.payment_method,
@@ -77,30 +89,25 @@ try {
     $types = "";
     
     if ($fromDate) {
-        $query .= " AND b.pickup_date >= ?";
+        $query .= " AND DATE(b.{$dateField}) >= ?";
         $params[] = $fromDate;
         $types .= "s";
     }
     
     if ($toDate) {
-        $query .= " AND b.pickup_date <= ?";
+        $query .= " AND DATE(b.{$dateField}) <= ?";
         $params[] = $toDate;
         $types .= "s";
     }
     
-    // Filter by computed payment_status (matches displayed status, avoids pending/partial swap)
+    // Filter by same rules as CASE payment_status (legacy column + amounts + epsilon)
     if ($status) {
-        $paidExpr = "(COALESCE(p.paid_amount, 0) + COALESCE(b.advance_paid_amount, 0))";
-        $remainingExpr = "(b.total_amount - " . $paidExpr . ")";
         if ($status === 'pending') {
-            // Computed pending: no payment received (paid = 0), not cancelled
-            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " = 0";
+            $query .= " AND b.status != 'cancelled' AND NOT ({$legacyPaidSql}) AND {$paidExpr} <= 0.01";
         } else if ($status === 'partial') {
-            // Computed partial: some paid, some remaining
-            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " > 0 AND " . $remainingExpr . " > 0";
+            $query .= " AND b.status != 'cancelled' AND NOT ({$legacyPaidSql}) AND {$paidExpr} > 0.01 AND {$remainingExpr} > 0.01";
         } else if ($status === 'paid') {
-            // Computed paid: fully paid (paid >= total)
-            $query .= " AND b.status != 'cancelled' AND " . $paidExpr . " >= b.total_amount AND " . $paidExpr . " > 0";
+            $query .= " AND b.status != 'cancelled' AND ({$legacyPaidSql} OR ({$paidExpr} >= ({$totalExpr} - 0.01) AND {$paidExpr} > 0.01 AND {$totalExpr} > 0))";
         } else if ($status === 'cancelled') {
             $query .= " AND b.status = 'cancelled'";
         }

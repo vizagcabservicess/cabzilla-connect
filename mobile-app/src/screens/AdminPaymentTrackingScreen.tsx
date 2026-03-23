@@ -2,7 +2,7 @@
  * Admin Payment Tracking - dynamic payment tracking matching web logic
  * Date filters: All, Today, Week, Month, Year, Range (custom)
  * Status filters: All, Pending, Paid, Completed (completed maps to paid)
- * Uses API summary for Received/Pending; supports search
+ * Bookings payment view (same API as web Payments). Date: trip vs booked-on toggle.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -56,14 +56,6 @@ interface PaymentItem {
   createdAt?: string;
   customerName?: string;
   [key: string]: unknown;
-}
-
-interface PaymentSummary {
-  totalAmount?: number;
-  totalPaid?: number;
-  totalPending?: number;
-  totalOverdue?: number;
-  countByStatus?: Record<string, number>;
 }
 
 type PeriodType = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom';
@@ -121,14 +113,26 @@ function mapStatusForApi(status: string): string | undefined {
   return status;
 }
 
+function rowPaymentStatus(p: PaymentItem): string {
+  return String(p.paymentStatus ?? p.payment_status ?? '').toLowerCase();
+}
+
+/** Match web PaymentManagement: same status filter on rows (defensive if API drifts) */
+function matchesStatusFilter(p: PaymentItem, filter: string): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'completed') return rowPaymentStatus(p) === 'paid';
+  return rowPaymentStatus(p) === filter;
+}
+
 export function AdminPaymentTrackingScreen() {
   const navigation = useNavigation<any>();
   const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  /** pickup_date = web Payments default; created_at = admin create-booking by day booked */
+  const [dateField, setDateField] = useState<'pickup_date' | 'created_at'>('created_at');
   const [periodType, setPeriodType] = useState<PeriodType>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
@@ -156,19 +160,18 @@ export function AdminPaymentTrackingScreen() {
         ...dateParams,
         status: mapStatusForApi(statusFilter),
         search: debouncedSearch.trim() || undefined,
+        date_field: dateField,
       });
       const list = res?.payments ?? [];
       setPayments(Array.isArray(list) ? list : []);
-      setSummary((res?.summary as PaymentSummary) ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
       setPayments([]);
-      setSummary(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, periodType, startDate, endDate, debouncedSearch]);
+  }, [statusFilter, periodType, startDate, endDate, debouncedSearch, dateField]);
 
   useEffect(() => {
     setLoading(true);
@@ -180,21 +183,20 @@ export function AdminPaymentTrackingScreen() {
     load();
   };
 
-  const totalPaid = summary?.totalPaid ?? payments
-    .filter((p) => ['paid', 'partial'].includes(String(p.paymentStatus ?? p.payment_status ?? '').toLowerCase()))
-    .reduce((s, p) => s + (Number(p.paidAmount ?? p.amount ?? 0) || 0), 0);
-  const totalPending = summary?.totalPending ?? payments
-    .filter((p) => ['pending', 'partial'].includes(String(p.paymentStatus ?? p.payment_status ?? '').toLowerCase()))
-    .reduce((s, p) => s + (Number(p.remainingAmount ?? p.amount ?? 0) || 0), 0);
-  const paidCount = summary?.countByStatus
-    ? (summary.countByStatus.paid ?? 0) + (summary.countByStatus.partial ?? 0)
-    : payments.filter((p) => ['paid', 'partial'].includes(String(p.paymentStatus ?? p.payment_status ?? '').toLowerCase())).length;
-  const pendingCount = summary?.countByStatus
-    ? (summary.countByStatus.pending ?? 0) + (summary.countByStatus.partial ?? 0)
-    : payments.filter((p) => {
-        const s = String(p.paymentStatus ?? p.payment_status ?? '').toLowerCase();
-        return s === 'pending' || s === 'partial';
-      }).length;
+  const visiblePayments = payments.filter((p) => matchesStatusFilter(p, statusFilter));
+
+  // Derive from visible rows so totals match the list (same idea as web PaymentManagement client filter)
+  const totalPaid = visiblePayments
+    .filter((p) => ['paid', 'partial'].includes(rowPaymentStatus(p)))
+    .reduce((s, p) => s + (Number(p.paidAmount ?? 0) || 0), 0);
+  const totalPending = visiblePayments
+    .filter((p) => ['pending', 'partial'].includes(rowPaymentStatus(p)))
+    .reduce((s, p) => s + (Number(p.remainingAmount ?? 0) || 0), 0);
+  const paidCount = visiblePayments.filter((p) => ['paid', 'partial'].includes(rowPaymentStatus(p))).length;
+  const pendingCount = visiblePayments.filter((p) => {
+    const s = rowPaymentStatus(p);
+    return s === 'pending' || s === 'partial';
+  }).length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -231,6 +233,25 @@ export function AdminPaymentTrackingScreen() {
             </TouchableOpacity>
           </View>
         )}
+        <View style={styles.dateBasisRow}>
+          <Text style={styles.dateBasisLabel}>Date filter:</Text>
+          <TouchableOpacity
+            style={[styles.dateBasisChip, dateField === 'pickup_date' && styles.dateBasisChipActive]}
+            onPress={() => setDateField('pickup_date')}
+          >
+            <Text style={[styles.dateBasisChipText, dateField === 'pickup_date' && styles.dateBasisChipTextActive]}>
+              Trip date
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.dateBasisChip, dateField === 'created_at' && styles.dateBasisChipActive]}
+            onPress={() => setDateField('created_at')}
+          >
+            <Text style={[styles.dateBasisChipText, dateField === 'created_at' && styles.dateBasisChipTextActive]}>
+              Booked on
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {showStartPicker && (
@@ -329,13 +350,13 @@ export function AdminPaymentTrackingScreen() {
             ))}
           </View>
 
-          {payments.length === 0 ? (
+          {visiblePayments.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="bar-chart-outline" size={48} color={colors.gray200} />
               <Text style={styles.emptyText}>No payments for selected filter</Text>
             </View>
           ) : (
-            payments.map((p, i) => {
+            visiblePayments.map((p, i) => {
               const bookingId = Number(p.id ?? p.bookingId ?? p.booking_id ?? 0);
               return (
                 <TouchableOpacity
@@ -406,6 +427,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
   },
+  dateBasisRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  dateBasisLabel: { fontSize: 12, color: colors.gray600, fontWeight: '600' },
+  dateBasisChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: colors.gray100,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  dateBasisChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dateBasisChipText: { fontSize: 12, fontWeight: '600', color: colors.gray600 },
+  dateBasisChipTextActive: { color: '#fff' },
   periodScrollContent: { flexDirection: 'row', gap: 8, paddingVertical: 8 },
   periodBtn: {
     paddingVertical: 6,

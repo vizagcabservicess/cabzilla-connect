@@ -27,6 +27,16 @@ Ensure these are set in `.env` or EAS secrets:
 
 The app uses redirect URI: `vizagtaxihub://oauthredirect` (from `app.json` scheme + path).
 
+### Redirect goes to webpage instead of app
+
+If after Google sign-in the user is redirected to the website instead of back to the app:
+
+1. **Google Cloud Console** → Credentials → your **Android** OAuth client
+2. Under **Authorized redirect URIs**, ensure you have:
+   - `vizagtaxihub://oauthredirect` (custom scheme for the app)
+3. Do **not** use only the web app URL (e.g. `https://www.vizagtaxihub.com/...`) – that will open the browser.
+4. Ensure you are using the **Android** OAuth client ID in the app (not only the Web client). The Web client rejects custom scheme redirects.
+
 ## Backend setup
 
 The mobile app calls `social-signup.php` and `social-login.php` for Google auth. Deploy these files to your server under `api/auth/`:

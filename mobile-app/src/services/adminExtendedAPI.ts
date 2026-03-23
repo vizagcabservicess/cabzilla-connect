@@ -705,6 +705,15 @@ export const adminExtendedAPI = {
     return res.data?.data;
   },
 
+  /** Payroll - delete entry */
+  payrollDelete: async (id: string | number) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.delete(`${base}/api/admin/payroll.php?id=${id}`, { headers, timeout: 15000 });
+    if (res.data?.status !== 'success') throw new Error(res.data?.message || 'Failed to delete payroll entry');
+    return res.data;
+  },
+
   /** Payroll - update entry (matches web payrollAPI.updatePayrollEntry) */
   payrollUpdate: async (
     id: string | number,
@@ -726,26 +735,80 @@ export const adminExtendedAPI = {
     return res.data?.data;
   },
 
-  /** Payments - get list (matches web payments API: from_date, to_date, status, search) */
+  /** Payments - get list (matches web payments API: from_date, to_date, status, search)
+   * date_field: 'created_at' = filter by booking creation (shows admin create-booking); 'pickup_date' = filter by trip date
+   */
   paymentsList: async (params?: {
     from_date?: string;
     to_date?: string;
     status?: string;
     search?: string;
     method?: string;
+    date_field?: 'pickup_date' | 'created_at';
   }) => {
     const base = getBase();
     const headers = await authHeaders();
     const res = await axios.get(`${base}/api/admin/payments.php`, {
       headers,
       params,
-      timeout: 15000,
+      timeout: 20000,
+      validateStatus: () => true,
     });
+    if (res.status >= 400 || res.data?.status === 'error') {
+      const msg =
+        (typeof res.data?.message === 'string' && res.data.message) ||
+        `Payments request failed (${res.status})`;
+      throw new Error(msg);
+    }
     const data = res.data?.data ?? res.data;
     return {
       payments: data?.payments ?? [],
       summary: data?.summary ?? {},
     };
+  },
+
+  /** Payments - send pending digest to admin WhatsApp (for daily follow-up). */
+  sendPendingPaymentsWhatsApp: async () => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.post(
+      `${base}/api/admin/send-pending-payments-whatsapp.php`,
+      {},
+      { headers, timeout: 60000 }
+    );
+    const d = res.data?.data;
+    if (res.data?.status === 'error') {
+      throw new Error(res.data?.message || 'Send failed');
+    }
+    return d ?? {};
+  },
+
+  /** Payments - update status (mark as paid/partial). paymentId = booking_id. */
+  paymentUpdate: async (
+    paymentId: number | string,
+    status: 'paid' | 'partial' | 'pending' | 'cancelled',
+    amount?: number,
+    paymentMethod?: string,
+    notes?: string
+  ) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.post(
+      `${base}/api/admin/payment-update.php`,
+      {
+        payment_id: paymentId,
+        status,
+        amount,
+        payment_method: paymentMethod,
+        notes,
+      },
+      { headers, timeout: 15000 }
+    );
+    const data = res.data?.data;
+    if (res.data?.status === 'error' || !data) {
+      throw new Error(res.data?.message || 'Payment update failed');
+    }
+    return data;
   },
 
   /** Users - get all */

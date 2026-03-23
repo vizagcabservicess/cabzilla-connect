@@ -14,7 +14,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Switch,
-  Linking,
+  Share,
   Modal,
   Pressable,
 } from 'react-native';
@@ -108,18 +108,20 @@ export function PassengerInfoScreen({ route, navigation }: Props) {
               ? tourName || 'Tour'
               : 'Taxi';
     const returnDateObj = returnDate ? new Date(returnDate) : null;
-    const text = encodeURIComponent(
+    const text =
       `${tripLabel} Booking\n\n` +
-        `From: ${pickupLocation.name}\n` +
-        `To: ${dropName}\n` +
-        `Date: ${pickupDateObj.toLocaleString('en-IN')}` +
-        (returnDateObj ? `\nReturn: ${returnDateObj.toLocaleString('en-IN')}` : '') +
-        `\nVehicle: ${selectedVehicle.name}\n` +
-        `Distance: ${distance} KM` +
-        (tripType === 'outstation' && tripMode === 'round-trip' ? ' × 2 (round trip)' : '') +
-        `\nTotal: ₹${totalPrice.toLocaleString('en-IN')}`
-    );
-    Linking.openURL(`https://wa.me/919966363662?text=${text}`).catch(() => {});
+      `From: ${pickupLocation.name}\n` +
+      `To: ${dropName}\n` +
+      `Date: ${pickupDateObj.toLocaleString('en-IN')}` +
+      (returnDateObj ? `\nReturn: ${returnDateObj.toLocaleString('en-IN')}` : '') +
+      `\nVehicle: ${selectedVehicle.name}\n` +
+      `Distance: ${distance} KM` +
+      (tripType === 'outstation' && tripMode === 'round-trip' ? ' × 2 (round trip)' : '') +
+      `\nTotal: ₹${totalPrice.toLocaleString('en-IN')}`;
+    Share.share({
+      message: text,
+      title: 'Booking Summary',
+    }).catch(() => {});
   };
 
   const handleProceed = () => {

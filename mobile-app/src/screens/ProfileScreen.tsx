@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  Alert,
 } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
@@ -62,11 +64,35 @@ export function ProfileScreen({ navigation }: Props) {
   const handleWhatsApp = () => openUrl(`https://wa.me/${WHATSAPP_NUMBER}`);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+  const handleLogout = () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          const tabNav = navigation.getParent();
+          tabNav?.dispatch(CommonActions.reset({
+            index: 0,
+            routes: [
+              { name: 'Main', state: { routes: [{ name: 'Home', params: { showAuthSheet: true } }] } },
+              { name: 'FleetVehicles' },
+              { name: 'HireDriver' },
+              { name: 'Profile' },
+            ],
+          }));
+        },
+      },
+    ]);
+  };
+
   const accountLinks: ProfileLink[] = isAuthenticated
     ? [
         ...(isAdmin ? [{ label: 'Admin Dashboard', onPress: () => navigation.navigate('AdminDashboard') }] : []),
         { label: 'My Bookings / Dashboard', onPress: () => navigation.navigate('Dashboard') },
-        { label: 'Log out', onPress: () => logout() },
+        { label: 'Log out', onPress: handleLogout },
       ]
     : [
         { label: 'Log in', onPress: () => navigation.navigate('Login') },

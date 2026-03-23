@@ -54,15 +54,15 @@ export function PaymentManagement() {
   const payments = data && Array.isArray(data.payments) ? data.payments : [];
   const summary = data && data.summary ? data.summary : emptySummary;
   
-  // Apply frontend filtering for computed status and method
+  // Apply frontend filtering when API params and response shape differ (defensive)
   const filteredPayments = payments.filter(payment => {
     let statusMatch = true;
     let methodMatch = true;
-    if (filters.status) {
-      statusMatch = payment.paymentStatus === filters.status;
+    if (filters.paymentStatus) {
+      statusMatch = payment.paymentStatus === filters.paymentStatus;
     }
-    if (filters.method) {
-      methodMatch = payment.paymentMethod === filters.method;
+    if (filters.paymentMethod) {
+      methodMatch = payment.paymentMethod === filters.paymentMethod;
     }
     return statusMatch && methodMatch;
   });
@@ -75,8 +75,8 @@ export function PaymentManagement() {
   // Handle filter change
   const handleFilter = (newFilters: {
     dateRange?: DateRange;
-    status?: PaymentStatus;
-    method?: PaymentMethod;
+    paymentStatus?: PaymentStatus;
+    paymentMethod?: PaymentMethod;
   }) => {
     setFilters(newFilters);
   };

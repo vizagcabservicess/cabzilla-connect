@@ -178,9 +178,10 @@ try {
     $isPaid = isset($requestData['isPaid']) && $requestData['isPaid'] ? 1 : 0;
     
     // Handle partial payment fields
+    $totalAmount = (float)($requestData['totalAmount'] ?? 0);
     $partialPaymentReceived = isset($requestData['partialPaymentReceived']) && $requestData['partialPaymentReceived'] ? 1 : 0;
     $partialPaymentAmount = isset($requestData['partialPaymentAmount']) ? (float)$requestData['partialPaymentAmount'] : 0;
-    $advancePaidAmount = $partialPaymentReceived ? $partialPaymentAmount : 0;
+    $advancePaidAmount = $partialPaymentReceived ? $partialPaymentAmount : ($isPaid ? $totalAmount : 0);
     $paymentStatus = $partialPaymentReceived && $partialPaymentAmount > 0 ? 'partial_payment' : ($isPaid ? 'paid' : 'pending');
     
     $createdBy = isset($requestData['createdBy']) ? $requestData['createdBy'] : 'admin';

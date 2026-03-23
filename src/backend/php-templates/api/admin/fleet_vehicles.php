@@ -77,6 +77,23 @@ function ensureTablesExist($conn) {
 // Ensure tables exist
 ensureTablesExist($conn);
 
+// Add odometer/emi columns to fleet_vehicles only if missing (avoids duplicate-column notes on each request)
+function ensureFleetVehicleColumns($conn) {
+    $res = $conn->query("SHOW COLUMNS FROM fleet_vehicles LIKE 'last_service_odometer'");
+    if (!$res || $res->num_rows === 0) {
+        $conn->query("ALTER TABLE fleet_vehicles ADD COLUMN last_service_odometer INT DEFAULT 0");
+    }
+    $res = $conn->query("SHOW COLUMNS FROM fleet_vehicles LIKE 'next_service_odometer'");
+    if (!$res || $res->num_rows === 0) {
+        $conn->query("ALTER TABLE fleet_vehicles ADD COLUMN next_service_odometer INT DEFAULT 5000");
+    }
+    $res = $conn->query("SHOW COLUMNS FROM fleet_vehicles LIKE 'emi'");
+    if (!$res || $res->num_rows === 0) {
+        $conn->query("ALTER TABLE fleet_vehicles ADD COLUMN emi DECIMAL(10,2) NULL DEFAULT NULL");
+    }
+}
+ensureFleetVehicleColumns($conn);
+
 try {
     // Get the request path
     $requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -298,8 +315,9 @@ try {
             }
             
             // Check if vehicle number already exists
+            $vehicleNumber = (string)($data['vehicleNumber'] ?? '');
             $checkStmt = $conn->prepare("SELECT id FROM fleet_vehicles WHERE vehicle_number = ?");
-            $checkStmt->bind_param("s", $data['vehicleNumber']);
+            $checkStmt->bind_param("s", $vehicleNumber);
             $checkStmt->execute();
             $checkResult = $checkStmt->get_result();
             
@@ -309,10 +327,29 @@ try {
                 exit;
             }
             
-            // Find the variable assignments for POST
-            $emi = isset($data['emi']) ? floatval($data['emi']) : null;
-            
-            // Insert new vehicle
+            // Extract all values to variables (required for PHP 8.1+ mysqli bind_param)
+            $name = (string)($data['name'] ?? $vehicleNumber);
+            $model = (string)($data['model'] ?? '');
+            $make = (string)($data['make'] ?? '');
+            $year = $data['year'] ?? date('Y');
+            $yearVal = is_scalar($year) ? (string)$year : (string)date('Y');
+            $status = (string)($data['status'] ?? 'Active');
+            $lastService = (string)($data['lastService'] ?? date('Y-m-d'));
+            $nextServiceDue = (string)($data['nextServiceDue'] ?? date('Y-m-d', strtotime('+3 months')));
+            $fuelType = (string)($data['fuelType'] ?? 'Petrol');
+            $vehicleType = (string)($data['vehicleType'] ?? '');
+            $cabTypeId = (string)($data['cabTypeId'] ?? $data['vehicleType'] ?? '');
+            $capacity = (int)($data['capacity'] ?? 4);
+            $luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
+            $emiVal = isset($data['emi']) && $data['emi'] !== '' && $data['emi'] !== null
+                ? (float)$data['emi'] : null;
+            $isActive = $data['isActive'] ?? true;
+            $isActiveInt = $isActive ? 1 : 0;
+            $currentOdometer = (int)($data['currentOdometer'] ?? 0);
+            $lastServiceOdometer = isset($data['lastServiceOdometer']) ? (int)$data['lastServiceOdometer'] : 0;
+            $nextServiceOdometer = isset($data['nextServiceOdometer']) ? (int)$data['nextServiceOdometer'] : 5000;
+
+            // Insert new vehicle (18 params: 11s, 2i, 1d, 4i)
             $stmt = $conn->prepare("
                 INSERT INTO fleet_vehicles (
                     vehicle_number, name, model, make, year, status, last_service_date, next_service_due,
@@ -320,32 +357,30 @@ try {
                     last_service_odometer, next_service_odometer
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            
-            $name = $data['name'] ?? $data['vehicleNumber'];
-            $model = $data['model'] ?? '';
-            $make = $data['make'] ?? '';
-            $year = $data['year'] ?? date('Y');
-            $status = $data['status'] ?? 'Active';
-            $lastService = $data['lastService'] ?? date('Y-m-d');
-            $nextServiceDue = $data['nextServiceDue'] ?? date('Y-m-d', strtotime('+3 months'));
-            $fuelType = $data['fuelType'] ?? 'Petrol';
-            $vehicleType = $data['vehicleType'] ?? '';
-            $cabTypeId = $data['cabTypeId'] ?? '';
-            $capacity = $data['capacity'] ?? 4;
-            $luggageCapacity = $data['luggageCapacity'] ?? 2;
-            $isActive = $data['isActive'] ?? true;
-            $currentOdometer = $data['currentOdometer'] ?? 0;
-            $lastServiceOdometer = isset($data['lastServiceOdometer']) ? (int)$data['lastServiceOdometer'] : 0;
-            $nextServiceOdometer = isset($data['nextServiceOdometer']) ? (int)$data['nextServiceOdometer'] : 0;
-            
-            $isActiveInt = $isActive ? 1 : 0;
-            
-            $stmt->bind_param(
-                "ssssssssssiiidiii",
-                $data['vehicleNumber'], $name, $model, $make, $year, $status, $lastService, $nextServiceDue,
-                $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $emi, $isActiveInt, $currentOdometer,
-                $lastServiceOdometer, $nextServiceOdometer
-            );
+
+            // Use separate stmt for NULL emi to avoid bind_param issues on some PHP/mysqli versions
+            if ($emiVal === null) {
+                $stmt = $conn->prepare("
+                    INSERT INTO fleet_vehicles (
+                        vehicle_number, name, model, make, year, status, last_service_date, next_service_due,
+                        fuel_type, vehicle_type, cab_type_id, capacity, luggage_capacity, is_active, current_odometer,
+                        last_service_odometer, next_service_odometer
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->bind_param(
+                    "sssssssssssiiiiii",
+                    $vehicleNumber, $name, $model, $make, $yearVal, $status, $lastService, $nextServiceDue,
+                    $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $isActiveInt, $currentOdometer,
+                    $lastServiceOdometer, $nextServiceOdometer
+                );
+            } else {
+                $stmt->bind_param(
+                    "sssssssssssiiidiiii",
+                    $vehicleNumber, $name, $model, $make, $yearVal, $status, $lastService, $nextServiceDue,
+                    $fuelType, $vehicleType, $cabTypeId, $capacity, $luggageCapacity, $emiVal, $isActiveInt, $currentOdometer,
+                    $lastServiceOdometer, $nextServiceOdometer
+                );
+            }
             
             if (!$stmt->execute()) {
                 throw new Exception("Error adding vehicle: " . $stmt->error);

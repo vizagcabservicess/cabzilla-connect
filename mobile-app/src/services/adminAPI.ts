@@ -436,8 +436,13 @@ export const adminAPI = {
         'Content-Type': 'application/json',
       },
       timeout: 15000,
+      validateStatus: () => true,
     });
     const data = response.data;
+    if (response.status >= 400) {
+      const msg = typeof data?.error === 'string' ? data.error : data?.message || `Request failed (${response.status})`;
+      throw new Error(msg);
+    }
     if (data?.error) throw new Error(data.error);
     return (data?.vehicle ?? payload) as AdminFleetVehicle;
   },

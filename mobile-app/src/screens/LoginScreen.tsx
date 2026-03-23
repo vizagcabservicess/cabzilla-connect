@@ -44,7 +44,7 @@ export function LoginScreen() {
       };
       const response = await socialLogin(socialData);
       if (response.success) {
-        navigation.goBack();
+        navigation.navigate('ProfileHome');
       } else if (response.redirect_to_signup && response.social_data) {
         const signupResponse = await socialSignup({
           provider: 'google',
@@ -54,7 +54,7 @@ export function LoginScreen() {
           picture: response.social_data.picture,
         });
         if (signupResponse.success) {
-          navigation.goBack();
+          navigation.navigate('ProfileHome');
         } else {
           setError(signupResponse.error || 'Sign up failed');
         }
@@ -80,7 +80,7 @@ export function LoginScreen() {
     try {
       const response = await login(email.trim(), password);
       if (response.success) {
-        navigation.goBack();
+        navigation.navigate('ProfileHome');
       } else if (response.email_verification_required) {
         setError('Please verify your email before logging in. Check your inbox.');
       } else {
@@ -144,6 +144,12 @@ export function LoginScreen() {
               secureTextEntry
               autoComplete="password"
             />
+            <TouchableOpacity
+              style={styles.forgotRow}
+              onPress={() => navigation.navigate('ForgotPassword')}
+            >
+              <Text style={styles.forgotLink}>Forgot password?</Text>
+            </TouchableOpacity>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -201,6 +207,8 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, color: colors.gray600, marginBottom: 24 },
   form: { marginBottom: 24 },
   label: { fontSize: 14, fontWeight: '500', color: colors.foreground },
+  forgotRow: { alignSelf: 'flex-end', marginTop: 8, marginBottom: 4 },
+  forgotLink: { fontSize: 14, fontWeight: '600', color: colors.primary },
   input: {
     marginTop: 8,
     backgroundColor: '#fff',

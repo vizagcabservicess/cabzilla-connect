@@ -14,4 +14,20 @@ export const bookingAPI = {
     });
     return response.data;
   },
+
+  /**
+   * Notify that booking payment was abandoned/cancelled.
+   * Triggers pending payment email to admin/customer and WhatsApp to admin (same as web).
+   */
+  notifyPendingPayment: async (bookingId: number | string, reason: 'cancelled' | 'abandoned' = 'abandoned') => {
+    try {
+      await axios.post(`${BASE}/api/send-pending-notification.php`, { booking_id: bookingId, reason }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 5000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
 };

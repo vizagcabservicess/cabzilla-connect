@@ -920,6 +920,48 @@ function updatePayrollEntry($conn, $data) {
 }
 
 /**
+ * Delete payroll entry and related allowances, deductions; unlink advances
+ */
+function deletePayrollEntry($conn, $id) {
+    $payrollId = (int)$id;
+    if ($payrollId <= 0) {
+        sendErrorResponse('Invalid payroll ID', 400);
+    }
+    $conn->begin_transaction();
+    try {
+        // Verify entry exists
+        $check = $conn->prepare("SELECT id FROM payroll_entries WHERE id = ?");
+        $check->bind_param("i", $payrollId);
+        $check->execute();
+        if ($check->get_result()->num_rows === 0) {
+            $conn->rollback();
+            sendErrorResponse('Payroll entry not found', 404);
+        }
+        // Delete allowances
+        $delAllow = $conn->prepare("DELETE FROM payroll_allowances WHERE payroll_id = ?");
+        $delAllow->bind_param("i", $payrollId);
+        $delAllow->execute();
+        // Delete deductions
+        $delDed = $conn->prepare("DELETE FROM payroll_deductions WHERE payroll_id = ?");
+        $delDed->bind_param("i", $payrollId);
+        $delDed->execute();
+        // Unlink advances
+        $unlinkAdv = $conn->prepare("UPDATE salary_advances SET payroll_id = NULL WHERE payroll_id = ?");
+        $unlinkAdv->bind_param("i", $payrollId);
+        $unlinkAdv->execute();
+        // Delete payroll entry
+        $delPay = $conn->prepare("DELETE FROM payroll_entries WHERE id = ?");
+        $delPay->bind_param("i", $payrollId);
+        $delPay->execute();
+        $conn->commit();
+        sendSuccessResponse(['id' => $payrollId], 'Payroll entry deleted successfully');
+    } catch (Exception $e) {
+        $conn->rollback();
+        sendErrorResponse('Failed to delete payroll entry: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
  * Record salary advance
  */
 function recordSalaryAdvance($conn, $data) {

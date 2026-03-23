@@ -2,7 +2,7 @@ import type { Location } from '../types';
 import type { TripType, TripMode } from '../types';
 
 export type RootStackParamList = {
-  Home: { initialTripType?: TripType } | undefined;
+  Home: { initialTripType?: TripType; showAuthSheet?: boolean } | undefined;
   ToursList: {
     pickupLocation?: Location;
     pickupDate?: number;
@@ -68,6 +68,7 @@ export type RootStackParamList = {
   ProfileHome: undefined;
   Login: { message?: string } | undefined;
   Signup: undefined;
+  ForgotPassword: undefined;
   Dashboard: undefined;
   AdminDashboard: undefined;
   AdminBookingsList: undefined;

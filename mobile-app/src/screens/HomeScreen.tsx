@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,10 @@ import {
   Platform,
   Alert,
   Dimensions,
+  Modal,
+  Pressable,
+  Animated,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -24,9 +28,13 @@ const CARD_MAX_WIDTH = Math.min(420, SCREEN_WIDTH - 32);
 import { calculateDistanceMatrix } from '../services/distanceService';
 import { isLocationInVizag, getDistanceBetween } from '../lib/locationUtils';
 import { tourAPI } from '../services/tourAPI';
+import { useAuth } from '../providers/AuthProvider';
 import type { RootStackParamList } from '../navigation/types';
 import type { Location } from '../types';
 import type { TripType, TripMode } from '../types';
+
+const SUPPORT_PHONE = '+919966363662';
+const SUPPORT_WHATSAPP = '919966363662';
 
 const VIZAG_AIRPORT: Location = {
   id: 'vizag_airport',
@@ -53,7 +61,13 @@ type HomeRouteProp = RouteProp<RootStackParamList, 'Home'>;
 export function HomeScreen() {
   const navigation = useNavigation<HomeNavProp>();
   const route = useRoute<HomeRouteProp>();
+  const { isAuthenticated } = useAuth();
   const initialTrip = route.params?.initialTripType ?? 'outstation';
+  const showAuthSheetParam = route.params?.showAuthSheet ?? false;
+  const [authSheetVisible, setAuthSheetVisible] = useState(false);
+  const [supportSheetVisible, setSupportSheetVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(300)).current;
+  const supportSlideAnim = useRef(new Animated.Value(-180)).current;
   const [tripType, setTripType] = useState<TripType>(initialTrip);
   const [tripMode, setTripMode] = useState<TripMode>('one-way');
   const [hourlyPackage, setHourlyPackage] = useState<string>('8hrs-80km');
@@ -69,6 +83,61 @@ export function HomeScreen() {
   React.useEffect(() => {
     tourAPI.getAvailableTours().then(setTours).catch(() => setTours([])).finally(() => setToursLoading(false));
   }, []);
+
+  // Show auth bottom sheet when redirected after logout
+  useEffect(() => {
+    if (showAuthSheetParam) {
+      setAuthSheetVisible(true);
+      navigation.setParams({ showAuthSheet: false });
+    }
+  }, [showAuthSheetParam, navigation]);
+
+  useEffect(() => {
+    if (authSheetVisible) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      slideAnim.setValue(300);
+    }
+  }, [authSheetVisible, slideAnim]);
+
+  useEffect(() => {
+    if (supportSheetVisible) {
+      Animated.spring(supportSlideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    } else {
+      supportSlideAnim.setValue(-180);
+    }
+  }, [supportSheetVisible, supportSlideAnim]);
+
+  const closeAuthSheet = () => {
+    Animated.timing(slideAnim, {
+      toValue: 300,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setAuthSheetVisible(false);
+    });
+  };
+
+  const openSupportSheet = () => setSupportSheetVisible(true);
+  const closeSupportSheet = () => {
+    Animated.timing(supportSlideAnim, {
+      toValue: -180,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setSupportSheetVisible(false);
+    });
+  };
 
   // Sync trip type when navigating from Services tab (Outstation, Airport, Local, Tour)
   React.useEffect(() => {
@@ -239,6 +308,10 @@ export function HomeScreen() {
 
   const handleSearchCabs = useCallback(async () => {
     if (!isFormValid || !pickupLocation) return;
+    if (pickupDate < getMinimumDate()) {
+      Alert.alert('Invalid time', 'Please select a trip start at least 1 hour from now.');
+      return;
+    }
     const drop = tripType === 'outstation' || tripType === 'airport' ? dropLocation : pickupLocation;
     if ((tripType === 'outstation' || tripType === 'airport') && !drop) return;
 
@@ -295,7 +368,7 @@ export function HomeScreen() {
     }
 
     await performSearch(effectiveTripType);
-  }, [isFormValid, pickupLocation, dropLocation, tripType, performSearch]);
+  }, [isFormValid, pickupLocation, dropLocation, tripType, pickupDate, performSearch]);
 
   const tabs: { id: TripType; label: string; icon: string }[] = [
     { id: 'outstation', label: 'Outstation\nTrips', icon: 'car' },
@@ -308,15 +381,42 @@ export function HomeScreen() {
   const dropHelper =
     tripType === 'airport' ? 'Please select a location within 35km of Visakhapatnam' : '';
 
+  const goToLogin = () => {
+    setAuthSheetVisible(false);
+    const tabNav = navigation.getParent();
+    if (tabNav) {
+      tabNav.navigate('Profile', { screen: 'Login' });
+    } else {
+      navigation.navigate('Profile', { screen: 'Login' });
+    }
+  };
+  const goToSignup = () => {
+    setAuthSheetVisible(false);
+    const tabNav = navigation.getParent();
+    if (tabNav) {
+      tabNav.navigate('Profile', { screen: 'Signup' });
+    } else {
+      navigation.navigate('Profile', { screen: 'Signup' });
+    }
+  };
+
   return (
+    <>
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header - Vizag Taxi Hub logo (no menu) */}
+      {/* Header - logo left, support button right */}
       <View style={styles.header}>
         <Image
           source={{ uri: 'https://www.vizagtaxihub.com/uploads/vizagtaxihub-logo.png' }}
           style={styles.logo}
           resizeMode="contain"
         />
+        <TouchableOpacity
+          style={styles.headerSupportBtn}
+          onPress={openSupportSheet}
+          activeOpacity={0.7}
+        >
+          <Feather name="help-circle" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -517,6 +617,10 @@ export function HomeScreen() {
               ]}
               onPress={() => {
                 if (pickupLocation && pickupLocation.name) {
+                  if (pickupDate < getMinimumDate()) {
+                    Alert.alert('Invalid time', 'Please select a trip start at least 1 hour from now.');
+                    return;
+                  }
                   navigation.navigate('ToursList', {
                     pickupLocation,
                     pickupDate: pickupDate.getTime(),
@@ -614,6 +718,61 @@ export function HomeScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+
+    <Modal visible={supportSheetVisible} transparent animationType="fade">
+      <Pressable style={styles.supportSheetOverlay} onPress={closeSupportSheet}>
+        <Animated.View style={[styles.supportSheetPane, { transform: [{ translateY: supportSlideAnim }] }]}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={styles.supportSheetHandleBar} />
+            <Text style={styles.supportSheetTitle}>Support</Text>
+            <Text style={styles.supportSheetSub}>Get in touch with us</Text>
+            <TouchableOpacity
+              style={styles.supportSheetBtn}
+              onPress={() => {
+                Linking.openURL(`https://wa.me/${SUPPORT_WHATSAPP}`).catch(() => {});
+                closeSupportSheet();
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="whatsapp" size={18} color="#fff" />
+              <Text style={styles.supportSheetBtnText}>WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.supportSheetBtnOutline}
+              onPress={() => {
+                Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => {});
+                closeSupportSheet();
+              }}
+              activeOpacity={0.8}
+            >
+              <Feather name="phone" size={18} color={colors.primary} />
+              <Text style={styles.supportSheetBtnTextOutline}>Phone Call</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Animated.View>
+      </Pressable>
+    </Modal>
+
+    <Modal visible={authSheetVisible} transparent animationType="fade">
+      <Pressable style={styles.authSheetOverlay} onPress={closeAuthSheet}>
+        <Animated.View style={[styles.authSheetPane, { transform: [{ translateY: slideAnim }] }]}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={styles.authSheetHandleBar} />
+            <Text style={styles.authSheetTitle}>Welcome back</Text>
+            <Text style={styles.authSheetSub}>Sign in to manage your bookings and account</Text>
+            <TouchableOpacity style={styles.authSheetBtn} onPress={goToLogin} activeOpacity={0.8}>
+              <Feather name="log-in" size={20} color="#fff" />
+              <Text style={styles.authSheetBtnText}>Log in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.authSheetBtnOutline} onPress={goToSignup} activeOpacity={0.8}>
+              <Feather name="user-plus" size={20} color={colors.primary} />
+              <Text style={styles.authSheetBtnTextOutline}>Sign up</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Animated.View>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -622,13 +781,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   logo: { width: 160, height: 44 },
+  headerSupportBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   menuBtn: { padding: 8 },
   menuIcon: { fontSize: 24, color: colors.foreground, fontFamily: fonts.regular },
 
@@ -819,5 +986,129 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: fonts.bold,
     color: colors.gray900,
+  },
+  supportSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-start',
+  },
+  supportSheetPane: {
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    ...(Platform.OS !== 'web' && { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8 }),
+  },
+  supportSheetHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray300,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  supportSheetTitle: {
+    fontSize: 20,
+    fontFamily: fonts.bold,
+    color: colors.foreground,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  supportSheetSub: {
+    fontSize: 14,
+    color: colors.gray600,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  supportSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#25D366',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  supportSheetBtnOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  supportSheetBtnText: { fontSize: 15, fontFamily: fonts.semiBold, color: '#fff' },
+  supportSheetBtnTextOutline: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.primary },
+  authSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  authSheetPane: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  authSheetHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray300,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  authSheetTitle: {
+    fontSize: 22,
+    fontFamily: fonts.bold,
+    color: colors.foreground,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  authSheetSub: {
+    fontSize: 15,
+    color: colors.gray600,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  authSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  authSheetBtnText: {
+    fontSize: 16,
+    fontFamily: fonts.semiBold,
+    color: '#fff',
+  },
+  authSheetBtnOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  authSheetBtnTextOutline: {
+    fontSize: 16,
+    fontFamily: fonts.semiBold,
+    color: colors.primary,
   },
 });

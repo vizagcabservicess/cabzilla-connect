@@ -94,12 +94,12 @@ export function AddPayrollModal({ visible, onClose, onSuccess, selectedDriverId,
         setAllowances(
           (payrollToEdit.allowances?.length ?? 0) > 0
             ? payrollToEdit.allowances!.map((a) => ({ type: a.type, amount: String(a.amount) }))
-            : DEFAULT_ALLOWANCES
+            : [] // Empty = user deleted them; don't restore defaults when editing
         );
         setDeductions(
           (payrollToEdit.deductions?.length ?? 0) > 0
             ? payrollToEdit.deductions!.map((d) => ({ type: d.type, amount: String(d.amount) }))
-            : DEFAULT_DEDUCTIONS
+            : [] // Empty = user deleted them; don't restore defaults when editing
         );
         const status = (payrollToEdit.paymentStatus ?? 'pending') as 'pending' | 'paid';
         setPaymentStatus(status);
@@ -143,6 +143,35 @@ export function AddPayrollModal({ visible, onClose, onSuccess, selectedDriverId,
 
   const filterValid = (rows: AllowanceRow[]) =>
     rows.filter((r) => r.type?.trim() && !isNaN(parseFloat(r.amount)) && parseFloat(r.amount) > 0);
+
+  const handleDelete = () => {
+    const id = payrollToEdit?.id;
+    if (!id) return;
+    Alert.alert(
+      'Delete Payroll Entry',
+      'Are you sure you want to delete this payroll entry? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setSaving(true);
+            try {
+              await adminExtendedAPI.payrollDelete(id);
+              Alert.alert('Deleted', 'Payroll entry deleted successfully');
+              onSuccess();
+              onClose();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete payroll entry');
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!driverId?.trim()) {
@@ -439,6 +468,18 @@ export function AddPayrollModal({ visible, onClose, onSuccess, selectedDriverId,
                 </Text>
               )}
             </TouchableOpacity>
+
+            {/* Delete (only when editing) */}
+            {payrollToEdit?.id && (
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={handleDelete}
+                disabled={saving}
+              >
+                <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                <Text style={styles.deleteBtnText}>Delete Payroll Entry</Text>
+              </TouchableOpacity>
+            )}
             <View style={{ height: 32 }} />
           </ScrollView>
         </View>
@@ -556,4 +597,16 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.7 },
   submitText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+  },
+  deleteBtnText: { fontSize: 14, fontWeight: '600', color: '#dc2626' },
 });

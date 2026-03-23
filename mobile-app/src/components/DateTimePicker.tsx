@@ -28,7 +28,11 @@ export function DateTimePickerComponent({
 
   const handleChange = (_: any, selected?: Date) => {
     if (Platform.OS === 'android') setShow(false);
-    if (selected) onDateChange(selected);
+    if (selected) {
+      // Webapp logic: reject past time - require at least 1 hour advance for today
+      if (selected < min) return;
+      onDateChange(selected);
+    }
   };
 
   return (
