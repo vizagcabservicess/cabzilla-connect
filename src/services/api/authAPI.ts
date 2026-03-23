@@ -174,6 +174,26 @@ class AuthAPI {
     }
   }
 
+  async updateProfile(data: { name?: string; phone?: string }): Promise<AuthResponse> {
+    try {
+      const response = await axios.patch(`${API_BASE_URL}/update-profile.php`, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token && { Authorization: `Bearer ${this.token}` })
+        }
+      });
+      const resData = response.data;
+      if (resData.success && resData.user) {
+        localStorage.setItem('user', JSON.stringify(resData.user));
+        return { success: true, user: resData.user };
+      }
+      return { success: false, error: resData.error || 'Update failed' };
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
+  }
+
   async getCurrentUser(): Promise<User | null> {
     try {
       if (!this.token) return null;

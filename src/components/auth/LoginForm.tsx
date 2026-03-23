@@ -10,17 +10,21 @@ import { useAuth } from '@/providers/AuthProvider';
 import { SocialLoginButtons } from './SocialLoginButtons';
 import { SocialLoginConfigCheck } from './SocialLoginConfigCheck';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
+import { PhonePromptModal } from './PhonePromptModal';
 import { getDashboardUrl } from '@/utils/authUtils';
 import { getAuthErrorMessage, isEmailVerificationError } from '@/lib/authLogic';
 
 export function LoginForm() {
-  const { login, socialLogin } = useAuth();
+  const { login, socialLogin, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showPhonePrompt, setShowPhonePrompt] = useState(false);
+  const [pendingDashboardUrl, setPendingDashboardUrl] = useState<string | null>(null);
+  const [phoneSubmitLoading, setPhoneSubmitLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,37 +78,21 @@ export function LoginForm() {
       toast.loading('Signing in with Google...', { id: 'social-login-toast' });
       const response = await socialLogin('google');
       
-      // Check if user needs to sign up first
-      if (response.redirect_to_signup) {
-        toast.dismiss('social-login-toast');
-        toast.error('Account not found', {
-          id: 'social-login-toast',
-          description: 'Please sign up first before using Google login'
-        });
-        
-        // Store social data for signup
-        localStorage.setItem('social_signup_data', JSON.stringify(response.social_data));
-        
-        // Redirect to signup page
-        setTimeout(() => {
-          navigate('/register');
-        }, 1000);
-        return;
-      }
-      
       toast.success('Google login successful', { 
         id: 'social-login-toast', 
         description: `Redirecting to your dashboard...` 
       });
       
-      // Get the user from the response or from the auth context
       const user = response?.user || null;
+      const dashboardUrl = getDashboardUrl(user);
+      const needsPhone = user && (!user.phone || String(user.phone).trim() === '');
       
-      // Redirect based on user role
-      setTimeout(() => {
-        const dashboardUrl = getDashboardUrl(user);
-        navigate(dashboardUrl);
-      }, 500);
+      if (needsPhone) {
+        setPendingDashboardUrl(dashboardUrl);
+        setShowPhonePrompt(true);
+      } else {
+        setTimeout(() => navigate(dashboardUrl), 500);
+      }
     } catch (error) {
       toast.error('Google login failed', {
         id: 'social-login-toast',
@@ -113,6 +101,29 @@ export function LoginForm() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePhoneSubmit = async (phone: string) => {
+    setPhoneSubmitLoading(true);
+    try {
+      await updateProfile({ phone });
+      toast.success('Phone number saved');
+      if (pendingDashboardUrl) {
+        navigate(pendingDashboardUrl);
+        setPendingDashboardUrl(null);
+      }
+      setShowPhonePrompt(false);
+    } finally {
+      setPhoneSubmitLoading(false);
+    }
+  };
+
+  const handlePhoneSkip = () => {
+    if (pendingDashboardUrl) {
+      navigate(pendingDashboardUrl);
+      setPendingDashboardUrl(null);
+    }
+    setShowPhonePrompt(false);
   };
 
   if (showForgotPassword) {
@@ -187,6 +198,13 @@ export function LoginForm() {
           variant="login"
         />
       </div>
+
+      <PhonePromptModal
+        open={showPhonePrompt}
+        onClose={handlePhoneSkip}
+        onSubmit={handlePhoneSubmit}
+        isLoading={phoneSubmitLoading}
+      />
     </>
   );
 }

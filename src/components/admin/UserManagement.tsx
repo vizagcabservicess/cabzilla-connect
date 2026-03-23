@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, RefreshCw, Save, User, UserPlus, UserX } from "lucide-react";
+import { AlertCircle, Eye, RefreshCw, Save, User, UserPlus, UserX } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { userAPI } from '@/services/api/userAPI';
 import { User as UserType } from '@/types/api';
@@ -27,6 +28,7 @@ const formSchema = z.object({
 });
 
 export function UserManagement() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -266,9 +268,21 @@ export function UserManagement() {
       {/* Users Table Card */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" /> Existing Users
-          </CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" /> Existing Users
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2"
+              title="View your own customer dashboard"
+            >
+              <Eye className="h-4 w-4" />
+              View Customer Dashboard
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isRefreshing ? (
@@ -284,6 +298,8 @@ export function UserManagement() {
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Auth</TableHead>
+                  <TableHead className="text-center w-24">Bookings</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -313,18 +329,37 @@ export function UserManagement() {
                         </SelectContent>
                       </Select>
                     </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-gray-500 capitalize">
+                        {user.authProvider === 'google' ? 'Google' : 'Email'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="font-medium">{user.bookingsCount ?? 0}</span>
+                    </TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => {
-                          setUsername(user.name);
-                          handleUserDelete(user.id);
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <UserX className="h-4 w-4" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate(`/dashboard?viewAs=${user.id}`, { state: { viewAsName: user.name } })}
+                          title={`View ${user.name}'s dashboard`}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setUsername(user.name);
+                            handleUserDelete(user.id);
+                          }}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <UserX className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -128,7 +128,7 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         if ($payload) {
             $userId = $payload['user_id'] ?? $payload['userId'] ?? $payload['id'] ?? $payload['sub'] ?? null;
             $userEmail = $payload['email'] ?? null;
-            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            $isAdmin = isset($payload['role']) && in_array($payload['role'], ['admin', 'super_admin'], true);
             if ($userId) {
                 $authSuccess = true;
                 logMessage("JWT verification successful", ['userId' => $userId, 'hasEmail' => !empty($userEmail)]);
@@ -143,6 +143,13 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
 if (!$userId && isset($_GET['user_id'])) {
     $userId = intval($_GET['user_id']);
     logMessage("Using user_id from query parameter", ['user_id' => $userId]);
+}
+
+// For admins: allow viewing a specific user's bookings via view_as_user_id (impersonation)
+$viewAsUserId = null;
+if ($isAdmin && isset($_GET['view_as_user_id']) && intval($_GET['view_as_user_id']) > 0) {
+    $viewAsUserId = intval($_GET['view_as_user_id']);
+    logMessage("Admin viewing as user", ['view_as_user_id' => $viewAsUserId, 'admin_id' => $userId]);
 }
 
 // Require authentication for all requests
@@ -219,7 +226,16 @@ try {
         LEFT JOIN tour_fares tf ON b.tour_id = tf.tour_id
     ";
     
-    if ($userId && !$isAdmin) {
+    if ($viewAsUserId) {
+        // Admin impersonation: return only the target user's bookings
+        $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            logMessage("Failed to prepare view-as bookings query", ['error' => $conn->error]);
+            throw new Exception("Failed to prepare query: " . $conn->error);
+        }
+        $stmt->bind_param("i", $viewAsUserId);
+    } else if ($userId && !$isAdmin) {
         // Get user's bookings if authenticated
         $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
         $stmt = $conn->prepare($sql);
@@ -229,7 +245,7 @@ try {
         }
         $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
-        // Admins can see all bookings
+        // Admins can see all bookings (when not impersonating)
         $sql = $baseSql . " ORDER BY b.created_at DESC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -295,16 +311,17 @@ try {
         $bookings[] = $booking;
     }
     
-    logMessage("Found bookings for user", ['count' => count($bookings), 'user_id' => $userId]);
+    $effectiveUserId = $viewAsUserId ?: $userId;
+    logMessage("Found bookings for user", ['count' => count($bookings), 'user_id' => $effectiveUserId]);
 
     // Fetch group tour bookings for this user (match by customer_email)
-    $userEmailForMatch = $userEmail;
-    if (!$userEmailForMatch && $userId) {
-        // Fallback: look up email from user table
+    $userEmailForMatch = $viewAsUserId ? null : $userEmail;
+    if (!$userEmailForMatch && $effectiveUserId) {
+        // Look up email from user table (for impersonation or when JWT has no email)
         foreach (['user', 'users'] as $userTable) {
             $ueStmt = @$conn->prepare("SELECT email FROM `$userTable` WHERE id = ? LIMIT 1");
             if ($ueStmt) {
-                $ueStmt->bind_param('i', $userId);
+                $ueStmt->bind_param('i', $effectiveUserId);
                 if ($ueStmt->execute() && ($ueRow = $ueStmt->get_result()->fetch_assoc())) {
                     $userEmailForMatch = trim($ueRow['email'] ?? '');
                 }
@@ -359,7 +376,7 @@ try {
                         }
                         $bookings[] = [
                             'id' => 1000000 + (int)$gtRow['id'],
-                            'userId' => (int)$userId,
+                            'userId' => (int)$effectiveUserId,
                             'bookingNumber' => $gtRow['booking_number'],
                             'pickupLocation' => $bpName ?: $pickup,
                             'pickup_location' => $bpName ?: $pickup,
@@ -414,7 +431,7 @@ try {
             'status' => 'success', 
             'bookings' => [], 
             'message' => 'No bookings found for this user yet',
-            'userId' => $userId,
+            'userId' => $effectiveUserId,
             'auth_status' => $authSuccess ? 'success' : 'failed'
         ]);
         exit;
@@ -424,7 +441,7 @@ try {
     echo json_encode([
         'status' => 'success', 
         'bookings' => $bookings,
-        'userId' => $userId,
+        'userId' => $effectiveUserId,
         'auth_status' => $authSuccess ? 'success' : 'failed'
     ]);
     

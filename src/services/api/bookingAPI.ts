@@ -54,9 +54,11 @@ export const bookingAPI = {
   },
   
   /**
-   * Get user bookings with authentication
+   * Get user bookings with authentication.
+   * @param userId - The user whose bookings to fetch (or target user when viewAs is true)
+   * @param options - When viewAs is true, admin/super_admin can fetch another user's bookings (impersonation)
    */
-  getUserBookings: async (userId: number) => {
+  getUserBookings: async (userId: number, options?: { viewAs?: boolean }) => {
     try {
       const headers = {
         'Cache-Control': 'no-cache',
@@ -69,10 +71,13 @@ export const bookingAPI = {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
+
+      const viewAsParam = options?.viewAs ? `&view_as_user_id=${userId}` : '';
+      const url = `/api/user/bookings.php?user_id=${userId}${viewAsParam}`;
       
       // First try direct path
       try {
-        const response = await axios.get(`/api/user/bookings.php?user_id=${userId}`, {
+        const response = await axios.get(url, {
           headers,
           timeout: 15000
         });
@@ -86,7 +91,8 @@ export const bookingAPI = {
         }
       } catch (directError) {
         // Try with API_BASE_URL
-        const response = await axios.get(`${API_BASE_URL}/api/user/bookings.php?user_id=${userId}`, {
+        const apiUrl = `${API_BASE_URL}/api/user/bookings.php?user_id=${userId}${viewAsParam}`;
+        const response = await axios.get(apiUrl, {
           headers,
           timeout: 15000
         });

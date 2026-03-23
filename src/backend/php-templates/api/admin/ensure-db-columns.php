@@ -115,6 +115,20 @@ try {
         $conn->query("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE AFTER password");
         $changes[] = "Added google_id column to users table";
     }
+
+    // Add auth_provider for distinguishing Google vs email users
+    $checkAuthProvider = $conn->query("SHOW COLUMNS FROM users LIKE 'auth_provider'");
+    if (!$checkAuthProvider || $checkAuthProvider->num_rows === 0) {
+        $conn->query("ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NULL DEFAULT 'email'");
+        $changes[] = "Added auth_provider column to users table";
+    }
+
+    // Add profile_picture for Google profile photos
+    $checkProfilePic = $conn->query("SHOW COLUMNS FROM users LIKE 'profile_picture'");
+    if (!$checkProfilePic || $checkProfilePic->num_rows === 0) {
+        $conn->query("ALTER TABLE users ADD COLUMN profile_picture VARCHAR(512) NULL");
+        $changes[] = "Added profile_picture column to users table";
+    }
     
     sendJsonResponse([
         'status' => 'success',

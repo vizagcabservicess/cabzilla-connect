@@ -26,7 +26,8 @@ import {
   Info,
   Shield,
   Building2,
-  Bus
+  Bus,
+  Eye
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -59,6 +60,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <LayoutDashboard size={20} />, 
       path: '/admin?tab=dashboard',
       show: true
+    },
+    { 
+      id: 'customer-dashboard', 
+      label: 'Customer Dashboard', 
+      icon: <Eye size={20} />, 
+      path: '/dashboard',
+      show: isAdmin() || isSuperAdmin()
     },
     
     // Booking Management

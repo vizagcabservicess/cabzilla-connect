@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings, Timer, Clock } from "lucide-react";
+import { Book, CircleOff, Eye, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings, Timer, Clock, User as UserIcon } from "lucide-react";
 import { bookingAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
 import { apiHealthCheck } from '@/services/api/healthCheck';
@@ -16,15 +16,20 @@ import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType, User,
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
+import { EditProfileModal } from '@/components/guest/EditProfileModal';
 import { useAuth } from '@/providers/AuthProvider';
+import AdminLayout from '@/components/admin/AdminLayout';
 
 const MAX_RETRIES = 3;
 
 export default function DashboardPage() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, isLoading: loading, isAuthenticated, updateProfile } = useAuth();
   const userTyped = user as User | null;
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const viewAsId = searchParams.get('viewAs');
+  const viewAsName = (location.state as { viewAsName?: string } | null)?.viewAsName;
   const [isAdmin, setIsAdmin] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +44,8 @@ export default function DashboardPage() {
     connected: false,
     message: 'Checking connection...'
   });
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Check API connectivity on component mount
   useEffect(() => {
@@ -90,7 +97,7 @@ export default function DashboardPage() {
               email: cachedUser.email || '',
               role: cachedUser.role || 'user'
             };
-            setIsAdmin(cachedUser.role === 'admin');
+            setIsAdmin(cachedUser.role === 'admin' || cachedUser.role === 'super_admin');
           }
         } catch (e) {
           console.warn('Error parsing cached user data:', e);
@@ -101,7 +108,7 @@ export default function DashboardPage() {
         try {
           userData = await authAPI.getCurrentUser();
           if (userData) {
-            setIsAdmin(userData.role === 'admin');
+            setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
             console.log('User data loaded from API:', userData);
           } else {
             throw new Error('User data not found');
@@ -122,6 +129,11 @@ export default function DashboardPage() {
     checkAuth();
   }, [navigate, location.pathname]);
 
+  const parsedViewAsId = viewAsId ? parseInt(viewAsId, 10) : 0;
+  const isViewingAsUser = !!(parsedViewAsId > 0 && (userTyped?.role === 'admin' || userTyped?.role === 'super_admin'));
+  const targetUserId = isViewingAsUser ? parsedViewAsId : (userTyped?.id ?? 0);
+  const effectiveUserName = isViewingAsUser ? (viewAsName || `User #${viewAsId}`) : userTyped?.name;
+
   const fetchBookings = useCallback(async () => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -130,7 +142,10 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings(userTyped?.id || 0);
+      const data = await bookingAPI.getUserBookings(
+        targetUserId,
+        isViewingAsUser ? { viewAs: true } : undefined
+      );
       if (Array.isArray(data)) {
         setBookings(data);
       } else if (data && Array.isArray(data.bookings)) {
@@ -146,7 +161,7 @@ export default function DashboardPage() {
       setIsRefreshing(false);
       setIsLoading(false);
     }
-  }, [isAuthenticated, navigate, user?.id]);
+  }, [isAuthenticated, navigate, targetUserId, isViewingAsUser]);
 
   const fetchAdminMetrics = useCallback(async () => {
     if (!isAdmin || !user?.id) return;
@@ -175,10 +190,10 @@ export default function DashboardPage() {
   }, [isAdmin, user]);
 
   useEffect(() => {
-    if (userTyped?.id) {
+    if (targetUserId > 0) {
       fetchBookings();
     }
-  }, [fetchBookings, userTyped]);
+  }, [fetchBookings, targetUserId]);
 
   useEffect(() => {
     if (isAdmin && userTyped?.id) {
@@ -345,7 +360,8 @@ export default function DashboardPage() {
     );
   }
 
-  return (
+  const showAdminSidebar = userTyped?.role === 'admin' || userTyped?.role === 'super_admin';
+  const dashboardContent = (
     <>
       <Helmet>
         <title>Dashboard - Vizag Taxi Hub | Manage Your Bookings</title>
@@ -377,11 +393,26 @@ export default function DashboardPage() {
       
       <div className="container mx-auto py-8">
         <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+      {isViewingAsUser && (
+        <Alert className="mb-4 border-amber-200 bg-amber-50">
+          <Eye className="h-4 w-4" />
+          <AlertTitle>Viewing as customer</AlertTitle>
+          <AlertDescription>
+            You are viewing the dashboard for <strong>{effectiveUserName}</strong>.{' '}
+            <Button variant="link" className="p-0 h-auto" onClick={() => navigate('/dashboard', { replace: true })}>
+              Back to my dashboard
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <h2 className="text-xl font-semibold mb-4">
-        Welcome back, {userTyped?.name}
+        Welcome back, {effectiveUserName}
       </h2>
-      {userTyped?.role && (
+      {userTyped?.role && !isViewingAsUser && (
         <div className="mb-4 text-gray-600">Role: {userTyped.role.replace('_', ' ')}</div>
+      )}
+      {isViewingAsUser && (
+        <div className="mb-4 text-gray-600">Viewing as: {effectiveUserName}</div>
       )}
       {!apiStatus.connected && (
         <Alert variant="warning" className="mb-6">
@@ -393,6 +424,16 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div />
         <div className="flex flex-col md:flex-row gap-2">
+          {!isViewingAsUser && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEditProfile(true)}
+            >
+              <UserIcon className="h-4 w-4 mr-1" />
+              Edit Profile
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -405,7 +446,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {(isAdmin) && (
+      <EditProfileModal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        user={userTyped ?? { name: '', email: '', phone: '' }}
+        onSubmit={async (data) => {
+          setProfileSaving(true);
+          try {
+            await updateProfile(data);
+            toast.success('Profile updated');
+          } finally {
+            setProfileSaving(false);
+          }
+        }}
+        isLoading={profileSaving}
+      />
+
+      {(isAdmin && !isViewingAsUser) && (
         <div className="mb-8">
           <Card>
             <CardHeader>
@@ -531,6 +588,14 @@ export default function DashboardPage() {
       )) : <p>No cancelled bookings.</p>}
       </div>
     </>
+  );
+
+  return showAdminSidebar ? (
+    <AdminLayout activeTab="customer-dashboard">
+      {dashboardContent}
+    </AdminLayout>
+  ) : (
+    dashboardContent
   );
 }
 

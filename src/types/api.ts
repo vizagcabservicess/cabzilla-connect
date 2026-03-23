@@ -73,8 +73,12 @@ export interface User {
   email: string;
   phone: string;
   role: 'guest' | 'admin' | 'super_admin' | 'driver' | 'user' | 'customer' | 'provider';
-  is_active: boolean;
+  is_active?: boolean;
   imageUrl?: string;
+  authProvider?: 'google' | 'email';
+  createdAt?: string;
+  /** Number of bookings made by this user (from admin users API) */
+  bookingsCount?: number;
 }
 
 export type BookingStatus = 

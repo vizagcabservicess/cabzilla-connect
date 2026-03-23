@@ -1,4 +1,11 @@
 <?php
+// Use same config and DB connection as auth (social-login, login) - ensures User Management
+// sees the same users table that Google OAuth writes to
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../common/db_helper.php';
+require_once __DIR__ . '/../utils/security.php';
+require_once __DIR__ . '/../utils/auth.php';
+
 // Simple logging for debugging
 function logDebug($message) {
     $logFile = __DIR__ . '/users_debug.log';
@@ -10,104 +17,31 @@ function logDebug($message) {
 // Start logging
 logDebug("=== USERS.PHP SCRIPT STARTED ===");
 
-// Environment variables will be loaded in getDbConnection() function
-
-// Database connection function
-function getDbConnection() {
-    // Load environment variables from .env file
-    $envFile = $_SERVER['DOCUMENT_ROOT'] . '/.env';
-    if (file_exists($envFile)) {
-        $envVars = parse_ini_file($envFile);
-        logDebug("Raw .env file contents:");
-        logDebug("File exists at: $envFile");
-        logDebug("Parsed envVars: " . json_encode($envVars));
-        
-        // If parse_ini_file fails, try manual parsing
-        if (!$envVars || empty($envVars)) {
-            logDebug("parse_ini_file failed, trying manual parsing...");
-            $envContent = file_get_contents($envFile);
-            logDebug("Raw file content: " . substr($envContent, 0, 200) . "...");
-            
-            $lines = explode("\n", $envContent);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || strpos($line, '#') === 0) continue;
-                
-                if (strpos($line, '=') !== false) {
-                    list($key, $value) = explode('=', $line, 2);
-                    $key = trim($key);
-                    $value = trim($value);
-                    $envVars[$key] = $value;
-                    logDebug("Manual parse: $key = $value");
-                }
-            }
-        }
-        
-        $dbHost = $envVars['DB_HOST'] ?? 'localhost';
-        $dbUser = $envVars['DB_USER'] ?? 'root';
-        $dbPass = $envVars['DB_PASS'] ?? '';
-        $dbName = $envVars['DB_NAME'] ?? 'vizag_taxi_hub';
-        logDebug("Loaded .env file from: $envFile");
-        logDebug("DB_HOST: $dbHost, DB_USER: $dbUser, DB_NAME: $dbName");
-    } else {
-        // Fallback to default values if .env file not found
-        $dbHost = 'localhost';
-        $dbUser = 'root';
-        $dbPass = '';
-        $dbName = 'vizag_taxi_hub';
-        logDebug("Warning: .env file not found at: $envFile, using default database credentials");
+// Security functions (only define if not already from security.php)
+if (!function_exists('setSecurityHeaders')) {
+    function setSecurityHeaders() {
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('X-XSS-Protection: 1; mode=block');
     }
-    
-    logDebug("Attempting database connection...");
-    logDebug("Host: $dbHost, Database: $dbName, Username: $dbUser");
-    
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    
-    if ($conn->connect_error) {
-        $error = "Connection failed: " . $conn->connect_error;
-        logDebug("Database connection error: $error");
-        throw new Exception($error);
+}
+if (!function_exists('secureLog')) {
+    function secureLog($message, $level, $data = []) {
+        $logFile = __DIR__ . '/users_debug.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $logMessage = "[$timestamp] [$level] $message " . json_encode($data) . "\n";
+        file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
     }
-    
-    logDebug("Database connection successful!");
-    return $conn;
 }
-
-// Security functions
-function setSecurityHeaders() {
-    header('X-Content-Type-Options: nosniff');
-    header('X-Frame-Options: DENY');
-    header('X-XSS-Protection: 1; mode=block');
-}
-
-function secureLog($message, $level, $data = []) {
-    $logFile = __DIR__ . '/users_debug.log';
-    $timestamp = date('Y-m-d H:i:s');
-    $logMessage = "[$timestamp] [$level] $message " . json_encode($data) . "\n";
-    file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
-}
-
-function checkRateLimit($key, $limit, $window) {
-    // Simple rate limiting - always allow for now
-    return true;
-}
-
-function verifyJwtToken($token) {
-    // Simplified JWT verification for testing
-    if (empty($token)) {
-        return false;
+if (!function_exists('checkRateLimit')) {
+    function checkRateLimit($key, $limit, $window) {
+        return true;
     }
-    
-    // For testing, return a mock admin user
-    return [
-        'user_id' => 1,
-        'role' => 'super_admin',
-        'email' => 'admin@vizagtaxihub.com'
-    ];
 }
-
-function auditLog($action, $userId, $data = []) {
-    secureLog("Audit: $action", "INFO", ['user_id' => $userId, 'data' => $data]);
+if (!function_exists('auditLog')) {
+    function auditLog($action, $userId, $data = []) {
+        secureLog("Audit: $action", "INFO", ['user_id' => $userId, 'data' => $data]);
+    }
 }
 
 // CORS Headers - SECURITY: Restrict to trusted domains only
@@ -196,10 +130,10 @@ if (!$isAdmin) {
 // Audit log admin access
 auditLog('admin_users_access', $userId, ['action' => $_SERVER['REQUEST_METHOD']]);
 
-// Connect to database - with fallback to mock data if connection fails
+// Connect to database (same as social-login - uses shared config)
 $conn = null;
 try {
-    $conn = getDbConnection();
+    $conn = getDbConnectionWithRetry();
     logDebug("Database connection established successfully");
 } catch (Exception $e) {
     $errorMessage = $e->getMessage();
@@ -239,8 +173,18 @@ try {
 try {
     // Handle GET request to fetch all users
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // Query to get all users
-        $query = "SELECT id, name, email, phone, role, created_at FROM users ORDER BY created_at DESC";
+        // Query to get all users with booking counts (include authProvider: google | email)
+        $baseCols = "u.id, u.name, u.email, u.phone, u.role, u.created_at";
+        $hasAuthProvider = $conn->query("SHOW COLUMNS FROM users LIKE 'auth_provider'");
+        if ($hasAuthProvider && $hasAuthProvider->num_rows > 0) {
+            $baseCols .= ", COALESCE(u.auth_provider, 'email') as authProvider";
+        }
+        $bookingsExist = $conn->query("SHOW TABLES LIKE 'bookings'");
+        if ($bookingsExist && $bookingsExist->num_rows > 0) {
+            $query = "SELECT $baseCols, COUNT(b.id) as bookings_count FROM users u LEFT JOIN bookings b ON u.id = b.user_id GROUP BY u.id ORDER BY u.created_at DESC";
+        } else {
+            $query = "SELECT $baseCols, 0 as bookings_count FROM users u ORDER BY u.created_at DESC";
+        }
         $result = $conn->query($query);
         
         if (!$result) {
@@ -249,14 +193,17 @@ try {
         
         $users = [];
         while ($row = $result->fetch_assoc()) {
-            $users[] = [
+            $u = [
                 'id' => intval($row['id']),
                 'name' => $row['name'],
                 'email' => $row['email'],
                 'phone' => $row['phone'],
                 'role' => $row['role'],
-                'createdAt' => $row['created_at']
+                'createdAt' => $row['created_at'],
+                'authProvider' => $row['authProvider'] ?? 'email',
+                'bookingsCount' => isset($row['bookings_count']) ? (int)$row['bookings_count'] : 0
             ];
+            $users[] = $u;
         }
         
         secureLog("Successfully fetched " . count($users) . " users from database", "INFO");

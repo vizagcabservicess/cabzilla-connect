@@ -12,6 +12,7 @@ interface AuthContextType {
   socialLogin: (provider: 'google' | 'facebook') => Promise<AuthResponse>;
   socialSignup: (provider: 'google' | 'facebook', phone?: string) => Promise<AuthResponse>;
   socialSignupWithData: (socialData: any) => Promise<AuthResponse>;
+  updateProfile: (data: { name?: string; phone?: string }) => Promise<AuthResponse>;
   logout: () => Promise<void>;
 }
 
@@ -283,6 +284,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (data: { name?: string; phone?: string }) => {
+    const response = await authAPI.updateProfile(data);
+    if (response.success && response.user) {
+      setUser(response.user);
+      localStorage.setItem('user', JSON.stringify(response.user));
+    }
+    return response;
+  };
+
   const logout = async () => {
     try {
       await authAPI.logout();
@@ -304,6 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     socialLogin,
     socialSignup,
     socialSignupWithData,
+    updateProfile,
     logout,
   };
 

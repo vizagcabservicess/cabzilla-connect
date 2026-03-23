@@ -21,15 +21,14 @@ import {
   Share, 
   Clock,
   Plus,
-  Copy,
-  Mail,
-  MessageCircle
+  User
 } from "lucide-react";
+import { useAuth } from '@/providers/AuthProvider';
 import { bookingAPI } from '@/services/api';
-import { authAPI } from '@/services/api/authAPI';
 import { Booking } from '@/types/api';
 import { BookingInvoice } from './BookingInvoice';
 import { BookingShare } from './BookingShare';
+import { EditProfileModal } from './EditProfileModal';
 
 interface GuestDashboardProps {
   user: any;
@@ -38,6 +37,7 @@ interface GuestDashboardProps {
 
 function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
   const navigate = useNavigate();
+  const { updateProfile } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +46,8 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showInvoice, setShowInvoice] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Fetch real bookings from API
   useEffect(() => {
@@ -198,9 +200,22 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
           <h2 className="text-xl font-semibold text-muted-foreground mt-1">
             Welcome back, {user.name}
           </h2>
-          <div className="text-sm text-muted-foreground mt-1">Role: Guest</div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-muted-foreground">Role: Guest</span>
+            {user.phone && (
+              <span className="text-sm text-muted-foreground">• {user.phone}</span>
+            )}
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowEditProfile(true)}
+            className="flex items-center gap-2"
+          >
+            <User className="h-4 w-4" />
+            Edit Profile
+          </Button>
           <Button onClick={() => navigate('/')} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Create Booking
@@ -414,6 +429,23 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
           }}
         />
       )}
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        user={user}
+        onSubmit={async (data) => {
+          setProfileSaving(true);
+          try {
+            await updateProfile(data);
+            toast.success('Profile updated');
+          } finally {
+            setProfileSaving(false);
+          }
+        }}
+        isLoading={profileSaving}
+      />
     </div>
   );
 }
