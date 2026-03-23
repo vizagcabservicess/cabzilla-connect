@@ -36,8 +36,18 @@ function formatDisplayDate(dateStr: string, timeStr?: string): string {
   return timeStr ? `${formatted} • ${timeStr}` : formatted;
 }
 
-export function DashboardScreen({ navigation }: Props) {
+export function DashboardScreen({ navigation, route }: Props) {
   const { user, isAuthenticated } = useAuth();
+  const params = route.params;
+  const viewAsId = params?.viewAs;
+  const viewAsName = params?.viewAsName;
+  const isViewingAsUser = !!(
+    viewAsId &&
+    (user?.role === 'admin' || user?.role === 'super_admin')
+  );
+  const targetUserId = isViewingAsUser ? viewAsId : (user?.id ?? 0);
+  const displayName = isViewingAsUser ? viewAsName || `User #${viewAsId}` : user?.name;
+
   const [bookings, setBookings] = useState<UserBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +58,15 @@ export function DashboardScreen({ navigation }: Props) {
       setLoading(false);
       return;
     }
+    if (targetUserId <= 0) {
+      setLoading(false);
+      return;
+    }
     try {
       setError(null);
-      const data = await userBookingsAPI.getUserBookings();
+      const data = isViewingAsUser
+        ? await userBookingsAPI.getUserBookingsForUser(targetUserId, { viewAs: true })
+        : await userBookingsAPI.getUserBookings();
       setBookings(data);
     } catch (e: any) {
       setError(e?.message || 'Failed to load bookings');
@@ -59,7 +75,7 @@ export function DashboardScreen({ navigation }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, targetUserId, isViewingAsUser]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => loadBookings());
@@ -100,8 +116,22 @@ export function DashboardScreen({ navigation }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={styles.title}>My Bookings</Text>
+        <Text style={styles.title}>
+          {isViewingAsUser ? `${displayName}'s Bookings` : 'My Bookings'}
+        </Text>
       </View>
+      {isViewingAsUser && (
+        <View style={styles.viewAsBanner}>
+          <Feather name="eye" size={16} color={colors.primary} />
+          <Text style={styles.viewAsText}>Viewing as {displayName}</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Dashboard')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.viewAsLink}>Back to my dashboard</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.loading}>
@@ -241,4 +271,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   btnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  viewAsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#fef3c7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fde68a',
+  },
+  viewAsText: { fontSize: 13, color: colors.foreground, flex: 1 },
+  viewAsLink: { fontSize: 13, color: colors.primary, fontWeight: '600' },
 });

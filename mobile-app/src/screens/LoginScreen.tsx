@@ -1,5 +1,7 @@
 /**
  * Login screen - mirrors web app LoginPage
+ * Google: uses social-login.php (unified - auto-creates user on first login)
+ * Phone prompt: if Google user has no phone, prompt before navigating
  */
 import React, { useState } from 'react';
 import {
@@ -12,6 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
@@ -23,13 +27,16 @@ import { GoogleSignInButtonLazy } from '../components/GoogleSignInButtonLazy';
 export function LoginScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ Login: { message?: string } }, 'Login'>>();
-  const { login, socialLogin, socialSignup } = useAuth();
+  const { login, socialLogin, updateProfile } = useAuth();
   const message = route.params?.message;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPhonePrompt, setShowPhonePrompt] = useState(false);
+  const [phonePromptLoading, setPhonePromptLoading] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
 
   const handleGoogleSuccess = async (socialUser: { id: string; email: string; name: string; picture?: string }) => {
     setError('');
@@ -43,20 +50,12 @@ export function LoginScreen() {
         picture: socialUser.picture,
       };
       const response = await socialLogin(socialData);
-      if (response.success) {
-        navigation.navigate('ProfileHome');
-      } else if (response.redirect_to_signup && response.social_data) {
-        const signupResponse = await socialSignup({
-          provider: 'google',
-          providerId: response.social_data.providerId,
-          email: response.social_data.email,
-          name: response.social_data.name,
-          picture: response.social_data.picture,
-        });
-        if (signupResponse.success) {
-          navigation.navigate('ProfileHome');
+      if (response.success && response.user) {
+        const needsPhone = !response.user.phone || String(response.user.phone).trim() === '';
+        if (needsPhone) {
+          setShowPhonePrompt(true);
         } else {
-          setError(signupResponse.error || 'Sign up failed');
+          navigation.navigate('ProfileHome');
         }
       } else {
         setError(response.error || response.message || 'Google login failed');
@@ -68,6 +67,31 @@ export function LoginScreen() {
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const handlePhoneSubmit = async () => {
+    const digits = phoneInput.replace(/\D/g, '');
+    if (digits.length < 10) {
+      Alert.alert('Invalid', 'Please enter a valid phone number (at least 10 digits)');
+      return;
+    }
+    setPhonePromptLoading(true);
+    try {
+      await updateProfile({ phone: phoneInput.trim() });
+      setShowPhonePrompt(false);
+      setPhoneInput('');
+      navigation.navigate('ProfileHome');
+    } catch {
+      Alert.alert('Error', 'Failed to save phone number');
+    } finally {
+      setPhonePromptLoading(false);
+    }
+  };
+
+  const handlePhoneSkip = () => {
+    setShowPhonePrompt(false);
+    setPhoneInput('');
+    navigation.navigate('ProfileHome');
   };
 
   const handleSubmit = async () => {
@@ -189,6 +213,42 @@ export function LoginScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={showPhonePrompt} transparent animationType="fade">
+        <View style={styles.phoneModalOverlay}>
+          <View style={styles.phoneModalContent}>
+            <Text style={styles.phoneModalTitle}>Add your phone number</Text>
+            <Text style={styles.phoneModalDesc}>
+              Please add your phone number to complete your profile. This helps us contact you about your bookings.
+            </Text>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="e.g. 9876543210"
+              placeholderTextColor={colors.gray600}
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              keyboardType="phone-pad"
+              maxLength={15}
+            />
+            <View style={styles.phoneModalBtns}>
+              <TouchableOpacity style={styles.phoneSkipBtn} onPress={handlePhoneSkip} disabled={phonePromptLoading}>
+                <Text style={styles.phoneSkipText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.phoneSaveBtn, phonePromptLoading && styles.btnDisabled]}
+                onPress={handlePhoneSubmit}
+                disabled={phonePromptLoading}
+              >
+                {phonePromptLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.phoneSaveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -258,4 +318,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   googleBtn: { marginTop: 0 },
+  phoneModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  phoneModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+  },
+  phoneModalTitle: { fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 8 },
+  phoneModalDesc: { fontSize: 14, color: colors.gray600, marginBottom: 16 },
+  phoneInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.foreground,
+    marginBottom: 20,
+  },
+  phoneModalBtns: { flexDirection: 'row', gap: 12 },
+  phoneSkipBtn: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  phoneSkipText: { fontSize: 16, fontWeight: '600', color: colors.gray600 },
+  phoneSaveBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneSaveText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 });

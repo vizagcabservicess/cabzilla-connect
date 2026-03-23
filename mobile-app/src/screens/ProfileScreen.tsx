@@ -1,7 +1,7 @@
 /**
- * Profile tab - mirrors web app profile (login, dashboard, support, legal)
+ * Profile tab - mirrors web app profile (login, dashboard, support, legal, edit profile)
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
   Linking,
   Platform,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,7 +62,43 @@ function openUrl(url: string) {
 type Props = NativeStackScreenProps<RootStackParamList, 'ProfileHome'>;
 
 export function ProfileScreen({ navigation }: Props) {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, updateProfile } = useAuth();
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editName, setEditName] = useState(user?.name ?? '');
+  const [editPhone, setEditPhone] = useState(user?.phone ?? '');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  useEffect(() => {
+    if (showEditProfile && user) {
+      setEditName(user.name ?? '');
+      setEditPhone(user.phone ?? '');
+      setEditError('');
+    }
+  }, [showEditProfile, user?.name, user?.phone]);
+
+  const handleSaveProfile = async () => {
+    const trimmedName = editName.trim();
+    const trimmedPhone = editPhone.trim();
+    if (trimmedName.length < 2) {
+      setEditError('Name must be at least 2 characters');
+      return;
+    }
+    if (trimmedPhone && trimmedPhone.replace(/\D/g, '').length < 10) {
+      setEditError('Please enter a valid phone number (at least 10 digits)');
+      return;
+    }
+    setEditLoading(true);
+    setEditError('');
+    try {
+      await updateProfile({ name: trimmedName, phone: trimmedPhone || undefined });
+      setShowEditProfile(false);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : 'Failed to update');
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const handleCall = () => openUrl(`tel:${PHONE_NUMBER}`);
   const handleWhatsApp = () => openUrl(`https://wa.me/${WHATSAPP_NUMBER}`);
@@ -90,6 +130,7 @@ export function ProfileScreen({ navigation }: Props) {
 
   const accountLinks: ProfileLink[] = isAuthenticated
     ? [
+        { label: 'Edit Profile', onPress: () => setShowEditProfile(true) },
         ...(isAdmin ? [{ label: 'Admin Dashboard', onPress: () => navigation.navigate('AdminDashboard') }] : []),
         { label: 'My Bookings / Dashboard', onPress: () => navigation.navigate('Dashboard') },
         { label: 'Log out', onPress: handleLogout },
@@ -163,6 +204,69 @@ export function ProfileScreen({ navigation }: Props) {
           © Vizag Taxi Hub {new Date().getFullYear()}
         </Text>
       </ScrollView>
+
+      <Modal visible={showEditProfile} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={styles.editModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity style={styles.editModalBackdrop} activeOpacity={1} onPress={() => setShowEditProfile(false)} />
+          <View style={styles.editModalContent}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setShowEditProfile(false)}>
+                <Feather name="x" size={24} color={colors.gray600} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.editModalDesc}>Update your name and phone. Email cannot be changed.</Text>
+            <Text style={styles.editLabel}>Name</Text>
+            <TextInput
+              style={styles.editInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor={colors.gray600}
+            />
+            <Text style={styles.editLabel}>Phone</Text>
+            <TextInput
+              style={styles.editInput}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="e.g. 9876543210"
+              placeholderTextColor={colors.gray600}
+              keyboardType="phone-pad"
+              maxLength={15}
+            />
+            {user?.email && (
+              <>
+                <Text style={[styles.editLabel, { color: colors.gray600 }]}>Email (read-only)</Text>
+                <TextInput
+                  style={[styles.editInput, styles.editInputDisabled]}
+                  value={user.email}
+                  editable={false}
+                />
+              </>
+            )}
+            {editError ? <Text style={styles.editError}>{editError}</Text> : null}
+            <View style={styles.editModalBtns}>
+              <TouchableOpacity style={styles.editCancelBtn} onPress={() => setShowEditProfile(false)} disabled={editLoading}>
+                <Text style={styles.editCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editSaveBtn, editLoading && { opacity: 0.7 }]}
+                onPress={handleSaveProfile}
+                disabled={editLoading}
+              >
+                {editLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.editSaveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -316,4 +420,49 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     textAlign: 'center',
   },
+  editModalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  editModalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  editModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  editModalTitle: { fontSize: 18, fontWeight: '700', color: colors.foreground },
+  editModalDesc: { fontSize: 14, color: colors.gray600, marginBottom: 20 },
+  editLabel: { fontSize: 14, fontWeight: '500', color: colors.foreground, marginBottom: 6 },
+  editInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.foreground,
+    marginBottom: 16,
+  },
+  editInputDisabled: { backgroundColor: colors.gray100 },
+  editError: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  editModalBtns: { flexDirection: 'row', gap: 12 },
+  editCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    alignItems: 'center',
+  },
+  editCancelText: { fontSize: 16, fontWeight: '600', color: colors.gray600 },
+  editSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  editSaveText: { fontSize: 16, fontWeight: '600', color: '#fff' },
 });

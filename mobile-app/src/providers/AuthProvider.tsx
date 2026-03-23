@@ -20,6 +20,7 @@ interface AuthContextType {
   signup: (userData: RegisterRequest) => Promise<AuthResponse>;
   socialLogin: (socialData: SocialLoginRequest) => Promise<AuthResponse>;
   socialSignup: (socialData: SocialLoginRequest & { phone?: string }) => Promise<AuthResponse>;
+  updateProfile: (data: { name?: string; phone?: string }) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -109,6 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const updateProfile = useCallback(async (data: { name?: string; phone?: string }) => {
+    const response = await authAPI.updateProfile(data);
+    if (response.success && response.user) {
+      setUser(response.user);
+    }
+    return response;
+  }, []);
+
   const logout = useCallback(async () => {
     await authAPI.logout();
     setUser(null);
@@ -122,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signup,
     socialLogin,
     socialSignup,
+    updateProfile,
     logout,
     refreshUser,
   };

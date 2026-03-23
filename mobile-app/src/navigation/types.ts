@@ -69,7 +69,7 @@ export type RootStackParamList = {
   Login: { message?: string } | undefined;
   Signup: undefined;
   ForgotPassword: undefined;
-  Dashboard: undefined;
+  Dashboard: { viewAs?: number; viewAsName?: string } | undefined;
   AdminDashboard: undefined;
   AdminBookingsList: undefined;
   /** Same behaviour as web Bookings → Upcoming trips tab */

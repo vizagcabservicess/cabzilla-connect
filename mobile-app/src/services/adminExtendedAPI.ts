@@ -99,6 +99,8 @@ export interface AdminUser {
   phone?: string;
   role: string;
   is_active?: boolean;
+  authProvider?: 'google' | 'email';
+  bookingsCount?: number;
 }
 
 // --- Reports ---
@@ -811,7 +813,7 @@ export const adminExtendedAPI = {
     return data;
   },
 
-  /** Users - get all */
+  /** Users - get all (mirrors web userAPI.getAllUsers) */
   usersList: async () => {
     const base = getBase();
     const headers = await authHeaders();
@@ -819,7 +821,45 @@ export const adminExtendedAPI = {
       headers,
       timeout: 15000,
     });
-    return res.data?.users ?? res.data?.data ?? [];
+    const raw = res.data?.data ?? res.data?.users ?? res.data ?? [];
+    return Array.isArray(raw) ? raw : [];
+  },
+
+  /** Users - create (mirrors web userAPI.createUser) */
+  usersCreate: async (data: { name: string; email: string; phone?: string; role: string }) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.post(`${base}/api/admin/users.php`, data, {
+      headers,
+      timeout: 15000,
+    });
+    if (res.data?.status === 'error') throw new Error(res.data?.message || 'Failed to create user');
+    return res.data;
+  },
+
+  /** Users - update role (mirrors web userAPI.updateUserRole) */
+  usersUpdateRole: async (userId: number | string, role: string) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.put(`${base}/api/admin/users.php`, { userId, role }, {
+      headers,
+      timeout: 15000,
+    });
+    if (res.data?.status === 'error') throw new Error(res.data?.message || 'Failed to update role');
+    return res.data;
+  },
+
+  /** Users - delete (mirrors web userAPI.deleteUser) */
+  usersDelete: async (userId: number | string) => {
+    const base = getBase();
+    const headers = await authHeaders();
+    const res = await axios.delete(`${base}/api/admin/users.php`, {
+      headers,
+      data: { user_id: userId },
+      timeout: 15000,
+    });
+    if (res.data?.status === 'error') throw new Error(res.data?.message || 'Failed to delete user');
+    return res.data;
   },
 
   /** Reports - get report data (matches web reportsAPI, supports period + filters) */

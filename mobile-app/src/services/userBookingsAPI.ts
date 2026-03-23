@@ -66,14 +66,27 @@ export function normalizeBooking(raw: Record<string, unknown>): UserBooking {
 }
 
 export const userBookingsAPI = {
+  /** Get current user's bookings */
   getUserBookings: async (): Promise<UserBooking[]> => {
     const token = await authAPI.getStoredToken();
     const user = await authAPI.getStoredUser();
     if (!token || !user?.id) {
       throw new Error('Not authenticated');
     }
+    return userBookingsAPI.getUserBookingsForUser(user.id);
+  },
+
+  /** Get bookings for a specific user (supports admin impersonation via view_as_user_id) */
+  getUserBookingsForUser: async (
+    userId: number,
+    options?: { viewAs?: boolean }
+  ): Promise<UserBooking[]> => {
+    const token = await authAPI.getStoredToken();
+    const user = await authAPI.getStoredUser();
+    if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const url = `${base}/api/user/bookings.php?user_id=${user.id}`;
+    const viewAsParam = options?.viewAs ? `&view_as_user_id=${userId}` : '';
+    const url = `${base}/api/user/bookings.php?user_id=${userId}${viewAsParam}`;
     const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token}`,

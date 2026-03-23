@@ -23,7 +23,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'customer' | 'driver' | 'admin' | 'super_admin';
+  role: 'customer' | 'driver' | 'admin' | 'super_admin' | 'guest';
   is_active: boolean;
 }
 
@@ -120,16 +120,26 @@ class AuthAPI {
     return data;
   }
 
+  /** Google signup - uses same social-login.php as login (backend auto-creates user on first login) */
   async socialSignup(socialData: SocialLoginRequest & { phone?: string }): Promise<AuthResponse> {
-    const response = await axios.post(`${AUTH_BASE}/social-signup.php`, socialData, {
-      headers: { 'Content-Type': 'application/json' },
+    return this.socialLogin(socialData);
+  }
+
+  async updateProfile(data: { name?: string; phone?: string }): Promise<AuthResponse> {
+    const token = await this.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const response = await axios.patch(`${AUTH_BASE}/update-profile.php`, data, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
     });
-    const data = response.data;
-    if (data.success && data.token && data.user) {
-      this.setToken(data.token);
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
+    const resData = response.data;
+    if (resData.success && resData.user) {
+      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(resData.user));
+      return { success: true, user: resData.user };
     }
-    return data;
+    return { success: false, error: resData.error || 'Update failed' };
   }
 
   async forgotPassword(email: string): Promise<{ status: string; message?: string }> {
