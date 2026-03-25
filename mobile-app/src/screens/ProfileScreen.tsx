@@ -132,6 +132,9 @@ export function ProfileScreen({ navigation }: Props) {
     ? [
         { label: 'Edit Profile', onPress: () => setShowEditProfile(true) },
         ...(isAdmin ? [{ label: 'Admin Dashboard', onPress: () => navigation.navigate('AdminDashboard') }] : []),
+        ...(user?.role === 'super_admin'
+          ? [{ label: 'Driver ops', onPress: () => navigation.navigate('AdminDriverOpsDashboard') }]
+          : []),
         { label: 'My Bookings / Dashboard', onPress: () => navigation.navigate('Dashboard') },
         { label: 'Log out', onPress: handleLogout },
       ]

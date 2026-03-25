@@ -5,23 +5,15 @@ RewriteBase /api/
 
 # CRITICAL: Force PHP processing for all .php files - MUST BE FIRST!
 <FilesMatch "\.php$">
-    # Ensure PHP files are processed correctly
     SetHandler application/x-httpd-php
-    # No caching for PHP files
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
-    # Set content type for API responses
-    Header set Content-Type "application/json"
+    # Do NOT force Content-Type here — let each PHP script set headers; forcing JSON broke empty bodies on some hosts
 </FilesMatch>
 
-# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
-
-# Set access headers for all responses - IMPORTANT FOR AXIOS REQUESTS
+# Set access headers for all responses
 <IfModule mod_headers.c>
-    # Set CORS headers unconditionally for all responses
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -30,7 +22,7 @@ RewriteRule .* - [R=200,L]
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Direct access to all PHP files - CRITICAL RULE
+# Direct access to all PHP files
 <Files ~ "\.php$">
     Order Allow,Deny
     Allow from all
@@ -43,18 +35,10 @@ RewriteRule ^admin/bookings$ /api/admin/bookings.php [L,NC,QSA]
 RewriteRule ^admin/pending-bookings\.php$ /api/admin/pending-bookings.php [L,NC,QSA]
 RewriteRule ^admin/pending-bookings$ /api/admin/pending-bookings.php [L,NC,QSA]
 
-# Force MIME types
 AddType application/json .json
 AddType application/x-httpd-php .php
 
-# Don't apply rewriting to actual files or directories
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Add explicit rules for our API endpoints
 RewriteRule ^status\.php$ /api/status.php [L,NC,QSA]
 RewriteRule ^admin/check-connection\.php$ /api/admin/check-connection.php [L,NC,QSA]
 
-# Send all other requests to index.html for React to handle only if not an API path
-RewriteCond %{REQUEST_URI} !^/api/.*\.php
-RewriteRule ^(.*)$ /index.html [L]
+# Do NOT rewrite unknown /api/* paths to site index.html — that returned 200 with empty/HTML and broke JSON clients

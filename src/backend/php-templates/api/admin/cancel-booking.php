@@ -58,8 +58,20 @@ try {
     
     error_log("Cancel booking request data: " . print_r($data, true));
 
+    // Accept all common booking id key variants for compatibility.
+    $bookingIdRaw = null;
+    if (isset($data['bookingId'])) {
+        $bookingIdRaw = $data['bookingId'];
+    } elseif (isset($data['booking_id'])) {
+        $bookingIdRaw = $data['booking_id'];
+    } elseif (isset($data['id'])) {
+        $bookingIdRaw = $data['id'];
+    }
+
+    $bookingId = (int)$bookingIdRaw;
+
     // Validate required fields
-    if (!isset($data['bookingId'])) {
+    if ($bookingId <= 0) {
         logCancelBookingError('Missing booking ID', $data);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing booking ID'], 400);
     }
@@ -78,9 +90,6 @@ try {
             'error_details' => $debugMode ? $e->getMessage() : null
         ], 500);
     }
-    
-    // Extract booking ID
-    $bookingId = $data['bookingId'];
     
     // Verify booking exists
     try {

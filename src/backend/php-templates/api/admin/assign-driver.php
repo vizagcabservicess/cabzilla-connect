@@ -36,18 +36,32 @@ function sendJsonResponse($data, $statusCode = 200) {
 }
 
 /**
- * Ensure bookings table supports driver assignment (driver_id column, status can be 'assigned').
+ * Ensure bookings table supports driver assignment (driver_id, driver_name, driver_phone, vehicle_number).
  */
 function ensureAssignDriverSchema($conn) {
-    $check = @$conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
-    if ($check && $check->num_rows === 0) {
+    $cols = [];
+    $res = @$conn->query("SHOW COLUMNS FROM bookings");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $cols[$r['Field']] = true;
+        }
+    }
+    if (empty($cols['driver_id'])) {
         @$conn->query("ALTER TABLE bookings ADD COLUMN driver_id INT(11) NULL");
+    }
+    if (empty($cols['driver_name'])) {
+        @$conn->query("ALTER TABLE bookings ADD COLUMN driver_name VARCHAR(100) NULL");
+    }
+    if (empty($cols['driver_phone'])) {
+        @$conn->query("ALTER TABLE bookings ADD COLUMN driver_phone VARCHAR(20) NULL");
+    }
+    if (empty($cols['vehicle_number'])) {
+        @$conn->query("ALTER TABLE bookings ADD COLUMN vehicle_number VARCHAR(50) NULL");
     }
     $st = @$conn->query("SHOW COLUMNS FROM bookings WHERE Field = 'status'");
     if ($st && $row = $st->fetch_assoc()) {
         $type = strtolower($row['Type'] ?? '');
         if (strpos($type, 'enum') !== false && strpos($type, 'assigned') === false) {
-            // Legacy enum without 'assigned' breaks UPDATE status='assigned' — widen to VARCHAR
             @$conn->query("ALTER TABLE bookings MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending'");
         }
     }
@@ -108,11 +122,11 @@ try {
         exit;
     }
 
-    // Connect to database
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    
-    if (!$conn) {
-        logAssignDriverError('Database connection failed');
+    // Connect to database (use shared helper for retry logic on shared hosting)
+    try {
+        $conn = getDbConnectionWithRetry();
+    } catch (Exception $e) {
+        logAssignDriverError('Database connection failed', ['error' => $e->getMessage()]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     }
 

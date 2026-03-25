@@ -33,7 +33,7 @@ export function LoginPage() {
       if (response.user.role === 'admin' || response.user.role === 'super_admin') {
         navigate('/admin');
       } else if (response.user.role === 'driver') {
-        navigate('/driver');
+        navigate('/dashboard');
       } else if (response.user.role === 'provider') {
         navigate('/pooling/provider');
       } else if (response.user.role === 'guest') {

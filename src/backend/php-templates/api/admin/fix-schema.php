@@ -38,6 +38,26 @@ try {
     try {
         $result = fixDriversSchema($conn);
         error_log("fixDriversSchema result: " . json_encode($result));
+
+        $odometerOps = [];
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS trip_odometer_readings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                booking_id INT NOT NULL,
+                reading_type ENUM('start','end') NOT NULL,
+                odometer_value INT NOT NULL,
+                image_url VARCHAR(255) DEFAULT '',
+                captured_at DATETIME NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+        $odometerOps[] = "Ensured trip_odometer_readings table";
+        $dc = $conn->query("SHOW COLUMNS FROM bookings LIKE 'driver_id'");
+        if (!$dc || $dc->num_rows === 0) {
+            $conn->query("ALTER TABLE bookings ADD COLUMN driver_id INT(11) NULL");
+            $odometerOps[] = "Added driver_id to bookings";
+        }
+        $result['operations'] = array_merge($result['operations'] ?? [], $odometerOps);
     } catch (Exception $innerE) {
         error_log("Error in fixDriversSchema: " . $innerE->getMessage());
         $result = [

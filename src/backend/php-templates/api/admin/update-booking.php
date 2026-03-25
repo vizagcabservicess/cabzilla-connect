@@ -213,7 +213,18 @@ try {
     
     logDebug("Is status update", ['isStatusUpdate' => $isStatusUpdate]);
     
-    if (!$debugMode && !$isStatusUpdate && ($currentStatus === 'completed' || $currentStatus === 'cancelled')) {
+    $tripEditKeys = [
+        'pickupDate', 'pickupLocation', 'dropLocation', 'driverName', 'vehicleNumber',
+        'startOdometer', 'endOdometer', 'distance', 'totalAmount', 'paymentType', 'driverCollectedAmount', 'completedAt',
+    ];
+    $hasTripFieldEdit = false;
+    foreach ($tripEditKeys as $tk) {
+        if (array_key_exists($tk, $data)) {
+            $hasTripFieldEdit = true;
+            break;
+        }
+    }
+    if (!$debugMode && !$isStatusUpdate && ($currentStatus === 'completed' || $currentStatus === 'cancelled') && !$hasTripFieldEdit) {
         sendJsonResponse(['status' => 'error', 'message' => 'Cannot update a completed or cancelled booking'], 400);
     }
     
@@ -256,16 +267,32 @@ try {
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
         'vehicleNumber' => 'vehicle_number',
-        'adminNotes' => 'admin_notes'
+        'adminNotes' => 'admin_notes',
+        'startOdometer' => 'start_odometer',
+        'endOdometer' => 'end_odometer',
+        'distance' => 'distance',
+        'paymentType' => 'payment_type',
+        'driverCollectedAmount' => 'driver_collected_amount',
     ];
-    
+
     foreach ($otherFields as $requestField => $dbField) {
         if (array_key_exists($requestField, $data)) {
-            logDebug("Processing field", ['field' => $requestField, 'dbField' => $dbField, 'value' => $data[$requestField]]);
+            $val = $data[$requestField];
+            if (($requestField === 'driverCollectedAmount') && ($val === '' || $val === null)) {
+                $val = null;
+            }
+            logDebug("Processing field", ['field' => $requestField, 'dbField' => $dbField, 'value' => $val]);
             $updateFields[] = "$dbField = ?";
-            $types .= getTypeForField($data[$requestField]);
-            $params[] = $data[$requestField];
+            $types .= getTypeForField($val);
+            $params[] = $val;
         }
+    }
+
+    if (array_key_exists('completedAt', $data)) {
+        $cv = $data['completedAt'];
+        $updateFields[] = 'completed_at = ?';
+        $types .= 's';
+        $params[] = ($cv === null || $cv === '') ? null : (string)$cv;
     }
     
     // Process extra charges if provided

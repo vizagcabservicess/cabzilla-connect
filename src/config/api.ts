@@ -1,9 +1,37 @@
 // API configuration
 
-// Base API URL - Use localhost for development, production for production
-export const apiBaseUrl = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:8080' 
-  : 'https://www.vizagtaxihub.com';
+function getRuntimeProductionOrigin(): string {
+  if (typeof window === 'undefined') {
+    return 'https://vizagtaxihub.com';
+  }
+  const origin = window.location.origin;
+  if (/^https?:\/\/([a-z0-9-]+\.)*vizagtaxihub\.com$/i.test(origin)) {
+    return origin;
+  }
+  return 'https://vizagtaxihub.com';
+}
+
+function getRuntimeApiBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8080'
+      : 'https://vizagtaxihub.com';
+  }
+
+  const isLocalHost =
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
+
+  // Use local backend only when app itself runs on localhost.
+  if (process.env.NODE_ENV === 'development' && isLocalHost) {
+    return 'http://localhost:8080';
+  }
+
+  return getRuntimeProductionOrigin();
+}
+
+// Runtime API base URL with CSP-safe same-origin fallback.
+export const apiBaseUrl = getRuntimeApiBaseUrl();
 
 // Helper function to get full API URL
 export const getApiUrl = (path: string = ''): string => {

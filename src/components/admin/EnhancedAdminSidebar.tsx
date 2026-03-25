@@ -27,7 +27,8 @@ import {
   Shield,
   Building2,
   Bus,
-  Eye
+  Eye,
+  Gauge
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -217,6 +218,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <Building2 size={20} />, 
       path: '/admin/operator-profiles',
       show: isAdmin() || isSuperAdmin()
+    },
+    {
+      id: 'driver-ops-dashboard',
+      label: 'Driver Ops Dashboard',
+      icon: <Gauge size={20} />,
+      path: '/driver',
+      show: isSuperAdmin()
     },
     
     // Always visible

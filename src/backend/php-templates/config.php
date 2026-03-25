@@ -77,6 +77,27 @@ if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
 }
 session_start();
 
+// str_starts_with polyfill for PHP < 8.0
+if (!function_exists('str_starts_with')) {
+    function str_starts_with($haystack, $needle) {
+        return $needle === '' || substr($haystack, 0, strlen($needle)) === $needle;
+    }
+}
+
+// getallheaders polyfill for nginx/php-fpm (Apache provides it natively)
+if (!function_exists('getallheaders')) {
+    function getallheaders() {
+        $headers = [];
+        foreach ($_SERVER as $name => $value) {
+            if (substr($name, 0, 5) === 'HTTP_') {
+                $key = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+                $headers[$key] = $value;
+            }
+        }
+        return $headers;
+    }
+}
+
 // Directory Settings
 define('ROOT_PATH', realpath(__DIR__));
 define('API_PATH', ROOT_PATH . '/api');

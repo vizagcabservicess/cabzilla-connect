@@ -1,0 +1,300 @@
+/**
+ * OdometerCaptureModal - Capture odometer photo, extract via OCR, with manual entry fallback
+ */
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { extractTextFromImage } from '../services/ocrService';
+import { colors } from '../theme/colors';
+import { driverTripsAPI, uploadImage } from '../services/driverTripsAPI';
+
+function parseOdometerFromText(text: string): number | null {
+  const kmLabel = text.match(/(\d{1,3}(?:,\d{3})*|\d{4,7})\s*km\b/i);
+  if (kmLabel) {
+    const n = parseInt(kmLabel[1].replace(/,/g, ''), 10);
+    if (n >= 1000 && n <= 9999999) return n;
+  }
+  const raw = text.replace(/\s/g, ' ');
+  const matches = raw.match(/\d{4,7}/g);
+  if (!matches || matches.length === 0) return null;
+  const numbers = matches.map((m) => parseInt(m, 10)).filter((n) => n >= 1000 && n <= 9999999);
+  if (numbers.length === 0) return null;
+  const hasLarge = numbers.some((n) => n >= 10000);
+  const candidates = hasLarge ? numbers.filter((n) => n < 800 || n > 6000) : numbers;
+  const pool = candidates.length > 0 ? candidates : numbers;
+  const large = pool.filter((n) => n >= 10000);
+  // When OCR returns two big numbers (e.g. spurious 801406 vs real 66984), prefer the lower reading.
+  if (large.length > 1) {
+    return Math.min(...large);
+  }
+  return Math.max(...pool);
+}
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+  bookingId: number;
+  readingType: 'start' | 'end';
+  onSuccess: () => void;
+}
+
+export function OdometerCaptureModal({ visible, onClose, bookingId, readingType, onSuccess }: Props) {
+  const [step, setStep] = useState<'idle' | 'capturing' | 'processing' | 'uploading'>('idle');
+  const [error, setError] = useState('');
+  const [manualValue, setManualValue] = useState('');
+  const [failedImageUri, setFailedImageUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setManualValue('');
+      setError('');
+      setFailedImageUri(null);
+      setStep('idle');
+    }
+  }, [visible]);
+
+  const handleCapture = async () => {
+    setError('');
+    setStep('capturing');
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setError('Camera permission is required');
+      setStep('idle');
+      return;
+    }
+
+    let result: ImagePicker.ImagePickerResult | undefined;
+    try {
+      result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+    } catch (cameraErr) {
+      setError(
+        cameraErr instanceof Error
+          ? cameraErr.message
+          : 'Could not open the camera. Check camera permission in system settings.'
+      );
+      setStep('idle');
+      return;
+    }
+
+    if (!result || result.canceled || !result.assets?.[0]?.uri) {
+      setStep('idle');
+      return;
+    }
+
+    const uri = result.assets[0].uri;
+    setStep('processing');
+
+    try {
+      const texts = await extractTextFromImage(uri);
+      const fullText = (texts || []).join(' ');
+      const odometer = parseOdometerFromText(fullText);
+
+      if (odometer === null) {
+        setError('Could not detect odometer reading. Retake the photo or enter manually below.');
+        setFailedImageUri(uri);
+        setStep('idle');
+        return;
+      }
+
+      setStep('uploading');
+      const imageUrl = await uploadImage(uri, 'odometer.jpg', 'odometer');
+      const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+      await driverTripsAPI.submitOdometer({
+        bookingId,
+        readingType,
+        odometerValue: odometer,
+        imageUrl,
+        capturedAt,
+      });
+
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setError(
+        (e instanceof Error ? e.message : 'Failed to process odometer').includes('Tesseract')
+          ? 'Scanning unavailable. Enter the reading manually below.'
+          : e instanceof Error
+            ? e.message
+            : 'Failed to process odometer'
+      );
+      setFailedImageUri(result.assets?.[0]?.uri ?? null);
+      setStep('idle');
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    const val = manualValue.replace(/\D/g, '');
+    const num = parseInt(val, 10);
+    if (isNaN(num) || num < 1000 || num > 999999) {
+      setError('Enter a valid odometer reading (1000–999999)');
+      return;
+    }
+    setError('');
+    setStep('uploading');
+    try {
+      let imageUrl = '';
+      if (failedImageUri && (failedImageUri.startsWith('file') || failedImageUri.startsWith('content'))) {
+        imageUrl = await uploadImage(failedImageUri, 'odometer.jpg', 'odometer');
+      }
+      const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      await driverTripsAPI.submitOdometer({
+        bookingId,
+        readingType,
+        odometerValue: num,
+        imageUrl,
+        capturedAt,
+      });
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+      setStep('idle');
+    }
+  };
+
+  const label = readingType === 'start' ? 'Start Trip' : 'End Trip';
+  // Keep manual row visible while manual submit uploads (step === 'uploading'); avoid narrowing step to only 'idle'.
+  const showManualEntry = Boolean(error || failedImageUri) && (step === 'idle' || step === 'uploading');
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => {
+        if (step === 'processing' || step === 'uploading') return;
+        setStep('idle');
+        onClose();
+      }}
+    >
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>Capture Odometer ({label})</Text>
+          <Text style={styles.desc}>
+            Take a photo of the odometer or enter the reading manually below.
+          </Text>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {showManualEntry && (
+            <View style={styles.manualRow}>
+              <TextInput
+                style={styles.manualInput}
+                value={manualValue}
+                onChangeText={(t) => {
+                  setManualValue(t.replace(/\D/g, '').slice(0, 7));
+                  setError('');
+                }}
+                placeholder="e.g. 45230"
+                keyboardType="number-pad"
+                placeholderTextColor={colors.gray500}
+                maxLength={7}
+              />
+              <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit} disabled={step === 'uploading'}>
+                {step === 'uploading' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.manualSubmitText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={styles.actions}>
+            {step === 'idle' && (
+              <>
+                <TouchableOpacity style={styles.captureBtn} onPress={handleCapture}>
+                  <Text style={styles.captureBtnText}>Take Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {(step === 'capturing' || step === 'processing' || step === 'uploading') && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.loadingText}>
+                  {step === 'capturing' && 'Opening camera...'}
+                  {step === 'processing' && 'Extracting odometer...'}
+                  {step === 'uploading' && 'Saving...'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  content: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+  },
+  title: { fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 8 },
+  desc: { fontSize: 14, color: colors.gray600, marginBottom: 16, lineHeight: 20 },
+  errorText: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  manualRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  manualInput: {
+    flex: 1,
+    backgroundColor: colors.gray50,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.foreground,
+  },
+  manualSubmitBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  manualSubmitText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  actions: { gap: 12 },
+  captureBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  captureBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  cancelBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  cancelBtnText: { fontSize: 16, fontWeight: '500', color: colors.gray600 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  loadingText: { fontSize: 14, color: colors.gray600 },
+});

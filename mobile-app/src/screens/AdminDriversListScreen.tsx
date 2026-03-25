@@ -25,6 +25,7 @@ export function AdminDriversListScreen({ navigation }: Props) {
   const [drivers, setDrivers] = useState<AdminDriver[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -53,6 +54,22 @@ export function AdminDriversListScreen({ navigation }: Props) {
   const navToAdd = () => navigation.navigate('AdminDriverAdd');
   const navToEdit = (driver: AdminDriver) => navigation.navigate('AdminDriverEdit', { driver });
 
+  const toggleStatus = async (driver: AdminDriver) => {
+    if (togglingId) return;
+    const newStatus: 'available' | 'offline' = driver.status === 'available' ? 'offline' : 'available';
+    setTogglingId(String(driver.id));
+    try {
+      await adminAPI.updateDriverStatus(driver.id, newStatus);
+      setDrivers((prev) =>
+        prev.map((d) => (d.id === driver.id ? { ...d, status: newStatus } : d))
+      );
+    } catch {
+      // Error surfaced by API; list will refresh on next load
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const renderDriver = ({ item }: { item: AdminDriver }) => (
     <TouchableOpacity style={styles.card} onPress={() => navToEdit(item)} activeOpacity={0.7}>
       <View style={styles.iconWrap}>
@@ -68,6 +85,21 @@ export function AdminDriversListScreen({ navigation }: Props) {
           </View>
         ) : null}
       </View>
+      <TouchableOpacity
+        style={styles.toggleBtn}
+        onPress={() => toggleStatus(item)}
+        disabled={togglingId === String(item.id)}
+      >
+        {togglingId === String(item.id) ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Ionicons
+            name={item.status === 'available' ? 'moon-outline' : 'checkmark-circle-outline'}
+            size={22}
+            color={colors.primary}
+          />
+        )}
+      </TouchableOpacity>
       <Ionicons name="chevron-forward" size={20} color={colors.gray600} />
     </TouchableOpacity>
   );
@@ -158,6 +190,13 @@ const styles = StyleSheet.create({
   },
   statusAvailable: { backgroundColor: '#d1fae5' },
   statusText: { fontSize: 11, fontWeight: '600', color: colors.foreground },
+  toggleBtn: {
+    padding: 8,
+    marginRight: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 38,
+  },
   empty: { alignItems: 'center', paddingVertical: 48 },
   emptyText: { fontSize: 15, color: colors.gray600, marginTop: 12 },
 });

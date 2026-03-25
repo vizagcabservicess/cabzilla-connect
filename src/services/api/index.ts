@@ -12,6 +12,7 @@ import { tourAPI } from './tourAPI';
 import { tourDetailAPI } from './tourDetailAPI';
 import { tourManagementAPI } from './tourManagementAPI';
 import { poolingAPI } from './poolingAPI';
+import { driverDashboardAPI } from './driverDashboardAPI';
 
 // Export all API services
 export {
@@ -27,7 +28,8 @@ export {
   tourAPI,
   tourDetailAPI,
   tourManagementAPI,
-  poolingAPI
+  poolingAPI,
+  driverDashboardAPI
 };
 
 // Default export
@@ -44,5 +46,6 @@ export default {
   tour: tourAPI,
   tourDetail: tourDetailAPI,
   tourManagement: tourManagementAPI,
-  pooling: poolingAPI
+  pooling: poolingAPI,
+  driverDashboard: driverDashboardAPI
 };

@@ -2,6 +2,56 @@
  * Utility functions for location data processing
  */
 
+function isPincodeLike(value: string): boolean {
+  const normalized = value.trim().replace(/\s+/g, '');
+  return /^\d{5,7}$/.test(normalized);
+}
+
+function isCodeLikeToken(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) return true;
+  if (/[a-zA-Z]/.test(normalized)) return false;
+  return /^[\d\s\-\/#.,]+$/.test(normalized);
+}
+
+function isGenericRegionToken(value: string): boolean {
+  const token = value.trim().toLowerCase();
+  if (!token) return true;
+  return [
+    'india',
+    'andhra pradesh',
+    'telangana',
+    'tamil nadu',
+    'karnataka',
+    'kerala',
+    'maharashtra',
+    'gujarat',
+    'west bengal',
+    'odisha',
+    'delhi',
+    'puducherry',
+  ].includes(token);
+}
+
+function pickReadablePlaceName(fullAddress: string): string {
+  const parts = fullAddress
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  // Prefer first locality/city-like segment.
+  for (const part of parts) {
+    if (isPincodeLike(part) || isCodeLikeToken(part)) continue;
+    if (!/[a-zA-Z]/.test(part)) continue;
+    if (isGenericRegionToken(part)) continue;
+    return part;
+  }
+
+  // Fallback: first non-code segment.
+  const fallback = parts.find((part) => !isPincodeLike(part) && !isCodeLikeToken(part));
+  return fallback || fullAddress.trim();
+}
+
 /**
  * Extract place name from full address
  * @param fullAddress - The complete address string
@@ -27,12 +77,13 @@ export function extractPlaceName(fullAddress: string): { name: string; address: 
   for (const pattern of patterns) {
     const match = fullAddress.match(pattern);
     if (match) {
-      const name = match[1].trim();
+      const parsedName = match[1].trim();
       const address = match[2].trim();
+      const safeName = isCodeLikeToken(parsedName) ? pickReadablePlaceName(fullAddress) : parsedName;
       
       // Validate that we have a reasonable place name (not too long)
-      if (name.length > 0 && name.length < 100) {
-        return { name, address };
+      if (safeName.length > 0 && safeName.length < 100 && !isCodeLikeToken(safeName)) {
+        return { name: safeName, address };
       }
     }
   }
@@ -40,13 +91,17 @@ export function extractPlaceName(fullAddress: string): { name: string; address: 
   // If no pattern matches, try to extract the first meaningful part
   const parts = fullAddress.split(',');
   if (parts.length > 1) {
-    const name = parts[0].trim();
+    const name = pickReadablePlaceName(fullAddress);
     const address = parts.slice(1).join(',').trim();
     
     // Check if the first part looks like a place name
-    if (name.length > 0 && name.length < 80 && !name.includes('India')) {
+    if (name.length > 0 && name.length < 80 && !name.toLowerCase().includes('india')) {
       return { name, address };
     }
+  }
+
+  if (isPincodeLike(fullAddress.trim()) || isCodeLikeToken(fullAddress.trim())) {
+    return { name: 'Unknown Location', address: fullAddress.trim() };
   }
 
   // Fallback: return the full address as both name and address

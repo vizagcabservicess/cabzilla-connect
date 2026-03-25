@@ -120,11 +120,13 @@ try {
         }
     }
     
-    // Check if the booking can be deleted (not completed or in progress)
-    if ($booking['status'] === 'completed' || $booking['status'] === 'in_progress') {
+    // Allow deleting completed bookings; block only active/in-progress ones.
+    $status = strtolower(trim((string)($booking['status'] ?? '')));
+    $activeStatuses = ['in_progress', 'started', 'on_trip', 'ongoing'];
+    if (in_array($status, $activeStatuses, true)) {
         sendJsonResponse([
             'status' => 'error', 
-            'message' => 'Cannot delete a completed or in-progress booking. Please cancel it first.'
+            'message' => 'Cannot delete an in-progress booking. Please complete or cancel it first.'
         ], 400);
     }
     

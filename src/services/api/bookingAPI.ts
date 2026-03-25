@@ -252,7 +252,9 @@ export const bookingAPI = {
   updateBookingStatus: async (bookingId: number | string, status: BookingStatus) => {
     try {
       const payload = { bookingId: bookingId, status };
-      const headers = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (token) headers.Authorization = `Bearer ${token}`;
       // Try non-admin endpoint first
       try {
         const r1 = await axios.post(`/api/update-booking.php`, payload, { headers });
@@ -269,26 +271,52 @@ export const bookingAPI = {
   },
   
   /**
-   * Update booking
+   * Update booking.
+   * Use `forceAdmin: true` for fields only handled by admin/update-booking.php (odometer, distance, payment_type, completed_at, etc.).
    */
-  updateBooking: async (bookingId: number | string, data: Partial<Booking>) => {
+  updateBooking: async (
+    bookingId: number | string,
+    data: Partial<Booking>,
+    options?: { forceAdmin?: boolean }
+  ) => {
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      const payload = { bookingId: bookingId, ...data } as any;
-      
-      console.log('updateBooking called with:', {
-        bookingId: bookingId,
-        payload: payload
-      });
-      
-      // Try non-admin endpoint first
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const payload = { bookingId: bookingId, ...data } as Record<string, unknown>;
+
+      const postAdmin = () =>
+        axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers, timeout: 25000 });
+
+      if (options?.forceAdmin) {
+        const r = await postAdmin();
+        return r.data;
+      }
+
+      const tripFieldsOnlyInAdmin = [
+        'startOdometer',
+        'endOdometer',
+        'distance',
+        'paymentType',
+        'driverCollectedAmount',
+        'completedAt',
+      ];
+      const needsAdmin = tripFieldsOnlyInAdmin.some((k) => Object.prototype.hasOwnProperty.call(data as object, k));
+      if (needsAdmin) {
+        try {
+          const r = await postAdmin();
+          return r.data;
+        } catch (e1) {
+          console.warn('Admin update-booking failed, trying public endpoint:', e1);
+        }
+      }
+
       try {
-        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers });
+        const r1 = await axios.post(`/api/update-booking.php`, payload, { headers, timeout: 25000 });
         return r1.data;
       } catch (e1) {
-        console.log('Non-admin endpoint failed, trying admin endpoint:', e1.message);
-        // Fallback to admin endpoint
-        const r2 = await axios.post(`${API_BASE_URL}/api/admin/update-booking.php`, payload, { headers });
+        console.log('Non-admin endpoint failed, trying admin endpoint:', (e1 as Error).message);
+        const r2 = await postAdmin();
         return r2.data;
       }
     } catch (error) {
@@ -319,9 +347,13 @@ export const bookingAPI = {
    */
   cancelBooking: async (bookingId: number | string) => {
     try {
+      const normalizedId = Number(bookingId);
+      if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+        throw new Error('Invalid booking ID');
+      }
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/cancel-booking.php`,
-        { bookingId: bookingId },
+        { bookingId: normalizedId, booking_id: normalizedId, id: normalizedId },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -340,14 +372,13 @@ export const bookingAPI = {
    */
   deleteBooking: async (bookingId: number | string) => {
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await axios.post(
         `${API_BASE_URL}/api/admin/delete-booking.php`,
         { bookingId: bookingId },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers }
       );
       return response.data;
     } catch (error) {

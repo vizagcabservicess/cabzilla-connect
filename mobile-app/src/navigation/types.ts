@@ -71,6 +71,8 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   Dashboard: { viewAs?: number; viewAsName?: string } | undefined;
   AdminDashboard: undefined;
+  /** Super-admin driver ops — web `DriverDashboard` parity */
+  AdminDriverOpsDashboard: undefined;
   AdminBookingsList: undefined;
   /** Same behaviour as web Bookings → Upcoming trips tab */
   AdminUpcomingTrips: undefined;
@@ -106,6 +108,15 @@ export type RootStackParamList = {
   HelpCenter: undefined;
   StaticContent: { contentKey: 'terms' | 'privacy' | 'refund' };
   DataDeletion: undefined;
+  DriverHome: undefined;
+  DriverTab: undefined;
+  DriverFuelTab: undefined;
+  DriverEarningsTab: undefined;
+  DriverTripsList: undefined;
+  DriverFuelHome: undefined;
+  DriverEarningsHome: undefined;
+  DriverTripDetail: { trip: import('../services/driverTripsAPI').DriverTrip };
+  FuelEntry: { bookingId?: number } | undefined;
   Payment: {
     pickupLocation: Location;
     dropLocation: Location | null;

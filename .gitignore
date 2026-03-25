@@ -42,3 +42,7 @@ src/backend/
 *.env
 .env.*
 !env.example
+
+# Google Cloud credentials - NEVER commit
+**/config/gcp-service-account.json
+**/gcp-*.json

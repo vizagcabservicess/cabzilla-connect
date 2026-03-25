@@ -290,7 +290,8 @@ export const adminAPI = {
     const base = getBase();
     const url = `${base}/api/admin/drivers.php`;
     const phoneDigits = (driver.phone ?? '').replace(/\D/g, '').slice(-10);
-    const payload = {
+    const linkEmail = ((driver as { linkUserEmail?: string }).linkUserEmail ?? '').trim();
+    const payload: Record<string, unknown> = {
       name: (driver.name ?? '').trim(),
       phone: phoneDigits,
       email: ((driver.email ?? '').trim() || `driver-${phoneDigits}@vizagtaxihub.com`),
@@ -300,6 +301,7 @@ export const adminAPI = {
       status: (driver as { status?: string }).status ?? 'available',
       location: ((driver as { location?: string }).location ?? '').trim() || 'Visakhapatnam',
     };
+    if (linkEmail) payload.linkUserEmail = linkEmail;
     const response = await axios.post(url, payload, {
       headers: {
         'Content-Type': 'application/json',
@@ -317,12 +319,29 @@ export const adminAPI = {
     return created as AdminDriver;
   },
 
+  /** Update driver status only (Set Available / Set Offline) - lightweight PUT with only status */
+  updateDriverStatus: async (id: string | number, status: 'available' | 'busy' | 'offline'): Promise<void> => {
+    const base = getBase();
+    const url = `${base}/api/admin/driver.php?id=${id}`;
+    const response = await axios.put(url, { status }, {
+      headers: { 'Content-Type': 'application/json', 'X-Force-Refresh': 'true' },
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+    const data = response.data;
+    if (response.status >= 400 || data?.status === 'error') {
+      const msg = data?.message ?? (Array.isArray(data?.errors) ? data.errors.join(', ') : null) ?? 'Failed to update status';
+      throw new Error(msg);
+    }
+  },
+
   /** Update driver (matches web PUT /api/admin/driver.php?id=X - same headers, no Bearer) */
   updateDriver: async (id: string | number, driver: Partial<AdminDriver>): Promise<void> => {
     const base = getBase();
     const url = `${base}/api/admin/driver.php?id=${id}`;
     const phoneDigits = (driver.phone ?? '').replace(/\D/g, '').slice(-10);
-    const payload = {
+    const linkEmail = ((driver as { linkUserEmail?: string }).linkUserEmail ?? '').trim();
+    const payload: Record<string, unknown> = {
       id: Number(id),
       name: (driver.name ?? '').trim(),
       phone: phoneDigits,
@@ -333,6 +352,7 @@ export const adminAPI = {
       status: (driver as { status?: string }).status ?? 'available',
       location: ((driver as { location?: string }).location ?? '').trim() || 'Visakhapatnam',
     };
+    if (linkEmail) payload.linkUserEmail = linkEmail;
     const response = await axios.put(url, payload, {
       headers: {
         'Content-Type': 'application/json',

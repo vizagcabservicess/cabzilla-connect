@@ -468,19 +468,28 @@ function formatFuelRecord($row) {
             'lastFourDigits' => $row['last_four_digits'] ?? null
         ];
     }
-    $qty = $row['quantity_liters'] ?? $row['quantity'] ?? 0;
-    $price = $row['price_per_liter'] ?? $row['price_per_unit'] ?? 0;
+    // Prefer columns written by driver fuel-entry.php (quantity, price_per_unit, fuel_station).
+    // Legacy rows may have both old + new columns; old *_liters columns often stay 0 while new columns hold driver data.
+    $q = $row['quantity'] ?? null;
+    $qty = ($q !== null && $q !== '') ? (float)$q : (float)($row['quantity_liters'] ?? 0);
+    $p = $row['price_per_unit'] ?? null;
+    $price = ($p !== null && $p !== '') ? (float)$p : (float)($row['price_per_liter'] ?? 0);
+    $fuelStationTrim = isset($row['fuel_station']) ? trim((string)$row['fuel_station']) : '';
+    $stationTrim = isset($row['station']) ? trim((string)$row['station']) : '';
+    $fuelStationOut = $fuelStationTrim !== '' ? $fuelStationTrim : ($stationTrim !== '' ? $stationTrim : null);
     return [
         'id' => $row['id'] ?? null,
         'vehicleId' => $row['vehicle_id'] ?? null,
         'fillDate' => $row['fill_date'] ?? null,
-        'quantity' => (float)(is_numeric($qty) ? $qty : 0),
-        'pricePerUnit' => (float)(is_numeric($price) ? $price : 0),
-        'quantityLiters' => (float)(is_numeric($qty) ? $qty : 0),
-        'pricePerLiter' => (float)(is_numeric($price) ? $price : 0),
+        'quantity' => is_numeric($qty) ? (float)$qty : 0,
+        'pricePerUnit' => is_numeric($price) ? (float)$price : 0,
+        'quantityLiters' => is_numeric($qty) ? (float)$qty : 0,
+        'pricePerLiter' => is_numeric($price) ? (float)$price : 0,
         'totalCost' => (float)(is_numeric($row['total_cost'] ?? 0) ? $row['total_cost'] : 0),
-        'odometer' => (int)($row['odometer_reading'] ?? $row['odometer'] ?? 0),
-        'fuelStation' => $row['station'] ?? $row['fuel_station'] ?? null,
+        'odometer' => array_key_exists('odometer', $row)
+            ? (int)($row['odometer'] ?? 0)
+            : (int)($row['odometer_reading'] ?? 0),
+        'fuelStation' => $fuelStationOut,
         'fuelType' => $row['fuel_type'] ?? 'Petrol',
         'mileage' => $row['mileage'] ? (float)$row['mileage'] : null,
         'paymentMethod' => $row['payment_method'],

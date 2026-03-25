@@ -180,6 +180,7 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
             onTabChange={handleTabChange}
             onTripModeChange={setTripMode}
             visibleTabs={['outstation', 'local', 'airport', 'tour']}
+            showTripModeToggle
           />
         </div>
 
@@ -267,8 +268,8 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
               </div>
             </div>
 
-            {/* Return Date for Round Trip */}
-            {tripType === 'outstation' && tripMode === 'round-trip' && (
+            {/* Return Date for Round Trip (Outstation/Tour) */}
+            {(tripType === 'outstation' || tripType === 'tour') && tripMode === 'round-trip' && (
               <>
                 <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
                 <div className="flex-1 min-w-0">

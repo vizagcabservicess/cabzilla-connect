@@ -105,6 +105,9 @@ try {
             if (!isset($columns['updated_at'])) {
                 $conn->query("ALTER TABLE drivers ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
             }
+            if (!isset($columns['user_id'])) {
+                $conn->query("ALTER TABLE drivers ADD COLUMN user_id INT NULL");
+            }
 
             // Update column names if they differ
             if (isset($columns['license_number']) && !isset($columns['license_no'])) {
@@ -270,21 +273,41 @@ switch ($_SERVER['REQUEST_METHOD']) {
                     throw new Exception("Driver with same phone or email already exists");
                 }
                 
+                $userId = null;
+                if (!empty($data['userId'])) {
+                    $userId = (int)$data['userId'];
+                } elseif (!empty($data['user_id'])) {
+                    $userId = (int)$data['user_id'];
+                } elseif (!empty($data['linkUserEmail'])) {
+                    $ueStmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                    if ($ueStmt) {
+                        $ueStmt->bind_param("s", $data['linkUserEmail']);
+                        if ($ueStmt->execute()) {
+                            $ueRes = $ueStmt->get_result();
+                            if ($ueRow = $ueRes->fetch_assoc()) {
+                                $userId = (int)$ueRow['id'];
+                            }
+                        }
+                        $ueStmt->close();
+                    }
+                }
+
                 // Insert new driver
-                $sql = "INSERT INTO drivers (name, phone, email, license_no, status, vehicle) VALUES (?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO drivers (name, phone, email, license_no, status, vehicle, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $conn->prepare($sql);
                 if (!$stmt) {
                     throw new Exception("Failed to prepare insert statement: " . $conn->error);
                 }
                 
                 $status = $data['status'] ?? 'available';
-                $stmt->bind_param("ssssss", 
+                $stmt->bind_param("ssssssi", 
                     $data['name'],
                     $data['phone'],
                     $data['email'],
                     $data['license_no'],
                     $status,
-                    $data['vehicle']
+                    $data['vehicle'],
+                    $userId
                 );
                 
                 if (!$stmt->execute()) {

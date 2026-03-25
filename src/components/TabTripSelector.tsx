@@ -17,6 +17,8 @@ interface TabTripSelectorProps {
   /** Airport tab: show From Airport / To Airport instead of One Way / Round Trip */
   airportDirectionLabel?: string;
   onAirportDirectionChange?: (direction: 'from-airport' | 'to-airport') => void;
+  /** Show top-level One Way / Round Trip pills (admin create booking use-case). */
+  showTripModeToggle?: boolean;
 }
 
 export function TabTripSelector({ 
@@ -28,6 +30,7 @@ export function TabTripSelector({
   visibleTabs,
   airportDirectionLabel,
   onAirportDirectionChange,
+  showTripModeToggle = false,
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -252,10 +255,10 @@ export function TabTripSelector({
           </div>
         </>
       )}
-      {/* Trip mode: Outstation/Tour = One Way / Round Trip; Airport = From Airport / To Airport - mobile/tablet only */}
-      {(selectedTab === 'outstation' || selectedTab === 'tour') && (
+      {/* Trip mode: Outstation/Tour = One Way / Round Trip */}
+      {showTripModeToggle && (selectedTab === 'outstation' || selectedTab === 'tour') && (
         <motion.div 
-          className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center lg:hidden"
+          className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -271,7 +274,7 @@ export function TabTripSelector({
                   ? 'bg-white border-blue-600 text-blue-700 shadow-sm font-bold lg:bg-blue-600 lg:border-blue-600 lg:text-white' 
                   : 'bg-gray-50 border-gray-300 text-gray-700 font-semibold sm:font-medium lg:bg-gray-100 lg:border-gray-200 lg:text-gray-700'}`}
             >
-              <span className="relative flex h-4 w-4 lg:hidden">
+              <span className="relative flex h-4 w-4">
                 <span className={`inline-block w-4 h-4 rounded-full border-2 ${tripMode === option.value ? 'border-blue-600 bg-white' : 'border-gray-400 bg-gray-100'}`}></span>
                 {tripMode === option.value && (
                   <span className="absolute left-1/2 top-1/2 w-2 h-2 bg-blue-600 rounded-full -translate-x-1/2 -translate-y-1/2"></span>

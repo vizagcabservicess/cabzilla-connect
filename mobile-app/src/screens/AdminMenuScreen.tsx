@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
+import { useAuth } from '../providers/AuthProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminMenu'>;
 
@@ -26,6 +27,8 @@ type MenuItem = {
   screen: string;
   params?: Record<string, string>;
   isFullNative?: boolean;
+  /** If true, only `super_admin` sees this row (matches web driver dashboard gate). */
+  superAdminOnly?: boolean;
 };
 
 const MENU_ITEMS: MenuItem[] = [
@@ -42,6 +45,14 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'group-tours', label: 'Group Tours', icon: 'bus-outline', screen: 'AdminGroupTours', isFullNative: true },
   { id: 'vehicles', label: 'Vehicles', icon: 'car-outline', screen: 'AdminVehiclesList', isFullNative: true },
   { id: 'drivers', label: 'Drivers', icon: 'people-outline', screen: 'AdminDriversList', isFullNative: true },
+  {
+    id: 'driver-ops',
+    label: 'Driver ops',
+    icon: 'speedometer-outline',
+    screen: 'AdminDriverOpsDashboard',
+    isFullNative: true,
+    superAdminOnly: true,
+  },
   { id: 'fleet', label: 'Fleet Management', icon: 'car-sport-outline', screen: 'AdminFleet', isFullNative: true },
   { id: 'fares', label: 'Fares', icon: 'document-text-outline', screen: 'AdminFares', isFullNative: true },
   { id: 'commission', label: 'Commission', icon: 'pricetag-outline', screen: 'AdminCommission', isFullNative: true },
@@ -57,6 +68,11 @@ const MENU_ITEMS: MenuItem[] = [
 ];
 
 export function AdminMenuScreen({ navigation }: Props) {
+  const { user } = useAuth();
+  const visibleItems = MENU_ITEMS.filter(
+    (item) => !item.superAdminOnly || user?.role === 'super_admin'
+  );
+
   const handlePress = (item: MenuItem) => {
     (navigation.navigate as (name: string, params?: object) => void)(item.screen, item.params ?? {});
   };
@@ -78,7 +94,7 @@ export function AdminMenuScreen({ navigation }: Props) {
       >
         <Text style={styles.subtitle}>Vizag Taxi Hub</Text>
         <View style={styles.grid}>
-          {MENU_ITEMS.map((item) => (
+          {visibleItems.map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.gridItem}

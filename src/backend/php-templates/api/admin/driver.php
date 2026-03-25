@@ -191,7 +191,42 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
             }
             
-            // Validate input data
+            // Status-only update (e.g. "Set Available" / "Set Offline") - skip full validation
+            $keys = array_keys(array_filter($data, fn($v) => $v !== null && $v !== ''));
+            $isStatusOnly = (count($keys) === 1 && $keys[0] === 'status') ||
+                (count($keys) === 2 && in_array('status', $keys) && in_array('id', $keys));
+            if ($isStatusOnly && !empty($data['status'])) {
+                $validStatuses = ['available', 'busy', 'offline'];
+                if (!in_array($data['status'], $validStatuses)) {
+                    sendJsonResponse([
+                        'status' => 'error',
+                        'message' => 'Invalid status. Must be: ' . implode(', ', $validStatuses)
+                    ], 400);
+                }
+                $stmt = $conn->prepare("UPDATE drivers SET status = ?, updated_at = NOW() WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("si", $data['status'], $driverId);
+                    if ($stmt->execute()) {
+                        $getStmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
+                        $getStmt->bind_param("i", $driverId);
+                        $getStmt->execute();
+                        $res = $getStmt->get_result();
+                        $updated = $res && $res->num_rows > 0 ? $res->fetch_assoc() : null;
+                        sendJsonResponse([
+                            'status' => 'success',
+                            'message' => 'Driver status updated successfully',
+                            'data' => $updated
+                        ]);
+                    } else {
+                        sendJsonResponse(['status' => 'error', 'message' => 'Failed to update status: ' . $stmt->error], 500);
+                    }
+                } else {
+                    sendJsonResponse(['status' => 'error', 'message' => 'Database prepare failed'], 500);
+                }
+                exit;
+            }
+            
+            // Full update: validate input data
             $errors = validateDriverData($data);
             if (!empty($errors)) {
                 sendJsonResponse([
@@ -217,12 +252,44 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 ], 409);
             }
             
-            // Ensure required fields are set
-            $vehicleValue = isset($data['vehicle']) ? $data['vehicle'] : '';
-            $vehicleIdValue = isset($data['vehicle_id']) ? $data['vehicle_id'] : '';
+            // Ensure required fields are set. Use NULL for empty vehicle_id to avoid UNIQUE constraint violation.
+            $vehicleValue = isset($data['vehicle']) ? trim((string)$data['vehicle']) : '';
+            $vehicleIdRaw = isset($data['vehicle_id']) ? $data['vehicle_id'] : '';
+            $vehicleIdValue = ($vehicleIdRaw === '' || $vehicleIdRaw === null) ? '' : trim((string)$vehicleIdRaw);
             $statusValue = isset($data['status']) ? $data['status'] : 'available';
             $locationValue = isset($data['location']) ? $data['location'] : '';
             $emailValue = isset($data['email']) ? $data['email'] : '';
+
+            $userIdToSet = null;
+            if (isset($data['userId']) && $data['userId'] !== '' && $data['userId'] !== null) {
+                $userIdToSet = (int)$data['userId'];
+            } elseif (isset($data['user_id']) && $data['user_id'] !== '' && $data['user_id'] !== null) {
+                $userIdToSet = (int)$data['user_id'];
+            } elseif (!empty($data['linkUserEmail'])) {
+                $ueStmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+                if ($ueStmt) {
+                    $ueStmt->bind_param("s", $data['linkUserEmail']);
+                    if ($ueStmt->execute()) {
+                        $ueRes = $ueStmt->get_result();
+                        if ($ueRow = $ueRes->fetch_assoc()) {
+                            $userIdToSet = (int)$ueRow['id'];
+                        }
+                    }
+                    $ueStmt->close();
+                }
+            } else {
+                $curStmt = $conn->prepare("SELECT user_id FROM drivers WHERE id = ?");
+                if ($curStmt) {
+                    $curStmt->bind_param("i", $driverId);
+                    $curStmt->execute();
+                    $curRes = $curStmt->get_result();
+                    $curRow = $curRes ? $curRes->fetch_assoc() : null;
+                    if ($curRow && array_key_exists('user_id', $curRow)) {
+                        $userIdToSet = $curRow['user_id'] !== null ? (int)$curRow['user_id'] : null;
+                    }
+                    $curStmt->close();
+                }
+            }
             
             // Log the values we're going to use in the update
             debugLog('Driver update values', [
@@ -236,33 +303,68 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 'location' => $locationValue
             ]);
             
-            // Update driver details
-            $stmt = $conn->prepare("
-                UPDATE drivers SET 
-                    name = ?, 
-                    phone = ?, 
-                    email = ?, 
-                    license_no = ?,
-                    vehicle = ?,
-                    vehicle_id = ?,
-                    status = ?,
-                    location = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ");
-            
-            $stmt->bind_param(
-                "ssssssssi",
-                $data['name'],
-                $data['phone'],
-                $emailValue,
-                $data['license_no'],
-                $vehicleValue,
-                $vehicleIdValue,
-                $statusValue,
-                $locationValue,
-                $driverId
-            );
+            $userColExists = false;
+            $ucRes = $conn->query("SHOW COLUMNS FROM drivers LIKE 'user_id'");
+            if ($ucRes && $ucRes->num_rows > 0) {
+                $userColExists = true;
+            }
+
+            // Use NULLIF to store NULL for empty vehicle_id (avoids UNIQUE constraint on '')
+            if ($userColExists) {
+                $stmt = $conn->prepare("
+                    UPDATE drivers SET 
+                        name = ?, 
+                        phone = ?, 
+                        email = ?, 
+                        license_no = ?,
+                        vehicle = ?,
+                        vehicle_id = NULLIF(?, ''),
+                        status = ?,
+                        location = ?,
+                        user_id = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                $stmt->bind_param(
+                    "ssssssssii",
+                    $data['name'],
+                    $data['phone'],
+                    $emailValue,
+                    $data['license_no'],
+                    $vehicleValue,
+                    $vehicleIdValue,
+                    $statusValue,
+                    $locationValue,
+                    $userIdToSet,
+                    $driverId
+                );
+            } else {
+                $stmt = $conn->prepare("
+                    UPDATE drivers SET 
+                        name = ?, 
+                        phone = ?, 
+                        email = ?, 
+                        license_no = ?,
+                        vehicle = ?,
+                        vehicle_id = NULLIF(?, ''),
+                        status = ?,
+                        location = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                $stmt->bind_param(
+                    "ssssssssi",
+                    $data['name'],
+                    $data['phone'],
+                    $emailValue,
+                    $data['license_no'],
+                    $vehicleValue,
+                    $vehicleIdValue,
+                    $statusValue,
+                    $locationValue,
+                    $driverId
+                );
+            }
             
             if ($stmt->execute()) {
                 debugLog('Driver update executed successfully. Affected rows: ' . $stmt->affected_rows);

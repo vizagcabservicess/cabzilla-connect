@@ -47,29 +47,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT
     exit;
 }
 
-// Get booking ID from URL or request body
+// Read body once (php://input is not rewindable on most SAPIs)
+$rawInput = file_get_contents('php://input');
+$data = json_decode($rawInput, true);
+if (!$data || !is_array($data)) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
+    exit;
+}
+
 $bookingId = null;
 if (isset($_GET['id'])) {
     $bookingId = $_GET['id'];
+} elseif (isset($data['id'])) {
+    $bookingId = $data['id'];
+} elseif (isset($data['bookingId'])) {
+    $bookingId = $data['bookingId'];
+} elseif (isset($data['booking_id'])) {
+    $bookingId = $data['booking_id'];
 } else {
-    // Get data from request body
-    $data = json_decode(file_get_contents('php://input'), true);
-    if (isset($data['id'])) {
-        $bookingId = $data['id'];
-    } else if (isset($data['bookingId'])) {
-        $bookingId = $data['bookingId'];
-    } else if (isset($data['booking_id'])) {
-        $bookingId = $data['booking_id'];
-    } else {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
-        exit;
-    }
-}
-
-// Get data from request body
-$data = json_decode(file_get_contents('php://input'), true);
-if (!$data) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
+    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
     exit;
 }
 

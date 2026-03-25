@@ -208,12 +208,37 @@ function fixDriversSchema($conn) {
             if (!isset($columns['vehicle_id'])) {
                 schemaDebugLog("Adding vehicle_id column");
                 try {
-                    $conn->query("ALTER TABLE drivers ADD COLUMN vehicle_id VARCHAR(50)");
+                    $conn->query("ALTER TABLE drivers ADD COLUMN vehicle_id VARCHAR(50) NULL");
                     $results['operations'][] = "Added vehicle_id column";
                 } catch (Exception $e) {
                     $results['errors'][] = "Failed to add vehicle_id column: " . $e->getMessage();
                     schemaDebugLog("Error adding vehicle_id column: " . $e->getMessage());
                 }
+            }
+
+            // Remove UNIQUE constraint on vehicle_id if it exists (allows multiple drivers with no vehicle)
+            try {
+                $idxRes = $conn->query("SHOW INDEX FROM drivers WHERE Column_name = 'vehicle_id' AND Non_unique = 0");
+                if ($idxRes && $idxRes->num_rows > 0) {
+                    $idx = $idxRes->fetch_assoc();
+                    $idxName = $idx['Key_name'] ?? 'vehicle_id';
+                    if ($idxName !== 'PRIMARY') {
+                        $conn->query("ALTER TABLE drivers DROP INDEX `$idxName`");
+                        $results['operations'][] = "Removed UNIQUE constraint from vehicle_id";
+                    }
+                }
+            } catch (Exception $e) {
+                $results['errors'][] = "Failed to drop vehicle_id unique index: " . $e->getMessage();
+            }
+
+            // Convert empty vehicle_id to NULL to avoid future UNIQUE violations
+            try {
+                $conn->query("UPDATE drivers SET vehicle_id = NULL WHERE vehicle_id = ''");
+                if ($conn->affected_rows > 0) {
+                    $results['operations'][] = "Converted empty vehicle_id to NULL: " . $conn->affected_rows . " rows";
+                }
+            } catch (Exception $e) {
+                $results['errors'][] = "Failed to fix empty vehicle_id: " . $e->getMessage();
             }
             
             // Ensure any NULL values in license_no are filled with empty string

@@ -64,6 +64,13 @@ export function AdminBookingsList() {
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const customScrollRef = useRef<HTMLDivElement>(null);
   const [showCustomScrollbar, setShowCustomScrollbar] = useState(true);
+
+  const getBookingIdentifier = (booking: Booking | null | undefined): number | null => {
+    if (!booking) return null;
+    const candidate = (booking as any).id ?? (booking as any).bookingId ?? (booking as any).booking_id;
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
   
   const fetchBookings = async () => {
     try {
@@ -358,16 +365,21 @@ export function AdminBookingsList() {
   const handleCancelBooking = async (booking?: Booking) => {
     const targetBooking = booking || selectedBooking;
     if (!targetBooking) return;
+    const targetBookingId = getBookingIdentifier(targetBooking);
+    if (!targetBookingId) {
+      toast.error("Failed to cancel booking: Missing booking ID");
+      return;
+    }
     
     setIsSubmitting(true);
     try {
       // Try bookingAPI first
       try {
-        await bookingAPI.cancelBooking(targetBooking.id);
+        await bookingAPI.cancelBooking(targetBookingId);
         
         // Update the bookings list
         const updatedBookings = bookings.map(booking => 
-          booking.id === targetBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
+          getBookingIdentifier(booking) === targetBookingId ? { ...booking, status: 'cancelled' as BookingStatus } : booking
         );
         setBookings(updatedBookings);
         applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -389,7 +401,9 @@ export function AdminBookingsList() {
           'X-Debug': 'true'
         },
         body: JSON.stringify({
-          bookingId: targetBooking.id,
+          bookingId: targetBookingId,
+          booking_id: targetBookingId,
+          id: targetBookingId,
           status: 'cancelled'
         })
       });
@@ -402,7 +416,7 @@ export function AdminBookingsList() {
       
       // Update the bookings list
       const updatedBookings = bookings.map(booking => 
-        booking.id === targetBooking.id ? { ...booking, status: 'cancelled' as BookingStatus } : booking
+        getBookingIdentifier(booking) === targetBookingId ? { ...booking, status: 'cancelled' as BookingStatus } : booking
       );
       setBookings(updatedBookings);
       applyFilters(updatedBookings, searchTerm, statusFilter);
@@ -921,7 +935,7 @@ export function AdminBookingsList() {
                   <TableHead className="font-semibold text-sm min-w-[200px]">Passenger</TableHead>
                   <TableHead className="font-semibold text-sm min-w-[300px]">Route</TableHead>
                   <TableHead className="font-semibold text-sm min-w-[160px]">Pickup Date & Time</TableHead>
-                  <TableHead className="font-semibold text-sm min-w-[180px]">Vehicle & Trip Type</TableHead>
+                  <TableHead className="font-semibold text-sm min-w-[140px]">Vehicle type</TableHead>
                   <TableHead className="font-semibold text-sm w-28">Amount</TableHead>
                   <TableHead className="font-semibold text-sm w-24">Status</TableHead>
                   <TableHead className="font-semibold text-sm w-28">Payment Status</TableHead>
@@ -995,14 +1009,11 @@ export function AdminBookingsList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Car className="h-4 w-4 text-orange-600" />
-                          <span className="font-medium">{booking.cabType}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full inline-block">
-                          {booking.tripType}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Car className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                        <span className="font-medium">
+                          {(booking.cabType || booking.vehicle_type || '—').toString()}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>

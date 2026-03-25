@@ -15,7 +15,7 @@ export function getDashboardUrl(user: User | null): string {
     case 'super_admin':
       return '/admin';
     case 'driver':
-      return '/driver';
+      return '/dashboard';
     case 'provider':
       return '/pooling/provider';
     case 'guest':

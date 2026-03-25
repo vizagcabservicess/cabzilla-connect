@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../providers/AuthProvider';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ToursListScreen } from '../screens/ToursListScreen';
 import { TourDetailScreen } from '../screens/TourDetailScreen';
@@ -18,6 +19,7 @@ import { SignupScreen } from '../screens/SignupScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
+import { AdminDriverOpsDashboardScreen } from '../screens/AdminDriverOpsDashboardScreen';
 import { AdminBookingsListScreen } from '../screens/AdminBookingsListScreen';
 import { AdminUpcomingTripsScreen } from '../screens/AdminUpcomingTripsScreen';
 import { AdminMenuScreen } from '../screens/AdminMenuScreen';
@@ -50,6 +52,11 @@ import { ContactUsScreen } from '../screens/ContactUsScreen';
 import { HelpCenterScreen } from '../screens/HelpCenterScreen';
 import { StaticContentScreen } from '../screens/StaticContentScreen';
 import { DataDeletionScreen } from '../screens/DataDeletionScreen';
+import { DriverTripDetailScreen } from '../screens/DriverTripDetailScreen';
+import { FuelEntryScreen } from '../screens/FuelEntryScreen';
+import { DriverTripsDashboardScreen } from '../screens/DriverTripsDashboardScreen';
+import { DriverFuelScreen } from '../screens/DriverFuelScreen';
+import { DriverEarningsScreen } from '../screens/DriverEarningsScreen';
 import { MenuProvider } from '../providers/MenuProvider';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
@@ -67,6 +74,7 @@ function ProfileStack() {
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen name="AdminDriverOpsDashboard" component={AdminDriverOpsDashboardScreen} />
       <Stack.Screen name="AdminBookingsList" component={AdminBookingsListScreen} />
       <Stack.Screen name="AdminUpcomingTrips" component={AdminUpcomingTripsScreen} />
       <Stack.Screen name="AdminMenu" component={AdminMenuScreen} />
@@ -118,6 +126,16 @@ function ServicesStack() {
   );
 }
 
+function DriverTripsStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DriverTripsList" component={DriverTripsDashboardScreen} />
+      <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} />
+      <Stack.Screen name="FuelEntry" component={FuelEntryScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function MainStack() {
   return (
     <MenuProvider>
@@ -139,7 +157,77 @@ function MainStack() {
   );
 }
 
+function DriverFuelStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DriverFuelHome" component={DriverFuelScreen} />
+      <Stack.Screen name="FuelEntry" component={FuelEntryScreen} />
+      <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function DriverEarningsStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DriverEarningsHome" component={DriverEarningsScreen} />
+      <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} />
+      <Stack.Screen name="FuelEntry" component={FuelEntryScreen} />
+    </Stack.Navigator>
+  );
+}
+
 export function RootNavigator() {
+  const { user, isAuthenticated } = useAuth();
+  const isDriver = isAuthenticated && user?.role === 'driver';
+
+  if (isDriver) {
+    return (
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#2563EB',
+          tabBarInactiveTintColor: '#9CA3AF',
+          tabBarLabelStyle: { fontSize: 11, textAlign: 'center' },
+          tabBarItemStyle: { flex: 1 },
+        }}
+      >
+        <Tab.Screen
+          name="DriverTab"
+          component={DriverTripsStack}
+          options={{
+            title: 'Trips',
+            tabBarIcon: ({ focused }) => <TabBarIcon name="car" focused={focused} />,
+          }}
+        />
+        <Tab.Screen
+          name="DriverFuelTab"
+          component={DriverFuelStack}
+          options={{
+            title: 'Fuel',
+            tabBarIcon: ({ focused }) => <TabBarIcon name="water" focused={focused} />,
+          }}
+        />
+        <Tab.Screen
+          name="DriverEarningsTab"
+          component={DriverEarningsStack}
+          options={{
+            title: 'Earnings',
+            tabBarIcon: ({ focused }) => <TabBarIcon name="cash" focused={focused} />,
+          }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileStack}
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ focused }) => <TabBarIcon name="person" focused={focused} />,
+          }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
   return (
     <Tab.Navigator
       screenOptions={{

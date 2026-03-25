@@ -38,6 +38,7 @@ export function AdminDriverFormScreen({ route, navigation }: Props) {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [status, setStatus] = useState<'available' | 'busy' | 'offline'>('available');
   const [location, setLocation] = useState('Visakhapatnam');
+  const [linkUserEmail, setLinkUserEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export function AdminDriverFormScreen({ route, navigation }: Props) {
       const s = (driver.status ?? 'available') as string;
       setStatus(s === 'available' || s === 'busy' || s === 'offline' ? s : 'available');
       setLocation(String((driver as { location?: string }).location ?? 'Visakhapatnam'));
+      setLinkUserEmail(String((driver as { linkUserEmail?: string }).linkUserEmail ?? ''));
     }
   }, [driver]);
 
@@ -89,6 +91,7 @@ export function AdminDriverFormScreen({ route, navigation }: Props) {
         vehicleNumber: vehicleNumber.trim(),
         status,
         location: location.trim() || 'Visakhapatnam',
+        linkUserEmail: linkUserEmail.trim() || undefined,
       };
       if (isEdit && driver?.id != null) {
         await adminAPI.updateDriver(driver.id, payload);
@@ -159,6 +162,13 @@ export function AdminDriverFormScreen({ route, navigation }: Props) {
           <FormField label="Vehicle Type" value={vehicleType} onChangeText={setVehicleType} placeholder="e.g., Sedan, SUV" />
           <FormField label="Vehicle Number" value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g., AP31AB1234" />
           <FormField label="Location" value={location} onChangeText={setLocation} placeholder="e.g., Visakhapatnam" />
+          <FormField
+            label="Link App User (email)"
+            value={linkUserEmail}
+            onChangeText={setLinkUserEmail}
+            placeholder="e.g., driver@example.com (optional)"
+            keyboardType="email-address"
+          />
 
           <View style={styles.fieldRow}>
             <Text style={styles.label}>Status</Text>

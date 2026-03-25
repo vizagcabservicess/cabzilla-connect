@@ -178,11 +178,11 @@ export function DriverAssignment({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!driverName || !driverPhone || !vehicleNumber || !selectedVehicleId) {
+    if (!selectedDriver || !driverName || !driverPhone || !vehicleNumber || !selectedVehicleId) {
       toast({
         variant: "destructive",
         title: "Missing Information",
-        description: "Please fill in all driver details and select a valid vehicle."
+        description: "Please select a driver from the dropdown, fill in all details, and select a fleet vehicle."
       });
       return;
     }
@@ -376,7 +376,7 @@ export function DriverAssignment({
 
               <Button
                 type="submit"
-                disabled={isSubmitting || !driverName || !driverPhone || !vehicleNumber}
+                disabled={isSubmitting || !selectedDriver || !driverName || !driverPhone || !vehicleNumber || !selectedVehicleId}
               >
                 {isSubmitting ? 'Assigning...' : 'Assign Driver'}
               </Button>
