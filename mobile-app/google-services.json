@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "434607531085",
+    "project_id": "vizagtaxihubnotifications",
+    "storage_bucket": "vizagtaxihubnotifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:434607531085:android:f04fac2cffd544d2eee804",
+        "android_client_info": {
+          "package_name": "com.vizagtaxihub.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCg9BwRG-AFD9p2z3C4w0lxkCGhj5ouAxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -19,7 +19,13 @@ function resolveConflictingKmReadings(kmVals: number[]): number {
 
 export function parseOdometerFromText(text: string): number | null {
   const normalized = text.replace(/[０-９]/g, (ch) => String('０１２３４５６７８９'.indexOf(ch)));
-  const stripped = normalized.replace(/\b\d{1,3}\s*-\s*\d{2,4}\b/gu, ' ');
+  let collapsed = normalized.replace(/(\d),(\d{3})\b/g, '$1$2');
+  for (let i = 0; i < 4; i++) {
+    const next = collapsed.replace(/\b(\d{1,3})\s+(\d{3})\b/gu, '$1$2');
+    if (next === collapsed) break;
+    collapsed = next;
+  }
+  const stripped = collapsed.replace(/\b\d{1,3}\s*-\s*\d{2,4}\b/gu, ' ');
   const kmGlobal = [...stripped.matchAll(/(\d{1,3}(?:,\d{3})*|\d{4,7})\s*[.,]*\s*k\s*ms?\b/gis)];
   if (kmGlobal.length > 0) {
     const vals = kmGlobal

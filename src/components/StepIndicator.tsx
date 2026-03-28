@@ -7,40 +7,34 @@ interface StepIndicatorProps {
     title: string;
     isCompleted?: boolean;
   }>;
-}
-
-interface StepIndicatorProps {
-  currentStep: number;
-  steps: Array<{
-    number: number;
-    title: string;
-    isCompleted?: boolean;
-  }>;
   onStepClick?: (stepNumber: number) => void;
 }
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, steps, onStepClick }) => {
   return (
-    <div className="flex items-center justify-center mb-4 px-2 bg-white py-3 rounded-lg shadow-sm">
+    <div className="mb-4 flex items-start justify-center gap-1 border-b border-gray-100 bg-white px-1 py-3 sm:gap-2">
       {steps.map((step, index) => (
         <React.Fragment key={step.number}>
-          <div className="flex flex-col items-center relative flex-1">
-            <span 
-              className={`text-sm font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-                currentStep === step.number 
-                  ? 'text-blue-600' 
-                  : 'text-gray-600 hover:text-gray-900'
+          <div className="relative flex min-w-0 flex-1 flex-col items-center">
+            <button
+              type="button"
+              className={`w-full px-0.5 text-center text-[11px] font-semibold leading-tight transition-colors sm:text-xs ${
+                currentStep === step.number
+                  ? 'text-blue-600'
+                  : 'text-gray-500 hover:text-gray-800'
               }`}
-              onClick={() => onStepClick && onStepClick(step.number)}
+              onClick={() => onStepClick?.(step.number)}
             >
-              {step.number}. {step.title}
-            </span>
+              <span className="whitespace-normal sm:whitespace-nowrap">
+                {step.number}. {step.title}
+              </span>
+            </button>
             {currentStep === step.number && (
-              <div className="w-full h-1 bg-blue-600 mt-1 rounded-full"></div>
+              <div className="mt-2 h-1 w-[min(100%,4.5rem)] rounded-full bg-blue-600" aria-hidden />
             )}
           </div>
           {index < steps.length - 1 && (
-            <div className="w-4 h-0.5 bg-gray-300 mx-2"></div>
+            <div className="mx-0.5 mt-2 hidden h-px w-3 shrink-0 bg-gray-200 sm:block sm:w-4" aria-hidden />
           )}
         </React.Fragment>
       ))}

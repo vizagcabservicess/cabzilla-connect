@@ -1433,101 +1433,115 @@ export const BookingSummary = ({
     }
   }
 
+  const tripTypeHeading =
+    tripType === 'outstation'
+      ? `Outstation (${tripMode === 'one-way' ? 'One-Way' : 'Round Trip'})`
+      : tripType === 'airport'
+        ? 'Airport Transfer'
+        : tripType === 'local'
+          ? `Local — ${hourlyPackage}`
+          : tripType === 'tour'
+            ? 'Tour'
+            : tripType.charAt(0).toUpperCase() + tripType.slice(1);
+
   return (
     <div className="text-[14px] md:text-[14px] booking-summary-mobile">
-      <div className="bg-white rounded-lg shadow-md p-4 md:p-5 relative">
-        <h2 className="text-[14px] md:text-[15px] font-semibold mb-3 text-left">Booking Summary</h2>
+      <div className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+        <h2 className="mb-3 text-left text-[15px] font-semibold text-gray-900 md:text-[16px]">Booking Summary</h2>
 
         <div className="space-y-3">
-          <div className="border-b pb-3">
-            <div className="flex items-start gap-2 mb-2">
-              <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="text-left">
-                <p className="text-[12px] text-gray-500 text-left">TRIP TYPE</p>
-                <p className="font-semibold text-[14px] capitalize text-left">
-                  {tripType === 'outstation' ? `${tripType} (${tripMode})` : tripType}
-                  {tripType === 'local' && ` - ${hourlyPackage}`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2 mb-2">
-              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="text-left">
-                <p className="text-[12px] text-gray-500 text-left">{(tripType === 'outstation' && tripMode === 'round-trip') ? 'ACTUAL DISTANCE' : 'TOTAL DISTANCE'}</p>
-                <p className="font-semibold text-left text-[14px]">
-                  {(tripType === 'outstation' && tripMode === 'round-trip')
-                    ? `${distance * 2} KM`
-                    : (tripType === 'outstation' || tripType === 'airport') && distance === 0 && pickupLocation && dropLocation
-                      ? <span className="text-blue-500 animate-pulse">Calculating...</span>
-                      : `${distance} KM`}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2 mb-2">
-              <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="text-left flex-1">
-                <p className="text-[12px] text-gray-500 text-left">PICKUP</p>
-                <p className="font-semibold text-left text-[14px]">{pickupLocation.name}</p>
-                {pickupLocation.address && pickupLocation.address !== pickupLocation.name && (
-                  <p className="text-[12px] text-gray-600 text-left mt-1">{pickupLocation.address}</p>
-                )}
-              </div>
-              {onEditPickupLocation && (
-                <button
-                  onClick={onEditPickupLocation}
-                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                  title="Edit pickup location"
-                >
-                  <Edit2 className="h-4 w-4 text-gray-500 hover:text-blue-500" />
-                </button>
-              )}
-            </div>
-
-            {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
-              <div className="flex items-start gap-2">
-                <MapPin className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                <div className="text-left">
-                  <p className="text-[12px] text-gray-500 text-left">DROP-OFF</p>
-                  <p className="font-semibold text-left text-[14px]">{dropLocation.name}</p>
-                  {dropLocation.address && dropLocation.address !== dropLocation.name && (
-                    <p className="text-[12px] text-gray-600 text-left mt-1">{dropLocation.address}</p>
-                  )}
+          <div className="border-b border-gray-100 pb-3">
+            <div className="divide-y divide-gray-100">
+              <div className="flex items-start gap-2 py-3 first:pt-0">
+                <Calendar className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Trip type</p>
+                  <p className="text-left text-[14px] font-semibold text-gray-900">{tripTypeHeading}</p>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-start gap-2 mt-3">
-              <Calendar className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-[12px] text-gray-500 text-left">PICKUP DATE</p>
-                <p className="font-semibold text-[14px]">
-                  {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
-                </p>
-              </div>
-              {onEditPickupDate && (
-                <button
-                  onClick={onEditPickupDate}
-                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                  title="Edit pickup date"
-                >
-                  <Edit2 className="h-4 w-4 text-gray-500 hover:text-blue-500" />
-                </button>
-              )}
-            </div>
-
-            {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
-              <div className="flex items-start gap-2 mt-4">
-                <Calendar className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-[12px] text-gray-500">RETURN DATE</p>
-                  <p className="font-semibold text-[14px]">
-                    {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
+              <div className="flex items-start gap-2 py-3">
+                <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                    {(tripType === 'outstation' && tripMode === 'round-trip') ? 'Actual distance' : 'Total distance'}
+                  </p>
+                  <p className="text-left text-[14px] font-semibold text-gray-900">
+                    {(tripType === 'outstation' && tripMode === 'round-trip')
+                      ? `${distance * 2} KM`
+                      : (tripType === 'outstation' || tripType === 'airport') && distance === 0 && pickupLocation && dropLocation
+                        ? <span className="animate-pulse text-blue-600">Calculating...</span>
+                        : `${distance} KM`}
                   </p>
                 </div>
               </div>
-            )}
+
+              <div className="flex items-start gap-2 py-3">
+                <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Pickup</p>
+                  <p className="text-left text-[14px] font-semibold text-gray-900">{pickupLocation.name}</p>
+                  {pickupLocation.address && pickupLocation.address !== pickupLocation.name && (
+                    <p className="mt-1 text-left text-[12px] text-gray-600">{pickupLocation.address}</p>
+                  )}
+                </div>
+                {onEditPickupLocation && (
+                  <button
+                    type="button"
+                    onClick={onEditPickupLocation}
+                    className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-blue-600"
+                    title="Edit pickup location"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
+                <div className="flex items-start gap-2 py-3">
+                  <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Drop-off</p>
+                    <p className="text-left text-[14px] font-semibold text-gray-900">{dropLocation.name}</p>
+                    {dropLocation.address && dropLocation.address !== dropLocation.name && (
+                      <p className="mt-1 text-left text-[12px] text-gray-600">{dropLocation.address}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 py-3">
+                <Calendar className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Pickup date</p>
+                  <p className="text-[14px] font-semibold text-gray-900">
+                    {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+                  </p>
+                </div>
+                {onEditPickupDate && (
+                  <button
+                    type="button"
+                    onClick={onEditPickupDate}
+                    className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-blue-600"
+                    title="Edit pickup date"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
+                <div className="flex items-start gap-2 py-3">
+                  <Calendar className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Return date</p>
+                    <p className="text-[14px] font-semibold text-gray-900">
+                      {format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="border-b pb-4">

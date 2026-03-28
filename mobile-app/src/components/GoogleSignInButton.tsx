@@ -7,7 +7,13 @@ import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 
 import Constants from 'expo-constants';
 import * as AuthSession from 'expo-auth-session';
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
-import { GOOGLE_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '../config';
+import {
+  GOOGLE_CLIENT_ID,
+  GOOGLE_ANDROID_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
+  getGoogleNativeRedirectUri,
+  isGoogleNativeSignInConfigured,
+} from '../config';
 import { colors } from '../theme/colors';
 
 const canUseGoogleSignIn = Platform.OS === 'web' || Constants.appOwnership !== 'expo';
@@ -49,10 +55,7 @@ interface GoogleSignInButtonProps {
 
 export function GoogleSignInButton(props: GoogleSignInButtonProps) {
   const hasClientId =
-    GOOGLE_CLIENT_ID &&
-    (Platform.OS === 'web' ||
-      Platform.OS === 'ios' ||
-      (Platform.OS === 'android' && !!GOOGLE_ANDROID_CLIENT_ID));
+    Platform.OS === 'web' ? !!GOOGLE_CLIENT_ID : isGoogleNativeSignInConfigured();
   if (!canUseGoogleSignIn || !hasClientId) return null;
   return <GoogleSignInButtonInner {...props} />;
 }
@@ -73,16 +76,19 @@ function GoogleSignInButtonInner({
         ? GOOGLE_IOS_CLIENT_ID
         : GOOGLE_CLIENT_ID;
 
-  // Default Google provider uses `applicationId:/oauthredirect` (e.g. com.vizagtaxihub.app:/...)
-  // which does NOT match app.json "scheme" (vizagtaxihub) — the browser opens your website instead of the app.
+  // Native Google OAuth requires redirect com.googleusercontent.apps.<clientPrefix>:/oauthredirect
+  // (not vizagtaxihub://...) — see Google OAuth 2.0 native app docs.
   const redirectUri = useMemo(() => {
     if (Platform.OS === 'web') {
       return AuthSession.makeRedirectUri({ path: 'oauthredirect' });
     }
+    const googleNative = getGoogleNativeRedirectUri();
+    if (googleNative) {
+      return googleNative;
+    }
     return AuthSession.makeRedirectUri({
       scheme: 'vizagtaxihub',
       path: 'oauthredirect',
-      native: 'vizagtaxihub://oauthredirect',
     });
   }, []);
 

@@ -17,6 +17,7 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { GoogleMapsProvider } from './src/providers/GoogleMapsProvider';
 import { AuthProvider } from './src/providers/AuthProvider';
+import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 SplashScreen.preventAutoHideAsync();
@@ -49,6 +50,7 @@ export default function App() {
   return (
     <SafeAreaProvider onLayout={onLayoutRootView}>
       <AuthProvider>
+        <PushNotificationBootstrap />
         <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
           <NavigationContainer ref={navigationRef}>
             <RootNavigator />

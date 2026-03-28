@@ -48,8 +48,8 @@ interface LocationInputProps {
   isPickupLocation?: boolean;
   tripType?: TripType;
   readOnly?: boolean;
-  /** Desktop-only layout: label above (light grey), bordered input, MapPin inside */
-  variant?: 'mobile' | 'desktop';
+  /** mobile = floating label; desktop = label + bordered row; app = native-app style (uppercase label, gray row, pin icon) */
+  variant?: 'mobile' | 'desktop' | 'app';
 }
 
 export function LocationInput({
@@ -70,6 +70,7 @@ export function LocationInput({
   variant = 'mobile',
 }: LocationInputProps) {
   const isDesktopVariant = variant === 'desktop';
+  const isAppVariant = variant === 'app';
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Location[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
@@ -324,15 +325,23 @@ export function LocationInput({
         </div>
       )}
 
-      {/* Desktop variant: static label above (darker for readability), bordered input, MapPin inside */}
-      {isDesktopVariant && label && (
-        <label htmlFor={id} className="block text-xs text-gray-600 font-medium mb-1 pointer-events-none">
+      {/* Desktop / app: static label above */}
+      {(isDesktopVariant || isAppVariant) && label && (
+        <label
+          htmlFor={id}
+          className={cn(
+            "block pointer-events-none font-medium",
+            isAppVariant
+              ? "mb-1 text-[11px] font-bold uppercase tracking-wide text-blue-600"
+              : "mb-1.5 text-xs text-gray-600"
+          )}
+        >
           {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
+          {required && <span className="ml-0.5 text-red-500">*</span>}
         </label>
       )}
       {/* Mobile: floating label when focused/has value */}
-      {!isDesktopVariant && label && (isFocused || inputValue) && (
+      {!isDesktopVariant && !isAppVariant && label && (isFocused || inputValue) && (
         <label
           htmlFor={id}
           className="absolute left-10 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200"
@@ -343,28 +352,47 @@ export function LocationInput({
         </label>
       )}
 
-      <div className={cn(
-        "ios-search-input-wrapper relative",
-        isDesktopVariant && "border border-gray-200 rounded-md bg-white flex items-center pl-3 min-h-[2.75rem]"
-      )}>
-        {isDesktopVariant && (
-          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mr-2" aria-hidden />
+      <div
+        className={cn(
+          "ios-search-input-wrapper relative",
+          isDesktopVariant && "border border-gray-200 rounded-md bg-white flex items-center pl-3 min-h-[2.75rem]",
+          isAppVariant &&
+            "flex min-h-[3rem] items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm"
         )}
-        <div className={cn("flex-1 min-w-0", isDesktopVariant && "flex items-center")}>
+      >
+        {(isDesktopVariant || isAppVariant) && (
+          <MapPin className={cn("flex-shrink-0 text-gray-400", isAppVariant ? "h-5 w-5" : "mr-2 h-4 w-4")} aria-hidden />
+        )}
+        <div className={cn("min-w-0 flex-1", (isDesktopVariant || isAppVariant) && "flex items-center")}>
         <Input
           id={id}
           ref={inputRef}
           value={inputValue}
           onChange={handleInputChange}
-          placeholder={isDesktopVariant ? (placeholder || 'Enter a location') : (!isFocused && !inputValue ? label : '')}
+          placeholder={
+            isDesktopVariant
+              ? placeholder || "Enter a location"
+              : isAppVariant
+                ? placeholder || "Enter location"
+                : !isFocused && !inputValue
+                  ? label
+                  : ""
+          }
           disabled={disabled}
           readOnly={readOnly}
-          style={{ fontSize: isDesktopVariant ? '0.9375rem' : (isDesktop ? '1.2rem' : '1rem'), height: isDesktopVariant ? '2.75rem' : '3.5rem' }}
+          style={{
+            fontSize: isDesktopVariant ? "0.9375rem" : isAppVariant ? "1rem" : isDesktop ? "1.2rem" : "1rem",
+            height: isAppVariant ? "auto" : isDesktopVariant ? "2.75rem" : "3.5rem",
+            minHeight: isAppVariant ? "2.5rem" : undefined,
+          }}
           className={cn(
             "pr-10 ios-search-input",
-            isDesktopVariant
-              ? "border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent text-gray-800 font-bold placeholder:text-gray-400"
-              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500 font-bold"
+            isDesktopVariant || isAppVariant
+              ? cn(
+                  "border-0 bg-transparent font-semibold text-gray-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500",
+                  isAppVariant && "px-0 pr-10"
+                )
+              : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
           onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
           onBlur={() => { handleInputBlur(); setIsFocused(false); }}
@@ -390,7 +418,7 @@ export function LocationInput({
         </div>
       </div>
       {!isDesktopVariant && subtitleText && (
-        <p className="text-xs text-gray-500 mt-1 text-left">{subtitleText}</p>
+        <p className={cn("text-left text-xs text-gray-500", isAppVariant ? "mt-1" : "mt-1.5")}>{subtitleText}</p>
       )}
       
       {showSuggestions && filteredSuggestions.length > 0 && (

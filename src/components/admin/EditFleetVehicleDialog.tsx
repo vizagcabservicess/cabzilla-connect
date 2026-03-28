@@ -31,6 +31,13 @@ interface EditFleetVehicleDialogProps {
   onDelete: (vehicleId: string) => void;
 }
 
+function listFieldToFormString(value: string[] | string | undefined): string {
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return typeof value === 'string' ? value : '';
+}
+
 export function EditFleetVehicleDialog({
   open,
   onClose,
@@ -44,7 +51,9 @@ export function EditFleetVehicleDialog({
     defaultValues: {
       ...vehicle,
       lastServiceOdometer: vehicle.lastServiceOdometer || 0,
-      nextServiceOdometer: vehicle.nextServiceOdometer || 0
+      nextServiceOdometer: vehicle.nextServiceOdometer || 0,
+      inclusions: listFieldToFormString(vehicle.inclusions),
+      exclusions: listFieldToFormString(vehicle.exclusions),
     }
   });
 
@@ -54,7 +63,9 @@ export function EditFleetVehicleDialog({
       form.reset({
         ...vehicle,
         lastServiceOdometer: vehicle.lastServiceOdometer || 0,
-        nextServiceOdometer: vehicle.nextServiceOdometer || 0
+        nextServiceOdometer: vehicle.nextServiceOdometer || 0,
+        inclusions: listFieldToFormString(vehicle.inclusions),
+        exclusions: listFieldToFormString(vehicle.exclusions),
       });
     }
   }, [open, vehicle, form]);
@@ -83,16 +94,6 @@ export function EditFleetVehicleDialog({
     
     onSave(updatedVehicle);
   };
-
-  // When loading, join arrays for textarea
-  useEffect(() => {
-    if (formData.inclusions && Array.isArray(formData.inclusions)) {
-      form.setValue('inclusions', formData.inclusions.join(', '));
-    }
-    if (formData.exclusions && Array.isArray(formData.exclusions)) {
-      form.setValue('exclusions', formData.exclusions.join(', '));
-    }
-  }, [formData]);
 
   const handleDeleteClick = () => {
     setIsDeleteDialogOpen(true);

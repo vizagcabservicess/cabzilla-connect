@@ -362,7 +362,9 @@ export function FuelEntryScreen() {
         accuracy: pos.coords.accuracy ?? null,
         capturedAt,
       };
-      const fraudFlags = Array.isArray(uploaded.fraudFlags) ? uploaded.fraudFlags : [];
+      const fraudFlags = (Array.isArray(uploaded.fraudFlags) ? uploaded.fraudFlags : []).filter(
+        (f) => f !== 'OCR_TIMESTAMP_MISMATCH'
+      );
       if (phase === 'receipt') {
         setEntryFlags((prev) => {
           const rest = prev.filter((f) => f !== 'OCR_TIMESTAMP_MISMATCH');
@@ -409,9 +411,9 @@ export function FuelEntryScreen() {
               odoVal <= 999_999 &&
               fromText >= 10_000 &&
               fromText <= 99_999 &&
-              fromText * 2 < odoVal
+              fromText * 3 < odoVal
             ) {
-              // Server often returns a 6-digit OCR glue (e.g. 140701) while on-device parse finds real 5-digit km.
+              // Server often returns a 6-digit OCR glue (e.g. 403351) while on-device parse finds real 5-digit km.
               odoVal = fromText;
             }
           }
@@ -550,11 +552,6 @@ export function FuelEntryScreen() {
       return;
     }
 
-    if (entryFlags.includes('OCR_TIMESTAMP_MISMATCH')) {
-      Alert.alert('Validation', 'Timestamp mismatch detected. Retake the photos.');
-      return;
-    }
-
     if (entryFlags.includes('FUEL_AMOUNT_MISMATCH')) {
       Alert.alert(
         'Validation',
@@ -641,7 +638,6 @@ export function FuelEntryScreen() {
     !photosCaptured ||
     !captureTimesValid ||
     !numericValid ||
-    entryFlags.includes('OCR_TIMESTAMP_MISMATCH') ||
     entryFlags.includes('FUEL_AMOUNT_MISMATCH') ||
     ocrPumpReceiptMismatch;
 
@@ -794,13 +790,6 @@ export function FuelEntryScreen() {
             )}
           </View>
         </View>
-
-        {entryFlags.includes('OCR_TIMESTAMP_MISMATCH') ? (
-          <Text style={styles.errorText}>
-            Receipt date/time from the slip and when you captured it differ by more than 15 minutes. Retake the
-            receipt (same fill) or take the receipt photo closer to when it was printed.
-          </Text>
-        ) : null}
 
         {entryFlags.includes('FUEL_AMOUNT_MISMATCH') ? (
           <Text style={styles.errorText}>

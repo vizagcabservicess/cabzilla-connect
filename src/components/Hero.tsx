@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
+import { BookingPaymentFooter } from './BookingPaymentFooter';
 import { StepIndicator } from './StepIndicator';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
@@ -216,6 +217,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [finalTotal, setFinalTotal] = useState<number>(0);
+  const [bookingPaymentMode, setBookingPaymentMode] = useState<'partial' | 'full'>(() => {
+    if (typeof sessionStorage === 'undefined') return 'partial';
+    const m = sessionStorage.getItem('paymentMode');
+    return m === 'full' ? 'full' : 'partial';
+  });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [minTravelHours, setMinTravelHours] = useState<number>(0);
   const [isCheckingTravelTime, setIsCheckingTravelTime] = useState<boolean>(false);
@@ -223,9 +229,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState<boolean>(false);
   const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
-  const [isPackageFocused, setIsPackageFocused] = useState<boolean>(false);
-  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
-  
   // Add new state for airport direction label
   const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
   const [isTabSwitching, setIsTabSwitching] = useState<boolean>(false);
@@ -257,14 +260,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
   };
-
-  useEffect(() => {
-    function handleResize() {
-      setIsDesktop(window.innerWidth >= 1024);
-    }
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Load dynamic vehicles with inactive dates
   useEffect(() => {
@@ -1313,6 +1308,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
   };
 
+  const persistBookingPaymentMode = (mode: 'partial' | 'full') => {
+    setBookingPaymentMode(mode);
+    sessionStorage.setItem('paymentMode', mode);
+  };
+
   function handleBookNow() {
     if (!isFormValid || !selectedCab) {
       toast({
@@ -1324,6 +1324,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       return;
     }
 
+    sessionStorage.setItem('paymentMode', bookingPaymentMode);
     setShowGuestDetailsForm(true);
 
     // Scroll to top so user sees "Complete Your Booking" (reliable on mobile and desktop)
@@ -1468,110 +1469,77 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
             <div className="w-16"></div> {/* Spacer for center alignment */}
           </div>
           
-                     <div className="p-4 pb-28 mt-8">
-           
-            
+                     <div className="px-2 pb-28 pt-4">
             {/* Trip Type Selector */}
-            <div className="w-full mb-6">
+            <div className="mb-1 w-full">
               <TabTripSelector
                 selectedTab={ensureCustomerTripType(tripType)}
                 tripMode={tripMode}
                 onTabChange={handleTabChange}
                 onTripModeChange={setTripMode}
                 visibleTabs={visibleTabs}
+                showTripModeToggle
+                tripModeToggleMobileOnly
               />
             </div>
 
-            {/* Main Booking Container */}
-            <div key={`booking-form-${editTrigger}`} className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
-              <div className="flex flex-col items-stretch gap-0">
-                {/* From Location */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 p-3">
-                    {/* Removed icon and 'Enter' text */}
-                    <div className="flex-1 min-w-0">
-                                             <LocationInput
-                         key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                         label="Pickup location"
-                         placeholder="Pickup location"
-                         value={pickupLocation ? { ...pickupLocation } : undefined}
-                         onLocationChange={handlePickupLocationChange}
-                         isPickupLocation={true}
-                         tripType={tripType}
-                         className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                       />
-                    </div>
-                  </div>
-                </div>
+            <div key={`booking-form-${editTrigger}`} className="mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5">
+              <div className="flex flex-col gap-3">
+                <LocationInput
+                  key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                  variant="app"
+                  label="From"
+                  placeholder="Enter pickup location"
+                  value={pickupLocation ? { ...pickupLocation } : undefined}
+                  onLocationChange={handlePickupLocationChange}
+                  isPickupLocation={true}
+                  tripType={tripType}
+                />
 
-                {/* To Location */}
                 {(tripType === 'outstation' || tripType === 'airport') && (
-                  <div className="flex-1 min-w-0 border-t border-gray-200">
-                    <div className="flex items-center gap-2 p-3">
-                      {/* Removed icon and 'Enter' text */}
-                      <div className="flex-1 min-w-0">
-                                                 <LocationInput
-                           key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                           label="Drop location"
-                           placeholder="Enter Drop location"
-                           value={dropLocation ? { ...dropLocation } : undefined}
-                           onLocationChange={handleDropLocationChange}
-                           isPickupLocation={false}
-                           tripType={tripType}
-                           className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                         />
-                      </div>
-                    </div>
-                  </div>
+                  <LocationInput
+                    key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                    variant="app"
+                    label="To"
+                    placeholder="Enter drop location"
+                    value={dropLocation ? { ...dropLocation } : undefined}
+                    onLocationChange={handleDropLocationChange}
+                    isPickupLocation={false}
+                    tripType={tripType}
+                  />
                 )}
 
-                {/* Date Picker */}
-                <div className="flex-1 min-w-0 border-t border-gray-200">
-                  <div className="flex items-center gap-2 p-3">
-                    <div className="flex-1 min-w-0">
-                      <DateTimePicker
-                        date={pickupDate}
-                        onDateChange={setPickupDate}
-                        minDate={getMinimumAllowedDate()}
-                        className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <DateTimePicker
+                  variant="app"
+                  label="Trip start"
+                  date={pickupDate}
+                  onDateChange={setPickupDate}
+                  minDate={getMinimumAllowedDate()}
+                />
 
-                {/* Return Date for Round Trip */}
                 {tripType === 'outstation' && tripMode === 'round-trip' && (
-                  <div className="flex-1 min-w-0 border-t border-gray-200">
-                    <div className="flex items-center gap-2 p-3">
-                      <div className="flex-1 min-w-0">
-                        <DateTimePicker
-                          date={returnDate}
-                          onDateChange={handleReturnDateChange}
-                          minDate={pickupDate}
-                          disabled={!isReturnTimeEnabled}
-                          className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
-                          label="Return date of journey"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <DateTimePicker
+                    variant="app"
+                    label="Return trip"
+                    date={returnDate}
+                    onDateChange={handleReturnDateChange}
+                    minDate={pickupDate}
+                    disabled={!isReturnTimeEnabled}
+                  />
                 )}
               </div>
             </div>
 
-            {/* Update Button */}
-            <div className="flex justify-center">
-              <Button
-                onClick={() => {
-                  setShowMobileEditForm(false);
-                  setCurrentStep(2);
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg rounded-xl"
-                disabled={!isFormValid}
-              >
-                Update Search
-              </Button>
-            </div>
+            <Button
+              onClick={() => {
+                setShowMobileEditForm(false);
+                setCurrentStep(2);
+              }}
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-extrabold uppercase tracking-wide text-white shadow-md hover:bg-blue-700"
+              disabled={!isFormValid}
+            >
+              Update search
+            </Button>
           </div>
         </div>
       )}
@@ -1608,17 +1576,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
         } ${((isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
-        <div className="w-full sm:container sm:mx-auto px-0 sm:px-4">
+        <div className="w-full max-lg:px-2 sm:container sm:mx-auto sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
-            <div className={`bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3`}>
+            <div className={`max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2`}>
               
               
               {!showGuestDetailsForm ? (
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
-                    <div className="space-y-6 sm:space-y-8">
+                    <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8">
                       {/* Trip Type Selector (tabs + trip mode on mobile) */}
-                      <div className="w-full mb-4">
+                      <div className="w-full max-lg:mb-0 lg:mb-4">
                         <TabTripSelector
                           selectedTab={ensureCustomerTripType(tripType)}
                           tripMode={tripMode}
@@ -1627,182 +1595,116 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                           visibleTabs={visibleTabs}
                           airportDirectionLabel={tripType === 'airport' ? airportDirectionLabel : undefined}
                           onAirportDirectionChange={tripType === 'airport' ? handleAirportDirectionChange : undefined}
+                          showTripModeToggle
+                          tripModeToggleMobileOnly
                         />
                       </div>
 
                       {/* MOBILE/TABLET: current form - hidden on desktop (lg) */}
                       <div className="lg:hidden">
-                      {/* Main Booking Container - Bus booking style */}
-                      <div key={`booking-form-mobile-${editTrigger}`} className="bg-white border border-gray-200 rounded-2xl shadow-lg p-0 mb-6">
-                        <div className="flex flex-col lg:flex-row items-stretch gap-0">
-                          {/* From Location */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-3">
-                              {/* Removed icon and 'Enter' text */}
-                              <div className="flex-1 min-w-0">
-                                                                 <LocationInput
-                                   key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                                   label="Pickup location"
-                                   placeholder="Enter Pickup location"
-                                   value={pickupLocation ? { ...pickupLocation } : undefined}
-                                   onLocationChange={handlePickupLocationChange}
-                                   isPickupLocation={true}
-                                   tripType={tripType}
-                                   className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                                 />
-                              </div>
-                            </div>
-                          </div>
+                      <div
+                        key={`booking-form-mobile-${editTrigger}`}
+                        className="mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5"
+                      >
+                        <div className="flex flex-col gap-3">
+                          <LocationInput
+                            key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                            variant="app"
+                            label="From"
+                            placeholder="Enter pickup location"
+                            value={pickupLocation ? { ...pickupLocation } : undefined}
+                            onLocationChange={handlePickupLocationChange}
+                            isPickupLocation={true}
+                            tripType={tripType}
+                          />
 
-                          {/* Vertical Divider */}
                           {(tripType === 'outstation' || tripType === 'airport') && (
-                            <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
+                            <LocationInput
+                              key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                              variant="app"
+                              label="To"
+                              placeholder="Enter drop location"
+                              value={dropLocation ? { ...dropLocation } : undefined}
+                              onLocationChange={handleDropLocationChange}
+                              isPickupLocation={false}
+                              tripType={tripType}
+                            />
                           )}
 
-                          {/* To Location */}
-                          {(tripType === 'outstation' || tripType === 'airport') && (
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 p-3">
-                                {/* Removed icon and 'Enter' text */}
-                                <div className="flex-1 min-w-0">
-                                                                     <LocationInput
-                                     key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                                     label="Drop location"
-                                     placeholder="Enter Drop location"
-                                     value={dropLocation ? { ...dropLocation } : undefined}
-                                     onLocationChange={handleDropLocationChange}
-                                     isPickupLocation={false}
-                                     tripType={tripType}
-                                     className="border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                                   />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Package Selection for Local */}
                           {tripType === 'local' && (
-                            <>
-                              <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center relative w-full h-full p-3">
-                                  {(isPackageFocused || hourlyPackage) && (
-                                    <label
-                                      className="absolute left-4 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200 font-semibold"
-                                      style={{
-                                        background: 'white',
-                                        paddingLeft: '0.5rem',
-                                        paddingRight: '0.25rem',
-                                        zIndex: 10,
-                                        top: '0.6rem', // Fine-tuned for alignment
-                                        marginLeft: '0.75rem',
-                                      }}
-                                    >
-                                      Package
-                                    </label>
-                                  )}
-                                  <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                    <SelectTrigger
-                                      className="h-[3.5rem] pl-4 text-[1rem] lg:text-[1.2rem] flex items-center border border-gray-300 bg-white font-bold"
-                                      style={{
-                                        alignItems: 'center',
-                                        paddingTop: 0,
-                                        paddingBottom: 0,
-                                        lineHeight: '1.2',
-                                        marginTop: isDesktop ? '-18.5px' : '0px',
-                                      }}
-                                      onFocus={() => setIsPackageFocused(true)}
-                                      onBlur={() => setIsPackageFocused(false)}
-                                    >
-                                      <SelectValue placeholder="Package" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {hourlyPackageOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </>
-                          )}
-
-                          {/* Vertical Divider */}
-                          <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-
-                          {/* Date Picker */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 p-3">
-                             
-                              <div className="flex-1 min-w-0">
-                                <DateTimePicker
-                                  date={pickupDate}
-                                  onDateChange={setPickupDate}
-                                  minDate={getMinimumAllowedDate()}
-                                  className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
-                                />
+                            <div className="w-full">
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                                Package
+                              </label>
+                              <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
+                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                                  <SelectTrigger className="h-11 w-full border-0 bg-transparent text-[1rem] font-semibold text-gray-900 shadow-none focus:ring-0">
+                                    <SelectValue placeholder="Choose hourly package" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {hourlyPackageOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* Return Date for Round Trip */}
+                          <DateTimePicker
+                            variant="app"
+                            label="Trip start"
+                            date={pickupDate}
+                            onDateChange={setPickupDate}
+                            minDate={getMinimumAllowedDate()}
+                          />
+
                           {tripType === 'outstation' && tripMode === 'round-trip' && (
-                            <>
-                              <div className="hidden lg:block w-px bg-gray-200 mx-2"></div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 p-3">
-                                  
-                                  <div className="flex-1 min-w-0">
-                                    <DateTimePicker
-                                      date={returnDate}
-                                      onDateChange={handleReturnDateChange}
-                                      minDate={pickupDate}
-                                      disabled={!isReturnTimeEnabled}
-                                      className="h-auto border-0 bg-transparent p-0 text-[1rem] lg:text-[1.2rem] font-semibold text-gray-900 focus:ring-0"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            </>
+                            <DateTimePicker
+                              variant="app"
+                              label="Return trip"
+                              date={returnDate}
+                              onDateChange={handleReturnDateChange}
+                              minDate={pickupDate}
+                              disabled={!isReturnTimeEnabled}
+                            />
                           )}
                         </div>
-                        
-                        {/* Error Message */}
+
                         {validationError && (
-                          <div className="text-red-600 text-sm mt-3 px-4 py-2 bg-red-50 rounded-lg">{validationError}</div>
+                          <div className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-sm text-red-600">{validationError}</div>
                         )}
-                      </div>
 
-                     {/* Loading State */}
-                     {isCalculatingDistance && (
-                       <div className="flex items-center justify-center py-4">
-                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-                         <p className="text-gray-600 font-medium">Calculating route distance...</p>
-                       </div>
-                     )}
+                        {isCalculatingDistance && (
+                          <div className="flex items-center justify-center py-2">
+                            <div className="mr-3 h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500"></div>
+                            <p className="font-medium text-gray-600">Calculating route distance...</p>
+                          </div>
+                        )}
 
-                      {/* Search Button - Bus booking style */}
-                      <div className="flex justify-center mt-6">
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="w-full sm:w-[300px] bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 text-base font-semibold rounded-full shadow-lg flex items-center justify-center transition-all duration-300 mb-6"
-                          style={{ minHeight: '40px' }}
+                          className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-all duration-300 hover:bg-blue-700 disabled:opacity-60"
                         >
                           {isLoading ? (
-                            <div className="flex items-center">
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                              <span>Searching...</span>
+                            <div className="flex items-center normal-case">
+                              <div className="mr-3 h-5 w-5 animate-spin rounded-full border-b-2 border-white"></div>
+                              <span>Searching…</span>
                             </div>
                           ) : (
-                            <div className="flex items-center">
-                              <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                            <span className="flex items-center gap-2">
+                              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                                  clipRule="evenodd"
+                                />
                               </svg>
-                              Search Cabs
-                            </div>
+                              Search
+                            </span>
                           )}
                         </Button>
                       </div>
@@ -1963,8 +1865,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                         />
                       </div>
                       
-                      {/* Trip Summary Bar */}
-                      <div className="mb-4 bg-[#f8faf5] border border-[#e0e7d9] rounded-xl w-full max-w-full overflow-hidden px-4 py-3 shadow-sm">
+                      {/* Trip summary — white card (mobile web reference) */}
+                      <div className="mb-4 w-full max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <button
@@ -2025,8 +1927,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                           
                         </div>
                       </div>
-                      {/* Step 2 Main Grid */}
-                      <div className="grid grid-cols-1 lg:[grid-template-columns:62%_38%] gap-8 animate-fade-in text-xs lg:text-[12px]">
+                      {/* Step 2 Main Grid — extra bottom padding on mobile when vehicle chosen (sticky pay bar) */}
+                      <div
+                        className={`grid grid-cols-1 lg:[grid-template-columns:62%_38%] gap-8 animate-fade-in text-xs lg:text-[12px] ${
+                          selectedCab ? 'pb-52 lg:pb-0' : ''
+                        }`}
+                      >
                         <div className="lg:col-span-1 space-y-6">
                           <div className="bg-white rounded-xl shadow-card p-2">
                             <div className="flex items-center justify-between mb-2">
@@ -2135,18 +2041,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                               hideInclusionsExclusions={true}
                             />
                           </div>
-                          <Button 
-                            onClick={handleBookNow}
-                            className="w-full mt-2 py-3 text-base mobile-button hero-book-now-button text-lg lg:text-[16px]"
-                            disabled={!isFormValid || !selectedCab || isLoading}
-                          >
-                            {isLoading ? (
-                              <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                <span>Processing...</span>
-                              </div>
-                            ) : `Book Now - ${formatPrice(finalTotal)}`}
-                          </Button>
+                          {selectedCab && finalTotal > 0 && (
+                            <div className="mt-3 hidden lg:block">
+                              <BookingPaymentFooter
+                                finalTotal={finalTotal}
+                                mode={bookingPaymentMode}
+                                onModeChange={persistBookingPaymentMode}
+                                onBookNow={handleBookNow}
+                                isLoading={isLoading}
+                                disabled={!isFormValid || !selectedCab}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </>
@@ -2339,6 +2245,26 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           </div>
         </div>
       )}
+
+      {/* Mobile: Part / Full pay + Book Now — fixed above bottom nav once a vehicle is selected */}
+      {currentStep === 2 &&
+        !showGuestDetailsForm &&
+        !isSlidingSearch &&
+        selectedCab &&
+        finalTotal > 0 && (
+          <div className="fixed inset-x-0 bottom-0 z-40 max-md:bottom-16 lg:hidden">
+            <div className="border-t border-gray-200 bg-white px-3 pt-3 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] mobile-safe-bottom">
+              <BookingPaymentFooter
+                finalTotal={finalTotal}
+                mode={bookingPaymentMode}
+                onModeChange={persistBookingPaymentMode}
+                onBookNow={handleBookNow}
+                isLoading={isLoading}
+                disabled={!isFormValid || !selectedCab}
+              />
+            </div>
+          </div>
+        )}
       
       {/* Mobile Navigation Bar */}
       <MobileNavigation />

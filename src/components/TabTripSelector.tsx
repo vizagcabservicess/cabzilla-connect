@@ -19,6 +19,11 @@ interface TabTripSelectorProps {
   onAirportDirectionChange?: (direction: 'from-airport' | 'to-airport') => void;
   /** Show top-level One Way / Round Trip pills (admin create booking use-case). */
   showTripModeToggle?: boolean;
+  /**
+   * When true with showTripModeToggle: only render trip mode on viewports below lg
+   * (e.g. Hero already has One Way / Round Trip in the desktop field row — avoids duplicate UI).
+   */
+  tripModeToggleMobileOnly?: boolean;
 }
 
 export function TabTripSelector({ 
@@ -31,6 +36,7 @@ export function TabTripSelector({
   airportDirectionLabel,
   onAirportDirectionChange,
   showTripModeToggle = false,
+  tripModeToggleMobileOnly = false,
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -196,35 +202,56 @@ export function TabTripSelector({
     tour: <Building2 className="w-4 h-4" />,
   };
 
-  // Convert trip types to tab format - REMOVED pooling
   const allTabs = [
-    { id: 'outstation', label: 'Outstation' },
-    { id: 'local', label: 'Local' },
-    { id: 'airport', label: 'Airport' },
-    { id: 'tour', label: 'Tour' }
+    { id: 'outstation' as const, label: 'Outstation', mobileLine1: 'Outstation', mobileLine2: 'Trips' },
+    { id: 'local' as const, label: 'Local', mobileLine1: 'Hourly', mobileLine2: 'Rentals' },
+    { id: 'airport' as const, label: 'Airport', mobileLine1: 'Airport', mobileLine2: 'Transfer' },
+    { id: 'tour' as const, label: 'Tour', mobileLine1: 'Tour', mobileLine2: 'Packages' },
   ];
-  const tabs = visibleTabs ? allTabs.filter(tab => visibleTabs.includes(tab.id as any)) : allTabs;
+  const tabs = visibleTabs ? allTabs.filter((tab) => visibleTabs.includes(tab.id)) : allTabs;
   
   return (
-    <div className="space-y-2 sm:space-y-4" id="tab-trip-selector">
+    <div
+      className="space-y-2 sm:space-y-4 max-lg:space-y-1.5 max-lg:rounded-2xl max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:px-2.5 max-lg:py-2.5 max-lg:shadow-md max-lg:shadow-gray-900/5"
+      id="tab-trip-selector"
+    >
       {/* Tab bar - Hidden when only one tab is visible */}
       {(!visibleTabs || visibleTabs.length > 1) && (
         <>
           {/* Mobile/Tablet: pill tabs */}
-          <div className="mb-2 sm:mb-4 lg:hidden">
-            <div className="relative w-full flex justify-center">
-              <div className="flex w-full bg-gray-50 sm:bg-gray-100 rounded-lg sm:rounded-full p-0.5 sm:p-1 border border-gray-200" style={{boxShadow: 'none'}}>
+          <div className="mb-0 sm:mb-4 lg:hidden">
+            <div className="relative flex w-full justify-center">
+              <div className="flex w-full gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
                 {tabs.map((tab, idx) => {
                   const isActive = selectedTab === tab.id;
                   return (
                     <button
                       key={tab.id}
-                      ref={(el) => { if (el) tabRefs.current[idx] = el; }}
-                      className={`flex-1 min-w-0 py-2.5 sm:py-2 px-2 sm:px-4 flex items-center justify-center rounded-md sm:rounded-full font-bold sm:font-medium transition-colors duration-200 text-sm text-center focus:outline-none ${isActive ? "bg-white border border-blue-600 shadow-sm z-10 text-blue-700 font-bold" : "bg-transparent text-gray-600 font-semibold sm:font-medium"}`}
+                      ref={(el) => {
+                        if (el) tabRefs.current[idx] = el;
+                      }}
+                      type="button"
+                      className={`flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-center transition-colors duration-200 focus:outline-none ${isActive ? "z-10 border border-blue-600 bg-white text-blue-600 shadow-sm" : "border border-transparent bg-transparent text-gray-500"}`}
                       onClick={() => handleTabChange(tab.id)}
                       style={{ zIndex: isActive ? 2 : 1 }}
                     >
-                      <span className="leading-tight font-bold sm:font-medium">{tab.label}</span>
+                      <span
+                        className={`flex shrink-0 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${isActive ? "text-blue-600" : "text-gray-400"}`}
+                      >
+                        {tabIcons[tab.id]}
+                      </span>
+                      <span className="flex max-w-full flex-col items-center justify-center gap-0.5 px-0.5 text-center leading-tight">
+                        <span
+                          className={`w-full whitespace-normal text-[11px] font-bold leading-[1.2] tracking-tight ${isActive ? "text-blue-600" : "text-gray-700"}`}
+                        >
+                          {tab.mobileLine1}
+                        </span>
+                        <span
+                          className={`w-full whitespace-normal text-[10px] font-semibold leading-[1.2] tracking-tight ${isActive ? "text-blue-600" : "text-gray-500"}`}
+                        >
+                          {tab.mobileLine2}
+                        </span>
+                      </span>
                     </button>
                   );
                 })}
@@ -255,58 +282,115 @@ export function TabTripSelector({
           </div>
         </>
       )}
-      {/* Trip mode: Outstation/Tour = One Way / Round Trip */}
+      {/* Trip mode: mobile = app-style tiles; desktop = compact pills (unless mobile-only — desktop row lives in Hero) */}
       {showTripModeToggle && (selectedTab === 'outstation' || selectedTab === 'tour') && (
-        <motion.div 
-          className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          {[{label: 'One Way', value: 'one-way'}, {label: 'Round Trip', value: 'round-trip'}].map(option => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onTripModeChange(option.value as 'one-way' | 'round-trip')}
-              className={`flex items-center gap-2 px-4 sm:px-3 py-2 sm:py-1 rounded-lg sm:rounded-full border transition-colors duration-200 focus:outline-none text-sm sm:text-xs font-bold sm:font-medium
-                lg:rounded-full
-                ${tripMode === option.value 
-                  ? 'bg-white border-blue-600 text-blue-700 shadow-sm font-bold lg:bg-blue-600 lg:border-blue-600 lg:text-white' 
-                  : 'bg-gray-50 border-gray-300 text-gray-700 font-semibold sm:font-medium lg:bg-gray-100 lg:border-gray-200 lg:text-gray-700'}`}
+        <>
+          <motion.div
+            className="mt-1 flex w-full max-w-full items-stretch gap-2 sm:mt-2 lg:hidden"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {(
+              [
+                { label: "One Way", sub: "Get dropped off", value: "one-way" },
+                { label: "Round Trip", sub: "Keep cab till return", value: "round-trip" },
+              ] as const
+            ).map((option) => {
+              const active = tripMode === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onTripModeChange(option.value)}
+                  className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors duration-200 focus:outline-none ${
+                    active ? "border-blue-600 ring-1 ring-blue-600/20" : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <span className={`text-sm font-bold leading-tight ${active ? "text-blue-600" : "text-gray-700"}`}>
+                    {option.label}
+                  </span>
+                  <span className={`mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug ${active ? "text-blue-500" : "text-gray-500"}`}>
+                    {option.sub}
+                  </span>
+                </button>
+              );
+            })}
+          </motion.div>
+          {!tripModeToggleMobileOnly && (
+            <motion.div
+              className="mt-1 hidden gap-2 sm:mt-2 lg:flex lg:justify-center"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
             >
-              <span className="relative flex h-4 w-4">
-                <span className={`inline-block w-4 h-4 rounded-full border-2 ${tripMode === option.value ? 'border-blue-600 bg-white' : 'border-gray-400 bg-gray-100'}`}></span>
-                {tripMode === option.value && (
-                  <span className="absolute left-1/2 top-1/2 w-2 h-2 bg-blue-600 rounded-full -translate-x-1/2 -translate-y-1/2"></span>
-                )}
-              </span>
-              {option.label}
-            </button>
-          ))}
-        </motion.div>
+              {(
+                [
+                  { label: "One Way", value: "one-way" as const },
+                  { label: "Round Trip", value: "round-trip" as const },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onTripModeChange(option.value)}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200 focus:outline-none sm:px-4 sm:py-2 sm:text-sm ${
+                    tripMode === option.value
+                      ? "border-blue-600 bg-blue-600 font-bold text-white shadow-sm"
+                      : "border-gray-200 bg-gray-100 text-gray-700 hover:text-gray-900"
+                  }`}
+                >
+                  <span className="relative flex h-4 w-4 shrink-0">
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full border-2 ${
+                        tripMode === option.value ? "border-white bg-blue-600" : "border-gray-400 bg-gray-100"
+                      }`}
+                    />
+                    {tripMode === option.value && (
+                      <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+                    )}
+                  </span>
+                  {option.label}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </>
       )}
       {selectedTab === 'airport' && onAirportDirectionChange && (
-        <motion.div 
-          className="flex gap-2 sm:gap-2 mt-1 sm:mt-2 justify-center lg:hidden"
+        <motion.div
+          className="mt-1 flex w-full items-stretch gap-2 sm:mt-2 max-lg:mt-2 lg:hidden"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
           <button
             type="button"
-            onClick={() => onAirportDirectionChange('from-airport')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 sm:px-3 py-2 sm:py-1 rounded-lg sm:rounded-full border transition-colors duration-200 focus:outline-none text-xs font-medium whitespace-nowrap
-              ${airportDirectionLabel === 'From Airport' ? 'bg-white border-blue-600 text-blue-700 shadow-sm font-bold lg:bg-blue-600 lg:text-white' : 'bg-gray-50 border-gray-300 text-gray-700 font-semibold sm:font-medium lg:bg-gray-100 lg:border-gray-200 lg:text-gray-700'}`}
+            onClick={() => onAirportDirectionChange("from-airport")}
+            className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors focus:outline-none ${
+              airportDirectionLabel === "From Airport"
+                ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"
+                : "border-gray-200 text-gray-700 hover:border-gray-300"
+            }`}
           >
-            From Airport
+            <span className="text-sm font-bold leading-tight">From Airport</span>
+            <span className="mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
+              Pickup at terminal
+            </span>
           </button>
           <button
             type="button"
-            onClick={() => onAirportDirectionChange('to-airport')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 sm:px-3 py-2 sm:py-1 rounded-lg sm:rounded-full border transition-colors duration-200 focus:outline-none text-xs font-medium whitespace-nowrap
-              ${airportDirectionLabel === 'To Airport' ? 'bg-white border-blue-600 text-blue-700 shadow-sm font-bold lg:bg-blue-600 lg:text-white' : 'bg-gray-50 border-gray-300 text-gray-700 font-semibold sm:font-medium lg:bg-gray-100 lg:border-gray-200 lg:text-gray-700'}`}
+            onClick={() => onAirportDirectionChange("to-airport")}
+            className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors focus:outline-none ${
+              airportDirectionLabel === "To Airport"
+                ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"
+                : "border-gray-200 text-gray-700 hover:border-gray-300"
+            }`}
           >
-            To Airport
+            <span className="text-sm font-bold leading-tight">To Airport</span>
+            <span className="mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
+              Drop at terminal
+            </span>
           </button>
         </motion.div>
       )}

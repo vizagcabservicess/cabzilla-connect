@@ -13,6 +13,42 @@ const getBase = () => {
   return WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com';
 };
 
+function messageFromFuelEntryErrorBody(data: unknown): string | null {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
+  const rec = data as Record<string, unknown>;
+  const msg = rec.message;
+  if (typeof msg !== 'string' || msg.trim() === '') return null;
+  const dbg = rec.debug;
+  let extra = '';
+  if (dbg !== null && typeof dbg === 'object' && !Array.isArray(dbg)) {
+    const dbErr = (dbg as Record<string, unknown>).dbError;
+    if (typeof dbErr === 'string' && dbErr.trim() !== '') {
+      extra = ` (${dbErr.trim()})`;
+    }
+  }
+  return msg + extra;
+}
+
+/** PHP sometimes prefixes warnings/HTML before JSON; axios then gives a string body. */
+function coerceFuelEntryJsonObject(data: unknown): Record<string, unknown> | null {
+  if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
+    return data as Record<string, unknown>;
+  }
+  if (typeof data !== 'string') return null;
+  const t = data.replace(/^\uFEFF/, '').trim();
+  const start = t.indexOf('{');
+  if (start < 0) return null;
+  try {
+    const parsed = JSON.parse(t.slice(start)) as unknown;
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export const uploadImage = async (
   uri: string,
   name = 'odometer.jpg',
@@ -234,15 +270,64 @@ export const driverTripsAPI = {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const response = await axios.post(`${base}/api/driver/fuel-entry.php`, params, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    });
-    const data = response.data;
-    if (data?.status !== 'success') throw new Error(data?.message || 'Failed to save fuel entry');
+    const url = `${base}/api/driver/fuel-entry.php`;
+    try {
+      const response = await axios.post(url, params, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+        validateStatus: (s) => s >= 200 && s < 600,
+      });
+      const { data: rawData, status } = response;
+      const data = coerceFuelEntryJsonObject(rawData);
+      const fromBody = messageFromFuelEntryErrorBody(data ?? rawData);
+
+      if (data === null) {
+        const rawStr =
+          typeof rawData === 'string'
+            ? rawData
+            : rawData === undefined || rawData === null
+              ? ''
+              : JSON.stringify(rawData);
+        const trimmed = rawStr.replace(/\s+/g, ' ').trim();
+        const snippet = trimmed.slice(0, 280);
+        if (!trimmed) {
+          throw new Error(
+            `Server returned an empty body (HTTP ${status}). Deploy the latest api/driver/fuel-entry.php from this repo to ${url} (PHP 7.4+), or check server/PHP error logs for fatals before JSON output.`
+          );
+        }
+        throw new Error(
+          `Server returned non-JSON (HTTP ${status}). ${snippet}${trimmed.length > 280 ? '…' : ''}`
+        );
+      }
+
+      const rec = data;
+      if (rec.status === 'success') return;
+
+      if (fromBody) throw new Error(fromBody);
+      throw new Error(`Failed to save fuel entry (HTTP ${status})`);
+    } catch (e) {
+      if (axios.isAxiosError(e)) {
+        const st = e.response?.status;
+        const parsed = messageFromFuelEntryErrorBody(e.response?.data);
+        if (parsed) throw new Error(parsed);
+        if (e.code === 'ECONNABORTED') throw new Error('Request timed out. Check your connection.');
+        if (!e.response) {
+          throw new Error(
+            `Network error: ${e.message}. Check connection and API base URL (currently: ${base || '(empty)'}).`
+          );
+        }
+        const raw = e.response.data;
+        if (typeof raw === 'string' && raw.trim()) {
+          throw new Error(
+            `Server error${st != null ? ` (${st})` : ''}: ${raw.replace(/\s+/g, ' ').trim().slice(0, 200)}`
+          );
+        }
+      }
+      throw e;
+    }
   },
 
   uploadFuelOdometer: async (params: {

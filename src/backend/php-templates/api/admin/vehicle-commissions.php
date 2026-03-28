@@ -292,22 +292,61 @@ try {
             }
             
             $bookingId = intval($data['booking_id']);
-            $driverId = null; // Always null for vehicle commission
+            $driverId = (isset($data['driver_id']) && $data['driver_id'] !== '' && $data['driver_id'] !== null)
+                ? intval($data['driver_id'])
+                : null;
             $totalAmount = floatval($data['total_amount']);
             $commissionPercentage = floatval($data['commission_percentage']);
-            $commissionAmount = floatval($data['commission_amount']);
+            $commissionAmount = isset($data['commission_amount'])
+                ? floatval($data['commission_amount'])
+                : ($totalAmount * ($commissionPercentage / 100));
             $status = isset($data['status']) ? $data['status'] : 'pending';
             $notes = isset($data['notes']) ? $data['notes'] : '';
             
-            // Check if commission record already exists for this booking
-            $checkStmt = $conn->prepare("SELECT id FROM fleet_commission_payments WHERE booking_id = ?");
+            if (!in_array($status, ['pending', 'paid', 'cancelled'], true)) {
+                $status = 'pending';
+            }
+            
+            // Check if commission record already exists for this booking (reassign driver / change vehicle)
+            $checkStmt = $conn->prepare("SELECT id, status FROM fleet_commission_payments WHERE booking_id = ?");
             $checkStmt->bind_param("i", $bookingId);
             $checkStmt->execute();
             $checkResult = $checkStmt->get_result();
             
             if ($checkResult->num_rows > 0) {
-                $existingId = $checkResult->fetch_assoc()['id'];
-                sendResponse(['status' => 'error', 'message' => 'Commission payment already exists for this booking', 'existing_id' => $existingId], 400);
+                $existingRow = $checkResult->fetch_assoc();
+                $existingId = intval($existingRow['id']);
+                $existingStatus = $existingRow['status'] ?? 'pending';
+                // Keep paid/cancelled status; still refresh vehicle, driver, and amounts from this assignment
+                $statusToStore = in_array($existingStatus, ['paid', 'cancelled'], true) ? $existingStatus : $status;
+                
+                if ($driverId === null) {
+                    $upd = $conn->prepare("UPDATE fleet_commission_payments SET vehicle_id = ?, driver_id = NULL, total_amount = ?, commission_amount = ?, commission_percentage = ?, status = ?, notes = ? WHERE id = ?");
+                } else {
+                    $upd = $conn->prepare("UPDATE fleet_commission_payments SET vehicle_id = ?, driver_id = ?, total_amount = ?, commission_amount = ?, commission_percentage = ?, status = ?, notes = ? WHERE id = ?");
+                }
+                if (!$upd) {
+                    logCommissionError('Prepare failed updating commission payment', ['error' => $conn->error]);
+                    sendResponse(['status' => 'error', 'message' => 'Failed to update commission payment'], 500);
+                }
+                if ($driverId === null) {
+                    $upd->bind_param("iddssi", $vehicleId, $totalAmount, $commissionAmount, $commissionPercentage, $statusToStore, $notes, $existingId);
+                } else {
+                    $upd->bind_param("iidddssi", $vehicleId, $driverId, $totalAmount, $commissionAmount, $commissionPercentage, $statusToStore, $notes, $existingId);
+                }
+                if ($upd->execute()) {
+                    $upd->close();
+                    $result = $conn->query("SELECT cp.*, b.booking_number, v.name AS vehicle_name, v.vehicle_number 
+                                           FROM fleet_commission_payments cp
+                                           LEFT JOIN bookings b ON cp.booking_id = b.id
+                                           LEFT JOIN fleet_vehicles v ON cp.vehicle_id = v.id
+                                           WHERE cp.id = $existingId");
+                    $payment = $result->fetch_assoc();
+                    sendResponse(['status' => 'success', 'message' => 'Commission payment updated for booking', 'data' => $payment]);
+                }
+                logCommissionError('Error updating commission payment (duplicate booking)', ['error' => $upd->error, 'booking_id' => $bookingId]);
+                $upd->close();
+                sendResponse(['status' => 'error', 'message' => 'Failed to update commission payment'], 500);
             }
             
             // Insert commission payment

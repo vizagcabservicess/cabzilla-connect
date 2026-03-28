@@ -21,8 +21,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import Constants from 'expo-constants';
 import { useAuth } from '../providers/AuthProvider';
 import { GoogleSignInButtonLazy } from '../components/GoogleSignInButtonLazy';
+import { isGoogleNativeSignInConfigured } from '../config';
 
 export function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -209,6 +211,15 @@ export function LoginScreen() {
               label="Continue with Google"
               style={styles.googleBtn}
             />
+            {Platform.OS !== 'web' && Constants.appOwnership !== 'expo' && !isGoogleNativeSignInConfigured() ? (
+              <Text style={styles.googleHint}>
+                Google sign-in needs a Web client ID plus an Android (or iOS) OAuth client ID in EAS secrets, a
+                fresh build, and your app’s SHA-1 on the Android client in Google Cloud Console.
+              </Text>
+            ) : null}
+            {Platform.OS !== 'web' && Constants.appOwnership === 'expo' ? (
+              <Text style={styles.googleHint}>Google sign-in works in a dev or store build, not in Expo Go.</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -325,6 +336,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   googleBtn: { marginTop: 0 },
+  googleHint: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.gray600,
+  },
   phoneModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

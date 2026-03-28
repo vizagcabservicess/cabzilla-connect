@@ -1,5 +1,6 @@
 /**
  * Push: super_admin (new bookings), driver (trip assignments).
+ * Production (EAS) builds require expo.extra.eas.projectId + FCM credentials in EAS for Android.
  */
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
@@ -33,47 +34,98 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Request permissions and get push token. Returns null on web, simulator, or denied.
+ * EAS project ID from app config (required for getExpoPushTokenAsync in release builds).
+ */
+export function getExpoPushProjectId(): string | undefined {
+  const fromExpoConfig = Constants.expoConfig?.extra?.eas?.projectId;
+  const fromEasConfig = Constants.easConfig?.projectId;
+  const id = (fromExpoConfig ?? fromEasConfig)?.trim();
+  return id || undefined;
+}
+
+let globalListenersInstalled = false;
+
+/**
+ * Console logging for received / tapped notifications (safe to call once at app start).
+ */
+export function installGlobalPushNotificationLogger(): void {
+  if (Platform.OS === 'web' || globalListenersInstalled) return;
+  globalListenersInstalled = true;
+
+  Notifications.addNotificationReceivedListener((notification) => {
+    console.log('[push] Notification received:', notification.request.identifier, notification.request.content);
+  });
+
+  Notifications.addNotificationResponseReceivedListener((response) => {
+    console.log('[push] Notification tapped:', response.notification.request.identifier, response.actionIdentifier);
+  });
+}
+
+/**
+ * Request notification permission (call on app start for early grant + diagnostics).
+ * @returns Final permission status, or null on web / unsupported.
+ */
+export async function registerForPushNotificationsAsync(): Promise<Notifications.PermissionStatus | null> {
+  if (Platform.OS === 'web') return null;
+
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  if (existing === 'granted') {
+    return existing;
+  }
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status !== 'granted') {
+    console.warn('[push] Notification permission denied — status:', status);
+  }
+  return status;
+}
+
+/**
+ * Request permissions and get Expo push token. Returns null on web, simulator, denied, or missing projectId.
+ * Uses the same projectId resolution as production EAS builds.
  */
 export async function getPushToken(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
-  if (!Device.isDevice) return null;
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let final = existing;
-  if (existing !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    final = status;
-  }
-  if (final !== 'granted') {
-    console.warn('[push] Notification permission not granted — remote push disabled.');
+  if (!Device.isDevice) {
+    console.warn('[push] Not a physical device — Expo push token unavailable (simulator).');
     return null;
   }
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  const permission = await registerForPushNotificationsAsync();
+  if (permission !== 'granted') {
+    console.warn('[push] Notification permission not granted — remote push disabled. Status:', permission);
+    return null;
+  }
+
+  const projectId = getExpoPushProjectId();
   if (!projectId) {
-    console.warn(
-      '[push] Missing expo.extra.eas.projectId — cannot get Expo push token. ' +
-        'Fix app.json extra.eas.projectId. Android store/dev builds also need FCM in EAS. See mobile-app/docs/PUSH_NOTIFICATIONS.md'
+    console.error(
+      '[push] MISSING projectId — set expo.extra.eas.projectId in app.json and rebuild. ' +
+        'Constants.expoConfig?.extra?.eas?.projectId is undefined in this build.'
     );
     return null;
   }
 
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
     const token = tokenData?.data ?? null;
     if (!token) {
-      console.warn('[push] getExpoPushTokenAsync returned empty — check EAS FCM (Android) / APNs (iOS).');
+      console.error(
+        '[push] getExpoPushTokenAsync returned empty token — verify EAS FCM (Android) / APNs (iOS) credentials.'
+      );
+    } else {
+      console.log('[push] Expo push token obtained (prefix):', token.slice(0, 24) + '…');
     }
     return token;
   } catch (e) {
-    console.warn('[push] getExpoPushTokenAsync failed:', e);
+    console.error('[push] getExpoPushTokenAsync failed:', e);
     return null;
   }
 }
 
 /**
- *
  * Set up notification listeners (e.g. when user taps notification).
  * Returns unsubscribe function.
  */
@@ -84,9 +136,7 @@ export function addNotificationListeners(
   const subReceived = onReceived
     ? Notifications.addNotificationReceivedListener(onReceived)
     : null;
-  const subTap = onTap
-    ? Notifications.addNotificationResponseReceivedListener(onTap)
-    : null;
+  const subTap = onTap ? Notifications.addNotificationResponseReceivedListener(onTap) : null;
 
   return () => {
     subReceived?.remove();

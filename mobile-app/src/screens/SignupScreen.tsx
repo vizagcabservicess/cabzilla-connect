@@ -24,6 +24,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../providers/AuthProvider';
 import { GoogleSignInButtonLazy } from '../components/GoogleSignInButtonLazy';
+import { isGoogleNativeSignInConfigured } from '../config';
 
 export function SignupScreen() {
   const navigation = useNavigation<any>();
@@ -253,6 +254,16 @@ export function SignupScreen() {
               label="Continue with Google"
               style={styles.googleBtn}
             />
+            {Platform.OS !== 'web' && Constants.appOwnership !== 'expo' && !isGoogleNativeSignInConfigured() ? (
+              <Text style={styles.googleHint}>
+                Google sign-in needs a Web client ID plus an Android (or iOS) OAuth client ID in your EAS
+                secrets, your app rebuilt, and the upload SHA-1 added for that Android client in Google Cloud
+                Console.
+              </Text>
+            ) : null}
+            {Platform.OS !== 'web' && Constants.appOwnership === 'expo' ? (
+              <Text style={styles.googleHint}>Google sign-in is available in a dev or store build, not in Expo Go.</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -367,6 +378,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   googleBtn: { marginTop: 0 },
+  googleHint: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.gray600,
+  },
   phoneModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

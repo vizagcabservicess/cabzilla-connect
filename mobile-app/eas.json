@@ -12,6 +12,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SHOW_PUSH_DEBUG": "1"
       }
     },
     "production": {
