@@ -44,6 +44,9 @@ export interface DriverFuelRecord {
   fuelQuantityLitres: number;
   vehicleNumber?: string | null;
   linkedTripId: number | null;
+  /** Pump LCD total vs receipt paid (when API provides). */
+  pumpDisplayTotal?: number | null;
+  amountVariance?: number | null;
 }
 
 export interface DriverEarningsSummary {

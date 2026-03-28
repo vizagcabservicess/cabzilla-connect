@@ -454,6 +454,8 @@ export const adminExtendedAPI = {
     paymentMethod?: string;
     paymentDetails?: { bankName?: string; lastFourDigits?: string };
     notes?: string;
+    latitude?: number | null;
+    longitude?: number | null;
   }) => {
     const base = getBase();
     const headers = await authHeaders();
@@ -481,6 +483,8 @@ export const adminExtendedAPI = {
       paymentMethod: string;
       paymentDetails: { bankName?: string; lastFourDigits?: string };
       notes: string;
+      latitude: number | null;
+      longitude: number | null;
     }>
   ) => {
     const base = getBase();

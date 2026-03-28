@@ -261,6 +261,21 @@ try {
             secureLog("Failed to update user role: " . $conn->error, "ERROR");
             throw new Exception("Failed to update user role: " . $conn->error);
         }
+
+        $linkPath = __DIR__ . '/../utils/driver_user_link.php';
+        if (is_readable($linkPath)) {
+            try {
+                require_once $linkPath;
+                if (function_exists('syncDriverFleetLinkForUserRole')) {
+                    syncDriverFleetLinkForUserRole($conn, (int) $targetUserId, (string) $newRole);
+                }
+            } catch (Throwable $e) {
+                secureLog('Driver fleet sync after role change failed (role still saved)', 'WARNING', [
+                    'user_id' => $targetUserId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
         
         // Get updated user info
         $stmt = $conn->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
@@ -332,6 +347,23 @@ try {
             'role' => $userData['role'],
             'createdAt' => $userData['created_at']
         ];
+
+        if ($role === 'driver') {
+            $linkPath = __DIR__ . '/../utils/driver_user_link.php';
+            if (is_readable($linkPath)) {
+                try {
+                    require_once $linkPath;
+                    if (function_exists('syncDriverFleetLinkForUserRole')) {
+                        syncDriverFleetLinkForUserRole($conn, (int) $newUserId, 'driver');
+                    }
+                } catch (Throwable $e) {
+                    secureLog('Driver fleet sync after user create failed', 'WARNING', [
+                        'user_id' => $newUserId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
 
         secureLog("Successfully created user $newUserId", "INFO");
         sendJsonResponse(['status' => 'success', 'message' => 'User created successfully', 'data' => $createdUser], 201);

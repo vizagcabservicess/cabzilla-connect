@@ -84,6 +84,23 @@ if (!function_exists('str_starts_with')) {
     }
 }
 
+// str_contains polyfill for PHP < 8.0 (ocr-extractor and other API code)
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle) {
+        return $needle === '' || strpos($haystack, $needle) !== false;
+    }
+}
+
+// mb_substr fallback when ext-mbstring is missing (shared hosts)
+if (!function_exists('mb_substr')) {
+    function mb_substr($str, $start, $length = null) {
+        if ($str === null || $str === '') {
+            return '';
+        }
+        return $length === null ? substr($str, $start) : substr($str, $start, $length);
+    }
+}
+
 // getallheaders polyfill for nginx/php-fpm (Apache provides it natively)
 if (!function_exists('getallheaders')) {
     function getallheaders() {

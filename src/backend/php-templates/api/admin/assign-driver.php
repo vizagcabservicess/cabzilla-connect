@@ -237,6 +237,36 @@ try {
         
         // Commit transaction
         $conn->commit();
+
+        // Push alert to driver app (Expo) — requires drivers.user_id → users.id + push_tokens
+        $driverUserId = (int) ($driver['user_id'] ?? 0);
+        if ($driverUserId <= 0) {
+            $phoneDigits = preg_replace('/\D/', '', (string) ($driver['phone'] ?? ''));
+            if (strlen($phoneDigits) >= 10) {
+                $tail = substr($phoneDigits, -10);
+                $tailEsc = $conn->real_escape_string($tail);
+                $uRes = $conn->query(
+                    "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE '%{$tailEsc}' LIMIT 1"
+                );
+                if ($uRes && $uRow = $uRes->fetch_assoc()) {
+                    $driverUserId = (int) $uRow['id'];
+                }
+            }
+        }
+        if ($driverUserId > 0 && file_exists(__DIR__ . '/../utils/push.php')) {
+            require_once __DIR__ . '/../utils/push.php';
+            if (function_exists('sendPushToDriverForTripAssignment')) {
+                $pickupSummary = (string) ($booking['pickup_location'] ?? '');
+                $passengerName = (string) ($booking['passenger_name'] ?? '');
+                sendPushToDriverForTripAssignment(
+                    $driverUserId,
+                    (int) $bookingId,
+                    (string) ($booking['booking_number'] ?? ''),
+                    $pickupSummary,
+                    $passengerName
+                );
+            }
+        }
         
         // Send success response ($vehicleToUse set before UPDATE)
         sendJsonResponse([

@@ -62,7 +62,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withOptionalAndroidHardware.js"
     ],
     "extra": {
       "eas": {

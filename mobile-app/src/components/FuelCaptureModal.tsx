@@ -1,5 +1,5 @@
 /**
- * FuelCaptureModal - Capture fuel bill photo, extract via OCR (amount, liters, vehicle number)
+ * FuelCaptureModal - Capture fuel bill, parallel OCR + GPS, always continues to form.
  */
 import React, { useState } from 'react';
 import {
@@ -9,28 +9,53 @@ import {
   Modal,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView,
-  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { extractTextFromImage } from '../services/ocrService';
 import { colors } from '../theme/colors';
+import { formatPlaceFromGeocode } from '../utils/formatReverseGeocode';
+import { parseFuelFinalAmountFromText } from '../utils/parseFuelFinalAmountFromOcr';
 
 export type ParsedFuelType = 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
 
+/** @deprecated Use FuelCaptureSessionResult; kept for typing OCR hints */
 export interface FuelCaptureResult {
   amount: number;
   liters: number;
   vehicleNumber: string;
-  /** Dealer / outlet name from receipt header (e.g. KRISHNA ENTERPRISES) */
   fuelStation?: string;
-  /** From receipt line e.g. Product : Petrol */
   fuelType?: ParsedFuelType;
   imageUri: string;
 }
 
-/** Outlet name from BP/IOCL/HPCL-style receipts (often line after "Welcomes You" or line with ENTERPRISES). */
+export interface FuelCaptureLocation {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+}
+
+export interface FuelCaptureSessionResult {
+  imageUri: string;
+  /** null if OCR could not detect an amount — user enters manually */
+  amount: number | null;
+  fuelStation?: string;
+  /** Reverse-geocoded place name from GPS (used when OCR has no station) */
+  locationName?: string;
+  fuelType?: ParsedFuelType;
+  vehicleNumber?: string;
+  location: FuelCaptureLocation | null;
+  capturedAt: string;
+  rawOcrText?: string;
+}
+
 function extractStationName(raw: string): string | undefined {
+  const paidAt = raw.match(/paid\s+at\s+([^\n\r]+?)(?=\n|$)/i);
+  if (paidAt) {
+    let s = paidAt[1].trim().replace(/\s+/g, ' ');
+    s = s.replace(/\s+\d{5,}\s*$/, '').trim();
+    if (s.length >= 2 && s.length <= 120) return s;
+  }
   const collapsed = raw.replace(/\s+/g, ' ').trim();
   const collapsedStation = collapsed.match(
     /welcomes\s+you\s+([A-Za-z0-9\s&.]{3,70}?)\s+(?:pump\s*\(|tel\.|inv\.|no\.|local\s+id)/i
@@ -82,24 +107,20 @@ function parseFuelFromText(text: string): Partial<FuelCaptureResult> {
   const clean = text.replace(/\s+/g, ' ').replace(/\s*:\s*/g, ' : ');
   const toNum = (s: string) => parseFloat(s.replace(/,/g, '')) || 0;
 
-  // 1. Amount – labeled formats (Bharat Petroleum, IndianOil, etc.)
-  const amountPatterns: Array<{ re: RegExp; minVal?: number }> = [
-    { re: /(?:total\s+)?amount\s*\(?\s*rs\.?\s*\)?\s*:?\s*(\d+(?:\.\d{2})?)/i },
-    { re: /total\s+amount\s*\(?\s*rs\.?\s*\)?\s*:?\s*(\d+(?:\.\d{2})?)/i },
-    { re: /(?:amount|amt|total)\s*\(?\s*rs\.?\s*\)?\s*:?\s*(\d+(?:\.\d{2})?)/i },
-    { re: /(?:amount|total)[^\d]{0,30}(\d{3,7}\.\d{2})/i, minVal: 100 },
-    { re: /₹\s*(\d+(?:\.\d{2})?)|(\d{3,7}(?:\.\d{2})?)\s*₹/ },
-  ];
-  for (const { re, minVal = 1 } of amountPatterns) {
-    const m = clean.match(re);
-    const val = m ? toNum(m[1] ?? m[2] ?? '0') : 0;
-    if (val >= minVal && val <= 999999) {
-      result.amount = val;
-      break;
+  const fromParser = parseFuelFinalAmountFromText(text);
+  if (fromParser != null && fromParser >= 1 && fromParser <= 999999) {
+    result.amount = fromParser;
+  }
+
+  // Pump-style total row without ₹/Rs (OCR dropped symbol)
+  if (!result.amount || result.amount < 1) {
+    const totalPump = clean.match(/\btotal\s+(\d{2,6}\.\d{2})\b/i);
+    if (totalPump) {
+      const val = toNum(totalPump[1]);
+      if (val >= 50 && val <= 999999) result.amount = val;
     }
   }
 
-  // 2. Volume – "Volume (L) : 00024.19" or "Volume(L):" or "24.19 L"
   const volumeLabelMatch = clean.match(
     /(?:volume|vol)\s*\(?\s*l\s*\)?\s*:?\s*(\d+(?:\.\d{1,2})?)/i
   );
@@ -112,7 +133,6 @@ function parseFuelFromText(text: string): Partial<FuelCaptureResult> {
     if (literSuffix) result.liters = toNum(literSuffix[1]);
   }
 
-  // Fuel type – "Product : Petrol", "Fuel: Diesel"
   const productMatch = clean.match(/(?:product|fuel)\s*:?\s*(petrol|diesel|cng|electric)\b/i);
   if (productMatch) {
     const w = productMatch[1].toLowerCase();
@@ -122,7 +142,6 @@ function parseFuelFromText(text: string): Partial<FuelCaptureResult> {
     else if (w === 'electric') result.fuelType = 'Electric';
   }
 
-  // 3. Vehicle – Indian plates (AP39WD 9777, TS01AB 1234)
   const vehicleMatch = clean.match(
     /(?:AP|TS|TN|KA|MH|KL|DL|GJ|OD|WB|UP)[\s-]*\d{2}[\s-]*[A-Z]{1,2}[\s-]*\d{1,4}/i
   );
@@ -135,69 +154,95 @@ function parseFuelFromText(text: string): Partial<FuelCaptureResult> {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onResult: (result: FuelCaptureResult) => void;
-  /** Called when OCR fails – pass image URI so user can enter details manually */
-  onManualFallback?: (imageUri: string) => void;
+  onSessionComplete: (session: FuelCaptureSessionResult) => void;
 }
 
-export function FuelCaptureModal({ visible, onClose, onResult, onManualFallback }: Props) {
+export function FuelCaptureModal({ visible, onClose, onSessionComplete }: Props) {
   const [step, setStep] = useState<'idle' | 'capturing' | 'processing'>('idle');
-  const [error, setError] = useState('');
-  const [failedImageUri, setFailedImageUri] = useState<string | null>(null);
-  const [debugOcrText, setDebugOcrText] = useState<string | null>(null);
+  const [statusHint, setStatusHint] = useState('');
 
   const handleCapture = async () => {
-    setError('');
-    setFailedImageUri(null);
-    setDebugOcrText(null);
+    setStatusHint('');
     setStep('capturing');
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      setError('Camera permission is required');
+    await Location.requestForegroundPermissionsAsync();
+
+    const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    if (camStatus !== 'granted') {
+      setStatusHint('Camera permission is required to capture the receipt.');
       setStep('idle');
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
+    const pickerResult = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
       quality: 0.8,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
     });
 
-    if (result.canceled || !result.assets?.[0]?.uri) {
+    if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) {
       setStep('idle');
       return;
     }
 
+    const imageUri = pickerResult.assets[0].uri;
+    const capturedAt = new Date().toISOString();
     setStep('processing');
+
+    let fullText = '';
+    let location: FuelCaptureLocation | null = null;
+
     try {
-      const texts = await extractTextFromImage(result.assets[0].uri);
-      const fullText = (texts || []).join(' ');
-      const parsed = parseFuelFromText(fullText);
+      const [texts, pos] = await Promise.all([
+        extractTextFromImage(imageUri).catch(() => [] as string[]),
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).catch(() => null),
+      ]);
 
-      if (!parsed.amount || parsed.amount < 1) {
-        setError('Could not detect amount. Please retake with the total amount clearly visible, or enter details manually.');
-        setFailedImageUri(result.assets[0].uri);
-        setDebugOcrText(fullText || '(no text from OCR)');
-        setStep('idle');
-        return;
+      fullText = (texts || []).join('\n');
+      if (pos?.coords) {
+        location = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy ?? null,
+        };
       }
-
-      onResult({
-        amount: parsed.amount,
-        liters: parsed.liters || 0,
-        vehicleNumber: parsed.vehicleNumber || '',
-        fuelStation: parsed.fuelStation,
-        fuelType: parsed.fuelType,
-        imageUri: result.assets[0].uri,
-      });
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to process');
-      setFailedImageUri(result.assets?.[0]?.uri ?? null);
-      setStep('idle');
+    } catch {
+      fullText = '';
     }
+
+    let locationName: string | undefined;
+    if (location) {
+      try {
+        const geo = await Location.reverseGeocodeAsync({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+        locationName = formatPlaceFromGeocode(geo[0]);
+      } catch {
+        locationName = undefined;
+      }
+    }
+
+    const parsed = parseFuelFromText(fullText);
+    const amount =
+      parsed.amount != null && parsed.amount >= 1 && parsed.amount <= 999999 ? parsed.amount : null;
+
+    onSessionComplete({
+      imageUri,
+      amount,
+      fuelStation: parsed.fuelStation,
+      locationName,
+      fuelType: parsed.fuelType,
+      vehicleNumber: parsed.vehicleNumber,
+      location,
+      capturedAt,
+      rawOcrText: fullText.trim() || undefined,
+    });
+    setStep('idle');
+    setStatusHint('');
+    onClose();
   };
 
   return (
@@ -206,48 +251,20 @@ export function FuelCaptureModal({ visible, onClose, onResult, onManualFallback 
         <View style={styles.content}>
           <Text style={styles.title}>Capture Fuel Bill</Text>
           <Text style={styles.desc}>
-            Take a photo of the fuel bill. Amount, liters, fuel station, and vehicle number will be extracted when possible.
+            Take a photo of the fuel bill or payment receipt. We will read the amount when possible; you can always
+            edit on the next screen. Location is saved in the background if you allow it.
           </Text>
-          {error ? (
-            <Text style={styles.errorText}>
-              {error.includes('Tesseract') ? 'Receipt scanning is not available. You can enter the details manually.' : error}
-            </Text>
-          ) : null}
-          {debugOcrText !== null ? (
-            <View style={styles.debugBox}>
-              <Text style={styles.debugLabel}>Debug – raw OCR text:</Text>
-              <ScrollView style={styles.debugScroll} nestedScrollEnabled>
-                <Text style={styles.debugText} selectable>
-                  {debugOcrText || '(empty)'}
-                </Text>
-              </ScrollView>
-            </View>
-          ) : null}
+          {statusHint ? <Text style={styles.errorText}>{statusHint}</Text> : null}
           <View style={styles.actions}>
             {step === 'idle' && (
               <>
-                <TouchableOpacity style={styles.captureBtn} onPress={handleCapture}>
+                <TouchableOpacity style={styles.captureBtn} onPress={() => void handleCapture()}>
                   <Text style={styles.captureBtnText}>Take Photo</Text>
                 </TouchableOpacity>
-                {error && failedImageUri && onManualFallback && (
-                  <TouchableOpacity
-                    style={styles.manualBtn}
-                    onPress={() => {
-                      onManualFallback(failedImageUri);
-                      setError('');
-                      setFailedImageUri(null);
-                      setDebugOcrText(null);
-                      onClose();
-                    }}
-                  >
-                    <Text style={styles.manualBtnText}>Enter Manually</Text>
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={styles.cancelBtn}
                   onPress={() => {
-                    setError('');
-                    setDebugOcrText(null);
+                    setStatusHint('');
                     onClose();
                   }}
                 >
@@ -260,7 +277,7 @@ export function FuelCaptureModal({ visible, onClose, onResult, onManualFallback 
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={styles.loadingText}>
                   {step === 'capturing' && 'Opening camera...'}
-                  {step === 'processing' && 'Extracting details...'}
+                  {step === 'processing' && 'Reading receipt, location & place name...'}
                 </Text>
               </View>
             )}
@@ -277,15 +294,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 8 },
   desc: { fontSize: 14, color: colors.gray600, marginBottom: 16, lineHeight: 20 },
   errorText: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
-  debugBox: { marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 8 },
-  debugLabel: { fontSize: 12, fontWeight: '600', color: colors.gray600, marginBottom: 4 },
-  debugScroll: { maxHeight: 120 },
-  debugText: { fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#374151' },
   actions: { gap: 12 },
   captureBtn: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   captureBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  manualBtn: { paddingVertical: 14, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
-  manualBtnText: { fontSize: 16, fontWeight: '600', color: colors.primary },
   cancelBtn: { paddingVertical: 14, alignItems: 'center' },
   cancelBtnText: { fontSize: 16, fontWeight: '500', color: colors.gray600 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },

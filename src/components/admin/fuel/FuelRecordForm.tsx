@@ -53,6 +53,8 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
   const [bankName, setBankName] = useState<string>('');
   const [lastFourDigits, setLastFourDigits] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
 
   // Data state
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
@@ -84,6 +86,16 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
         }
         setNotes(editingRecord.notes || '');
         setMileage(editingRecord.mileage?.toString() || null);
+        setLatitude(
+          editingRecord.latitude != null && !Number.isNaN(editingRecord.latitude)
+            ? String(editingRecord.latitude)
+            : ''
+        );
+        setLongitude(
+          editingRecord.longitude != null && !Number.isNaN(editingRecord.longitude)
+            ? String(editingRecord.longitude)
+            : ''
+        );
       } else {
         resetForm();
       }
@@ -223,6 +235,26 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
         notes: notes.trim() || undefined,
       };
 
+      const latTrim = latitude.trim();
+      const lngTrim = longitude.trim();
+      if (latTrim !== '' && lngTrim !== '') {
+        const latN = parseFloat(latTrim);
+        const lngN = parseFloat(lngTrim);
+        if (!Number.isNaN(latN) && !Number.isNaN(lngN) && latN >= -90 && latN <= 90 && lngN >= -180 && lngN <= 180) {
+          fuelRecord.latitude = latN;
+          fuelRecord.longitude = lngN;
+        } else {
+          toast.error('Invalid latitude/longitude (use WGS84 decimal degrees)');
+          return;
+        }
+      } else if (latTrim !== '' || lngTrim !== '') {
+        toast.error('Enter both latitude and longitude, or leave both empty');
+        return;
+      } else if (editingRecord && (editingRecord.latitude != null || editingRecord.longitude != null)) {
+        fuelRecord.latitude = null;
+        fuelRecord.longitude = null;
+      }
+
       // Add mileage if calculated
       if (mileage) {
         fuelRecord.mileage = parseFloat(mileage);
@@ -305,6 +337,8 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
     setNotes('');
     setMileage(null);
     setPreviousOdometer(null);
+    setLatitude('');
+    setLongitude('');
   };
 
   return (
@@ -437,6 +471,29 @@ export function FuelRecordForm({ isOpen, onClose, onSave, editingRecord }: FuelR
               value={fuelStation}
               onChange={(e) => setFuelStation(e.target.value)}
               placeholder="e.g., HPCL, Gajuwaka"
+            />
+          </div>
+
+          <div className="grid w-full items-center gap-2">
+            <Label htmlFor="latitude">Latitude (optional)</Label>
+            <Input
+              id="latitude"
+              type="number"
+              step="any"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              placeholder="e.g., 17.6868"
+            />
+          </div>
+          <div className="grid w-full items-center gap-2">
+            <Label htmlFor="longitude">Longitude (optional)</Label>
+            <Input
+              id="longitude"
+              type="number"
+              step="any"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              placeholder="e.g., 83.2185"
             />
           </div>
 

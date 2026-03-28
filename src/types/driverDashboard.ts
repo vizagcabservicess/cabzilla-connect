@@ -47,6 +47,8 @@ export interface DriverFuelRecord {
   /** From fuel record vehicle, else booking vehicle / fleet vehicle. */
   vehicleNumber?: string | null;
   linkedTripId: number | null;
+  pumpDisplayTotal?: number | null;
+  amountVariance?: number | null;
 }
 
 export interface DriverEarningsSummary {

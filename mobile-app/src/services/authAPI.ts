@@ -46,6 +46,8 @@ export interface SocialLoginRequest {
   email: string;
   name: string;
   picture?: string;
+  /** Google ID token — backend verifies with Google when present */
+  id_token?: string;
 }
 
 export interface AuthResponse {
@@ -201,7 +203,7 @@ class AuthAPI {
     return !!token;
   }
 
-  /** Register push token for super_admin users. Backend rejects non–super_admin. */
+  /** Register Expo push token for super_admin (new bookings) or driver (trip assignments). */
   async registerPushToken(pushToken: string, platform: string): Promise<boolean> {
     const token = await this.getStoredToken();
     if (!token) return false;

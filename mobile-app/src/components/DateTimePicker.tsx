@@ -5,6 +5,12 @@ import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { colors } from '../theme/colors';
 
+function defaultMinimumDate(): Date {
+  const n = new Date();
+  n.setTime(n.getTime() + 60 * 60 * 1000);
+  return n;
+}
+
 interface DateTimePickerComponentProps {
   label?: string;
   date: Date;
@@ -20,11 +26,8 @@ export function DateTimePickerComponent({
 }: DateTimePickerComponentProps) {
   const [show, setShow] = useState(false);
 
-  const min = minDate || (() => {
-    const n = new Date();
-    n.setTime(n.getTime() + 60 * 60 * 1000);
-    return n;
-  })();
+  // Recompute each render so minimum tracks the clock (avoid stale min from first mount).
+  const min = minDate ?? defaultMinimumDate();
 
   const handleChange = (_: any, selected?: Date) => {
     if (Platform.OS === 'android') setShow(false);

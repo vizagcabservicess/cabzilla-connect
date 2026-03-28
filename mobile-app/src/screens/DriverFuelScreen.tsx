@@ -61,6 +61,11 @@ export function DriverFuelScreen() {
                 Vehicle: {(item.vehicleNumber || '').trim() || '—'}
               </Text>
               <Text style={styles.meta}>Linked Trip: {item.linkedTripId ?? 'None'}</Text>
+              {item.amountVariance != null && Math.abs(item.amountVariance) >= 0.01 ? (
+                <Text style={styles.varianceLine}>
+                  Receipt vs pump: Δ ₹{item.amountVariance.toFixed(2)}
+                </Text>
+              ) : null}
             </View>
           )}
           ListEmptyComponent={<Text style={styles.empty}>No fuel records.</Text>}
@@ -98,6 +103,7 @@ const styles = StyleSheet.create({
   amount: { fontSize: 16, fontWeight: '700', color: colors.foreground },
   qty: { fontSize: 14, fontWeight: '600', color: colors.primary },
   meta: { fontSize: 12, color: colors.gray600 },
+  varianceLine: { fontSize: 12, color: '#b45309', fontWeight: '600', marginTop: 4 },
   empty: { marginTop: 30, textAlign: 'center', color: colors.gray600 },
   fab: { position: 'absolute', right: 18, bottom: 24, width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5 },
 });

@@ -60,6 +60,7 @@ import { DriverEarningsScreen } from '../screens/DriverEarningsScreen';
 import { MenuProvider } from '../providers/MenuProvider';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
+import { DriverTripAssignmentOverlay } from '../components/DriverTripAssignmentOverlay';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const ServicesStackNav = createNativeStackNavigator<ServicesStackParamList>();
@@ -183,52 +184,56 @@ export function RootNavigator() {
 
   if (isDriver) {
     return (
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: '#2563EB',
-          tabBarInactiveTintColor: '#9CA3AF',
-          tabBarLabelStyle: { fontSize: 11, textAlign: 'center' },
-          tabBarItemStyle: { flex: 1 },
-        }}
-      >
-        <Tab.Screen
-          name="DriverTab"
-          component={DriverTripsStack}
-          options={{
-            title: 'Trips',
-            tabBarIcon: ({ focused }) => <TabBarIcon name="car" focused={focused} />,
+      <>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: '#2563EB',
+            tabBarInactiveTintColor: '#9CA3AF',
+            tabBarLabelStyle: { fontSize: 11, textAlign: 'center' },
+            tabBarItemStyle: { flex: 1 },
           }}
-        />
-        <Tab.Screen
-          name="DriverFuelTab"
-          component={DriverFuelStack}
-          options={{
-            title: 'Fuel',
-            tabBarIcon: ({ focused }) => <TabBarIcon name="water" focused={focused} />,
-          }}
-        />
-        <Tab.Screen
-          name="DriverEarningsTab"
-          component={DriverEarningsStack}
-          options={{
-            title: 'Earnings',
-            tabBarIcon: ({ focused }) => <TabBarIcon name="cash" focused={focused} />,
-          }}
-        />
-        <Tab.Screen
-          name="Profile"
-          component={ProfileStack}
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ focused }) => <TabBarIcon name="person" focused={focused} />,
-          }}
-        />
-      </Tab.Navigator>
+        >
+          <Tab.Screen
+            name="DriverTab"
+            component={DriverTripsStack}
+            options={{
+              title: 'Trips',
+              tabBarIcon: ({ focused }) => <TabBarIcon name="car" focused={focused} />,
+            }}
+          />
+          <Tab.Screen
+            name="DriverFuelTab"
+            component={DriverFuelStack}
+            options={{
+              title: 'Fuel',
+              tabBarIcon: ({ focused }) => <TabBarIcon name="water" focused={focused} />,
+            }}
+          />
+          <Tab.Screen
+            name="DriverEarningsTab"
+            component={DriverEarningsStack}
+            options={{
+              title: 'Earnings',
+              tabBarIcon: ({ focused }) => <TabBarIcon name="cash" focused={focused} />,
+            }}
+          />
+          <Tab.Screen
+            name="Profile"
+            component={ProfileStack}
+            options={{
+              title: 'Profile',
+              tabBarIcon: ({ focused }) => <TabBarIcon name="person" focused={focused} />,
+            }}
+          />
+        </Tab.Navigator>
+        <DriverTripAssignmentOverlay />
+      </>
     );
   }
 
   return (
+    <>
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
@@ -271,6 +276,8 @@ export function RootNavigator() {
         }}
       />
     </Tab.Navigator>
+    <DriverTripAssignmentOverlay />
+    </>
   );
 }
 

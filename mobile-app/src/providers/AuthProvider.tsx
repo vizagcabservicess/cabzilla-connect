@@ -10,7 +10,11 @@ import {
   RegisterRequest,
   SocialLoginRequest,
 } from '../services/authAPI';
-import { getPushToken, addNotificationListeners } from '../services/pushNotificationService';
+import {
+  getPushToken,
+  addNotificationListeners,
+  ensureTripAssignmentNotificationChannel,
+} from '../services/pushNotificationService';
 
 interface AuthContextType {
   user: User | null;
@@ -57,21 +61,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Register for push notifications when super_admin logs in (native only)
+  // Register push: super_admin (new bookings), driver (trip assignments)
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    if (user?.role !== 'super_admin') return;
+    if (user?.role !== 'super_admin' && user?.role !== 'driver') return;
 
     let unsubscribe: (() => void) | null = null;
     const setup = async () => {
       const pushToken = await getPushToken();
       if (!pushToken) return;
 
+      if (user?.role === 'driver') {
+        await ensureTripAssignmentNotificationChannel();
+      }
+
       await authAPI.registerPushToken(pushToken, Platform.OS);
 
-      unsubscribe = addNotificationListeners(undefined, () => {
-        // User tapped notification; app will open. Navigation handled via deep link or RootNavigator.
-      });
+      if (user?.role === 'super_admin') {
+        unsubscribe = addNotificationListeners(undefined, () => {
+          // Tapped; navigation handled elsewhere if needed
+        });
+      }
     };
     setup();
     return () => {

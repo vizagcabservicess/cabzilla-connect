@@ -5,6 +5,8 @@ export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?
 export const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 /** Android OAuth Client ID - required for native Android (Web client does not allow custom scheme redirects) */
 export const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '';
+/** iOS OAuth Client ID - use iOS client type in Google Cloud for native return-to-app (optional; falls back to web client on Simulator) */
+export const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '';
 
 /** Web app base URL for login, dashboard, support & legal links */
 export const WEB_APP_BASE_URL = process.env.EXPO_PUBLIC_WEB_APP_BASE_URL ?? 'https://www.vizagtaxihub.com';

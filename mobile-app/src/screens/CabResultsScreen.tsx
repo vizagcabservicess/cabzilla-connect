@@ -25,6 +25,7 @@ import {
   calculateOutstationRoundTripFare,
   calculateLocalFare,
   calculateAirportFare,
+  isNumericFleetIdOnly,
   type LocalPackageMatrix,
 } from '../services/fareService';
 import { tourAPI } from '../services/tourAPI';
@@ -148,13 +149,12 @@ export function CabResultsScreen({ route, navigation }: Props) {
       const id = String(vehicle.id || vehicle.vehicleId || '').toLowerCase().replace(/-/g, '_').trim();
       // Try exact keys: vehicle id, name variants, and known mappings (match tour_fare_rates vehicle_id)
       const keysToTry = [
-        id,
+        ...(isNumericFleetIdOnly(id) ? [] : [id]),
         n,
         n.replace(/\s+/g, '_'),
         n.replace(/-/g, '_'),
         (n.includes('swift') || n.includes('dzire')) ? 'sedan' : null,
-        n.includes('glanza') ? 'toyota_glanza' : null,
-        n.includes('glanza') ? 'glanza' : null,
+        ...(n.includes('glanza') ? (['sedan', 'swift_dzire', 'toyota_glanza', 'glanza'] as const) : []),
         n.includes('ertiga') ? 'ertiga' : null,
         n.includes('innova') ? 'innova_crysta' : null,
         n.includes('tempo') ? 'tempo_traveller' : null,
@@ -172,18 +172,23 @@ export function CabResultsScreen({ route, navigation }: Props) {
     }
 
     const id = String(vehicle.id || vehicle.vehicleId || '').toLowerCase().replace(/-/g, '_').trim();
-    const nameKey = name.toLowerCase().replace(/\s+/g, '_');
+    const nameLower = name.toLowerCase();
+    const nameKey = nameLower.replace(/\s+/g, '_');
+    // Name-first for sedan-class: id/nameKey can be toyota_glanza with wrong API tiers while Swift uses sedan (59km outstation).
+    // Numeric fleet PKs must not index fares{} when API used array indices as keys.
     const fare =
-      fares[id] ||
+      (nameLower.includes('swift') || nameLower.includes('dzire') ? fares['sedan'] : null) ||
+      (nameLower.includes('glanza')
+        ? fares['sedan'] || fares['swift_dzire'] || fares['toyota_glanza'] || fares['glanza'] || fares['toyota']
+        : null) ||
+      (nameLower.includes('amaze') ? fares['amaze'] || fares['sedan'] : null) ||
+      (!isNumericFleetIdOnly(id) ? fares[id] : null) ||
       fares[nameKey] ||
-      fares[name.toLowerCase()] ||
-      (name.toLowerCase().includes('swift') || name.toLowerCase().includes('dzire') ? fares['sedan'] : null) ||
-      (name.toLowerCase().includes('glanza') ? fares['glanza'] || fares['toyota_glanza'] || fares['toyota'] || fares['sedan'] : null) ||
-      (name.toLowerCase().includes('amaze') ? fares['amaze'] || fares['sedan'] : null) ||
-      (name.toLowerCase().includes('ertiga') ? fares['ertiga'] : null) ||
-      (name.toLowerCase().includes('innova') ? fares['innova_crysta'] : null) ||
-      (name.toLowerCase().includes('tempo') ? fares['tempo_traveller'] || fares['tempo'] : null) ||
-      (name.toLowerCase().includes('luxury') ? fares['luxury'] : null) ||
+      fares[nameLower] ||
+      (nameLower.includes('ertiga') ? fares['ertiga'] : null) ||
+      (nameLower.includes('innova') ? fares['innova_crysta'] : null) ||
+      (nameLower.includes('tempo') ? fares['tempo_traveller'] || fares['tempo'] : null) ||
+      (nameLower.includes('luxury') ? fares['luxury'] : null) ||
       fares['sedan'];
     if (!fare || (fare.basePrice <= 0 && fare.pricePerKm <= 0)) return 0;
     // Only use round-trip fare when we have return date - prevents wrong fare when tripMode

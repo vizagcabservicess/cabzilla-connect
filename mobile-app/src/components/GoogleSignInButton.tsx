@@ -2,12 +2,12 @@
  * Google Sign-In button - uses expo-auth-session (same backend as web app)
  * Returns null in Expo Go (expo-crypto native module not available).
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
-import { GOOGLE_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID } from '../config';
+import { GOOGLE_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from '../config';
 import { colors } from '../theme/colors';
 
 const canUseGoogleSignIn = Platform.OS === 'web' || Constants.appOwnership !== 'expo';
@@ -34,6 +34,8 @@ export interface SocialUser {
   email: string;
   name: string;
   picture?: string;
+  /** Google ID token — send to social-login.php for server verification */
+  idToken?: string;
   provider: 'google';
 }
 
@@ -46,7 +48,11 @@ interface GoogleSignInButtonProps {
 }
 
 export function GoogleSignInButton(props: GoogleSignInButtonProps) {
-  const hasClientId = GOOGLE_CLIENT_ID && (Platform.OS !== 'android' || GOOGLE_ANDROID_CLIENT_ID);
+  const hasClientId =
+    GOOGLE_CLIENT_ID &&
+    (Platform.OS === 'web' ||
+      Platform.OS === 'ios' ||
+      (Platform.OS === 'android' && !!GOOGLE_ANDROID_CLIENT_ID));
   if (!canUseGoogleSignIn || !hasClientId) return null;
   return <GoogleSignInButtonInner {...props} />;
 }
@@ -58,32 +64,53 @@ function GoogleSignInButtonInner({
   label = 'Continue with Google',
   style,
 }: GoogleSignInButtonProps) {
-  // On Android native: use Android client ID (Web client rejects custom scheme redirects).
-  // On web/iOS: use Web client ID. webClientId is always Web client (for id_token).
-  const clientId = Platform.OS === 'android' && GOOGLE_ANDROID_CLIENT_ID
-    ? GOOGLE_ANDROID_CLIENT_ID
-    : GOOGLE_CLIENT_ID;
+  // Native: platform OAuth client so Google returns to the app, not a https:// web redirect.
+  // webClientId stays the Web client for server token verification / id_token exchange.
+  const clientId =
+    Platform.OS === 'android' && GOOGLE_ANDROID_CLIENT_ID
+      ? GOOGLE_ANDROID_CLIENT_ID
+      : Platform.OS === 'ios' && GOOGLE_IOS_CLIENT_ID
+        ? GOOGLE_IOS_CLIENT_ID
+        : GOOGLE_CLIENT_ID;
+
+  // Default Google provider uses `applicationId:/oauthredirect` (e.g. com.vizagtaxihub.app:/...)
+  // which does NOT match app.json "scheme" (vizagtaxihub) — the browser opens your website instead of the app.
+  const redirectUri = useMemo(() => {
+    if (Platform.OS === 'web') {
+      return AuthSession.makeRedirectUri({ path: 'oauthredirect' });
+    }
+    return AuthSession.makeRedirectUri({
+      scheme: 'vizagtaxihub',
+      path: 'oauthredirect',
+      native: 'vizagtaxihub://oauthredirect',
+    });
+  }, []);
+
   const [request, response, promptAsync] = useIdTokenAuthRequest(
     {
       clientId,
       webClientId: GOOGLE_CLIENT_ID,
       androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+      iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+      redirectUri,
     },
-    { scheme: 'vizagtaxihub', path: 'oauthredirect' }
+    {}
   );
 
   useEffect(() => {
     if (response?.type === 'success' && response.params?.id_token) {
       const decoded = decodeJwtPayload(response.params.id_token);
-      if (!decoded.sub || !decoded.email || !decoded.name) {
+      if (!decoded.sub || !decoded.email) {
         onError?.(new Error('Invalid Google response: missing user data'));
         return;
       }
+      const displayName = decoded.name?.trim() || decoded.email.split('@')[0] || 'User';
       const socialUser: SocialUser = {
         id: decoded.sub,
         email: decoded.email,
-        name: decoded.name,
+        name: displayName,
         picture: decoded.picture,
+        idToken: response.params.id_token,
         provider: 'google',
       };
       onSuccess(socialUser);

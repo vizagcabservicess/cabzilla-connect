@@ -211,13 +211,25 @@ export const driverTripsAPI = {
     bookingId?: number;
     quantity: number;
     pricePerUnit: number;
+    /** Paid total from receipt (card/UPI slip); should match totalCost. */
     totalCost: number;
+    /** Explicit receipt total for auditing (defaults server-side to totalCost). */
+    receiptTotalAmount?: number;
+    /** Pump LCD total for receipt vs pump variance. */
+    pumpDisplayTotal?: number | null;
     odometer: number;
     fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
     fuelStation?: string;
-    paymentMethod: 'card' | 'customer_advance' | 'company_paid';
+    paymentMethod: 'card' | 'upi' | 'customer_advance' | 'company_paid';
     cardLastFour?: string;
     receiptImageUrl?: string;
+    pumpImageUrl?: string;
+    odometerImageUrl?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    locationAccuracy?: number | null;
+    captureTimestamp?: string;
+    flags?: string[];
   }): Promise<void> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
@@ -235,16 +247,31 @@ export const driverTripsAPI = {
 
   uploadFuelOdometer: async (params: {
     imageUri: string;
-    type: 'fuel' | 'odometer' | 'driver_docs';
+    type: 'fuel' | 'fuel_receipt' | 'fuel_pump' | 'fuel_odometer' | 'odometer' | 'odometer_reading' | 'driver_docs';
     bookingId?: number;
     vehicleId?: number;
+    /** Used to build the required `fuel-records/{...}/{vehicleNumber}/...` GCS path */
+    vehicleNumber?: string;
+    /** ISO timestamp from the photo capture step */
+    captureTimestamp?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    locationAccuracy?: number | null;
     fileName?: string;
+    /** Receipt OCR total (₹) for pump upload: server checks pump display vs receipt within ±₹2. */
+    receiptTotalOcr?: number | null;
+    /** Raw Vision text from receipt capture — paired into server `fuelOcrDebug` on pump upload. */
+    pairedReceiptOcrText?: string | null;
+    /** Set '1' with pairedReceiptOcrText to receive explainability JSON from server. */
+    includeFuelOcrDebug?: '1' | '0' | null;
   }): Promise<{
     id: number;
     imageUrl: string;
     type: string;
     extracted: Record<string, unknown>;
     rawText?: string;
+    fraudFlags?: string[];
+    fuelOcrDebug?: Record<string, unknown> | null;
   }> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
@@ -261,6 +288,27 @@ export const driverTripsAPI = {
     formData.append('type', params.type);
     if (params.bookingId) formData.append('bookingId', String(params.bookingId));
     if (params.vehicleId) formData.append('vehicleId', String(params.vehicleId));
+    if (params.vehicleNumber) formData.append('vehicleNumber', params.vehicleNumber);
+    if (params.captureTimestamp) formData.append('captureTimestamp', params.captureTimestamp);
+    if (params.latitude != null) formData.append('latitude', String(params.latitude));
+    if (params.longitude != null) formData.append('longitude', String(params.longitude));
+    if (params.locationAccuracy != null) formData.append('locationAccuracy', String(params.locationAccuracy));
+    if (params.type === 'fuel_pump' && params.receiptTotalOcr != null && params.receiptTotalOcr > 0) {
+      formData.append('receiptTotalOcr', String(params.receiptTotalOcr));
+    }
+    if (
+      params.type === 'fuel_pump' &&
+      typeof params.pairedReceiptOcrText === 'string' &&
+      params.pairedReceiptOcrText.trim() !== ''
+    ) {
+      formData.append('pairedReceiptOcrText', params.pairedReceiptOcrText);
+    }
+    if (
+      params.includeFuelOcrDebug === '1' &&
+      (params.type === 'fuel_pump' || params.type === 'fuel_receipt')
+    ) {
+      formData.append('includeFuelOcrDebug', '1');
+    }
     const response = await axios.post(`${base}/api/driver/upload-fuel-odometer.php`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './src/navigation/navigationRef';
 
 WebBrowser.maybeCompleteAuthSession();
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -49,7 +50,7 @@ export default function App() {
     <SafeAreaProvider onLayout={onLayoutRootView}>
       <AuthProvider>
         <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <RootNavigator />
           </NavigationContainer>
           <StatusBar style="auto" />

@@ -354,11 +354,51 @@ function getFallbackForKey(key: string): OutstationFare {
   return FALLBACK_FARES.sedan;
 }
 
+/** Fleet DB primary keys (e.g. "3") must not index into fare maps built from array responses (keys "0","1","2"). */
+export function isNumericFleetIdOnly(id: string): boolean {
+  const s = String(id ?? '').trim();
+  return s.length > 0 && /^\d+$/.test(s);
+}
+
+function inferVehicleSlugFromFareRow(row: Record<string, unknown>): string {
+  const name = String(row.name ?? row.displayName ?? '').toLowerCase();
+  if (name.includes('glanza')) return 'toyota_glanza';
+  if (name.includes('swift') || name.includes('dzire')) return 'sedan';
+  if (name.includes('amaze')) return 'amaze';
+  if (name.includes('ertiga')) return 'ertiga';
+  if (name.includes('innova') || name.includes('crysta')) return 'innova_crysta';
+  if (name.includes('tempo') || name.includes('traveller')) return 'tempo_traveller';
+  return '';
+}
+
 function parseFares(raw: any): Record<string, OutstationFare> {
-  const fares = raw?.fares || raw;
-  if (typeof fares !== 'object') return {};
+  const faresRaw = raw?.fares ?? raw;
+  if (faresRaw == null || typeof faresRaw !== 'object') return {};
+
+  let entryPairs: [string, any][];
+  if (Array.isArray(faresRaw)) {
+    entryPairs = [];
+    for (const item of faresRaw) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      let key = String(row.vehicleId ?? row.vehicle_id ?? row.vehicleType ?? row.vehicle_type ?? '')
+        .toLowerCase()
+        .replace(/-/g, '_')
+        .replace(/\s+/g, '_')
+        .trim();
+      if (!key || isNumericFleetIdOnly(key)) {
+        key = inferVehicleSlugFromFareRow(row);
+      }
+      if (!key) continue;
+      entryPairs.push([key, item]);
+    }
+  } else {
+    // Drop pure numeric keys — same collision as array indices when a client mistakes row order for vehicle id.
+    entryPairs = Object.entries(faresRaw).filter(([k]) => !isNumericFleetIdOnly(String(k)));
+  }
+
   return Object.fromEntries(
-    Object.entries(fares).map(([k, v]: [string, any]) => {
+    entryPairs.map(([k, v]: [string, any]) => {
       const key = String(k).toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim();
       const fallback = getFallbackForKey(key);
       // direct-outstation-fares uses oneWayBasePrice; outstation-fares uses base_price
@@ -420,7 +460,12 @@ function expandVehicleAliases(
   for (const group of [SEDAN_ALIASES, ERTIGA_ALIASES, INNOVA_ALIASES, TEMPO_ALIASES]) {
     // Prefer API-sourced fare (has tier prices from DB) over FALLBACK
     const withData = group.filter((k) => result[k] && (result[k].tier2Price != null || result[k].basePrice > 0));
+    const sedanHasData =
+      group === SEDAN_ALIASES &&
+      result['sedan'] &&
+      (result['sedan'].tier2Price != null || result['sedan'].basePrice > 0);
     const best =
+      (sedanHasData ? 'sedan' : undefined) ??
       withData.find((k) => apiKeys.has(k)) ?? // Prefer API key
       withData[0]; // Else use first with data
     if (best && result[best]) {
@@ -431,6 +476,11 @@ function expandVehicleAliases(
         if (!aliasFare || missingTier || (apiOverridesFallback && aliasFare.basePrice === result[best].basePrice)) {
           result[alias] = result[best];
         }
+      }
+      // DB often has mis-tiered toyota_glanza while sedan/swift_dzire are correct — always align Glanza to sedan tier.
+      if (group === SEDAN_ALIASES && best === 'sedan') {
+        result['glanza'] = result['sedan'];
+        result['toyota_glanza'] = result['sedan'];
       }
     }
   }
@@ -852,7 +902,7 @@ export function calculateLocalFare(
   // Try vehicle ID first - use aliases so "tempo" from fleet finds "tempo_traveller" in fare matrix
   if (vehicleId) {
     const vid = String(vehicleId).toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim();
-    if (vid) {
+    if (vid && !isNumericFleetIdOnly(vid)) {
       const keysToTry = LOCAL_VEHICLE_ID_ALIASES[vid] ?? [vid];
       for (const k of keysToTry) {
         const price = pkgMap?.[k];
@@ -993,7 +1043,7 @@ function calculateAirportFareFromTiers(fare: AirportFare, distance: number): num
   return Math.round(basePrice);
 }
 
-// Web useFare fallbacks when API fails - match web display (2km: Swift 840, Ertiga/Glanza 1200, Innova 1500)
+// Web useFare fallbacks when API fails - match web display (2km: Swift/Glanza sedan 840, Ertiga 1200, Innova 1500)
 const AIRPORT_FALLBACK: Record<string, { tier1: number; tier2: number; tier3: number; tier4: number; extraKm: number }> = {
   sedan: { tier1: 840, tier2: 1200, tier3: 1500, tier4: 1800, extraKm: 14 },
   ertiga: { tier1: 1200, tier2: 1600, tier3: 2000, tier4: 2400, extraKm: 18 },
@@ -1009,7 +1059,8 @@ const AIRPORT_FALLBACK: Record<string, { tier1: number; tier2: number; tier3: nu
 function getAirportFallbackForKey(cab: string): { tier1: number; tier2: number; tier3: number; tier4: number; extraKm: number } {
   const n = cab.toLowerCase();
   if (n.includes('ertiga')) return AIRPORT_FALLBACK.ertiga;
-  if (n.includes('glanza') || n.includes('toyota_glanza')) return AIRPORT_FALLBACK.toyota_glanza;
+  // Glanza is sedan-class; wrong DB rows sometimes key glanza at Ertiga-like tiers
+  if (n.includes('glanza') || n.includes('toyota_glanza')) return AIRPORT_FALLBACK.sedan;
   if (n.includes('innova') || n.includes('crysta')) return AIRPORT_FALLBACK.innova_crysta;
   if (n.includes('tempo') || n.includes('traveller')) return AIRPORT_FALLBACK.tempo_traveller;
   return AIRPORT_FALLBACK.sedan;
@@ -1024,8 +1075,10 @@ export function calculateAirportFare(
 ): number {
   const cab = cabType.toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim();
   const vid = vehicleId ? String(vehicleId).toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_').trim() : '';
+  // Numeric fleet IDs collide with array-index keys ("0","1","2") in some API responses — resolve by cab name first.
   const keysToTry = [
-    vid,
+    ...(cab.includes('glanza') ? (['sedan', 'swift_dzire'] as string[]) : []),
+    ...(vid && !isNumericFleetIdOnly(vid) ? [vid] : []),
     cab,
     cab.replace(/\s+/g, '_'),
     cab.includes('swift') || cab.includes('dzire') ? 'swift_dzire' : null,

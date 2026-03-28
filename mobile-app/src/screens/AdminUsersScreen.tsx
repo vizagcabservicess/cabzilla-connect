@@ -45,6 +45,8 @@ export function AdminUsersScreen() {
     role: 'guest' as const,
   });
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  /** Android Alert.alert allows at most 3 buttons — use a modal so Driver and all roles appear. */
+  const [roleModalUser, setRoleModalUser] = useState<AdminUser | null>(null);
 
   const load = async () => {
     try {
@@ -94,21 +96,19 @@ export function AdminUsersScreen() {
   };
 
   const handleUpdateRole = (u: AdminUser) => {
-    const roleLabels: Record<string, string> = {
-      guest: 'Guest',
-      admin: 'Admin',
-      super_admin: 'Super Admin',
-      driver: 'Driver',
-    };
-    const currentRole = u.role || 'guest';
-    Alert.alert(
-      'Update Role',
-      `Set role for ${u.name}:`,
-      ROLES.map((r) => ({
-        text: roleLabels[r.value] || r.value,
-        onPress: () => updateRole(u.id, r.value),
-      })).concat([{ text: 'Cancel', style: 'cancel' }])
-    );
+    setRoleModalUser(u);
+  };
+
+  const applyRoleFromModal = async (role: (typeof ROLES)[number]['value']) => {
+    const u = roleModalUser;
+    if (!u) return;
+    const current = (u.role || 'guest') as string;
+    if (role === current) {
+      setRoleModalUser(null);
+      return;
+    }
+    setRoleModalUser(null);
+    await updateRole(u.id, role);
   };
 
   const updateRole = async (userId: number, role: string) => {
@@ -370,6 +370,65 @@ export function AdminUsersScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={roleModalUser !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRoleModalUser(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setRoleModalUser(null)}
+          />
+          <View style={[styles.modalContent, styles.roleModalSheet]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Update Role</Text>
+                {roleModalUser ? (
+                  <Text style={styles.roleModalSubtitle} numberOfLines={2}>
+                    {roleModalUser.name}
+                  </Text>
+                ) : null}
+              </View>
+              <TouchableOpacity onPress={() => setRoleModalUser(null)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Ionicons name="close" size={24} color={colors.gray600} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.inputLabel}>Select role</Text>
+            <View style={styles.rolePicker}>
+              {ROLES.map((r) => {
+                const active = (roleModalUser?.role || 'guest') === r.value;
+                return (
+                  <TouchableOpacity
+                    key={r.value}
+                    style={[styles.roleOption, active && styles.roleOptionActive]}
+                    onPress={() => applyRoleFromModal(r.value)}
+                    disabled={!!actionLoadingId && actionLoadingId === roleModalUser?.id}
+                  >
+                    <Text
+                      style={[
+                        styles.roleOptionText,
+                        active && styles.roleOptionTextActive,
+                      ]}
+                    >
+                      {r.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              style={styles.roleModalCancel}
+              onPress={() => setRoleModalUser(null)}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -544,6 +603,20 @@ const styles = StyleSheet.create({
   },
   roleOptionText: { fontSize: 14, color: colors.gray600 },
   roleOptionTextActive: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+  roleModalSheet: { maxHeight: '70%' as const },
+  roleModalSubtitle: {
+    fontSize: 14,
+    color: colors.gray600,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  roleModalCancel: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+  },
   modalFooter: {
     flexDirection: 'row',
     gap: 12,

@@ -39,7 +39,13 @@ export function SignupScreen() {
   const [phonePromptLoading, setPhonePromptLoading] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
 
-  const handleGoogleSignup = async (socialUser: { id: string; email: string; name: string; picture?: string }) => {
+  const handleGoogleSignup = async (socialUser: {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string;
+    idToken?: string;
+  }) => {
     setError('');
     setGoogleLoading(true);
     try {
@@ -49,6 +55,7 @@ export function SignupScreen() {
         email: socialUser.email,
         name: socialUser.name,
         picture: socialUser.picture,
+        ...(socialUser.idToken ? { id_token: socialUser.idToken } : {}),
       });
       if (response.success && response.user) {
         const needsPhone = !response.user.phone || String(response.user.phone).trim() === '';

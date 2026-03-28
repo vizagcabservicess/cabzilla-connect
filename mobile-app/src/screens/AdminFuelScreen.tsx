@@ -15,6 +15,7 @@ import {
   TextInput,
   Alert,
   Modal,
+  Linking,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, subDays } from 'date-fns';
@@ -38,6 +39,8 @@ type FuelRecord = {
   quantity: number;
   pricePerUnit: number;
   totalCost: number;
+  pumpDisplayTotal?: number | null;
+  amountVariance?: number | null;
   odometer: number;
   fuelStation?: string;
   fuelType: string;
@@ -45,6 +48,8 @@ type FuelRecord = {
   vehicleName?: string;
   vehicleNumber?: string;
   calculatedMileage?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 const FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'Electric'] as const;
@@ -83,6 +88,8 @@ function normalizeFuelRecord(r: Record<string, unknown>): FuelRecord {
   const pricePerUnit = parseNum(r.pricePerUnit ?? r.pricePerLiter ?? r.price_per_unit ?? r.price_per_liter ?? 0);
   const idVal = r.id;
   const safeId = (typeof idVal === 'string' || typeof idVal === 'number') ? idVal : 0;
+  const pumpDisplay = r.pumpDisplayTotal ?? r.pump_display_total;
+  const amtVar = r.amountVariance ?? r.amount_variance;
   return {
     id: safeId,
     vehicleId: String(r.vehicleId ?? r.vehicle_id ?? ''),
@@ -90,16 +97,23 @@ function normalizeFuelRecord(r: Record<string, unknown>): FuelRecord {
     quantity,
     pricePerUnit,
     totalCost: parseNum(r.totalCost ?? r.total_cost ?? 0),
+    pumpDisplayTotal: pumpDisplay != null && pumpDisplay !== '' ? parseNum(pumpDisplay) : null,
+    amountVariance: amtVar != null && amtVar !== '' ? parseNum(amtVar) : null,
     odometer: Math.floor(parseNum(r.odometer ?? r.odometer_reading ?? 0)),
     fuelStation: (r.fuelStation ?? r.fuel_station ?? r.station) as string | undefined,
     fuelType: String(r.fuelType ?? r.fuel_type ?? 'Petrol'),
     paymentMethod: String(r.paymentMethod ?? r.payment_method ?? 'Cash'),
     vehicleName: (r.vehicleName ?? r.vehicle_name) as string | undefined,
     vehicleNumber: (r.vehicleNumber ?? r.vehicle_number) as string | undefined,
+    latitude:
+      r.latitude != null && r.latitude !== '' && !Number.isNaN(parseNum(r.latitude)) ? parseNum(r.latitude) : null,
+    longitude:
+      r.longitude != null && r.longitude !== '' && !Number.isNaN(parseNum(r.longitude)) ? parseNum(r.longitude) : null,
   };
 }
 
 function calculateMileage(records: FuelRecord[], getQty: (r: FuelRecord) => number = (r) => r.quantity ?? 0): FuelRecord[] {
+  const MAX_KM_BETWEEN_FILLS = 4000;
   const grouped: Record<string, FuelRecord[]> = {};
   records.forEach((r) => {
     const vid = String(r.vehicleId ?? '');
@@ -107,13 +121,26 @@ function calculateMileage(records: FuelRecord[], getQty: (r: FuelRecord) => numb
     grouped[vid].push(r);
   });
   Object.values(grouped).forEach((arr) => {
-    arr.sort((a, b) => new Date(a.fillDate).getTime() - new Date(b.fillDate).getTime());
+    arr.sort((a, b) => {
+      const td = new Date(a.fillDate).getTime() - new Date(b.fillDate).getTime();
+      if (td !== 0) return td;
+      return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+    });
+    if (arr.length > 0) arr[0].calculatedMileage = null;
     for (let i = 1; i < arr.length; i++) {
       const prev = arr[i - 1];
       const curr = arr[i];
-      const dist = curr.odometer - prev.odometer;
       const qty = getQty(curr);
-      curr.calculatedMileage = qty > 0 && dist > 0 ? dist / qty : null;
+      const prevOdo = prev.odometer;
+      const currOdo = curr.odometer;
+      let kmPerL: number | null = null;
+      if (qty > 0 && prevOdo > 0 && currOdo >= prevOdo) {
+        const dist = currOdo - prevOdo;
+        if (dist > 0 && dist <= MAX_KM_BETWEEN_FILLS) {
+          kmPerL = dist / qty;
+        }
+      }
+      curr.calculatedMileage = kmPerL;
     }
   });
   return records;
@@ -157,6 +184,8 @@ export function AdminFuelScreen() {
   const [formFuelType, setFormFuelType] = useState('Petrol');
   const [formPaymentMethod, setFormPaymentMethod] = useState('Cash');
   const [formNotes, setFormNotes] = useState('');
+  const [formLatitude, setFormLatitude] = useState('');
+  const [formLongitude, setFormLongitude] = useState('');
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showRangeStartPicker, setShowRangeStartPicker] = useState(false);
@@ -252,6 +281,8 @@ export function AdminFuelScreen() {
     setFormFuelType(r.fuelType ?? 'Petrol');
     setFormPaymentMethod(r.paymentMethod ?? 'Cash');
     setFormNotes('');
+    setFormLatitude(r.latitude != null ? String(r.latitude) : '');
+    setFormLongitude(r.longitude != null ? String(r.longitude) : '');
     setShowRecordForm(true);
   }, []);
 
@@ -299,6 +330,8 @@ export function AdminFuelScreen() {
     setFormFuelType('Petrol');
     setFormPaymentMethod('Cash');
     setFormNotes('');
+    setFormLatitude('');
+    setFormLongitude('');
     setShowRecordForm(true);
   };
 
@@ -323,9 +356,32 @@ export function AdminFuelScreen() {
       Alert.alert('Validation', 'Enter valid odometer reading');
       return;
     }
+    const latT = formLatitude.trim();
+    const lngT = formLongitude.trim();
+    let latVal: number | null | undefined;
+    let lngVal: number | null | undefined;
+    if (latT !== '' && lngT !== '') {
+      const latN = parseFloat(latT);
+      const lngN = parseFloat(lngT);
+      if (Number.isNaN(latN) || Number.isNaN(lngN) || latN < -90 || latN > 90 || lngN < -180 || lngN > 180) {
+        Alert.alert('Validation', 'Invalid latitude/longitude');
+        return;
+      }
+      latVal = latN;
+      lngVal = lngN;
+    } else if (latT !== '' || lngT !== '') {
+      Alert.alert('Validation', 'Enter both latitude and longitude, or leave both empty');
+      return;
+    } else if (
+      editingRecord?.id != null &&
+      (editingRecord.latitude != null || editingRecord.longitude != null)
+    ) {
+      latVal = null;
+      lngVal = null;
+    }
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         vehicleId: formVehicleId,
         fillDate: format(formFillDate, 'yyyy-MM-dd'),
         quantity: qty,
@@ -337,11 +393,15 @@ export function AdminFuelScreen() {
         paymentMethod: formPaymentMethod,
         notes: formNotes || undefined,
       };
+      if (latVal !== undefined) {
+        payload.latitude = latVal;
+        payload.longitude = lngVal ?? null;
+      }
       if (editingRecord?.id != null) {
-        await adminExtendedAPI.fuelUpdateRecord(editingRecord.id, payload);
+        await adminExtendedAPI.fuelUpdateRecord(editingRecord.id, payload as Parameters<typeof adminExtendedAPI.fuelUpdateRecord>[1]);
         Alert.alert('Success', 'Fuel record updated');
       } else {
-        await adminExtendedAPI.fuelCreateRecord(payload);
+        await adminExtendedAPI.fuelCreateRecord(payload as Parameters<typeof adminExtendedAPI.fuelCreateRecord>[0]);
         Alert.alert('Success', 'Fuel record added');
       }
       setShowRecordForm(false);
@@ -591,11 +651,33 @@ export function AdminFuelScreen() {
                     <Text style={styles.recordMetaText}>{getEffectiveQuantity(r).toFixed(1)} L</Text>
                     <Text style={styles.recordMetaText}>₹{getEffectivePricePerUnit(r).toFixed(2)}/L</Text>
                     <Text style={styles.recordMetaText}>{formatAmount(r.totalCost ?? 0)}</Text>
+                    {r.pumpDisplayTotal != null && r.pumpDisplayTotal > 0 && (
+                      <Text style={styles.recordMetaText}>Pump ₹{r.pumpDisplayTotal.toFixed(2)}</Text>
+                    )}
+                    {r.amountVariance != null && Math.abs(r.amountVariance) >= 0.01 && (
+                      <Text style={[styles.recordMetaText, styles.varianceMeta]}>
+                        Δ ₹{r.amountVariance.toFixed(2)}
+                      </Text>
+                    )}
                     {r.odometer != null && <Text style={styles.recordMetaText}>{r.odometer.toLocaleString()} km</Text>}
                     {r.calculatedMileage != null && r.calculatedMileage! > 0 && (
                       <Text style={styles.recordMetaText}>{r.calculatedMileage!.toFixed(1)} km/L</Text>
                     )}
                   </View>
+                  {r.latitude != null &&
+                    r.longitude != null &&
+                    !Number.isNaN(r.latitude) &&
+                    !Number.isNaN(r.longitude) && (
+                      <TouchableOpacity
+                        onPress={() =>
+                          Linking.openURL(`https://www.google.com/maps?q=${r.latitude},${r.longitude}`)
+                        }
+                      >
+                        <Text style={styles.recordGps}>
+                          GPS {r.latitude.toFixed(4)}, {r.longitude.toFixed(4)} — Maps
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   <View style={styles.recordActions}>
                     <TouchableOpacity style={styles.recordActionBtn} onPress={() => openEditRecord(r)}>
                       <Ionicons name="pencil-outline" size={18} color={colors.primary} />
@@ -689,6 +771,29 @@ export function AdminFuelScreen() {
               <TextInput style={styles.input} value={formOdometer} onChangeText={setFormOdometer} placeholder="0" keyboardType="number-pad" placeholderTextColor={colors.gray600} />
               <Text style={styles.label}>Fuel Station</Text>
               <TextInput style={styles.input} value={formFuelStation} onChangeText={setFormFuelStation} placeholder="Optional" placeholderTextColor={colors.gray600} />
+              <Text style={styles.label}>GPS (optional, decimal degrees)</Text>
+              <View style={styles.formRow}>
+                <View style={styles.formHalf}>
+                  <TextInput
+                    style={styles.input}
+                    value={formLatitude}
+                    onChangeText={setFormLatitude}
+                    placeholder="Latitude"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={colors.gray600}
+                  />
+                </View>
+                <View style={styles.formHalf}>
+                  <TextInput
+                    style={styles.input}
+                    value={formLongitude}
+                    onChangeText={setFormLongitude}
+                    placeholder="Longitude"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={colors.gray600}
+                  />
+                </View>
+              </View>
               <Text style={styles.label}>Fuel Type</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.formChipRow}>
                 {FUEL_TYPES.map((ft) => (
@@ -783,6 +888,8 @@ const styles = StyleSheet.create({
   recordVehicle: { fontSize: 13, color: colors.gray600, marginTop: 4 },
   recordMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   recordMetaText: { fontSize: 12, color: colors.foreground },
+  varianceMeta: { color: '#b45309', fontWeight: '600' },
+  recordGps: { fontSize: 12, color: colors.primary, fontWeight: '600', marginTop: 6 },
   recordActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   recordActionBtn: { padding: 8 },
   empty: { alignItems: 'center', paddingVertical: 32 },

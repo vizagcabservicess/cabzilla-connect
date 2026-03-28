@@ -1,11 +1,25 @@
 /**
- * Push notification service for super_admin users.
- * Registers device token with backend and handles incoming notifications.
+ * Push: super_admin (new bookings), driver (trip assignments).
  */
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+
+/** Android channel for assign-driver pushes — must match server Expo payload `android.channelId`. */
+export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments';
+
+export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(TRIP_ASSIGNMENT_CHANNEL_ID, {
+    name: 'Trip assignments',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 600, 200, 600],
+    sound: 'default',
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
 
 // Configure how notifications appear when app is in foreground
 Notifications.setNotificationHandler({
@@ -31,23 +45,31 @@ export async function getPushToken(): Promise<string | null> {
     const { status } = await Notifications.requestPermissionsAsync();
     final = status;
   }
-  if (final !== 'granted') return null;
-
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-  if (!projectId) {
-    if (__DEV__) {
-      console.warn(
-        '[push] Missing expo.extra.eas.projectId — cannot get Expo push token. ' +
-          'Remote push on Android release builds also requires FCM in EAS. See mobile-app/docs/PUSH_NOTIFICATIONS.md'
-      );
-    }
+  if (final !== 'granted') {
+    console.warn('[push] Notification permission not granted — remote push disabled.');
     return null;
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId,
-  });
-  return tokenData?.data ?? null;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  if (!projectId) {
+    console.warn(
+      '[push] Missing expo.extra.eas.projectId — cannot get Expo push token. ' +
+        'Fix app.json extra.eas.projectId. Android store/dev builds also need FCM in EAS. See mobile-app/docs/PUSH_NOTIFICATIONS.md'
+    );
+    return null;
+  }
+
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenData?.data ?? null;
+    if (!token) {
+      console.warn('[push] getExpoPushTokenAsync returned empty — check EAS FCM (Android) / APNs (iOS).');
+    }
+    return token;
+  } catch (e) {
+    console.warn('[push] getExpoPushTokenAsync failed:', e);
+    return null;
+  }
 }
 
 /**

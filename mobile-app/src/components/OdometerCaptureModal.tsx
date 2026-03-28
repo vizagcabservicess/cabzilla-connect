@@ -17,38 +17,31 @@ import * as ImagePicker from 'expo-image-picker';
 import { extractTextFromImage } from '../services/ocrService';
 import { colors } from '../theme/colors';
 import { driverTripsAPI, uploadImage } from '../services/driverTripsAPI';
+import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
 
-function parseOdometerFromText(text: string): number | null {
-  const kmLabel = text.match(/(\d{1,3}(?:,\d{3})*|\d{4,7})\s*km\b/i);
-  if (kmLabel) {
-    const n = parseInt(kmLabel[1].replace(/,/g, ''), 10);
-    if (n >= 1000 && n <= 9999999) return n;
-  }
-  const raw = text.replace(/\s/g, ' ');
-  const matches = raw.match(/\d{4,7}/g);
-  if (!matches || matches.length === 0) return null;
-  const numbers = matches.map((m) => parseInt(m, 10)).filter((n) => n >= 1000 && n <= 9999999);
-  if (numbers.length === 0) return null;
-  const hasLarge = numbers.some((n) => n >= 10000);
-  const candidates = hasLarge ? numbers.filter((n) => n < 800 || n > 6000) : numbers;
-  const pool = candidates.length > 0 ? candidates : numbers;
-  const large = pool.filter((n) => n >= 10000);
-  // When OCR returns two big numbers (e.g. spurious 801406 vs real 66984), prefer the lower reading.
-  if (large.length > 1) {
-    return Math.min(...large);
-  }
-  return Math.max(...pool);
-}
+export type OdometerCaptureModalProps =
+  | {
+      visible: boolean;
+      onClose: () => void;
+      mode: 'trip';
+      bookingId: number;
+      readingType: 'start' | 'end';
+      onSuccess: () => void;
+    }
+  | {
+      visible: boolean;
+      onClose: () => void;
+      mode: 'fuel';
+      onReadingApplied: (reading: number) => void;
+    };
 
-interface Props {
-  visible: boolean;
-  onClose: () => void;
-  bookingId: number;
-  readingType: 'start' | 'end';
-  onSuccess: () => void;
-}
-
-export function OdometerCaptureModal({ visible, onClose, bookingId, readingType, onSuccess }: Props) {
+export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
+  const { visible, onClose } = props;
+  const tripMode = props.mode === 'trip';
+  const bookingId = tripMode ? props.bookingId : 0;
+  const readingType = tripMode ? props.readingType : 'start';
+  const onSuccess = tripMode ? props.onSuccess : () => {};
+  const onReadingAppliedFuel = !tripMode ? props.onReadingApplied : null;
   const [step, setStep] = useState<'idle' | 'capturing' | 'processing' | 'uploading'>('idle');
   const [error, setError] = useState('');
   const [manualValue, setManualValue] = useState('');
@@ -111,6 +104,13 @@ export function OdometerCaptureModal({ visible, onClose, bookingId, readingType,
         return;
       }
 
+      if (onReadingAppliedFuel) {
+        onReadingAppliedFuel(odometer);
+        setStep('idle');
+        onClose();
+        return;
+      }
+
       setStep('uploading');
       const imageUrl = await uploadImage(uri, 'odometer.jpg', 'odometer');
       const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -148,6 +148,11 @@ export function OdometerCaptureModal({ visible, onClose, bookingId, readingType,
     setError('');
     setStep('uploading');
     try {
+      if (onReadingAppliedFuel) {
+        onReadingAppliedFuel(num);
+        onClose();
+        return;
+      }
       let imageUrl = '';
       if (failedImageUri && (failedImageUri.startsWith('file') || failedImageUri.startsWith('content'))) {
         imageUrl = await uploadImage(failedImageUri, 'odometer.jpg', 'odometer');
@@ -168,7 +173,7 @@ export function OdometerCaptureModal({ visible, onClose, bookingId, readingType,
     }
   };
 
-  const label = readingType === 'start' ? 'Start Trip' : 'End Trip';
+  const label = tripMode ? (readingType === 'start' ? 'Start Trip' : 'End Trip') : 'Fuel entry';
   // Keep manual row visible while manual submit uploads (step === 'uploading'); avoid narrowing step to only 'idle'.
   const showManualEntry = Boolean(error || failedImageUri) && (step === 'idle' || step === 'uploading');
 
@@ -190,9 +195,13 @@ export function OdometerCaptureModal({ visible, onClose, bookingId, readingType,
         keyboardVerticalOffset={0}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Capture Odometer ({label})</Text>
+          <Text style={styles.title}>
+            {tripMode ? `Capture Odometer (${label})` : 'Capture odometer'}
+          </Text>
           <Text style={styles.desc}>
-            Take a photo of the odometer or enter the reading manually below.
+            {tripMode
+              ? 'Take a photo of the odometer or enter the reading manually below.'
+              : 'Photograph your dashboard odometer to fill the reading, or type it manually.'}
           </Text>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {showManualEntry && (

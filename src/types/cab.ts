@@ -265,6 +265,9 @@ export interface FuelRecord {
   totalCost: number;
   odometer: number;
   fuelStation: string;
+  /** Capture location from driver upload or manual admin entry (WGS84). */
+  latitude?: number | null;
+  longitude?: number | null;
   fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'Electric';
   paymentMethod: 'Cash' | 'Card' | 'Company' | 'Customer';
   paymentDetails?: {

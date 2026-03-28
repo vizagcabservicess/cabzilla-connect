@@ -245,26 +245,40 @@ export default function FuelManagementPage() {
     return `${vehicle.vehicleNumber} - ${vehicle.name} ${vehicle.model}`;
   };
 
-  // Utility to calculate mileage for each record
+  /** km/L since previous fill: (current odometer − previous odometer) ÷ liters this fill. Only when previous odometer is valid and non‑decreasing. */
   function calculateMileage(records: FuelRecord[]): FuelRecord[] {
-    // Group records by vehicleId
+    const MAX_KM_BETWEEN_FILLS = 4000;
     const grouped: { [vehicleId: string]: FuelRecord[] } = {};
     records.forEach(record => {
       if (!grouped[record.vehicleId]) grouped[record.vehicleId] = [];
       grouped[record.vehicleId].push(record);
     });
-    // For each vehicle, sort by fillDate and calculate mileage
     Object.values(grouped).forEach(vehicleRecords => {
-      vehicleRecords.sort((a, b) => new Date(a.fillDate).getTime() - new Date(b.fillDate).getTime());
+      vehicleRecords.sort((a, b) => {
+        const td = new Date(a.fillDate).getTime() - new Date(b.fillDate).getTime();
+        if (td !== 0) return td;
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+      });
+      if (vehicleRecords.length > 0) vehicleRecords[0].calculatedMileage = null;
       for (let i = 1; i < vehicleRecords.length; i++) {
         const prev = vehicleRecords[i - 1];
         const curr = vehicleRecords[i];
-        const distance = curr.odometer - prev.odometer;
         const fuel = curr.quantity;
-        curr.calculatedMileage = (fuel > 0 && distance > 0) ? distance / fuel : null;
+        const prevOdo = prev.odometer;
+        const currOdo = curr.odometer;
+        let kmPerL: number | null = null;
+        if (
+          fuel > 0 &&
+          prevOdo > 0 &&
+          currOdo >= prevOdo
+        ) {
+          const distance = currOdo - prevOdo;
+          if (distance > 0 && distance <= MAX_KM_BETWEEN_FILLS) {
+            kmPerL = distance / fuel;
+          }
+        }
+        curr.calculatedMileage = kmPerL;
       }
-      // First record has no previous, so no mileage
-      if (vehicleRecords.length > 0) vehicleRecords[0].calculatedMileage = null;
     });
     return records;
   }
@@ -474,18 +488,19 @@ export default function FuelManagementPage() {
                       <TableHead className="text-right">Mileage</TableHead>
                       <TableHead>Payment</TableHead>
                       <TableHead>Fuel Station</TableHead>
+                      <TableHead>GPS</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredFuelData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8">
+                        <TableCell colSpan={12} className="text-center py-8">
                           <p className="text-gray-500">No fuel records found. Add a new record or adjust your filters.</p>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredFuelData.map((record) => (
+                      recordsWithMileage.map((record) => (
                         <TableRow key={record.id}>
                           <TableCell>{formatDate(record.fillDate)}</TableCell>
                           <TableCell className="font-medium">{getVehicleDisplayName(record.vehicleId)}</TableCell>
@@ -513,6 +528,23 @@ export default function FuelManagementPage() {
                           </TableCell>
                           <TableCell>{getPaymentMethodDisplay(record.paymentMethod, record.paymentDetails)}</TableCell>
                           <TableCell>{record.fuelStation}</TableCell>
+                          <TableCell className="text-sm">
+                            {record.latitude != null &&
+                            record.longitude != null &&
+                            !Number.isNaN(record.latitude) &&
+                            !Number.isNaN(record.longitude) ? (
+                              <a
+                                href={`https://www.google.com/maps?q=${record.latitude},${record.longitude}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleEditFuelRecord(record)}>

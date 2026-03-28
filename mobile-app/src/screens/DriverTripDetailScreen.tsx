@@ -264,6 +264,7 @@ export function DriverTripDetailScreen() {
       <OdometerCaptureModal
         visible={odometerModal !== null}
         onClose={() => setOdometerModal(null)}
+        mode="trip"
         bookingId={trip.id}
         readingType={odometerModal === 'start' ? 'start' : 'end'}
         onSuccess={onOdometerSuccess}

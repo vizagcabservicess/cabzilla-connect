@@ -38,7 +38,13 @@ export function LoginScreen() {
   const [phonePromptLoading, setPhonePromptLoading] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
 
-  const handleGoogleSuccess = async (socialUser: { id: string; email: string; name: string; picture?: string }) => {
+  const handleGoogleSuccess = async (socialUser: {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string;
+    idToken?: string;
+  }) => {
     setError('');
     setGoogleLoading(true);
     try {
@@ -48,6 +54,7 @@ export function LoginScreen() {
         email: socialUser.email,
         name: socialUser.name,
         picture: socialUser.picture,
+        ...(socialUser.idToken ? { id_token: socialUser.idToken } : {}),
       };
       const response = await socialLogin(socialData);
       if (response.success && response.user) {

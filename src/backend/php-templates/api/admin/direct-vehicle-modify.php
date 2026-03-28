@@ -10,37 +10,40 @@ require_once __DIR__ . '/../utils/auth.php'; // CRITICAL: Add authentication
  * SECURITY MODEL: Public read access for vehicle loading, admin authentication for modifications
  */
 
-// SECURITY CHECK - Require admin authentication only for modifications
-// Allow public read access for vehicle loading
-$isReadOnlyRequest = ($_SERVER['REQUEST_METHOD'] === 'GET' && 
-                     isset($_GET['action']) && 
-                     in_array($_GET['action'], ['load', 'list']));
-
-if (!$isReadOnlyRequest && !validateAdminAuth()) {
-    http_response_code(403);
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.']);
-    exit;
-}
-
-// Set CORS headers - Restrict to trusted domains only
+// CORS must run before auth. Browser preflight is OPTIONS (not GET) — if we 403 here without CORS,
+// anonymous pages get TypeError: Failed to fetch when calling ?action=load with custom headers.
 $allowedOrigins = ['https://vizagtaxihub.com', 'https://www.vizagtaxihub.com'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins)) {
+if (in_array($origin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
     header('Access-Control-Allow-Origin: https://vizagtaxihub.com');
 }
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh, X-Bypass-Cache, X-Database-First, X-Debug, Cache-Control, Pragma, Expires');
 header('Access-Control-Allow-Credentials: true');
-header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Vary: Origin');
 
-// Handle OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+    http_response_code(204);
     exit;
 }
+
+// SECURITY CHECK - Require admin authentication only for modifications
+// Allow public read access for vehicle loading (GET load/list only)
+$isReadOnlyRequest = ($_SERVER['REQUEST_METHOD'] === 'GET'
+                     && isset($_GET['action'])
+                     && in_array($_GET['action'], ['load', 'list'], true));
+
+if (!$isReadOnlyRequest && !validateAdminAuth()) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.']);
+    exit;
+}
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Create logs directory
 $logDir = __DIR__ . '/../../logs';

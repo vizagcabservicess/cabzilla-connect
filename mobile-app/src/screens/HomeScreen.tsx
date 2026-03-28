@@ -14,11 +14,14 @@ import {
   Pressable,
   Animated,
   Linking,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
+import { useFocusEffect } from '@react-navigation/native';
 import { LocationInput } from '../components/LocationInput';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
 import { colors, fonts } from '../theme/colors';
@@ -55,6 +58,18 @@ function getMinimumDate(): Date {
   return n;
 }
 
+/** Earliest allowed pickup = device time + 1h (re-check at tap — UI can show :28 while min is already :29). */
+function resolvePickupForSearch(current: Date): Date {
+  const min = getMinimumDate();
+  return current.getTime() < min.getTime() ? new Date(min.getTime()) : current;
+}
+
+/** Trip start must stay ≥ now+1h; state was only set once so it goes stale as the clock moves. */
+function clampPickupToMinimum(setPickupDate: React.Dispatch<React.SetStateAction<Date>>): void {
+  const min = getMinimumDate();
+  setPickupDate((prev) => (prev < min ? min : prev));
+}
+
 type HomeNavProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 type HomeRouteProp = RouteProp<RootStackParamList, 'Home'>;
 
@@ -76,12 +91,40 @@ export function HomeScreen() {
   const [dropLocation, setDropLocation] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date>(getMinimumDate());
   const [returnDate, setReturnDate] = useState<Date | null>(null);
+  const pickupDateRef = useRef(pickupDate);
+  const returnDateRef = useRef(returnDate);
+  useEffect(() => {
+    pickupDateRef.current = pickupDate;
+  }, [pickupDate]);
+  useEffect(() => {
+    returnDateRef.current = returnDate;
+  }, [returnDate]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [tours, setTours] = useState<any[]>([]);
   const [toursLoading, setToursLoading] = useState(true);
 
   React.useEffect(() => {
     tourAPI.getAvailableTours().then(setTours).catch(() => setTours([])).finally(() => setToursLoading(false));
+  }, []);
+
+  // Keep trip start ≥ device time + 1h: clamp when returning to Home, on resume, and every minute while Home is visible.
+  useFocusEffect(
+    useCallback(() => {
+      clampPickupToMinimum(setPickupDate);
+      const tick = setInterval(() => {
+        clampPickupToMinimum(setPickupDate);
+      }, 60_000);
+      return () => clearInterval(tick);
+    }, [])
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') {
+        clampPickupToMinimum(setPickupDate);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   // Show auth bottom sheet when redirected after logout
@@ -251,9 +294,29 @@ export function HomeScreen() {
     (!(tripType === 'outstation' && tripMode === 'round-trip') || (returnDate != null));
 
   const performSearch = useCallback(
-    async (effectiveTripType: TripType) => {
+    async (effectiveTripType: TripType, pickupHint?: Date) => {
       const drop =
         effectiveTripType === 'outstation' || effectiveTripType === 'airport' ? dropLocation : pickupLocation;
+      const pickupResolved = resolvePickupForSearch(pickupHint ?? pickupDateRef.current);
+      if (pickupResolved.getTime() !== pickupDateRef.current.getTime()) {
+        setPickupDate(pickupResolved);
+        pickupDateRef.current = pickupResolved;
+      }
+      const pickupTs = pickupResolved.getTime();
+
+      let returnTs: number | undefined;
+      if (effectiveTripType === 'outstation' && tripMode === 'round-trip') {
+        const r = returnDateRef.current;
+        if (r && r.getTime() >= pickupTs) {
+          returnTs = r.getTime();
+        } else if (r) {
+          const bumped = new Date(pickupTs + 60 * 60 * 1000);
+          setReturnDate(bumped);
+          returnDateRef.current = bumped;
+          returnTs = bumped.getTime();
+        }
+      }
+
       setIsCalculating(true);
       try {
         let distance = 0;
@@ -268,15 +331,11 @@ export function HomeScreen() {
             duration = result.duration;
           }
         }
-        const effectiveReturn =
-          effectiveTripType === 'outstation' && tripMode === 'round-trip' && returnDate
-            ? returnDate.getTime()
-            : undefined;
         navigation.navigate('CabResults', {
           pickupLocation: pickupLocation!,
           dropLocation: drop ?? null,
-          pickupDate: pickupDate.getTime(),
-          returnDate: effectiveReturn,
+          pickupDate: pickupTs,
+          returnDate: returnTs,
           tripType: effectiveTripType,
           tripMode,
           distance,
@@ -284,15 +343,11 @@ export function HomeScreen() {
           hourlyPackage: effectiveTripType === 'local' ? hourlyPackage : undefined,
         });
       } catch {
-        const effectiveReturn =
-          effectiveTripType === 'outstation' && tripMode === 'round-trip' && returnDate
-            ? returnDate.getTime()
-            : undefined;
         navigation.navigate('CabResults', {
           pickupLocation: pickupLocation!,
           dropLocation: drop ?? null,
-          pickupDate: pickupDate.getTime(),
-          returnDate: effectiveReturn,
+          pickupDate: pickupTs,
+          returnDate: returnTs,
           tripType: effectiveTripType,
           tripMode,
           distance: effectiveTripType === 'local' ? (hourlyPackage === '8hrs-80km' ? 80 : 100) : 0,
@@ -303,14 +358,15 @@ export function HomeScreen() {
         setIsCalculating(false);
       }
     },
-    [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, hourlyPackage, navigation]
+    [pickupLocation, dropLocation, tripMode, hourlyPackage, navigation]
   );
 
   const handleSearchCabs = useCallback(async () => {
     if (!isFormValid || !pickupLocation) return;
-    if (pickupDate < getMinimumDate()) {
-      Alert.alert('Invalid time', 'Please select a trip start at least 1 hour from now.');
-      return;
+    const effectivePickup = resolvePickupForSearch(pickupDateRef.current);
+    if (effectivePickup.getTime() !== pickupDateRef.current.getTime()) {
+      setPickupDate(effectivePickup);
+      pickupDateRef.current = effectivePickup;
     }
     const drop = tripType === 'outstation' || tripType === 'airport' ? dropLocation : pickupLocation;
     if ((tripType === 'outstation' || tripType === 'airport') && !drop) return;
@@ -346,7 +402,17 @@ export function HomeScreen() {
           hasCoords
             ? `Distance is ${distanceKm.toFixed(1)}km (beyond 35km). We'll use Outstation fares for this trip.`
             : "Selected drop is outside Visakhapatnam. We'll use Outstation fares for this trip.",
-          [{ text: 'OK', onPress: () => performSearch(effectiveTripType) }]
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                const ep = resolvePickupForSearch(pickupDateRef.current);
+                setPickupDate(ep);
+                pickupDateRef.current = ep;
+                void performSearch(effectiveTripType, ep);
+              },
+            },
+          ]
         );
         return;
       }
@@ -361,14 +427,24 @@ export function HomeScreen() {
           hasCoords
             ? `Distance is ${distanceKm.toFixed(1)}km (within 35km). We'll use Airport Transfer fares for this trip.`
             : "Drop location is within Visakhapatnam. We'll use Airport Transfer fares for this trip.",
-          [{ text: 'OK', onPress: () => performSearch(effectiveTripType) }]
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                const ep = resolvePickupForSearch(pickupDateRef.current);
+                setPickupDate(ep);
+                pickupDateRef.current = ep;
+                void performSearch(effectiveTripType, ep);
+              },
+            },
+          ]
         );
         return;
       }
     }
 
-    await performSearch(effectiveTripType);
-  }, [isFormValid, pickupLocation, dropLocation, tripType, pickupDate, performSearch]);
+    await performSearch(effectiveTripType, effectivePickup);
+  }, [isFormValid, pickupLocation, dropLocation, tripType, tripMode, performSearch]);
 
   const tabs: { id: TripType; label: string; icon: string }[] = [
     { id: 'outstation', label: 'Outstation\nTrips', icon: 'car' },
@@ -617,13 +693,14 @@ export function HomeScreen() {
               ]}
               onPress={() => {
                 if (pickupLocation && pickupLocation.name) {
-                  if (pickupDate < getMinimumDate()) {
-                    Alert.alert('Invalid time', 'Please select a trip start at least 1 hour from now.');
-                    return;
+                  const ep = resolvePickupForSearch(pickupDateRef.current);
+                  if (ep.getTime() !== pickupDateRef.current.getTime()) {
+                    setPickupDate(ep);
+                    pickupDateRef.current = ep;
                   }
                   navigation.navigate('ToursList', {
                     pickupLocation,
-                    pickupDate: pickupDate.getTime(),
+                    pickupDate: ep.getTime(),
                     tripMode,
                   });
                 }
@@ -680,11 +757,12 @@ export function HomeScreen() {
                     key={tour.id || i}
                     style={styles.destinationCard}
                     onPress={() => {
+                      const ep = resolvePickupForSearch(pickupDateRef.current);
                       navigation.navigate('TourDetail', {
                         tourId: tour.id ?? '',
                         tourName: tour.name ?? '',
                         pickupLocation: pickupLocation || undefined,
-                        pickupDate: pickupDate.getTime(),
+                        pickupDate: ep.getTime(),
                       });
                     }}
                     activeOpacity={0.8}
