@@ -7,6 +7,8 @@ import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 import { toast } from 'sonner';
 import { InvoicePDF } from './InvoicePDF';
+import type { Booking as ApiBooking } from '@/types/api';
+import { patchInvoiceHtmlTripTypeCell } from '@/utils/invoiceTripTypeDisplay';
 
 interface Booking {
   id: number;
@@ -255,12 +257,14 @@ export function BookingInvoice({ booking, onClose }: BookingInvoiceProps) {
           : taxNote.textContent;
       }
 
-      return doc.documentElement.outerHTML;
+      let out = doc.documentElement.outerHTML;
+      out = patchInvoiceHtmlTripTypeCell(out, booking as unknown as ApiBooking);
+      return out;
     } catch (error) {
       console.error('Failed to sanitize invoice HTML:', error);
-      return html;
+      return patchInvoiceHtmlTripTypeCell(html, booking as unknown as ApiBooking);
     }
-  }, [baseFare, gstEnabled, taxes, totalWithTaxes, formatCurrency]);
+  }, [baseFare, gstEnabled, taxes, totalWithTaxes, formatCurrency, booking]);
 
   const invoiceHtml = useMemo(
     () => sanitizeInvoiceHtml(rawInvoiceHtml),

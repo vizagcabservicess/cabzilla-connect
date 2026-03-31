@@ -1,6 +1,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../utils/invoice_trip_type_display.inc.php';
 
 // CRITICAL: Set all response headers first before any output
 // Turn off error display to prevent output before JSON
@@ -1636,25 +1637,7 @@ try {
         }
     }
 
-    // Trip type display: infer from context when empty; override "local" when clearly outstation
-    $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
-    $dist = (float)($booking['distance'] ?? 0);
-    $hasReturnDate = !empty($booking['return_date'] ?? $booking['returnDate'] ?? null);
-    $hasHourlyPackage = !empty($booking['hourly_package']) || isset($booking['no_of_hours']) || isset($booking['estimated_hours']);
-    if ($tripTypeRaw === '') {
-        if ($dist > 35 || $hasReturnDate) {
-            $tripTypeRaw = 'outstation';
-        } elseif ($hasHourlyPackage) {
-            $tripTypeRaw = 'local';
-        }
-    } elseif ($tripTypeRaw === 'local' && ($dist > 35 || $hasReturnDate)) {
-        $tripTypeRaw = 'outstation';
-    }
-    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'N/A';
-    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
-        $tripMode = $booking['trip_mode'] ?? $booking['tripMode'];
-        $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
-    }
+    list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
 
     // Create HTML content for invoice - compact layout for single-page PDF
     $invoiceHtml = '<!DOCTYPE html>

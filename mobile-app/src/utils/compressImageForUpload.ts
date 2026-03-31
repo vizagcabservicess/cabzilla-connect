@@ -1,5 +1,6 @@
 /**
  * Resize + JPEG compress before OCR / upload so files stay under Vision API (~4MB) limits.
+ * Use `geminiVisionPreset: true` for driver fuel captures (2048px max width, ~88% JPEG) — stencil crop + CNG 3-decimal qty / damaged LCD.
  */
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { getInfoAsync } from 'expo-file-system/legacy';
@@ -8,12 +9,34 @@ import { Platform } from 'react-native';
 /** Target max file size (binary); Vision uses base64 ~4M chars — stay under ~3MB binary. */
 const MAX_BYTES = 3 * 1024 * 1024;
 const INITIAL_WIDTH = 1920;
-const FALLBACK_WIDTH = 1280;
+const FALLBACK_WIDTH = 2048;
 const INITIAL_QUALITY = 0.78;
 const FALLBACK_QUALITY = 0.52;
 
-export async function compressImageForUpload(uri: string): Promise<string> {
+const GEMINI_VISION_MAX_WIDTH = 2048;
+const GEMINI_VISION_JPEG_QUALITY = 0.88;
+
+export async function compressImageForUpload(
+  uri: string,
+  options?: { preserveFullResolution?: boolean; geminiVisionPreset?: boolean }
+): Promise<string> {
   if (!uri) return uri;
+  if (options?.preserveFullResolution) {
+    return uri;
+  }
+
+  if (options?.geminiVisionPreset) {
+    try {
+      const out = await manipulateAsync(
+        uri,
+        [{ resize: { width: GEMINI_VISION_MAX_WIDTH } }],
+        { compress: GEMINI_VISION_JPEG_QUALITY, format: SaveFormat.JPEG }
+      );
+      return out.uri;
+    } catch {
+      return uri;
+    }
+  }
 
   async function compress(width: number, compressQuality: number) {
     return manipulateAsync(

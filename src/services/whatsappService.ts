@@ -1,5 +1,15 @@
 import { Booking } from '@/types/api';
 import { formatLocationForDisplay } from '@/utils/locationUtils';
+import {
+  normalizeTripTypeForConfirmation,
+  resolveLocalHoursKmFromHourlyPackageField,
+} from '@/utils/localPackageLimitsForConfirmation';
+import {
+  coalesceTourInclusionsExclusions,
+  coalesceTourItinerary,
+  formatTourItineraryForWhatsApp,
+  isTourBooking,
+} from '@/utils/tourConfirmationHelpers';
 
 /** True if we should show this value in customer-facing messages (omit N/A clutter). */
 function isPresentableValue(v: unknown): boolean {
@@ -124,7 +134,13 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       tripType = 'outstation';
     }
   }
-  
+
+  // API may send "Local", "Local City Ride", or outstation for airport + hourly rental; hourly_package wins
+  tripType = normalizeTripTypeForConfirmation(tripType === 'Unknown' ? '' : tripType, booking);
+  if (!tripType || tripType === '') {
+    tripType = 'Unknown';
+  }
+
   // For tour bookings, use tour name as destination
   let dropLocation = booking.drop_location 
     ? typeof booking.drop_location === 'string' 
@@ -151,13 +167,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   // Determine trip type display with trip mode
   let tripTypeDisplay = tripType;
   if (tripType === 'local') {
-    // For local trips, include the trip mode (One Way or Round Trip)
-    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
-    tripTypeDisplay = `Local City Ride - ${modeDisplay}`;
+    // Label updated after package hours/km are resolved (hourly rental ≠ one-way outstation)
+    tripTypeDisplay = 'Local hourly rental';
   } else if (tripType === 'tour' || tourId) {
-    // For tours, include the trip mode (One Way or Round Trip)
-    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
-    tripTypeDisplay = `Tour - ${modeDisplay}`;
+    const modeDisplay = tripMode === 'round-trip' ? 'round trip' : 'one-way';
+    const tn = tourName || 'Tour package';
+    tripTypeDisplay = `Tour: ${tn} (${modeDisplay})`;
   } else if (tripType === 'outstation') {
     // For outstation, include the trip mode (One Way or Round Trip)
     const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
@@ -274,78 +289,111 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const pendingAmount = Math.max(0, fareBase - advanceAmount);
   const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
 
-  // Get package details for local trips only - use actual booking data or smart inference
-  let hoursIncluded = tripType === 'local' ? (booking.hours_included || (booking as any).hoursIncluded) : 'N/A';
-  let kmIncluded = tripType === 'local' ? (booking.km_included || (booking as any).kmIncluded) : 'N/A';
+  // Get package details for local trips — prefer hourlyPackage id / DB fields; fare inference is last resort
+  let hoursIncluded: string | number = tripType === 'local' ? '' : 'N/A';
+  let kmIncluded: string | number = tripType === 'local' ? '' : 'N/A';
   let extraPerHour = tripType === 'local' ? (booking.extra_per_hour || (booking as any).extraPerHour) : 'N/A';
   let extraPerKm = tripType === 'local' ? (booking.extra_per_km || (booking as any).extraPerKm) : 'N/A';
-  
-  // Smart inference for local trips based on fare and vehicle type
+
+  if (tripType === 'local') {
+    const fromPkg = resolveLocalHoursKmFromHourlyPackageField(booking);
+    if (fromPkg) {
+      hoursIncluded = fromPkg.hours;
+      kmIncluded = fromPkg.km;
+    } else {
+      const hi = booking.hours_included ?? (booking as any).hoursIncluded;
+      const ki = booking.km_included ?? (booking as any).kmIncluded;
+      hoursIncluded = hi != null && Number(hi) > 0 ? String(Math.round(Number(hi))) : '';
+      kmIncluded = ki != null && Number(ki) > 0 ? String(Math.round(Number(ki))) : '';
+    }
+    const fareSanity = parseFloat(fareBase.toString());
+    const vt0 = vehicleModel.toLowerCase();
+    if (
+      vt0.includes('innova') &&
+      fareSanity >= 2800 &&
+      fareSanity <= 4000 &&
+      String(hoursIncluded) === '10' &&
+      String(kmIncluded) === '100' &&
+      !fromPkg
+    ) {
+      hoursIncluded = '8';
+      kmIncluded = '80';
+    }
+  }
+
+  // Smart inference for local trips only when hours/km or extra rates still missing (avoid wrong tier at ₹4k boundary)
   if (tripType === 'local' && (!hoursIncluded || !kmIncluded || !extraPerHour || !extraPerKm)) {
     const vehicleType = vehicleModel.toLowerCase();
     const fare = parseFloat(fareBase.toString());
-    
-    // Infer package based on fare and vehicle type
+
     if (vehicleType.includes('innova')) {
-      if (fare >= 4000 && fare <= 5000) {
-        // 10hrs 100km package for Innova Crysta
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '450';
-        extraPerKm = '20';
-      } else if (fare >= 3000 && fare <= 4000) {
-        // 8hrs 80km package for Innova Crysta
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '450';
-        extraPerKm = '20';
+      if (fare > 4000 && fare <= 5500) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '450';
+        extraPerKm = extraPerKm || '20';
+      } else if (fare >= 2800 && fare <= 4000) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '450';
+        extraPerKm = extraPerKm || '20';
       }
     } else if (vehicleType.includes('ertiga')) {
-      if (fare >= 3500 && fare <= 4500) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '400';
-        extraPerKm = '18';
-      } else if (fare >= 2500 && fare <= 3500) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '400';
-        extraPerKm = '18';
+      if (fare > 3500 && fare <= 4800) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '400';
+        extraPerKm = extraPerKm || '18';
+      } else if (fare >= 2400 && fare <= 3500) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '400';
+        extraPerKm = extraPerKm || '18';
       }
     } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
-      if (fare >= 7500 && fare <= 9000) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '850';
-        extraPerKm = '35';
-      } else if (fare >= 6000 && fare <= 8000) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '850';
-        extraPerKm = '35';
+      if (fare > 7500 && fare <= 9200) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '850';
+        extraPerKm = extraPerKm || '35';
+      } else if (fare >= 5800 && fare <= 7500) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '850';
+        extraPerKm = extraPerKm || '35';
       }
     } else {
       // Sedan (Swift/Dzire/Amaze/Glanza)
-      if (fare >= 2500 && fare <= 3500) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '300';
-        extraPerKm = '14';
-      } else if (fare >= 2000 && fare <= 3000) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '300';
-        extraPerKm = '14';
+      if (fare > 3000 && fare <= 3600) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '300';
+        extraPerKm = extraPerKm || '14';
+      } else if (fare >= 1800 && fare <= 3000) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '300';
+        extraPerKm = extraPerKm || '14';
       }
     }
-    
+
     // Final fallback to defaults
-    if (!hoursIncluded) {
-      hoursIncluded = '8';
-      kmIncluded = '80';
-      extraPerHour = '100';
-      extraPerKm = '12';
-    }
+      if (!hoursIncluded) {
+        hoursIncluded = '8';
+      }
+      if (!kmIncluded) {
+        kmIncluded = '80';
+      }
+      if (!extraPerHour || extraPerHour === 'N/A') {
+        extraPerHour = '100';
+      }
+      if (!extraPerKm || extraPerKm === 'N/A') {
+        extraPerKm = '12';
+      }
+  }
+
+  if (tripType === 'local' && hoursIncluded && kmIncluded) {
+    tripTypeDisplay = `Local hourly rental — ${hoursIncluded} hrs / ${kmIncluded} km`;
   }
 
   // Get billing details
@@ -407,6 +455,18 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       ? booking.exclusions.join(', ') 
       : booking.exclusions
     : null;
+
+  const tourBookingForLists = isTourBooking(tripType, tourId, booking);
+  if (tourBookingForLists) {
+    const ti = coalesceTourInclusionsExclusions(booking, 'inclusions');
+    const te = coalesceTourInclusionsExclusions(booking, 'exclusions');
+    if (ti.length) {
+      inclusions = ti.join('; ');
+    }
+    if (te.length) {
+      exclusions = te.join('; ');
+    }
+  }
 
   // If no specific inclusions/exclusions found, provide defaults based on vehicle type
   if (!inclusions || inclusions === 'Standard inclusions apply') {
@@ -582,6 +642,18 @@ ${allNotes}`;
   const airportChargesBlock =
     airportChargeLines.length > 1 ? airportChargeLines.join('\n') : '';
 
+  const tourBooking = tourBookingForLists;
+  const itineraryDays = coalesceTourItinerary(booking);
+  const itineraryWhatsApp = formatTourItineraryForWhatsApp(itineraryDays);
+  const tourRef = String(tourId || booking.tour_id || booking.tourId || '').trim();
+  const tourDurationLine = (() => {
+    const a = booking.tourDurationLabel || booking.tour_duration || booking.tourDuration;
+    if (a && String(a).trim()) return String(a).trim();
+    const d = booking.tourDays ?? booking.tour_days;
+    if (d != null && Number(d) > 0) return `${Math.round(Number(d))} day(s)`;
+    return '';
+  })();
+
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
 Hello ${passengerName}!
@@ -602,6 +674,19 @@ ${tripType === 'airport' && tripKmRounded > 0 ? `📏 *Trip distance:* ${tripKmR
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
 📞 *Guest contact:* ${passengerName}, ${passengerCountryCode} ${passengerPhone}
 ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${tourBooking ? `
+
+*Your tour package*
+📦 *Tour:* ${tourName || 'Tour package'}
+🆔 *Tour reference:* ${tourRef || '—'}
+${tourDurationLine ? `📆 *Duration:* ${tourDurationLine}
+` : ''}${oneWayDistance > 0 ? `🛣️ *Approx. distance:* ${Math.round(oneWayDistance)} km
+` : ''}
+${itineraryWhatsApp ? `*Day-by-day itinerary*
+${itineraryWhatsApp}
+` : `*Day-by-day itinerary*
+📋 Full day-wise plan was not included in this message. Contact +91 9966363662 with booking # *${booking.bookingNumber || booking.id}* for the complete itinerary for *${tourName || 'your tour'}*.
+`}` : ''}
 
 *Fare and Payments*
 💰 *Fare (base):* ₹${fareBase}
@@ -610,9 +695,11 @@ ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalReq
 ${gstEnabled && isPresentableValue(gstNumber) ? `🏢 *GST Details:* ${gstNumber}${isPresentableValue(companyName) ? ` (${companyName})` : ''}` : ''}
 🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt
 
-*Trip Inclusions & Exclusions*
+${tourBooking ? `*Tour inclusions & exclusions* (this booking)
 📋 *Inclusions:* ${inclusions}
-❌ *Exclusions:* ${exclusions}
+❌ *Exclusions:* ${exclusions}` : `*Trip Inclusions & Exclusions*
+📋 *Inclusions:* ${inclusions}
+❌ *Exclusions:* ${exclusions}`}
 
 ${tripType === 'local' ? `*Package Limits*
 ⏰ *Hours included:* ${hoursIncluded}
@@ -630,14 +717,6 @@ ${airportChargesBlock ? `${airportChargesBlock}
 ` : ''}${billingAndChargesBlock}
 
 ${routeAndNotesBlock ? `${routeAndNotesBlock}
-
-` : ''}${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
-${(booking as any).tour_itinerary.map((day: any) => {
-  const activities = Array.isArray(day.activities) ? day.activities.join(', ') : '';
-  return `📅 *Day ${day.day}: ${day.title}*
-${day.description}
-${activities ? `🎯 Activities: ${activities}` : ''}`;
-}).join('\n\n')}
 
 ` : ''}*Policies*
 ❌ *Cancellation:* ${cancellationPolicy}

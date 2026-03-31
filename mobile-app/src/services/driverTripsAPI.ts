@@ -349,6 +349,10 @@ export const driverTripsAPI = {
     pairedReceiptOcrText?: string | null;
     /** Set '1' with pairedReceiptOcrText to receive explainability JSON from server. */
     includeFuelOcrDebug?: '1' | '0' | null;
+    /** When true, `imageUri` is already passed through `compressImageForUpload`. */
+    skipImageCompress?: boolean;
+    /** Petrol/Diesel/CNG — server rate-band validation for Gemini pump reading (default petrol). */
+    fuelType?: 'Petrol' | 'Diesel' | string | null;
   }): Promise<{
     id: number;
     imageUrl: string;
@@ -357,11 +361,15 @@ export const driverTripsAPI = {
     rawText?: string;
     fraudFlags?: string[];
     fuelOcrDebug?: Record<string, unknown> | null;
+    /** Pump only: unified vision fields from single Gemini call (skip parallel fuel-vision-unified when set). */
+    fuelUnifiedVision?: Record<string, unknown> | null;
   }> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
-    const compressedUri = await compressImageForUpload(params.imageUri);
+    const compressedUri = params.skipImageCompress
+      ? params.imageUri
+      : await compressImageForUpload(params.imageUri);
     const formData = new FormData();
     formData.append('image', {
       uri: compressedUri,
@@ -393,6 +401,11 @@ export const driverTripsAPI = {
       (params.type === 'fuel_pump' || params.type === 'fuel_receipt')
     ) {
       formData.append('includeFuelOcrDebug', '1');
+    }
+    if (params.type === 'fuel_pump' && params.fuelType != null && String(params.fuelType).trim() !== '') {
+      const f = String(params.fuelType).toLowerCase();
+      const ft = f.includes('diesel') ? 'diesel' : f.includes('cng') ? 'cng' : 'petrol';
+      formData.append('fuelType', ft);
     }
     const response = await axios.post(`${base}/api/driver/upload-fuel-odometer.php`, formData, {
       headers: {

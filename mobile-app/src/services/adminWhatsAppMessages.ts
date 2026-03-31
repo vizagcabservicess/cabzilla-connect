@@ -42,6 +42,156 @@ function stringifyOptionalNum(v: unknown): string {
   return s;
 }
 
+/** Package id only — DB hours/km applied separately so bad 10/100 rows can be repaired. */
+function resolveLocalHoursKmFromHourlyPackageFieldMobile(booking: Booking): { hours: string; km: string } | null {
+  const limits: Record<string, { hours: string; km: string }> = {
+    '4hrs-40km': { hours: '4', km: '40' },
+    '04hrs-40km': { hours: '4', km: '40' },
+    '8hrs-80km': { hours: '8', km: '80' },
+    '10hrs-100km': { hours: '10', km: '100' },
+  };
+  const raw = booking.hourlyPackage ?? booking.hourly_package ?? (booking as any).hourlyPackage;
+  if (raw != null && String(raw).trim() !== '') {
+    const id = String(raw).trim().toLowerCase();
+    if (limits[id]) {
+      return limits[id];
+    }
+    const strip = (s: string) => s.replace(/^0+(?=\d)/, '');
+    const altKey = Object.keys(limits).find((k) => strip(k) === strip(id));
+    if (altKey) {
+      return limits[altKey];
+    }
+    const m = id.match(/(\d+)\s*hrs?[/-](\d+)\s*km/i);
+    if (m) {
+      return { hours: m[1], km: m[2] };
+    }
+  }
+  return null;
+}
+
+function normalizeTripTypeForConfirmationMobile(tripTypeRaw: string, booking: Booking): string {
+  const tourRef = booking.tour_id ?? booking.tourId;
+  if (!tourRef && (booking.hourlyPackage ?? booking.hourly_package ?? (booking as any).hourlyPackage)) {
+    return 'local';
+  }
+  let t = String(tripTypeRaw || '').trim();
+  if (!t) {
+    return '';
+  }
+  const collapsed = t.toLowerCase().replace(/[\s_-]+/g, '');
+  const lower = t.toLowerCase();
+  if (
+    lower === 'local' ||
+    lower === 'local city ride' ||
+    collapsed === 'localcityride' ||
+    lower.includes('hourly')
+  ) {
+    return 'local';
+  }
+  const dropStr = String(
+    typeof booking.drop_location === 'string'
+      ? booking.drop_location
+      : (booking.drop_location as { city?: string } | undefined)?.city ??
+          booking.dropLocation ??
+          ''
+  ).toLowerCase();
+  if (!tourRef && dropStr.includes('local city ride')) {
+    return 'local';
+  }
+  return t;
+}
+
+type TourDay = { day: number; title: string; description: string; activities: string[] };
+
+function isTourBookingMobile(tripType: string, tourId: string | undefined | null, booking: Booking): boolean {
+  const t = (tripType || '').toLowerCase();
+  if (t === 'tour') return true;
+  if (tourId && String(tourId).trim() !== '') return true;
+  if (booking.tour_id != null && String(booking.tour_id).trim() !== '') return true;
+  if (booking.tourId != null && String(booking.tourId).trim() !== '') return true;
+  return false;
+}
+
+function coalesceTourItineraryMobile(booking: Booking): TourDay[] {
+  const parseValue = (v: unknown): TourDay[] => {
+    if (v == null) return [];
+    if (typeof v === 'string' && v.trim() !== '') {
+      try {
+        return parseValue(JSON.parse(v) as unknown);
+      } catch {
+        return [];
+      }
+    }
+    if (!Array.isArray(v)) return [];
+    const out: TourDay[] = [];
+    for (const item of v) {
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        const day = Number(o.day);
+        if (!Number.isFinite(day) || day < 1) continue;
+        const title = String(o.title ?? '').trim();
+        const description = String(o.description ?? '').trim();
+        let activities: string[] = [];
+        if (Array.isArray(o.activities)) {
+          activities = o.activities.map((a) => String(a).trim()).filter(Boolean);
+        }
+        out.push({ day, title, description, activities });
+      }
+    }
+    return out.sort((a, b) => a.day - b.day);
+  };
+  const b = booking as Booking & { tour_itinerary_json?: unknown; tourItinerary?: TourDay[] };
+  return parseValue(booking.tour_itinerary ?? b.tourItinerary ?? b.tour_itinerary_json);
+}
+
+function formatTourItineraryMobile(days: TourDay[]): string {
+  if (!days.length) return '';
+  return days
+    .map((d) => {
+      const acts = d.activities?.length ? d.activities.join(', ') : '';
+      const titleLine = d.title ? `: *${d.title}*` : '';
+      const desc = d.description ? `\n${d.description}` : '';
+      const actLine = acts ? `\n🎯 *Activities:* ${acts}` : '';
+      return `📅 *Day ${d.day}*${titleLine}${desc}${actLine}`;
+    })
+    .join('\n\n');
+}
+
+function coerceStringArrayMobile(a: unknown): string[] {
+  if (a == null) return [];
+  if (Array.isArray(a)) return a.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof a === 'string' && a.trim() !== '') {
+    try {
+      const p = JSON.parse(a) as unknown;
+      if (Array.isArray(p)) return p.map((x) => String(x).trim()).filter(Boolean);
+    } catch {
+      /* plain */
+    }
+    return a
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function coalesceTourInclusionsExclusionsMobile(booking: Booking, kind: 'inclusions' | 'exclusions'): string[] {
+  const b = booking as Booking & {
+    tourInclusions?: string[];
+    tourExclusions?: string[];
+    tour_inclusions?: string[] | string;
+    tour_exclusions?: string[] | string;
+  };
+  if (kind === 'inclusions') {
+    const direct = coerceStringArrayMobile(b.tour_inclusions ?? b.tourInclusions);
+    if (direct.length) return direct;
+    return coerceStringArrayMobile(booking.inclusions);
+  }
+  const direct = coerceStringArrayMobile(b.tour_exclusions ?? b.tourExclusions);
+  if (direct.length) return direct;
+  return coerceStringArrayMobile(booking.exclusions);
+}
+
 export function formatPhoneNumber(phone: string): string {
   // Remove all non-numeric characters
   const cleaned = phone.replace(/\D/g, '');
@@ -136,7 +286,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       tripType = 'outstation';
     }
   }
-  
+
+  tripType = normalizeTripTypeForConfirmationMobile(tripType === 'Unknown' ? '' : tripType, booking);
+  if (!tripType || tripType === '') {
+    tripType = 'Unknown';
+  }
+
   // For tour bookings, use tour name as destination
   let dropLocation = booking.drop_location 
     ? typeof booking.drop_location === 'string' 
@@ -163,13 +318,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   // Determine trip type display with trip mode
   let tripTypeDisplay = tripType;
   if (tripType === 'local') {
-    // For local trips, include the trip mode (One Way or Round Trip)
-    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
-    tripTypeDisplay = `Local City Ride - ${modeDisplay}`;
+    tripTypeDisplay = 'Local hourly rental';
   } else if (tripType === 'tour' || tourId) {
-    // For tours, include the trip mode (One Way or Round Trip)
-    const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
-    tripTypeDisplay = `Tour - ${modeDisplay}`;
+    const modeDisplay = tripMode === 'round-trip' ? 'round trip' : 'one-way';
+    const tn = tourName || 'Tour package';
+    tripTypeDisplay = `Tour: ${tn} (${modeDisplay})`;
   } else if (tripType === 'outstation') {
     // For outstation, include the trip mode (One Way or Round Trip)
     const modeDisplay = tripMode === 'round-trip' ? 'Round Trip' : 'One Way';
@@ -286,78 +439,108 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const pendingAmount = Math.max(0, fareBase - advanceAmount);
   const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
 
-  // Get package details for local trips only - use actual booking data or smart inference
-  let hoursIncluded = tripType === 'local' ? (booking.hours_included || (booking as any).hoursIncluded) : 'N/A';
-  let kmIncluded = tripType === 'local' ? (booking.km_included || (booking as any).kmIncluded) : 'N/A';
+  // Local package limits — prefer hourlyPackage / DB; fare inference only as fallback
+  let hoursIncluded: string | number = tripType === 'local' ? '' : 'N/A';
+  let kmIncluded: string | number = tripType === 'local' ? '' : 'N/A';
   let extraPerHour = tripType === 'local' ? (booking.extra_per_hour || (booking as any).extraPerHour) : 'N/A';
   let extraPerKm = tripType === 'local' ? (booking.extra_per_km || (booking as any).extraPerKm) : 'N/A';
-  
-  // Smart inference for local trips based on fare and vehicle type
+
+  if (tripType === 'local') {
+    const fromPkg = resolveLocalHoursKmFromHourlyPackageFieldMobile(booking);
+    if (fromPkg) {
+      hoursIncluded = fromPkg.hours;
+      kmIncluded = fromPkg.km;
+    } else {
+      const hi = booking.hours_included ?? (booking as any).hoursIncluded;
+      const ki = booking.km_included ?? (booking as any).kmIncluded;
+      hoursIncluded = hi != null && Number(hi) > 0 ? String(Math.round(Number(hi))) : '';
+      kmIncluded = ki != null && Number(ki) > 0 ? String(Math.round(Number(ki))) : '';
+    }
+    const fareSanity = parseFloat(fareBase.toString());
+    const vt0 = vehicleModel.toLowerCase();
+    if (
+      vt0.includes('innova') &&
+      fareSanity >= 2800 &&
+      fareSanity <= 4000 &&
+      String(hoursIncluded) === '10' &&
+      String(kmIncluded) === '100' &&
+      !fromPkg
+    ) {
+      hoursIncluded = '8';
+      kmIncluded = '80';
+    }
+  }
+
   if (tripType === 'local' && (!hoursIncluded || !kmIncluded || !extraPerHour || !extraPerKm)) {
     const vehicleType = vehicleModel.toLowerCase();
     const fare = parseFloat(fareBase.toString());
-    
-    // Infer package based on fare and vehicle type
+
     if (vehicleType.includes('innova')) {
-      if (fare >= 4000 && fare <= 5000) {
-        // 10hrs 100km package for Innova Crysta
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '450';
-        extraPerKm = '20';
-      } else if (fare >= 3000 && fare <= 4000) {
-        // 8hrs 80km package for Innova Crysta
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '450';
-        extraPerKm = '20';
+      if (fare > 4000 && fare <= 5500) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '450';
+        extraPerKm = extraPerKm || '20';
+      } else if (fare >= 2800 && fare <= 4000) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '450';
+        extraPerKm = extraPerKm || '20';
       }
     } else if (vehicleType.includes('ertiga')) {
-      if (fare >= 3500 && fare <= 4500) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '400';
-        extraPerKm = '18';
-      } else if (fare >= 2500 && fare <= 3500) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '400';
-        extraPerKm = '18';
+      if (fare > 3500 && fare <= 4800) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '400';
+        extraPerKm = extraPerKm || '18';
+      } else if (fare >= 2400 && fare <= 3500) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '400';
+        extraPerKm = extraPerKm || '18';
       }
     } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
-      if (fare >= 7500 && fare <= 9000) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '850';
-        extraPerKm = '35';
-      } else if (fare >= 6000 && fare <= 8000) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '850';
-        extraPerKm = '35';
+      if (fare > 7500 && fare <= 9200) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '850';
+        extraPerKm = extraPerKm || '35';
+      } else if (fare >= 5800 && fare <= 7500) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '850';
+        extraPerKm = extraPerKm || '35';
       }
     } else {
-      // Sedan (Swift/Dzire/Amaze/Glanza)
-      if (fare >= 2500 && fare <= 3500) {
-        hoursIncluded = '10';
-        kmIncluded = '100';
-        extraPerHour = '300';
-        extraPerKm = '14';
-      } else if (fare >= 2000 && fare <= 3000) {
-        hoursIncluded = '8';
-        kmIncluded = '80';
-        extraPerHour = '300';
-        extraPerKm = '14';
+      if (fare > 3000 && fare <= 3600) {
+        hoursIncluded = hoursIncluded || '10';
+        kmIncluded = kmIncluded || '100';
+        extraPerHour = extraPerHour || '300';
+        extraPerKm = extraPerKm || '14';
+      } else if (fare >= 1800 && fare <= 3000) {
+        hoursIncluded = hoursIncluded || '8';
+        kmIncluded = kmIncluded || '80';
+        extraPerHour = extraPerHour || '300';
+        extraPerKm = extraPerKm || '14';
       }
     }
-    
-    // Final fallback to defaults
+
     if (!hoursIncluded) {
       hoursIncluded = '8';
+    }
+    if (!kmIncluded) {
       kmIncluded = '80';
+    }
+    if (!extraPerHour || extraPerHour === 'N/A') {
       extraPerHour = '100';
+    }
+    if (!extraPerKm || extraPerKm === 'N/A') {
       extraPerKm = '12';
     }
+  }
+
+  if (tripType === 'local' && hoursIncluded && kmIncluded) {
+    tripTypeDisplay = `Local hourly rental — ${hoursIncluded} hrs / ${kmIncluded} km`;
   }
 
   // Get billing details
@@ -416,6 +599,14 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       ? booking.exclusions.join(', ') 
       : booking.exclusions
     : null;
+
+  const tourBookingForLists = isTourBookingMobile(tripType, tourId, booking);
+  if (tourBookingForLists) {
+    const ti = coalesceTourInclusionsExclusionsMobile(booking, 'inclusions');
+    const te = coalesceTourInclusionsExclusionsMobile(booking, 'exclusions');
+    if (ti.length) inclusions = ti.join('; ');
+    if (te.length) exclusions = te.join('; ');
+  }
 
   // If no specific inclusions/exclusions found, provide defaults based on vehicle type
   if (!inclusions || inclusions === 'Standard inclusions apply') {
@@ -591,6 +782,18 @@ ${allNotes}`;
   const airportChargesBlock =
     airportChargeLines.length > 1 ? airportChargeLines.join('\n') : '';
 
+  const tourBooking = tourBookingForLists;
+  const itineraryDays = coalesceTourItineraryMobile(booking);
+  const itineraryWhatsApp = formatTourItineraryMobile(itineraryDays);
+  const tourRef = String(tourId || booking.tour_id || booking.tourId || '').trim();
+  const tourDurationLine = (() => {
+    const a = booking.tourDurationLabel || (booking as any).tour_duration || (booking as any).tourDuration;
+    if (a && String(a).trim()) return String(a).trim();
+    const d = (booking as any).tourDays ?? (booking as any).tour_days;
+    if (d != null && Number(d) > 0) return `${Math.round(Number(d))} day(s)`;
+    return '';
+  })();
+
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
 Hello ${passengerName}!
@@ -611,6 +814,19 @@ ${tripType === 'airport' && tripKmRounded > 0 ? `📏 *Trip distance:* ${tripKmR
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
 📞 *Guest contact:* ${passengerName}, ${passengerCountryCode} ${passengerPhone}
 ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
+${tourBooking ? `
+
+*Your tour package*
+📦 *Tour:* ${tourName || 'Tour package'}
+🆔 *Tour reference:* ${tourRef || '—'}
+${tourDurationLine ? `📆 *Duration:* ${tourDurationLine}
+` : ''}${oneWayDistance > 0 ? `🛣️ *Approx. distance:* ${Math.round(oneWayDistance)} km
+` : ''}
+${itineraryWhatsApp ? `*Day-by-day itinerary*
+${itineraryWhatsApp}
+` : `*Day-by-day itinerary*
+📋 Full day-wise plan was not included in this message. Contact +91 9966363662 with booking # *${booking.bookingNumber || booking.id}* for the complete itinerary for *${tourName || 'your tour'}*.
+`}` : ''}
 
 *Fare and Payments*
 💰 *Fare (base):* ₹${fareBase}
@@ -619,9 +835,11 @@ ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalReq
 ${gstEnabled && isPresentableValue(gstNumber) ? `🏢 *GST Details:* ${gstNumber}${isPresentableValue(companyName) ? ` (${companyName})` : ''}` : ''}
 🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt
 
-*Trip Inclusions & Exclusions*
+${tourBooking ? `*Tour inclusions & exclusions* (this booking)
 📋 *Inclusions:* ${inclusions}
-❌ *Exclusions:* ${exclusions}
+❌ *Exclusions:* ${exclusions}` : `*Trip Inclusions & Exclusions*
+📋 *Inclusions:* ${inclusions}
+❌ *Exclusions:* ${exclusions}`}
 
 ${tripType === 'local' ? `*Package Limits*
 ⏰ *Hours included:* ${hoursIncluded}
@@ -639,14 +857,6 @@ ${airportChargesBlock ? `${airportChargesBlock}
 ` : ''}${billingAndChargesBlock}
 
 ${routeAndNotesBlock ? `${routeAndNotesBlock}
-
-` : ''}${(tripType === 'tour' || tourId) && (booking as any).tour_itinerary && Array.isArray((booking as any).tour_itinerary) && (booking as any).tour_itinerary.length > 0 ? `*Tour Itinerary*
-${(booking as any).tour_itinerary.map((day: any) => {
-  const activities = Array.isArray(day.activities) ? day.activities.join(', ') : '';
-  return `📅 *Day ${day.day}: ${day.title}*
-${day.description}
-${activities ? `🎯 Activities: ${activities}` : ''}`;
-}).join('\n\n')}
 
 ` : ''}*Policies*
 ❌ *Cancellation:* ${cancellationPolicy}

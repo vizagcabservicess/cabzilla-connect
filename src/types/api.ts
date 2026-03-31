@@ -39,6 +39,18 @@ export interface BookingRequest {
   partialPaymentAmount?: number;
   createdBy?: string;
   tourId?: string;
+  /** Snapshot for WhatsApp/email confirmations — store when API supports JSON fields */
+  tourName?: string;
+  tourDuration?: string;
+  tourDays?: number;
+  tourItinerary?: Array<{
+    day: number;
+    title: string;
+    description: string;
+    activities: string[];
+  }>;
+  tourInclusions?: string[];
+  tourExclusions?: string[];
   // Optional GST details captured during guest form submission
   gstEnabled?: boolean;
   gstDetails?: {
@@ -178,6 +190,8 @@ export interface Booking {
   exclusions?: string[];
   hours_included?: number;
   km_included?: number;
+  hoursIncluded?: number;
+  kmIncluded?: number;
   extra_per_hour?: number;
   extra_per_km?: number;
   waiting_charge_per_hour?: number;
@@ -203,6 +217,16 @@ export interface Booking {
   /** Normalized trip type label (e.g. Airport Transfer). */
   tripTypeDisplay?: string;
   tour_itinerary?: TourItineraryDay[];
+  /** Tour lists persisted from booking snapshot (snake_case API) */
+  tour_inclusions?: string[] | string;
+  tour_exclusions?: string[] | string;
+  tourItinerary?: TourItineraryDay[];
+  tour_duration?: string;
+  tourDuration?: string;
+  tour_days?: number;
+  /** Local rentals: e.g. 8hrs-80km — used for confirmation message package limits */
+  hourlyPackage?: string | null;
+  hourly_package?: string | null;
 }
 
 export type DriverStatus = 'available' | 'busy' | 'offline';

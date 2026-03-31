@@ -384,6 +384,17 @@ const TourDetailPage = () => {
         passengerEmail: guestDetails.email,
         additionalRequirements: guestDetails.additionalRequirements,
         tourId: tour.tourId,
+        tourName: tour.tourName,
+        tourDuration: tour.duration || tour.timeDuration || '',
+        tourDays: tour.days,
+        tourItinerary: (tour.itinerary ?? []).map((d) => ({
+          day: d.day,
+          title: d.title,
+          description: d.description,
+          activities: Array.isArray(d.activities) ? d.activities : [],
+        })),
+        tourInclusions: tour.inclusions ?? [],
+        tourExclusions: tour.exclusions ?? [],
         // Include GST details from guest form if provided
         gstEnabled: !!guestDetails.gstEnabled,
         gstDetails: guestDetails.gstEnabled ? {

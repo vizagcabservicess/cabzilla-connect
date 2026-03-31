@@ -1,73 +1,113 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, User, Car, UserPlus } from 'lucide-react';
+import { Home, User, Phone } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 import { motion } from 'framer-motion';
+import { buildWhatsAppMeUrl } from '@/utils/whatsappPrefillMessage';
 
-interface NavItem {
+interface RouteNavItem {
+  kind: 'route';
   icon: React.ReactNode;
   label: string;
   href: string;
 }
 
+interface ExternalNavItem {
+  kind: 'external';
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+  external: true;
+}
+
+type NavItem = RouteNavItem | ExternalNavItem;
+
 export const MobileNavigation = () => {
   const { pathname: currentPath } = useLocation();
 
+  const whatsappHref = useMemo(() => buildWhatsAppMeUrl(currentPath), [currentPath]);
+
   const navItems: NavItem[] = [
     {
+      kind: 'route',
       icon: <Home size={20} />,
       label: 'Home',
       href: '/',
     },
     {
-      icon: <Car size={20} />,
-      label: 'Fleet',
-      href: '/fleet',
+      kind: 'external',
+      icon: <FaWhatsapp className="h-5 w-5" aria-hidden />,
+      label: 'WhatsApp',
+      href: whatsappHref,
+      external: true,
     },
     {
-      icon: <UserPlus size={20} />,
-      label: 'Hire Driver',
-      href: '/hire-driver',
+      kind: 'external',
+      icon: <Phone size={20} aria-hidden />,
+      label: 'Call',
+      href: 'tel:+919966363662',
+      external: true,
     },
     {
+      kind: 'route',
       icon: <User size={20} />,
       label: 'Profile',
       href: '/login',
     },
   ];
-  
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
       <div className="grid grid-cols-4 h-16">
-        {navItems.map((item) => (
+        {navItems.map((item) => {
+          if (item.kind === 'external') {
+            return (
+              <a
+                key={item.label}
+                href={item.href}
+                target={item.href.startsWith('http') ? '_blank' : undefined}
+                rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                className="relative flex flex-col items-center justify-center h-full transition-colors text-gray-500 hover:text-gray-700"
+                aria-label={item.label}
+              >
+                <div className="relative">{item.icon}</div>
+                <span className="text-xs mt-1">{item.label}</span>
+              </a>
+            );
+          }
+
+          const isActive = currentPath === item.href;
+          return (
             <Link
               key={item.label}
               to={item.href}
               className={`relative flex flex-col items-center justify-center h-full transition-colors ${
-                currentPath === item.href ? 'text-blue-600' : 'text-gray-500'
+                isActive ? 'text-blue-600' : 'text-gray-500'
               }`}
             >
               <div className="relative">
-                {currentPath === item.href && (
+                {isActive && (
                   <motion.div
                     layoutId="navIndicator"
                     className="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 rounded-full"
                     initial={false}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   />
                 )}
                 {item.icon}
               </div>
               <span className="text-xs mt-1">{item.label}</span>
-              {currentPath === item.href && (
+              {isActive && (
                 <motion.div
                   layoutId="navBottomIndicator"
                   className="absolute bottom-0 w-12 h-1 bg-blue-600 rounded-t-md"
                   initial={false}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 />
               )}
             </Link>
-        ))}
+          );
+        })}
       </div>
     </nav>
   );

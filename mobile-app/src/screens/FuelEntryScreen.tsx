@@ -13,6 +13,8 @@ import {
   Alert,
   Image,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,10 +22,20 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
+import { authAPI } from '../services/authAPI';
 import { driverTripsAPI } from '../services/driverTripsAPI';
 import type { DriverTrip } from '../services/driverTripsAPI';
 import { formatPlaceFromGeocode } from '../utils/formatReverseGeocode';
 import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
+import { compressImageForUpload } from '../utils/compressImageForUpload';
+import { FuelCaptureCameraModal } from '../components/FuelCaptureCameraModal';
+import {
+  analyzeFuelCaptureUnified,
+  fuelUnifiedVisionFromUploadPayload,
+  FUEL_RETAKE_GUIDANCE_MESSAGE,
+  type FuelCapturePhase,
+  type FuelVisionUnifiedResult,
+} from '../services/fuelGeminiVisionUnified';
 
 const PAYMENT_OPTIONS: { value: 'card' | 'upi' | 'customer_advance' | 'company_paid'; label: string }[] = [
   { value: 'card', label: 'Card' },
@@ -75,11 +87,186 @@ function ocrPumpAndReceiptTotalsDangerouslyMismatch(receiptOcr: number | null, p
   return Math.abs(pumpOcr - receiptOcr) > tol;
 }
 
+/** Softer threshold: show confirm modal (driver may still proceed after acknowledging). */
+function receiptPumpOcrTotalsMeaningfullyDiffer(receiptOcr: number | null, pumpOcr: number | null): boolean {
+  if (receiptOcr == null || pumpOcr == null) return false;
+  if (!(receiptOcr > 0) || !(pumpOcr > 0)) return false;
+  const lo = Math.min(receiptOcr, pumpOcr);
+  const tol = Math.max(15, lo * 0.02);
+  return Math.abs(pumpOcr - receiptOcr) > tol;
+}
+
+type CrossMismatchLine = { key: string; text: string };
+
+/**
+ * Differences across receipt OCR, pump OCR, and edited fields — driver must confirm before save
+ * (unless a server anti-fraud flag is set).
+ */
+function buildCrossSourceMismatchLines(params: {
+  ocrReceiptAmount: number | null;
+  ocrPumpAmount: number | null;
+  ocrReceiptQty: number | null;
+  ocrPumpQty: number | null;
+  enteredTotal: number;
+  enteredQty: number;
+  enteredOdo: number;
+  ocrOdometer: number | null;
+}): CrossMismatchLine[] {
+  const lines: CrossMismatchLine[] = [];
+  const {
+    ocrReceiptAmount,
+    ocrPumpAmount,
+    ocrReceiptQty,
+    ocrPumpQty,
+    enteredTotal,
+    enteredQty,
+    enteredOdo,
+    ocrOdometer,
+  } = params;
+
+  if (receiptPumpOcrTotalsMeaningfullyDiffer(ocrReceiptAmount, ocrPumpAmount)) {
+    lines.push({
+      key: 'receipt_vs_pump',
+      text: `Receipt OCR total ₹${ocrReceiptAmount!.toFixed(2)} vs pump display OCR ₹${ocrPumpAmount!.toFixed(2)} (check photos or edit amounts).`,
+    });
+  }
+  if (ocrPumpAmount != null && ocrPumpAmount > 0 && Number.isFinite(enteredTotal) && enteredTotal > 0) {
+    const tol = Math.max(20, enteredTotal * 0.03);
+    if (Math.abs(enteredTotal - ocrPumpAmount) > tol) {
+      lines.push({
+        key: 'entered_vs_pump',
+        text: `Entered total ₹${enteredTotal.toFixed(2)} vs pump OCR ₹${ocrPumpAmount.toFixed(2)}.`,
+      });
+    }
+  }
+  if (ocrReceiptAmount != null && ocrReceiptAmount > 0 && Number.isFinite(enteredTotal) && enteredTotal > 0) {
+    const tol = Math.max(20, enteredTotal * 0.03);
+    if (Math.abs(enteredTotal - ocrReceiptAmount) > tol) {
+      lines.push({
+        key: 'entered_vs_receipt',
+        text: `Entered total ₹${enteredTotal.toFixed(2)} vs receipt OCR ₹${ocrReceiptAmount.toFixed(2)}.`,
+      });
+    }
+  }
+  if (
+    ocrReceiptQty != null &&
+    ocrReceiptQty > 0 &&
+    ocrPumpQty != null &&
+    ocrPumpQty > 0 &&
+    Math.abs(ocrReceiptQty - ocrPumpQty) > Math.max(0.35, ocrPumpQty * 0.04)
+  ) {
+    lines.push({
+      key: 'qty_receipt_vs_pump',
+      text: `Quantity: receipt OCR ${ocrReceiptQty.toFixed(2)} vs pump OCR ${ocrPumpQty.toFixed(2)} (litres or kg).`,
+    });
+  }
+  if (
+    ocrOdometer != null &&
+    ocrOdometer > 0 &&
+    Number.isFinite(enteredOdo) &&
+    enteredOdo > 0 &&
+    Math.abs(enteredOdo - ocrOdometer) >= Math.max(5, Math.floor(enteredOdo * 0.002))
+  ) {
+    lines.push({
+      key: 'odometer',
+      text: `Odometer: you entered ${enteredOdo} km but the odometer photo OCR suggests ${ocrOdometer} km.`,
+    });
+  }
+  if (ocrPumpQty != null && ocrPumpQty > 0 && Number.isFinite(enteredQty) && enteredQty > 0) {
+    const tol = Math.max(0.4, enteredQty * 0.04);
+    if (Math.abs(enteredQty - ocrPumpQty) > tol) {
+      lines.push({
+        key: 'entered_qty_vs_pump',
+        text: `Quantity: you entered ${enteredQty.toFixed(2)} but pump OCR ${ocrPumpQty.toFixed(2)}.`,
+      });
+    }
+  }
+
+  return lines;
+}
+
 /** If ₹/L implied by amount ÷ litres is outside a normal forecourt band, OCR probably grabbed density or wrong row (missing decimals). */
 function fuelPumpImpliedRateLooksInvalid(amount: number, qty: number): boolean {
   if (!(amount > 0) || !(qty > 0.25) || qty > 200) return false;
   const implied = amount / qty;
   return implied < 62 || implied > 155;
+}
+
+/**
+ * Pump digits are only trustworthy for autofill when unified vision is confident and returns
+ * both amount and volume — otherwise we would paste Vision/heuristic guesses that still imply a “normal” ₹/L.
+ */
+function isUnifiedPumpReadingTrustworthy(u: FuelVisionUnifiedResult | null): boolean {
+  if (u == null || u.should_retake) return false;
+  if (u.confidence !== 'high') return false;
+  const a = parsePositiveAmount(u.fuel_amount);
+  const q = parsePositiveAmount(u.volume);
+  if (a == null || q == null) return false;
+  // Sale total is not in the forecourt ₹/L band (~₹80–₹130); values there are almost always the Rate row mis-mapped.
+  if (a >= 80 && a <= 130) return false;
+  // Model often puts Volume (L) in fuel_amount and garbage in volume; implied ₹/L still looks "normal" (e.g. 20.95 / 0.32).
+  const r = parsePositiveAmount(u.rate);
+  if (
+    r != null &&
+    q < 2.5 &&
+    q > 0 &&
+    a >= 5 &&
+    a <= 70 &&
+    r >= 70 &&
+    r <= 125
+  ) {
+    return false;
+  }
+  if (fuelPumpImpliedRateLooksInvalid(a, q)) return false;
+  return true;
+}
+
+/** Server included pump LLM (Gemini) JSON in debug and it passed hard validation. */
+function isServerPumpVisionValidated(fuelOcrDebug: unknown): boolean {
+  if (fuelOcrDebug == null || typeof fuelOcrDebug !== 'object') return false;
+  const o = fuelOcrDebug as Record<string, unknown>;
+  if (o.pump_gemini_validated === true || o.pump_claude_validated === true) return true;
+  const gv = o.gemini_pump_vision;
+  if (gv != null && typeof gv === 'object' && (gv as Record<string, unknown>).ok === true) return true;
+  const legacy = o.claude_haiku_vision;
+  if (legacy != null && typeof legacy === 'object' && (legacy as Record<string, unknown>).ok === true)
+    return true;
+  return false;
+}
+
+/** Merge server `fuelOcrDebug` with the app’s parallel `fuel-vision-unified.php` result for Push debug / Metro. */
+function mergeFuelOcrDebugWithClientUnified(
+  rawDbg: unknown,
+  phase: FuelCapturePhase,
+  unifiedVision: FuelVisionUnifiedResult | null,
+  visionTokenSent: boolean,
+): Record<string, unknown> {
+  const base =
+    rawDbg != null && typeof rawDbg === 'object' && !Array.isArray(rawDbg)
+      ? { ...(rawDbg as Record<string, unknown>) }
+      : {};
+  const serialized =
+    unifiedVision == null
+      ? null
+      : {
+          fuel_amount: unifiedVision.fuel_amount,
+          volume: unifiedVision.volume,
+          rate: unifiedVision.rate,
+          odometer_reading: unifiedVision.odometer_reading,
+          confidence: unifiedVision.confidence,
+          source: unifiedVision.source,
+          should_retake: unifiedVision.should_retake,
+        };
+  base.client_unified_vision = {
+    note:
+      'Pump: usually from upload data.fuelUnifiedVision (one Gemini call). Receipt/odometer: parallel fuel-vision-unified.php. Compare with gemini_pump_vision in debug.',
+    phase,
+    token_sent: visionTokenSent,
+    pump_autofill_trustworthy:
+      phase === 'pump' ? isUnifiedPumpReadingTrustworthy(unifiedVision) : undefined,
+    result: serialized,
+  };
+  return base;
 }
 
 /** Server `ocr_retake_reasons` codes — keep in sync with fuel-ocr-debug.php */
@@ -143,6 +330,11 @@ export function FuelEntryScreen() {
 
   const [capturingPhase, setCapturingPhase] = useState<'receipt' | 'pump' | 'odometer' | null>(null);
   const [entryFlags, setEntryFlags] = useState<string[]>([]);
+  /** Blocks save until pump upload passes strict server validation (and receipt/pump hold cleared). */
+  const [pumpOcrGateBlocked, setPumpOcrGateBlocked] = useState(false);
+  /** Driver acknowledged cross-source (receipt / pump / odometer) differences for this submit attempt. */
+  const [crossMismatchModalVisible, setCrossMismatchModalVisible] = useState(false);
+  const [crossMismatchLines, setCrossMismatchLines] = useState<CrossMismatchLine[]>([]);
 
   // OCR extracted values (used to show warnings + enable strict Save validation)
   const [ocrReceiptAmount, setOcrReceiptAmount] = useState<number | null>(null);
@@ -159,6 +351,11 @@ export function FuelEntryScreen() {
 
   const ocrReceiptAmountRef = useRef<number | null>(null);
   const ocrPumpAmountRef = useRef<number | null>(null);
+  const guidedCaptureRef = useRef<{ resolve: (uri: string) => void; reject: (e: Error) => void } | null>(
+    null
+  );
+  const [guidedCameraVisible, setGuidedCameraVisible] = useState(false);
+  const [guidedCameraPhase, setGuidedCameraPhase] = useState<'receipt' | 'pump' | 'odometer'>('pump');
   /** Server-side fuel OCR debug pairs receipt Vision text with pump text on the next pump upload. */
   const receiptPairedOcrTextRef = useRef<string | null>(null);
   useEffect(() => {
@@ -316,29 +513,38 @@ export function FuelEntryScreen() {
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
 
-      const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      if (camStatus !== 'granted') {
-        Alert.alert('Validation', 'Camera permission is required');
-        return;
+      let localUri: string;
+      if (Platform.OS === 'web') {
+        const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        if (camStatus !== 'granted') {
+          Alert.alert('Validation', 'Camera permission is required');
+          return;
+        }
+        const pickerResult = await ImagePicker.launchCameraAsync({
+          allowsEditing: false,
+          quality: 0.85,
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        });
+        if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
+        localUri = pickerResult.assets[0].uri;
+      } else {
+        localUri = await new Promise<string>((resolve, reject) => {
+          guidedCaptureRef.current = { resolve, reject };
+          setGuidedCameraPhase(phase);
+          setGuidedCameraVisible(true);
+        });
       }
-
-      const pickerResult = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 0.85,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      });
-
-      if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
-
-      const localUri = pickerResult.assets[0].uri;
       const capturedAt = new Date().toISOString();
 
-      const uploadType =
+      const uploadType: 'fuel_receipt' | 'fuel_pump' | 'odometer' =
         phase === 'receipt' ? 'fuel_receipt' : phase === 'pump' ? 'fuel_pump' : 'odometer';
 
-      const uploaded = await driverTripsAPI.uploadFuelOdometer({
-        imageUri: localUri,
-        type: uploadType as any,
+      const uploadUri = await compressImageForUpload(localUri, { geminiVisionPreset: true });
+      const visionToken = await authAPI.getStoredToken();
+      const uploadParams = {
+        imageUri: uploadUri,
+        skipImageCompress: true,
+        type: uploadType,
         bookingId: bookingId || undefined,
         vehicleId: vehicleId || undefined,
         vehicleNumber: selectedVehicleNumber,
@@ -347,13 +553,43 @@ export function FuelEntryScreen() {
         longitude: pos.coords.longitude,
         locationAccuracy: pos.coords.accuracy ?? null,
         receiptTotalOcr:
-          uploadType === 'fuel_pump' ? (ocrReceiptAmountRef.current != null && ocrReceiptAmountRef.current > 0 ? ocrReceiptAmountRef.current : null) : undefined,
+          uploadType === 'fuel_pump'
+            ? ocrReceiptAmountRef.current != null && ocrReceiptAmountRef.current > 0
+              ? ocrReceiptAmountRef.current
+              : null
+            : undefined,
         pairedReceiptOcrText:
-          uploadType === 'fuel_pump' && receiptPairedOcrTextRef.current != null && receiptPairedOcrTextRef.current.trim() !== ''
+          uploadType === 'fuel_pump' &&
+          receiptPairedOcrTextRef.current != null &&
+          receiptPairedOcrTextRef.current.trim() !== ''
             ? receiptPairedOcrTextRef.current
             : undefined,
-        includeFuelOcrDebug: uploadType === 'fuel_pump' || uploadType === 'fuel_receipt' ? '1' : undefined,
-      });
+        includeFuelOcrDebug:
+          uploadType === 'fuel_pump' || uploadType === 'fuel_receipt' || uploadType === 'odometer'
+            ? ('1' as const)
+            : undefined,
+        fuelType: uploadType === 'fuel_pump' ? fuelType : undefined,
+      };
+
+      const [uploaded, unifiedFromParallel] = await Promise.all([
+        driverTripsAPI.uploadFuelOdometer(uploadParams),
+        phase !== 'pump' && visionToken
+          ? analyzeFuelCaptureUnified(uploadUri, visionToken, phase)
+          : Promise.resolve(null),
+      ]);
+      let unifiedVision: FuelVisionUnifiedResult | null = unifiedFromParallel;
+      if (phase === 'pump') {
+        const fromUpload = fuelUnifiedVisionFromUploadPayload(
+          (uploaded as { fuelUnifiedVision?: unknown }).fuelUnifiedVision,
+        );
+        if (fromUpload != null) {
+          unifiedVision = fromUpload;
+        } else if (visionToken) {
+          const fk =
+            fuelType === 'Diesel' ? 'diesel' : fuelType === 'CNG' ? 'cng' : 'petrol';
+          unifiedVision = await analyzeFuelCaptureUnified(uploadUri, visionToken, 'pump', fk);
+        }
+      }
 
       const imageUrl = uploaded.imageUrl;
       const meta: CaptureMeta = {
@@ -418,8 +654,22 @@ export function FuelEntryScreen() {
             }
           }
         }
+        if (
+          unifiedVision &&
+          (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium') &&
+          !unifiedVision.should_retake &&
+          unifiedVision.odometer_reading != null &&
+          unifiedVision.odometer_reading > 0
+        ) {
+          odoVal = unifiedVision.odometer_reading;
+        }
         setOcrOdometerValue(odoVal);
         setOdometer(odoVal != null ? String(odoVal) : '');
+        if (__DEV__) {
+          const mini = mergeFuelOcrDebugWithClientUnified(null, 'odometer', unifiedVision, Boolean(visionToken));
+          // eslint-disable-next-line no-console
+          console.log('[FuelOCR odometer client unified]', JSON.stringify(mini.client_unified_vision, null, 2));
+        }
       } else {
         const retakeAlert =
           phase === 'receipt' || phase === 'pump' ? buildOcrRetakeAlert(extracted, phase) : null;
@@ -432,13 +682,38 @@ export function FuelEntryScreen() {
           amountVal = null;
           if (phase === 'pump') qtyVal = null;
         }
+        if (unifiedVision && !unifiedVision.should_retake) {
+          if (phase === 'pump' && isUnifiedPumpReadingTrustworthy(unifiedVision)) {
+            const ua = parsePositiveAmount(unifiedVision.fuel_amount);
+            const uq = parsePositiveAmount(unifiedVision.volume);
+            if (ua != null) amountVal = ua;
+            if (uq != null) qtyVal = uq;
+          } else if (
+            phase === 'receipt' &&
+            (unifiedVision.confidence === 'high' || unifiedVision.confidence === 'medium')
+          ) {
+            const ua = parsePositiveAmount(unifiedVision.fuel_amount);
+            if (ua != null) amountVal = ua;
+          }
+        }
+
+        if (phase === 'pump') {
+          const dbgEarly = (uploaded as { fuelOcrDebug?: unknown }).fuelOcrDebug;
+          const serverVisionOk = isServerPumpVisionValidated(dbgEarly);
+          const unifiedTrust = isUnifiedPumpReadingTrustworthy(unifiedVision);
+          if (!serverVisionOk && !unifiedTrust) {
+            amountVal = null;
+            qtyVal = null;
+          }
+        }
+
         const serverOcrStatus =
           typeof extracted.fuel_ocr_status === 'string' ? extracted.fuel_ocr_status : null;
 
         if (phase === 'receipt') {
           setOcrReceiptAmount(amountVal);
           ocrReceiptAmountRef.current = amountVal;
-          setOcrReceiptQuantity(null);
+          setOcrReceiptQuantity(qtyVal);
           if (amountVal != null) {
             setTotalCost(String(amountVal));
           } else {
@@ -451,7 +726,7 @@ export function FuelEntryScreen() {
             setQuantity('');
           } else {
             const pumpHasQty = pumpPhoto != null && ocrPumpQuantity != null;
-            if (!pumpHasQty) setQuantity('');
+            if (!pumpHasQty) setQuantity(qtyVal != null ? String(qtyVal) : '');
           }
         } else {
           setOcrPumpAmount(amountVal);
@@ -473,18 +748,43 @@ export function FuelEntryScreen() {
 
         if (phase === 'receipt' || phase === 'pump') {
           const rawDbg = (uploaded as { fuelOcrDebug?: unknown }).fuelOcrDebug;
-          if (rawDbg != null && typeof rawDbg === 'object') {
-            setFuelOcrDebug(rawDbg as Record<string, unknown>);
-            if (__DEV__) {
+          const merged = mergeFuelOcrDebugWithClientUnified(
+            rawDbg,
+            phase,
+            unifiedVision,
+            Boolean(visionToken),
+          );
+          setFuelOcrDebug(merged);
+          if (__DEV__) {
+            // eslint-disable-next-line no-console
+            console.log('[FuelOCR debug merged]', JSON.stringify(merged, null, 2));
+            if (rawDbg == null || typeof rawDbg !== 'object') {
               // eslint-disable-next-line no-console
-              console.log('[FuelOCR debug]', JSON.stringify(rawDbg, null, 2));
+              console.warn(
+                '[FuelOCR] No server fuelOcrDebug — only client_unified_vision in merged payload; deploy upload-fuel-odometer.php?',
+              );
             }
-          } else {
-            setFuelOcrDebug(null);
-            if (__DEV__) {
-              // eslint-disable-next-line no-console
-              console.warn('[FuelOCR debug] API returned no fuelOcrDebug — deploy latest upload-fuel-odometer.php?');
-            }
+          }
+        }
+
+        if (phase === 'pump') {
+          const st = typeof extracted.fuel_ocr_status === 'string' ? extracted.fuel_ocr_status : '';
+          const blocked =
+            extracted.pump_reading_rejected === true || st === 'hold' || st === 'rejected';
+          setPumpOcrGateBlocked(blocked);
+          if (extracted.pump_reading_rejected === true) {
+            const m =
+              typeof extracted.pump_reading_message === 'string'
+                ? extracted.pump_reading_message
+                : 'Could not validate pump display. Retake the photo.';
+            Alert.alert('Pump photo not accepted', m);
+          } else if (st === 'hold') {
+            const pr = extracted.pump_receipt_review as { message?: string } | undefined;
+            const hm =
+              pr != null && typeof pr.message === 'string'
+                ? pr.message
+                : 'Pump and receipt amounts do not match. Flagged for review.';
+            Alert.alert('Review required', hm);
           }
         }
 
@@ -496,12 +796,16 @@ export function FuelEntryScreen() {
             'We could not detect the bill amount on this photo. Retake the receipt with the total in clear view, less glare, and good lighting. You can still enter the amount manually.'
           );
         } else if (phase === 'pump') {
-          if (amountVal == null) {
+          if (extracted.pump_reading_rejected !== true && amountVal == null) {
             Alert.alert(
               'Could not read pump amount',
               'We could not detect the Amount (₹) on the pump display. Retake the photo so the main sale total is sharp and readable. You can still enter litres and amount manually.'
             );
-          } else if (qtyVal != null && fuelPumpImpliedRateLooksInvalid(amountVal, qtyVal)) {
+          } else if (
+            amountVal != null &&
+            qtyVal != null &&
+            fuelPumpImpliedRateLooksInvalid(amountVal, qtyVal)
+          ) {
             Alert.alert(
               'Pump numbers look unreliable',
               'The total and litres from this image do not match a normal pump (often caused by glare or missing decimal points). Retake the pump photo or correct the values manually.'
@@ -519,6 +823,10 @@ export function FuelEntryScreen() {
         if (ft) setFuelType(ft);
       }
 
+      if (unifiedVision?.should_retake === true && unifiedVision.confidence === 'low') {
+        Alert.alert('Retake suggested', FUEL_RETAKE_GUIDANCE_MESSAGE);
+      }
+
       try {
         const [addr] = await Location.reverseGeocodeAsync({
           latitude: pos.coords.latitude,
@@ -532,15 +840,25 @@ export function FuelEntryScreen() {
         /* optional geocode */
       }
     } catch (e) {
+      if (e instanceof Error && e.message === 'cancelled') {
+        return;
+      }
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to process photos');
     } finally {
       setCapturingPhase(null);
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (options?: { skipCrossMismatchModal?: boolean }) => {
     if (!vehicleId) {
       Alert.alert('Validation', 'Please select a vehicle');
+      return;
+    }
+    if (pumpOcrGateBlocked) {
+      Alert.alert(
+        'Pump photo not validated',
+        'The last pump photo failed validation or is on hold for a receipt mismatch. Retake the pump photo or resolve the review flag before saving.'
+      );
       return;
     }
     if (!receiptPhoto || !pumpPhoto || !odometerPhoto) {
@@ -552,7 +870,7 @@ export function FuelEntryScreen() {
       return;
     }
 
-    if (entryFlags.includes('FUEL_AMOUNT_MISMATCH')) {
+    if (entryFlags.includes('FUEL_AMOUNT_MISMATCH') || entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD')) {
       Alert.alert(
         'Validation',
         'Pump display total and receipt total differ beyond the allowed tolerance for the same fill. Retake the pump or receipt photo.'
@@ -563,7 +881,7 @@ export function FuelEntryScreen() {
     if (ocrPumpAndReceiptTotalsDangerouslyMismatch(ocrReceiptAmount, ocrPumpAmount)) {
       Alert.alert(
         'Validation',
-        'The amount read from the pump photo does not match the receipt. Retake the pump photo (same fill) so the totals align, then save.'
+        'Pump and receipt OCR totals differ by more than about 15% (₹120+). Retake photos for the same fill or correct the amounts before saving.',
       );
       return;
     }
@@ -578,6 +896,24 @@ export function FuelEntryScreen() {
     if (isNaN(odo) || odo <= 0) {
       Alert.alert('Validation', 'Odometer reading is required');
       return;
+    }
+
+    if (!options?.skipCrossMismatchModal) {
+      const mm = buildCrossSourceMismatchLines({
+        ocrReceiptAmount,
+        ocrPumpAmount,
+        ocrReceiptQty: ocrReceiptQuantity,
+        ocrPumpQty: ocrPumpQuantity,
+        enteredTotal: t,
+        enteredQty: q,
+        enteredOdo: odo,
+        ocrOdometer: ocrOdometerValue,
+      });
+      if (mm.length > 0) {
+        setCrossMismatchLines(mm);
+        setCrossMismatchModalVisible(true);
+        return;
+      }
     }
     if (paymentMethod === 'card' && cardLastFour.replace(/\D/g, '').length !== 4) {
       Alert.alert('Validation', 'Enter last 4 digits of card');
@@ -638,8 +974,9 @@ export function FuelEntryScreen() {
     !photosCaptured ||
     !captureTimesValid ||
     !numericValid ||
+    pumpOcrGateBlocked ||
     entryFlags.includes('FUEL_AMOUNT_MISMATCH') ||
-    ocrPumpReceiptMismatch;
+    entryFlags.includes('PUMP_RECEIPT_MISMATCH_HOLD');
 
   if (loading) {
     return (
@@ -728,6 +1065,7 @@ export function FuelEntryScreen() {
                     setOcrPumpAmount(null);
                     setOcrPumpQuantity(null);
                     ocrPumpAmountRef.current = null;
+                    setPumpOcrGateBlocked(false);
                     setFuelOcrDebug(null);
                     setFuelOcrDebugOpen(false);
                     setQuantity('');
@@ -800,9 +1138,9 @@ export function FuelEntryScreen() {
 
         {ocrPumpReceiptMismatch ? (
           <Text style={styles.errorText}>
-            Pump total from OCR (₹{ocrPumpAmount != null ? ocrPumpAmount.toFixed(2) : '—'}) does not match receipt OCR
-            (₹{ocrReceiptAmount != null ? ocrReceiptAmount.toFixed(2) : '—'}). Retake the pump photo for the same fill.
-            Save stays off until the two amounts agree (within about 15% or ₹120).
+            Pump total from OCR (₹{ocrPumpAmount != null ? ocrPumpAmount.toFixed(2) : '—'}) differs a lot from receipt OCR
+            (₹{ocrReceiptAmount != null ? ocrReceiptAmount.toFixed(2) : '—'}). Retake for the same fill if that is wrong.
+            Smaller differences: tap Save — you will be asked to confirm before the entry is sent.
           </Text>
         ) : null}
 
@@ -1010,6 +1348,61 @@ export function FuelEntryScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      <Modal
+        visible={crossMismatchModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCrossMismatchModalVisible(false)}
+      >
+        <Pressable style={styles.mismatchModalBackdrop} onPress={() => setCrossMismatchModalVisible(false)}>
+          <Pressable style={styles.mismatchModalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.mismatchModalTitle}>Confirm readings</Text>
+            <Text style={styles.mismatchModalSubtitle}>
+              These values don&apos;t line up across receipt, pump photo, or odometer. Continue only if the amount, quantity,
+              and odometer you entered are correct.
+            </Text>
+            <ScrollView style={styles.mismatchModalList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {crossMismatchLines.map((row) => (
+                <Text key={row.key} style={styles.mismatchModalBullet}>
+                  • {row.text}
+                </Text>
+              ))}
+            </ScrollView>
+            <View style={styles.mismatchModalActions}>
+              <TouchableOpacity
+                style={[styles.mismatchModalBtn, styles.mismatchModalBtnSecondary]}
+                onPress={() => setCrossMismatchModalVisible(false)}
+              >
+                <Text style={styles.mismatchModalBtnSecondaryText}>Go back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.mismatchModalBtn, styles.mismatchModalBtnPrimary]}
+                onPress={() => {
+                  setCrossMismatchModalVisible(false);
+                  void handleSubmit({ skipCrossMismatchModal: true });
+                }}
+              >
+                <Text style={styles.mismatchModalBtnPrimaryText}>Confirm & save</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <FuelCaptureCameraModal
+        visible={guidedCameraVisible}
+        phase={guidedCameraPhase}
+        onDismiss={() => {
+          setGuidedCameraVisible(false);
+          guidedCaptureRef.current?.reject(new Error('cancelled'));
+          guidedCaptureRef.current = null;
+        }}
+        onCaptured={(uri) => {
+          setGuidedCameraVisible(false);
+          guidedCaptureRef.current?.resolve(uri);
+          guidedCaptureRef.current = null;
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1073,17 +1466,6 @@ const styles = StyleSheet.create({
   hintTextMuted: { marginTop: 8, fontSize: 12, color: colors.gray600, lineHeight: 17 },
   varianceText: { fontSize: 12, color: '#b45309', fontWeight: '600' },
   errorText: { marginTop: 10, fontSize: 14, color: '#dc2626', textAlign: 'center' },
-  captureRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  captureBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  captureBtnHalf: { flex: 1, minWidth: 0 },
   captureBtnOutline: {
     backgroundColor: '#fff',
     borderWidth: 2,
@@ -1142,4 +1524,28 @@ const styles = StyleSheet.create({
     color: colors.gray700,
     padding: 12,
   },
+  mismatchModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  mismatchModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    maxHeight: '85%',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  mismatchModalTitle: { fontSize: 18, fontWeight: '700', color: colors.foreground, marginBottom: 8 },
+  mismatchModalSubtitle: { fontSize: 14, color: colors.gray600, lineHeight: 20, marginBottom: 14 },
+  mismatchModalList: { maxHeight: 260, marginBottom: 16 },
+  mismatchModalBullet: { fontSize: 14, color: colors.gray800, lineHeight: 21, marginBottom: 10 },
+  mismatchModalActions: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
+  mismatchModalBtn: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, minWidth: 120, alignItems: 'center' },
+  mismatchModalBtnSecondary: { backgroundColor: colors.gray100, borderWidth: 1, borderColor: colors.gray200 },
+  mismatchModalBtnSecondaryText: { fontSize: 15, fontWeight: '600', color: colors.gray700 },
+  mismatchModalBtnPrimary: { backgroundColor: colors.primary },
+  mismatchModalBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });

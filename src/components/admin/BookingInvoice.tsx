@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
+import { patchInvoiceHtmlTripTypeCell } from '@/utils/invoiceTripTypeDisplay';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function parseAmount(text?: string | null): number | null {
@@ -857,12 +858,14 @@ export function BookingInvoice({
         totalCells.forEach(cell => updateAmountCell(cell, summaryTotal));
       }
 
-      return doc.documentElement.outerHTML;
+      let out = doc.documentElement.outerHTML;
+      out = patchInvoiceHtmlTripTypeCell(out, booking);
+      return out;
     } catch (error) {
       console.error('Failed to sanitize admin invoice HTML:', error);
-      return html;
+      return patchInvoiceHtmlTripTypeCell(html, booking);
     }
-  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount]);
+  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking]);
 
   const htmlContent = useMemo(
     () => sanitizeInvoiceHtml(rawHtmlContent),
@@ -1326,22 +1329,19 @@ export function BookingInvoice({
 
   const handleDownloadPdf = () => {
     try {
-      setDownloadCount(prev => prev + 1);
+      setDownloadCount((prev) => prev + 1);
       const pdfUrl = createPdfUrl(false);
-      
-      // Open in new tab with browser's PDF viewer
       window.open(pdfUrl, '_blank');
-      
       toast({
-        title: "PDF Opened in New Tab",
-        description: "Your invoice should open in a new browser tab"
+        title: 'PDF Opened in New Tab',
+        description: 'Your invoice should open in a new browser tab',
       });
     } catch (error) {
-      console.error("Invoice download error:", error);
+      console.error('Invoice download error:', error);
       toast({
-        variant: "destructive",
-        title: "Download Failed",
-        description: "Failed to download invoice. Please try the HTML version instead."
+        variant: 'destructive',
+        title: 'Download Failed',
+        description: 'Failed to download invoice. Please try the HTML version instead.',
       });
     }
   };
@@ -1350,27 +1350,24 @@ export function BookingInvoice({
     try {
       const htmlUrl = createPdfUrl(false, false, true);
       window.open(htmlUrl, '_blank');
-      
       toast({
-        title: "HTML Invoice",
-        description: "HTML version of the invoice opened in a new tab"
+        title: 'HTML Invoice',
+        description: 'HTML version of the invoice opened in a new tab',
       });
     } catch (error) {
-      console.error("HTML view error:", error);
+      console.error('HTML view error:', error);
       toast({
-        variant: "destructive",
-        title: "HTML View Failed",
-        description: "Failed to open HTML invoice"
+        variant: 'destructive',
+        title: 'HTML View Failed',
+        description: 'Failed to open HTML invoice',
       });
     }
   };
 
   const handleForceDownload = () => {
     try {
-      setDownloadCount(prev => prev + 1);
+      setDownloadCount((prev) => prev + 1);
       const pdfUrl = createPdfUrl(true);
-      
-      // Use download attribute to force download
       const link = document.createElement('a');
       link.href = pdfUrl;
       link.download = `Invoice_${booking.id}_${new Date().getTime()}.pdf`;
@@ -1378,38 +1375,35 @@ export function BookingInvoice({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       toast({
-        title: "Download Started",
-        description: "Your invoice download should begin shortly"
+        title: 'Download Started',
+        description: 'Your invoice download should begin shortly',
       });
     } catch (error) {
-      console.error("Force download error:", error);
+      console.error('Force download error:', error);
       toast({
-        variant: "destructive",
-        title: "Force Download Failed",
-        description: "Failed to force download. Try the HTML version instead."
+        variant: 'destructive',
+        title: 'Force Download Failed',
+        description: 'Failed to force download. Try the HTML version instead.',
       });
     }
   };
 
   const handleAdminDownload = () => {
     try {
-      setDownloadCount(prev => prev + 1);
-      const pdfUrl = createPdfUrl(true, true); // true for direct download, true for admin endpoint
-      
+      setDownloadCount((prev) => prev + 1);
+      const pdfUrl = createPdfUrl(true, true);
       window.open(pdfUrl, '_blank');
-      
       toast({
-        title: "Admin PDF Download",
-        description: "Using admin endpoint to download PDF"
+        title: 'Admin PDF Download',
+        description: 'Using admin endpoint to download PDF',
       });
     } catch (error) {
-      console.error("Admin download error:", error);
+      console.error('Admin download error:', error);
       toast({
-        variant: "destructive",
-        title: "Admin Download Failed",
-        description: "Failed to use admin download. Try the HTML version instead."
+        variant: 'destructive',
+        title: 'Admin Download Failed',
+        description: 'Failed to use admin download. Try the HTML version instead.',
       });
     }
   };

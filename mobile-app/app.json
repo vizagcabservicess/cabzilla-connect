@@ -54,6 +54,13 @@
           "cameraPermission": "Vizag Taxi Hub uses the camera for odometer readings and fuel receipt photos."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Vizag Taxi Hub uses the camera to capture fuel pump displays, receipts, and odometer readings with on-screen guides.",
+          "recordAudioAndroid": false
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-font",
       [

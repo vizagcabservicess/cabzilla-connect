@@ -23,6 +23,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminAPI, AdminInvoice } from '../services/adminAPI';
 import type { RootStackParamList } from '../navigation/types';
+import { patchInvoiceHtmlTripTypeCellForMobile } from '../utils/invoiceTripTypeLineForMobile';
 
 type Route = RouteProp<RootStackParamList, 'BookingInvoice'>;
 
@@ -235,7 +236,7 @@ export function InvoiceScreen() {
     setLoadingPdf(true);
     try {
       const lockedBaseFare = computeBaseFareFromBooking(booking);
-      const html = await adminAPI.getInvoiceHtml(bookingId, {
+      let html = await adminAPI.getInvoiceHtml(bookingId, {
         gstEnabled: invoiceState.gstEnabled,
         isIGST: invoiceState.isIGST,
         includeTax: invoiceState.includeTax,
@@ -244,6 +245,7 @@ export function InvoiceScreen() {
         customInvoiceNumber: invoiceState.customInvoiceNumber.trim() || undefined,
         adminNotes: invoiceState.adminNotes.trim() || undefined,
       });
+      html = patchInvoiceHtmlTripTypeCellForMobile(html, booking as Record<string, unknown>);
       navigation.navigate('WebView', {
         url: '',
         title: 'Invoice',

@@ -12,6 +12,7 @@ ob_start();
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 require_once __DIR__ . '/utils/response.php';
+require_once __DIR__ . '/utils/invoice_trip_type_display.inc.php';
 
 // Import DomPDF classes at the top level
 use Dompdf\Dompdf;
@@ -517,27 +518,8 @@ try {
     }
     ";
 
-    // Trip type label: support trip_type/tripType, infer/override from context
-    $tripTypeRaw = trim($booking['trip_type'] ?? $booking['tripType'] ?? '');
-    $dist = (float)($booking['distance'] ?? 0);
-    $hasReturnDate = !empty($booking['return_date'] ?? $booking['returnDate'] ?? null);
-    $hasHourlyPackage = strpos($booking['hourly_package'] ?? '', 'hr') !== false || !empty($booking['no_of_hours']) || !empty($booking['estimated_hours']);
-    if ($tripTypeRaw === '') {
-        // Infer when empty: outstation if distance > 35 or return date; local if hourly package
-        if ($dist > 35 || $hasReturnDate) {
-            $tripTypeRaw = 'outstation';
-        } elseif ($hasHourlyPackage) {
-            $tripTypeRaw = 'local';
-        }
-    } elseif ($tripTypeRaw === 'local' && ($dist > 35 || $hasReturnDate)) {
-        // Override: stored "local" but clearly outstation (distance/round-trip) - e.g. mobile create-booking bug
-        $tripTypeRaw = 'outstation';
-    }
-    $tripTypeLabel = $tripTypeRaw !== '' ? ucfirst($tripTypeRaw) : 'N/A';
-    if ($tripTypeRaw === 'outstation' && !empty($booking['trip_mode'] ?? $booking['tripMode'] ?? '')) {
-        $tripMode = $booking['trip_mode'] ?? $booking['tripMode'] ?? '';
-        $tripTypeLabel .= ' (' . ucfirst(str_replace('-', ' ', $tripMode)) . ')';
-    }
+    // Trip type: shared resolver fixes DB outstation + local hourly (8/80, package, hourly_package)
+    list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
 
     // Create HTML content for the invoice
     $content = '
