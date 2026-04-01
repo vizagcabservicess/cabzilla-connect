@@ -4,8 +4,6 @@ import { View, ActivityIndicator } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
-
-WebBrowser.maybeCompleteAuthSession();
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from '@expo-google-fonts/inter/useFonts';
 import {
@@ -18,7 +16,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { GoogleMapsProvider } from './src/providers/GoogleMapsProvider';
 import { AuthProvider } from './src/providers/AuthProvider';
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap';
+import { DriverTripAssignmentOverlay } from './src/components/DriverTripAssignmentOverlay';
 import { RootNavigator } from './src/navigation/RootNavigator';
+
+WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,6 +56,8 @@ export default function App() {
           <NavigationContainer ref={navigationRef}>
             <RootNavigator />
           </NavigationContainer>
+          {/* Modal must sit outside the navigator tree — otherwise some Android builds never show it above tabs */}
+          <DriverTripAssignmentOverlay />
           <StatusBar style="auto" />
         </GoogleMapsProvider>
       </AuthProvider>

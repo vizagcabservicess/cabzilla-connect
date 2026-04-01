@@ -146,6 +146,7 @@ try {
                         'status' => $booking['status'],
                         'passengerName' => $booking['passenger_name'],
                         'passengerPhone' => $booking['passenger_phone'],
+                        'passengerCountryCode' => $booking['passenger_country_code'] ?? '+91',
                         'passengerEmail' => $booking['passenger_email'],
                         'createdAt' => $booking['created_at'],
                         'updatedAt' => $booking['updated_at']
@@ -229,6 +230,7 @@ try {
                 'status' => $booking['status'],
                 'passengerName' => $booking['passenger_name'],
                 'passengerPhone' => $booking['passenger_phone'],
+                'passengerCountryCode' => $booking['passenger_country_code'] ?? '+91',
                 'passengerEmail' => $booking['passenger_email'],
                 'additionalRequirements' => $booking['additional_requirements'] ?? null,
                 'driverName' => $booking['driver_name'] ?? null,

@@ -1,5 +1,28 @@
 import { Platform } from 'react-native';
 
+/**
+ * EAS / production Google Sign-In checklist (Android standalone; Expo Go uses different auth):
+ *
+ * 1) Create OAuth clients in Google Cloud Console (same project as Firebase if you use FCM):
+ *    - Type "Web application" → EXPO_PUBLIC_GOOGLE_CLIENT_ID
+ *    - Type "Android" for package com.vizagtaxihub.app → EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
+ *    - Optional "iOS" for bundle com.vizagtaxihub.app → EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+ *
+ * 2) SHA-1 for the **upload keystore** EAS uses to sign release builds:
+ *    - Run: `eas credentials` → Android → production → view Keystore → copy SHA-1 (or fingerprints from `eas credentials -p android`)
+ *    - Firebase Console → Project settings → Your Android app → Add fingerprint (SHA-1)
+ *    - Google Cloud → APIs & Services → Credentials → open the **Android** OAuth client → add same SHA-1
+ *    - Re-download google-services.json and commit/replace mobile-app/google-services.json, then `eas build --platform android`
+ *
+ * 3) EAS secrets (embedded at build time):
+ *    eas secret:create --name EXPO_PUBLIC_GOOGLE_CLIENT_ID --value "....apps.googleusercontent.com" --scope project
+ *    eas secret:create --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value "....apps.googleusercontent.com" --scope project
+ *    (Optional iOS) EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+ *
+ * 4) Backend: native Google ID tokens often have audience = Android (or iOS) client id. If api/auth/social-login.php
+ *    sets GOOGLE_OAUTH_CLIENT_IDS, include **comma-separated** Web + Android (+ iOS) client ids so verification passes.
+ */
+
 // API configuration - no hardcoded values
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
 export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';

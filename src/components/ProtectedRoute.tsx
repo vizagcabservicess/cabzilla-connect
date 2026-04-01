@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/providers/AuthProvider';
+import { AdminDriverFuelRefillPoller } from '@/components/admin/AdminDriverFuelRefillPoller';
 
 export const AdminProtectedRoute = () => {
   const { isAuthenticated, isAdmin, loading } = useAuth();
@@ -17,7 +18,12 @@ export const AdminProtectedRoute = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <AdminDriverFuelRefillPoller />
+      <Outlet />
+    </>
+  );
 };
 
 export const CustomerProtectedRoute = () => {

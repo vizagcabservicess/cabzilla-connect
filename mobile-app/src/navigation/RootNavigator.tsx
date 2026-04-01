@@ -60,8 +60,6 @@ import { DriverEarningsScreen } from '../screens/DriverEarningsScreen';
 import { MenuProvider } from '../providers/MenuProvider';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
-import { DriverTripAssignmentOverlay } from '../components/DriverTripAssignmentOverlay';
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const ServicesStackNav = createNativeStackNavigator<ServicesStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -227,7 +225,6 @@ export function RootNavigator() {
             }}
           />
         </Tab.Navigator>
-        <DriverTripAssignmentOverlay />
       </>
     );
   }
@@ -276,7 +273,6 @@ export function RootNavigator() {
         }}
       />
     </Tab.Navigator>
-    <DriverTripAssignmentOverlay />
     </>
   );
 }

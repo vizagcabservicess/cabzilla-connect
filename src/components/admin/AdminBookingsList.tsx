@@ -23,7 +23,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
 import { Booking, BookingStatus } from '@/types/api';
-import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2 } from 'lucide-react';
+import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2, Download } from 'lucide-react';
+import { saveAs } from 'file-saver';
+import { pdf } from '@react-pdf/renderer';
+import { bookingPickupInDateRange, bookingsToCsv, buildBookingExportRows } from '@/utils/adminBookingsExport';
+import { AdminBookingsExportPDF } from '@/components/pdf/AdminBookingsExportPDF';
 import { usePrivileges } from '@/hooks/usePrivileges';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -37,7 +41,7 @@ import {
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetailsModal } from './BookingDetailsModal';
-import { getStatusColorClass } from '@/utils/bookingUtils';
+import { getStatusColorClass, formatPassengerPhoneForDisplay } from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
 import { formatPrice } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -52,7 +56,10 @@ export function AdminBookingsList() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pickupDateFrom, setPickupDateFrom] = useState('');
+  const [pickupDateTo, setPickupDateTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [apiAttempt, setApiAttempt] = useState(0);
@@ -70,6 +77,23 @@ export function AdminBookingsList() {
     const candidate = (booking as any).id ?? (booking as any).bookingId ?? (booking as any).booking_id;
     const parsed = Number(candidate);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  /** Merge API/client patches into the row and keep the open modal in sync (fixes fleet vehicle dropdown showing empty after assign). */
+  const patchBookingInListAndModal = (
+    bookingId: number,
+    patchFromApi: Record<string, unknown>,
+    clientPatch?: Partial<Booking>
+  ): Booking[] => {
+    const base =
+      bookings.find((b) => b.id === bookingId) ||
+      (selectedBooking?.id === bookingId ? selectedBooking : null);
+    if (!base) return bookings;
+    const merged = { ...base, ...(patchFromApi as Partial<Booking>), ...(clientPatch || {}) } as Booking;
+    const updatedBookings = bookings.map((b) => (b.id === bookingId ? merged : b));
+    setBookings(updatedBookings);
+    setSelectedBooking((prev) => (prev && prev.id === bookingId ? merged : prev));
+    return updatedBookings;
   };
   
   const fetchBookings = async () => {
@@ -144,7 +168,7 @@ export function AdminBookingsList() {
       
       if (Array.isArray(data) && data.length > 0) {
         setBookings(data);
-        applyFilters(data, searchTerm, statusFilter);
+        applyFilters(data);
         toast.success(`${data.length} bookings loaded successfully (${responseSource})`, {
           id: 'bookings-loaded',
         });
@@ -212,14 +236,9 @@ export function AdminBookingsList() {
         const response = await bookingAPI.updateBooking(selectedBooking.id, updatedData);
         console.log('Booking update response:', response);
         
-        // Update the bookings list with the updated data from the response
-        const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
-        
-        const updatedBookings = bookings.map(booking => 
-          booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
-        );
-        setBookings(updatedBookings);
-        applyFilters(updatedBookings, searchTerm, statusFilter);
+        const updatedBooking = response.data || {};
+        const nextBookings = patchBookingInListAndModal(selectedBooking.id, updatedBooking as Record<string, unknown>, updatedData);
+        applyFilters(nextBookings);
         
         toast.success("Booking updated successfully");
         return;
@@ -261,14 +280,9 @@ export function AdminBookingsList() {
       const response = await directResponse.json();
       console.log('Booking update response:', response);
       
-      // Update the bookings list with the updated data from the response
-      const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
-      
-      const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
-      );
-      setBookings(updatedBookings);
-      applyFilters(updatedBookings, searchTerm, statusFilter);
+      const updatedBooking = response.data || {};
+      const nextBookings = patchBookingInListAndModal(selectedBooking.id, updatedBooking as Record<string, unknown>, updatedData);
+      applyFilters(nextBookings);
       
       toast.success("Booking updated successfully");
     } catch (error) {
@@ -294,14 +308,9 @@ export function AdminBookingsList() {
         const response = await bookingAPI.assignDriver(selectedBooking.id, driverData);
         console.log('Driver assignment response:', response);
         
-        // Update the bookings list with the updated data from the response
-        const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
-        
-        const updatedBookings = bookings.map(booking => 
-          booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
-        );
-        setBookings(updatedBookings);
-        applyFilters(updatedBookings, searchTerm, statusFilter);
+        const updatedBooking = response.data || {};
+        const nextBookings = patchBookingInListAndModal(selectedBooking.id, updatedBooking as Record<string, unknown>, updatedData);
+        applyFilters(nextBookings);
         
         toast.success("Driver assigned successfully");
         return;
@@ -344,14 +353,9 @@ export function AdminBookingsList() {
       const response = await directResponse.json();
       console.log('Driver assignment response:', response);
       
-      // Update the bookings list with the updated data from the response
-      const updatedBooking = response.data || { ...selectedBooking, ...updatedData };
-      
-      const updatedBookings = bookings.map(booking => 
-        booking.id === selectedBooking.id ? { ...booking, ...updatedBooking } : booking
-      );
-      setBookings(updatedBookings);
-      applyFilters(updatedBookings, searchTerm, statusFilter);
+      const updatedBooking = response.data || {};
+      const nextBookings = patchBookingInListAndModal(selectedBooking.id, updatedBooking as Record<string, unknown>, updatedData);
+      applyFilters(nextBookings);
       
       toast.success("Driver assigned successfully");
     } catch (error) {
@@ -382,7 +386,7 @@ export function AdminBookingsList() {
           getBookingIdentifier(booking) === targetBookingId ? { ...booking, status: 'cancelled' as BookingStatus } : booking
         );
         setBookings(updatedBookings);
-        applyFilters(updatedBookings, searchTerm, statusFilter);
+        applyFilters(updatedBookings);
         
         toast.success("Booking cancelled successfully");
         return;
@@ -419,7 +423,7 @@ export function AdminBookingsList() {
         getBookingIdentifier(booking) === targetBookingId ? { ...booking, status: 'cancelled' as BookingStatus } : booking
       );
       setBookings(updatedBookings);
-      applyFilters(updatedBookings, searchTerm, statusFilter);
+      applyFilters(updatedBookings);
       
       toast.success("Booking cancelled successfully");
     } catch (error) {
@@ -451,7 +455,7 @@ export function AdminBookingsList() {
         // Remove from bookings list
         const updatedBookings = bookings.filter(b => b.id !== targetBooking.id);
         setBookings(updatedBookings);
-        applyFilters(updatedBookings, searchTerm, statusFilter);
+        applyFilters(updatedBookings);
         
         toast.success("Booking deleted successfully");
         return;
@@ -483,7 +487,7 @@ export function AdminBookingsList() {
       // Remove from bookings list
       const updatedBookings = bookings.filter(b => b.id !== targetBooking.id);
       setBookings(updatedBookings);
-      applyFilters(updatedBookings, searchTerm, statusFilter);
+      applyFilters(updatedBookings);
       
       toast.success("Booking deleted successfully");
     } catch (error) {
@@ -513,7 +517,7 @@ export function AdminBookingsList() {
           booking.id === targetBooking.id ? { ...booking, status: newStatus } : booking
         );
         setBookings(updatedBookings);
-        applyFilters(updatedBookings, searchTerm, statusFilter);
+        applyFilters(updatedBookings);
         
         toast.success(`Booking status updated to ${newStatus}`);
         return;
@@ -567,7 +571,7 @@ export function AdminBookingsList() {
         booking.id === targetBooking.id ? { ...booking, status: newStatus } : booking
       );
       setBookings(updatedBookings);
-      applyFilters(updatedBookings, searchTerm, statusFilter);
+      applyFilters(updatedBookings);
       
       console.log('✅ Updated bookings list:', updatedBookings.find(b => b.id === targetBooking.id));
       toast.success(`Booking status updated to ${newStatus}`);
@@ -677,33 +681,112 @@ export function AdminBookingsList() {
   }, [retryCount]);
 
   useEffect(() => {
-    applyFilters(bookings, searchTerm, statusFilter);
-  }, [searchTerm, statusFilter, bookings]);
+    applyFilters(bookings);
+  }, [searchTerm, statusFilter, bookings, pickupDateFrom, pickupDateTo]);
 
-  const applyFilters = (bookingsArray: Booking[], search: string, status: string) => {
-    console.log('Applying filters:', { search, status });
+  const applyFilters = (bookingsArray: Booking[]) => {
+    console.log('Applying filters:', { searchTerm, statusFilter, pickupDateFrom, pickupDateTo });
     console.log('Bookings to filter:', bookingsArray.length);
     
     let filtered = [...bookingsArray];
     
-    if (search) {
-      const term = search.toLowerCase();
-      filtered = filtered.filter(booking => 
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(booking => {
+        const phoneDisplay = formatPassengerPhoneForDisplay(
+          booking.passengerPhone,
+          booking.passengerCountryCode
+        ).toLowerCase();
+        return (
         (booking.bookingNumber && booking.bookingNumber.toLowerCase().includes(term)) ||
         (booking.passengerName && booking.passengerName.toLowerCase().includes(term)) ||
         (booking.passengerPhone && booking.passengerPhone.includes(term)) ||
+        (phoneDisplay && phoneDisplay.includes(term)) ||
+        (booking.passengerCountryCode && booking.passengerCountryCode.toLowerCase().includes(term)) ||
         (booking.passengerEmail && booking.passengerEmail.toLowerCase().includes(term)) ||
         (booking.pickupLocation && booking.pickupLocation.toLowerCase().includes(term))
-      );
+        );
+      });
       console.log('After search filter:', filtered.length);
     }
+
+    if (pickupDateFrom.trim() !== '' || pickupDateTo.trim() !== '') {
+      filtered = filtered.filter((booking) =>
+        bookingPickupInDateRange(booking.pickupDate, pickupDateFrom, pickupDateTo)
+      );
+      console.log('After pickup date filter:', filtered.length);
+    }
     
-    if (status !== 'all') {
-      filtered = filtered.filter(booking => booking.status === status);
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(booking => booking.status === statusFilter);
       console.log('After status filter:', filtered.length);
     }
     
     setFilteredBookings(filtered);
+  };
+
+  const exportFileNameSuffix = () => {
+    const a = pickupDateFrom.trim();
+    const b = pickupDateTo.trim();
+    if (a && b) return `${a}_to_${b}`;
+    if (a) return `from_${a}`;
+    if (b) return `to_${b}`;
+    return new Date().toISOString().slice(0, 10);
+  };
+
+  const handleDownloadCsv = () => {
+    if (filteredBookings.length === 0) {
+      toast.info('No bookings to export');
+      return;
+    }
+    const rows = buildBookingExportRows(
+      filteredBookings,
+      formatDateTime,
+      formatPassengerPhoneForDisplay,
+      (loc) => formatLocationForDisplay(loc).name,
+      (loc) => formatLocationForDisplay(loc).name,
+      formatPrice
+    );
+    const csv = bookingsToCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    saveAs(blob, `vizag-bookings-${exportFileNameSuffix()}.csv`);
+    toast.success(`Downloaded ${filteredBookings.length} row(s) as CSV`);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (filteredBookings.length === 0) {
+      toast.info('No bookings to export');
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const pdfRows = filteredBookings.map((b) => ({
+        bookingNumber: b.bookingNumber ?? String(b.id ?? ''),
+        passengerName: b.passengerName ?? '',
+        phone: formatPassengerPhoneForDisplay(b.passengerPhone, b.passengerCountryCode),
+        pickup: formatLocationForDisplay(b.pickupLocation ?? '').name.slice(0, 200),
+        drop: formatLocationForDisplay(b.dropLocation ?? '').name.slice(0, 200),
+        pickupDate: formatDateTime(b.pickupDate ?? ''),
+        cabType: b.cabType ?? '',
+        amount: formatPrice(Number(b.totalAmount ?? 0)),
+        status: String(b.status ?? ''),
+        paymentStatus: String((b as Booking & { payment_status?: string }).payment_status ?? '—'),
+      }));
+      const blob = await pdf(
+        <AdminBookingsExportPDF
+          title="Vizag Taxi Hub — Bookings"
+          generatedAt={new Date().toLocaleString('en-IN')}
+          rows={pdfRows}
+        />
+      ).toBlob();
+      saveAs(blob, `vizag-bookings-${exportFileNameSuffix()}.pdf`);
+      toast.success(`Downloaded ${filteredBookings.length} booking(s) as PDF`);
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const handleRetry = () => {
@@ -857,8 +940,8 @@ export function AdminBookingsList() {
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="grid gap-2 lg:w-80">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between xl:flex-wrap">
+        <div className="grid gap-2 w-full min-w-0 sm:max-w-md">
           <Label htmlFor="search">Search</Label>
           <Input
             id="search"
@@ -867,7 +950,62 @@ export function AdminBookingsList() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 lg:self-end">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="grid gap-2 w-full sm:w-40">
+            <Label htmlFor="pickup-from">Pickup from</Label>
+            <Input
+              id="pickup-from"
+              type="date"
+              value={pickupDateFrom}
+              onChange={(e) => setPickupDateFrom(e.target.value)}
+              className="min-h-10"
+            />
+          </div>
+          <div className="grid gap-2 w-full sm:w-40">
+            <Label htmlFor="pickup-to">Pickup to</Label>
+            <Input
+              id="pickup-to"
+              type="date"
+              value={pickupDateTo}
+              onChange={(e) => setPickupDateTo(e.target.value)}
+              className="min-h-10"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="sm:mb-0.5 h-10"
+            onClick={() => {
+              setPickupDateFrom('');
+              setPickupDateTo('');
+            }}
+            disabled={!pickupDateFrom && !pickupDateTo}
+          >
+            Clear dates
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10"
+            onClick={handleDownloadCsv}
+            disabled={filteredBookings.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10"
+            onClick={handleDownloadPdf}
+            disabled={filteredBookings.length === 0 || isExportingPdf}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {isExportingPdf ? 'PDF…' : 'PDF'}
+          </Button>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 xl:self-end">
           <div className="grid gap-2 sm:w-48">
             <Label htmlFor="status">Status</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -887,7 +1025,7 @@ export function AdminBookingsList() {
           <Button 
             variant="outline" 
             onClick={handleRetry}
-            className="lg:self-end h-10 mt-auto"
+            className="h-10 mt-auto"
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -954,7 +1092,10 @@ export function AdminBookingsList() {
                         {booking.passengerPhone && (
                           <div className="flex items-center text-xs text-muted-foreground">
                             <Phone className="h-3 w-3 mr-1.5" />
-                            {booking.passengerPhone}
+                            {formatPassengerPhoneForDisplay(
+                              booking.passengerPhone,
+                              booking.passengerCountryCode
+                            )}
                           </div>
                         )}
                       </div>

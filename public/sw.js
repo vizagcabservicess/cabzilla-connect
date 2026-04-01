@@ -183,6 +183,64 @@ async function preloadModule(url) {
   }
 }
 
+// Web Push — show OS/browser notification (payload JSON: { title, body, url, data })
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Vizag Taxi Hub', body: '', url: '/admin' };
+  try {
+    if (event.data) {
+      const j = event.data.json();
+      if (j && typeof j === 'object') {
+        payload = {
+          title: j.title || payload.title,
+          body: j.body || '',
+          url: j.url || '/admin',
+        };
+      }
+    }
+  } catch (e) {
+    try {
+      const t = event.data ? event.data.text() : '';
+      if (t) {
+        payload.body = t;
+      }
+    } catch (_) {}
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/og-image.png',
+      badge: '/og-image.png',
+      tag: 'fuel-refill',
+      renotify: true,
+      data: { url: payload.url },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/admin';
+  const path = url.startsWith('http') ? url : new URL(url, self.location.origin).pathname;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (let i = 0; i < clientList.length; i++) {
+        const c = clientList[i];
+        try {
+          const u = new URL(c.url);
+          if (u.pathname.startsWith(path.split('?')[0]) && 'focus' in c) {
+            return c.focus();
+          }
+        } catch (_) {}
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(self.location.origin + path);
+      }
+    })
+  );
+});
+
 
 
 

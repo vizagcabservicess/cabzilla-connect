@@ -1,14 +1,36 @@
 /**
  * Push: super_admin (new bookings), driver (trip assignments).
- * Production (EAS) builds require expo.extra.eas.projectId + FCM credentials in EAS for Android.
+ *
+ * Production (EAS) Android:
+ * - app.json: expo.extra.eas.projectId, android.googleServicesFile → google-services.json
+ * - EAS: Project credentials → FCM (upload server key or use EAS linked Firebase)
+ * - Physical device only; register-push-token must hit your API (EXPO_PUBLIC_API_BASE_URL in EAS secrets)
+ *
+ * Foreground: Notifications.setNotificationHandler (loaded from index via pushNotificationInit).
+ * Background / killed: FCM delivers; tap opens app — use getLastNotificationResponseAsync (admin: AuthProvider; driver: DriverTripAssignmentOverlay).
  */
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 
-/** Android channel for assign-driver pushes — must match server Expo payload `android.channelId`. */
+/** Android channel for assign-driver pushes — must match server Expo Push `channelId` (top-level). */
 export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments';
+
+/** Admin/fuel/booking pushes use Expo top-level `channelId: 'default'` when no Android block is sent. */
+export const DEFAULT_PUSH_CHANNEL_ID = 'default';
+
+export async function ensureDefaultPushChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(DEFAULT_PUSH_CHANNEL_ID, {
+    name: 'General',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    sound: 'default',
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
 
 export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
@@ -18,18 +40,21 @@ export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
     vibrationPattern: [0, 600, 200, 600],
     sound: 'default',
     enableVibrate: true,
+    showBadge: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 }
 
-// Configure how notifications appear when app is in foreground
+// Foreground presentation (SDK 54+: do not use deprecated shouldShowAlert)
 Notifications.setNotificationHandler({
   handleNotification: async (): Promise<Notifications.NotificationBehavior> => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
+    ...(Platform.OS === 'android'
+      ? { priority: Notifications.AndroidNotificationPriority.MAX }
+      : {}),
   }),
 });
 

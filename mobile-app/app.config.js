@@ -1,10 +1,9 @@
 /**
  * Dynamic Expo config: adds Google OAuth reversed client-id URL scheme + Android intent filter
  * so `com.googleusercontent.apps.*:/oauthredirect` returns to the app (required by Google native OAuth).
+ *
+ * Must use the `config` argument from Expo so static app.json is merged (expo-doctor / EAS).
  */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const appJson = require('./app.json');
-
 function reverseGoogleScheme(clientId) {
   const id = (clientId || '').trim();
   const suffix = '.apps.googleusercontent.com';
@@ -14,8 +13,8 @@ function reverseGoogleScheme(clientId) {
   return `com.googleusercontent.apps.${id.slice(0, -suffix.length)}`;
 }
 
-module.exports = () => {
-  const base = appJson.expo;
+module.exports = ({ config }) => {
+  const base = config;
   const baseScheme = base.scheme || 'vizagtaxihub';
 
   const androidId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
@@ -49,13 +48,11 @@ module.exports = () => {
   }
 
   return {
-    expo: {
-      ...base,
-      scheme: schemes.length === 1 ? schemes[0] : schemes,
-      android: {
-        ...base.android,
-        ...(intentFilters.length > existingFilters.length ? { intentFilters } : {}),
-      },
+    ...base,
+    scheme: schemes.length === 1 ? schemes[0] : schemes,
+    android: {
+      ...base.android,
+      ...(intentFilters.length > existingFilters.length ? { intentFilters } : {}),
     },
   };
 };

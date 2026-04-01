@@ -11,6 +11,7 @@ import CookieConsentManager from "@/components/CookieConsentManager";
 import { ScrollToTop } from "@/components/ScrollToTop";
 
 import router from './routes'; // Only for original approach
+import { AdminWebPushGate } from '@/components/admin/AdminWebPushGate';
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -46,6 +47,7 @@ const App = () => (
     <Sonner />
     <CookieConsentProvider>
       <AuthProvider>
+        <AdminWebPushGate />
         <PoolingAuthProvider>
           {USE_ORIGINAL_APP ? (
             <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>

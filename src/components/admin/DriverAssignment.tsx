@@ -132,30 +132,38 @@ export function DriverAssignment({
     calculateCommission();
   }, [vehicleNumber, booking.id, booking.totalAmount]);
 
+  // When the booking record gains driver/vehicle from the server, reflect it (do not clear user edits when booking fields are still empty)
+  useEffect(() => {
+    if (booking.driverName) setDriverName(booking.driverName);
+    if (booking.driverPhone) setDriverPhone(booking.driverPhone);
+  }, [booking.id, booking.driverName, booking.driverPhone]);
+
+  useEffect(() => {
+    setVehicleNumber(booking.vehicleNumber || '');
+  }, [booking.id, booking.vehicleNumber, booking.vehicleId]);
+
   // Reactively update selected vehicle if booking.vehicleNumber or vehicles change
   useEffect(() => {
-    if (
-      Array.isArray(vehicles) &&
-      vehicles.length > 0 &&
-      (booking.vehicleId || booking.vehicleNumber)
-    ) {
+    const b = booking as Booking & { fleet_vehicle_id?: string | number };
+    const fleetId = b.vehicleId ?? b.fleet_vehicle_id;
+    const reg = b.vehicleNumber || (b as { vehicle_number?: string }).vehicle_number || '';
+
+    if (Array.isArray(vehicles) && vehicles.length > 0 && (fleetId || reg)) {
       let found;
-      if (booking.vehicleId) {
-        found = vehicles.find(v => v.id?.toString() === booking.vehicleId?.toString());
+      if (fleetId) {
+        found = vehicles.find((v) => v.id?.toString() === fleetId?.toString());
       }
-      if (!found && booking.vehicleNumber) {
+      if (!found && reg) {
         found = vehicles.find(
-          v =>
-            v.vehicleNumber === booking.vehicleNumber ||
-            v.vehicle_number === booking.vehicleNumber
+          (v) => v.vehicleNumber === reg || v.vehicle_number === reg
         );
       }
-      if (found && selectedVehicleId !== found.id.toString()) {
+      if (found) {
         setSelectedVehicleId(found.id.toString());
-        setVehicleNumber(found.vehicleNumber || found.vehicle_number);
+        setVehicleNumber(found.vehicleNumber || found.vehicle_number || reg);
       }
     }
-  }, [booking.vehicleId, booking.vehicleNumber, vehicles, selectedVehicleId]);
+  }, [booking, vehicles]);
 
   const handleDriverSelect = (value: string) => {
     setSelectedDriver(value);

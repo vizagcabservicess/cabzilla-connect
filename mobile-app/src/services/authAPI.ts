@@ -2,7 +2,7 @@
  * Auth API - same endpoints as web app
  * POST /api/auth/login.php, register.php, social-login.php, social-signup.php
  */
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
@@ -13,7 +13,6 @@ const getAuthBase = () => {
   if (Platform.OS === 'web') return '/api/auth';
   return `${WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com'}/api/auth`;
 };
-const AUTH_BASE = getAuthBase();
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user';
@@ -82,41 +81,45 @@ class AuthAPI {
     }
   }
 
-  setToken(token: string | null): void {
+  async setToken(token: string | null): Promise<void> {
     this.token = token;
-    if (token) {
-      SecureStore.setItemAsync(TOKEN_KEY, token).catch(() => {});
-    } else {
-      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    try {
+      if (token) {
+        await SecureStore.setItemAsync(TOKEN_KEY, token);
+      } else {
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+      }
+    } catch {
+      // SecureStore can fail on some devices; in-memory token still allows the session
     }
   }
 
   async login(credentials: LoginRequest): Promise<AuthResponse> {
-    const response = await axios.post(`${AUTH_BASE}/login.php`, credentials, {
+    const response = await axios.post(`${getAuthBase()}/login.php`, credentials, {
       headers: { 'Content-Type': 'application/json' },
     });
     const data = response.data;
     if (data.success && data.token && data.user) {
-      this.setToken(data.token);
+      await this.setToken(data.token);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
     }
     return data;
   }
 
   async signup(userData: RegisterRequest): Promise<AuthResponse> {
-    const response = await axios.post(`${AUTH_BASE}/register.php`, userData, {
+    const response = await axios.post(`${getAuthBase()}/register.php`, userData, {
       headers: { 'Content-Type': 'application/json' },
     });
     return response.data;
   }
 
   async socialLogin(socialData: SocialLoginRequest): Promise<AuthResponse> {
-    const response = await axios.post(`${AUTH_BASE}/social-login.php`, socialData, {
+    const response = await axios.post(`${getAuthBase()}/social-login.php`, socialData, {
       headers: { 'Content-Type': 'application/json' },
     });
     const data = response.data;
     if (data.success && data.token && data.user) {
-      this.setToken(data.token);
+      await this.setToken(data.token);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
     }
     return data;
@@ -130,7 +133,7 @@ class AuthAPI {
   async updateProfile(data: { name?: string; phone?: string }): Promise<AuthResponse> {
     const token = await this.getStoredToken();
     if (!token) throw new Error('Not authenticated');
-    const response = await axios.patch(`${AUTH_BASE}/update-profile.php`, data, {
+    const response = await axios.patch(`${getAuthBase()}/update-profile.php`, data, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
@@ -145,7 +148,7 @@ class AuthAPI {
   }
 
   async forgotPassword(email: string): Promise<{ status: string; message?: string }> {
-    const response = await axios.post(`${AUTH_BASE}/forgot-password.php`, { email }, {
+    const response = await axios.post(`${getAuthBase()}/forgot-password.php`, { email }, {
       headers: { 'Content-Type': 'application/json' },
     });
     return response.data;
@@ -157,7 +160,7 @@ class AuthAPI {
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
         await axios.post(
-          `${AUTH_BASE}/logout.php`,
+          `${getAuthBase()}/logout.php`,
           {},
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -175,7 +178,7 @@ class AuthAPI {
     const token = await this.getStoredToken();
     if (!token) return null;
     try {
-      const response = await axios.get(`${AUTH_BASE}/me.php`, {
+      const response = await axios.get(`${getAuthBase()}/me.php`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data?.success && response.data?.user) {
@@ -215,7 +218,16 @@ class AuthAPI {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
       return true;
-    } catch {
+    } catch (e) {
+      if (isAxiosError(e)) {
+        console.warn(
+          '[push] register-push-token failed:',
+          e.response?.status,
+          e.response?.data ?? e.message
+        );
+      } else {
+        console.warn('[push] register-push-token failed:', e);
+      }
       return false;
     }
   }

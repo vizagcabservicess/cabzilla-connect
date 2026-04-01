@@ -28,15 +28,23 @@ export function FleetVehicleAssignment({ booking, onAssign, isSubmitting }: Flee
 
   useEffect(() => {
     if (!fleetVehicles.length) return;
+    const b = booking as Booking & { fleet_vehicle_id?: string | number };
+    const fleetId = b.vehicleId ?? b.fleet_vehicle_id;
+    const reg =
+      b.vehicleNumber ||
+      (b as Booking & { vehicle_number?: string }).vehicle_number ||
+      '';
     const assigned = fleetVehicles.find(
       (v) =>
-        (booking.vehicleId && String(v.id) === String(booking.vehicleId)) ||
-        (booking.vehicleNumber && (v.vehicleNumber === booking.vehicleNumber || (v as { vehicle_number?: string }).vehicle_number === booking.vehicleNumber))
+        (fleetId != null && fleetId !== '' && String(v.id) === String(fleetId)) ||
+        (reg && (v.vehicleNumber === reg || (v as { vehicle_number?: string }).vehicle_number === reg))
     );
     if (assigned) {
       setSelectedVehicleId(String(assigned.id));
+    } else if (!fleetId && !reg) {
+      setSelectedVehicleId('');
     }
-  }, [booking.vehicleId, booking.vehicleNumber, fleetVehicles]);
+  }, [booking, fleetVehicles]);
 
   const fetchFleetVehicles = async () => {
     try {

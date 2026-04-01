@@ -67,14 +67,8 @@ function GoogleSignInButtonInner({
   label = 'Continue with Google',
   style,
 }: GoogleSignInButtonProps) {
-  // Native: platform OAuth client so Google returns to the app, not a https:// web redirect.
-  // webClientId stays the Web client for server token verification / id_token exchange.
-  const clientId =
-    Platform.OS === 'android' && GOOGLE_ANDROID_CLIENT_ID
-      ? GOOGLE_ANDROID_CLIENT_ID
-      : Platform.OS === 'ios' && GOOGLE_IOS_CLIENT_ID
-        ? GOOGLE_IOS_CLIENT_ID
-        : GOOGLE_CLIENT_ID;
+  // expo-auth-session uses androidClientId / iosClientId on native; webClientId is the Web OAuth client.
+  // Native id_token `aud` is often the Android/iOS client id — server must allow it via GOOGLE_OAUTH_CLIENT_IDS.
 
   // Native Google OAuth requires redirect com.googleusercontent.apps.<clientPrefix>:/oauthredirect
   // (not vizagtaxihub://...) — see Google OAuth 2.0 native app docs.
@@ -94,7 +88,6 @@ function GoogleSignInButtonInner({
 
   const [request, response, promptAsync] = useIdTokenAuthRequest(
     {
-      clientId,
       webClientId: GOOGLE_CLIENT_ID,
       androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
       iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
@@ -121,7 +114,12 @@ function GoogleSignInButtonInner({
       };
       onSuccess(socialUser);
     } else if (response?.type === 'error') {
+      if (__DEV__) {
+        console.warn('[GoogleSignIn]', response.error);
+      }
       onError?.(new Error(response.error?.message ?? 'Google sign-in failed'));
+    } else if (response?.type === 'dismiss' && __DEV__) {
+      console.warn('[GoogleSignIn] Chrome tab dismissed before completing sign-in');
     }
     // Don't call onError for 'cancel' - user intentionally dismissed
   }, [response, onSuccess, onError]);

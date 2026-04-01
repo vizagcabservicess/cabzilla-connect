@@ -192,6 +192,16 @@ function fuelPumpImpliedRateLooksInvalid(amount: number, qty: number): boolean {
   return implied < 62 || implied > 155;
 }
 
+/** Match server `fuel_pump_numeric_math_abs_delta_inr` (~₹0.10; small slack for float). */
+function pumpSaleTotalMatchesVolumeTimesRate(amount: number, qty: number, rate: number): boolean {
+  const calc = qty * rate;
+  if (!(calc > 0) || !Number.isFinite(calc) || !Number.isFinite(amount)) return false;
+  const exp2 = Math.round(calc * 100) / 100;
+  const expR = Math.round(calc);
+  const delta = Math.min(Math.abs(amount - exp2), Math.abs(amount - expR));
+  return delta <= 0.11;
+}
+
 /**
  * Pump digits are only trustworthy for autofill when unified vision is confident and returns
  * both amount and volume — otherwise we would paste Vision/heuristic guesses that still imply a “normal” ₹/L.
@@ -218,6 +228,7 @@ function isUnifiedPumpReadingTrustworthy(u: FuelVisionUnifiedResult | null): boo
     return false;
   }
   if (fuelPumpImpliedRateLooksInvalid(a, q)) return false;
+  if (r != null && !pumpSaleTotalMatchesVolumeTimesRate(a, q, r)) return false;
   return true;
 }
 

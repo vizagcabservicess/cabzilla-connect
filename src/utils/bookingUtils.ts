@@ -94,3 +94,19 @@ export const calculateExtraChargesTotal = (
   
   return extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
 };
+
+/**
+ * Show stored national number with dial code. If phone is already E.164 (+...), return as-is.
+ */
+export function formatPassengerPhoneForDisplay(
+  nationalOrFull: string | null | undefined,
+  countryCode?: string | null
+): string {
+  const raw = String(nationalOrFull ?? '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('+')) return raw;
+  const code = String(countryCode ?? '+91').trim();
+  const prefix = code.startsWith('+') ? code : `+${code}`;
+  const digits = raw.replace(/\D/g, '');
+  return `${prefix} ${digits}`;
+}

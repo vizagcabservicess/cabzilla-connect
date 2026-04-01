@@ -267,6 +267,7 @@ try {
         'driverName' => 'driver_name',
         'driverPhone' => 'driver_phone',
         'vehicleNumber' => 'vehicle_number',
+        'vehicleId' => 'fleet_vehicle_id',
         'adminNotes' => 'admin_notes',
         'startOdometer' => 'start_odometer',
         'endOdometer' => 'end_odometer',
@@ -421,6 +422,8 @@ try {
         'driverName' => $updatedBooking['driver_name'],
         'driverPhone' => $updatedBooking['driver_phone'],
         'vehicleNumber' => $updatedBooking['vehicle_number'],
+        'vehicleId' => isset($updatedBooking['fleet_vehicle_id']) && $updatedBooking['fleet_vehicle_id'] !== '' && $updatedBooking['fleet_vehicle_id'] !== null
+            ? (string)$updatedBooking['fleet_vehicle_id'] : null,
         'adminNotes' => isset($updatedBooking['admin_notes']) ? $updatedBooking['admin_notes'] : null,
         'extraCharges' => $decodedExtraCharges,
         'updatedAt' => $updatedBooking['updated_at']

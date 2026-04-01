@@ -25,7 +25,9 @@ function getApiBase(): string {
 function parseUnified(body: unknown): FuelVisionUnifiedResult | null {
   if (body == null || typeof body !== 'object' || !('status' in body)) return null;
   const o = body as Record<string, unknown>;
-  if (o.status !== 'ok' || o.result == null || typeof o.result !== 'object') return null;
+  const st = o.status;
+  /** `fuel-vision-unified.php` returns status "error" with HTTP 200 + result stubs when validation fails (avoids CDN non-JSON 502 pages). */
+  if ((st !== 'ok' && st !== 'error') || o.result == null || typeof o.result !== 'object') return null;
   const r = o.result as Record<string, unknown>;
   const conf = r.confidence === 'high' || r.confidence === 'medium' || r.confidence === 'low' ? r.confidence : 'low';
   const src =
@@ -92,29 +94,27 @@ export async function analyzeFuelCaptureUnified(
       });
 
       const raw = (await res.text()).replace(/^\uFEFF/, '').trim();
-      if (!res.ok) {
-        try {
-          const errBody = JSON.parse(raw) as unknown;
-          if (__DEV__) {
-            // eslint-disable-next-line no-console
-            console.error(`[fuel-vision-unified HTTP ${res.status}]`, JSON.stringify(errBody, null, 2));
-          }
-        } catch {
-          if (__DEV__) {
-            const cdnHint =
-              !raw.trimStart().startsWith('{') && raw.length < 120
-                ? ' Non-JSON body usually means Cloudflare/nginx 502 (origin timeout, PHP fatal, or script not deployed) — check server error logs and that fuel-vision-unified.php is on the host.'
-                : '';
-            // eslint-disable-next-line no-console
-            console.error(`[fuel-vision-unified HTTP ${res.status}]${cdnHint}`, raw.slice(0, 2000));
-          }
-        }
-        return null;
-      }
       let data: unknown;
       try {
         data = JSON.parse(raw);
       } catch {
+        if (__DEV__ && !res.ok) {
+          const cdnHint =
+            !raw.trimStart().startsWith('{') && raw.length < 120
+              ? ' Non-JSON body: proxy/origin error, timeout, or PHP fatal — check server logs and fuel-vision-unified.php.'
+              : '';
+          // eslint-disable-next-line no-console
+          console.error(`[fuel-vision-unified HTTP ${res.status}]${cdnHint}`, raw.slice(0, 2000));
+        }
+        return null;
+      }
+      if (!res.ok) {
+        const fromBody = parseUnified(data);
+        if (fromBody != null) return fromBody;
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.error(`[fuel-vision-unified HTTP ${res.status}]`, JSON.stringify(data, null, 2));
+        }
         return null;
       }
       if (__DEV__) {

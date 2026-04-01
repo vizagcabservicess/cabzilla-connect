@@ -24,7 +24,6 @@
       "package": "com.vizagtaxihub.app",
       "googleServicesFile": "./google-services.json",
       "versionCode": 1,
-      "useNextNotificationsApi": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -38,6 +37,9 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
       ],
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "pan"

@@ -131,10 +131,12 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   }, []);
   
   const onFormSubmit = (data: GuestDetails) => {
+    // countryCode is not a registered input — always use the dropdown value so API gets correct dial code (e.g. +1 vs +91)
+    const countryCode = selectedCountry.dialCode;
     // Save to session storage for future use
     sessionStorage.setItem('guestName', data.name);
     sessionStorage.setItem('guestPhone', data.phone);
-    sessionStorage.setItem('countryCode', data.countryCode);
+    sessionStorage.setItem('countryCode', countryCode);
     sessionStorage.setItem('guestEmail', data.email);
     sessionStorage.setItem('additionalRequirements', data.additionalRequirements || '');
     sessionStorage.setItem('paymentMode', data.paymentMode || 'partial');
@@ -146,7 +148,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
       sessionStorage.setItem('companyEmail', data.companyEmail || '');
     }
     
-    onSubmit({ ...data, totalPrice });
+    onSubmit({ ...data, countryCode, totalPrice });
   };
 
   // Calculate payment amounts
