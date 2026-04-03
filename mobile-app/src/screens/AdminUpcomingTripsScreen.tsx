@@ -22,6 +22,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
 import { adminAPI } from '../services/adminAPI';
+import {
+  formatPassengerPhoneForDisplay,
+  passengerPhoneE164Digits,
+  passengerPhoneToTelHref,
+} from '../utils/passengerPhoneDisplay';
 import type { UserBooking } from '../services/userBookingsAPI';
 import {
   generateBookingConfirmationMessage,
@@ -202,6 +207,8 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
       Alert.alert('WhatsApp', 'No customer phone on this booking');
       return;
     }
+    const rowCc = (row as Record<string, unknown>).passengerCountryCode ??
+      (row as Record<string, unknown>).passenger_country_code;
     setWhatsappSendingId(row.id);
     setActionBooking(null);
     try {
@@ -222,7 +229,20 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
       } else {
         text = generateUpcomingTripReminderMessage(full as any);
       }
-      await adminAPI.sendAdminTripWhatsApp(phoneRaw, text, 'trip');
+      const fullRecord = full as Record<string, unknown>;
+      const cc =
+        (fullRecord.passengerCountryCode ?? fullRecord.passenger_country_code ?? rowCc) as
+          | string
+          | undefined;
+      const waPhone = passengerPhoneE164Digits(phoneRaw, cc);
+      if (!waPhone) {
+        Alert.alert(
+          'WhatsApp',
+          'Need full international number (+…) or passenger country code on the booking to send.',
+        );
+        return;
+      }
+      await adminAPI.sendAdminTripWhatsApp(waPhone, text, 'trip');
       Alert.alert('WhatsApp', 'Message sent to customer (trip line)');
     } catch (e) {
       Alert.alert('WhatsApp', e instanceof Error ? e.message : 'Send failed');
@@ -265,12 +285,19 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
   };
 
   const callCustomer = (b: UserBooking) => {
-    const digits = String(b.passengerPhone ?? b.passenger_phone ?? '').replace(/\D/g, '');
-    if (!digits) {
+    const raw = String(b.passengerPhone ?? b.passenger_phone ?? '').trim();
+    if (!raw) {
       Alert.alert('Call', 'No phone number');
       return;
     }
-    Linking.openURL(`tel:${digits}`);
+    const br = b as Record<string, unknown>;
+    const cc = br.passengerCountryCode ?? br.passenger_country_code;
+    const href = passengerPhoneToTelHref(raw, cc as string | undefined);
+    if (href) Linking.openURL(href).catch(() => {});
+    else {
+      const digits = raw.replace(/\D/g, '');
+      if (digits) Linking.openURL(`tel:${digits}`).catch(() => {});
+    }
   };
 
   const driverChipLabel =
@@ -416,9 +443,17 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
                   <Text style={styles.customer}>
                     {String(booking.passengerName ?? booking.guest_name ?? '—')}
                   </Text>
-                  <Text style={styles.phone}>
-                    {String(booking.passengerPhone ?? booking.passenger_phone ?? booking.guest_phone ?? '—')}
-                  </Text>
+                  <View style={styles.phoneRow}>
+                    <Ionicons name="call-outline" size={12} color={colors.gray600} />
+                    <Text style={styles.phone}>
+                      {formatPassengerPhoneForDisplay(
+                        String(booking.passengerPhone ?? booking.passenger_phone ?? booking.guest_phone ?? ''),
+                        (booking as Record<string, unknown>).passengerCountryCode ??
+                          (booking as Record<string, unknown>).passenger_country_code
+                      ) ||
+                        String(booking.passengerPhone ?? booking.passenger_phone ?? booking.guest_phone ?? '—')}
+                    </Text>
+                  </View>
                   <View style={styles.route}>
                     <Text style={styles.routeText} numberOfLines={2}>
                       {locName(booking.pickupLocation ?? booking.pickup_location)} →{' '}
@@ -734,7 +769,13 @@ const styles = StyleSheet.create({
   },
   bookingRef: { fontSize: 15, fontWeight: '700', color: colors.primary },
   customer: { fontSize: 16, fontWeight: '600', marginTop: 4 },
-  phone: { fontSize: 13, color: colors.gray600, marginTop: 2 },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  phone: { fontSize: 12, color: colors.gray600, flex: 1 },
   route: { marginTop: 8 },
   routeText: { fontSize: 14, color: colors.foreground },
   pickupRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },

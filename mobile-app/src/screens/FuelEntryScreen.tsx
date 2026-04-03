@@ -1222,9 +1222,9 @@ export function FuelEntryScreen() {
             >
               <Text style={[styles.tripChipText, !bookingId && styles.tripChipTextActive]}>None</Text>
             </TouchableOpacity>
-            {trips.map((t) => (
+            {trips.map((t, tripIdx) => (
               <TouchableOpacity
-                key={t.id}
+                key={`${t.bookingNumber ?? 'b'}-${t.id}-${tripIdx}`}
                 style={[styles.tripChip, bookingId === t.id && styles.tripChipActive]}
                 onPress={() => setBookingId(t.id)}
               >

@@ -16,7 +16,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
-import { CommonActions } from '@react-navigation/native';
+import { resetTabsAfterLogout, type TabParentForReset } from '../navigation/resetTabsAfterLogout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
@@ -112,17 +112,10 @@ export function ProfileScreen({ navigation }: Props) {
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
+          const role = user?.role;
           await logout();
-          const tabNav = navigation.getParent();
-          tabNav?.dispatch(CommonActions.reset({
-            index: 0,
-            routes: [
-              { name: 'Main', state: { routes: [{ name: 'Home', params: { showAuthSheet: true } }] } },
-              { name: 'FleetVehicles' },
-              { name: 'HireDriver' },
-              { name: 'Profile' },
-            ],
-          }));
+          const tabNav = navigation.getParent() as TabParentForReset;
+          resetTabsAfterLogout(tabNav, role);
         },
       },
     ]);

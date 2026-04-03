@@ -19,6 +19,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminAPI } from '../services/adminAPI';
 import type { UserBooking } from '../services/userBookingsAPI';
+import {
+  formatBookingStatus,
+  getEffectiveBookingStatus,
+  tripStatusBadgeBackground,
+} from '../utils/bookingStatusDisplay';
 
 function formatDate(dateStr: string, timeStr?: string): string {
   if (!dateStr) return '';
@@ -31,24 +36,12 @@ function formatDate(dateStr: string, timeStr?: string): string {
 
 const STATUS_FILTERS = [
   { label: 'All', value: '' },
+  { label: 'Admin created', value: 'admin_created' },
   { label: 'Pending', value: 'pending' },
   { label: 'Confirmed', value: 'confirmed' },
   { label: 'Completed', value: 'completed' },
   { label: 'Cancelled', value: 'cancelled' },
 ];
-
-function statusColor(status?: string): string {
-  switch (status?.toLowerCase()) {
-    case 'confirmed':
-      return '#d1fae5';
-    case 'completed':
-      return '#dbeafe';
-    case 'cancelled':
-      return '#fee2e2';
-    default:
-      return colors.gray200;
-  }
-}
 
 export function AdminBookingsListScreen() {
   const navigation = useNavigation<any>();
@@ -84,7 +77,10 @@ export function AdminBookingsListScreen() {
   };
 
   const filtered = statusFilter
-    ? bookings.filter((b) => (b.status || '').toLowerCase() === statusFilter.toLowerCase())
+    ? bookings.filter(
+        (b) =>
+          getEffectiveBookingStatus(b).toLowerCase() === statusFilter.toLowerCase()
+      )
     : bookings;
 
   if (loading && bookings.length === 0) {
@@ -167,7 +163,9 @@ export function AdminBookingsListScreen() {
           </View>
         ) : (
           <View style={styles.bookingList}>
-            {filtered.map((b) => (
+            {filtered.map((b) => {
+              const rowStatus = getEffectiveBookingStatus(b);
+              return (
               <TouchableOpacity
                 key={b.id}
                 style={styles.bookingCard}
@@ -182,12 +180,13 @@ export function AdminBookingsListScreen() {
                 </View>
                 <View style={styles.bookingMeta}>
                   <Text style={styles.bookingDate}>{formatDate(b.pickup_date, b.pickup_time)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor(b.status) }]}>
-                    <Text style={styles.statusText}>{b.status || '—'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: tripStatusBadgeBackground(rowStatus) }]}>
+                    <Text style={styles.statusText}>{formatBookingStatus(rowStatus)}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
-            ))}
+            );
+            })}
           </View>
         )}
 

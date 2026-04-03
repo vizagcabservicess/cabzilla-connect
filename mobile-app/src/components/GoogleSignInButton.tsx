@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as AuthSession from 'expo-auth-session';
 import { useIdTokenAuthRequest } from 'expo-auth-session/providers/google';
 import {
@@ -16,7 +16,9 @@ import {
 } from '../config';
 import { colors } from '../theme/colors';
 
-const canUseGoogleSignIn = Platform.OS === 'web' || Constants.appOwnership !== 'expo';
+/** Expo Go (store client) cannot run native Google OAuth reliably; dev/store builds are Bare or Standalone. */
+const canUseGoogleSignIn =
+  Platform.OS === 'web' || Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
 
 function decodeJwtPayload(token: string): { sub?: string; email?: string; name?: string; picture?: string } {
   try {

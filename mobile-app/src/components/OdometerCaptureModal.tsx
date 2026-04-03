@@ -18,6 +18,7 @@ import { extractTextFromImage } from '../services/ocrService';
 import { colors } from '../theme/colors';
 import { driverTripsAPI, uploadImage } from '../services/driverTripsAPI';
 import { parseOdometerFromText } from '../utils/parseOdometerFromOcr';
+import { FuelCaptureCameraModal } from './FuelCaptureCameraModal';
 
 export type OdometerCaptureModalProps =
   | {
@@ -46,6 +47,7 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
   const [error, setError] = useState('');
   const [manualValue, setManualValue] = useState('');
   const [failedImageUri, setFailedImageUri] = useState<string | null>(null);
+  const [guidedCameraVisible, setGuidedCameraVisible] = useState(false);
 
   useEffect(() => {
     if (!visible) {
@@ -53,45 +55,12 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       setError('');
       setFailedImageUri(null);
       setStep('idle');
+      setGuidedCameraVisible(false);
     }
   }, [visible]);
 
-  const handleCapture = async () => {
-    setError('');
-    setStep('capturing');
-
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      setError('Camera permission is required');
-      setStep('idle');
-      return;
-    }
-
-    let result: ImagePicker.ImagePickerResult | undefined;
-    try {
-      result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 0.8,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      });
-    } catch (cameraErr) {
-      setError(
-        cameraErr instanceof Error
-          ? cameraErr.message
-          : 'Could not open the camera. Check camera permission in system settings.'
-      );
-      setStep('idle');
-      return;
-    }
-
-    if (!result || result.canceled || !result.assets?.[0]?.uri) {
-      setStep('idle');
-      return;
-    }
-
-    const uri = result.assets[0].uri;
+  const processCapturedUri = async (uri: string) => {
     setStep('processing');
-
     try {
       const texts = await extractTextFromImage(uri);
       const fullText = (texts || []).join(' ');
@@ -133,9 +102,49 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
             ? e.message
             : 'Failed to process odometer'
       );
-      setFailedImageUri(result.assets?.[0]?.uri ?? null);
+      setFailedImageUri(uri);
       setStep('idle');
     }
+  };
+
+  const handleCapture = async () => {
+    setError('');
+    if (Platform.OS !== 'web') {
+      setGuidedCameraVisible(true);
+      return;
+    }
+
+    setStep('capturing');
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setError('Camera permission is required');
+      setStep('idle');
+      return;
+    }
+
+    let result: ImagePicker.ImagePickerResult | undefined;
+    try {
+      result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+    } catch (cameraErr) {
+      setError(
+        cameraErr instanceof Error
+          ? cameraErr.message
+          : 'Could not open the camera. Check camera permission in system settings.'
+      );
+      setStep('idle');
+      return;
+    }
+
+    if (!result || result.canceled || !result.assets?.[0]?.uri) {
+      setStep('idle');
+      return;
+    }
+
+    await processCapturedUri(result.assets[0].uri);
   };
 
   const handleManualSubmit = async () => {
@@ -174,84 +183,104 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
   };
 
   const label = tripMode ? (readingType === 'start' ? 'Start Trip' : 'End Trip') : 'Fuel entry';
-  // Keep manual row visible while manual submit uploads (step === 'uploading'); avoid narrowing step to only 'idle'.
-  const showManualEntry = Boolean(error || failedImageUri) && (step === 'idle' || step === 'uploading');
+  // Trip: always show manual entry when idle or saving (copy promises "enter manually below"). Fuel: only after OCR failure.
+  const showManualEntry = tripMode
+    ? step === 'idle' || step === 'uploading'
+    : Boolean(error || failedImageUri) && (step === 'idle' || step === 'uploading');
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => {
-        if (step === 'processing' || step === 'uploading') return;
-        setStep('idle');
-        onClose();
-      }}
-    >
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (guidedCameraVisible) return;
+          if (step === 'processing' || step === 'uploading') return;
+          setStep('idle');
+          onClose();
+        }}
       >
-        <View style={styles.content}>
-          <Text style={styles.title}>
-            {tripMode ? `Capture Odometer (${label})` : 'Capture odometer'}
-          </Text>
-          <Text style={styles.desc}>
-            {tripMode
-              ? 'Take a photo of the odometer or enter the reading manually below.'
-              : 'Photograph your dashboard odometer to fill the reading, or type it manually.'}
-          </Text>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {showManualEntry && (
-            <View style={styles.manualRow}>
-              <TextInput
-                style={styles.manualInput}
-                value={manualValue}
-                onChangeText={(t) => {
-                  setManualValue(t.replace(/\D/g, '').slice(0, 7));
-                  setError('');
-                }}
-                placeholder="e.g. 45230"
-                keyboardType="number-pad"
-                placeholderTextColor={colors.gray500}
-                maxLength={7}
-              />
-              <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit} disabled={step === 'uploading'}>
-                {step === 'uploading' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.manualSubmitText}>Submit</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-          <View style={styles.actions}>
-            {step === 'idle' && (
-              <>
-                <TouchableOpacity style={styles.captureBtn} onPress={handleCapture}>
-                  <Text style={styles.captureBtnText}>Take Photo</Text>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.content}>
+            <Text style={styles.title}>
+              {tripMode ? `Capture Odometer (${label})` : 'Capture odometer'}
+            </Text>
+            <Text style={styles.desc}>
+              {tripMode
+                ? Platform.OS === 'web'
+                  ? 'Take a photo of the odometer or enter the reading manually below.'
+                  : 'Align the odometer inside the on-screen frame (only that area is saved—same as fuel capture), or type the reading below.'
+                : Platform.OS === 'web'
+                  ? 'Photograph your dashboard odometer to fill the reading, or type it manually.'
+                  : 'Use the guided camera to frame the odometer, or type the reading manually.'}
+            </Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {showManualEntry && (
+              <View style={styles.manualRow}>
+                <TextInput
+                  style={styles.manualInput}
+                  value={manualValue}
+                  onChangeText={(t) => {
+                    setManualValue(t.replace(/\D/g, '').slice(0, 7));
+                    setError('');
+                  }}
+                  placeholder="e.g. 45230"
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.gray500}
+                  maxLength={7}
+                />
+                <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit} disabled={step === 'uploading'}>
+                  {step === 'uploading' ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.manualSubmitText}>Submit</Text>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {(step === 'capturing' || step === 'processing' || step === 'uploading') && (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.loadingText}>
-                  {step === 'capturing' && 'Opening camera...'}
-                  {step === 'processing' && 'Extracting odometer...'}
-                  {step === 'uploading' && 'Saving...'}
-                </Text>
               </View>
             )}
+            <View style={styles.actions}>
+              {step === 'idle' && (
+                <>
+                  <TouchableOpacity style={styles.captureBtn} onPress={() => void handleCapture()}>
+                    <Text style={styles.captureBtnText}>Take Photo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {(step === 'capturing' || step === 'processing' || step === 'uploading') && (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.loadingText}>
+                    {step === 'capturing' && 'Opening camera...'}
+                    {step === 'processing' && 'Extracting odometer...'}
+                    {step === 'uploading' && 'Saving...'}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
+      {Platform.OS !== 'web' && (
+        <FuelCaptureCameraModal
+          visible={guidedCameraVisible}
+          phase="odometer"
+          onDismiss={() => setGuidedCameraVisible(false)}
+          onCaptured={(uri) => {
+            setGuidedCameraVisible(false);
+            void processCapturedUri(uri);
+          }}
+        />
+      )}
+    </>
   );
 }
 

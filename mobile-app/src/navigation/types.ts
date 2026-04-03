@@ -111,10 +111,8 @@ export type RootStackParamList = {
   DriverHome: undefined;
   DriverTab: undefined;
   DriverFuelTab: undefined;
-  DriverEarningsTab: undefined;
   DriverTripsList: undefined;
   DriverFuelHome: undefined;
-  DriverEarningsHome: undefined;
   DriverTripDetail: { trip: import('../services/driverTripsAPI').DriverTrip };
   FuelEntry: { bookingId?: number } | undefined;
   Payment: {

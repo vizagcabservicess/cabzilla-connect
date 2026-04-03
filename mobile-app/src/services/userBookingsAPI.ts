@@ -22,6 +22,8 @@ export interface UserBooking {
   vehicle_type?: string;
   total_amount?: number;
   status?: string;
+  createdBy?: string | null;
+  created_by?: string | null;
   [key: string]: unknown;
 }
 
@@ -61,6 +63,7 @@ export function normalizeBooking(raw: Record<string, unknown>): UserBooking {
     vehicle_type: (raw.cabType ?? raw.vehicle_type ?? raw.trip_type) as string | undefined,
     total_amount: num,
     status: (raw.status ?? raw.booking_status) as string | undefined,
+    createdBy: (raw.createdBy ?? raw.created_by) as string | undefined,
     ...raw,
   };
 }

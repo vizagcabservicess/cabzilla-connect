@@ -25,6 +25,15 @@ import type { RootStackParamList } from '../navigation/types';
 import { adminAPI } from '../services/adminAPI';
 import { tourAPI } from '../services/tourAPI';
 import { useAuth } from '../providers/AuthProvider';
+import {
+  formatPassengerPhoneForDisplay,
+  passengerPhoneE164Digits,
+  passengerPhoneToTelHref,
+} from '../utils/passengerPhoneDisplay';
+import {
+  formatBookingStatus,
+  getEffectiveBookingStatus,
+} from '../utils/bookingStatusDisplay';
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'BookingDetail'>;
 
@@ -36,6 +45,24 @@ function formatDate(dateStr: string, timeStr?: string): string {
   if (!m) return dateStr;
   const [, y, mo, d] = m;
   return timeStr ? `${d}-${mo}-${y} • ${timeStr}` : `${d}-${mo}-${y}`;
+}
+
+function bookingOdometerDisplayLine(booking: Record<string, unknown>, kmKey: string, atKey: string): string | undefined {
+  const rawKm = booking[kmKey];
+  if (rawKm == null || rawKm === '') return undefined;
+  const km = Math.round(Number(rawKm));
+  if (!Number.isFinite(km)) return undefined;
+  const rawAt = booking[atKey];
+  let at = '';
+  if (typeof rawAt === 'string' && rawAt.trim()) {
+    const t = rawAt.includes('T') ? rawAt : rawAt.replace(' ', 'T');
+    const d = new Date(t);
+    at = !Number.isNaN(d.getTime())
+      ? d.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+      : rawAt.trim();
+  }
+  const kmStr = km.toLocaleString('en-IN');
+  return at ? `${kmStr} km · ${at}` : `${kmStr} km`;
 }
 
 /** Format trip type with mode for display (e.g. "Tour - Round Trip", "Outstation - One Way") */
@@ -108,7 +135,8 @@ function StatusBadge({
     else if (s === 'pending') bg = '#fef3c7';
     else if (s === 'cancelled') bg = '#fee2e2';
   } else {
-    if (s === 'confirmed' || s === 'assigned') bg = '#dcfce7';
+    if (s === 'admin_created') bg = '#ede9fe';
+    else if (s === 'confirmed' || s === 'assigned') bg = '#dcfce7';
     else if (s === 'completed') bg = '#dbeafe';
     else if (s === 'pending') bg = '#fef3c7';
     else if (s === 'cancelled') bg = '#fee2e2';
@@ -140,11 +168,13 @@ export function BookingDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       setLocalBooking(booking);
+      setLocalStatus(null);
       if (!paramBookingId || !isAdmin) return;
       adminAPI.getBookingById(paramBookingId).then((b) => {
         setLocalBooking(b as typeof booking);
         const st = (b as { status?: string }).status;
-        if (st) setLocalStatus(st);
+        if (st && String(st).trim()) setLocalStatus(String(st).trim());
+        else setLocalStatus(null);
       }).catch(() => {});
     }, [paramBookingId, isAdmin, booking])
   );
@@ -167,7 +197,12 @@ export function BookingDetailScreen() {
   const displayBooking = localBooking ?? booking;
 
   const b = (displayBooking ?? booking) as (UserBooking & Record<string, unknown>) | undefined;
-  const status = localStatus ?? b?.status ?? '';
+  const rawTripStatus = (localStatus ?? b?.status ?? '').trim();
+  const effectiveStatus = getEffectiveBookingStatus({
+    status: rawTripStatus,
+    createdBy: (b?.createdBy ?? b?.created_by) as string | undefined,
+    created_by: b?.created_by as string | undefined,
+  });
   const bookingId =
     typeof b?.id === 'number' && !Number.isNaN(b.id) && b.id > 0
       ? b.id
@@ -178,6 +213,9 @@ export function BookingDetailScreen() {
   const bookingNumber = (b?.bookingNumber ?? b?.booking_number) as string | undefined;
   const passengerName = (b?.passengerName ?? b?.passenger_name) as string | undefined;
   const passengerPhone = (b?.passengerPhone ?? b?.passenger_phone) as string | undefined;
+  const passengerCountryCode = (b?.passengerCountryCode ?? b?.passenger_country_code) as string | undefined;
+  const passengerPhoneFormatted =
+    formatPassengerPhoneForDisplay(passengerPhone, passengerCountryCode) || passengerPhone || '';
   const passengerEmail = (b?.passengerEmail ?? b?.passenger_email) as string | undefined;
   const driverName = (b?.driverName ?? b?.driver_name) as string | undefined;
   const driverPhone = (b?.driverPhone ?? b?.driver_phone) as string | undefined;
@@ -190,11 +228,11 @@ export function BookingDetailScreen() {
   const tourDisplayName =
     (b?.tourName ?? b?.tour_name ?? resolvedTourName ?? '') as string;
 
-  const handleCall = (phone?: string) => {
-    if (phone) {
-      const num = phone.replace(/\D/g, '');
-      Linking.openURL(`tel:${num}`).catch(() => {});
-    }
+  const handleCall = (phone?: string, countryCode?: string) => {
+    if (!phone) return;
+    const href = passengerPhoneToTelHref(phone, countryCode);
+    if (href) Linking.openURL(href).catch(() => {});
+    else Linking.openURL(`tel:${phone.replace(/\D/g, '')}`).catch(() => {});
   };
 
   const goBack = () => navigation.goBack();
@@ -337,7 +375,7 @@ export function BookingDetailScreen() {
       const extraKm = (b?.extra_per_km ?? (b as any)?.extraPerKm) ?? '—';
       msg += `\n\n*Package Limits (Local)*\n⏰ *Hours included:* ${hoursIncl}\n🛣️ *Kilometers limit:* ${kmIncl} km\n📈 *Extra charges:* ₹${extraHr}/hour beyond hours; ₹${extraKm}/km beyond km (pro rate basis)`;
     }
-    msg += `\n\n*Passenger*\n👤 Name: ${passengerName || '—'}\n📞 Phone: ${passengerPhone || '—'}\n📧 Email: ${passengerEmail || '—'}`;
+    msg += `\n\n*Passenger*\n👤 Name: ${passengerName || '—'}\n📞 Phone: ${passengerPhoneFormatted || passengerPhone || '—'}\n📧 Email: ${passengerEmail || '—'}`;
     if (additionalReq && additionalReq.trim()) {
       msg += `\n\n*Additional Info*\n${additionalReq}`;
     }
@@ -386,13 +424,16 @@ export function BookingDetailScreen() {
   };
 
   const handleSendToCustomer = () => {
-    const phone = passengerPhone?.replace(/\D/g, '');
-    if (!phone) {
-      Alert.alert('Missing Phone', 'Customer phone number is required to send details.');
+    const waDigits = passengerPhoneE164Digits(passengerPhone, passengerCountryCode);
+    if (!waDigits) {
+      Alert.alert(
+        'WhatsApp',
+        'Use a full international number (+…) or save passenger country code on the booking.',
+      );
       return;
     }
     const msg = buildCustomerMessage();
-    const url = `https://wa.me/${phone.startsWith('91') ? phone : `91${phone}`}?text=${encodeURIComponent(msg)}`;
+    const url = `https://wa.me/${waDigits}?text=${encodeURIComponent(msg)}`;
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open WhatsApp.'));
   };
 
@@ -416,12 +457,21 @@ export function BookingDetailScreen() {
   const navToInvoice = () =>
     bookingId && navigation.navigate('BookingInvoice', { bookingId, booking: bookingForNav });
 
+  const statusForStep = (() => {
+    const e = (effectiveStatus || '').toLowerCase();
+    if (e === 'admin_created') return 'pending';
+    if (e === 'in_progress') return 'assigned';
+    return effectiveStatus || '';
+  })();
   const stepIndex = STEPS.findIndex(
-    (s) => s.toLowerCase() === (status || '').toLowerCase()
+    (s) => s.toLowerCase() === statusForStep.toLowerCase()
   );
   const currentStep = stepIndex >= 0 ? stepIndex : 0;
-  const canConfirm = isAdmin && (status || '').toLowerCase() === 'pending';
-  const canCancel = (status || '').toLowerCase() !== 'cancelled' && (status || '').toLowerCase() !== 'completed';
+  const canConfirm =
+    isAdmin && ['pending', 'admin_created'].includes((effectiveStatus || '').toLowerCase());
+  const canCancel =
+    (effectiveStatus || '').toLowerCase() !== 'cancelled' &&
+    (effectiveStatus || '').toLowerCase() !== 'completed';
   const canDelete = isAdmin && canCancel;
 
   if (!b || bookingId <= 0) {
@@ -454,7 +504,11 @@ export function BookingDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Booking # {bookingNumber}</Text>
             <View style={styles.badgeRow}>
-              <StatusBadge status={status} type="status" />
+              <StatusBadge
+                status={effectiveStatus}
+                type="status"
+                label={formatBookingStatus(effectiveStatus)}
+              />
               {paymentStatus && (
                 <StatusBadge status={paymentStatus} label={`Payment: ${paymentStatus}`} type="payment" />
               )}
@@ -463,7 +517,7 @@ export function BookingDetailScreen() {
         )}
 
         {/* Progress tracker - admin only, hide when cancelled */}
-        {isAdmin && (status || '').toLowerCase() !== 'cancelled' && (
+        {isAdmin && (effectiveStatus || '').toLowerCase() !== 'cancelled' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Progress</Text>
             <View style={styles.stepsRow}>
@@ -482,7 +536,9 @@ export function BookingDetailScreen() {
                       i <= currentStep && styles.stepTextActive,
                     ]}
                   >
-                    {step}
+                    {i === 0 && effectiveStatus.toLowerCase() === 'admin_created'
+                      ? 'Admin created'
+                      : step}
                   </Text>
                   {i < STEPS.length - 1 && <View style={styles.stepLine} />}
                 </View>
@@ -545,8 +601,8 @@ export function BookingDetailScreen() {
           <DetailRow
             icon="phone"
             label="Phone"
-            value={passengerPhone}
-            onPress={passengerPhone ? () => handleCall(passengerPhone) : undefined}
+            value={passengerPhoneFormatted || passengerPhone}
+            onPress={passengerPhone ? () => handleCall(passengerPhone, passengerCountryCode) : undefined}
           />
           <DetailRow icon="mail" label="Email" value={passengerEmail} />
         </View>
@@ -562,6 +618,31 @@ export function BookingDetailScreen() {
               onPress={driverPhone ? () => handleCall(driverPhone) : undefined}
             />
             <DetailRow icon="hash" label="Vehicle No" value={vehicleNumber} />
+          </View>
+        )}
+
+        {(bookingOdometerDisplayLine(b as Record<string, unknown>, 'startOdometer', 'startOdometerAt') ||
+          bookingOdometerDisplayLine(b as Record<string, unknown>, 'endOdometer', 'endOdometerAt')) && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Trip odometer</Text>
+            <DetailRow
+              icon="activity"
+              label="Start (reading & time)"
+              value={bookingOdometerDisplayLine(b as Record<string, unknown>, 'startOdometer', 'startOdometerAt')}
+              onPress={(() => {
+                const u = (b.startOdometerImageUrl ?? b.start_odometer_image_url) as string | undefined;
+                return u && /^https?:\/\//i.test(u) ? () => Linking.openURL(u).catch(() => {}) : undefined;
+              })()}
+            />
+            <DetailRow
+              icon="activity"
+              label="End (reading & time)"
+              value={bookingOdometerDisplayLine(b as Record<string, unknown>, 'endOdometer', 'endOdometerAt')}
+              onPress={(() => {
+                const u = (b.endOdometerImageUrl ?? b.end_odometer_image_url) as string | undefined;
+                return u && /^https?:\/\//i.test(u) ? () => Linking.openURL(u).catch(() => {}) : undefined;
+              })()}
+            />
           </View>
         )}
 

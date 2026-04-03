@@ -17,7 +17,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
@@ -254,15 +254,18 @@ export function SignupScreen() {
               label="Continue with Google"
               style={styles.googleBtn}
             />
-            {Platform.OS !== 'web' && Constants.appOwnership !== 'expo' && !isGoogleNativeSignInConfigured() ? (
+            {Platform.OS !== 'web' &&
+            Constants.executionEnvironment !== ExecutionEnvironment.StoreClient &&
+            !isGoogleNativeSignInConfigured() ? (
               <Text style={styles.googleHint}>
-                Google sign-in needs a Web client ID plus an Android (or iOS) OAuth client ID in your EAS
-                secrets, your app rebuilt, and the upload SHA-1 added for that Android client in Google Cloud
-                Console.
+                Google sign-in needs EXPO_PUBLIC_GOOGLE_CLIENT_ID and EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in .env or
+                EAS secrets, a new build, and the EAS keystore SHA-1 on the Android OAuth client in Google Cloud.
               </Text>
             ) : null}
-            {Platform.OS !== 'web' && Constants.appOwnership === 'expo' ? (
-              <Text style={styles.googleHint}>Google sign-in is available in a dev or store build, not in Expo Go.</Text>
+            {Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient ? (
+              <Text style={styles.googleHint}>
+                Google sign-in and remote push need an EAS dev/preview build — not Expo Go.
+              </Text>
             ) : null}
           </View>
 

@@ -621,8 +621,8 @@ export function AdminDriverOpsDashboardScreen({ navigation }: Props) {
                     <Text style={styles.csvBtnText}>{exporting === 'trips' ? '…' : 'CSV'}</Text>
                   </TouchableOpacity>
                 </View>
-                {data.trips.items.map((trip) => (
-                  <View key={trip.tripId} style={styles.tripCard}>
+                {data.trips.items.map((trip, idx) => (
+                  <View key={`${trip.tripCode ?? trip.tripId}-${trip.tripId}-${idx}`} style={styles.tripCard}>
                     <View style={styles.tripTop}>
                       <Text style={styles.tripCode}>{trip.tripCode}</Text>
                       <View style={[styles.badge, { backgroundColor: STATUS_COLORS[trip.status] }]}>

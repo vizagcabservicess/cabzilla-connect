@@ -69,3 +69,22 @@ Or upload the AAB manually: [Play Console](https://play.google.com/console) → 
 | `app.json` | Package `com.vizagtaxihub.app`, adaptive icons, `versionCode` |
 | `eas.json` | Production uses AAB; preview uses APK for testing |
 | `.env`    | Local dev only; EAS builds use EAS Secrets   |
+
+---
+
+## Expo Go works but Play Store build does not (e.g. trips empty)
+
+These installs **do not share the same config**:
+
+| | Expo Go (`npx expo start`) | Play Store / EAS standalone |
+|--|------------------------------|------------------------------|
+| **API URL** | Reads **`mobile-app/.env`** if present (`EXPO_PUBLIC_API_BASE_URL`, etc.) | Only variables embedded at **`eas build`** time (**EAS Secrets** or `eas.json` `env`) |
+| **Typical mistake** | `.env` points at staging, tunnel, or a PC IP — trips show there | Production AAB never had that URL; it uses the fallback host or an old secret |
+
+**What to do**
+
+1. In [expo.dev](https://expo.dev) → your project → **Secrets**, confirm **`EXPO_PUBLIC_API_BASE_URL`** (and optionally **`EXPO_PUBLIC_WEB_APP_BASE_URL`**) match the **same host** where your PHP API is deployed and updated (e.g. `https://www.vizagtaxihub.com` — no trailing slash).
+2. Run a **new** production build after changing secrets (`eas build --platform android --profile production`); secrets are **baked into the JS bundle at build time**, not read at runtime.
+3. For a quick comparison, build a **preview** APK (`eas build --profile preview`) with `EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG=1` (already in `eas.json`); open the driver **Trips** screen and check Metro/device logs for `[driverDashboard] GET …` to see the exact origin the app calls.
+
+Backend differences (older `dashboard.php` on production) also produce this symptom — align deploy order: **upload PHP first**, then **rebuild the store app** if you rely on new API behavior.

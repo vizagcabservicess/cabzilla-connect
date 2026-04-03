@@ -52,6 +52,8 @@ export interface SocialLoginRequest {
 export interface AuthResponse {
   success: boolean;
   message?: string;
+  /** Present when backend uses social-login unified flow */
+  is_new_user?: boolean;
   error?: string;
   user?: User;
   token?: string;
@@ -174,6 +176,17 @@ class AuthAPI {
     }
   }
 
+  /** Drop token + cached user when the server rejects the session (deleted account, inactive, invalid JWT). */
+  private async clearStoredSession(): Promise<void> {
+    this.token = null;
+    try {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(USER_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
   async getCurrentUser(): Promise<User | null> {
     const token = await this.getStoredToken();
     if (!token) return null;
@@ -187,7 +200,13 @@ class AuthAPI {
         return user;
       }
       return null;
-    } catch {
+    } catch (e) {
+      if (isAxiosError(e)) {
+        const status = e.response?.status;
+        if (status === 401 || status === 403) {
+          await this.clearStoredSession();
+        }
+      }
       return null;
     }
   }
@@ -212,11 +231,15 @@ class AuthAPI {
     if (!token) return false;
     try {
       const base = getAuthBase();
-      await axios.post(
+      const res = await axios.post<{ status?: string; message?: string }>(
         `${base}/register-push-token.php`,
         { pushToken, platform },
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       );
+      if (res.data?.status !== 'success') {
+        console.warn('[push] register-push-token unexpected body:', res.data);
+        return false;
+      }
       return true;
     } catch (e) {
       if (isAxiosError(e)) {

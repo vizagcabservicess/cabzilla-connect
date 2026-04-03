@@ -22,6 +22,11 @@ import { colors } from '../theme/colors';
 import { adminAPI, AdminMetrics, MetricsPeriod } from '../services/adminAPI';
 import { authAPI } from '../services/authAPI';
 import type { UserBooking } from '../services/userBookingsAPI';
+import {
+  formatBookingStatus,
+  getEffectiveBookingStatus,
+  tripStatusBadgeBackground,
+} from '../utils/bookingStatusDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminDashboard'>;
 
@@ -327,7 +332,9 @@ export function AdminDashboardScreen({ navigation }: Props) {
           </View>
         ) : (
           <View style={styles.bookingList}>
-            {bookings.slice(0, 10).map((b) => (
+            {bookings.slice(0, 10).map((b) => {
+              const rowStatus = getEffectiveBookingStatus(b);
+              return (
               <TouchableOpacity
                 key={b.id}
                 style={styles.bookingCard}
@@ -342,12 +349,13 @@ export function AdminDashboardScreen({ navigation }: Props) {
                 </View>
                 <View style={styles.bookingMeta}>
                   <Text style={styles.bookingDate}>{formatDate(b.pickup_date, b.pickup_time)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor(b.status) }]}>
-                    <Text style={styles.statusText}>{b.status || '—'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: tripStatusBadgeBackground(rowStatus) }]}>
+                    <Text style={styles.statusText}>{formatBookingStatus(rowStatus)}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
-            ))}
+            );
+            })}
           </View>
         )}
 
@@ -364,19 +372,6 @@ export function AdminDashboardScreen({ navigation }: Props) {
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-function statusColor(status?: string): string {
-  switch (status?.toLowerCase()) {
-    case 'confirmed':
-      return '#d1fae5';
-    case 'completed':
-      return '#dbeafe';
-    case 'cancelled':
-      return '#fee2e2';
-    default:
-      return colors.gray200;
-  }
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

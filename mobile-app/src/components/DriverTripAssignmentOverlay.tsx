@@ -267,7 +267,9 @@ export function DriverTripAssignmentOverlay() {
         if (res?.notification) {
           setPendingFromNotification(res.notification, label);
         } else {
-          pushDebug(`${label}: getLastNotificationResponse = null`);
+          pushDebug(
+            `${label}: getLastNotificationResponse = null (normal if opened from app icon, not from a push)`
+          );
         }
       });
     };

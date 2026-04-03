@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Platform } from 'react-native';
-import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
+import { getResolvedApiOrigin } from '../config';
 import { authAPI } from './authAPI';
 import type { DriverDashboardData, DriverDashboardFilters, DriverDashboardTrip, DriverFuelRecord } from '../types/driverDashboard';
 import { deriveTripDurationHours } from '../utils/tripDurationFromStamps';
@@ -33,13 +32,13 @@ function normalizeFuelItem(raw: Record<string, unknown>): DriverFuelRecord {
   };
 }
 
-const CACHE_KEY = 'driver_dashboard_cache_v1';
+const CACHE_PREFIX = 'driver_dashboard_cache_v1_u';
 
-const getBase = () => {
-  if (API_BASE_URL) return API_BASE_URL;
-  if (Platform.OS === 'web') return '';
-  return WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com';
-};
+async function dashboardCacheKey(): Promise<string> {
+  const user = await authAPI.getStoredUser();
+  const id = user?.id != null ? String(user.id) : '0';
+  return `${CACHE_PREFIX}${id}`;
+}
 
 function buildQuery(filters?: DriverDashboardFilters): string {
   const searchParams = new URLSearchParams();
@@ -111,7 +110,11 @@ export const driverDashboardAPI = {
   getDashboard: async (filters?: DriverDashboardFilters): Promise<DriverDashboardData> => {
     const token = await authAPI.getStoredToken();
     if (!token) throw new Error('Not authenticated');
-    const base = getBase();
+    const base = getResolvedApiOrigin();
+    const cacheKey = await dashboardCacheKey();
+    if (process.env.EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG === '1') {
+      console.warn('[driverDashboard] GET', `${base || '(relative)'}/api/driver/dashboard.php`);
+    }
 
     try {
       const response = await axios.get(`${base}/api/driver/dashboard.php${buildQuery(filters)}`, {
@@ -143,10 +146,10 @@ export const driverDashboardAPI = {
           offset: payload.fuelRecords?.offset ?? 0,
         },
       };
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(mapped));
       return mapped;
     } catch (error) {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         return JSON.parse(cached) as DriverDashboardData;
       }

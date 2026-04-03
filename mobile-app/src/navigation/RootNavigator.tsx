@@ -56,7 +56,6 @@ import { DriverTripDetailScreen } from '../screens/DriverTripDetailScreen';
 import { FuelEntryScreen } from '../screens/FuelEntryScreen';
 import { DriverTripsDashboardScreen } from '../screens/DriverTripsDashboardScreen';
 import { DriverFuelScreen } from '../screens/DriverFuelScreen';
-import { DriverEarningsScreen } from '../screens/DriverEarningsScreen';
 import { MenuProvider } from '../providers/MenuProvider';
 import type { RootStackParamList, ServicesStackParamList } from './types';
 import { colors } from '../theme/colors';
@@ -166,16 +165,6 @@ function DriverFuelStack() {
   );
 }
 
-function DriverEarningsStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="DriverEarningsHome" component={DriverEarningsScreen} />
-      <Stack.Screen name="DriverTripDetail" component={DriverTripDetailScreen} />
-      <Stack.Screen name="FuelEntry" component={FuelEntryScreen} />
-    </Stack.Navigator>
-  );
-}
-
 export function RootNavigator() {
   const { user, isAuthenticated } = useAuth();
   const isDriver = isAuthenticated && user?.role === 'driver';
@@ -206,14 +195,6 @@ export function RootNavigator() {
             options={{
               title: 'Fuel',
               tabBarIcon: ({ focused }) => <TabBarIcon name="water" focused={focused} />,
-            }}
-          />
-          <Tab.Screen
-            name="DriverEarningsTab"
-            component={DriverEarningsStack}
-            options={{
-              title: 'Earnings',
-              tabBarIcon: ({ focused }) => <TabBarIcon name="cash" focused={focused} />,
             }}
           />
           <Tab.Screen

@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/core';
-import { CommonActions } from '@react-navigation/native';
+import { resetTabsAfterLogout, type TabParentForReset } from '../navigation/resetTabsAfterLogout';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from './AuthProvider';
@@ -115,18 +115,11 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
         text: 'Log out',
         style: 'destructive',
         onPress: async () => {
+          const role = user?.role;
           closeMenu();
           await logout();
-          const tabNav = navigation.getParent();
-          tabNav?.dispatch(CommonActions.reset({
-            index: 0,
-            routes: [
-              { name: 'Main', state: { routes: [{ name: 'Home', params: { showAuthSheet: true } }] } },
-              { name: 'FleetVehicles' },
-              { name: 'HireDriver' },
-              { name: 'Profile' },
-            ],
-          }));
+          const tabNav = navigation.getParent() as TabParentForReset;
+          resetTabsAfterLogout(tabNav, role);
         },
       },
     ]);

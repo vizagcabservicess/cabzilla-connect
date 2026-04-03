@@ -58,8 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
-    const u = await authAPI.getStoredUser();
-    setUser(u);
+    const token = await authAPI.getStoredToken();
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    const u = await authAPI.getCurrentUser();
+    if (u) {
+      setUser(u);
+      return;
+    }
+    const stillToken = await authAPI.getStoredToken();
+    if (!stillToken) {
+      setUser(null);
+      return;
+    }
+    setUser(await authAPI.getStoredUser());
   }, []);
 
   useEffect(() => {
@@ -107,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const scheduleMs = [0, 2000, 8000, 20000];
+      let registered = false;
       for (let i = 0; i < scheduleMs.length; i++) {
         if (cancelled) return;
         const wait = scheduleMs[i]! - (i > 0 ? scheduleMs[i - 1]! : 0);
@@ -119,7 +134,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const pushToken = await getPushToken();
         if (!pushToken) continue;
         const ok = await authAPI.registerPushToken(pushToken, Platform.OS);
-        if (ok) break;
+        if (ok) {
+          registered = true;
+          break;
+        }
+      }
+      if (!cancelled && !registered) {
+        console.warn(
+          '[push] Token registration did not succeed. Needs: physical device, notification permission, EAS FCM credentials, ' +
+            'EXPO_PUBLIC_API_BASE_URL, deployed register-push-token.php, and push_tokens table on the server. ' +
+            'Remote push does not work in Expo Go (SDK 53+).'
+        );
       }
     };
 

@@ -14,8 +14,11 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 
-/** Android channel for assign-driver pushes — must match server Expo Push `channelId` (top-level). */
-export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments';
+/**
+ * Android channel for assign-driver pushes — must match server Expo Push `channelId` (top-level).
+ * Bumped from `trip_assignments` so existing installs pick up alarm / DND-bypass settings (channels are mostly immutable after creation).
+ */
+export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments_v2';
 
 /** Admin/fuel/booking pushes use Expo top-level `channelId: 'default'` when no Android block is sent. */
 export const DEFAULT_PUSH_CHANNEL_ID = 'default';
@@ -35,13 +38,26 @@ export async function ensureDefaultPushChannel(): Promise<void> {
 export async function ensureTripAssignmentNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(TRIP_ASSIGNMENT_CHANNEL_ID, {
-    name: 'Trip assignments',
+    name: 'Trip assignments (urgent)',
+    description:
+      'New trip alerts. For sound on lock screen / when Do Not Disturb is on: allow this channel and disable battery restrictions for the app in system settings.',
     importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 600, 200, 600],
+    vibrationPattern: [0, 600, 200, 600, 200, 600],
     sound: 'default',
     enableVibrate: true,
     showBadge: true,
+    enableLights: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    /** May play / vibrate through DND when user grants “Alarms”-class behavior for this channel (OEM-dependent). */
+    bypassDnd: true,
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.ALARM,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      flags: {
+        enforceAudibility: true,
+        requestHardwareAudioVideoSynchronization: false,
+      },
+    },
   });
 }
 

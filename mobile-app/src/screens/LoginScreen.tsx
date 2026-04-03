@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/core';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useAuth } from '../providers/AuthProvider';
 import { GoogleSignInButtonLazy } from '../components/GoogleSignInButtonLazy';
 import { isGoogleNativeSignInConfigured } from '../config';
@@ -211,14 +211,20 @@ export function LoginScreen() {
               label="Continue with Google"
               style={styles.googleBtn}
             />
-            {Platform.OS !== 'web' && Constants.appOwnership !== 'expo' && !isGoogleNativeSignInConfigured() ? (
+            {Platform.OS !== 'web' &&
+            Constants.executionEnvironment !== ExecutionEnvironment.StoreClient &&
+            !isGoogleNativeSignInConfigured() ? (
               <Text style={styles.googleHint}>
-                Google sign-in needs a Web client ID plus an Android (or iOS) OAuth client ID in EAS secrets, a
-                fresh build, and your app’s SHA-1 on the Android client in Google Cloud Console.
+                Google sign-in needs EXPO_PUBLIC_GOOGLE_CLIENT_ID (Web) and EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in
+                .env or EAS secrets, then a new build. Add the EAS keystore SHA-1 to the Android OAuth client in
+                Google Cloud.
               </Text>
             ) : null}
-            {Platform.OS !== 'web' && Constants.appOwnership === 'expo' ? (
-              <Text style={styles.googleHint}>Google sign-in works in a dev or store build, not in Expo Go.</Text>
+            {Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient ? (
+              <Text style={styles.googleHint}>
+                Google sign-in and remote push are not available in Expo Go. Use an EAS development or preview build
+                (expo-dev-client).
+              </Text>
             ) : null}
           </View>
 

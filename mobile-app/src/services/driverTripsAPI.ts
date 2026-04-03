@@ -3,9 +3,11 @@
  */
 import axios from 'axios';
 import { Platform } from 'react-native';
+import type { DriverDashboardTrip } from '../types/driverDashboard';
 import { authAPI } from './authAPI';
 import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
 import { compressImageForUpload } from '../utils/compressImageForUpload';
+import { driverDashboardAPI } from './driverDashboardAPI';
 
 const getBase = () => {
   if (API_BASE_URL) return API_BASE_URL;
@@ -85,6 +87,8 @@ export interface DriverTrip {
   pickupTime: string;
   passengerName: string;
   passengerPhone: string;
+  /** From bookings.passenger_country_code; used to format display / tel:/WhatsApp */
+  passengerCountryCode?: string | null;
   passengerEmail: string;
   vehicleNumber: string;
   /** Fleet vehicle id when booking has an assigned vehicle */
@@ -103,6 +107,54 @@ export interface DriverTrip {
   additionalRequirements: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  /** km — from booking column or latest trip_odometer_readings row */
+  startOdometer?: number;
+  /** MySQL datetime or ISO from server */
+  startOdometerAt?: string;
+  startOdometerImageUrl?: string;
+  endOdometer?: number;
+  endOdometerAt?: string;
+  endOdometerImageUrl?: string;
+}
+
+/** Map dashboard trip row to `DriverTrip` — same scope as Trips tab (dashboard.php). */
+export function dashboardTripToDriverTrip(d: DriverDashboardTrip): DriverTrip {
+  const pickupDateStr = d.startTime ? String(d.startTime) : '';
+  let pickupTime = '';
+  const timeMatch = pickupDateStr.match(/(\d{1,2}:\d{2})/);
+  if (timeMatch) pickupTime = timeMatch[1];
+  const cab = (d.cabType ?? '').trim();
+  const svc = (d.tripType ?? '').trim();
+  const vehicleType = cab || '—';
+  const tripMode = (d.tripMode ?? '').trim();
+  const startOdo = Number(d.startingOdometer);
+  const endOdo = Number(d.endingOdometer);
+  return {
+    id: d.tripId,
+    bookingNumber: d.tripCode,
+    pickupLocation: d.pickupLocation,
+    dropLocation: d.dropLocation,
+    pickupDate: pickupDateStr,
+    pickupTime,
+    passengerName: d.passengerName ?? '',
+    passengerPhone: d.passengerPhone ?? '',
+    passengerCountryCode: undefined,
+    passengerEmail: '',
+    vehicleNumber: d.vehicleNumber ?? '',
+    fleetVehicleId: null,
+    vehicleType,
+    tripCategory: svc || undefined,
+    tripMode: tripMode || undefined,
+    tripType: vehicleType,
+    totalAmount: d.tripAmount,
+    advancePaidAmount: 0,
+    status: d.status,
+    additionalRequirements: null,
+    driverName: d.driverName ?? null,
+    driverPhone: null,
+    startOdometer: Number.isFinite(startOdo) ? Math.round(startOdo) : undefined,
+    endOdometer: Number.isFinite(endOdo) ? Math.round(endOdo) : undefined,
+  };
 }
 
 /** Normalize trip payload from `trips.php` (snake/camel, legacy rows). */
@@ -114,6 +166,13 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
     (cab ? '' : String(raw.tripType ?? '').trim());
   const vehicleType = String(raw.vehicleType ?? '').trim() || (cab || '—');
   const tripMode = String(raw.tripMode ?? raw.trip_mode ?? '').trim();
+  const optInt = (v: unknown): number | undefined => {
+    if (v == null || v === '') return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n) : undefined;
+  };
+  const optStr = (v: unknown): string | undefined =>
+    typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
   return {
     id: Number(raw.id),
     bookingNumber: String(raw.bookingNumber ?? ''),
@@ -123,6 +182,7 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
     pickupTime: String(raw.pickupTime ?? ''),
     passengerName: String(raw.passengerName ?? ''),
     passengerPhone: String(raw.passengerPhone ?? ''),
+    passengerCountryCode: optStr(raw.passengerCountryCode ?? raw.passenger_country_code),
     passengerEmail: String(raw.passengerEmail ?? ''),
     vehicleNumber: String(raw.vehicleNumber ?? ''),
     fleetVehicleId:
@@ -141,6 +201,12 @@ export function mapApiTripToDriverTrip(raw: Record<string, unknown>): DriverTrip
     additionalRequirements: (raw.additionalRequirements as string | null) ?? null,
     driverName: (raw.driverName as string | null) ?? null,
     driverPhone: (raw.driverPhone as string | null) ?? null,
+    startOdometer: optInt(raw.startOdometer ?? raw.start_odometer),
+    startOdometerAt: optStr(raw.startOdometerAt ?? raw.start_odometer_at),
+    startOdometerImageUrl: optStr(raw.startOdometerImageUrl ?? raw.start_odometer_image_url),
+    endOdometer: optInt(raw.endOdometer ?? raw.end_odometer),
+    endOdometerAt: optStr(raw.endOdometerAt ?? raw.end_odometer_at),
+    endOdometerImageUrl: optStr(raw.endOdometerImageUrl ?? raw.end_odometer_image_url),
   };
 }
 
@@ -453,6 +519,19 @@ export const driverTripsAPI = {
     if (!token) throw new Error('Not authenticated');
     const base = getBase();
     const qs = params?.status ? `?status=${params.status}` : '';
+
+    const loadFromDashboard = async (): Promise<DriverTrip[]> => {
+      const data = await driverDashboardAPI.getDashboard({
+        tripLimit: 80,
+        ...(params?.status ? { status: params.status } : {}),
+      });
+      const items = data.trips.items;
+      const filtered = params?.status
+        ? items.filter((t) => t.status === params.status)
+        : items.filter((t) => t.status === 'assigned' || t.status === 'in_progress');
+      return filtered.map(dashboardTripToDriverTrip);
+    };
+
     try {
       const response = await axios.get(`${base}/api/driver/trips.php${qs}`, {
         headers: {
@@ -461,15 +540,48 @@ export const driverTripsAPI = {
         },
         timeout: 15000,
       });
-      const data = response.data;
-      if (data?.status !== 'success') {
-        throw new Error(data?.message || 'Failed to load trips');
+      let data: unknown = response.data;
+      if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+        const coerced = coerceFuelEntryJsonObject(data);
+        if (coerced) data = coerced;
       }
-      return (data.trips ?? []).map((t: Record<string, unknown>) => mapApiTripToDriverTrip(t));
+      const rec = data as { status?: string; trips?: unknown; message?: string } | null;
+      if (rec?.status === 'success') {
+        const rawTrips = Array.isArray(rec.trips) ? rec.trips : [];
+        return rawTrips.map((t: Record<string, unknown>) => mapApiTripToDriverTrip(t));
+      }
+      if (rec?.status === 'error' && rec.message) {
+        console.warn('[driverTrips] trips.php:', rec.message, '— using dashboard.php');
+      }
+      return loadFromDashboard();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      if (msg) throw new Error(msg);
-      throw e;
+      console.warn('[driverTrips] trips.php failed, using dashboard.php:', e);
+      try {
+        return await loadFromDashboard();
+      } catch (e2) {
+        if (e2 instanceof Error && e2.message) throw e2;
+        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        if (msg) throw new Error(msg);
+        throw e instanceof Error ? e : new Error('Failed to load trips');
+      }
     }
+  },
+
+  getTripById: async (bookingId: number): Promise<DriverTrip> => {
+    const token = await authAPI.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const base = getBase();
+    const response = await axios.get(`${base}/api/driver/trips.php?bookingId=${encodeURIComponent(String(bookingId))}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+    const data = response.data;
+    if (data?.status !== 'success' || data?.trip == null) {
+      throw new Error(data?.message || 'Failed to load trip');
+    }
+    return mapApiTripToDriverTrip(data.trip as Record<string, unknown>);
   },
 };

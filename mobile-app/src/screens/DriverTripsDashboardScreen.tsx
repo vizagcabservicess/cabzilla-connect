@@ -116,7 +116,7 @@ export function DriverTripsDashboardScreen() {
       ) : (
         <FlatList
           data={trips}
-          keyExtractor={(item) => String(item.tripId)}
+          keyExtractor={(item, index) => `${item.tripCode ?? 'trip'}-${item.tripId}-${index}`}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[colors.primary]} />}
           renderItem={({ item }) => (

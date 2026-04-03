@@ -1,16 +1,20 @@
 /**
  * DriverTripDetailScreen - Trip detail for driver with Start/End Trip actions
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Linking, Switch, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { driverTripsAPI } from '../services/driverTripsAPI';
 import type { DriverTrip } from '../services/driverTripsAPI';
 import { OdometerCaptureModal } from '../components/OdometerCaptureModal';
+import {
+  formatPassengerPhoneForDisplay,
+  passengerPhoneToTelHref,
+} from '../utils/passengerPhoneDisplay';
 import { EndTripPaymentModal } from '../components/EndTripPaymentModal';
 
 const TAB_BAR_HEIGHT = 56;
@@ -46,6 +50,23 @@ function humanizeTripToken(raw: string): string {
   return TRIP_CATEGORY_LABELS[k] || TRIP_MODE_LABELS[k] || formatServiceCategory(raw);
 }
 
+function formatOdometerCapturedAt(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return '';
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const d = new Date(normalized);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+  }
+  return raw.trim();
+}
+
+function odometerDisplayLine(km: number | undefined, at?: string | null): string | null {
+  if (km == null || Number.isNaN(km)) return null;
+  const t = formatOdometerCapturedAt(at ?? undefined);
+  const kmStr = km.toLocaleString('en-IN');
+  return t ? `${kmStr} km · ${t}` : `${kmStr} km`;
+}
+
 /** Service type (Outstation, Local, …) + mode; not the vehicle model (that is Vehicle type). */
 function buildTripTypeDisplay(trip: DriverTrip): string {
   const cat = (trip.tripCategory || '').trim();
@@ -63,16 +84,51 @@ export function DriverTripDetailScreen() {
   const { params } = useRoute<any>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const trip = params?.trip as DriverTrip | undefined;
+  const paramTrip = params?.trip as DriverTrip | undefined;
   const scrollBottomPadding = insets.bottom + TAB_BAR_HEIGHT + 32;
+  const [tripDetail, setTripDetail] = useState<DriverTrip | null>(paramTrip ?? null);
   const [status, setStatus] = useState<'assigned' | 'in_progress' | 'completed'>(
-    (trip?.status as 'assigned' | 'in_progress' | 'completed') ?? 'assigned'
+    (paramTrip?.status as 'assigned' | 'in_progress' | 'completed') ?? 'assigned'
   );
   const [loading, setLoading] = useState(false);
   const [odometerModal, setOdometerModal] = useState<'start' | 'end' | null>(null);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [liveTracking, setLiveTracking] = useState(false);
   const trackingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const trip = tripDetail ?? paramTrip;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!trip?.id) return;
+      let cancelled = false;
+      (async () => {
+        try {
+          const t = await driverTripsAPI.getTripById(trip.id);
+          if (!cancelled) {
+            setTripDetail(t);
+            setStatus(t.status);
+          }
+        } catch {
+          /* keep cached trip */
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [trip?.id])
+  );
+
+  if (!paramTrip && !tripDetail) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+        </TouchableOpacity>
+        <Text style={styles.error}>Trip not found</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!trip) {
     return (
@@ -108,6 +164,12 @@ export function DriverTripDetailScreen() {
       try {
         await driverTripsAPI.updateTripStatus(trip.id, 'in_progress');
         setStatus('in_progress');
+        try {
+          const t = await driverTripsAPI.getTripById(trip.id);
+          setTripDetail(t);
+        } catch {
+          /* ignore */
+        }
       } catch (e) {
         Alert.alert('Error', e instanceof Error ? e.message : 'Failed to start trip');
       } finally {
@@ -115,6 +177,12 @@ export function DriverTripDetailScreen() {
       }
     } else if (odometerModal === 'end') {
       setOdometerModal(null);
+      try {
+        const t = await driverTripsAPI.getTripById(trip.id);
+        setTripDetail(t);
+      } catch {
+        /* ignore */
+      }
       setPaymentModalVisible(true);
     }
   };
@@ -161,10 +229,8 @@ export function DriverTripDetailScreen() {
   }, [liveTracking, currentStatus, trip?.id]);
 
   const callPassenger = () => {
-    const ph = (trip.passengerPhone || '').replace(/\D/g, '');
-    if (ph.length >= 10) {
-      Linking.openURL(`tel:${ph.length === 10 ? '+91' + ph : ph}`);
-    }
+    const href = passengerPhoneToTelHref(trip.passengerPhone, trip.passengerCountryCode);
+    if (href) Linking.openURL(href).catch(() => {});
   };
 
   return (
@@ -189,7 +255,9 @@ export function DriverTripDetailScreen() {
           <View style={styles.rowContent}>
             <Text style={styles.rowLabel}>Phone</Text>
             <TouchableOpacity onPress={callPassenger}>
-              <Text style={[styles.rowValue, styles.link]}>{trip.passengerPhone || '—'}</Text>
+              <Text style={[styles.rowValue, styles.link]}>
+                {formatPassengerPhoneForDisplay(trip.passengerPhone, trip.passengerCountryCode) || '—'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -205,6 +273,30 @@ export function DriverTripDetailScreen() {
           <InfoRow icon="card" label="Advance Amount" value={formatAmount(trip.advancePaidAmount ?? 0)} />
         )}
         <InfoRow icon="pricetag" label="Status" value={currentStatus.replace('_', ' ')} />
+        {odometerDisplayLine(trip.startOdometer, trip.startOdometerAt) != null && (
+          <InfoRow
+            icon="speedometer-outline"
+            label="Odometer (start)"
+            value={odometerDisplayLine(trip.startOdometer, trip.startOdometerAt) ?? '—'}
+            onPress={
+              trip.startOdometerImageUrl && /^https?:\/\//i.test(trip.startOdometerImageUrl)
+                ? () => Linking.openURL(trip.startOdometerImageUrl!).catch(() => {})
+                : undefined
+            }
+          />
+        )}
+        {odometerDisplayLine(trip.endOdometer, trip.endOdometerAt) != null && (
+          <InfoRow
+            icon="speedometer-outline"
+            label="Odometer (end)"
+            value={odometerDisplayLine(trip.endOdometer, trip.endOdometerAt) ?? '—'}
+            onPress={
+              trip.endOdometerImageUrl && /^https?:\/\//i.test(trip.endOdometerImageUrl)
+                ? () => Linking.openURL(trip.endOdometerImageUrl!).catch(() => {})
+                : undefined
+            }
+          />
+        )}
 
         {currentStatus === 'in_progress' && (
           <>
@@ -279,16 +371,37 @@ export function DriverTripDetailScreen() {
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <View style={styles.row}>
+function InfoRow({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
       <Ionicons name={icon as any} size={20} color={colors.gray500} style={styles.rowIcon} />
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowValue}>{value}</Text>
+        <Text style={[styles.rowValue, onPress && styles.link]}>{value}</Text>
+        {onPress ? (
+          <Text style={[styles.rowHint, styles.link]}>Open photo</Text>
+        ) : null}
       </View>
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+        {body}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={styles.row}>{body}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -304,6 +417,7 @@ const styles = StyleSheet.create({
   rowContent: { flex: 1 },
   rowLabel: { fontSize: 12, color: colors.gray600, marginBottom: 2 },
   rowValue: { fontSize: 15, color: colors.foreground },
+  rowHint: { fontSize: 12, marginTop: 4 },
   link: { color: colors.primary, textDecorationLine: 'underline' },
   actionBtn: {
     flexDirection: 'row',

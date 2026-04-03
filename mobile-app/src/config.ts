@@ -69,6 +69,17 @@ export function isGoogleNativeSignInConfigured(): boolean {
 /** Web app base URL for login, dashboard, support & legal links */
 export const WEB_APP_BASE_URL = process.env.EXPO_PUBLIC_WEB_APP_BASE_URL ?? 'https://www.vizagtaxihub.com';
 
+/**
+ * API origin for native mobile requests. Expo Go often uses `.env` (`EXPO_PUBLIC_API_BASE_URL`);
+ * Play Store builds only see variables set as EAS Secrets at build time — not your local `.env`.
+ */
+export function getResolvedApiOrigin(): string {
+  const direct = (API_BASE_URL || '').trim().replace(/\/$/, '');
+  if (direct) return direct;
+  if (Platform.OS === 'web') return '';
+  return (WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com').trim().replace(/\/$/, '');
+}
+
 export const APP_CONFIG = {
   appName: 'Vizag Taxi Hub',
   appVersion: '1.0.0',
