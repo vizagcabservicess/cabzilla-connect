@@ -67,7 +67,7 @@ function buildTripStatusSqlClause(mysqli $conn, $tripStatusFilter, $tableAlias =
     $sql = '';
     $ts = strtolower(trim($tripStatusFilter ?? ''));
     if ($ts !== '' && $ts !== 'all') {
-        $allowed = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'];
+        $allowed = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled', 'admin_created', 'in_progress', 'payment_pending', 'payment_received', 'continued'];
         if (in_array($ts, $allowed, true)) {
             $sql .= " AND LOWER(TRIM(COALESCE({$pref}status,''))) = '" . $conn->real_escape_string($ts) . "'";
         }
@@ -1118,7 +1118,7 @@ try {
 
                 // 3. Also fetch standalone non_gst_bills if table exists (no booking row — skip when filtering by trip status)
                 $ngbTableCheck = @$conn->query("SHOW TABLES LIKE 'non_gst_bills'");
-                $nongstTripStatusActive = in_array($tripStatusFilter, ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'], true);
+                $nongstTripStatusActive = in_array($tripStatusFilter, ['pending', 'confirmed', 'assigned', 'completed', 'cancelled', 'admin_created', 'in_progress', 'payment_pending', 'payment_received', 'continued'], true);
                 if ($ngbTableCheck && $ngbTableCheck->num_rows > 0 && !$nongstTripStatusActive) {
                     $sql = "SELECT id, bill_number as billNumber, bill_date as date, customer_name as customerName,
                             amount, description, payment_status as paymentStatus, payment_method as paymentMethod

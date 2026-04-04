@@ -31,6 +31,7 @@ import {
 import { colors, fonts } from '../theme/colors';
 import type { Location } from '../types';
 import type { TripType } from '../types';
+import { formatDateForAPI } from '../utils/dateUtils';
 
 export type PaymentParams = {
   pickupLocation: Location;
@@ -196,12 +197,13 @@ export function PaymentScreen({ route, navigation }: Props) {
   const handleConfirmBooking = async () => {
     setLoading(true);
     try {
-      const pickupDateTime = pickupDate.toISOString().slice(0, 19).replace('T', ' ');
+      // Local wall clock — must match book.php parsing as Asia/Kolkata (toISOString() is UTC and shifts times).
+      const pickupDateTime = formatDateForAPI(pickupDate);
       const payload: Record<string, unknown> = {
         pickupLocation: pickupLocation.name + (pickupLocation.address ? `, ${pickupLocation.address}` : ''),
         dropLocation: dropName + (dropLocation?.address ? `, ${dropLocation.address}` : ''),
         pickupDate: pickupDateTime,
-        pickupTime: pickupDate.toTimeString().slice(0, 5),
+        pickupTime: `${String(pickupDate.getHours()).padStart(2, '0')}:${String(pickupDate.getMinutes()).padStart(2, '0')}`,
         tripType,
         tripMode: 'one-way',
         vehicleType: selectedVehicle.name,

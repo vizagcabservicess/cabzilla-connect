@@ -41,7 +41,12 @@ import {
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { getForcedRequestConfig } from '@/config/requestConfig';
 import { BookingDetailsModal } from './BookingDetailsModal';
-import { getStatusColorClass, formatPassengerPhoneForDisplay } from '@/utils/bookingUtils';
+import {
+  getStatusColorClass,
+  formatBookingStatus,
+  formatPassengerPhoneForDisplay,
+  getEffectiveBookingStatus,
+} from '@/utils/bookingUtils';
 import { getApiUrl } from '@/config/api';
 import { formatPrice } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -718,7 +723,9 @@ export function AdminBookingsList() {
     }
     
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.status === statusFilter);
+      filtered = filtered.filter(
+        (booking) => getEffectiveBookingStatus(booking) === statusFilter
+      );
       console.log('After status filter:', filtered.length);
     }
     
@@ -1014,6 +1021,7 @@ export function AdminBookingsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="admin_created">Admin created</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="assigned">Assigned</SelectItem>
@@ -1081,7 +1089,9 @@ export function AdminBookingsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBookings.map((booking) => (
+                {filteredBookings.map((booking) => {
+                  const rowStatus = getEffectiveBookingStatus(booking);
+                  return (
                   <TableRow key={booking.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium text-primary">
                       {booking.bookingNumber}
@@ -1163,10 +1173,8 @@ export function AdminBookingsList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        className={`${getStatusColorClass(booking.status)} capitalize`}
-                      >
-                        {booking.status}
+                      <Badge className={getStatusColorClass(rowStatus)}>
+                        {formatBookingStatus(rowStatus)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -1197,14 +1205,16 @@ export function AdminBookingsList() {
                             View details
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {booking.status === 'pending' && (
+                          {(rowStatus === 'pending' || rowStatus === 'admin_created') && (
                             <DropdownMenuItem onClick={() => {
                               handleStatusChange('confirmed', booking);
                             }}>
                               Confirm booking
                             </DropdownMenuItem>
                           )}
-                          {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                          {(rowStatus === 'pending' ||
+                            rowStatus === 'admin_created' ||
+                            rowStatus === 'confirmed') && (
                             <DropdownMenuItem onClick={() => {
                               handleCancelBooking(booking);
                             }}>
@@ -1227,7 +1237,8 @@ export function AdminBookingsList() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+                })}
               </TableBody>
             </Table>
           </div>

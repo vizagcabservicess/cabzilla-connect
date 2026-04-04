@@ -1,6 +1,30 @@
 
 import { BookingStatus } from '@/types/api';
 
+type EffectiveStatusInput = {
+  status?: string | null;
+  createdBy?: string | null;
+  created_by?: string | null;
+};
+
+/**
+ * Trip status shown in admin lists. If the DB rejected `admin_created` (e.g. narrow ENUM)
+ * but `created_by` is admin, treat as admin_created so the UI still matches intent.
+ */
+export function getEffectiveBookingStatus(booking: EffectiveStatusInput): BookingStatus {
+  const raw = String(booking.status ?? '').trim();
+  if (raw) {
+    return raw as BookingStatus;
+  }
+  const created = String(booking.createdBy ?? booking.created_by ?? '')
+    .trim()
+    .toLowerCase();
+  if (created === 'admin') {
+    return 'admin_created';
+  }
+  return 'pending';
+}
+
 /**
  * Determines if a booking is editable based on its status
  * @param status - The current status of the booking
@@ -18,6 +42,9 @@ export const isBookingEditable = (status: BookingStatus): boolean => {
  * @returns The next logical status in the flow or null if at end of flow
  */
 export const getNextBookingStatus = (currentStatus: BookingStatus): BookingStatus | null => {
+  if (currentStatus === 'admin_created') {
+    return 'confirmed';
+  }
   const statusFlow: BookingStatus[] = [
     'pending',
     'confirmed',
@@ -55,6 +82,8 @@ export const formatBookingStatus = (status: BookingStatus): string => {
  */
 export const getStatusColorClass = (status: BookingStatus): string => {
   switch (status) {
+    case 'admin_created':
+      return 'bg-violet-100 text-violet-900';
     case 'pending':
       return 'bg-yellow-100 text-yellow-800';
     case 'confirmed':
@@ -95,18 +124,8 @@ export const calculateExtraChargesTotal = (
   return extraCharges.reduce((sum, charge) => sum + charge.amount, 0);
 };
 
-/**
- * Show stored national number with dial code. If phone is already E.164 (+...), return as-is.
- */
-export function formatPassengerPhoneForDisplay(
-  nationalOrFull: string | null | undefined,
-  countryCode?: string | null
-): string {
-  const raw = String(nationalOrFull ?? '').trim();
-  if (!raw) return '';
-  if (raw.startsWith('+')) return raw;
-  const code = String(countryCode ?? '+91').trim();
-  const prefix = code.startsWith('+') ? code : `+${code}`;
-  const digits = raw.replace(/\D/g, '');
-  return `${prefix} ${digits}`;
-}
+export {
+  formatPassengerPhoneForDisplay,
+  passengerPhoneE164Digits,
+  passengerPhoneToTelHref,
+} from './passengerPhoneDisplay';

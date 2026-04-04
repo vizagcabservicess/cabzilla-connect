@@ -1638,6 +1638,7 @@ try {
     }
 
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
+    $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
 
     // Create HTML content for invoice - compact layout for single-page PDF
     $invoiceHtml = '<!DOCTYPE html>

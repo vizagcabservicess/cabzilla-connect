@@ -521,19 +521,53 @@ export function BookingInvoice({
       summaryBaseFare = Number(backendBaseAmount.toFixed(2));
       summaryTaxes = Number(backendTaxAmount.toFixed(2));
       summaryTotal = Number(backendTotalAmount.toFixed(2));
+
+      // Legacy / bug rows: base_amount saved as 0 while total is correct (common on outstation if fare field wasn't wired into invoice insert)
+      if (summaryBaseFare <= 0 && summaryTotal > 0) {
+        if (effectiveGstEnabled && effectiveIncludeTax) {
+          const taxable = Number((summaryTotal / (1 + GST_RATE)).toFixed(2));
+          summaryBaseFare = Number(Math.max(0, taxable - summaryExtras).toFixed(2));
+          const impliedTax = Number((summaryTotal - taxable).toFixed(2));
+          if (summaryTaxes <= 0.01 || Math.abs(summaryTaxes - impliedTax) > 0.05) {
+            summaryTaxes = impliedTax;
+          }
+        } else if (effectiveGstEnabled && !effectiveIncludeTax) {
+          summaryBaseFare = Number(
+            Math.max(0, summaryTotal - summaryTaxes - summaryExtras).toFixed(2)
+          );
+        } else {
+          summaryBaseFare = Number(Math.max(0, summaryTotal - summaryExtras).toFixed(2));
+        }
+        if (summaryBaseFare <= 0 && typeof booking.fare === 'number' && booking.fare > 0) {
+          summaryBaseFare = Number(booking.fare.toFixed(2));
+        }
+      }
       return { summaryBaseFare, summaryTaxes, summaryTotal };
     }
 
     // No stored invoice - calculate from booking data
     if (effectiveGstEnabled && effectiveIncludeTax) {
-      const inclusiveTotal = baseFare + summaryExtras;
+      const bookingTotalRaw =
+        typeof booking.totalAmount === 'number' && booking.totalAmount > 0
+          ? booking.totalAmount
+          : typeof (booking as any).total_amount === 'number' && (booking as any).total_amount > 0
+            ? ((booking as any).total_amount as number)
+            : 0;
+      let lockedInclusive = baseFare;
+      if (lockedInclusive <= 0 && bookingTotalRaw > 0) {
+        lockedInclusive = Number(Math.max(0, bookingTotalRaw - summaryExtras).toFixed(2));
+      }
+      const inclusiveTotal = lockedInclusive + summaryExtras;
       const total = Number(inclusiveTotal.toFixed(2));
-      const preTaxTotal = Number((total / (1 + GST_RATE)).toFixed(2));
-      const totalGST = Number((total - preTaxTotal).toFixed(2));
-      const totalInclusive = baseFare + summaryExtras;
-      const preTaxBase = totalInclusive > 0
-        ? Number(((baseFare / totalInclusive) * preTaxTotal).toFixed(2))
-        : Number((baseFare / (1 + GST_RATE)).toFixed(2));
+      const preTaxTotal = total > 0 ? Number((total / (1 + GST_RATE)).toFixed(2)) : 0;
+      const totalGST = total > 0 ? Number((total - preTaxTotal).toFixed(2)) : 0;
+      const totalInclusive = inclusiveTotal;
+      const preTaxBase =
+        totalInclusive > 0
+          ? Number(((lockedInclusive / totalInclusive) * preTaxTotal).toFixed(2))
+          : lockedInclusive > 0
+            ? Number((lockedInclusive / (1 + GST_RATE)).toFixed(2))
+            : 0;
       summaryBaseFare = Number(Math.max(0, preTaxBase).toFixed(2));
       summaryTaxes = totalGST;
       summaryTotal = total;
@@ -551,7 +585,21 @@ export function BookingInvoice({
     }
 
     return { summaryBaseFare, summaryTaxes, summaryTotal };
-  }, [effectiveGstEnabled, effectiveIncludeTax, baseFare, summaryExtras, GST_RATE, backendBaseAmount, backendTaxAmount, backendTotalAmount, exclusiveBaseFallback, fallbackBaseFare]);
+  }, [
+    effectiveGstEnabled,
+    effectiveIncludeTax,
+    baseFare,
+    summaryExtras,
+    GST_RATE,
+    backendBaseAmount,
+    backendTaxAmount,
+    backendTotalAmount,
+    exclusiveBaseFallback,
+    fallbackBaseFare,
+    booking.fare,
+    booking.totalAmount,
+    (booking as any).total_amount,
+  ]);
 
   const { summaryBaseFare, summaryTaxes, summaryTotal } = summaryValues;
   

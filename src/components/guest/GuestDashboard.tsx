@@ -142,6 +142,7 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
+      case 'admin_created': return 'bg-violet-100 text-violet-900';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
@@ -152,6 +153,7 @@ function GuestDashboard({ user, onLogout }: GuestDashboardProps) {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status.toLowerCase()) {
+      case 'admin_created': return 'secondary';
       case 'pending': return 'secondary';
       case 'confirmed': return 'default';
       case 'completed': return 'outline';

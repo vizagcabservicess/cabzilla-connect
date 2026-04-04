@@ -12,6 +12,7 @@ import { Booking, BookingStatus } from '@/types/api';
 import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
 import { convertUTCToLocal } from '@/lib/dateUtils';
+import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } from '@/utils/bookingUtils';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -123,6 +124,7 @@ export function BookingDetails({
 
   // Construct the PDF URL for the invoice download
   const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
+  const displayStatus = getEffectiveBookingStatus(booking);
 
   return (
     <div>
@@ -136,14 +138,16 @@ export function BookingDetails({
           </div>
           <div className="text-right">
             <p className="font-semibold text-base">{formatPrice(booking.totalAmount)}</p>
-            <div className="inline-block px-1.5 py-0.5 text-xs font-medium rounded-md bg-gray-100 text-gray-800 mt-1">
-              {booking.status.replace('_', ' ').toUpperCase()}
+            <div
+              className={`inline-block px-1.5 py-0.5 text-xs font-medium rounded-md mt-1 ${getStatusColorClass(displayStatus)}`}
+            >
+              {formatBookingStatus(displayStatus)}
             </div>
           </div>
         </div>
 
         <BookingStatusFlow 
-          currentStatus={booking.status} 
+          currentStatus={displayStatus} 
           onStatusChange={onStatusChange}
           isSubmitting={isSubmitting}
         />

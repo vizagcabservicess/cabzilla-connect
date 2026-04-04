@@ -165,8 +165,8 @@ try {
                 tour_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
-    // Set default values
-    $status = 'pending';
+    // Admin panel creates bookings explicitly — use a distinct status for list/reporting
+    $status = 'admin_created';
     $dropLocation = isset($requestData['dropLocation']) ? $requestData['dropLocation'] : '';
     $returnDate = isset($requestData['returnDate']) && !empty($requestData['returnDate']) ? $requestData['returnDate'] : null;
     $distance = isset($requestData['distance']) ? $requestData['distance'] : 0;

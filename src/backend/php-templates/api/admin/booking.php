@@ -33,6 +33,52 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
+/**
+ * Latest start/end rows from trip_odometer_readings onto booking payload (camelCase for API clients).
+ *
+ * @param mysqli $conn
+ * @param int $bookingId
+ * @param array $out Output booking array; merged keys: startOdometer, startOdometerAt, startOdometerImageUrl, end*
+ */
+function admin_booking_attach_trip_odometer(mysqli $conn, int $bookingId, array &$out): void
+{
+    $tableCheck = $conn->query("SHOW TABLES LIKE 'trip_odometer_readings'");
+    if (!$tableCheck || $tableCheck->num_rows === 0) {
+        return;
+    }
+    $st = $conn->prepare('SELECT reading_type, odometer_value, image_url, captured_at FROM trip_odometer_readings WHERE booking_id = ?');
+    if (!$st) {
+        return;
+    }
+    $st->bind_param('i', $bookingId);
+    $st->execute();
+    $res = $st->get_result();
+    $latest = [];
+    while ($r = $res->fetch_assoc()) {
+        $type = (string)($r['reading_type'] ?? '');
+        if ($type !== 'start' && $type !== 'end') {
+            continue;
+        }
+        $cap = (string)($r['captured_at'] ?? '');
+        if (!isset($latest[$type]) || $cap > ($latest[$type]['captured_at'] ?? '')) {
+            $latest[$type] = $r;
+        }
+    }
+    $st->close();
+    if (isset($latest['start'])) {
+        $row = $latest['start'];
+        $out['startOdometer'] = (int)$row['odometer_value'];
+        $out['startOdometerAt'] = $row['captured_at'];
+        $out['startOdometerImageUrl'] = $row['image_url'] ?? '';
+    }
+    if (isset($latest['end'])) {
+        $row = $latest['end'];
+        $out['endOdometer'] = (int)$row['odometer_value'];
+        $out['endOdometerAt'] = $row['captured_at'];
+        $out['endOdometerImageUrl'] = $row['image_url'] ?? '';
+    }
+}
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -228,6 +274,7 @@ try {
                 'tripMode' => $booking['trip_mode'],
                 'totalAmount' => (float)$booking['total_amount'],
                 'status' => $booking['status'],
+                'createdBy' => $booking['created_by'] ?? null,
                 'passengerName' => $booking['passenger_name'],
                 'passengerPhone' => $booking['passenger_phone'],
                 'passengerCountryCode' => $booking['passenger_country_code'] ?? '+91',
@@ -248,7 +295,14 @@ try {
                 'createdAt' => $booking['created_at'],
                 'updatedAt' => $booking['updated_at']
             ];
-            
+            if (isset($booking['start_odometer']) && $booking['start_odometer'] !== null && $booking['start_odometer'] !== '') {
+                $formattedBooking['startOdometer'] = (int)round((float)$booking['start_odometer']);
+            }
+            if (isset($booking['end_odometer']) && $booking['end_odometer'] !== null && $booking['end_odometer'] !== '') {
+                $formattedBooking['endOdometer'] = (int)round((float)$booking['end_odometer']);
+            }
+            admin_booking_attach_trip_odometer($conn, (int)$booking['id'], $formattedBooking);
+
             sendJsonResponse(['status' => 'success', 'data' => $formattedBooking]);
         } else {
             sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);

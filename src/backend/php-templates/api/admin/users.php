@@ -397,8 +397,16 @@ try {
         $stmt->bind_param("i", $userIdToDelete);
         $success = $stmt->execute();
         if (!$success) {
-            secureLog("Failed to delete user: " . $conn->error, "ERROR");
-            sendJsonResponse(['status' => 'error', 'message' => 'Failed to delete user: ' . $conn->error], 500);
+            secureLog("Failed to delete user: " . $stmt->error, "ERROR");
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to delete user: ' . $stmt->error], 500);
+            exit;
+        }
+        if ($stmt->affected_rows === 0) {
+            secureLog("Delete user: no row removed (missing id or FK blocked without error)", "WARNING");
+            sendJsonResponse([
+                'status' => 'error',
+                'message' => 'User was not deleted (not found). If they still appear in lists, check database foreign keys / related records.',
+            ], 404);
             exit;
         }
         secureLog("Successfully deleted user $userIdToDelete", "INFO");

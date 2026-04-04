@@ -520,6 +520,7 @@ try {
 
     // Trip type: shared resolver fixes DB outstation + local hourly (8/80, package, hourly_package)
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
+    $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
 
     // Create HTML content for the invoice
     $content = '

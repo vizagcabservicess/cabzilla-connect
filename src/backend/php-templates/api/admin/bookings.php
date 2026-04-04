@@ -207,6 +207,7 @@ try {
             'tripMode' => $row['trip_mode'],
             'totalAmount' => (float)$row['total_amount'],
             'status' => $row['status'],
+            'createdBy' => isset($row['created_by']) ? $row['created_by'] : null,
             'passengerName' => $row['passenger_name'],
             'passengerPhone' => $row['passenger_phone'],
             'passengerCountryCode' => $row['passenger_country_code'] ?? '+91',

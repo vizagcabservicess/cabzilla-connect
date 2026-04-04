@@ -149,7 +149,7 @@ try {
         SELECT b.*
         FROM bookings b
         LEFT JOIN vehicle_assignments va ON b.id = va.booking_id
-        WHERE (b.status = 'pending' OR b.status = 'confirmed') 
+        WHERE (b.status = 'pending' OR b.status = 'confirmed' OR b.status = 'admin_created') 
         AND (va.id IS NULL OR b.fleet_vehicle_id IS NULL OR b.fleet_vehicle_id = '')
         ORDER BY b.pickup_date ASC
         LIMIT 20
@@ -162,7 +162,7 @@ try {
         // Try simpler query if the join fails
         $simpleQuery = "
             SELECT * FROM bookings 
-            WHERE (status = 'pending' OR status = 'confirmed') 
+            WHERE (status = 'pending' OR status = 'confirmed' OR status = 'admin_created') 
             AND (fleet_vehicle_id IS NULL OR fleet_vehicle_id = '')
             ORDER BY pickup_date ASC
             LIMIT 20

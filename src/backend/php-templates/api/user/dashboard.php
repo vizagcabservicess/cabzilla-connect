@@ -180,7 +180,7 @@ try {
         }
         
         // Get upcoming rides (pending/confirmed with future date)
-        $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed') AND DATE(pickup_date) > CURDATE()";
+        $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed' OR status = 'admin_created') AND DATE(pickup_date) > CURDATE()";
         if (!empty($statusFilter) && $statusFilter !== 'all') {
             $upcomingRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) > CURDATE()";
         }

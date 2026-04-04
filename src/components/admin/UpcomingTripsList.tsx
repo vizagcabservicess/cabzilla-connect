@@ -49,6 +49,11 @@ import {
   generateDriverAssignmentMessage,
   generateUpcomingTripReminderMessage,
 } from '@/services/whatsappService';
+import {
+  formatPassengerPhoneForDisplay,
+  passengerPhoneE164Digits,
+  passengerPhoneToTelHref,
+} from '@/utils/bookingUtils';
 
 function isWithinNext24Hours(pickupIso: string): boolean {
   const t = new Date(pickupIso).getTime();
@@ -78,13 +83,21 @@ function tripTypeKey(booking: Booking): string {
   return String(booking.tripType ?? booking.trip_type ?? '').toLowerCase();
 }
 
-function dialPhone(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) {
+function dialPassenger(booking: Booking) {
+  const raw = String(booking.passengerPhone ?? booking.guest_phone ?? '').trim();
+  if (!raw) {
     toast.error('No phone number');
     return;
   }
-  window.location.href = `tel:${digits}`;
+  const cc =
+    booking.passengerCountryCode ??
+    (booking as Booking & { passenger_country_code?: string }).passenger_country_code;
+  const href = passengerPhoneToTelHref(raw, cc);
+  if (!href) {
+    toast.error('Could not open dialer for this number');
+    return;
+  }
+  window.location.href = href;
 }
 
 export function UpcomingTripsList() {
@@ -349,7 +362,16 @@ export function UpcomingTripsList() {
       } else {
         text = generateUpcomingTripReminderMessage(full);
       }
-      await bookingAPI.sendAdminTripWhatsApp(phoneRaw, text, 'trip');
+      const waPhone = passengerPhoneE164Digits(
+        phoneRaw,
+        full.passengerCountryCode ??
+          (full as Booking & { passenger_country_code?: string }).passenger_country_code,
+      );
+      if (!waPhone) {
+        toast.error('WhatsApp needs full international number (+…) or country code on the booking');
+        return;
+      }
+      await bookingAPI.sendAdminTripWhatsApp(waPhone, text, 'trip');
       toast.success('WhatsApp sent to customer (trip line)');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'WhatsApp send failed');
@@ -532,8 +554,13 @@ export function UpcomingTripsList() {
                       <div className="space-y-1">
                         <div className="font-medium">{booking.passengerName ?? booking.guest_name}</div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
-                          {booking.passengerPhone ?? booking.guest_phone ?? '—'}
+                          <Phone className="h-3 w-3 shrink-0" />
+                          {formatPassengerPhoneForDisplay(
+                            String(booking.passengerPhone ?? booking.guest_phone ?? ''),
+                            booking.passengerCountryCode ??
+                              (booking as Booking & { passenger_country_code?: string })
+                                .passenger_country_code,
+                          ) || '—'}
                         </div>
                       </div>
                     </TableCell>
@@ -667,13 +694,7 @@ export function UpcomingTripsList() {
                             Short trip reminder
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() =>
-                              dialPhone(
-                                String(booking.passengerPhone ?? booking.guest_phone ?? ''),
-                              )
-                            }
-                          >
+                          <DropdownMenuItem onClick={() => dialPassenger(booking)}>
                             Call customer
                           </DropdownMenuItem>
                         </DropdownMenuContent>

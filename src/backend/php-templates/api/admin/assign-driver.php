@@ -184,7 +184,7 @@ try {
         }
 
         $bs = strtolower((string)($booking['status'] ?? ''));
-        if (!in_array($bs, ['pending', 'confirmed', 'assigned'], true)) {
+        if (!in_array($bs, ['pending', 'confirmed', 'assigned', 'admin_created'], true)) {
             throw new Exception("Booking cannot be assigned (current status: {$booking['status']})");
         }
         
@@ -244,14 +244,42 @@ try {
             $phoneDigits = preg_replace('/\D/', '', (string) ($driver['phone'] ?? ''));
             if (strlen($phoneDigits) >= 10) {
                 $tail = substr($phoneDigits, -10);
-                $tailEsc = $conn->real_escape_string($tail);
-                $uRes = $conn->query(
-                    "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE '%{$tailEsc}' LIMIT 1"
-                );
-                if ($uRes && $uRow = $uRes->fetch_assoc()) {
-                    $driverUserId = (int) $uRow['id'];
+                $phoneLike = '%' . $tail . '%';
+                $driverEmailNorm = strtolower(trim((string) ($driver['email'] ?? '')));
+
+                if ($driverEmailNorm !== '') {
+                    $uStmt = $conn->prepare(
+                        "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE ? AND LOWER(TRIM(COALESCE(email,''))) = ? LIMIT 1"
+                    );
+                    if ($uStmt) {
+                        $uStmt->bind_param('ss', $phoneLike, $driverEmailNorm);
+                        $uStmt->execute();
+                        $uRes = $uStmt->get_result();
+                        if ($uRes && $uRow = $uRes->fetch_assoc()) {
+                            $driverUserId = (int) $uRow['id'];
+                        }
+                        $uStmt->close();
+                    }
+                }
+                if ($driverUserId <= 0) {
+                    $uStmt = $conn->prepare(
+                        "SELECT id FROM users WHERE role = 'driver' AND is_active = 1 AND phone LIKE ? ORDER BY id ASC LIMIT 1"
+                    );
+                    if ($uStmt) {
+                        $uStmt->bind_param('s', $phoneLike);
+                        $uStmt->execute();
+                        $uRes = $uStmt->get_result();
+                        if ($uRes && $uRow = $uRes->fetch_assoc()) {
+                            $driverUserId = (int) $uRow['id'];
+                        }
+                        $uStmt->close();
+                    }
                 }
             }
+        }
+        if ($driverUserId > 0) {
+            require_once __DIR__ . '/../utils/driver_user_link.php';
+            cabzillaForceLinkDriverRowToUser($conn, (int) $driver['id'], $driverUserId);
         }
         if ($driverUserId > 0 && file_exists(__DIR__ . '/../utils/push.php')) {
             require_once __DIR__ . '/../utils/push.php';
