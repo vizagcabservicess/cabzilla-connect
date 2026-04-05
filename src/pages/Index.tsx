@@ -16,8 +16,6 @@ import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { PopularDestinations } from '@/components/PopularDestinations';
 import { PopularGroupTours } from '@/components/PopularGroupTours';
-import { GroupTourPromoPopup } from '@/components/GroupTourPromoPopup';
-
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const isSearch = searchParams.get('search') === '1';
@@ -118,9 +116,6 @@ const Index = () => {
         
         {/* Mobile Navigation */}
         <MobileNavigation />
-
-        {/* Group Tour Promo Popup */}
-        {!isSearch && <GroupTourPromoPopup />}
       </div>
     </>
   );

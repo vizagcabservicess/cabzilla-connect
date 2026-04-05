@@ -10,6 +10,15 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
+      /**
+       * Guest search WhatsApp alert — same PHP as production (no local Node required).
+       * Previously proxied to 127.0.0.1:3001; without `npm run dev:track-search` that caused ECONNREFUSED.
+       */
+      '/api/track-search.php': {
+        target: 'https://www.vizagtaxihub.com',
+        changeOrigin: true,
+        secure: true,
+      },
       '/api': {
         target: 'https://www.vizagtaxihub.com',
         changeOrigin: true,

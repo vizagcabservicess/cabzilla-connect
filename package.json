@@ -10,7 +10,9 @@
     "build:prod": "vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "vite preview --port 3000"
+    "start": "vite preview --port 3000",
+    "dev:track-search": "node server/track-search-server.mjs",
+    "dev:full": "concurrently -n vite,track -c blue,green \"vite\" \"node server/track-search-server.mjs\""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

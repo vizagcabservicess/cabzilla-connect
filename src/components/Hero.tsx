@@ -26,7 +26,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
 import { BookingPaymentFooter } from './BookingPaymentFooter';
 import { StepIndicator } from './StepIndicator';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
@@ -34,6 +34,21 @@ import { calculateDistanceMatrix } from '@/lib/distanceService';
 
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { formatDateForAPI } from '@/lib/dateUtils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  trackGuestSearch,
+  formatDepartureForTrack,
+  buildTripTypeLabelForTrack,
+} from '@/services/trackSearchAPI';
+import { WhatsAppCountryPhoneRow, defaultWhatsappCountry } from '@/components/WhatsAppCountryPhoneRow';
+import type { CountryCode } from '@/lib/countryCodes';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -236,6 +251,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [dynamicVehicles, setDynamicVehicles] = useState<CabType[]>([]);
   const [vehiclesLoaded, setVehiclesLoaded] = useState<boolean>(false);
   const [editTrigger, setEditTrigger] = useState<number>(0);
+  const skipPhoneGateRef = useRef(false);
+  const [showGuestPhoneModal, setShowGuestPhoneModal] = useState(false);
+  const [guestPhoneDigits, setGuestPhoneDigits] = useState('');
+  const [guestPhoneCountry, setGuestPhoneCountry] = useState<CountryCode>(() => defaultWhatsappCountry());
 
   // Helper function to get minimum allowed date (current date + 1 hour for today, or current date for future dates)
   const getMinimumAllowedDate = () => {
@@ -1113,6 +1132,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       }
     }
 
+    if (!skipPhoneGateRef.current) {
+      setShowGuestPhoneModal(true);
+      return;
+    }
+    skipPhoneGateRef.current = false;
+
     if (onSearch) onSearch({
       pickupLocation,
       dropLocation,
@@ -1151,6 +1176,41 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     setTimeout(() => {
       setIsLoading(false);
     }, 300);
+  }
+
+  function handleGuestPhoneModalSubmit() {
+    if (guestPhoneDigits.length !== guestPhoneCountry.maxLength) {
+      toast({
+        title: 'Invalid number',
+        description: `Enter a valid ${guestPhoneCountry.maxLength}-digit number for ${guestPhoneCountry.name}.`,
+        variant: 'destructive',
+        duration: 3000,
+      });
+      return;
+    }
+    const guestPhone = `${guestPhoneCountry.dialCode}${guestPhoneDigits}`;
+    const carsShown = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined).map(
+      (c) => c.name
+    );
+    const pickup = pickupLocation?.name?.trim() || '';
+    const drop = tripType === 'local' ? pickup : (dropLocation?.name?.trim() || '');
+    const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
+    const departure = formatDepartureForTrack(pickupDate);
+
+    trackGuestSearch({
+      guestPhone,
+      pickup,
+      drop,
+      tripType: tripTypeLabel,
+      departure,
+      carsShown,
+    });
+
+    setGuestPhoneDigits('');
+    setGuestPhoneCountry(defaultWhatsappCountry());
+    setShowGuestPhoneModal(false);
+    skipPhoneGateRef.current = true;
+    proceedWithSearch();
   }
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
@@ -1449,6 +1509,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
     // Only run when these change
   }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation]);
+
+  const canSubmitGuestPhone = guestPhoneDigits.length === guestPhoneCountry.maxLength;
 
   return (
     <div className="relative">
@@ -2266,6 +2328,67 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           </div>
         )}
       
+      <Dialog
+        open={showGuestPhoneModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowGuestPhoneModal(false);
+            setGuestPhoneDigits('');
+            setGuestPhoneCountry(defaultWhatsappCountry());
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl border border-gray-200 p-6 shadow-xl" showClose>
+          <DialogHeader className="space-y-2 text-left">
+            <DialogTitle className="text-xl font-semibold tracking-tight text-gray-900">
+              Continue with WhatsApp
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-gray-600">
+              Enter your WhatsApp number to see available cabs. We&apos;ll use this to share booking updates.
+            </DialogDescription>
+          </DialogHeader>
+          <WhatsAppCountryPhoneRow
+            idPrefix="hero-guest-wa"
+            selectedCountry={guestPhoneCountry}
+            onCountryChange={(c) => {
+              setGuestPhoneCountry(c);
+              setGuestPhoneDigits('');
+            }}
+            phoneDigits={guestPhoneDigits}
+            onPhoneDigitsChange={setGuestPhoneDigits}
+          />
+          <DialogFooter className="mt-4 flex flex-col gap-0 sm:justify-stretch">
+            <Button
+              type="button"
+              disabled={!canSubmitGuestPhone}
+              className="h-12 w-full rounded-full text-base font-semibold shadow-sm transition-colors enabled:bg-blue-600 enabled:text-white enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:opacity-100 disabled:hover:bg-gray-200"
+              onClick={handleGuestPhoneModalSubmit}
+            >
+              Search Cabs
+            </Button>
+            <p className="mt-3 text-center text-[11px] leading-snug text-gray-600 sm:text-xs">
+              By clicking on <span className="font-medium text-gray-800">Search Cabs</span>, I agree to the{' '}
+              <Link
+                to="/terms-conditions"
+                className="text-blue-600 underline-offset-2 hover:underline"
+                onClick={() => setShowGuestPhoneModal(false)}
+              >
+                Terms &amp; Conditions
+              </Link>{' '}
+              &amp;{' '}
+              <Link
+                to="/privacy-policy"
+                className="text-blue-600 underline-offset-2 hover:underline"
+                onClick={() => setShowGuestPhoneModal(false)}
+              >
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Mobile Navigation Bar */}
       <MobileNavigation />
     </div>
