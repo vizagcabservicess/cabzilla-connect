@@ -931,37 +931,57 @@ export function FuelEntryScreen() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      await driverTripsAPI.submitFuelEntry({
-        vehicleId,
-        bookingId: bookingId || undefined,
-        quantity: q,
-        pricePerUnit: t / q,
-        totalCost: t,
-        receiptTotalAmount: t,
-        pumpDisplayTotal: ocrPumpAmount != null && ocrPumpAmount > 0 ? ocrPumpAmount : null,
-        odometer: odo,
-        fuelType,
-        fuelStation: fuelStation || undefined,
-        paymentMethod,
-        cardLastFour: paymentMethod === 'card' ? cardLastFour.replace(/\D/g, '').slice(-4) : undefined,
-        receiptImageUrl: receiptPhoto.imageUrl,
-        pumpImageUrl: pumpPhoto.imageUrl,
-        odometerImageUrl: odometerPhoto.imageUrl,
-        latitude: receiptPhoto.meta.latitude ?? undefined,
-        longitude: receiptPhoto.meta.longitude ?? undefined,
-        locationAccuracy: receiptPhoto.meta.accuracy ?? undefined,
-        captureTimestamp: receiptPhoto.meta.capturedAt,
-        flags: entryFlags,
-      });
+    const confirmLines = [
+      `Litres: ${q}`,
+      `Total: ₹${t.toLocaleString('en-IN')}`,
+      `Odometer: ${odo.toLocaleString('en-IN')} km`,
+      `Payment: ${paymentMethod}`,
+      fuelStation.trim() ? `Station: ${fuelStation.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
 
-      Alert.alert('Success', 'Fuel entry saved', [{ text: 'OK', onPress: () => navigation.goBack() }]);
-    } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
-    } finally {
-      setSubmitting(false);
-    }
+    Alert.alert('Confirm fuel entry', `${confirmLines}\n\nSubmit this entry to the server?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Submit',
+        onPress: () => {
+          void (async () => {
+            setSubmitting(true);
+            try {
+              await driverTripsAPI.submitFuelEntry({
+                vehicleId,
+                bookingId: bookingId || undefined,
+                quantity: q,
+                pricePerUnit: t / q,
+                totalCost: t,
+                receiptTotalAmount: t,
+                pumpDisplayTotal: ocrPumpAmount != null && ocrPumpAmount > 0 ? ocrPumpAmount : null,
+                odometer: odo,
+                fuelType,
+                fuelStation: fuelStation || undefined,
+                paymentMethod,
+                cardLastFour: paymentMethod === 'card' ? cardLastFour.replace(/\D/g, '').slice(-4) : undefined,
+                receiptImageUrl: receiptPhoto.imageUrl,
+                pumpImageUrl: pumpPhoto.imageUrl,
+                odometerImageUrl: odometerPhoto.imageUrl,
+                latitude: receiptPhoto.meta.latitude ?? undefined,
+                longitude: receiptPhoto.meta.longitude ?? undefined,
+                locationAccuracy: receiptPhoto.meta.accuracy ?? undefined,
+                captureTimestamp: receiptPhoto.meta.capturedAt,
+                flags: entryFlags,
+              });
+
+              Alert.alert('Success', 'Fuel entry saved', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
+            } finally {
+              setSubmitting(false);
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   const qNum = parseFloat(quantity);

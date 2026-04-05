@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { Driver } from '@/types/api';
 import { FixDatabaseButton } from './FixDatabaseButton';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { dedupeDriversByPhoneOrEmail } from '@/utils/driverListDedupe';
 
 export function DriverManagement() {
   const { toast: uiToast } = useToast();
@@ -54,8 +55,10 @@ export function DriverManagement() {
     return 'https://www.vizagtaxihub.com';
   };
 
-  const fetchDrivers = async () => {
-    setIsLoading(true);
+  const fetchDrivers = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const apiBaseUrl = getApiBaseUrl();
@@ -70,9 +73,9 @@ export function DriverManagement() {
         throw new Error(`API returned status ${response.status}: ${data?.message || 'Unknown error'}`);
       }
       if (data?.status === 'success' && Array.isArray(data?.drivers)) {
-        setDrivers(data.drivers);
+        setDrivers(dedupeDriversByPhoneOrEmail(data.drivers as Driver[]));
       } else if (data?.status === 'success' && Array.isArray(data?.data)) {
-        setDrivers(data.data);
+        setDrivers(dedupeDriversByPhoneOrEmail(data.data as Driver[]));
       } else {
         setDrivers([]);
       }
@@ -80,7 +83,9 @@ export function DriverManagement() {
       setError('Failed to load drivers.');
       setDrivers([]);
     } finally {
-      setIsLoading(false);
+      if (!opts?.silent) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -185,11 +190,7 @@ export function DriverManagement() {
         throw new Error(data.message || 'Failed to add driver');
       }
       toast.success("New driver has been added successfully");
-      if (data.driver) {
-        setDrivers([...drivers, data.driver]);
-      } else {
-        fetchDrivers();
-      }
+      await fetchDrivers({ silent: true });
       setIsAddDriverDialogOpen(false);
     } catch (error) {
       console.error('Error adding driver:', error);
@@ -464,6 +465,7 @@ export function DriverManagement() {
           onClose={() => setIsAddDriverDialogOpen(false)}
           onSubmit={handleAddDriver}
           isSubmitting={isSubmitting}
+          existingDrivers={drivers}
         />
       )}
       

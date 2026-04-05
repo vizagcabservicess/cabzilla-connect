@@ -25,9 +25,16 @@ interface AddDriverDialogProps {
   onClose: () => void;
   onSubmit: (data: Partial<Driver>) => Promise<void>;
   isSubmitting: boolean;
+  /** When set, block save if phone/email matches an existing driver */
+  existingDrivers?: { id?: number; phone?: string; email?: string }[];
 }
 
-export function AddDriverDialog({ isOpen, onClose, onSubmit, isSubmitting }: AddDriverDialogProps) {
+function phoneKey10(phone: string): string {
+  const d = phone.replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : d;
+}
+
+export function AddDriverDialog({ isOpen, onClose, onSubmit, isSubmitting, existingDrivers }: AddDriverDialogProps) {
   const [formData, setFormData] = useState<Partial<Driver>>({
     name: '',
     phone: '',
@@ -58,6 +65,23 @@ export function AddDriverDialog({ isOpen, onClose, onSubmit, isSubmitting }: Add
       errors.email = 'Invalid email format';
     }
     
+    if (existingDrivers?.length) {
+      const pk = phoneKey10(formData.phone ?? '');
+      if (pk.length >= 10) {
+        const clash = existingDrivers.some((d) => phoneKey10(d.phone ?? '') === pk);
+        if (clash) {
+          errors.phone = 'A driver with this phone number already exists';
+        }
+      }
+      const em = (formData.email ?? '').trim().toLowerCase();
+      if (em) {
+        const clashE = existingDrivers.some((d) => (d.email ?? '').trim().toLowerCase() === em);
+        if (clashE) {
+          errors.email = 'A driver with this email already exists';
+        }
+      }
+    }
+
     if (!formData.license_number?.trim()) {
       errors.license_number = 'License number is required';
     }

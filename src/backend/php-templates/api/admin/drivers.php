@@ -137,6 +137,45 @@ try {
     error_log("Error checking/creating drivers table: " . $e->getMessage());
 }
 
+/** Normalize to last 10 digits for duplicate detection. */
+function drivers_normalize_phone_key($phone) {
+    $d = preg_replace('/\D/', '', (string)$phone);
+    if (strlen($d) >= 10) {
+        return substr($d, -10);
+    }
+    return $d;
+}
+
+/**
+ * One row per logical driver: same mobile (last 10 digits) or same email keeps lowest id.
+ */
+function drivers_dedupe_rows(array $rows) {
+    $best = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $id = (int)($row['id'] ?? 0);
+        $pkey = drivers_normalize_phone_key($row['phone'] ?? '');
+        $ekey = strtolower(trim((string)($row['email'] ?? '')));
+        if ($pkey !== '' && strlen($pkey) >= 10) {
+            $key = 'p:' . $pkey;
+        } elseif ($ekey !== '') {
+            $key = 'e:' . $ekey;
+        } else {
+            $key = 'id:' . $id;
+        }
+        if (!isset($best[$key]) || $id < (int)($best[$key]['id'] ?? PHP_INT_MAX)) {
+            $best[$key] = $row;
+        }
+    }
+    $out = array_values($best);
+    usort($out, function ($a, $b) {
+        return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+    });
+    return $out;
+}
+
 // Function to validate driver data
 function validateDriverData($data) {
     $errors = [];
@@ -215,6 +254,8 @@ switch ($_SERVER['REQUEST_METHOD']) {
                 while ($row = $result->fetch_assoc()) {
                     $drivers[] = $row;
                 }
+
+                $drivers = drivers_dedupe_rows($drivers);
                 
                 // Commit transaction
                 $conn->commit();
@@ -257,17 +298,25 @@ switch ($_SERVER['REQUEST_METHOD']) {
             $conn->begin_transaction();
             
             try {
-                // Check if driver with same phone/email exists
-                $checkStmt = $conn->prepare("SELECT id FROM drivers WHERE phone = ? OR email = ?");
+                // Check if driver with same phone (any formatting) or email exists
+                $phoneDigits = preg_replace('/\D/', '', (string)($data['phone'] ?? ''));
+                $phoneLast10 = strlen($phoneDigits) >= 10 ? substr($phoneDigits, -10) : $phoneDigits;
+                $emailNorm = strtolower(trim((string)($data['email'] ?? '')));
+
+                $dupSql = "SELECT id FROM drivers WHERE 
+                    (LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'+',''),'.','')) >= 10
+                     AND RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''),' ',''),'-',''),'+',''),'.',''), 10) = ?)
+                    OR (? <> '' AND LOWER(TRIM(COALESCE(email,''))) = ?)";
+                $checkStmt = $conn->prepare($dupSql);
                 if (!$checkStmt) {
                     throw new Exception("Failed to prepare check statement: " . $conn->error);
                 }
-                
-                $checkStmt->bind_param("ss", $data['phone'], $data['email']);
+
+                $checkStmt->bind_param("sss", $phoneLast10, $emailNorm, $emailNorm);
                 if (!$checkStmt->execute()) {
                     throw new Exception("Failed to check existing driver: " . $checkStmt->error);
                 }
-                
+
                 $checkResult = $checkStmt->get_result();
                 if ($checkResult->num_rows > 0) {
                     throw new Exception("Driver with same phone or email already exists");

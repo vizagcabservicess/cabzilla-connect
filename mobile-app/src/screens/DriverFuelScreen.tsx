@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
-import { driverDashboardAPI } from '../services/driverDashboardAPI';
+import { driverDashboardAPI, invalidateDriverDashboardCache } from '../services/driverDashboardAPI';
 import type { DriverFuelRecord } from '../types/driverDashboard';
 
 export function DriverFuelScreen() {
@@ -14,15 +14,18 @@ export function DriverFuelScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [totalFuel, setTotalFuel] = useState(0);
   const [refills, setRefills] = useState(0);
-  const [efficiency, setEfficiency] = useState(0);
+  /** null = unreliable / bogus (e.g. odometer km inflated) */
+  const [efficiency, setEfficiency] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
+      await invalidateDriverDashboardCache();
       const data = await driverDashboardAPI.getDashboard({ fuelLimit: 50, tripLimit: 10 });
       setRecords(data.fuelRecords.items);
       setTotalFuel(data.summary.totalFuelSpend);
       setRefills(data.summary.numberOfRefills);
-      setEfficiency(data.summary.fuelEfficiencyKmPerLitre);
+      const effRaw = data.summary.fuelEfficiencyKmPerLitre;
+      setEfficiency(Number.isFinite(effRaw) && effRaw > 0 && effRaw <= 80 ? effRaw : null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -39,7 +42,7 @@ export function DriverFuelScreen() {
       <View style={styles.metrics}>
         <Metric title="Total Fuel Spend" value={`₹${totalFuel.toFixed(0)}`} />
         <Metric title="Refills" value={String(refills)} />
-        <Metric title="Fuel Efficiency" value={`${efficiency.toFixed(2)} km/l`} />
+        <Metric title="Fuel Efficiency" value={efficiency != null ? `${efficiency.toFixed(2)} km/l` : '—'} />
       </View>
 
       {loading ? (

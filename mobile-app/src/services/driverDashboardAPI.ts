@@ -32,7 +32,7 @@ function normalizeFuelItem(raw: Record<string, unknown>): DriverFuelRecord {
   };
 }
 
-const CACHE_PREFIX = 'driver_dashboard_cache_v1_u';
+const CACHE_PREFIX = 'driver_dashboard_cache_v2_u';
 
 async function dashboardCacheKey(): Promise<string> {
   const user = await authAPI.getStoredUser();
@@ -104,6 +104,12 @@ function mapDashboardTripItem(raw: Record<string, unknown>): DriverDashboardTrip
     totalDurationHours,
     tripAmount: toNum(t.tripAmount ?? t.trip_amount ?? t.total_amount),
   };
+}
+
+/** Clears cached dashboard payload (forces next GET to hit the server). */
+export async function invalidateDriverDashboardCache(): Promise<void> {
+  const cacheKey = await dashboardCacheKey();
+  await AsyncStorage.removeItem(cacheKey);
 }
 
 export const driverDashboardAPI = {

@@ -12,6 +12,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { extractTextFromImage } from '../services/ocrService';
@@ -59,6 +60,21 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
     }
   }, [visible]);
 
+  const uploadTripOdometerAfterConfirm = async (uri: string, odometer: number) => {
+    setStep('uploading');
+    const imageUrl = await uploadImage(uri, 'odometer.jpg', 'odometer');
+    const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    await driverTripsAPI.submitOdometer({
+      bookingId,
+      readingType,
+      odometerValue: odometer,
+      imageUrl,
+      capturedAt,
+    });
+    onSuccess();
+    onClose();
+  };
+
   const processCapturedUri = async (uri: string) => {
     setStep('processing');
     try {
@@ -74,26 +90,55 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       }
 
       if (onReadingAppliedFuel) {
-        onReadingAppliedFuel(odometer);
         setStep('idle');
-        onClose();
+        Alert.alert(
+          'Confirm odometer reading',
+          `Use ${odometer.toLocaleString('en-IN')} km for this fuel entry?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Submit',
+              onPress: () => {
+                onReadingAppliedFuel(odometer);
+                onClose();
+              },
+            },
+          ]
+        );
         return;
       }
 
-      setStep('uploading');
-      const imageUrl = await uploadImage(uri, 'odometer.jpg', 'odometer');
-      const capturedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-
-      await driverTripsAPI.submitOdometer({
-        bookingId,
-        readingType,
-        odometerValue: odometer,
-        imageUrl,
-        capturedAt,
-      });
-
-      onSuccess();
-      onClose();
+      setStep('idle');
+      const label = readingType === 'start' ? 'Start trip' : 'End trip';
+      Alert.alert(
+        `Confirm ${label} odometer`,
+        `Reading: ${odometer.toLocaleString('en-IN')} km\n\nSave this reading on the server?`,
+        [
+          {
+            text: 'Edit value',
+            style: 'cancel',
+            onPress: () => {
+              setManualValue(String(odometer));
+            },
+          },
+          {
+            text: 'Confirm & save',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await uploadTripOdometerAfterConfirm(uri, odometer);
+                } catch (e) {
+                  setError(
+                    e instanceof Error ? e.message : 'Failed to save odometer'
+                  );
+                  setFailedImageUri(uri);
+                  setStep('idle');
+                }
+              })();
+            },
+          },
+        ]
+      );
     } catch (e) {
       setError(
         (e instanceof Error ? e.message : 'Failed to process odometer').includes('Tesseract')
@@ -147,21 +192,10 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
     await processCapturedUri(result.assets[0].uri);
   };
 
-  const handleManualSubmit = async () => {
-    const val = manualValue.replace(/\D/g, '');
-    const num = parseInt(val, 10);
-    if (isNaN(num) || num < 1000 || num > 999999) {
-      setError('Enter a valid odometer reading (1000–999999)');
-      return;
-    }
+  const runManualTripSubmit = async (num: number) => {
     setError('');
     setStep('uploading');
     try {
-      if (onReadingAppliedFuel) {
-        onReadingAppliedFuel(num);
-        onClose();
-        return;
-      }
       let imageUrl = '';
       if (failedImageUri && (failedImageUri.startsWith('file') || failedImageUri.startsWith('content'))) {
         imageUrl = await uploadImage(failedImageUri, 'odometer.jpg', 'odometer');
@@ -180,6 +214,41 @@ export function OdometerCaptureModal(props: OdometerCaptureModalProps) {
       setError(e instanceof Error ? e.message : 'Failed to save');
       setStep('idle');
     }
+  };
+
+  const handleManualSubmit = async () => {
+    const val = manualValue.replace(/\D/g, '');
+    const num = parseInt(val, 10);
+    if (isNaN(num) || num < 1000 || num > 999999) {
+      setError('Enter a valid odometer reading (1000–999999)');
+      return;
+    }
+    if (onReadingAppliedFuel) {
+      Alert.alert(
+        'Confirm odometer reading',
+        `Use ${num.toLocaleString('en-IN')} km for this fuel entry?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Submit',
+            onPress: () => {
+              onReadingAppliedFuel(num);
+              onClose();
+            },
+          },
+        ]
+      );
+      return;
+    }
+    const label = readingType === 'start' ? 'Start trip' : 'End trip';
+    Alert.alert(
+      `Confirm ${label} odometer`,
+      `Reading: ${num.toLocaleString('en-IN')} km\n\nSave this reading on the server?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm & save', onPress: () => void runManualTripSubmit(num) },
+      ]
+    );
   };
 
   const label = tripMode ? (readingType === 'start' ? 'Start Trip' : 'End Trip') : 'Fuel entry';

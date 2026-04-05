@@ -56,19 +56,24 @@ export function DriverTripsDashboardScreen() {
 
   const load = useCallback(async () => {
     try {
+      // Do not pass status — server would return only that bucket and summary chips would all go to 0 except one.
       const data = await driverDashboardAPI.getDashboard({
-        search: search || undefined,
-        status: status || undefined,
-        tripLimit: 50,
+        search: search.trim() || undefined,
+        tripLimit: 100,
       });
       setTrips(data.trips.items);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search, status]);
+  }, [search]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const displayTrips = useMemo(() => {
+    if (!status) return trips;
+    return trips.filter((t) => t.status === status);
+  }, [trips, status]);
 
   const stats = useMemo(() => ({
     assigned: trips.filter((t) => t.status === 'assigned').length,
@@ -115,8 +120,8 @@ export function DriverTripsDashboardScreen() {
         <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : (
         <FlatList
-          data={trips}
-          keyExtractor={(item, index) => `${item.tripCode ?? 'trip'}-${item.tripId}-${index}`}
+          data={displayTrips}
+          keyExtractor={(item) => `trip-${item.tripId}`}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[colors.primary]} />}
           renderItem={({ item }) => (
@@ -127,8 +132,14 @@ export function DriverTripsDashboardScreen() {
                   <Text style={styles.badgeText}>{item.status.replace('_', ' ')}</Text>
                 </View>
               </View>
-              <Text style={styles.route}>{item.pickupLocation}</Text>
-              <Text style={styles.routeSecondary}>{item.dropLocation}</Text>
+              {item.pickupLocation.trim() === item.dropLocation.trim() ? (
+                <Text style={styles.route}>{item.pickupLocation}</Text>
+              ) : (
+                <>
+                  <Text style={styles.route}>{item.pickupLocation}</Text>
+                  <Text style={styles.routeSecondary}>{item.dropLocation}</Text>
+                </>
+              )}
               <View style={styles.metaRow}>
                 <Text style={styles.meta}>Km: {item.totalKilometers.toFixed(1)}</Text>
                 <Text style={styles.meta}>Hours: {item.totalDurationHours.toFixed(1)}</Text>

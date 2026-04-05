@@ -8,6 +8,7 @@ import { authAPI } from './authAPI';
 import { API_BASE_URL, WEB_APP_BASE_URL } from '../config';
 import type { UserBooking } from './userBookingsAPI';
 import { normalizeBooking } from './userBookingsAPI';
+import { dedupeDriversByPhoneOrEmail } from '../utils/driverListDedupe';
 
 const getBase = () => {
   if (API_BASE_URL) return API_BASE_URL;
@@ -403,7 +404,8 @@ export const adminAPI = {
     const data = response.data;
     if (data?.status === 'error') throw new Error(data?.message || 'Failed to load drivers');
     const list = data?.data ?? data?.drivers ?? [];
-    return Array.isArray(list) ? list : [];
+    const raw = Array.isArray(list) ? list : [];
+    return dedupeDriversByPhoneOrEmail(raw as AdminDriver[]);
   },
 
   /** Get fleet vehicles (matches web fleet_vehicles.php) */
