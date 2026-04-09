@@ -2,7 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
+import {
+  fetchLocalFares,
+  fetchAirportFares,
+  AIRPORT_FARE_DISTANCE_TIERS_LABEL,
+  getAirportTierDistanceLabelForDisplayPrice,
+} from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 
@@ -87,7 +92,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
             fareRows.push({
               tripType: "Airport Transfer",
               baseFare: `₹${airportPrice}`,
-              distance: "One way",
+              distance: getAirportTierDistanceLabelForDisplayPrice(airportFare, airportPrice),
               duration: "N/A",
               bookingType: "airport"
             });
@@ -145,7 +150,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
             {
               tripType: "Airport Transfer",
               baseFare: "₹15/km",
-              distance: "One way",
+              distance: AIRPORT_FARE_DISTANCE_TIERS_LABEL,
               duration: "N/A",
               bookingType: "airport"
             }

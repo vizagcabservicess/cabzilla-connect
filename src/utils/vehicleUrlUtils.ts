@@ -19,7 +19,7 @@ const SLUG_TO_IMAGE_PATH: Record<string, string> = {
   'swift-dzire': '/cars/sedan.png',
   'honda-amaze': '/cars/amaze.png',
   'innova-hycross': '/cars/innova.png',
-  'urbania': '/cars/tempo.png',
+  'urbania': '/uploads/og-image-urbania.jpg',
   'luxury': '/cars/luxury.png',
 };
 

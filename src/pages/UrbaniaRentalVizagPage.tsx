@@ -105,7 +105,7 @@ const UrbaniaRentalVizagPage = () => {
           property="og:description"
           content="Urbania hire in Visakhapatnam — weddings, corporate groups, outstation tours. Book with Vizag Taxi Hub."
         />
-        <meta property="og:image" content="https://vizagtaxihub.com/cars/tempo.png" />
+        <meta property="og:image" content="https://vizagtaxihub.com/uploads/og-image-urbania.jpg" />
         <meta property="og:site_name" content="Vizag Taxi Hub" />
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content={PAGE_URL} />
@@ -117,7 +117,7 @@ const UrbaniaRentalVizagPage = () => {
           property="twitter:description"
           content="Premium Urbania van rental with driver in Visakhapatnam — group travel made easy."
         />
-        <meta property="twitter:image" content="https://vizagtaxihub.com/cars/tempo.png" />
+        <meta property="twitter:image" content="https://vizagtaxihub.com/uploads/og-image-urbania.jpg" />
         <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       </Helmet>

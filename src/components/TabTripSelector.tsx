@@ -6,6 +6,7 @@ import { reloadCabTypes } from "@/lib/cabData";
 import { TabBar } from "@/components/TabBar";
 import { fareService } from "@/services/fareService";
 import { Car, Clock, Plane, Building2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -270,8 +271,8 @@ export function TabTripSelector({
           </div>
           {/* Desktop: underline tabs with icons + tagline */}
           <div className="hidden lg:block mb-0 pb-4 border-b border-gray-200">
-            <div className="flex items-end justify-between gap-4 w-full">
-              <div className="flex gap-0 flex-1 min-w-0">
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="flex min-w-0 flex-1 gap-0">
                 {tabs.map((tab, idx) => {
                   const isActive = selectedTab === tab.id;
                   return (
@@ -287,7 +288,24 @@ export function TabTripSelector({
                   );
                 })}
               </div>
-              <p className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0 pb-1">Vizag&apos;s Fastest Cab Booking Platform</p>
+              <div
+                className="flex max-w-[min(100%,20rem)] flex-shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 shadow-sm"
+                role="region"
+                aria-label="Urbania van now available"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="shrink-0 rounded-md bg-white/95 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">
+                    New
+                  </span>
+                  <p className="truncate text-xs font-semibold text-white">Urbania now available!</p>
+                </div>
+                <Link
+                  to="/vehicle/urbania"
+                  className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700"
+                >
+                  Book →
+                </Link>
+              </div>
             </div>
           </div>
         </>

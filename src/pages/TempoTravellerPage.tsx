@@ -12,6 +12,9 @@ import { fareAPI } from '@/services/api/fareAPI';
 import { TourInfo } from '@/types/cab';
 import { VehiclePricing } from '@/types/api';
 import { Breadcrumb } from '@/components/Breadcrumb';
+import {
+  getAirportTierDistanceLabelForDisplayPrice,
+} from '@/services/fareManagementService';
 
 interface TempoTravellerPageProps {
   pageType: string;
@@ -714,7 +717,23 @@ const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
                             <td className="py-4 px-4 text-right font-semibold text-blue-600">
                               ₹{getTempoTravellerPricing()?.airportBasePrice?.toLocaleString() || '3,000'}
                             </td>
-                            <td className="py-4 px-4 text-right text-gray-600">One way</td>
+                            <td className="py-4 px-4 text-right text-gray-600">
+                              {(() => {
+                                const tp = getTempoTravellerPricing();
+                                const n =
+                                  (tp?.airportBasePrice && tp.airportBasePrice > 0
+                                    ? tp.airportBasePrice
+                                    : null) ??
+                                  (tp?.airportPickupPrice && tp.airportPickupPrice > 0
+                                    ? tp.airportPickupPrice
+                                    : null) ??
+                                  (tp?.airportTier1Price && tp.airportTier1Price > 0
+                                    ? tp.airportTier1Price
+                                    : null) ??
+                                  3000;
+                                return getAirportTierDistanceLabelForDisplayPrice(tp, n);
+                              })()}
+                            </td>
                             <td className="py-4 px-4 text-right text-gray-600">N/A</td>
                           </tr>
                         </>

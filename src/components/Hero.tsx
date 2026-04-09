@@ -1859,6 +1859,27 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
                     <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8">
+                      {/* Urbania promo — mobile/tablet; desktop strip sits beside tabs in TabTripSelector */}
+                      <div
+                        className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2.5 shadow-sm sm:px-4 sm:py-3 lg:hidden"
+                        role="region"
+                        aria-label="Urbania van now available"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                          <span className="shrink-0 rounded-md bg-white/95 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-700 sm:text-[11px]">
+                            New
+                          </span>
+                          <p className="truncate text-[13px] font-semibold leading-tight text-white sm:text-sm md:text-base">
+                            Urbania now available!
+                          </p>
+                        </div>
+                        <Link
+                          to="/vehicle/urbania"
+                          className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700 sm:px-4 sm:py-2"
+                        >
+                          Book →
+                        </Link>
+                      </div>
                       {/* Trip Type Selector (tabs + trip mode on mobile) */}
                       <div className="w-full max-lg:mb-0 lg:mb-4">
                         <TabTripSelector

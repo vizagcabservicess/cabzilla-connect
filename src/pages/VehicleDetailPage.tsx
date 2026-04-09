@@ -20,6 +20,7 @@ import { Helmet } from 'react-helmet-async';
 import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
+import { URBANIA_SEO_DEFAULTS } from '@/seo/urbaniaStaticMeta';
 
 // Lazy load heavy components with prefetch and defer
 const ImageGallery = lazy(() => import('@/components/vehicle/ImageGallery'));
@@ -105,21 +106,20 @@ const VehicleDetailPage = () => {
       (vehicle.name?.toLowerCase().includes('urbania') ?? false);
 
     if (isUrbania) {
-      const title =
-        vehicle.seoContent?.title ||
-        'Urbania Van Rental in Vizag | Premium AC Group Travel | Vizag Taxi Hub';
-      const description =
-        vehicle.seoContent?.metaDescription ||
-        `Book Urbania van hire in Visakhapatnam for weddings, corporate groups, and outstation trips. Premium AC Urbania with professional driver — local, airport & Andhra Pradesh. Call +91 9966363662.`;
+      const title = vehicle.seoContent?.title || URBANIA_SEO_DEFAULTS.title;
+      const description = vehicle.seoContent?.metaDescription || URBANIA_SEO_DEFAULTS.description;
       const keywords =
         vehicle.seoContent?.keywords ||
-        `urbania rental vizag, urbania hire visakhapatnam, force urbania vizag, urbania mini bus vizag, corporate urbania vizag, wedding urbania vizag, AC urbania outstation vizag, premium van hire vizag, vizag taxi hub urbania, ${vehicle.capacity} seater urbania`;
+        `${URBANIA_SEO_DEFAULTS.keywords}, ${vehicle.capacity} seater urbania`;
       return {
         title,
         description,
         keywords,
-        image: galleryImages?.[0]?.url || vehicle.image || 'https://vizagtaxihub.com/cars/tempo.png',
-        url: 'https://vizagtaxihub.com/vehicle/urbania',
+        image:
+          galleryImages?.[0]?.url ||
+          vehicle.image ||
+          URBANIA_SEO_DEFAULTS.ogImageUrl,
+        url: URBANIA_SEO_DEFAULTS.canonicalUrl,
       };
     }
 
@@ -169,7 +169,7 @@ const VehicleDetailPage = () => {
       const primaryImage =
         typeof seoData.image === 'string' && seoData.image.startsWith('http')
           ? seoData.image
-          : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || 'cars/tempo.png'}`}`;
+          : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || 'uploads/og-image-urbania.jpg'}`}`;
       return {
         '@context': 'https://schema.org',
         '@type': ['Product', 'Service'],
@@ -177,7 +177,7 @@ const VehicleDetailPage = () => {
         description:
           'Urbania van hire in Vizag for weddings, corporate travel, pilgrimages, and outstation group trips — AC comfort and professional driver.',
         url: seoData.url,
-        image: [primaryImage, 'https://vizagtaxihub.com/cars/tempo.png'],
+        image: [primaryImage, URBANIA_SEO_DEFAULTS.ogImageUrl],
         brand: { '@type': 'Brand', name: 'Vizag Taxi Hub' },
         provider: {
           '@type': 'LocalBusiness',

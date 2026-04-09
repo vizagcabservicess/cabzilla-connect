@@ -2,8 +2,61 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import { copyFileSync, mkdirSync, readdirSync, statSync } from "fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import { URBANIA_SEO_DEFAULTS } from "./src/seo/urbaniaStaticMeta";
+
+function escapeHtmlAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/** Duplicate of dist/index.html with Urbania head tags for WhatsApp / Facebook (no-JS crawlers). */
+function injectUrbaniaSocialMeta(html: string): string {
+  const m = URBANIA_SEO_DEFAULTS;
+  const keywords = `${m.keywords}, 13 seater urbania`;
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(m.title)}</title>`)
+    .replace(
+      /<meta name="description" content="[^"]*" \/>/,
+      `<meta name="description" content="${escapeHtmlAttr(m.description)}" />`,
+    )
+    .replace(
+      /<meta name="keywords" content="[^"]*" \/>/,
+      `<meta name="keywords" content="${escapeHtmlAttr(keywords)}" />`,
+    )
+    .replace(
+      /<link rel="canonical" href="[^"]*" \/>/,
+      `<link rel="canonical" href="${escapeHtmlAttr(m.canonicalUrl)}" />`,
+    )
+    .replace(
+      /<meta property="og:title" content="[^"]*" \/>/,
+      `<meta property="og:title" content="${escapeHtmlAttr(m.title)}" />`,
+    )
+    .replace(
+      /<meta property="og:description" content="[^"]*" \/>/,
+      `<meta property="og:description" content="${escapeHtmlAttr(m.description)}" />`,
+    )
+    .replace(
+      /<meta property="og:url" content="[^"]*" \/>/,
+      `<meta property="og:url" content="${escapeHtmlAttr(m.canonicalUrl)}" />`,
+    )
+    .replace(
+      /<meta property="og:image" content="[^"]*" \/>/,
+      `<meta property="og:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
+    )
+    .replace(
+      /<meta name="twitter:title" content="[^"]*" \/>/,
+      `<meta name="twitter:title" content="${escapeHtmlAttr(m.title)}" />`,
+    )
+    .replace(
+      /<meta name="twitter:description" content="[^"]*" \/>/,
+      `<meta name="twitter:description" content="${escapeHtmlAttr(m.description)}" />`,
+    )
+    .replace(
+      /<meta name="twitter:image" content="[^"]*" \/>/,
+      `<meta name="twitter:image" content="${escapeHtmlAttr(m.ogImageUrl)}" />`,
+    );
+}
 
 export default defineConfig(({ mode }) => ({
   server: {
@@ -76,6 +129,24 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' &&
     componentTagger(),
+    {
+      name: 'emit-urbania-social-index-html',
+      apply: 'build' as const,
+      closeBundle() {
+        const distIndex = join(process.cwd(), 'dist', 'index.html');
+        try {
+          const html = readFileSync(distIndex, 'utf8');
+          writeFileSync(
+            join(process.cwd(), 'dist', 'index-vehicle-urbania.html'),
+            injectUrbaniaSocialMeta(html),
+            'utf8',
+          );
+          console.log('✅ Wrote dist/index-vehicle-urbania.html (Urbania OG / WhatsApp preview)');
+        } catch (e) {
+          console.warn('emit-urbania-social-index-html:', e);
+        }
+      },
+    },
     // Custom plugin to exclude api folder from build
     {
       name: 'exclude-api-folder',

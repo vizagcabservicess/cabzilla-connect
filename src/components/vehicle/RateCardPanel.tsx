@@ -3,7 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Car, MapPin, Loader2 } from 'lucide-react';
-import { fetchLocalFares, fetchAirportFares } from '@/services/fareManagementService';
+import {
+  fetchLocalFares,
+  fetchAirportFares,
+  AIRPORT_FARE_DISTANCE_TIERS_LABEL,
+  getAirportTierDistanceLabelForDisplayPrice,
+} from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
 import { useNavigate } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
@@ -116,7 +121,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
             formattedRates.push({
               tripType: "Airport Transfer",
               baseFare: `₹${airportPrice}`,
-              distanceIncluded: "One way",
+              distanceIncluded: getAirportTierDistanceLabelForDisplayPrice(airportFare, airportPrice),
               notes: "AC Included, Driver, Tolls included",
               bookingType: "airport"
             });

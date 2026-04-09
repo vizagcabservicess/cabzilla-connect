@@ -22,7 +22,6 @@ export interface FareData {
   priceExtraHour?: number;
 }
 
-// Function to parse numeric values safely
 export const parseNumericValue = (value: any): number => {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
@@ -32,6 +31,51 @@ export const parseNumericValue = (value: any): number => {
   }
   return 0;
 };
+
+/** Fallback when tier prices are missing or none match the displayed amount. */
+export const AIRPORT_FARE_DISTANCE_TIERS_LABEL =
+  '≤10 km · 11–20 km · 21–30 km · >30 km';
+
+const AIRPORT_TIER_KM_LABELS = ['≤10 km', '11–20 km', '21–30 km', '>30 km'] as const;
+
+/** Read tier ₹ from API row (supports `tier1Price` or `airportTier1Price` shapes). */
+function airportTierPricesFromUnknown(fare: unknown): number[] {
+  if (!fare || typeof fare !== 'object') return [0, 0, 0, 0];
+  const o = fare as Record<string, unknown>;
+  const p = (a: string, b: string) => parseNumericValue(o[a] ?? o[b]);
+  return [
+    p('tier1Price', 'airportTier1Price'),
+    p('tier2Price', 'airportTier2Price'),
+    p('tier3Price', 'airportTier3Price'),
+    p('tier4Price', 'airportTier4Price'),
+  ];
+}
+
+/**
+ * Rate-card Distance column: only the km band(s) whose tier price equals the shown base fare
+ * (e.g. ₹3500 → "21–30 km" if tier3 is 3500).
+ */
+export function getAirportTierDistanceLabelForDisplayPrice(
+  airportFare: unknown,
+  displayPrice: number,
+): string {
+  const target = Math.round(Number(displayPrice));
+  if (!Number.isFinite(target) || target <= 0) {
+    return AIRPORT_FARE_DISTANCE_TIERS_LABEL;
+  }
+  const tiers = airportTierPricesFromUnknown(airportFare);
+  const labels: string[] = [];
+  tiers.forEach((price, i) => {
+    const rounded = Math.round(price);
+    if (rounded > 0 && rounded === target) {
+      labels.push(AIRPORT_TIER_KM_LABELS[i]);
+    }
+  });
+  if (labels.length > 0) {
+    return labels.join(' · ');
+  }
+  return AIRPORT_FARE_DISTANCE_TIERS_LABEL;
+}
 
 export const normalizeResponse = (response: any): FareData[] => {
   // If response is already an array of fares, return it
