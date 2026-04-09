@@ -101,7 +101,8 @@ export function AirportHeroWidget({ initialPickup, initialDrop, onSearch, onStep
         onEditStart={onEditStart} 
         onStepChange={onStepChange}
         visibleTabs={['airport']} 
-        hideBackground={true} 
+        hideBackground={true}
+        embedCompactLayout
       />
     </div>
   );

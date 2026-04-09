@@ -99,88 +99,76 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return distance;
 }
 
+/** Non-zero lat/lng from Places / geocoder — used for strict 35km check */
+function hasReliableCoordinates(
+  location: AppLocation | ApiLocation | null | undefined
+): boolean {
+  if (!location) return false;
+  if (typeof location.lat !== 'number' || typeof location.lng !== 'number') return false;
+  if (isNaN(location.lat) || isNaN(location.lng)) return false;
+  if (location.lat === 0 && location.lng === 0) return false;
+  return true;
+}
+
 /**
  * Determine if a location is within the specified radius of Visakhapatnam
  */
 function determineIfLocationIsInVizag(location: ApiLocation | null | undefined): boolean {
   if (!location) return false;
-  
-  // Check if location has valid coordinates
-  if (typeof location.lat === 'number' && 
-      typeof location.lng === 'number' && 
-      !isNaN(location.lat) && 
-      !isNaN(location.lng)) {
-    
-    // Calculate distance from Vizag center
+
+  if (hasReliableCoordinates(location)) {
     const distance = calculateDistance(
-      location.lat, 
-      location.lng, 
-      VIZAG_CENTER.lat, 
+      location.lat,
+      location.lng,
+      VIZAG_CENTER.lat,
       VIZAG_CENTER.lng
     );
-    
-    // Check if within 35km radius
-    if (distance <= VIZAG_RADIUS_KM) {
-      return true;
-    }
+    return distance <= VIZAG_RADIUS_KM;
   }
-  
-  // Check location name and address for Vizag keywords as fallback
+
   const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair'];
-  
   for (const keyword of vizagKeywords) {
-    if (safeIncludes(location.address, keyword) || 
-        safeIncludes(location.name, keyword)) {
+    if (
+      safeIncludes(location.address, keyword) ||
+      safeIncludes(location.name, keyword)
+    ) {
       return true;
     }
   }
-  
+
   return false;
 }
 
-// Add more Vizag suburbs/areas to the recognized list
-const vizagNames = [
-  'visakhapatnam', 'vizag', 'waltair',
-  'pendurthi', 'gajuwaka', 'madhurawada', 'mvp colony', 'nad junction', 'dwaraka nagar', 'akkayyapalem', 'gopalapatnam', 'kurmannapalem', 'sheela nagar', 'bhel', 'autonagar', 'simhachalam', 'bhimili', 'bhimli', 'ananthapuram', 'yendada', 'rushikonda', 'kailasagiri', 'jagadamba', 'seethammadhara', 'dondaparthi', 'railway colony', 'old gajuwaka', 'new gajuwaka', 'murali nagar', 'kancharapalem', 'chinna waltair', 'lawsons bay', 'siripuram', 'ramnagar', 'hb colony', 'marripalem', 'peda waltair', 'sagar nagar', 'kirlampudi', 'sriharipuram', 'malkapuram', 'scindia', 'gopalapatnam', 'pothinamallayya palem', 'arilova', 'bakkannapalem', 'gambhiram', 'ananthapuram', 'gopalapatnam', 'gajuwaka', 'pendurthi', 'madhurawada', 'mvp', 'nad', 'jagadamba', 'rk beach', 'beach road', 'airport', 'railway station', 'rtc complex',
-  'kommadi', 'thagarapuvalasa', 'chintapalli', 'narsipatnam', 'paderu', 'anakapalle', 'elamanchili', 'payakaraopeta', 'tuni', 'annavaram', 'kakinada', 'rajahmundry', 'vijayawada', 'guntur', 'nellore', 'tirupati', 'kurnool', 'anantapur', 'kadapa', 'chittoor', 'warangal', 'nizamabad', 'karimnagar', 'khammam', 'mahbubnagar', 'hyderabad', 'bangalore', 'chennai', 'kolkata', 'mumbai', 'delhi', 'pune', 'ahmedabad', 'jaipur', 'lucknow', 'kanpur', 'nagpur', 'indore', 'thane', 'bhopal', 'visakhapatnam', 'patna', 'vadodara', 'ghaziabad', 'ludhiana', 'agra', 'nashik', 'faridabad', 'meerut', 'rajkot', 'kalyan', 'vasai', 'srinagar', 'aurangabad', 'dhanbad', 'amritsar', 'allahabad', 'ranchi', 'howrah', 'coimbatore', 'jabalpur', 'gwalior', 'vijayawada', 'jodhpur', 'madurai', 'raipur', 'kota', 'guwahati', 'chandigarh', 'solapur', 'hubli', 'bareilly', 'moradabad', 'gurgaon', 'aligarh', 'jalandhar', 'tiruchirappalli', 'bhubaneswar', 'salem', 'warangal', 'mira', 'thiruvananthapuram', 'bhiwandi', 'saharanpur', 'gorakhpur', 'guntur', 'bikaner', 'amravati', 'noida', 'jamshedpur', 'bhilai', 'warangal', 'cuttack', 'firozabad', 'kochi', 'nellore', 'bhavnagar', 'dehradun', 'durgapur', 'asansol', 'rourkela', 'nanded', 'kolhapur', 'ajmer', 'akola', 'gulbarga', 'jamnagar', 'loni', 'udaipur', 'mangalore', 'kottayam', 'karnal', 'panipat', 'bathinda', 'hapur', 'alwar', 'ratlam', 'mathura', 'kollam', 'puducherry', 'shahjahanpur', 'new delhi', 'bharatpur', 'sikar', 'chapra', 'siwan', 'gandhinagar', 'pali', 'bareilly', 'moradabad', 'gurgaon', 'aligarh', 'jalandhar', 'tiruchirappalli', 'bhubaneswar', 'salem', 'warangal', 'mira', 'thiruvananthapuram', 'bhiwandi', 'saharanpur', 'gorakhpur', 'guntur', 'bikaner', 'amravati', 'noida', 'jamshedpur', 'bhilai', 'warangal', 'cuttack', 'firozabad', 'kochi', 'nellore', 'bhavnagar', 'dehradun', 'durgapur', 'asansol', 'rourkela', 'nanded', 'kolhapur', 'ajmer', 'akola', 'gulbarga', 'jamnagar', 'loni', 'udaipur', 'mangalore', 'kottayam', 'karnal', 'panipat', 'bathinda', 'hapur', 'alwar', 'ratlam', 'mathura', 'kollam', 'puducherry', 'shahjahanpur', 'new delhi', 'bharatpur', 'sikar', 'chapra', 'siwan', 'gandhinagar', 'pali'
-];
-
 /**
- * Check if a location is in Visakhapatnam based on coordinates and address
- * Safe handling of potentially undefined values
+ * True when pickup/drop is within VIZAG_RADIUS_KM of city center.
+ * Prefer coordinates: if lat/lng are reliable, distance is authoritative (no name-list bypass).
+ * Without coords, only core city keywords count — avoids treating distant AP cities as "Vizag".
  */
 export const isLocationInVizag = (location: AppLocation | ApiLocation | null | undefined): boolean => {
   if (!location) return false;
-  
-  // Check if isInVizag is already set
-  if (typeof location.isInVizag === 'boolean') {
-    return location.isInVizag;
-  }
-  
-  // Check distance from Vizag center if coordinates are available
-  const hasValidCoordinates = 
-    typeof location.lat === 'number' && !isNaN(location.lat) && 
-    typeof location.lng === 'number' && !isNaN(location.lng);
-    
-  if (hasValidCoordinates) {
+
+  if (hasReliableCoordinates(location)) {
     const distance = calculateDistance(
-      location.lat, 
-      location.lng, 
-      VIZAG_CENTER.lat, 
+      location.lat,
+      location.lng,
+      VIZAG_CENTER.lat,
       VIZAG_CENTER.lng
     );
-    
-    if (distance <= VIZAG_RADIUS_KM) {
+    return distance <= VIZAG_RADIUS_KM;
+  }
+
+  const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair'];
+  for (const keyword of vizagKeywords) {
+    if (
+      safeIncludes(location.address, keyword) ||
+      safeIncludes(location.name, keyword) ||
+      safeIncludes((location as AppLocation).city, keyword)
+    ) {
       return true;
     }
   }
-  
-  // Check if any Vizag name appears in the location's address, name, or city
-  return vizagNames.some(vizagName => 
-    safeIncludes(location.address, vizagName) ||
-    safeIncludes(location.name, vizagName) ||
-    safeIncludes((location as AppLocation).city, vizagName)
-  );
+
+  return false;
 };
 
 /**

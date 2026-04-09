@@ -49,11 +49,7 @@ const ToursPage = () => {
       return;
     }
     
-    const isInVizag = pickupLocation.isInVizag !== undefined ? 
-      pickupLocation.isInVizag : 
-      isLocationInVizag(pickupLocation);
-      
-    if (!isInVizag) {
+    if (!isLocationInVizag(pickupLocation)) {
       toast({
         title: "Invalid pickup location",
         description: "Pickup location must be within Visakhapatnam city limits.",
@@ -171,8 +167,8 @@ const ToursPage = () => {
 
   const renderSearchForm = () => (
     <div className="w-full max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto px-2 md:px-0">
-      <div className="bg-white/90 md:bg-white/80 rounded-2xl md:rounded-3xl shadow-2xl md:p-10 p-4 border border-gray-100 backdrop-blur-md">
-        <div className="text-center mb-6">
+      <div className="bg-white/90 md:bg-white/80 rounded-2xl md:rounded-3xl shadow-2xl md:p-6 p-4 border border-gray-100 backdrop-blur-md">
+        <div className="text-center mb-4">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Find Your Perfect Tour</h2>
           <p className="text-gray-600">Enter your details to discover amazing tour packages</p>
         </div>
@@ -278,17 +274,17 @@ const ToursPage = () => {
       
       <div className="min-h-screen bg-white flex flex-col">
         <Navbar />
-        <main className="flex-1 pt-20">
+        <main className="flex-1 pt-16 md:pt-20">
           
           {/* Hero Section - Only show when not searching */}
           {!searchInitiated && (
-            <section className="relative bg-gradient-to-br from-emerald-50 to-white pt-16 md:pt-24 pb-16 md:pb-32">
+            <section className="relative bg-gradient-to-br from-emerald-50 to-white pt-8 md:pt-12 pb-8 md:pb-10">
               <div className="max-w-7xl mx-auto px-4 md:px-6">
                 <motion.div 
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8 }}
-                  className="text-center mb-8 md:mb-24"
+                  className="text-center mb-5 md:mb-8"
                 >
                   <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-emerald-100 text-emerald-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
                     <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
@@ -299,7 +295,7 @@ const ToursPage = () => {
                     <br />
                     <span className="text-emerald-500">Destinations</span>
                   </h1>
-                  <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-2xl mx-auto">
+                  <p className="text-base md:text-xl text-gray-600 mb-0 max-w-2xl mx-auto">
                     Discover breathtaking destinations around Visakhapatnam with our carefully crafted tour packages.
                   </p>
                 </motion.div>
@@ -308,7 +304,7 @@ const ToursPage = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, delay: 0.2 }}
-                  className="rounded-xl md:rounded-2xl md:p-8"
+                  className="rounded-xl md:rounded-2xl md:p-0"
                 >
                   {renderSearchForm()}
                 </motion.div>

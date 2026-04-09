@@ -67,8 +67,11 @@ const CabFareCard = ({
   handleSelectCab,
   tripMode,
   returnDate,
-  selectedCabBreakdown
+  selectedCabBreakdown,
+  isCalculatingFares = false,
 }: any) => {
+  const awaitingRouteKm =
+    (tripType === 'outstation' || tripType === 'airport') && distance <= 0;
   const normalizeVehicleId = (id: string): string => {
     return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   };
@@ -116,7 +119,7 @@ const CabFareCard = ({
         isSelected={selectedCabId === cab.id}
         onSelect={() => handleSelectCab(cab, fare, breakdownToUseForRoundTrip)}
         fareDetails={fareText}
-        isCalculating={isLoading}
+        isCalculating={!!isCalculatingFares || awaitingRouteKm}
         tripType={tripType}
         breakdown={breakdownToUseForRoundTrip}
       />
@@ -213,7 +216,7 @@ const CabFareCard = ({
       isSelected={isSelected}
       onSelect={() => handleSelectCab(cab, fare, breakdownToUse)}
       fareDetails={fareText}
-      isCalculating={isLoading}
+      isCalculating={isLoading || !!isCalculatingFares || awaitingRouteKm}
       tripType={tripType}
       breakdown={breakdownToUse}
     />
@@ -322,6 +325,7 @@ export const CabList: React.FC<CabListProps> = ({
               tripMode={tripMode}
               returnDate={returnDate}
               selectedCabBreakdown={selectedCabBreakdown}
+              isCalculatingFares={isCalculatingFares}
             />
           ))
         )

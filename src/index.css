@@ -472,6 +472,18 @@ margin-top: 4px !important;
   }
 }
 
+/* Local taxi embed only: minimal vertical padding (Hero embedCompactLayout) */
+#booking-widget.hero-embed-page-spacing {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+@media (min-width: 640px) {
+  #booking-widget.hero-embed-page-spacing {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+}
+
 /* Spacing for booking form view - when form is shown (edit mode or dedicated taxi pages) */
 #booking-widget.hero-edit-form-spacing {
   padding-top: 2.5rem;

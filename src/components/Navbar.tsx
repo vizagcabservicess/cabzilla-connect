@@ -57,6 +57,8 @@ const megaMenuData = {
         to: '/tempo-traveller-rental-vizag',
         subItems: [
           { label: 'Seat Sharing (Book Seats)', to: '/group-tours' },
+          { label: 'Urbania Rental Vizag', to: '/urbania-rental-vizag' },
+          { label: 'Urbania (fleet page)', to: '/vehicle/urbania' },
           { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
           { label: '17 Seater Tempo Traveller', to: '/17-seater-tempo-traveller-vizag' },
           { label: '12 Seater Tempo Traveller', to: '/12-seater-tempo-traveller-vizag' },
@@ -97,6 +99,8 @@ const megaMenuData = {
       { label: 'Sedan', to: '/vehicle/sedan' },
       { label: 'Ertiga', to: '/vehicle/ertiga' },
       { label: 'Toyota Glanza', to: '/vehicle/toyota-glanza' },
+      { label: 'Urbania', to: '/vehicle/urbania' },
+      { label: 'Urbania van rental', to: '/urbania-rental-vizag' },
       { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
       { label: '17 Seater Tempo Traveller', to: '/17-seater-tempo-traveller-vizag' },
       { label: '12 Seater Tempo Traveller', to: '/12-seater-tempo-traveller-vizag' },

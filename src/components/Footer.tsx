@@ -103,6 +103,12 @@ const Footer = () => {
             <h3 className="font-medium text-white mb-4 text-lg">Tempo Traveller Services</h3>
             <ul className="space-y-3 text-gray-300">
               <li>
+                <Link to="/urbania-rental-vizag" className="hover:text-white transition-colors block">Urbania Rental Vizag</Link>
+              </li>
+              <li>
+                <Link to="/vehicle/urbania" className="hover:text-white transition-colors block">Urbania (Fleet)</Link>
+              </li>
+              <li>
                 <Link to="/tempo-traveller-rental-vizag" className="hover:text-white transition-colors block">Tempo Traveller Rental</Link>
               </li>
               <li>

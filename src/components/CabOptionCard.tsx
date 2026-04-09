@@ -36,6 +36,29 @@ export function CabOptionCard({
       ? breakdown.totalFare
       : fare;
 
+  const numericFare =
+    typeof displayFare === 'number' && !Number.isNaN(displayFare) ? displayFare : null;
+  const needsAsyncFare =
+    tripType === 'outstation' || tripType === 'airport' || tripType === 'local';
+  const fareIsError = fareDetails === 'Error fetching price';
+  const fareNotReady =
+    !fareIsError &&
+    (isCalculating ||
+      (needsAsyncFare && numericFare !== null && numericFare <= 0));
+
+  const fareLabel = fareIsError
+    ? fareDetails
+    : fareNotReady
+      ? 'Calculating…'
+      : numericFare !== null && numericFare > 0
+        ? `₹${numericFare.toLocaleString('en-IN')}`
+        : fareDetails;
+
+  const cardClick = () => {
+    if (fareNotReady || fareIsError) return;
+    if (typeof onSelect === 'function') onSelect();
+  };
+
   return (
     <>
       {/* Mobile: horizontal, enhanced modern design */}
@@ -43,11 +66,12 @@ export function CabOptionCard({
         <div 
           className={cn(
             "bg-[#fff] rounded-xl shadow p-4 mb-4 flex flex-col gap-2 border border-gray-200",
+            fareNotReady || fareIsError ? "cursor-wait" : "cursor-pointer",
             isSelected 
               ? "ring-2 ring-blue-400" 
               : ""
           )}
-          onClick={() => { if (typeof onSelect === 'function') onSelect(); }}
+          onClick={cardClick}
         >
           <div className="flex items-center gap-4">
             {/* Car Image */}
@@ -56,7 +80,15 @@ export function CabOptionCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-[14px] text-gray-900 truncate">{cab.name}</span>
-                <span className="text-lg font-bold text-gray-900 ml-2">₹{typeof displayFare === 'number' ? displayFare.toLocaleString() : fareDetails}</span>
+                <span
+                  className={cn(
+                    'ml-2 text-lg font-bold tabular-nums',
+                    fareNotReady ? 'font-semibold text-gray-500 animate-pulse' : 'text-gray-900',
+                    fareIsError && 'text-red-600 text-sm font-semibold'
+                  )}
+                >
+                  {fareLabel}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                 <span>{cab.capacity || 4} Seats</span>
@@ -126,12 +158,13 @@ export function CabOptionCard({
       <div className="hidden md:block">
         <div 
           className={cn(
-            "bg-[#fff] rounded-xl shadow p-4 mb-4 flex flex-col gap-2 border border-gray-200 cursor-pointer hover:shadow-lg transition-all text-xs md:text-[12px]",
+            "bg-[#fff] rounded-xl shadow p-4 mb-4 flex flex-col gap-2 border border-gray-200 transition-all text-xs md:text-[12px]",
+            fareNotReady || fareIsError ? "cursor-wait" : "cursor-pointer hover:shadow-lg",
             isSelected 
               ? "ring-2 ring-blue-400" 
               : ""
           )}
-          onClick={() => { if (typeof onSelect === 'function') onSelect(); }}
+          onClick={cardClick}
         >
           <div className="flex items-center gap-4">
             {/* Car Image */}
@@ -140,7 +173,15 @@ export function CabOptionCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-[14px] text-gray-900 truncate">{cab.name}</span>
-                <span className="text-lg md:text-base font-bold text-gray-900 ml-2">₹{typeof displayFare === 'number' ? displayFare.toLocaleString() : fareDetails}</span>
+                <span
+                  className={cn(
+                    'ml-2 text-lg font-bold tabular-nums md:text-base',
+                    fareNotReady ? 'font-semibold text-gray-500 animate-pulse' : 'text-gray-900',
+                    fareIsError && 'text-red-600 text-sm font-semibold'
+                  )}
+                >
+                  {fareLabel}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-xs md:text-[11px] text-gray-500 mt-1">
                 <span>{cab.capacity || 4} Seats</span>

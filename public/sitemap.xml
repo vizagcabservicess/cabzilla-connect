@@ -400,8 +400,20 @@
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>https://vizagtaxihub.com/vehicle/urbania</loc>
+    <lastmod>2026-04-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
   
   <!-- Primary Tempo Traveller SEO URLs -->
+  <url>
+    <loc>https://vizagtaxihub.com/urbania-rental-vizag</loc>
+    <lastmod>2026-04-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
   <url>
     <loc>https://vizagtaxihub.com/tempo-traveller-rental-vizag</loc>
     <lastmod>2024-12-20</lastmod>

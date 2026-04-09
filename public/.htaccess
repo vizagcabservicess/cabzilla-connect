@@ -16,7 +16,9 @@ RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
 RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)$
 RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)/
-RewriteCond %{REQUEST_URI} !^/(tempo-traveller-rental-vizag|17-seater-tempo-traveller-vizag|12-seater-tempo-traveller-vizag|group-travel-tempo-traveller-vizag|corporate-tempo-traveller-vizag|wedding-tempo-traveller-vizag|pilgrimage-tempo-traveller-vizag|18-seater-tempo-traveller-vizag|mini-bus-travels-vizag)$
+# SPA fleet detail: bots must get index.html + JS so the page is not misclassified as Soft 404 by thin seo-handler output
+RewriteCond %{REQUEST_URI} !^/vehicle/
+RewriteCond %{REQUEST_URI} !^/(tempo-traveller-rental-vizag|17-seater-tempo-traveller-vizag|12-seater-tempo-traveller-vizag|group-travel-tempo-traveller-vizag|corporate-tempo-traveller-vizag|wedding-tempo-traveller-vizag|pilgrimage-tempo-traveller-vizag|18-seater-tempo-traveller-vizag|mini-bus-travels-vizag|urbania-rental-vizag)$
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 
 # SEO Handler - Only when explicitly requested with ?seo=1

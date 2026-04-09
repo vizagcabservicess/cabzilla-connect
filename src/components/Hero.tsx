@@ -63,7 +63,7 @@ const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,8 +79,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       if (routePrefillData) {
         const prefillData = JSON.parse(routePrefillData);
         // sessionStorage.removeItem('routePrefillData'); // Do NOT clear after use
+        const prePick = prefillData.pickupLocation as Location | undefined;
         return {
-          pickupLocation: prefillData.pickupLocation,
+          pickupLocation: prePick && isLocationInVizag(prePick) ? prePick : null,
           dropLocation: prefillData.dropLocation,
           pickupDate: prefillData.pickupDate ? (() => {
             const parsedDate = new Date(prefillData.pickupDate);
@@ -125,7 +126,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       }
       
       return {
-        pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
+        pickupLocation: pickupData
+          ? (() => {
+              const p = JSON.parse(pickupData) as Location;
+              return isLocationInVizag(p) ? p : null;
+            })()
+          : null,
         dropLocation: dropData ? JSON.parse(dropData) as Location : null,
         pickupDate: pickupDateStr ? (() => {
           const parsedDate = new Date(JSON.parse(pickupDateStr));
@@ -184,7 +190,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   // Handle navigation state from edit functionality
   const navigationState = location.state as any;
   const editModeData = navigationState && navigationState.tripType === 'tour' ? {
-    pickupLocation: navigationState.pickupLocation ? { name: navigationState.pickupLocation, isInVizag: true } : savedData.pickupLocation,
+    pickupLocation: navigationState.pickupLocation
+      ? typeof navigationState.pickupLocation === 'object'
+        ? navigationState.pickupLocation
+        : {
+            id: '',
+            name: navigationState.pickupLocation,
+            address: '',
+            lat: 0,
+            lng: 0,
+            city: '',
+            state: '',
+            type: 'other',
+            popularityScore: 50,
+          }
+      : savedData.pickupLocation,
     tripType: 'tour' as TripType
   } : {};
   
@@ -664,11 +684,19 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
     
     setIsTabSwitching(false); // Reset tab switching flag when user selects a location
-    
-    if (location.isInVizag === undefined) {
-      location.isInVizag = isLocationInVizag(location);
+
+    if (!isLocationInVizag(location)) {
+      toast({
+        title: 'Pickup outside service area',
+        description:
+          'Pickup must be within 35 km of Visakhapatnam. Please choose a location in or near the city.',
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
     }
-    setPickupLocation(location);
+
+    setPickupLocation({ ...location, isInVizag: true });
   };
   
   const handleDropLocationChange = (location: Location) => {
@@ -1811,9 +1839,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       {/* Booking Widget Section - Mobile: positioned after banner, Desktop: centered in banner */}
       <section id="booking-widget" className={`
         ${!isSearchActive && currentStep === 1 
-          ? 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
+          ? embedCompactLayout
+            ? 'relative z-20 py-0'
+            : 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
           : 'relative z-20 py-0 sm:py-0'
-        } ${((isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)) ? 'hero-edit-form-spacing' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
+        } ${
+          (currentStep === 1 || isSlidingSearch) && embedCompactLayout
+            ? 'hero-embed-page-spacing'
+            : (isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)
+              ? 'hero-edit-form-spacing'
+              : ''
+        } w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
         <div className="w-full max-lg:px-2 sm:container sm:mx-auto sm:px-4">
           <div className="w-full sm:max-w-6xl sm:mx-auto">
             <div className={`max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2`}>
@@ -2255,7 +2291,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
                                 hourlyPackage={hourlyPackage}
                                 pickupDate={pickupDate}
                                 returnDate={returnDate}
-                                isCalculatingFares={false}
+                                isCalculatingFares={isCalculatingDistance}
                               />
                             )}
                           </div>

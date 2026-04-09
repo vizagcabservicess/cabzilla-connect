@@ -209,14 +209,24 @@ export function TabTripSelector({
     { id: 'tour' as const, label: 'Tour', mobileLine1: 'Tour', mobileLine2: 'Packages' },
   ];
   const tabs = visibleTabs ? allTabs.filter((tab) => visibleTabs.includes(tab.id)) : allTabs;
-  
+
+  const showTabBar = !visibleTabs || visibleTabs.length > 1;
+  const showTripMode =
+    showTripModeToggle && (selectedTab === 'outstation' || selectedTab === 'tour');
+  const showAirportDirection = selectedTab === 'airport' && Boolean(onAirportDirectionChange);
+
+  /** Local-only embed: single tab + no trip-mode row → avoid empty bordered box on mobile */
+  if (!showTabBar && !showTripMode && !showAirportDirection) {
+    return null;
+  }
+
   return (
     <div
       className="space-y-2 sm:space-y-4 max-lg:space-y-1.5 max-lg:rounded-2xl max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:px-2.5 max-lg:py-2.5 max-lg:shadow-md max-lg:shadow-gray-900/5"
       id="tab-trip-selector"
     >
       {/* Tab bar - Hidden when only one tab is visible */}
-      {(!visibleTabs || visibleTabs.length > 1) && (
+      {showTabBar && (
         <>
           {/* Mobile/Tablet: pill tabs */}
           <div className="mb-0 sm:mb-4 lg:hidden">
@@ -283,7 +293,7 @@ export function TabTripSelector({
         </>
       )}
       {/* Trip mode: mobile = app-style tiles; desktop = compact pills (unless mobile-only — desktop row lives in Hero) */}
-      {showTripModeToggle && (selectedTab === 'outstation' || selectedTab === 'tour') && (
+      {showTripMode && (
         <>
           <motion.div
             className="mt-1 flex w-full max-w-full items-stretch gap-2 sm:mt-2 lg:hidden"
@@ -357,7 +367,7 @@ export function TabTripSelector({
           )}
         </>
       )}
-      {selectedTab === 'airport' && onAirportDirectionChange && (
+      {showAirportDirection && (
         <motion.div
           className="mt-1 flex w-full items-stretch gap-2 sm:mt-2 max-lg:mt-2 lg:hidden"
           initial={{ opacity: 0, y: 10 }}

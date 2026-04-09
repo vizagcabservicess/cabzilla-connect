@@ -149,7 +149,7 @@ export function AirportTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20">
+      <main className="flex-1 pt-16 md:pt-20">
       <Helmet>
         <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
         <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
@@ -180,14 +180,14 @@ export function AirportTaxiPage() {
      
 
       {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-sky-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-8 md:pt-20 pb-12 md:pb-28'}`}>
+      <section className={`relative bg-gradient-to-br from-sky-50 to-white ${isSearchActive ? 'pt-28 md:pt-36 pb-16 md:pb-20' : 'pt-8 md:pt-12 pb-8 md:pb-10'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {!isSearchActive && (
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-8 md:mb-24"
+            className="text-center mb-5 md:mb-8"
           >
             <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-sky-100 text-sky-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
               <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
@@ -198,7 +198,7 @@ export function AirportTaxiPage() {
               <br />
               <span className="text-sky-500">Confidence</span>
             </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-3xl mx-auto">
+            <p className="text-base md:text-xl text-gray-600 mb-0 max-w-3xl mx-auto">
               Hassle-free airport transfers with flight tracking, meet & greet service, and guaranteed on-time pickup and drop to Vizag Airport.
             </p>
           </motion.div>

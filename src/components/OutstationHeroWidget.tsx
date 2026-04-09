@@ -188,7 +188,8 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
         onEditStart={onEditStart}
         onStepChange={onStepChange}
         visibleTabs={['outstation']} 
-        hideBackground={true} 
+        hideBackground={true}
+        embedCompactLayout
       />
     </div>
   );

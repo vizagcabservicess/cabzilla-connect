@@ -128,5 +128,25 @@
     "inactiveDates": [],
     "vehicleType": "tempo_traveller",
     "tags": ["Group Travel", "Corporate Transport", "Family Friendly", "AC Mini Bus", "Professional Driver"]
+  },
+  {
+    "id": "bus",
+    "vehicleId": "bus",
+    "name": "Urbania",
+    "capacity": 13,
+    "luggageCapacity": 6,
+    "price": 8500,
+    "basePrice": 8500,
+    "pricePerKm": 28,
+    "image": "/cars/tempo.png",
+    "amenities": ["AC", "Music System", "USB Charging", "Push-back Seats", "Spacious Cabin", "Professional Driver"],
+    "description": "Premium Urbania van hire in Visakhapatnam for weddings, corporate groups, pilgrimages, and outstation trips. Spacious AC cabin, comfortable seating for up to 13 passengers, and experienced drivers for Vizag, airport transfers, and Andhra Pradesh travel.",
+    "ac": true,
+    "nightHaltCharge": 1200,
+    "driverAllowance": 300,
+    "isActive": true,
+    "inactiveDates": [],
+    "vehicleType": "bus",
+    "tags": ["Group Travel", "Wedding Transport", "Corporate", "AC Van", "Outstation"]
   }
 ]

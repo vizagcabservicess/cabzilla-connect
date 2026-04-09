@@ -36,6 +36,7 @@ Allow: /airport-taxi
 Allow: /tours
 Allow: /fleet
 Allow: /vehicle/
+Allow: /urbania-rental-vizag
 Allow: /hire-driver
 Allow: /our-story
 Allow: /vision-mission

@@ -6,6 +6,7 @@ export interface VehicleLoaderData {
     id: string;
     name: string;
     capacity: number;
+    pricePerKm?: number;
     fuelType?: string;
     image?: string;
     tags: string[];
@@ -49,6 +50,7 @@ export async function vehicleLoader({
       id: foundVehicle.id || vehicleSlug,
       name: foundVehicle.name,
       capacity: foundVehicle.capacity,
+      pricePerKm: foundVehicle.pricePerKm,
       fuelType: foundVehicle.fuelType,
       image: getVehicleImageUrl(foundVehicle) || foundVehicle.image,
       tags: [

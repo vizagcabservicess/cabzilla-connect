@@ -140,6 +140,7 @@ const VisionMissionPage = lazy(() => import('./pages/VisionMissionPage'));
 const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
 const HireDriverTermsPage = lazy(() => import('./pages/HireDriverTermsPage').then(module => ({ default: module.HireDriverTermsPage })));
 const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
+const UrbaniaRentalVizagPage = lazy(() => import('./pages/UrbaniaRentalVizagPage'));
 const SeventeenSeaterTempoTravellerPage = lazy(() => import('./pages/SeventeenSeaterTempoTravellerPage'));
 const TwelveSeaterTempoTravellerPage = lazy(() => import('./pages/TwelveSeaterTempoTravellerPage'));
 const GroupTravelTempoTravellerPage = lazy(() => import('./pages/GroupTravelTempoTravellerPage'));
@@ -584,6 +585,10 @@ const router = createBrowserRouter([
       {
         path: 'tempo-traveller-rental-vizag',
         element: <LazyRoute component={TempoTravellerRentalPage} />,
+      },
+      {
+        path: 'urbania-rental-vizag',
+        element: <LazyRoute component={UrbaniaRentalVizagPage} />,
       },
       {
         path: '17-seater-tempo-traveller-vizag',

@@ -36,6 +36,12 @@ export const ServiceLinks: React.FC<ServiceLinksProps> = ({
       icon: '🏛️'
     },
     {
+      name: 'Urbania Rental Vizag',
+      href: '/urbania-rental-vizag',
+      description: 'Premium Urbania van hire',
+      icon: '🚐'
+    },
+    {
       name: 'Tempo Traveller Rental',
       href: '/tempo-traveller-rental-vizag',
       description: 'Group travel solutions',

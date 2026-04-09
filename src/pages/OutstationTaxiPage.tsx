@@ -121,7 +121,7 @@ export function OutstationTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20">
+      <main className="flex-1 pt-16 md:pt-20">
       <Helmet>
         <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
         <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
@@ -150,14 +150,14 @@ export function OutstationTaxiPage() {
       </Helmet>
 
                                                                                                                      {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-36 md:pt-40 pb-24' : 'pt-16 md:pt-24 pb-16 md:pb-32'}`}>
+      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-28 md:pt-36 pb-16 md:pb-20' : 'pt-8 md:pt-12 pb-8 md:pb-10'}`}>
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           {!isSearchActive && (
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-8 md:mb-24"
+            className="text-center mb-5 md:mb-8"
           >
             <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-emerald-100 text-emerald-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
               <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
@@ -168,7 +168,7 @@ export function OutstationTaxiPage() {
               <br />
               <span className="text-emerald-500">City Limits</span>
             </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-8 md:mb-40 max-w-2xl mx-auto">
+            <p className="text-base md:text-xl text-gray-600 mb-0 max-w-2xl mx-auto">
               Professional outstation taxi service connecting you to every corner of India with comfort and reliability.
             </p>
           </motion.div>

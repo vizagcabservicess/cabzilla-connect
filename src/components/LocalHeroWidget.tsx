@@ -74,7 +74,8 @@ export function LocalHeroWidget({ initialPickup, initialDrop, onSearch, onStepCh
         onEditStart={onEditStart}
         onStepChange={onStepChange}
         visibleTabs={['local']} 
-        hideBackground={true} 
+        hideBackground={true}
+        embedCompactLayout
       />
     </div>
   );

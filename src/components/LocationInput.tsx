@@ -15,7 +15,7 @@ const MAX_DISTANCE_KM = 35;
 
 const PREDICTION_DEBOUNCE_MS = 320;
 
-const SELECT_FROM_LIST_MESSAGE = 'Please select a location from the suggestions list';
+const SELECT_FROM_LIST_MESSAGE_DEFAULT = 'Please select a location from the suggestions list';
 
 const EMPTY_LOCATION: Location = {
   id: '',
@@ -85,6 +85,10 @@ export function LocationInput({
   readOnly = false,
   variant = 'mobile',
 }: LocationInputProps) {
+  const selectFromListMessage = isPickupLocation
+    ? 'Select a valid pickup from suggestions (within 35 KM radius).'
+    : SELECT_FROM_LIST_MESSAGE_DEFAULT;
+
   const isDesktopVariant = variant === 'desktop';
   const isAppVariant = variant === 'app';
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -345,7 +349,7 @@ export function LocationInput({
           'text-align:center',
           'font-family:inherit',
         ].join(';');
-        hint.textContent = SELECT_FROM_LIST_MESSAGE;
+        hint.textContent = selectFromListMessage;
       }
 
       if (pac.firstChild !== hint) {
@@ -364,7 +368,7 @@ export function LocationInput({
       mo.disconnect();
       window.clearInterval(interval);
     };
-  }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId]);
+  }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId, selectFromListMessage]);
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
@@ -530,12 +534,9 @@ export function LocationInput({
      // Determine subtitle text based on props
    const getSubtitleText = () => {
      const isAirportTransfer = tripType === 'airport';
-     const isTourTrip = tripType === 'tour';
-     
-     if (isPickupLocation && isTourTrip) {
-       return "Please select a location within 35km of Visakhapatnam";
-     } else if (isPickupLocation) {
-       return "Please select a location within 35km of Visakhapatnam";
+
+     if (isPickupLocation) {
+       return 'Select a valid pickup from suggestions (within 35 KM radius).';
      } else if (isAirportTransfer) {
        return "Please select a location within 35km of Visakhapatnam";
      }
@@ -674,7 +675,7 @@ export function LocationInput({
               className="border-b border-red-100 bg-red-50/70 px-3 py-2.5 text-center text-xs leading-snug text-red-600"
               role="status"
             >
-              {SELECT_FROM_LIST_MESSAGE}
+              {selectFromListMessage}
             </div>
           )}
           {filteredSuggestions.map((suggestion) => (
@@ -703,7 +704,7 @@ export function LocationInput({
         >
           {showSelectionInvalid && (
             <div className="border-b border-red-100 bg-red-50/70 px-4 py-3 text-center sm:px-5">
-              <p className="text-xs leading-snug text-red-600">{SELECT_FROM_LIST_MESSAGE}</p>
+              <p className="text-xs leading-snug text-red-600">{selectFromListMessage}</p>
             </div>
           )}
           <div className="px-5 py-5 text-center sm:px-6 sm:py-6">

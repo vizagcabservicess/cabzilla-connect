@@ -52,6 +52,8 @@ interface VehicleData {
   id: string;
   name: string;
   capacity: number;
+  /** Per-km rate for JSON-LD Offer (when present from fleet data). */
+  pricePerKm?: number;
   fuelType?: string;
   image?: string;
   gallery?: GalleryItem[];
@@ -96,15 +98,39 @@ const VehicleDetailPage = () => {
   // Memoize expensive calculations - must be before early returns
   const seoData = useMemo(() => {
     if (!vehicle) return null;
-    
+
+    const isUrbania =
+      vehicleSlug === 'urbania' ||
+      vehicle.id === 'bus' ||
+      (vehicle.name?.toLowerCase().includes('urbania') ?? false);
+
+    if (isUrbania) {
+      const title =
+        vehicle.seoContent?.title ||
+        'Urbania Van Rental in Vizag | Premium AC Group Travel | Vizag Taxi Hub';
+      const description =
+        vehicle.seoContent?.metaDescription ||
+        `Book Urbania van hire in Visakhapatnam for weddings, corporate groups, and outstation trips. Premium AC Urbania with professional driver — local, airport & Andhra Pradesh. Call +91 9966363662.`;
+      const keywords =
+        vehicle.seoContent?.keywords ||
+        `urbania rental vizag, urbania hire visakhapatnam, force urbania vizag, urbania mini bus vizag, corporate urbania vizag, wedding urbania vizag, AC urbania outstation vizag, premium van hire vizag, vizag taxi hub urbania, ${vehicle.capacity} seater urbania`;
+      return {
+        title,
+        description,
+        keywords,
+        image: galleryImages?.[0]?.url || vehicle.image || 'https://vizagtaxihub.com/cars/tempo.png',
+        url: 'https://vizagtaxihub.com/vehicle/urbania',
+      };
+    }
+
     const vehicleType = vehicle.capacity > 12 ? 'mini bus' : vehicle.capacity > 6 ? 'SUV' : 'sedan';
     const vehicleTypeForTitle = vehicle.capacity > 12 ? 'Mini Bus' : vehicle.capacity > 6 ? 'SUV' : 'Sedan';
-    
+
     const getUniqueDescription = () => {
       if (vehicle.seoContent?.metaDescription) {
         return vehicle.seoContent.metaDescription;
       }
-      
+
       if (vehicle.capacity > 12) {
         return `${vehicle.name} - ${vehicle.capacity} seater mini bus service in Visakhapatnam. Perfect for group travel, corporate events, and family trips. Spacious and comfortable mini bus with professional driver. Book now for reliable transportation.`;
       } else if (vehicle.capacity > 6) {
@@ -113,20 +139,107 @@ const VehicleDetailPage = () => {
         return `${vehicle.name} - ${vehicle.capacity} seater sedan taxi service in Visakhapatnam. Perfect for business travel and small groups. Comfortable sedan with AC and professional driver. Best rates guaranteed.`;
       }
     };
-    
+
     return {
       title: vehicle.seoContent?.title || `${vehicle.name} - ${vehicle.capacity} Seater ${vehicleTypeForTitle} Service in Visakhapatnam | Vizag Taxi Hub`,
       description: getUniqueDescription(),
-      keywords: vehicle.seoContent?.keywords || `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`,
+      keywords:
+        vehicle.seoContent?.keywords ||
+        `${vehicle.name.toLowerCase()}, ${vehicle.capacity} seater ${vehicleType}, ${vehicleType} service vizag, taxi service visakhapatnam, ${vehicle.tags?.join(', ').toLowerCase() || 'taxi service'}, vizag taxi hub vehicles`,
       image: galleryImages?.[0]?.url || vehicle.image || '/og-image.png',
-      url: `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`
+      url: `https://vizagtaxihub.com${getVehicleUrl(vehicle)}`,
     };
-  }, [vehicle, galleryImages]);
+  }, [vehicle, galleryImages, vehicleSlug]);
 
   // Memoize structured data generation - must be before early returns
   const structuredData = useMemo(() => {
-    if (!vehicle || vehicle.id !== 'tempo_traveller') return null;
-    
+    if (!vehicle || !seoData) return null;
+
+    const isUrbania =
+      vehicleSlug === 'urbania' ||
+      vehicle.id === 'bus' ||
+      (vehicle.name?.toLowerCase().includes('urbania') ?? false);
+
+    if (isUrbania) {
+      const cap = vehicle.capacity > 0 ? vehicle.capacity : 13;
+      const pricePerKm =
+        typeof vehicle.pricePerKm === 'number' && vehicle.pricePerKm > 0
+          ? String(vehicle.pricePerKm)
+          : '28';
+      const primaryImage =
+        typeof seoData.image === 'string' && seoData.image.startsWith('http')
+          ? seoData.image
+          : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || 'cars/tempo.png'}`}`;
+      return {
+        '@context': 'https://schema.org',
+        '@type': ['Product', 'Service'],
+        name: 'Urbania Premium Van Rental in Visakhapatnam',
+        description:
+          'Urbania van hire in Vizag for weddings, corporate travel, pilgrimages, and outstation group trips — AC comfort and professional driver.',
+        url: seoData.url,
+        image: [primaryImage, 'https://vizagtaxihub.com/cars/tempo.png'],
+        brand: { '@type': 'Brand', name: 'Vizag Taxi Hub' },
+        provider: {
+          '@type': 'LocalBusiness',
+          name: 'Vizag Taxi Hub',
+          url: 'https://vizagtaxihub.com',
+          telephone: '+91-9966363662',
+          email: 'info@vizagtaxihub.com',
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: '44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram',
+            addressLocality: 'Visakhapatnam',
+            addressRegion: 'Andhra Pradesh',
+            postalCode: '530024',
+            addressCountry: 'IN',
+          },
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: 17.7428416,
+            longitude: 83.2889633,
+          },
+          areaServed: { '@type': 'City', name: 'Visakhapatnam' },
+          openingHours: 'Mo-Su 00:00-23:59',
+          paymentAccepted: 'Cash, Credit Card, UPI, Net Banking',
+        },
+        // Match Tempo Traveller Offer shape: Product/Merchant validators expect price + UnitPriceSpecification.price
+        offers: {
+          '@type': 'Offer',
+          price: pricePerKm,
+          priceCurrency: 'INR',
+          priceSpecification: {
+            '@type': 'UnitPriceSpecification',
+            price: pricePerKm,
+            priceCurrency: 'INR',
+            unitText: 'per kilometer',
+          },
+          availability: 'https://schema.org/InStock',
+          seller: {
+            '@type': 'Organization',
+            name: 'Vizag Taxi Hub',
+            url: 'https://vizagtaxihub.com',
+            telephone: '+919966363662',
+          },
+        },
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: '4.8',
+          reviewCount: '127',
+          bestRating: '5',
+          worstRating: '1',
+        },
+        category: 'Transportation Services',
+        additionalProperty: [
+          { '@type': 'PropertyValue', name: 'Capacity', value: `${cap} passengers (approx.)` },
+          { '@type': 'PropertyValue', name: 'Air Conditioning', value: 'Yes' },
+          { '@type': 'PropertyValue', name: 'Driver', value: 'Professional driver included' },
+          { '@type': 'PropertyValue', name: 'Service Area', value: 'Visakhapatnam and Andhra Pradesh' },
+        ],
+      };
+    }
+
+    if (vehicle.id !== 'tempo_traveller') return null;
+
     return {
       "@context": "https://schema.org",
       "@type": ["Product", "Service"],
@@ -216,7 +329,7 @@ const VehicleDetailPage = () => {
         }
       ]
     };
-  }, [vehicle?.id, seoData?.url]);
+  }, [vehicle, vehicleSlug, seoData]);
 
   // Handler functions for booking
   const handleBookOnline = () => {
@@ -344,8 +457,10 @@ const VehicleDetailPage = () => {
         <meta name="revisit-after" content="7 days" />
         <link rel="canonical" href={seoData?.url || `https://vizagtaxihub.com/vehicle/${vehicleSlug}`} />
         
-        {/* Local Business Schema for Tempo Traveller */}
-        {vehicle?.id === 'tempo_traveller' && (
+        {/* Local Business meta for high-intent fleet pages */}
+        {(vehicle?.id === 'tempo_traveller' ||
+          vehicleSlug === 'urbania' ||
+          vehicle?.id === 'bus') && (
           <>
             <meta name="business:contact_data:locality" content="Visakhapatnam" />
             <meta name="business:contact_data:region" content="Andhra Pradesh" />

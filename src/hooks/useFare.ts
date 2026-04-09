@@ -39,7 +39,8 @@ export function useFare(
   console.log(`useFare: Called for ${cabId} with package ${packageType}`);
   
   const [fareData, setFareData] = useState<FareData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  /** Start true so the first paint does not flash ₹0 before the effect runs. */
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
 
@@ -175,10 +176,15 @@ export function useFare(
     clearStaleFares();
     
     const calculateFareData = async () => {
-      if (!cabId) return;
+      if (!cabId) {
+        setIsLoading(false);
+        setFareData(null);
+        return;
+      }
 
       setIsLoading(true);
       setError(null);
+      setFareData(null);
 
       const normalizedCabId = normalizeVehicleId(cabId);
       const fareKey = getFareKey(tripType, normalizedCabId, tripType === "local" ? packageType : undefined);
