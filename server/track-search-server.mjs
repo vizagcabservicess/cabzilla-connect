@@ -37,13 +37,69 @@ function formatSearchedAtIst() {
     .trim() + ' IST';
 }
 
+function formatResultsShown(body) {
+  const fares = Array.isArray(body.vehicleFares) ? body.vehicleFares : null;
+  if (fares && fares.length) {
+    return fares
+      .filter((v) => v && (v.name || v.fareText))
+      .map((v) => `${v.name || 'Vehicle'}: ${v.fareText || '—'}`)
+      .join('\n');
+  }
+  const cars = Array.isArray(body.carsShown) ? body.carsShown.filter(Boolean).join(', ') : '';
+  return cars || '—';
+}
+
+function formatDurationHuman(totalMinutes) {
+  const m = Math.round(Number(totalMinutes));
+  if (!Number.isFinite(m) || m <= 0) return '';
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${r} min`;
+  if (r === 0) return `${h} hr`;
+  return `${h} hr ${r} min`;
+}
+
+function formatRouteSummary(body) {
+  const rawKm = body.distanceKmOneWay;
+  const owKm = typeof rawKm === 'number' ? rawKm : rawKm != null ? Number(rawKm) : NaN;
+  const rawMin = body.durationMinutesOneWay;
+  const owMin = typeof rawMin === 'number' ? rawMin : rawMin != null ? Number(rawMin) : NaN;
+  const kmOk = Number.isFinite(owKm) && owKm > 0;
+  const durOk = Number.isFinite(owMin) && owMin > 0;
+  if (!kmOk && !durOk) return '';
+
+  const mode = String(body.tripModeTrack || '').toLowerCase();
+  const kmPart = kmOk ? `~${Math.round(owKm)} km` : '';
+  const durOne = durOk ? formatDurationHuman(owMin) : '';
+  const durHalf = durOne ? `~${durOne}` : '';
+
+  /** e.g. *One-way:* Approx. route: ~621 km · ~10 hr 30 min */
+  const oneWayLine = (detail) =>
+    detail ? `📏 *One-way:* Approx. route: ${detail}\n` : '';
+
+  if (mode === 'round-trip') {
+    const owDetail = [kmPart, durHalf].filter(Boolean).join(' · ');
+    const rtKmPart = kmOk ? `~${Math.round(owKm * 2)} km` : '';
+    const rtDurPart = durOk ? `~${formatDurationHuman(Math.round(owMin * 2))}` : '';
+    const rtDetail = [rtKmPart, rtDurPart].filter(Boolean).join(' · ');
+    return (
+      oneWayLine(owDetail) +
+      (rtDetail ? `📏 *Round-trip (approx):* Approx. route: ${rtDetail}\n` : '')
+    );
+  }
+
+  const parts = [kmPart, durHalf].filter(Boolean);
+  return oneWayLine(parts.join(' · '));
+}
+
 function buildOwnerMessage(body) {
   const guest = body.guestPhone || '';
   const pickup = body.pickup || '';
   const drop = body.drop || '';
   const trip = body.tripType || '';
   const departure = body.departure || '';
-  const cars = Array.isArray(body.carsShown) ? body.carsShown.filter(Boolean).join(', ') : '';
+  const routeSummary = formatRouteSummary(body);
+  const resultsBlock = formatResultsShown(body);
   const searchedAt = formatSearchedAtIst();
 
   return (
@@ -52,8 +108,9 @@ function buildOwnerMessage(body) {
     `📍 *Pickup:* ${pickup}\n` +
     `📍 *Drop:* ${drop}\n` +
     `🔄 *Trip Type:* ${trip}\n` +
+    routeSummary +
     `📅 *Departure:* ${departure}\n` +
-    `🚗 *Results Shown:* ${cars || '—'}\n` +
+    `🚗 *Results:*\n${resultsBlock}\n` +
     `⏰ *Searched At:* ${searchedAt}`
   );
 }

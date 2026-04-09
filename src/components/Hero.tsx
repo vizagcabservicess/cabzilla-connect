@@ -3,11 +3,7 @@ import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
-import { 
-  vizagLocations, 
-  calculateAirportFare,
-  Location
-} from '@/lib/locationData';
+import { vizagLocations, Location } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { cabTypes, formatPrice, loadCabTypes } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
@@ -30,9 +26,10 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
-import { calculateDistanceMatrix } from '@/lib/distanceService';
+import { calculateDistanceMatrix, estimateRoadKmSync } from '@/lib/distanceService';
 
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { useAuth } from '@/providers/AuthProvider';
 import { formatDateForAPI } from '@/lib/dateUtils';
 import {
   Dialog,
@@ -46,7 +43,11 @@ import {
   trackGuestSearch,
   formatDepartureForTrack,
   buildTripTypeLabelForTrack,
+  buildTripTypeFieldForGuestTrack,
+  buildGuestTrackRouteKey,
 } from '@/services/trackSearchAPI';
+import { buildVehicleFareLinesForGuestTrack } from '@/lib/guestSearchFareLines';
+import { getAirportTransferFare } from '@/lib/airportFareForBooking';
 import { WhatsAppCountryPhoneRow, defaultWhatsappCountry } from '@/components/WhatsAppCountryPhoneRow';
 import type { CountryCode } from '@/lib/countryCodes';
 
@@ -57,12 +58,16 @@ const hourlyPackageOptions = [
 
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
-
+/** Session: guest WhatsApp (E.164) after first successful entry — skip modal on repeat searches in this tab. */
+const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
+/** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
+const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
 export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   const { isLoaded } = useGoogleMaps();
@@ -252,6 +257,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   const [vehiclesLoaded, setVehiclesLoaded] = useState<boolean>(false);
   const [editTrigger, setEditTrigger] = useState<number>(0);
   const skipPhoneGateRef = useRef(false);
+  /** When true, `proceedWithSearch` skips a duplicate track (modal path already called `runGuestSearchTracking`). */
+  const skipNextGuestTrackRef = useRef(false);
+  /** Google Distance Matrix leg for {@link buildGuestTrackRouteKey} — matches CabList km & duration (avoids stale state). */
+  const routedKmForRouteRef = useRef<{ key: string; km: number; durationMinutes: number }>({
+    key: '',
+    km: 0,
+    durationMinutes: 0,
+  });
   const [showGuestPhoneModal, setShowGuestPhoneModal] = useState(false);
   const [guestPhoneDigits, setGuestPhoneDigits] = useState('');
   const [guestPhoneCountry, setGuestPhoneCountry] = useState<CountryCode>(() => defaultWhatsappCountry());
@@ -832,6 +845,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
   }, [hourlyPackage]);
 
   useEffect(() => {
+    routedKmForRouteRef.current = { key: '', km: 0, durationMinutes: 0 };
+  }, [pickupLocation, dropLocation]);
+
+  useEffect(() => {
     if (tripType === 'local') {
       const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;
       setDistance(selectedPackage);
@@ -889,7 +906,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           
           // Wait a moment for the trip type change to take effect, then proceed
           setTimeout(() => {
-            proceedWithSearch();
+            void proceedWithSearch();
           }, 500);
           return;
         }
@@ -905,7 +922,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           
           // Wait a moment for the trip type change to take effect, then proceed
           setTimeout(() => {
-            proceedWithSearch();
+            void proceedWithSearch();
           }, 500);
           return;
         }
@@ -924,7 +941,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           
           // Wait a moment for the trip type change to take effect, then proceed
           setTimeout(() => {
-            proceedWithSearch();
+            void proceedWithSearch();
           }, 500);
           return;
         }
@@ -940,7 +957,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
           
           // Wait a moment for the trip type change to take effect, then proceed
           setTimeout(() => {
-            proceedWithSearch();
+            void proceedWithSearch();
           }, 500);
           return;
         }
@@ -948,11 +965,146 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }
 
     // If no distance check needed or distance check passed, proceed normally
-    proceedWithSearch();
+    void proceedWithSearch();
   };
 
+  /** POST / track-search + session snapshot (guest phone must already be in session if skipping modal). */
+  async function runGuestSearchTracking(guestPhone: string) {
+    const availableCabs = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
+    const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
+    const syncKm =
+      pickupLocation && dropForKm ? estimateRoadKmSync(pickupLocation, dropForKm) : 0;
+    const routeKey = buildGuestTrackRouteKey(pickupLocation, dropForKm);
+    const routed = routedKmForRouteRef.current;
+    const coordsOk = (loc: typeof pickupLocation) =>
+      !!loc &&
+      Number.isFinite(loc.lat) &&
+      Number.isFinite(loc.lng) &&
+      !(loc.lat === 0 && loc.lng === 0);
+    /**
+     * Fare cards use Google Distance Matrix (`distance` / CabList). Alerts must use the same km — not
+     * `estimateRoadKmSync` (Haversine×1.3), which is often tens of km high and jumps tiers vs the UI.
+     */
+    let distanceForTrack: number;
+    let durationMinutesForTrack: number | undefined;
+    if (tripType === 'local') {
+      const pkgKm =
+        hourlyPackage.includes('4hrs') || hourlyPackage.includes('4 hr')
+          ? 40
+          : hourlyPackage.includes('10hrs') || hourlyPackage.includes('10 hr')
+            ? 100
+            : 80;
+      distanceForTrack = distance > 0 ? distance : pkgKm;
+      durationMinutesForTrack = undefined;
+    } else if (
+      (tripType === 'outstation' || tripType === 'airport') &&
+      coordsOk(pickupLocation) &&
+      coordsOk(dropForKm)
+    ) {
+      if (routeKey && routed.key === routeKey && routed.km > 0) {
+        distanceForTrack = routed.km;
+        durationMinutesForTrack =
+          routed.durationMinutes > 0 ? routed.durationMinutes : undefined;
+      } else {
+        try {
+          const dm = await calculateDistanceMatrix(pickupLocation!, dropForKm!);
+          if (dm.status === 'OK' && dm.distance > 0) {
+            distanceForTrack = dm.distance;
+            durationMinutesForTrack = dm.duration > 0 ? dm.duration : undefined;
+            if (routeKey) {
+              routedKmForRouteRef.current = {
+                key: routeKey,
+                km: dm.distance,
+                durationMinutes: dm.duration,
+              };
+            }
+          } else {
+            distanceForTrack = syncKm > 0 ? syncKm : distance;
+            durationMinutesForTrack = undefined;
+          }
+        } catch {
+          distanceForTrack = syncKm > 0 ? syncKm : distance;
+          durationMinutesForTrack = undefined;
+        }
+      }
+    } else {
+      distanceForTrack = syncKm > 0 ? syncKm : distance;
+      durationMinutesForTrack = undefined;
+    }
+
+    if (
+      (tripType === 'outstation' || tripType === 'airport') &&
+      distanceForTrack > 0 &&
+      (durationMinutesForTrack === undefined || durationMinutesForTrack <= 0)
+    ) {
+      durationMinutesForTrack = Math.max(1, Math.round((distanceForTrack / 50) * 60));
+    }
+    const vehicleFares = await buildVehicleFareLinesForGuestTrack(availableCabs, {
+      tripType,
+      tripMode,
+      hourlyPackage,
+      distance: distanceForTrack,
+      pickupDate,
+      returnDate: returnDate || undefined,
+    });
+    /** Production PHP joins this with commas — include fare in each entry so legacy track-search.php shows prices. */
+    const carsShown =
+      vehicleFares.length > 0
+        ? vehicleFares.map((v) => `${v.name}: ${v.fareText}`)
+        : availableCabs.map((c) => c.name);
+    const pickup = pickupLocation?.name?.trim() || '';
+    const drop = tripType === 'local' ? pickup : (dropLocation?.name?.trim() || '');
+    const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
+    const distRounded = distanceForTrack > 0 ? Math.round(distanceForTrack) : undefined;
+    const durRounded =
+      durationMinutesForTrack !== undefined && durationMinutesForTrack > 0
+        ? Math.round(durationMinutesForTrack)
+        : undefined;
+    /** Includes route lines in `tripType` so production PHP that only echoes `tripType` still shows km & hours. */
+    const tripTypePayload = buildTripTypeFieldForGuestTrack(tripTypeLabel, distRounded, durRounded, tripMode);
+    const departure = formatDepartureForTrack(pickupDate);
+
+    trackGuestSearch({
+      guestPhone,
+      pickup,
+      drop,
+      tripType: tripTypePayload,
+      departure,
+      distanceKmOneWay: distRounded,
+      durationMinutesOneWay: durRounded,
+      tripModeTrack: tripMode,
+      carsShown,
+      vehicleFares,
+    });
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(
+          SESSION_GUEST_SEARCH_SNAPSHOT_KEY,
+          JSON.stringify({
+            updatedAt: new Date().toISOString(),
+            guestPhone,
+            pickup,
+            drop,
+            tripType: tripTypePayload,
+            tripTypeLabel,
+            departure,
+            carsShown,
+            vehicleFares,
+            distanceKmOneWay: distRounded,
+            durationMinutesOneWay: durRounded,
+            tripModeTrack: tripMode,
+            selectedCab: selectedCab?.name ?? null,
+          })
+        );
+      }
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
+
   // Helper function to proceed with the search after distance checks
-  function proceedWithSearch() {
+  async function proceedWithSearch() {
     // Check if drop location is Araku Valley - redirect to tour page
     if (dropLocation && dropLocation.name) {
       const dropLocationName = dropLocation.name.toLowerCase().trim();
@@ -1132,11 +1284,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       }
     }
 
-    if (!skipPhoneGateRef.current) {
+    const cachedGuestPhone =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(SESSION_GUEST_TRACK_PHONE_KEY)?.trim() || ''
+        : '';
+    const mustCollectPhone =
+      !skipPhoneGateRef.current &&
+      user?.role !== 'super_admin' &&
+      !cachedGuestPhone;
+
+    if (mustCollectPhone) {
       setShowGuestPhoneModal(true);
       return;
     }
     skipPhoneGateRef.current = false;
+
+    if (user?.role !== 'super_admin' && cachedGuestPhone && !skipNextGuestTrackRef.current) {
+      await runGuestSearchTracking(cachedGuestPhone);
+    }
+    skipNextGuestTrackRef.current = false;
 
     if (onSearch) onSearch({
       pickupLocation,
@@ -1178,7 +1344,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     }, 300);
   }
 
-  function handleGuestPhoneModalSubmit() {
+  async function handleGuestPhoneModalSubmit() {
     if (guestPhoneDigits.length !== guestPhoneCountry.maxLength) {
       toast({
         title: 'Invalid number',
@@ -1189,33 +1355,35 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       return;
     }
     const guestPhone = `${guestPhoneCountry.dialCode}${guestPhoneDigits}`;
-    const carsShown = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined).map(
-      (c) => c.name
-    );
-    const pickup = pickupLocation?.name?.trim() || '';
-    const drop = tripType === 'local' ? pickup : (dropLocation?.name?.trim() || '');
-    const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
-    const departure = formatDepartureForTrack(pickupDate);
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(SESSION_GUEST_TRACK_PHONE_KEY, guestPhone);
+      }
+    } catch {
+      /* ignore */
+    }
 
-    trackGuestSearch({
-      guestPhone,
-      pickup,
-      drop,
-      tripType: tripTypeLabel,
-      departure,
-      carsShown,
-    });
+    await runGuestSearchTracking(guestPhone);
+    skipNextGuestTrackRef.current = true;
 
     setGuestPhoneDigits('');
     setGuestPhoneCountry(defaultWhatsappCountry());
     setShowGuestPhoneModal(false);
     skipPhoneGateRef.current = true;
-    proceedWithSearch();
+    void proceedWithSearch();
   }
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
     // Only update distance for non-local trips
     if (tripType !== 'local') {
+      const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation);
+      if (rk) {
+        routedKmForRouteRef.current = {
+          key: rk,
+          km: calculatedDistance,
+          durationMinutes: calculatedDuration,
+        };
+      }
       setDistance(calculatedDistance);
       setDuration(calculatedDuration);
       setIsCalculatingDistance(false);
@@ -1229,7 +1397,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
     let totalPrice = 0;
     
     if (tripType === 'airport') {
-      totalPrice = calculateAirportFare(currentCab.name, distance);
+      totalPrice = getAirportTransferFare(currentCab, distance);
     } else if (tripType === 'local') {
       // For local trips, use only the package price (no driver allowance or extras)
       totalPrice = getLocalPackagePrice(hourlyPackage, currentCab.name);
@@ -1501,6 +1669,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, on
       calculateDistanceMatrix(pickupLocation, dropLocation)
         .then(result => {
           if (result.status === 'OK') {
+            const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation);
+            if (rk) {
+              routedKmForRouteRef.current = {
+                key: rk,
+                km: result.distance,
+                durationMinutes: result.duration,
+              };
+            }
             setDistance(result.distance);
             setDuration(result.duration);
           }

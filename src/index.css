@@ -489,3 +489,38 @@ margin-top: 4px !important;
     padding-bottom: 5rem;
   }
 }
+
+/* Google Places Autocomplete — sits on document body; z-index + surface so it layers above the booking row */
+.pac-container {
+  z-index: 10050 !important;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(229 231 235);
+  box-shadow:
+    0 8px 30px rgba(15, 23, 42, 0.08),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+  font-family: inherit;
+  overflow: hidden;
+}
+.pac-item {
+  padding: 0.625rem 0.75rem;
+  line-height: 1.35;
+  /* Center the marker with the full text block (primary + secondary line); default UI aligns icon to first line */
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem;
+}
+.pac-icon {
+  flex-shrink: 0;
+  align-self: center !important;
+  margin-top: 0 !important;
+  margin-right: 0 !important;
+  position: relative;
+  top: 0;
+}
+.pac-item + .pac-item {
+  border-top: 1px solid rgb(243 244 246);
+}
+.pac-item:hover,
+.pac-item-selected {
+  background-color: rgb(249 250 251);
+}

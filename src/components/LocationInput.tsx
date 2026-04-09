@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
-import { X, Search, MapPin } from "lucide-react";
+import { X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import type { Location } from '@/lib/locationData';
 import type { TripType } from '@/lib/tripTypes';
@@ -12,6 +12,22 @@ import { cn } from '@/lib/utils';
 const VIZAG_LAT = 17.6868;
 const VIZAG_LNG = 83.2185;
 const MAX_DISTANCE_KM = 35;
+
+const PREDICTION_DEBOUNCE_MS = 320;
+
+const SELECT_FROM_LIST_MESSAGE = 'Please select a location from the suggestions list';
+
+const EMPTY_LOCATION: Location = {
+  id: '',
+  name: '',
+  address: '',
+  lat: 0,
+  lng: 0,
+  city: '',
+  state: '',
+  type: 'other',
+  popularityScore: 50,
+};
 
 // Helper to calculate distance between two lat/lng points (Haversine formula)
 function getDistanceFromLatLng(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -84,7 +100,14 @@ export function LocationInput({
   const initializationAttemptsRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
-  
+  const [predictionsLoading, setPredictionsLoading] = useState(false);
+  const [noGooglePredictions, setNoGooglePredictions] = useState(false);
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const predictionsRequestSeq = useRef(0);
+  /** Full input row (pin + field); Google `.pac-container` is on `body` — we sync its box to this. */
+  const pacAnchorRef = useRef<HTMLDivElement | null>(null);
+  const pacHintDomId = useId().replace(/:/g, '');
+
   useEffect(() => {
     function handleResize() {
       setIsDesktop(window.innerWidth >= 1024);
@@ -99,7 +122,10 @@ export function LocationInput({
     // Always update when value/location changes, regardless of initialization state
     // Update refs
     valueRef.current = value;
-    locationRef.current = location;
+    const effectiveLocation =
+      location ??
+      (typeof value === 'object' && value !== null ? (value as Location) : undefined);
+    locationRef.current = effectiveLocation;
     
     // Set input value based on value or location (without triggering onChange)
     let newInputValue = "";
@@ -113,7 +139,13 @@ export function LocationInput({
       // Clear input when value is undefined/null
       newInputValue = "";
     }
-    
+
+    const inputEl = inputRef.current;
+    if (typeof document !== 'undefined' && inputEl && document.activeElement === inputEl) {
+      initializedRef.current = true;
+      return;
+    }
+
     setInputValue(newInputValue);
     
     // Mark as initialized
@@ -143,6 +175,196 @@ export function LocationInput({
        setFilteredSuggestions([]);
      }
    }, [inputValue, suggestions, isPickupLocation, tripType]);
+
+  useEffect(() => {
+    if (!isLoaded || !google) return;
+    autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+    return () => {
+      autocompleteServiceRef.current = null;
+    };
+  }, [isLoaded, google]);
+
+  useEffect(() => {
+    if (!isLoaded || !google || !autocompleteServiceRef.current) return;
+
+    const q = inputValue.trim();
+    if (q.length < 2 || !isFocused) {
+      setPredictionsLoading(false);
+      setNoGooglePredictions(false);
+      return;
+    }
+
+    setPredictionsLoading(true);
+    setNoGooglePredictions(false);
+    const seq = ++predictionsRequestSeq.current;
+
+    const timer = window.setTimeout(() => {
+      const isOutstationDrop = tripType === 'outstation' && !isPickupLocation;
+      const request: google.maps.places.AutocompletionRequest & { strictBounds?: boolean } = {
+        input: q,
+        componentRestrictions: { country: 'in' },
+        types: ['geocode', 'establishment'],
+      };
+
+      if (!isOutstationDrop) {
+        const vizagCenter = new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
+        const circle = new google.maps.Circle({
+          center: vizagCenter,
+          radius: MAX_DISTANCE_KM * 1000,
+        });
+        request.bounds = circle.getBounds() as google.maps.LatLngBounds;
+        if (isPickupLocation) {
+          request.strictBounds = true;
+        }
+      }
+
+      autocompleteServiceRef.current!.getPlacePredictions(request, (predictions, status) => {
+        if (seq !== predictionsRequestSeq.current) return;
+        setPredictionsLoading(false);
+        const s = status as unknown as string;
+        const ok = s === google.maps.places.PlacesServiceStatus.OK;
+        const zero = s === google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
+        if (!ok && !zero) {
+          setNoGooglePredictions(false);
+          return;
+        }
+        const has = !!(predictions && predictions.length > 0);
+        setNoGooglePredictions(!has);
+      });
+    }, PREDICTION_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [inputValue, isFocused, isLoaded, google, isPickupLocation, tripType]);
+
+  // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row).
+  useEffect(() => {
+    if (typeof document === 'undefined' || !isFocused) return;
+
+    let cancelled = false;
+    const alignPac = () => {
+      if (cancelled) return;
+      const anchor = pacAnchorRef.current;
+      if (!anchor) return;
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).filter((el) => {
+        const st = window.getComputedStyle(el);
+        return st.display !== 'none' && st.visibility !== 'hidden' && el.getBoundingClientRect().height > 0;
+      });
+      const pac = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      if (!pac) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const w = Math.max(200, Math.round(rect.width));
+      const left = Math.round(rect.left);
+      const top = Math.round(rect.bottom + 2);
+
+      const s = pac.style;
+      s.setProperty('position', 'fixed', 'important');
+      s.setProperty('box-sizing', 'border-box', 'important');
+      s.setProperty('width', `${w}px`, 'important');
+      s.setProperty('min-width', `${w}px`, 'important');
+      s.setProperty('max-width', `${w}px`, 'important');
+      s.setProperty('left', `${left}px`, 'important');
+      s.setProperty('top', `${top}px`, 'important');
+      s.setProperty('right', 'auto', 'important');
+      s.setProperty('transform', 'none', 'important');
+    };
+
+    alignPac();
+    window.addEventListener('resize', alignPac);
+    window.addEventListener('scroll', alignPac, true);
+
+    const mo = new MutationObserver(alignPac);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+
+    const interval = window.setInterval(alignPac, 150);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('resize', alignPac);
+      window.removeEventListener('scroll', alignPac, true);
+      mo.disconnect();
+      window.clearInterval(interval);
+    };
+  }, [isFocused]);
+
+  // RedBus-style hint inside Google's open suggestion panel (DOM — `.pac-container` is not React-rendered).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const removeHint = () => {
+      document.getElementById(pacHintDomId)?.remove();
+    };
+
+    const committed =
+      location ??
+      (typeof value === 'object' && value !== null ? (value as Location) : undefined);
+    const selectionInvalid = inputValue.trim().length > 0 && !committed?.id;
+
+    const emptyPanelOpen =
+      isFocused &&
+      noGooglePredictions &&
+      !predictionsLoading &&
+      inputValue.trim().length >= 2;
+
+    if (!isFocused || !selectionInvalid || emptyPanelOpen) {
+      removeHint();
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncHint = () => {
+      if (cancelled) return;
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).filter((el) => {
+        const st = window.getComputedStyle(el);
+        return st.display !== 'none' && st.visibility !== 'hidden' && el.getBoundingClientRect().height > 0;
+      });
+      const pac = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      if (!pac || !pac.querySelector('.pac-item')) {
+        removeHint();
+        return;
+      }
+
+      let hint = document.getElementById(pacHintDomId) as HTMLDivElement | null;
+      if (!hint || !pac.contains(hint)) {
+        if (hint) hint.remove();
+        hint = document.createElement('div');
+        hint.id = pacHintDomId;
+        hint.setAttribute('role', 'status');
+        hint.setAttribute('aria-live', 'polite');
+        hint.style.cssText = [
+          'box-sizing:border-box',
+          'padding:10px 12px',
+          'border-bottom:1px solid rgb(254 226 226)',
+          'background:rgb(254 242 242)',
+          'color:rgb(220 38 38)',
+          'font-size:12px',
+          'line-height:1.4',
+          'text-align:center',
+          'font-family:inherit',
+        ].join(';');
+        hint.textContent = SELECT_FROM_LIST_MESSAGE;
+      }
+
+      if (pac.firstChild !== hint) {
+        pac.insertBefore(hint, pac.firstChild);
+      }
+    };
+
+    syncHint();
+    const mo = new MutationObserver(syncHint);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+    const interval = window.setInterval(syncHint, 150);
+
+    return () => {
+      cancelled = true;
+      removeHint();
+      mo.disconnect();
+      window.clearInterval(interval);
+    };
+  }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId]);
   
   // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
@@ -173,6 +395,8 @@ export function LocationInput({
       
       // Add place_changed listener
       autocompleteRef.current.addListener("place_changed", () => {
+        setNoGooglePredictions(false);
+        setPredictionsLoading(false);
         const place = autocompleteRef.current?.getPlace();
         if (place && place.geometry?.location) {
           setInputValue(place.name || place.formatted_address || "");
@@ -193,7 +417,7 @@ export function LocationInput({
             toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
             setInputValue("");
             if (onChange) onChange("");
-            if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+            if (onLocationChange) onLocationChange(EMPTY_LOCATION);
             return;
           }
           
@@ -202,7 +426,7 @@ export function LocationInput({
             toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
             setInputValue("");
             if (onChange) onChange("");
-            if (onLocationChange) onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+            if (onLocationChange) onLocationChange(EMPTY_LOCATION);
             return;
           }
           
@@ -246,6 +470,12 @@ export function LocationInput({
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
+    const prevLoc = locationRef.current;
+    const prevDisplay = (prevLoc?.name || prevLoc?.address || '').trim();
+    if (onLocationChange && prevLoc?.id && newValue.trim() !== prevDisplay) {
+      onLocationChange(EMPTY_LOCATION);
+    }
+
     setInputValue(newValue);
     
     // Call the original onChange if provided
@@ -294,7 +524,7 @@ export function LocationInput({
   
   const handleInputBlur = () => {
     // Delay hiding suggestions to allow clicking on them
-    setTimeout(() => setShowSuggestions(false), 150);
+    window.setTimeout(() => setShowSuggestions(false), 200);
   };
 
      // Determine subtitle text based on props
@@ -314,6 +544,18 @@ export function LocationInput({
    };
   
   const subtitleText = getSubtitleText();
+
+  const committedLocation =
+    location ??
+    (typeof value === 'object' && value !== null ? (value as Location) : undefined);
+
+  const showEmptyGoogleDropdown =
+    isFocused &&
+    noGooglePredictions &&
+    !predictionsLoading &&
+    inputValue.trim().length >= 2;
+
+  const showSelectionInvalid = inputValue.trim().length > 0 && !committedLocation?.id;
   
   return (
     <div className={cn("relative", className)}>
@@ -353,6 +595,7 @@ export function LocationInput({
       )}
 
       <div
+        ref={pacAnchorRef}
         className={cn(
           "ios-search-input-wrapper relative",
           isDesktopVariant && "border border-gray-200 rounded-md bg-white flex items-center pl-3 min-h-[2.75rem]",
@@ -394,8 +637,11 @@ export function LocationInput({
                 )
               : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
-          onFocus={() => { setShowSuggestions(inputValue.length > 0); setIsFocused(true); }}
-          onBlur={() => { handleInputBlur(); setIsFocused(false); }}
+          onFocus={() => { setShowSuggestions(inputValue.length > 0 && suggestions.length > 0); setIsFocused(true); }}
+          onBlur={() => {
+            handleInputBlur();
+            window.setTimeout(() => setIsFocused(false), 200);
+          }}
         />
         {inputValue && !readOnly && (
           <button
@@ -405,9 +651,10 @@ export function LocationInput({
               setInputValue("");
               if (onChange) onChange("");
               if (onLocationChange) {
-                onLocationChange({ id: '', name: '', address: '', lat: 0, lng: 0, city: '', state: '', type: 'other', popularityScore: 50 });
+                onLocationChange(EMPTY_LOCATION);
               }
               setShowSuggestions(false);
+              setNoGooglePredictions(false);
             }}
             tabIndex={-1}
             aria-label="Clear location"
@@ -420,9 +667,16 @@ export function LocationInput({
       {!isDesktopVariant && subtitleText && (
         <p className={cn("text-left text-xs text-gray-500", isAppVariant ? "mt-1" : "mt-1.5")}>{subtitleText}</p>
       )}
-      
       {showSuggestions && filteredSuggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-y-auto border border-gray-200">
+        <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          {showSelectionInvalid && (
+            <div
+              className="border-b border-red-100 bg-red-50/70 px-3 py-2.5 text-center text-xs leading-snug text-red-600"
+              role="status"
+            >
+              {SELECT_FROM_LIST_MESSAGE}
+            </div>
+          )}
           {filteredSuggestions.map((suggestion) => (
             <div
               key={suggestion.id}
@@ -435,6 +689,32 @@ export function LocationInput({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {showEmptyGoogleDropdown && (
+        <div
+          className={cn(
+            "absolute z-[1001] w-full mt-1.5 overflow-hidden rounded-2xl border border-gray-200/90 bg-white",
+            "shadow-[0_8px_30px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.04)]",
+            "animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+          )}
+          role="status"
+        >
+          {showSelectionInvalid && (
+            <div className="border-b border-red-100 bg-red-50/70 px-4 py-3 text-center sm:px-5">
+              <p className="text-xs leading-snug text-red-600">{SELECT_FROM_LIST_MESSAGE}</p>
+            </div>
+          )}
+          <div className="px-5 py-5 text-center sm:px-6 sm:py-6">
+            <p className="text-[15px] font-bold leading-snug tracking-tight text-gray-900 sm:text-[17px]">
+              No Results Found
+            </p>
+            <p className="mx-auto mt-2.5 max-w-[min(100%,20rem)] text-sm leading-relaxed text-gray-500">
+              for{' '}
+              <span className="font-medium text-gray-600">&quot;{inputValue.trim()}&quot;</span>
+            </p>
+          </div>
         </div>
       )}
     </div>

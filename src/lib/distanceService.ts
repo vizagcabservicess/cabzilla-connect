@@ -253,6 +253,19 @@ function fallbackDistanceCalculation(
   };
 }
 
+/**
+ * Sync road-distance estimate (Haversine × 1.3, rounded) when Distance Matrix
+ * has not updated React state yet — same formula as {@link fallbackDistanceCalculation}.
+ */
+export function estimateRoadKmSync(
+  origin: Location | null | undefined,
+  destination: Location | null | undefined
+): number {
+  if (!origin || !destination) return 0;
+  if (!hasValidCoordinates(origin) || !hasValidCoordinates(destination)) return 0;
+  return getApproximateDistance(origin.lat, origin.lng, destination.lat, destination.lng);
+}
+
 // Haversine formula to calculate distance between two points on Earth
 function getApproximateDistance(
   lat1: number,
