@@ -391,6 +391,10 @@ const WeddingTempoTravellerPage = () => {
         <title>Wedding Tempo Traveller in Vizag | Wedding Transport | Best Rates</title>
         <meta name="description" content="Book wedding tempo traveller in Vizag. 17 seater AC mini bus with professional driver for wedding transport. Best rates in Visakhapatnam. Call +91 9966363662" />
         <meta name="keywords" content="wedding tempo traveller vizag, wedding transport vizag, tempo traveller for wedding vizag, wedding party transport vizag, family wedding transport vizag, wedding outstation travel vizag, tempo traveller booking vizag, tempo traveller rates vizag" />
+        <link rel="canonical" href="https://vizagtaxihub.com/wedding-tempo-traveller-vizag" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/wedding-tempo-traveller-vizag" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/wedding-tempo-traveller-vizag" />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>

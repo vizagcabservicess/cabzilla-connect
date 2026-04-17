@@ -12,6 +12,7 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 
 import router from './routes'; // Only for original approach
 import { AdminWebPushGate } from '@/components/admin/AdminWebPushGate';
+import { UrbaniaSeatShareCampaignModal } from '@/components/UrbaniaSeatShareCampaignModal';
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -39,6 +40,8 @@ const RouteLoadingSpinner = () => (
 );
 
 const USE_ORIGINAL_APP = true; // Toggle this to switch approaches
+/** Set to true to show the Urbania seat-sharing campaign modal again. */
+const SHOW_URBANIA_SEAT_SHARE_POPUP = false;
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const App = () => (
@@ -72,6 +75,7 @@ const App = () => (
             </BrowserRouter>
           )}
           <CookieConsentManager />
+          {SHOW_URBANIA_SEAT_SHARE_POPUP ? <UrbaniaSeatShareCampaignModal /> : null}
         </PoolingAuthProvider>
       </AuthProvider>
     </CookieConsentProvider>

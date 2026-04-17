@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +19,8 @@ import {
   formatPhoneNumber
 } from '@/services/whatsappService';
 import { getApiUrl } from '@/config/api';
+import { coalesceTourItinerary } from '@/utils/tourConfirmationHelpers';
+import { enrichTourBookingFromCatalog } from '@/utils/enrichTourBookingForConfirmation';
 
 interface BookingDetailsWhatsAppProps {
   booking: Booking;
@@ -29,16 +31,51 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
   const [activeTab, setActiveTab] = useState('customer');
   const [customMessage, setCustomMessage] = useState('');
   const [customPhone, setCustomPhone] = useState('');
+  const [bookingForMsg, setBookingForMsg] = useState<Booking>(booking);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setBookingForMsg(booking);
+
+    const tid = String(booking.tour_id ?? booking.tourId ?? '').trim();
+    const hasRef = Boolean(tid);
+    const hasItin = coalesceTourItinerary(booking).length > 0;
+    if (hasItin && hasRef) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const enriched = await enrichTourBookingFromCatalog(booking);
+        if (!cancelled) setBookingForMsg(enriched);
+      } catch {
+        /* keep booking as-is */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [booking]);
   
   // Generate invoice URL
   const invoiceUrl = getApiUrl(`/api/download-invoice.php?id=${booking.id}&direct_download=1`);
   
-  // Message templates
-  const bookingConfirmationMsg = generateBookingConfirmationMessage(booking);
-  const driverAssignmentMsg = booking.driverName ? generateDriverAssignmentMessage(booking) : '';
-  const invoiceMsg = generateInvoiceMessage(booking, invoiceUrl);
-  const driverNotificationMsg = booking.driverName ? generateDriverNotificationMessage(booking) : '';
+  // Message templates (use enriched booking so tour title/itinerary appear when API only stored tour_id)
+  const bookingConfirmationMsg = useMemo(
+    () => generateBookingConfirmationMessage(bookingForMsg),
+    [bookingForMsg]
+  );
+  const driverAssignmentMsg = useMemo(
+    () => (bookingForMsg.driverName ? generateDriverAssignmentMessage(bookingForMsg) : ''),
+    [bookingForMsg]
+  );
+  const invoiceMsg = useMemo(
+    () => generateInvoiceMessage(bookingForMsg, invoiceUrl),
+    [bookingForMsg, invoiceUrl]
+  );
+  const driverNotificationMsg = useMemo(
+    () => (bookingForMsg.driverName ? generateDriverNotificationMessage(bookingForMsg) : ''),
+    [bookingForMsg]
+  );
   
   const handleCopyMessage = (message: string) => {
     navigator.clipboard.writeText(message);

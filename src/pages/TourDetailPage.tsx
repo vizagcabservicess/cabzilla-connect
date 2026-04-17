@@ -374,6 +374,7 @@ const TourDetailPage = () => {
         returnDate: null,
         vehicleType: selectedVehicle.vehicleType || selectedVehicle.name,
         cabType: selectedVehicle.name,
+        vehicleCapacity: selectedVehicle.capacity,
         distance: computedDistance,
         tripType: 'tour',
         tripMode: tripMode,

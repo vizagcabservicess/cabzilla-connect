@@ -9,6 +9,7 @@ import {
   coalesceTourItinerary,
   formatTourItineraryForWhatsApp,
   isTourBooking,
+  resolveTourDurationForConfirmation,
 } from '@/utils/tourConfirmationHelpers';
 
 /** True if we should show this value in customer-facing messages (omit N/A clutter). */
@@ -74,7 +75,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   let tripType = booking.tripType || booking.trip_type || '';
   const tripMode = booking.tripMode || booking.trip_mode || 'one-way';
   const tourId = booking.tour_id || booking.tourId;
-  const tourName = booking.tour_name || booking.tourName;
+  let tourName =
+    booking.tour_name ||
+    booking.tourName ||
+    (booking as any).tour_title ||
+    (booking as any).package_name ||
+    '';
   
   // Smart fallback: If trip type is not set, try to infer it from the data
   if (!tripType || tripType === '') {
@@ -151,6 +157,24 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   // If it's a tour booking, override the drop location with tour name
   if ((tripType === 'tour' || tourId) && tourName) {
     dropLocation = tourName;
+  } else if (tripType === 'tour' && !tourName && dropLocation && pickupLocation) {
+    const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
+    const d0 =
+      typeof dropLocation === 'string'
+        ? dropLocation.split(',')[0].trim().toLowerCase()
+        : '';
+    if (
+      d0 &&
+      d0 !== p0 &&
+      (d0.includes('tour') ||
+        d0.includes('araku') ||
+        d0.includes('lambasingi') ||
+        d0.includes('vanajangi') ||
+        d0.includes('city'))
+    ) {
+      tourName = typeof dropLocation === 'string' ? dropLocation.split(',')[0].trim() : tourName;
+      dropLocation = tourName;
+    }
   }
 
   // Format pickup date and time
@@ -192,11 +216,18 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   
 
   // Get vehicle specifications from booking data - check multiple possible field names
-  let vehicleCapacity = (booking as any).vehicleCapacity || 
-                       (booking as any).capacity || 
-                       (booking as any).vehicle_capacity ||
-                       (booking as any).seating_capacity ||
-                       'N/A';
+  const veh = (booking as any).vehicle;
+  let vehicleCapacity =
+    (booking as any).vehicleCapacity ??
+    (booking as any).capacity ??
+    (booking as any).vehicle_capacity ??
+    (booking as any).seating_capacity ??
+    (booking as any).max_passengers ??
+    (booking as any).maxPassengers ??
+    (booking as any).passenger_capacity ??
+    (booking as any).vehicle_seats ??
+    (veh && typeof veh === 'object' ? veh.capacity ?? veh.seating_capacity : undefined) ??
+    'N/A';
   let vehicleLuggage = (booking as any).vehicleLuggage || 
                       (booking as any).luggageCapacity || 
                       (booking as any).vehicle_luggage ||
@@ -239,6 +270,8 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       vehicleLuggage = '4';
       vehicleFuelType = 'Petrol';
       vehicleFeatures = ['AC', 'Music System', 'Charging Point'];
+    } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
+      /* Capacity varies by variant; do not invent a number (see capacity line below). */
     } else {
       // Default specifications for unknown vehicles
       vehicleCapacity = '4';
@@ -247,6 +280,61 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       vehicleFeatures = ['AC', 'Music System'];
     }
   }
+
+  if (vehicleModel !== 'To be assigned') {
+    const vm = vehicleModel.toLowerCase();
+    if (vm.includes('tempo') || vm.includes('traveller')) {
+      const n = Number(vehicleCapacity);
+      if (/\b17\b|17\s*-?\s*seater|seventeen/i.test(vehicleModel)) {
+        if (!Number.isFinite(n) || n < 17) vehicleCapacity = '17';
+      } else if (/\b15\b|\b16\b/i.test(vehicleModel)) {
+        if (!Number.isFinite(n) || n < 15) vehicleCapacity = '15';
+      } else if (/\b14\b|14\s*-?\s*seater/i.test(vehicleModel)) {
+        if (!Number.isFinite(n) || n < 14) vehicleCapacity = '14';
+      } else if (/\b12\b|12\s*-?\s*seater/i.test(vehicleModel)) {
+        if (!Number.isFinite(n) || n < 12) vehicleCapacity = '12';
+      } else if (/\b9\b|10\b|11\b/.test(vehicleModel) && Number.isFinite(n) && n < 9) {
+        const m = vehicleModel.match(/\b(9|10|11)\b/);
+        if (m) vehicleCapacity = m[1];
+      }
+    }
+  }
+
+  const vmForCap = vehicleModel.toLowerCase();
+  const isTempoVehicle = vmForCap.includes('tempo') || vmForCap.includes('traveller');
+  const capNum = Number(vehicleCapacity);
+  const tempoLabelSpecifies7 =
+    /\b7\s*-?\s*seater\b/i.test(vehicleModel) ||
+    /\b7\s*\+\s*1\b/i.test(vehicleModel) ||
+    /\bmini\s*tempo\b/i.test(vehicleModel) ||
+    /\bforce\b/i.test(vehicleModel);
+  const capacityLooksLikeSedanLeak =
+    vehicleCapacity === '4' ||
+    (isTempoVehicle && Number.isFinite(capNum) && capNum > 0 && capNum <= 6);
+  /** Innova-class "7" often copied onto generic Tempo Traveller rows. */
+  const capacityLooksLikeMpvLeakOnTempo =
+    isTempoVehicle &&
+    Number.isFinite(capNum) &&
+    capNum === 7 &&
+    !tempoLabelSpecifies7;
+  const capacityLine = (() => {
+    if (vehicleModel === 'To be assigned') {
+      return '👥 *Capacity:* To be confirmed';
+    }
+    if (
+      isTempoVehicle &&
+      (vehicleCapacity === 'N/A' ||
+        !String(vehicleCapacity).trim() ||
+        capacityLooksLikeSedanLeak ||
+        capacityLooksLikeMpvLeakOnTempo)
+    ) {
+      return '👥 *Capacity:* Depends on the booked Tempo variant (typically about 9–17 seats). Reply to this chat or call +91 9966363662 for the exact seating for your vehicle.';
+    }
+    if (vehicleCapacity === 'N/A' || !String(vehicleCapacity).trim()) {
+      return '👥 *Capacity:* As per assigned vehicle';
+    }
+    return `👥 *Capacity:* ${vehicleCapacity} passengers`;
+  })();
 
   const vehicleFeaturesText = Array.isArray(vehicleFeatures) ? vehicleFeatures.join(', ') : vehicleFeatures || 'AC, Music System';
 
@@ -646,13 +734,7 @@ ${allNotes}`;
   const itineraryDays = coalesceTourItinerary(booking);
   const itineraryWhatsApp = formatTourItineraryForWhatsApp(itineraryDays);
   const tourRef = String(tourId || booking.tour_id || booking.tourId || '').trim();
-  const tourDurationLine = (() => {
-    const a = booking.tourDurationLabel || booking.tour_duration || booking.tourDuration;
-    if (a && String(a).trim()) return String(a).trim();
-    const d = booking.tourDays ?? booking.tour_days;
-    if (d != null && Number(d) > 0) return `${Math.round(Number(d))} day(s)`;
-    return '';
-  })();
+  const tourDurationLine = resolveTourDurationForConfirmation(booking);
 
   return `🚗 *Booking Confirmation - Vizag Taxi Hub*
 
@@ -670,7 +752,7 @@ ${returnDate ? `📅 *Return date & time:* ${formattedReturnDate}` : ''}
 ${tripType === 'outstation' ? `📏 *Total distance:* ${totalDistance} km${isRoundTrip ? ' (round-trip)' : ''}` : ''}
 ${tripType === 'airport' && tripKmRounded > 0 ? `📏 *Trip distance:* ${tripKmRounded} km` : ''}
 🚗 *Vehicle:* ${vehicleModel} [${vehicleRegNo}]
-👥 *Capacity:* ${vehicleCapacity} passengers
+${capacityLine}
 👨‍💼 *Driver:* ${driverName}, ${driverPhone}
 📞 *Guest contact:* ${passengerName}, ${passengerCountryCode} ${passengerPhone}
 ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}

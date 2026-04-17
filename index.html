@@ -4,34 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
     
-    <!-- STATIC FALLBACKS (Helmet will override on hydrated routes) -->
+    <!-- Title + meta description + OG/Twitter come only from react-helmet-async per route.
+         Do not duplicate them here: Googlebot (Live Test) executes JS and was seeing TWO
+         <meta name="description"> tags (static generic + Helmet), which can dilute snippets. -->
     <title>Vizag Taxi Hub - Outstation, Local & Airport Cabs in Visakhapatnam</title>
-    <meta name="description" content="Book reliable taxis in Vizag: outstation, local trips, airport transfers. Sedan, Ertiga, Innova Crysta. Transparent fares. Call +91 9966363662." />
-    <meta name="keywords" content="vizag taxi, visakhapatnam taxi, airport taxi vizag, outstation taxi, local taxi, cab booking vizag" />
-    <meta name="author" content="Vizag Taxi Hub" />
-    <link rel="canonical" href="https://vizagtaxihub.com/" />
-    
-    <!-- Minimal OG/Twitter fallbacks -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Vizag Taxi Hub" />
-    <meta property="og:title" content="Vizag Taxi Hub - Trusted Cabs in Visakhapatnam" />
-    <meta property="og:description" content="Outstation, local & airport taxi service in Vizag. Transparent fares." />
-    <meta property="og:url" content="https://vizagtaxihub.com/" />
-    <meta property="og:image" content="/og-image.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Vizag Taxi Hub — Trusted Cabs in Visakhapatnam" />
-    <meta name="twitter:description" content="Outstation, local & airport taxi service in Vizag. Transparent fares." />
-    <meta name="twitter:image" content="/og-image.png" />
     
     <!-- Google Search Console site verification -->
     <meta name="google-site-verification" content="fWB4H7qCW6v0Wb5JZypd3yVjgDk1kjkuc8CgvJX506g" />
     
-    <!-- Additional SEO -->
-    <meta name="robots" content="index, follow" />
-    <meta name="language" content="English" />
-    <meta name="revisit-after" content="7 days" />
+    <!-- robots / language / revisit-after: set per-route in Helmet where needed -->
     
 <!-- Favicon for Google Search Results -->
 <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -72,7 +53,8 @@
   </head>
 
   <body>
-    <!-- Static links for crawlers (Googlebot) - ensures key pages have inlinks before JS loads -->
+    <!-- Static links for crawlers (inlinks before JS). data-nosnippet: avoid menu-style text in SERP snippets. -->
+    <div data-nosnippet="true">
     <nav aria-label="Key services" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
       <a href="/tempo-traveller-rental-vizag">Tempo Traveller Rental Vizag</a>
       <a href="/12-seater-tempo-traveller-vizag">12 Seater Tempo Traveller</a>
@@ -89,7 +71,17 @@
       <a href="/vizag-to-araku-bus">Vizag to Araku Bus</a>
       <a href="/group-tours">Group Tours Vizag</a>
       <a href="/group-tours/search">Group Tour Search</a>
+      <a href="/tours/arasavalli-srikurmam-tour">Arasavalli Srikurmam Tour</a>
+      <a href="/hire-driver">Hire Driver Vizag</a>
+      <a href="/corporate-tempo-traveller-vizag">Corporate Tempo Traveller</a>
+      <a href="/vehicle/sedan">Sedan Taxi</a>
+      <a href="/vehicle/ertiga">Ertiga Taxi</a>
+      <a href="/vehicle/innova-crysta">Innova Crysta</a>
+      <a href="/vehicle/toyota-glanza">Toyota Glanza</a>
+      <a href="/vehicle/amaze">Honda Amaze</a>
+      <a href="/vehicle/tempo-traveller">Tempo Traveller Fleet</a>
     </nav>
+    </div>
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-ML4MNPX"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>

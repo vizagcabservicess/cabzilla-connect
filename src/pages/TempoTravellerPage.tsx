@@ -204,6 +204,10 @@ const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
         <title>{title} | Vizag Taxi Hub</title>
         <meta name="description" content={description} />
         <meta name="keywords" content={keywords} />
+        <link rel="canonical" href={url} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={url} />
+        <meta property="twitter:url" content={url} />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>

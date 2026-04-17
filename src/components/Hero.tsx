@@ -1525,8 +1525,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           companyEmail: guestDetails.companyEmail,
         } : undefined,
         hourlyPackage: tripType === 'local' ? hourlyPackage : null,
-        // Prevent tour bookings through Hero component - should redirect to tour pages
-        tourId: tripType === 'tour' ? 'INVALID_TOUR_FROM_HERO' : undefined
       };
 
       const response = await bookingAPI.createBooking(bookingData);
@@ -1858,7 +1856,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               {!showGuestDetailsForm ? (
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
-                    <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8">
+                    <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8 lg:space-y-0">
                       {/* Urbania promo — mobile/tablet; desktop strip sits beside tabs in TabTripSelector */}
                       <div
                         className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2.5 shadow-sm sm:px-4 sm:py-3 lg:hidden"

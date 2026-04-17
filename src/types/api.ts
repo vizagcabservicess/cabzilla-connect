@@ -22,6 +22,8 @@ export interface BookingRequest {
   tripMode?: string;
   vehicleType: string;
   cabType?: string;
+  /** Seating capacity of the selected vehicle (tour / fleet). */
+  vehicleCapacity?: number;
   passengerName: string;
   passengerPhone: string;
   passengerCountryCode?: string;
@@ -138,6 +140,8 @@ export interface Booking {
   tripMode?: string;
   vehicle_type: string;
   cabType?: string;
+  vehicleCapacity?: number;
+  vehicle_capacity?: number;
   fare: number;
   totalAmount?: number;
   status: BookingStatus;

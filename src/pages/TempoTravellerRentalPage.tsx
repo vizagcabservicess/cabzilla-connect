@@ -68,6 +68,10 @@ const TempoTravellerRentalPage = () => {
         <title>Tempo Traveller Rental in Vizag | 17 Seater AC Mini Bus Hire | Best Rates</title>
         <meta name="description" content="Book tempo traveller rental in Vizag at ₹35/km. 17 seater AC tempo traveller with professional driver. Perfect for group travel. Call +91 9966363662" />
         <meta name="keywords" content="tempo traveller rental vizag, 17 seater tempo traveller visakhapatnam, mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag, AC tempo traveller vizag, outstation tempo traveller vizag, family group travel vizag, wedding tempo traveller vizag, pilgrimage tempo traveller vizag, airport tempo traveller vizag, araku valley tempo traveller, borra caves tempo traveller, lambasingi tempo traveller, tempo traveller booking vizag, tempo traveller rates vizag" />
+        <link rel="canonical" href="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>

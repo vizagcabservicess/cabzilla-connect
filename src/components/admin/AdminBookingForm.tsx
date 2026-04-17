@@ -14,6 +14,7 @@ import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { cabTypes } from '@/lib/cabData';
 import { bookingAPI } from '@/services/api';
+import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { BookingRequest } from '@/types/api';
 import { useFare } from '@/hooks/useFare';
 import { formatPrice } from '@/lib/cabData';
@@ -379,6 +380,28 @@ export function AdminBookingForm() {
       const basePrice = calculatePrice();
       const priceAfterDiscount = calculatePriceAfterDiscount();
       const remainingAmount = calculateRemainingAmount();
+
+      let tourSnapshot: Pick<
+        BookingRequest,
+        'tourName' | 'tourDuration' | 'tourDays' | 'tourItinerary' | 'tourInclusions' | 'tourExclusions'
+      > = {};
+      if (tripType === 'tour' && selectedTourId) {
+        const detail = await tourDetailAPI.getTourDetail(selectedTourId);
+        tourSnapshot = {
+          tourName: detail?.tourName || selectedTourName || '',
+          tourDuration: detail?.duration || detail?.timeDuration || '',
+          tourDays: detail?.days,
+          tourItinerary:
+            detail?.itinerary?.map((d) => ({
+              day: d.day,
+              title: d.title,
+              description: d.description,
+              activities: Array.isArray(d.activities) ? d.activities : [],
+            })) || [],
+          tourInclusions: detail?.inclusions?.length ? detail.inclusions : [],
+          tourExclusions: detail?.exclusions?.length ? detail.exclusions : [],
+        };
+      }
       
       // Calculate discount amount (excluding partial payment)
       let discountAmount = 0;
@@ -395,6 +418,7 @@ export function AdminBookingForm() {
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         vehicleType: selectedCab?.name || '',
         cabType: selectedCab?.name || '',
+        vehicleCapacity: selectedCab?.capacity,
         distance: distance,
         tripType: tripType,
         tripMode: tripMode,
@@ -413,6 +437,7 @@ export function AdminBookingForm() {
         partialPaymentAmount: partialPaymentReceived ? partialPaymentAmount : 0,
         createdBy: 'admin',
         tourId: tripType === 'tour' && selectedTourId ? selectedTourId : undefined,
+        ...tourSnapshot,
       };
       
       // Debug logging for tour bookings

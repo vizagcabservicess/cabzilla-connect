@@ -60,6 +60,10 @@ const SeventeenSeaterTempoTravellerPage = () => {
         <title>17 Seater Tempo Traveller in Vizag | AC Mini Bus Rental | Group Travel</title>
         <meta name="description" content="Book 17 seater tempo traveller in Vizag for group travel. AC mini bus rental with professional driver. Best rates in Visakhapatnam. Call +91 9966363662" />
         <meta name="keywords" content="17 seater tempo traveller vizag, AC mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag, family group travel vizag, wedding tempo traveller vizag, pilgrimage tempo traveller vizag, airport tempo traveller vizag, tempo traveller booking vizag, tempo traveller rates vizag" />
+        <link rel="canonical" href="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
+        <meta property="twitter:url" content="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
         </script>

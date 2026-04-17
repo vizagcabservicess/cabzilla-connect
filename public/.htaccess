@@ -10,20 +10,17 @@ RewriteBase /
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
-# Force HTTPS redirect (optional - only if you want to force HTTPS)
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-
 # WhatsApp / Facebook / Telegram link previews: crawlers do not run React — serve built HTML with Urbania OG tags (see vite: index-vehicle-urbania.html)
 RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|LinkedInBot|TelegramBot|vkShare|Pinterest|Slackbot|Discordbot|Applebot) [NC]
 RewriteRule ^vehicle/urbania/?$ /index-vehicle-urbania.html [L]
 
+# Force HTTPS redirect (optional - only if you want to force HTTPS)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php|index-vehicle-urbania\.html)$
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php|index-vehicle-urbania\.html)/
-# SPA fleet detail: bots must get index.html + JS so the page is not misclassified as Soft 404 by thin seo-handler output
-RewriteCond %{REQUEST_URI} !^/vehicle/
-RewriteCond %{REQUEST_URI} !^/(tempo-traveller-rental-vizag|17-seater-tempo-traveller-vizag|12-seater-tempo-traveller-vizag|group-travel-tempo-traveller-vizag|corporate-tempo-traveller-vizag|wedding-tempo-traveller-vizag|pilgrimage-tempo-traveller-vizag|18-seater-tempo-traveller-vizag|mini-bus-travels-vizag|urbania-rental-vizag)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)/
+# Bots: seo-handler.php serves unique HTML for /vehicle/*, tempo URLs, etc. (see seo-handler.php thin-page block)
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 
 # SEO Handler - Only when explicitly requested with ?seo=1
@@ -31,18 +28,18 @@ RewriteCond %{QUERY_STRING} seo=1
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
+# OPTIONS: empty 200 only outside /api/ — /api/* must reach PHP (JSON + CORS) or preflight gets empty body
 RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteCond %{REQUEST_URI} !^/api/
 RewriteRule .* - [R=200,L]
 
 # Set secure CORS headers for all responses - SECURITY: Restrict to trusted domains only
 <IfModule mod_headers.c>
-    # SECURITY: Only allow trusted domains + localhost for development (Expo web, mobile app dev)
+    # SECURITY: Only allow trusted domains
     SetEnvIf Origin "^https://vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
     SetEnvIf Origin "^https://www\.vizagtaxihub\.com$" ALLOWED_ORIGIN=$0
-    SetEnvIf Origin "^http://localhost(:\d+)?$" ALLOWED_ORIGIN=$0
-    SetEnvIf Origin "^http://127\.0\.0\.1(:\d+)?$" ALLOWED_ORIGIN=$0
     Header always set Access-Control-Allow-Origin "%{ALLOWED_ORIGIN}e" env=ALLOWED_ORIGIN
-    Header always set Access-Control-Allow-Origin "https://vizagtaxihub.com" env=!ALLOWED_ORIGIN
+    Header always set Access-Control-Allow-Origin "https://www.vizagtaxihub.com" env=!ALLOWED_ORIGIN
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, X-Database-First"
     Header always set Access-Control-Max-Age "86400"
@@ -57,12 +54,12 @@ RewriteRule .* - [R=200,L]
         Header always set Expires "0"
     </FilesMatch>
     
-    # Long-term caching for hashed assets (Vite: name-hash.ext, hash is alphanumeric)
+   # Long-term caching for hashed assets (Vite: name-hash.ext, hash is alphanumeric)
     <FilesMatch ".*-[a-zA-Z0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
         Header always set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
     
-    # No cache for non-hashed JS/CSS only
+   # No cache for non-hashed JS/CSS only
     <FilesMatch "^(?!.*-[a-zA-Z0-9]{8,}\.(js|css)$).*\.(js|css)$">
         Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
         Header always set Pragma "no-cache"
@@ -87,7 +84,7 @@ RewriteRule .* - [R=200,L]
     # Ensure proper PHP handling
     SetHandler application/x-httpd-php
     # For API responses
-    Header always set Content-Type "application/json" env=!no_content_type
+    #Header always set Content-Type "application/json" env=!no_content_type
     # No caching
     Header set Cache-Control "no-cache, no-store, must-revalidate"
 </FilesMatch>
@@ -164,6 +161,8 @@ RewriteRule ^api/download-invoice/?$ /api/download-invoice.php [L,NC,QSA]
     Header always set Content-Disposition attachment
 </FilesMatch>
 
+
+
 # CRITICAL SECTION: ADMIN BOOKING ENDPOINTS - MUST BE FIRST!
 # Explicit booking endpoint mappings - these MUST be at the top and have high priority
 RewriteRule ^api/admin/booking/?$ /api/admin/booking.php [L,NC,QSA]
@@ -173,7 +172,10 @@ RewriteRule ^api/admin/bookings/([0-9]+)/?$ /api/admin/booking.php?id=$1 [L,NC,Q
 RewriteRule ^api/admin/test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
 
 # CRITICAL: Email verification endpoint - MUST BE HIGH PRIORITY (before other API routes)
+# Handle with and without trailing slash, with and without query parameters
 RewriteRule ^api/auth/verify-email/?$ /api/auth/verify-email.php [L,NC,QSA]
+RewriteRule ^api/auth/test-verify-email/?$ /api/auth/test-verify-email.php [L,NC,QSA]
+
 
 # HIGHEST PRIORITY: Ensure proper access to get-drivers.php
 RewriteRule ^api/admin/get-drivers\.php$ /api/admin/get-drivers.php [L,NC,QSA]
@@ -186,6 +188,7 @@ RewriteRule ^api/create-booking/?$ /api/book.php [L,NC,QSA]
 
 # Add direct access to the test endpoint
 RewriteRule ^test-booking-api/?$ /api/admin/test-booking-api.php [L,NC,QSA]
+
 
 # User bookings endpoints
 RewriteRule ^api/user/bookings/?$ /api/user/bookings.php [L,NC,QSA]
@@ -208,6 +211,7 @@ RewriteRule ^api/group-tour/verify-payment/?$ /api/group-tour/verify-payment.php
 RewriteRule ^api/group-tour/booking-details/?$ /api/group-tour/booking-details.php [L,NC,QSA]
 RewriteRule ^api/group-tour/webhook/?$ /api/group-tour/webhook.php [L,NC,QSA]
 
+
 # Other admin API endpoints
 RewriteRule ^api/admin/drivers/?$ /api/admin/drivers.php [L,NC,QSA]
 RewriteRule ^api/admin/driver/?$ /api/admin/driver.php [L,NC,QSA]
@@ -217,11 +221,23 @@ RewriteRule ^api/admin/(.*)\.php$ /api/admin/$1.php [L,NC,QSA]
 
 # Regular API routes
 RewriteRule ^api/user/bookings(.*)$ /api/user/bookings.php [L,NC,QSA]
+RewriteRule ^api/driver/me/?$ /api/driver/me.php [L,NC,QSA]
+RewriteRule ^api/driver/trips/?$ /api/driver/trips.php [L,NC,QSA]
+RewriteRule ^api/driver/trip-status/?$ /api/driver/trip-status.php [L,NC,QSA]
+RewriteRule ^api/driver/odometer-readings/?$ /api/driver/odometer-readings.php [L,NC,QSA]
+RewriteRule ^api/driver/location-updates/?$ /api/driver/location-updates.php [L,NC,QSA]
+RewriteRule ^api/driver/fuel-entry/?$ /api/driver/fuel-entry.php [L,NC,QSA]
+RewriteRule ^api/driver/upload-fuel-odometer/?$ /api/driver/upload-fuel-odometer.php [L,NC,QSA]
+RewriteRule ^api/driver/fuel-odometer-history/?$ /api/driver/fuel-odometer-history.php [L,NC,QSA]
+RewriteRule ^api/driver/vehicles/?$ /api/driver/vehicles.php [L,NC,QSA]
+RewriteRule ^api/ocr-extract/?$ /api/ocr-extract.php [L,NC,QSA]
+RewriteRule ^api/bill-text/?$ /api/bill-text.php [L,NC,QSA]
+RewriteRule ^api/receipt-ocr/?$ /api/receipt-ocr.php [L,NC,QSA]
+RewriteRule ^api/health/?$ /api/health.php [L,NC,QSA]
+RewriteRule ^api/gcp-check/?$ /api/gcp-check.php [L,NC,QSA]
 RewriteRule ^api/login/?$ /api/login.php [L,NC,QSA]
 RewriteRule ^api/signup/?$ /api/signup.php [L,NC,QSA]
 RewriteRule ^api/register/?$ /api/signup.php [L,NC,QSA]
-# Email verification endpoint - HIGH PRIORITY
-RewriteRule ^api/auth/verify-email/?$ /api/auth/verify-email.php [L,NC,QSA]
 RewriteRule ^api/(.*)\.php$ /api/$1.php [L,NC,QSA]
 
 # Invoice and receipt endpoints
@@ -240,18 +256,18 @@ RewriteRule ^admin/?$ /index.html [L]
 RewriteRule ^admin/(.*)$ /index.html [L]
 RewriteRule ^booking/(.*)$ /index.html [L]
 RewriteRule ^receipt/(.*)$ /index.html [L]
+# Group Tour - Tempo Traveller seat sharing
+RewriteRule ^group-tours/?$ /index.html [L]
+RewriteRule ^group-tours/(.*)$ /index.html [L]
 
 # URL Redirects for Old URLs - Handle 404 errors from Google search results
 # Old vehicle pages (now redirected to fleet)
 RewriteRule ^sedan$ /fleet [R=301,L]
 RewriteRule ^suv$ /fleet [R=301,L]
 RewriteRule ^tempotraveller$ /fleet [R=301,L]
-# FIXED: These were redirecting to /fleet instead of the vehicle page
-# RewriteRule ^tempo-traveller$ /fleet [R=301,L]
-# RewriteRule ^tempo_traveller$ /fleet [R=301,L]
-
-# OLD CAB URLs - Now handled by React components
-# These specific tempo traveller pages now have their own React components
+RewriteRule ^cabs/12-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/17-seater-tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
+RewriteRule ^cabs/tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 
 # Old service pages
 RewriteRule ^rentals$ /local-taxi [R=301,L]
@@ -406,7 +422,7 @@ RewriteRule ^vizag-to-bhubaneswar$ /outstation-taxi/visakhapatnam-to-bhubaneswar
 RewriteRule ^vizag-to-kolkata$ /outstation-taxi/visakhapatnam-to-kolkata [R=301,L]
 RewriteRule ^vizag-to-raipur$ /outstation-taxi/visakhapatnam-to-raipur [R=301,L]
 
-# Old tour-specific routes - Redirect to tour name URLs
+# Old tour-specific routes
 RewriteRule ^araku-tour$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^araku-valley$ /tours/araku-valley-tour [R=301,L]
 RewriteRule ^lambasingi-tour$ /tours/lambasingi-tour [R=301,L]
@@ -422,29 +438,26 @@ RewriteRule ^tours/vizag_north_city_tour$ /tours/vizag-north-city-tour [R=301,L]
 RewriteRule ^tours/vizag_south_city_tour$ /tours/vizag-south-city-tour [R=301,L]
 RewriteRule ^tours/araku_vizag_3D_2N$ /tours/araku-vizag-3d-2n [R=301,L]
 
-# Old vehicle-specific routes - Redirect to vehicle name URLs
+# Old vehicle-specific routes
 RewriteRule ^swift-dzire$ /vehicle/swift-dzire [R=301,L]
 RewriteRule ^ertiga$ /vehicle/ertiga [R=301,L]
 RewriteRule ^innova$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^innova-crysta$ /vehicle/innova-crysta [R=301,L]
 RewriteRule ^toyota-glanza$ /vehicle/toyota-glanza [R=301,L]
-# tempo-traveller now handled by React router
+RewriteRule ^tempo-traveller$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^honda-amaze$ /vehicle/amaze [R=301,L]
 RewriteRule ^amaze$ /vehicle/amaze [R=301,L]
 
 # Redirect old vehicle_id URLs to new vehicle name URLs
-RewriteRule ^vehicle/sedan$ /vehicle/sedan [R=301,L]
-RewriteRule ^vehicle/ertiga$ /vehicle/ertiga [R=301,L]
-RewriteRule ^vehicle/toyota$ /vehicle/toyota-glanza [R=301,L]
-RewriteRule ^vehicle/innova-crysta$ /vehicle/innova-crysta [R=301,L]
-RewriteRule ^vehicle/tempo_traveller$ /vehicle/tempo-traveller [R=301,L]
-RewriteRule ^vehicle/amaze$ /vehicle/amaze [R=301,L]
-RewriteRule ^vehicle/mpv$ /vehicle/innova-hycross [R=301,L]
-RewriteRule ^vehicle/bus$ /vehicle/urbania [R=301,L]
 
-# TEMPO TRAVELLER PAGES - Now handled by React components
-# All tempo traveller pages now have proper React components with content
-# No server-side redirects needed - React router handles all routing
+
+RewriteRule ^vehicle/toyota$ /vehicle/toyota-glanza [R=301,L]
+RewriteRule ^vehicle/tempo_traveller$ /vehicle/tempo-traveller [R=301,L]
+
+RewriteRule ^vehicle/mpv$ /vehicle/innova-hycross [R=301,L]
+
+
+# Tempo marketing URLs fall through to SPA index.html below (humans). Bots use seo-handler.php (rule at top).
 
 # LOCATION-SPECIFIC TEMPO TRAVELLER ROUTES - Redirect to main tempo traveller page
 RewriteRule ^tempo-traveller-madhurawada$ /vehicle/tempo-traveller [R=301,L]
@@ -454,12 +467,16 @@ RewriteRule ^tempo-traveller-mvp-colony$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^tempo-traveller-seethammadhara$ /vehicle/tempo-traveller [R=301,L]
 RewriteRule ^tempo-traveller-rushikonda$ /vehicle/tempo-traveller [R=301,L]
 
+
 # Handle trailing slashes
 RewriteRule ^(.+)/$ /$1 [R=301,L]
 
+# Missing Vite hashed assets must not return SPA HTML (stale /assets/*.js URLs)
+RewriteCond %{REQUEST_URI} ^/assets/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ - [R=404,L]
+
 # CRITICAL: Don't apply rewriting to actual files or directories
-# BUT: Allow API routes to be processed even if file doesn't exist (they'll be handled by PHP)
-RewriteCond %{REQUEST_URI} !^/api/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
@@ -511,6 +528,8 @@ AddType application/pdf .pdf
 <FilesMatch "\.(pdf)$">
     php_flag output_buffering Off
 </FilesMatch>
+
+
 
 # Handle PHP errors
 ErrorDocument 500 "PDF Generation Error. Please check the error logs."

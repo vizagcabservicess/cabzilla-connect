@@ -356,7 +356,11 @@ export function UpcomingTripsList() {
       }
       let text: string;
       if (kind === 'confirmation') {
-        text = generateBookingConfirmationMessage(full);
+        const { enrichTourBookingFromCatalog } = await import(
+          '@/utils/enrichTourBookingForConfirmation'
+        );
+        const enriched = await enrichTourBookingFromCatalog(full);
+        text = generateBookingConfirmationMessage(enriched);
       } else if (kind === 'driver') {
         text = generateDriverAssignmentMessage(full);
       } else {

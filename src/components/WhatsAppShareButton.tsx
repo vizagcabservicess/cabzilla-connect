@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { FaWhatsapp } from "react-icons/fa";
 import { Booking } from '@/types/api';
 import { formatPhoneNumber, generateBookingConfirmationMessage } from '@/services/whatsappService';
+import { enrichTourBookingFromCatalog } from '@/utils/enrichTourBookingForConfirmation';
 
 interface WhatsAppShareButtonProps {
   booking: Booking;
@@ -18,19 +19,20 @@ export function WhatsAppShareButton({
   fullWidth = false,
   children,
 }: WhatsAppShareButtonProps) {
-  const handleShare = () => {
+  const handleShare = async () => {
     const phone = booking.passengerPhone || booking.guest_phone;
-    const message = generateBookingConfirmationMessage(booking);
-    
     if (!phone) {
       console.error('No phone number available for sharing');
       return;
     }
-    
+
+    const enriched = await enrichTourBookingFromCatalog(booking);
+    const message = generateBookingConfirmationMessage(enriched);
+
     const formattedPhone = formatPhoneNumber(phone);
     const encodedMessage = encodeURIComponent(message);
     const url = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-    
+
     window.open(url, '_blank');
   };
 

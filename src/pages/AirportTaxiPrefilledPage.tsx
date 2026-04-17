@@ -11,25 +11,40 @@ function unslugify(slug: string) {
     .join(' ');
 }
 
+const AIRPORT_SEO_TITLE = 'Cabs in Visakhapatnam Airport | Vizag Airport Taxi';
+const AIRPORT_SEO_DESCRIPTION =
+  'Book Cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662';
+const AIRPORT_SEO_KEYWORDS =
+  'cabs in visakhapatnam airport, airport taxi visakhapatnam, vizag airport cab, airport transfer service, visakhapatnam airport pickup, airport drop vizag';
+
 export function AirportTaxiPrefilledPage() {
   const { from, to } = useParams<{ from: string; to: string }>();
 
   const pickupLocation = from ? unslugify(from) : undefined;
   const dropLocation = to ? unslugify(to) : undefined;
 
+  const pageTitle =
+    pickupLocation && dropLocation
+      ? `${pickupLocation} to ${dropLocation} | Vizag Airport Taxi`
+      : AIRPORT_SEO_TITLE;
+  const pageDescription =
+    pickupLocation && dropLocation
+      ? `Book cabs from ${pickupLocation} to ${dropLocation} at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662`
+      : AIRPORT_SEO_DESCRIPTION;
+
   return (
     <>
       <Helmet>
-        <title>{pickupLocation && dropLocation ? `${pickupLocation} to ${dropLocation} Airport Taxi | Vizag Taxi Hub` : 'Airport Taxi Service | Vizag Taxi Hub'}</title>
-        <meta name="description" content={pickupLocation && dropLocation ? `Book airport taxi from ${pickupLocation} to ${dropLocation}. Reliable airport transfer service with fixed pricing and professional drivers.` : 'Book airport taxi service in Visakhapatnam. Reliable airport transfer service with fixed pricing and professional drivers.'} />
-        <meta name="keywords" content="airport taxi visakhapatnam, vizag airport cab, airport transfer service, visakhapatnam airport pickup, airport drop vizag, taxi to airport" />
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta name="keywords" content={AIRPORT_SEO_KEYWORDS} />
         <meta name="author" content="Vizag Taxi Hub" />
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content={`https://vizagtaxihub.com/airport-taxi/${from}/${to}`} />
-        <meta property="og:title" content={pickupLocation && dropLocation ? `${pickupLocation} to ${dropLocation} Airport Taxi | Vizag Taxi Hub` : 'Airport Taxi Service | Vizag Taxi Hub'} />
-        <meta property="og:description" content={pickupLocation && dropLocation ? `Book airport taxi from ${pickupLocation} to ${dropLocation}. Reliable airport transfer service with fixed pricing and professional drivers.` : 'Book airport taxi service in Visakhapatnam. Reliable airport transfer service with fixed pricing and professional drivers.'} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
         <meta property="og:image" content="/og-image.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
@@ -37,8 +52,8 @@ export function AirportTaxiPrefilledPage() {
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content={`https://vizagtaxihub.com/airport-taxi/${from}/${to}`} />
-        <meta property="twitter:title" content={pickupLocation && dropLocation ? `${pickupLocation} to ${dropLocation} Airport Taxi | Vizag Taxi Hub` : 'Airport Taxi Service | Vizag Taxi Hub'} />
-        <meta property="twitter:description" content={pickupLocation && dropLocation ? `Book airport taxi from ${pickupLocation} to ${dropLocation}. Reliable airport transfer service with fixed pricing and professional drivers.` : 'Book airport taxi service in Visakhapatnam. Reliable airport transfer service with fixed pricing and professional drivers.'} />
+        <meta property="twitter:title" content={pageTitle} />
+        <meta property="twitter:description" content={pageDescription} />
         <meta property="twitter:image" content="/og-image.png" />
         
         {/* Additional SEO */}

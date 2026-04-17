@@ -35,6 +35,8 @@ define('WHATSAPP_PHONE_NUMBER_ID_PAYMENT', $_ENV['WHATSAPP_PHONE_NUMBER_ID_PAYME
 define('WHATSAPP_PHONE_NUMBER_ID', $_ENV['WHATSAPP_PHONE_NUMBER_ID'] ?? null);
 define('WHATSAPP_ACCESS_TOKEN', $_ENV['WHATSAPP_ACCESS_TOKEN'] ?? null);
 define('WHATSAPP_ADMIN_PHONE', $_ENV['WHATSAPP_ADMIN_PHONE'] ?? '919966363662');
+/** Optional override for Urbania seat-share popup alerts (E.164 digits). Falls back to WHATSAPP_ADMIN_PHONE when empty. */
+define('URBANIA_SEAT_SHARE_ALERT_WHATSAPP', $_ENV['URBANIA_SEAT_SHARE_ALERT_WHATSAPP'] ?? null);
 /** Comma-separated E.164 digits (e.g. 9198...,9180...). Falls back to WHATSAPP_ADMIN_PHONE when empty. */
 define('WHATSAPP_ADMIN_PHONES', $_ENV['WHATSAPP_ADMIN_PHONES'] ?? '');
 define('WHATSAPP_TEMPLATE_NAME', $_ENV['WHATSAPP_TEMPLATE_NAME'] ?? 'abandoned_payment_alert');

@@ -4,8 +4,13 @@ import { useEffect, useCallback, useState, useRef, useLayoutEffect } from "react
 import { useToast } from "@/hooks/use-toast";
 import { reloadCabTypes } from "@/lib/cabData";
 import { TabBar } from "@/components/TabBar";
+import {
+  AirportTabIcon,
+  LocalTabIcon,
+  OutstationTabIcon,
+  TourTabIcon,
+} from "@/components/icons/CabTabIcons";
 import { fareService } from "@/services/fareService";
-import { Car, Clock, Plane, Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface TabTripSelectorProps {
@@ -197,10 +202,10 @@ export function TabTripSelector({
   };
   
   const tabIcons: Record<string, React.ReactNode> = {
-    outstation: <Car className="w-4 h-4" />,
-    local: <Clock className="w-4 h-4" />,
-    airport: <Plane className="w-4 h-4" />,
-    tour: <Building2 className="w-4 h-4" />,
+    outstation: <OutstationTabIcon className="h-4 w-4" />,
+    local: <LocalTabIcon className="h-4 w-4" />,
+    airport: <AirportTabIcon className="h-4 w-4" />,
+    tour: <TourTabIcon className="h-4 w-4" />,
   };
 
   const allTabs = [
@@ -247,7 +252,7 @@ export function TabTripSelector({
                       style={{ zIndex: isActive ? 2 : 1 }}
                     >
                       <span
-                        className={`flex shrink-0 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${isActive ? "text-blue-600" : "text-gray-400"}`}
+                        className={`flex shrink-0 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px] ${isActive ? "text-blue-600" : "text-gray-600"}`}
                       >
                         {tabIcons[tab.id]}
                       </span>
@@ -279,7 +284,7 @@ export function TabTripSelector({
                     <button
                       key={tab.id}
                       ref={(el) => { if (el) tabRefs.current[idx] = el; }}
-                      className={`flex items-center gap-2 py-2 px-3 border-b-2 transition-colors duration-200 text-sm font-medium focus:outline-none -mb-[1px] ${isActive ? "border-blue-600 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                      className={`flex items-center gap-2 py-2 px-3 border-b-2 transition-colors duration-200 text-sm font-medium focus:outline-none -mb-[1px] ${isActive ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-gray-800"}`}
                       onClick={() => handleTabChange(tab.id)}
                     >
                       {tabIcons[tab.id]}

@@ -103,8 +103,8 @@ export function AirportTaxiPage() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "Vizag Taxi Hub - Airport Taxi Service",
-    "description": "Professional airport transfer service in Visakhapatnam. Pickup and drop to Visakhapatnam Airport with flight tracking and fixed pricing.",
+    "name": "Vizag Taxi Hub — Cabs in Visakhapatnam Airport",
+    "description": "Book cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup and drop with flight tracking and professional drivers.",
     "url": "https://vizagtaxihub.com/airport-taxi",
     "address": {
       "@type": "PostalAddress",
@@ -151,16 +151,16 @@ export function AirportTaxiPage() {
       <Navbar />
       <main className="flex-1 pt-16 md:pt-20">
       <Helmet>
-        <title>Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking</title>
-        <meta name="description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability. Best rates for airport transfer service." />
-        <meta name="keywords" content="airport taxi visakhapatnam, vizag airport cab, airport transfer service, visakhapatnam airport pickup, airport drop vizag, taxi to airport" />
+        <title>Cabs in Visakhapatnam Airport | Vizag Airport Taxi</title>
+        <meta name="description" content="Book Cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662" />
+        <meta name="keywords" content="cabs in visakhapatnam airport, airport taxi visakhapatnam, vizag airport cab, airport transfer service, visakhapatnam airport pickup, airport drop vizag" />
         <meta name="author" content="Vizag Taxi Hub" />
         
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/airport-taxi" />
-        <meta property="og:title" content="Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking" />
-        <meta property="og:description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability." />
+        <meta property="og:title" content="Cabs in Visakhapatnam Airport | Vizag Airport Taxi" />
+        <meta property="og:description" content="Book Cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662" />
         <meta property="og:image" content="/og-image.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
@@ -168,8 +168,8 @@ export function AirportTaxiPage() {
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://vizagtaxihub.com/airport-taxi" />
-        <meta property="twitter:title" content="Airport Taxi Visakhapatnam | Airport Transfer Service | Vizag Airport Cab Booking" />
-        <meta property="twitter:description" content="Book airport taxi in Visakhapatnam for pickup and drop to Vizag Airport. Fixed pricing, flight tracking, and 24/7 availability." />
+        <meta property="twitter:title" content="Cabs in Visakhapatnam Airport | Vizag Airport Taxi" />
+        <meta property="twitter:description" content="Book Cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662" />
         <meta property="twitter:image" content="/og-image.png" />
         
         {/* Additional SEO */}
@@ -194,9 +194,9 @@ export function AirportTaxiPage() {
               Trusted Airport Transfer Service
             </div>
             <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-6 leading-tight">
-              Fly With
+              Cabs in Visakhapatnam Airport
               <br />
-              <span className="text-sky-500">Confidence</span>
+              <span className="text-sky-500">Fly With Confidence</span>
             </h1>
             <p className="text-base md:text-xl text-gray-600 mb-0 max-w-3xl mx-auto">
               Hassle-free airport transfers with flight tracking, meet & greet service, and guaranteed on-time pickup and drop to Vizag Airport.
