@@ -29,6 +29,9 @@ const VehicleTabs = lazy(() => import('@/components/vehicle/VehicleTabs'));
 const RateCard = lazy(() => import('@/components/vehicle/RateCard'));
 const SimilarVehicles = lazy(() => import('@/components/vehicle/SimilarVehicles'));
 const VehicleTours = lazy(() => import('@/components/vehicle/VehicleTours'));
+const HeroBookingEmbed = lazy(() =>
+  import('@/components/Hero').then((m) => ({ default: m.Hero }))
+);
 
 // Note: DeferredComponents would be used for non-critical components
 
@@ -95,6 +98,15 @@ const VehicleDetailPage = () => {
     return [];
   });
   const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
+  /** Urbania Hero: hide page content below the widget once user clicks Search (step 2). */
+  const [urbaniaEmbedHeroStep, setUrbaniaEmbedHeroStep] = useState(1);
+  /** While user edits trip from step 2 (pencil / pickup / date), show gallery + rates again. */
+  const [urbaniaRevealPageGrid, setUrbaniaRevealPageGrid] = useState(false);
+
+  useEffect(() => {
+    setUrbaniaEmbedHeroStep(1);
+    setUrbaniaRevealPageGrid(false);
+  }, [vehicleSlug]);
 
   // Memoize expensive calculations - must be before early returns
   const seoData = useMemo(() => {
@@ -494,7 +506,35 @@ const VehicleDetailPage = () => {
             </BreadcrumbList>
           </Breadcrumb>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {vehicleSlug === 'urbania' && (
+            <div className="w-full vehicle-urbania-search-slot mb-4">
+              <Suspense fallback={
+                <div className="loading-skeleton min-h-[160px] w-full rounded-lg">
+                  <div className="min-h-[160px] w-full bg-[#f3f4f6] rounded-lg" />
+                </div>
+              }>
+                <HeroBookingEmbed
+                  hideBackground
+                  embedCompactLayout
+                  embedStretchToShell
+                  lockedVehicleSlug="urbania"
+                  summaryBackHref="/vehicle/urbania"
+                  onStepChange={setUrbaniaEmbedHeroStep}
+                  onTripEditOpenChange={setUrbaniaRevealPageGrid}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          <div
+            className={`grid grid-cols-1 lg:grid-cols-3 ${vehicleSlug === 'urbania' ? 'gap-5 lg:gap-6' : 'gap-8'} ${
+              vehicleSlug === 'urbania' &&
+              urbaniaEmbedHeroStep >= 2 &&
+              !urbaniaRevealPageGrid
+                ? 'hidden'
+                : ''
+            }`}
+          >
             <div className="lg:col-span-2 space-y-8">
               {/* Single image area - no duplication */}
               <div className="image-gallery-container" style={{ aspectRatio: '16/10' }}>
@@ -553,11 +593,12 @@ const VehicleDetailPage = () => {
                 </div>
               </div>
 
+              {vehicleSlug !== 'urbania' && (
               <div className="rate-card-container min-h-[420px]">
                 <Suspense fallback={
                   <div className="loading-skeleton" style={{ height: '420px', width: '100%' }}>
-                    <div style={{ 
-                      height: '100%', 
+                    <div style={{
+                      height: '100%',
                       background: '#f3f4f6',
                       borderRadius: '8px'
                     }}></div>
@@ -566,6 +607,7 @@ const VehicleDetailPage = () => {
                   <RateCard vehicleId={vehicle.id} vehicleName={vehicle.name} />
                 </Suspense>
               </div>
+              )}
 
               <div className="vehicle-tabs-container min-h-[280px]">
                 <Suspense fallback={<div className="loading-skeleton" style={{ height: '280px', width: '100%' }}></div>}>

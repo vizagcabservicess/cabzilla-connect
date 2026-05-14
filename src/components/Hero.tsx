@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
@@ -10,7 +10,7 @@ import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
-import { ChevronRight, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -50,11 +50,25 @@ import { buildVehicleFareLinesForGuestTrack } from '@/lib/guestSearchFareLines';
 import { getAirportTransferFare } from '@/lib/airportFareForBooking';
 import { WhatsAppCountryPhoneRow, defaultWhatsappCountry } from '@/components/WhatsAppCountryPhoneRow';
 import type { CountryCode } from '@/lib/countryCodes';
+import { generateVehicleUrl } from '@/utils/vehicleUrlUtils';
+import type { TourListItem } from '@/types/tour';
+import { tourDetailAPI } from '@/services/api/tourDetailAPI';
+import { getTourUrl } from '@/utils/tourUrlUtils';
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
   { value: "10hrs-100km", label: "10 Hours / 100 KM" }
 ];
+
+/** Match dropdown width to trigger so long tour names wrap instead of widening toward Trip/Search; Radix scrollbar restore is in index.css. */
+const heroTourPackageSelectContentProps = {
+  side: 'bottom' as const,
+  align: 'start' as const,
+  sideOffset: 4,
+  collisionPadding: 16,
+  className:
+    'w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] min-w-0 [&_[role=option]]:items-start [&_[role=option]]:whitespace-normal [&_[role=option]]:break-words [&_[role=option]]:py-2 [&_[role=option]]:leading-snug',
+};
 
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
@@ -63,7 +77,8 @@ const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, onEditStart, onStepChange }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; onEditStart?: () => void; onStepChange?: (step: number) => void }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string }) {
+  const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -243,7 +258,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setReturnDate(newDate || null);
   }, [returnDate]);
   // Don't auto-select first vehicle - user must explicitly select to see booking summary
-  const [selectedCab, setSelectedCabState] = useState<CabType | null>(savedData.selectedCab || null);
+  const [selectedCab, setSelectedCabState] = useState<CabType | null>(() => {
+    const cab = savedData.selectedCab || null;
+    if (normalizedLockSlug && cab && generateVehicleUrl(cab) !== normalizedLockSlug) return null;
+    return cab;
+  });
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
@@ -288,6 +307,64 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const [showGuestPhoneModal, setShowGuestPhoneModal] = useState(false);
   const [guestPhoneDigits, setGuestPhoneDigits] = useState('');
   const [guestPhoneCountry, setGuestPhoneCountry] = useState<CountryCode>(() => defaultWhatsappCountry());
+  /** Tour tab: packages from public tours API (same list as /tours page). */
+  const [heroTourList, setHeroTourList] = useState<TourListItem[]>([]);
+  const [heroTourListLoading, setHeroTourListLoading] = useState(false);
+
+  const sortedHeroTours = useMemo(
+    () => [...heroTourList].sort((a, b) => a.tourName.localeCompare(b.tourName)),
+    [heroTourList]
+  );
+
+  const applyHeroTourPackageSelection = useCallback((tour: TourListItem | null) => {
+    if (!tour) {
+      setDropLocation(null);
+      try {
+        sessionStorage.removeItem('dropLocation');
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const loc: Location = {
+      id: `tour_${tour.tourId}`,
+      name: tour.tourName,
+      city: 'Visakhapatnam',
+      state: 'Andhra Pradesh',
+      lat: 17.7215,
+      lng: 83.2248,
+      type: 'other',
+      popularityScore: 50,
+      address: tour.tourName,
+      isInVizag: true,
+    };
+    setDropLocation(loc);
+    try {
+      sessionStorage.setItem('dropLocation', JSON.stringify(loc));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tripType !== 'tour') return;
+    let cancelled = false;
+    setHeroTourListLoading(true);
+    tourDetailAPI
+      .getTours()
+      .then((list) => {
+        if (!cancelled) setHeroTourList(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (!cancelled) setHeroTourList([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHeroTourListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tripType]);
 
   // Helper function to get minimum allowed date (current date + 1 hour for today, or current date for future dates)
   const getMinimumAllowedDate = () => {
@@ -303,6 +380,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setIsSlidingSearch(true);
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
+    onTripEditOpenChange?.(true);
   };
 
   const handleEditPickupDate = () => {
@@ -311,6 +389,52 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setIsSlidingSearch(true);
     setShowGuestDetailsForm(false);
     if (onEditStart) onEditStart();
+    onTripEditOpenChange?.(true);
+  };
+
+  /** When `navigate(summaryBackHref)` stays on the same URL (Urbania embed), React keeps Hero mounted — explicitly reset booking flow back to step 1. */
+  const handleBookingSummaryBack = () => {
+    sessionStorage.removeItem('routePrefillData');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupDate');
+    sessionStorage.removeItem('returnDate');
+    sessionStorage.removeItem('selectedCab');
+
+    const target = summaryBackHref ?? '/';
+    const normalized = (pathname: string) =>
+      pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+    const stripQueryHash = (p: string) => (p.split(/[?#]/)[0] ?? p);
+    const backPath = normalized(stripQueryHash(summaryBackHref != null ? target : ''));
+    const here = normalized(location.pathname);
+
+    const samePageEmbedded =
+      summaryBackHref != null && summaryBackHref.length > 0 && backPath === here;
+
+    if (samePageEmbedded) {
+      setPickupLocation(null);
+      setDropLocation(null);
+      setReturnDate(null);
+      setPickupDate(getMinimumAllowedDate());
+      setSelectedCabState(null);
+      setDistance(0);
+      setDuration(0);
+      routedKmForRouteRef.current = { key: '', km: 0, durationMinutes: 0 };
+      setFinalTotal(0);
+      setCurrentStep(1);
+      setShowGuestDetailsForm(false);
+      setIsSlidingSearch(false);
+      setShowMobileEditForm(false);
+      setValidationError(null);
+      if (onStepChange) onStepChange(1);
+      onTripEditOpenChange?.(false);
+      requestAnimationFrame(() => {
+        document.getElementById('booking-widget')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return;
+    }
+
+    navigate(target);
   };
 
   // Load dynamic vehicles with inactive dates
@@ -351,6 +475,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     loadVehicles();
   }, []);
 
+  const filteredAvailableForDates = useMemo(
+    () =>
+      filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate ?? undefined),
+    [dynamicVehicles, pickupDate, returnDate]
+  );
+
+  const heroBookingCabList = useMemo(() => {
+    if (!normalizedLockSlug) return filteredAvailableForDates;
+    return filteredAvailableForDates.filter(
+      (c) => generateVehicleUrl(c) === normalizedLockSlug
+    );
+  }, [filteredAvailableForDates, normalizedLockSlug]);
 
   // Listen for route prefill events
   useEffect(() => {
@@ -595,6 +731,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     let valid = true;
     if (!pickupLocation || !pickupLocation.name) valid = false;
     if ((tripType === 'outstation' || tripType === 'airport') && !dropLocation) valid = false;
+    if (
+      tripType === 'tour' &&
+      (!dropLocation || !dropLocation.name || !String(dropLocation.id || '').startsWith('tour_'))
+    )
+      valid = false;
     if (!pickupDate) valid = false;
     if (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) valid = false;
     setIsFormValid(valid);
@@ -998,7 +1139,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   /** POST / track-search + session snapshot (guest phone must already be in session if skipping modal). */
   async function runGuestSearchTracking(guestPhone: string) {
-    const availableCabs = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
+    const availableCabs = heroBookingCabList;
     const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
     const syncKm =
       pickupLocation && dropForKm ? estimateRoadKmSync(pickupLocation, dropForKm) : 0;
@@ -1133,6 +1274,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   // Helper function to proceed with the search after distance checks
   async function proceedWithSearch() {
+    if (tripType !== 'tour') {
     // Check if drop location is Araku Valley - redirect to tour page
     if (dropLocation && dropLocation.name) {
       const dropLocationName = dropLocation.name.toLowerCase().trim();
@@ -1312,6 +1454,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       }
     }
 
+    }
+
     const cachedGuestPhone =
       typeof sessionStorage !== 'undefined'
         ? sessionStorage.getItem(SESSION_GUEST_TRACK_PHONE_KEY)?.trim() || ''
@@ -1344,14 +1488,22 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     });
     setIsLoading(true);
     
-    // If trip type is tour, navigate to the tour page with location and date params
+    // If trip type is tour, go to chosen package detail or browse all tours
     if (tripType === 'tour') {
-      navigate('/tours', { 
-        state: { 
-          pickupLocation, 
-          pickupDate 
-        } 
-      });
+      if (dropLocation?.id?.startsWith('tour_')) {
+        const tourKey = dropLocation.id.replace(/^tour_/, '');
+        navigate(getTourUrl({ tourId: tourKey, tourName: dropLocation.name }), {
+          state: { pickupLocation, pickupDate },
+        });
+      } else {
+        navigate('/tours', {
+          state: {
+            pickupLocation,
+            pickupDate,
+          },
+        });
+      }
+      setTimeout(() => setIsLoading(false), 300);
       return;
     }
     
@@ -1359,7 +1511,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     // Immediately switch to step 2 (hide banner), then finish any animations
     setCurrentStep(2);
     if (onStepChange) onStepChange(2);
-    
+    onTripEditOpenChange?.(false);
+
     // If we're in sliding search mode, hide the search widget after updating
     if (isSlidingSearch) {
       setTimeout(() => {
@@ -1490,6 +1643,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   let totalPrice = calculatePrice();
+  /** Use the higher of BookingSummary callback vs Hero estimate so pay UI never stays hidden if one path lags (common on mobile/embed). */
+  const payReadyTotal = Math.max(finalTotal, totalPrice);
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
   const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
 
@@ -1665,23 +1820,36 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   // Update selectedCab when available vehicles change due to date filtering
   useEffect(() => {
-    if (pickupDate && vehiclesLoaded) {
-      const availableVehicles = filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined);
-      
-      if (selectedCab) {
-        const isSelectedCabAvailable = availableVehicles.some(vehicle => vehicle.id === selectedCab.id);
-        
-        if (!isSelectedCabAvailable && availableVehicles.length > 0) {
-          // If selected cab is not available, select the first available one
-          setSelectedCab(availableVehicles[0]);
-        } else if (availableVehicles.length === 0) {
-          // If no vehicles are available, clear selection
-          setSelectedCab(null);
-        }
+    if (!pickupDate || !vehiclesLoaded) return;
+
+    const availableVehicles = heroBookingCabList;
+
+    if (normalizedLockSlug) {
+      if (availableVehicles.length === 0) {
+        setSelectedCabState(null);
+      } else if (!selectedCab || !availableVehicles.some((v) => v.id === selectedCab.id)) {
+        setSelectedCabState(availableVehicles[0]);
       }
-      // Don't auto-select when none selected - user must explicitly choose a vehicle
+      return;
     }
-  }, [pickupDate, returnDate, selectedCab, dynamicVehicles, vehiclesLoaded]);
+
+    if (selectedCab) {
+      const isSelectedCabAvailable = availableVehicles.some(vehicle => vehicle.id === selectedCab.id);
+
+      if (!isSelectedCabAvailable && availableVehicles.length > 0) {
+        setSelectedCab(availableVehicles[0]);
+      } else if (availableVehicles.length === 0) {
+        setSelectedCab(null);
+      }
+    }
+  }, [
+    pickupDate,
+    returnDate,
+    selectedCab,
+    vehiclesLoaded,
+    normalizedLockSlug,
+    heroBookingCabList,
+  ]);
 
   useEffect(() => {
     if (
@@ -1723,7 +1891,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowMobileEditForm(false)}
+              onClick={() => {
+                setShowMobileEditForm(false);
+                onTripEditOpenChange?.(false);
+              }}
               className="text-gray-600"
             >
               <X className="w-5 h-5 mr-2" />
@@ -1744,6 +1915,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 visibleTabs={visibleTabs}
                 showTripModeToggle
                 tripModeToggleMobileOnly
+                hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
               />
             </div>
 
@@ -1773,6 +1945,46 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   />
                 )}
 
+                {tripType === 'tour' && (
+                  <div className="w-full">
+                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                      Tour package
+                    </label>
+                    <Select
+                      value={
+                        dropLocation?.id?.startsWith('tour_')
+                          ? dropLocation.id.slice('tour_'.length)
+                          : undefined
+                      }
+                      onValueChange={(tourId) => {
+                        if (tourId === '__all_tours__') {
+                          navigate('/tours', { state: { pickupLocation, pickupDate } });
+                          return;
+                        }
+                        const t = sortedHeroTours.find((x) => x.tourId === tourId);
+                        applyHeroTourPackageSelection(t ?? null);
+                      }}
+                      disabled={heroTourListLoading}
+                    >
+                      <SelectTrigger className="flex h-11 min-h-[3rem] w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-[1rem] font-semibold text-gray-900 shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 data-[placeholder]:font-normal data-[placeholder]:text-gray-500">
+                        <SelectValue
+                          placeholder={
+                            heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent {...heroTourPackageSelectContentProps}>
+                        {sortedHeroTours.map((t) => (
+                          <SelectItem key={t.tourId} value={t.tourId}>
+                            {t.tourName}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <DateTimePicker
                   variant="app"
                   label="Trip start"
@@ -1798,6 +2010,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               onClick={() => {
                 setShowMobileEditForm(false);
                 setCurrentStep(2);
+                onTripEditOpenChange?.(false);
               }}
               className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-extrabold uppercase tracking-wide text-white shadow-md hover:bg-blue-700"
               disabled={!isFormValid}
@@ -1847,9 +2060,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             : (isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)
               ? 'hero-edit-form-spacing'
               : ''
-        } w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
-        <div className="w-full max-lg:px-2 sm:container sm:mx-auto sm:px-4">
-          <div className="w-full sm:max-w-6xl sm:mx-auto">
+        } ${embedStretchToShell ? 'hero-embed-pay-footer-compact' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
+        <div
+          className={
+            embedStretchToShell
+              ? 'w-full'
+              : 'w-full max-lg:px-2 sm:container sm:mx-auto sm:px-4'
+          }
+        >
+          <div className={embedStretchToShell ? 'w-full' : 'w-full sm:max-w-6xl sm:mx-auto'}>
             <div className={`max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2`}>
               
               
@@ -1857,7 +2076,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
                     <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8 lg:space-y-0">
-                      {/* Urbania promo — mobile/tablet; desktop strip sits beside tabs in TabTripSelector */}
+                      {/* Urbania promo — mobile/tablet (desktop strip in TabTripSelector); hidden when already on Urbania booking */}
+                      {normalizedLockSlug !== 'urbania' && (
                       <div
                         className="flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2.5 shadow-sm sm:px-4 sm:py-3 lg:hidden"
                         role="region"
@@ -1878,7 +2098,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           Book →
                         </Link>
                       </div>
-                      {/* Trip Type Selector (tabs + trip mode on mobile) */}
+                      )}
                       <div className="w-full max-lg:mb-0 lg:mb-4">
                         <TabTripSelector
                           selectedTab={ensureCustomerTripType(tripType)}
@@ -1890,6 +2110,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           onAirportDirectionChange={tripType === 'airport' ? handleAirportDirectionChange : undefined}
                           showTripModeToggle
                           tripModeToggleMobileOnly
+                          hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
                         />
                       </div>
 
@@ -1924,24 +2145,71 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             />
                           )}
 
+                          {tripType === 'tour' && (
+                            <div className="w-full">
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                                Tour package
+                              </label>
+                              <Select
+                                value={
+                                  dropLocation?.id?.startsWith('tour_')
+                                    ? dropLocation.id.slice('tour_'.length)
+                                    : undefined
+                                }
+                                onValueChange={(tourId) => {
+                                  if (tourId === '__all_tours__') {
+                                    navigate('/tours', { state: { pickupLocation, pickupDate } });
+                                    return;
+                                  }
+                                  const t = sortedHeroTours.find((x) => x.tourId === tourId);
+                                  applyHeroTourPackageSelection(t ?? null);
+                                }}
+                                disabled={heroTourListLoading}
+                              >
+                                <SelectTrigger className="flex h-11 min-h-[3rem] w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-[1rem] font-semibold text-gray-900 shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 data-[placeholder]:font-normal data-[placeholder]:text-gray-500">
+                                  <SelectValue
+                                    placeholder={
+                                      heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent {...heroTourPackageSelectContentProps}>
+                                  {sortedHeroTours.map((t) => (
+                                    <SelectItem key={t.tourId} value={t.tourId}>
+                                      {t.tourName}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
                           {tripType === 'local' && (
                             <div className="w-full">
                               <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
                                 Package
                               </label>
                               <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
-                                <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                  <SelectTrigger className="h-11 w-full border-0 bg-transparent text-[1rem] font-semibold text-gray-900 shadow-none focus:ring-0">
-                                    <SelectValue placeholder="Choose hourly package" />
-                                  </SelectTrigger>
-                                  <SelectContent>
+                                {/* Native select avoids Radix Select's RemoveScroll (scrollbar compensation + overflow-x on root causes horizontal jump). */}
+                                <div className="relative w-full">
+                                  <select
+                                    value={hourlyPackage}
+                                    onChange={(e) => setHourlyPackage(e.target.value)}
+                                    aria-label="Hourly package"
+                                    className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
+                                  >
                                     {hourlyPackageOptions.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
+                                      <option key={option.value} value={option.value}>
                                         {option.label}
-                                      </SelectItem>
+                                      </option>
                                     ))}
-                                  </SelectContent>
-                                </Select>
+                                  </select>
+                                  <ChevronDown
+                                    className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
+                                    aria-hidden
+                                  />
+                                </div>
                               </div>
                             </div>
                           )}
@@ -2032,6 +2300,45 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               />
                             </div>
                           )}
+                          {tripType === 'tour' && (
+                            <div className="flex-1 min-w-0 min-w-[10rem] flex flex-col gap-1">
+                              <label className="text-xs text-gray-600 font-medium pointer-events-none">
+                                Tour package
+                              </label>
+                              <Select
+                                value={
+                                  dropLocation?.id?.startsWith('tour_')
+                                    ? dropLocation.id.slice('tour_'.length)
+                                    : undefined
+                                }
+                                onValueChange={(tourId) => {
+                                  if (tourId === '__all_tours__') {
+                                    navigate('/tours', { state: { pickupLocation, pickupDate } });
+                                    return;
+                                  }
+                                  const t = sortedHeroTours.find((x) => x.tourId === tourId);
+                                  applyHeroTourPackageSelection(t ?? null);
+                                }}
+                                disabled={heroTourListLoading}
+                              >
+                                <SelectTrigger className="flex h-[2.75rem] w-full items-center rounded-md border border-gray-200 bg-white text-sm font-bold shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:ring-offset-0 data-[placeholder]:font-semibold data-[placeholder]:text-gray-500 disabled:opacity-60">
+                                  <SelectValue
+                                    placeholder={
+                                      heroTourListLoading ? 'Loading packages…' : 'Select package'
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent {...heroTourPackageSelectContentProps}>
+                                  {sortedHeroTours.map((t) => (
+                                    <SelectItem key={t.tourId} value={t.tourId}>
+                                      {t.tourName}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                           {(tripType === 'outstation' || tripType === 'airport' || tripType === 'tour') && (
                             <div className="flex flex-col gap-1 flex-shrink-0">
                               <span className="text-xs text-gray-600 font-medium pointer-events-none">Trip</span>
@@ -2071,16 +2378,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           {tripType === 'local' && (
                             <div className="flex-1 min-w-0 flex flex-col gap-1">
                               <label className="text-xs text-gray-600 font-medium">Package</label>
-                              <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                <SelectTrigger className="h-[2.75rem] border border-gray-200 rounded-md bg-white text-sm font-bold">
-                                  <SelectValue placeholder="Package" />
-                                </SelectTrigger>
-                                <SelectContent>
+                              <div className="relative w-full">
+                                <select
+                                  value={hourlyPackage}
+                                  onChange={(e) => setHourlyPackage(e.target.value)}
+                                  aria-label="Hourly package"
+                                  className="h-[2.75rem] w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-3 pr-9 text-sm font-bold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:ring-offset-0"
+                                >
                                   {hourlyPackageOptions.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
                                   ))}
-                                </SelectContent>
-                              </Select>
+                                </select>
+                                <ChevronDown
+                                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
+                                  aria-hidden
+                                />
+                              </div>
                             </div>
                           )}
                           <div className="flex-1 min-w-0 min-w-[11rem]">
@@ -2163,16 +2478,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => {
-                                sessionStorage.removeItem('routePrefillData');
-                                sessionStorage.removeItem('pickupLocation');
-                                sessionStorage.removeItem('dropLocation');
-                                sessionStorage.removeItem('pickupDate');
-                                sessionStorage.removeItem('returnDate');
-                                navigate('/');
-                              }}
+                              type="button"
+                              onClick={handleBookingSummaryBack}
                               className="text-gray-700 hover:text-blue-600 focus:outline-none"
-                              title="Back to home"
+                              title={summaryBackHref ? 'Back' : 'Back to home'}
                             >
                               <ArrowLeft className="w-5 h-5" />
                             </button>
@@ -2204,6 +2513,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 setShowGuestDetailsForm(false);
                               }
                               if (onEditStart) onEditStart();
+                              onTripEditOpenChange?.(true);
                             }}
                             className="text-blue-600 hover:text-blue-700 focus:outline-none p-2 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
                             title="Edit booking details"
@@ -2220,14 +2530,30 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                           
                         </div>
                       </div>
-                      {/* Step 2 Main Grid — extra bottom padding on mobile when vehicle chosen (sticky pay bar) */}
+                      {/* Step 2: Urbania shell — explicit 50%/50% minus horizontal gap (flex-1 can skew tracks) */}
                       <div
-                        className={`grid grid-cols-1 lg:[grid-template-columns:62%_38%] gap-8 animate-fade-in text-xs lg:text-[12px] ${
-                          selectedCab ? 'pb-52 lg:pb-0' : ''
+                        className={`${
+                          embedStretchToShell
+                            ? 'flex w-full animate-fade-in flex-col gap-y-4 text-xs lg:flex-row lg:flex-nowrap lg:items-start lg:gap-x-6 lg:gap-y-0 xl:gap-x-8 lg:text-[12px]'
+                            : `grid animate-fade-in grid-cols-1 gap-8 text-xs lg:text-[12px] lg:[grid-template-columns:62%_38%]`
+                        } ${
+                          selectedCab
+                            ? embedStretchToShell
+                              ? 'max-lg:pb-2 lg:pb-0'
+                              : 'pb-52 lg:pb-0'
+                            : ''
                         }`}
                       >
-                        <div className="lg:col-span-1 space-y-6">
-                          <div className="bg-white rounded-xl shadow-card p-2">
+                        <div
+                          className={
+                            embedStretchToShell
+                              ? 'max-lg:order-2 min-w-0 w-full space-y-6 lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
+                              : 'lg:col-span-1 space-y-6'
+                          }
+                        >
+                          <div
+                            className={`bg-white rounded-xl shadow-card p-2${embedStretchToShell ? ' w-full max-w-full' : ''}`}
+                          >
                             <div className="flex items-center justify-between mb-2">
                               {/* <h3 className="text-xs lg:text-[16px] font-semibold text-left">Trip Details</h3> */}
                               {/* <Button 
@@ -2283,7 +2609,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           </div>
                         )}
                             {!isMobile && (tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
-                              <div className="mt-3 app-card">
+                              <div className={`mt-3 app-card${embedStretchToShell ? ' w-full max-w-full' : ''}`}>
                                 <GoogleMapComponent
                                   key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
                                   pickupLocation={pickupLocation}
@@ -2294,14 +2620,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               </div>
                             )}
                           </div>
-                          <div className="text-xs lg:text-[12px]">
+                          <div className={`text-xs lg:text-[12px]${embedStretchToShell ? ' w-full max-w-full' : ''}`}>
                             {!vehiclesLoaded ? (
                               <div className="flex items-center justify-center p-4">
                                 <div className="text-gray-500">Loading vehicles...</div>
                               </div>
                             ) : (
                               <CabOptions 
-                                cabTypes={filterAvailableVehicles(dynamicVehicles, pickupDate, returnDate || undefined)} 
+                                cabTypes={heroBookingCabList} 
                                 selectedCab={selectedCab} 
                                 onSelectCab={setSelectedCab} 
                                 distance={distance} 
@@ -2315,8 +2641,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             )}
                           </div>
                         </div>
-                        <div className="lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md mobile-nav-fix">
-                          <div ref={bookingSummaryRef} id="booking-summary" className="text-xs lg:text-[12px]">
+                        <div
+                          className={
+                            embedStretchToShell
+                              ? 'max-lg:order-1 min-w-0 w-full text-xs lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none lg:text-[14px] xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
+                              : 'lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md mobile-nav-fix'
+                          }
+                        >
+                          <div
+                            ref={bookingSummaryRef}
+                            id="booking-summary"
+                            className={`text-xs lg:text-[12px] ${embedStretchToShell ? 'w-full max-w-none' : ''}`}
+                          >
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 
                               dropLocation={dropLocation} 
@@ -2334,10 +2670,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               hideInclusionsExclusions={true}
                             />
                           </div>
-                          {selectedCab && finalTotal > 0 && (
+                          {selectedCab && payReadyTotal > 0 && (
                             <div className="mt-3 hidden lg:block">
                               <BookingPaymentFooter
-                                finalTotal={finalTotal}
+                                finalTotal={payReadyTotal}
                                 mode={bookingPaymentMode}
                                 onModeChange={persistBookingPaymentMode}
                                 onBookNow={handleBookNow}
@@ -2451,7 +2787,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       
                       <GuestDetailsForm 
                         onSubmit={handleGuestDetailsSubmit}
-                        totalPrice={finalTotal}
+                        totalPrice={payReadyTotal}
                         onBack={handleBackToSelection}
                         isLoading={isLoading}
                         paymentEnabled={true}
@@ -2539,16 +2875,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         </div>
       )}
 
-      {/* Mobile: Part / Full pay + Book Now — fixed above bottom nav once a vehicle is selected */}
+      {/* Mobile: Part / Full pay + Book Now — fixed above bottom nav (z above mobile tab bar) */}
       {currentStep === 2 &&
         !showGuestDetailsForm &&
         !isSlidingSearch &&
         selectedCab &&
-        finalTotal > 0 && (
-          <div className="fixed inset-x-0 bottom-0 z-40 max-md:bottom-16 lg:hidden">
-            <div className="border-t border-gray-200 bg-white px-3 pt-3 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] mobile-safe-bottom">
+        payReadyTotal > 0 && (
+          <div className="fixed inset-x-0 bottom-0 z-[60] max-md:bottom-16 lg:hidden">
+            <div className="border-t border-gray-200 bg-white px-3 pt-2 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] mobile-safe-bottom">
               <BookingPaymentFooter
-                finalTotal={finalTotal}
+                finalTotal={payReadyTotal}
                 mode={bookingPaymentMode}
                 onModeChange={persistBookingPaymentMode}
                 onBookNow={handleBookNow}
@@ -2625,10 +2961,3 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     </div>
   );
 }
-
-<style>
-{`
-.package-select-lg-margin { margin-top: 0; }
-@media (min-width: 1024px) { .package-select-lg-margin { margin-top: -18.5px; } }
-`}
-</style>

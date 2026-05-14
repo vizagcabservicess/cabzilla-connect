@@ -30,6 +30,8 @@ interface TabTripSelectorProps {
    * (e.g. Hero already has One Way / Round Trip in the desktop field row — avoids duplicate UI).
    */
   tripModeToggleMobileOnly?: boolean;
+  /** Hide "Urbania now available!" strip on `/vehicle/urbania` etc. — redundant while already on Urbania. */
+  hideUrbaniaPromo?: boolean;
 }
 
 export function TabTripSelector({ 
@@ -43,6 +45,7 @@ export function TabTripSelector({
   onAirportDirectionChange,
   showTripModeToggle = false,
   tripModeToggleMobileOnly = false,
+  hideUrbaniaPromo = false,
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -293,6 +296,7 @@ export function TabTripSelector({
                   );
                 })}
               </div>
+              {!hideUrbaniaPromo && (
               <div
                 className="flex max-w-[min(100%,20rem)] flex-shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 shadow-sm"
                 role="region"
@@ -311,6 +315,7 @@ export function TabTripSelector({
                   Book →
                 </Link>
               </div>
+              )}
             </div>
           </div>
         </>
