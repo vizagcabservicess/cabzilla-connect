@@ -364,6 +364,11 @@ margin-bottom: 1.5rem !important;
 z-index: 9999 !important;
 }
 
+/* Urbania Hero embed: allow flex child to shrink so mobile width stays within the container */
+.vehicle-urbania-search-slot {
+  min-width: 0;
+}
+
 [data-radix-select-content] {
 z-index: 9999 !important;
 }

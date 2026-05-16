@@ -12,6 +12,8 @@ import {
 } from "@/components/icons/CabTabIcons";
 import { fareService } from "@/services/fareService";
 import { Link } from "react-router-dom";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -32,6 +34,13 @@ interface TabTripSelectorProps {
   tripModeToggleMobileOnly?: boolean;
   /** Hide "Urbania now available!" strip on `/vehicle/urbania` etc. — redundant while already on Urbania. */
   hideUrbaniaPromo?: boolean;
+  /**
+   * Urbania `/vehicle/*` embed: parent Hero already renders one outer card — drop duplicated
+   * max-lg border/shadow/padding on this wrapper so tabs + fields share a single frame.
+   */
+  suppressMobileCardChrome?: boolean;
+  /** `/vehicle/urbania`: One Way / Round Trip row matches marketing layout (label left, check / empty circle right). */
+  urbaniaMobileTripTiles?: boolean;
 }
 
 export function TabTripSelector({ 
@@ -46,6 +55,8 @@ export function TabTripSelector({
   showTripModeToggle = false,
   tripModeToggleMobileOnly = false,
   hideUrbaniaPromo = false,
+  suppressMobileCardChrome = false,
+  urbaniaMobileTripTiles = false,
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
@@ -229,9 +240,20 @@ export function TabTripSelector({
     return null;
   }
 
+  const mobileChromeOff = suppressMobileCardChrome;
+
   return (
     <div
-      className="space-y-2 sm:space-y-4 max-lg:space-y-1.5 max-lg:rounded-2xl max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:px-2.5 max-lg:py-2.5 max-lg:shadow-md max-lg:shadow-gray-900/5"
+      className={
+        mobileChromeOff
+          ? cn(
+              'space-y-2 sm:space-y-4 max-lg:rounded-none max-lg:bg-transparent max-lg:shadow-none',
+              urbaniaMobileTripTiles
+                ? 'max-lg:space-y-2 max-lg:border-0 max-lg:p-0 max-lg:px-0'
+                : 'max-lg:space-y-0.5 max-lg:border-x-0 max-lg:border-t-0 max-lg:border-b max-lg:border-gray-100 max-lg:pb-1 max-lg:pt-1 max-lg:px-2'
+            )
+          : 'space-y-2 sm:space-y-4 max-lg:space-y-1 max-lg:rounded-2xl max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:px-2.5 max-lg:pb-2 max-lg:pt-2 max-lg:shadow-md max-lg:shadow-gray-900/5'
+      }
       id="tab-trip-selector"
     >
       {/* Tab bar - Hidden when only one tab is visible */}
@@ -240,7 +262,7 @@ export function TabTripSelector({
           {/* Mobile/Tablet: pill tabs */}
           <div className="mb-0 sm:mb-4 lg:hidden">
             <div className="relative flex w-full justify-center">
-              <div className="flex w-full gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+              <div className={cn('flex w-full gap-0.5 border border-gray-200 bg-white', urbaniaMobileTripTiles ? 'rounded-none p-0.5 shadow-none' : 'rounded-lg p-1 shadow-sm')}>
                 {tabs.map((tab, idx) => {
                   const isActive = selectedTab === tab.id;
                   return (
@@ -250,7 +272,7 @@ export function TabTripSelector({
                         if (el) tabRefs.current[idx] = el;
                       }}
                       type="button"
-                      className={`flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-0.5 py-1.5 text-center transition-colors duration-200 focus:outline-none ${isActive ? "z-10 border border-blue-600 bg-white text-blue-600 shadow-sm" : "border border-transparent bg-transparent text-gray-500"}`}
+                      className={`flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1.5 text-center transition-colors duration-200 focus:outline-none ${urbaniaMobileTripTiles ? 'rounded-sm' : 'rounded-md'} ${isActive ? "z-10 border border-blue-600 bg-white text-blue-600 shadow-sm" : "border border-transparent bg-transparent text-gray-500"}`}
                       onClick={() => handleTabChange(tab.id)}
                       style={{ zIndex: isActive ? 2 : 1 }}
                     >
@@ -324,7 +346,10 @@ export function TabTripSelector({
       {showTripMode && (
         <>
           <motion.div
-            className="mt-1 flex w-full max-w-full items-stretch gap-2 sm:mt-2 lg:hidden"
+            className={cn(
+              'mt-0 flex w-full max-w-full items-stretch sm:mt-2 lg:hidden',
+              mobileChromeOff ? (urbaniaMobileTripTiles ? 'gap-2' : 'gap-1') : 'gap-2'
+            )}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -336,19 +361,62 @@ export function TabTripSelector({
               ] as const
             ).map((option) => {
               const active = tripMode === option.value;
+              if (urbaniaMobileTripTiles) {
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onTripModeChange(option.value)}
+                    className={cn(
+                      'flex min-h-[2.55rem] flex-1 basis-0 flex-row items-center justify-between gap-1.5 rounded-md border-2 bg-white px-2 py-1.5 text-left transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:min-h-[2.65rem] sm:px-2.5 sm:py-2',
+                      active ? 'border-blue-600 ring-1 ring-blue-600/15' : 'border-gray-200 hover:border-gray-300'
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <span
+                        className={cn(
+                          'block text-[13px] font-bold leading-tight sm:text-sm',
+                          active ? 'text-blue-600' : 'text-gray-800'
+                        )}
+                      >
+                        {option.label}
+                      </span>
+                      <span
+                        className={cn(
+                          'mt-0.5 block max-w-[12rem] text-[9px] font-medium leading-snug sm:text-[10px]',
+                          active ? 'text-blue-500' : 'text-gray-500'
+                        )}
+                      >
+                        {option.sub}
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        active
+                          ? 'border-blue-600 bg-blue-600 text-white'
+                          : 'border-gray-300 bg-white'
+                      )}
+                      aria-hidden
+                    >
+                      {active ? <Check className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5" /> : null}
+                    </span>
+                  </button>
+                );
+              }
               return (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => onTripModeChange(option.value)}
-                  className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors duration-200 focus:outline-none ${
+                  className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors duration-200 focus:outline-none ${
                     active ? "border-blue-600 ring-1 ring-blue-600/20" : "border-gray-200 hover:border-gray-300"
                   }`}
                 >
                   <span className={`text-sm font-bold leading-tight ${active ? "text-blue-600" : "text-gray-700"}`}>
                     {option.label}
                   </span>
-                  <span className={`mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug ${active ? "text-blue-500" : "text-gray-500"}`}>
+                  <span className={`mt-px max-w-[11rem] text-[10px] font-medium leading-snug ${active ? "text-blue-500" : "text-gray-500"}`}>
                     {option.sub}
                   </span>
                 </button>
@@ -397,7 +465,7 @@ export function TabTripSelector({
       )}
       {showAirportDirection && (
         <motion.div
-          className="mt-1 flex w-full items-stretch gap-2 sm:mt-2 max-lg:mt-2 lg:hidden"
+          className={`mt-0 flex w-full items-stretch sm:mt-2 lg:hidden ${mobileChromeOff ? "gap-0.5" : "gap-1"}`}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -405,28 +473,28 @@ export function TabTripSelector({
           <button
             type="button"
             onClick={() => onAirportDirectionChange("from-airport")}
-            className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors focus:outline-none ${
+            className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors focus:outline-none ${
               airportDirectionLabel === "From Airport"
                 ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"
                 : "border-gray-200 text-gray-700 hover:border-gray-300"
             }`}
           >
             <span className="text-sm font-bold leading-tight">From Airport</span>
-            <span className="mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
+            <span className="mt-px max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
               Pickup at terminal
             </span>
           </button>
           <button
             type="button"
             onClick={() => onAirportDirectionChange("to-airport")}
-            className={`flex min-h-[3.5rem] flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 py-2.5 text-center shadow-sm transition-colors focus:outline-none ${
+            className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors focus:outline-none ${
               airportDirectionLabel === "To Airport"
                 ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"
                 : "border-gray-200 text-gray-700 hover:border-gray-300"
             }`}
           >
             <span className="text-sm font-bold leading-tight">To Airport</span>
-            <span className="mt-0.5 max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
+            <span className="mt-px max-w-[11rem] text-[10px] font-medium leading-snug text-gray-500">
               Drop at terminal
             </span>
           </button>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate, useLoaderData } from 'react-router-dom';
-import { ArrowLeft, Car, Users, Fuel, Loader2, Phone } from 'lucide-react';
+import { ArrowLeft, Car, Fuel, Loader2, Phone, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
@@ -20,7 +20,15 @@ import { Helmet } from 'react-helmet-async';
 import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
-import { URBANIA_SEO_DEFAULTS } from '@/seo/urbaniaStaticMeta';
+import {
+  resolveUrbaniaIllustrationSrc,
+  URBANIA_ILLUSTRATION_CDN_URL,
+  URBANIA_ILLUSTRATION_PATH,
+  URBANIA_SEO_DEFAULTS,
+} from '@/seo/urbaniaStaticMeta';
+
+const urbaniaHeroIllustrationSrc = resolveUrbaniaIllustrationSrc();
+const urbaniaHeroIllustrationLocalSrc = `${import.meta.env.BASE_URL.replace(/\/$/, '')}${URBANIA_ILLUSTRATION_PATH}`;
 
 // Lazy load heavy components with prefetch and defer
 const ImageGallery = lazy(() => import('@/components/vehicle/ImageGallery'));
@@ -106,6 +114,21 @@ const VehicleDetailPage = () => {
   useEffect(() => {
     setUrbaniaEmbedHeroStep(1);
     setUrbaniaRevealPageGrid(false);
+  }, [vehicleSlug]);
+
+  /** Flush mobile chrome: theme `body` bg can read grey behind square card top corners */
+  useEffect(() => {
+    if (vehicleSlug !== 'urbania') return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.backgroundColor;
+    const prevBody = body.style.backgroundColor;
+    html.style.backgroundColor = '#ffffff';
+    body.style.backgroundColor = '#ffffff';
+    return () => {
+      html.style.backgroundColor = prevHtml;
+      body.style.backgroundColor = prevBody;
+    };
   }, [vehicleSlug]);
 
   // Memoize expensive calculations - must be before early returns
@@ -482,11 +505,23 @@ const VehicleDetailPage = () => {
         )}
       </Helmet>
       
-      <div className="min-h-screen bg-gray-50">
+      <div
+        className={
+          vehicleSlug === 'urbania'
+            ? 'min-h-screen bg-white'
+            : 'min-h-screen bg-gray-50'
+        }
+      >
         <Navbar />
-        <main id="main-content">
-        <div className="container mx-auto px-4 py-8 max-w-7xl  pt-20 md:pt-28 pb-16 md:pb-32">
-          <Breadcrumb className="mb-6">
+        <main id="main-content" className={vehicleSlug === 'urbania' ? 'bg-white' : undefined}>
+        <div
+          className={
+            vehicleSlug === 'urbania'
+              ? 'container mx-auto max-w-7xl px-4 pb-16 md:pb-32 max-lg:pt-[calc(5.5rem+env(safe-area-inset-top,0px))] lg:pt-28'
+              : 'container mx-auto max-w-7xl px-4 pb-16 pt-[max(6rem,calc(5rem+env(safe-area-inset-top,0px)))] md:pb-32 md:pt-28'
+          }
+        >
+          <Breadcrumb className="mb-6 hidden lg:block">
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
@@ -507,23 +542,76 @@ const VehicleDetailPage = () => {
           </Breadcrumb>
 
           {vehicleSlug === 'urbania' && (
-            <div className="w-full vehicle-urbania-search-slot mb-4">
-              <Suspense fallback={
-                <div className="loading-skeleton min-h-[160px] w-full rounded-lg">
-                  <div className="min-h-[160px] w-full bg-[#f3f4f6] rounded-lg" />
+            <section
+              className="vehicle-urbania-hero mb-3 sm:mb-4 lg:mb-6 max-lg:-mx-4 lg:mx-0"
+              data-vth-urbania-hero="bg-illustration"
+            >
+              <div className="flex flex-col overflow-visible max-lg:rounded-t-none max-lg:rounded-b-2xl max-lg:border max-lg:border-gray-200/90 max-lg:border-t-0 max-lg:bg-white max-lg:shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+                <div
+                  className="
+                    relative isolate bg-white
+                    max-lg:min-h-0 max-lg:overflow-visible
+                    max-lg:rounded-none max-lg:border-0 max-lg:shadow-none
+                    lg:hidden
+                  "
+                >
+                  <div className="flex flex-col gap-0">
+                  <div className="relative z-[3] shrink-0 bg-white px-4 pb-0 pt-2 sm:px-5 sm:pt-2">
+                    <div className="max-w-xl">
+                      <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
+                        {URBANIA_SEO_DEFAULTS.pageHeadline}
+                      </h1>
+                      <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
+                        {URBANIA_SEO_DEFAULTS.pageSubtitle}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative z-0 w-full bg-white px-4 pb-2 pt-2 sm:px-5" aria-hidden>
+                    <img
+                      src={urbaniaHeroIllustrationSrc}
+                      alt=""
+                      width={680}
+                      height={560}
+                      decoding="async"
+                      fetchPriority="high"
+                      className="mx-auto block h-auto w-full max-h-[min(13rem,44vw)] object-contain object-center sm:max-h-[min(15rem,40vw)]"
+                      onError={(e) => {
+                        const el = e.currentTarget;
+                        if (el.dataset.fallbackApplied === '1') return;
+                        el.dataset.fallbackApplied = '1';
+                        const primaryWasRemote = urbaniaHeroIllustrationSrc.includes('vizagtaxihub.com');
+                        el.src = primaryWasRemote ? urbaniaHeroIllustrationLocalSrc : URBANIA_ILLUSTRATION_CDN_URL;
+                      }}
+                    />
+                  </div>
+                  </div>
                 </div>
-              }>
-                <HeroBookingEmbed
-                  hideBackground
-                  embedCompactLayout
-                  embedStretchToShell
-                  lockedVehicleSlug="urbania"
-                  summaryBackHref="/vehicle/urbania"
-                  onStepChange={setUrbaniaEmbedHeroStep}
-                  onTripEditOpenChange={setUrbaniaRevealPageGrid}
-                />
-              </Suspense>
-            </div>
+
+                <div className="vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:border-0 lg:bg-transparent lg:p-0">
+                  <h1 className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageHeadline}</h1>
+                  <p className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageSubtitle}</p>
+                  <Suspense
+                    fallback={
+                      <div className="loading-skeleton min-h-[160px] w-full rounded-lg">
+                        <div className="min-h-[160px] w-full rounded-lg bg-[#f3f4f6]" />
+                      </div>
+                    }
+                  >
+                    <HeroBookingEmbed
+                      hideBackground
+                      embedCompactLayout
+                      embedStretchToShell
+                      lockedVehicleSlug="urbania"
+                      urbaniaUnifiedMobileLayout
+                      summaryBackHref="/vehicle/urbania"
+                      onStepChange={setUrbaniaEmbedHeroStep}
+                      onTripEditOpenChange={setUrbaniaRevealPageGrid}
+                    />
+                  </Suspense>
+                </div>
+              </div>
+            </section>
           )}
 
           <div
@@ -563,6 +651,7 @@ const VehicleDetailPage = () => {
                 </Suspense>
               </div>
 
+              {vehicleSlug !== 'urbania' && (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
                   <div className="flex-1">
@@ -592,6 +681,7 @@ const VehicleDetailPage = () => {
                   </div>
                 </div>
               </div>
+              )}
 
               {vehicleSlug !== 'urbania' && (
               <div className="rate-card-container min-h-[420px]">

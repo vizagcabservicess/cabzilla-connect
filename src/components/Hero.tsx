@@ -10,7 +10,8 @@ import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
-import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car, Clock, Briefcase, Snowflake, Shield, CheckCircle2 } from 'lucide-react';
+import { TourTabIcon } from '@/components/icons/CabTabIcons';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -28,6 +29,7 @@ import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
 import { calculateDistanceMatrix, estimateRoadKmSync } from '@/lib/distanceService';
 
+import { cn } from '@/lib/utils';
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { formatDateForAPI } from '@/lib/dateUtils';
@@ -54,6 +56,36 @@ import { generateVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { TourListItem } from '@/types/tour';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import { URBANIA_FEATURE_STRIP_LABELS } from '@/seo/urbaniaStaticMeta';
+
+const URB_EMBED_STRIP_ICONS = [Users, Briefcase, Snowflake, Shield] as const;
+
+/** Mobile Urbania reference: segmented USP row with vertical dividers */
+function UrbaniaMobileFeatureBar({ className }: { className?: string }) {
+  return (
+    <div
+      role="group"
+      aria-label="Urbania van highlights"
+      className={cn(
+        'flex divide-x divide-[#cfe2f8] overflow-x-auto rounded-xl border border-[#cfe2f8] bg-[#f0f7ff] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        className
+      )}
+    >
+      {URBANIA_FEATURE_STRIP_LABELS.map((label, idx) => {
+        const Icon = URB_EMBED_STRIP_ICONS[idx] ?? Users;
+        return (
+          <div
+            key={label}
+            className="flex min-w-[6.75rem] flex-1 flex-col items-center justify-center gap-1 px-1.5 py-2.5 sm:min-w-0"
+          >
+            <Icon className="h-4 w-4 shrink-0 text-[#3b71ca]" aria-hidden />
+            <span className="text-center text-[10px] font-semibold leading-tight text-[#4f5d6a]">{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
@@ -70,6 +102,35 @@ const heroTourPackageSelectContentProps = {
     'w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] min-w-0 [&_[role=option]]:items-start [&_[role=option]]:whitespace-normal [&_[role=option]]:break-words [&_[role=option]]:py-2 [&_[role=option]]:leading-snug',
 };
 
+const heroMobileTourSelectTriggerDefault =
+  'flex h-11 min-h-[3rem] w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-[1rem] font-semibold text-gray-900 shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 data-[placeholder]:font-normal data-[placeholder]:text-gray-500';
+
+/** Urbania ticket row: Radix Select without outer border/box shadow */
+const heroUrbaniaMobileTourSelectTrigger = cn(
+  'flex h-auto min-h-[1.75rem] w-full items-center justify-between gap-2 rounded-none border-0 bg-transparent px-0 py-0 text-left shadow-none outline-none outline-offset-0',
+  'text-[15px] font-bold leading-tight text-gray-900 data-[placeholder]:font-normal data-[placeholder]:text-gray-500',
+  'hover:bg-transparent focus-visible:border-0 focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0'
+);
+
+/** Urbania stacked card: cohesive dropdown panel + comfortable option tiles */
+const heroUrbaniaMobileSelectContentProps = {
+  ...heroTourPackageSelectContentProps,
+  sideOffset: 8,
+  className: cn(
+    heroTourPackageSelectContentProps.className,
+    'overflow-hidden rounded-xl border-0 bg-white p-0',
+    'shadow-[0_12px_42px_-12px_rgba(15,23,42,0.16),0_4px_14px_-4px_rgba(15,23,42,0.08)]',
+    'ring-1 ring-gray-900/[0.06]',
+    '[&_[data-radix-select-viewport]]:p-1.5',
+    '[&_[role=option]]:mx-0 [&_[role=option]]:my-0.5 [&_[role=option]]:rounded-xl [&_[role=option]]:border-0',
+    '[&_[role=option]]:py-2.5 [&_[role=option]]:pl-10 [&_[role=option]]:pr-3',
+    '[&_[role=option]]:text-left [&_[role=option]]:text-[15px] [&_[role=option]]:font-semibold [&_[role=option]]:leading-snug',
+    '[&_[role=option]]:text-gray-900 [&_[role=option]]:outline-none [&_[role=option]]:transition-colors',
+    '[&_[role=option]]:data-[highlighted]:bg-blue-50 [&_[role=option]]:data-[highlighted]:text-blue-900',
+    '[&_[role=option]]:focus:bg-blue-50 [&_[role=option]]:focus:text-blue-900'
+  ),
+};
+
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
 /** Session: guest WhatsApp (E.164) after first successful entry — skip modal on repeat searches in this tab. */
@@ -77,7 +138,7 @@ const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean }) {
   const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -86,6 +147,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   const { isLoaded } = useGoogleMaps();
+  /** `/vehicle/urbania` embed on small viewports: one padded bordered card so tabs + form stay aligned like native app chrome. */
+  const urbaniaMobileEmbedShell =
+    Boolean(embedStretchToShell && normalizedLockSlug === 'urbania');
+  /** Parent `VehicleDetailPage` wraps hero + embed in a single gray shell below `lg`. */
+  const urbaniaUnifiedShell =
+    Boolean(urbaniaUnifiedMobileLayout && urbaniaMobileEmbedShell);
+  /** Urbania `/vehicle/*` Hero on mobile / edit overlay: in-field captions + stacked ticket divider (desktop unchanged). */
+  const heroUrbaniaMobileTicketStyle = normalizedLockSlug === 'urbania';
+  const heroMobileUrbaniaFieldVariant: 'app' | 'infield' = heroUrbaniaMobileTicketStyle ? 'infield' : 'app';
+  const heroUrbaniaTicketCellPad = heroUrbaniaMobileTicketStyle ? 'px-2 py-1.5' : '';
+  const heroUrbaniaTourLocalRowClass = heroUrbaniaMobileTicketStyle ? 'flex items-start gap-2 px-3 py-2' : undefined;
   
   const loadFromSessionStorage = () => {
     try {
@@ -1916,77 +1988,216 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 showTripModeToggle
                 tripModeToggleMobileOnly
                 hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
+                suppressMobileCardChrome={urbaniaMobileEmbedShell}
+                urbaniaMobileTripTiles={normalizedLockSlug === 'urbania'}
               />
             </div>
 
             <div key={`booking-form-${editTrigger}`} className="mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5">
-              <div className="flex flex-col gap-3">
-                <LocationInput
-                  key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                  variant="app"
-                  label="From"
-                  placeholder="Enter pickup location"
-                  value={pickupLocation ? { ...pickupLocation } : undefined}
-                  onLocationChange={handlePickupLocationChange}
-                  isPickupLocation={true}
-                  tripType={tripType}
-                />
+              <div
+                className={cn(
+                  'flex flex-col',
+                  heroUrbaniaMobileTicketStyle
+                    ? 'divide-y divide-gray-200 overflow-hidden bg-transparent'
+                    : 'gap-3'
+                )}
+              >
+                {heroUrbaniaMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
+                  <div className="flex min-h-0 items-stretch bg-white">
+                    <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
+                      <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
+                      <div className="absolute bottom-[1.25rem] left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
+                      <div className="absolute left-1/2 top-[1.85rem] bottom-[1.85rem] w-0 -translate-x-1/2 border-l-2 border-dashed border-blue-500/55" />
+                    </div>
+                    <div className="min-w-0 flex-1 divide-y divide-gray-200">
+                      <LocationInput
+                        key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                        variant={heroMobileUrbaniaFieldVariant}
+                        className={heroUrbaniaTicketCellPad}
+                        label="From"
+                        placeholder="Enter pickup location"
+                        value={pickupLocation ? { ...pickupLocation } : undefined}
+                        onLocationChange={handlePickupLocationChange}
+                        isPickupLocation={true}
+                        tripType={tripType}
+                        hideLeadingIcon
+                      />
+                      <LocationInput
+                        key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                        variant={heroMobileUrbaniaFieldVariant}
+                        className={heroUrbaniaTicketCellPad}
+                        label="To"
+                        placeholder="Enter destination location"
+                        value={dropLocation ? { ...dropLocation } : undefined}
+                        onLocationChange={handleDropLocationChange}
+                        isPickupLocation={false}
+                        tripType={tripType}
+                        hideLeadingIcon
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <LocationInput
+                      key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                      variant={heroMobileUrbaniaFieldVariant}
+                      className={heroUrbaniaTicketCellPad}
+                      label="From"
+                      placeholder="Enter pickup location"
+                      value={pickupLocation ? { ...pickupLocation } : undefined}
+                      onLocationChange={handlePickupLocationChange}
+                      isPickupLocation={true}
+                      tripType={tripType}
+                    />
 
-                {(tripType === 'outstation' || tripType === 'airport') && (
-                  <LocationInput
-                    key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                    variant="app"
-                    label="To"
-                    placeholder="Enter drop location"
-                    value={dropLocation ? { ...dropLocation } : undefined}
-                    onLocationChange={handleDropLocationChange}
-                    isPickupLocation={false}
-                    tripType={tripType}
-                  />
+                    {(tripType === 'outstation' || tripType === 'airport') && (
+                      <LocationInput
+                        key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                        variant={heroMobileUrbaniaFieldVariant}
+                        className={heroUrbaniaTicketCellPad}
+                        label="To"
+                        placeholder="Enter destination location"
+                        value={dropLocation ? { ...dropLocation } : undefined}
+                        onLocationChange={handleDropLocationChange}
+                        isPickupLocation={false}
+                        tripType={tripType}
+                      />
+                    )}
+                  </>
                 )}
 
                 {tripType === 'tour' && (
-                  <div className="w-full">
-                    <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
-                      Tour package
-                    </label>
-                    <Select
-                      value={
-                        dropLocation?.id?.startsWith('tour_')
-                          ? dropLocation.id.slice('tour_'.length)
-                          : undefined
-                      }
-                      onValueChange={(tourId) => {
-                        if (tourId === '__all_tours__') {
-                          navigate('/tours', { state: { pickupLocation, pickupDate } });
-                          return;
-                        }
-                        const t = sortedHeroTours.find((x) => x.tourId === tourId);
-                        applyHeroTourPackageSelection(t ?? null);
-                      }}
-                      disabled={heroTourListLoading}
+                  <div
+                    className={cn(
+                      'w-full',
+                      heroUrbaniaTourLocalRowClass
+                    )}
+                  >
+                    {heroUrbaniaMobileTicketStyle && (
+                      <TourTabIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+                    )}
+                    <div
+                      className={cn(
+                        heroUrbaniaMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
+                      )}
                     >
-                      <SelectTrigger className="flex h-11 min-h-[3rem] w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-[1rem] font-semibold text-gray-900 shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 data-[placeholder]:font-normal data-[placeholder]:text-gray-500">
-                        <SelectValue
-                          placeholder={
-                            heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                      {heroUrbaniaMobileTicketStyle ? (
+                        <span className="text-[11px] font-medium leading-none text-gray-500">Tour package</span>
+                      ) : (
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                          Tour package
+                        </label>
+                      )}
+                      <Select
+                        value={
+                          dropLocation?.id?.startsWith('tour_')
+                            ? dropLocation.id.slice('tour_'.length)
+                            : undefined
+                        }
+                        onValueChange={(tourId) => {
+                          if (tourId === '__all_tours__') {
+                            navigate('/tours', { state: { pickupLocation, pickupDate } });
+                            return;
                           }
-                        />
-                      </SelectTrigger>
-                      <SelectContent {...heroTourPackageSelectContentProps}>
-                        {sortedHeroTours.map((t) => (
-                          <SelectItem key={t.tourId} value={t.tourId}>
-                            {t.tourName}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
-                      </SelectContent>
-                    </Select>
+                          const t = sortedHeroTours.find((x) => x.tourId === tourId);
+                          applyHeroTourPackageSelection(t ?? null);
+                        }}
+                        disabled={heroTourListLoading}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            heroUrbaniaMobileTicketStyle
+                              ? heroUrbaniaMobileTourSelectTrigger
+                              : heroMobileTourSelectTriggerDefault
+                          )}
+                        >
+                          <SelectValue
+                            placeholder={
+                              heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent
+                          {...(heroUrbaniaMobileTicketStyle
+                            ? heroUrbaniaMobileSelectContentProps
+                            : heroTourPackageSelectContentProps)}
+                        >
+                          {sortedHeroTours.map((t) => (
+                            <SelectItem key={t.tourId} value={t.tourId}>
+                              {t.tourName}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {tripType === 'local' && (
+                  <div
+                    className={cn(
+                      'w-full',
+                      heroUrbaniaTourLocalRowClass
+                    )}
+                  >
+                    {heroUrbaniaMobileTicketStyle && (
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+                    )}
+                    <div
+                      className={cn(
+                        heroUrbaniaMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
+                      )}
+                    >
+                      {heroUrbaniaMobileTicketStyle ? (
+                        <span className="text-[11px] font-medium leading-none text-gray-500">Package</span>
+                      ) : (
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                          Package
+                        </label>
+                      )}
+                      {heroUrbaniaMobileTicketStyle ? (
+                        <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                          <SelectTrigger className={heroUrbaniaMobileTourSelectTrigger} aria-label="Hourly package">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent {...heroUrbaniaMobileSelectContentProps}>
+                            {hourlyPackageOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                      <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
+                        <div className="relative w-full">
+                          <select
+                            value={hourlyPackage}
+                            onChange={(e) => setHourlyPackage(e.target.value)}
+                            aria-label="Hourly package"
+                            className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
+                          >
+                            {hourlyPackageOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
+                            aria-hidden
+                          />
+                        </div>
+                      </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <DateTimePicker
-                  variant="app"
+                  variant={heroMobileUrbaniaFieldVariant}
+                  className={heroUrbaniaTicketCellPad}
                   label="Trip start"
                   date={pickupDate}
                   onDateChange={setPickupDate}
@@ -1995,7 +2206,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
                 {tripType === 'outstation' && tripMode === 'round-trip' && (
                   <DateTimePicker
-                    variant="app"
+                    variant={heroMobileUrbaniaFieldVariant}
+                    className={heroUrbaniaTicketCellPad}
                     label="Return trip"
                     date={returnDate}
                     onDateChange={handleReturnDateChange}
@@ -2069,13 +2281,33 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           }
         >
           <div className={embedStretchToShell ? 'w-full' : 'w-full sm:max-w-6xl sm:mx-auto'}>
-            <div className={`max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2`}>
+            <div
+              className={
+                urbaniaMobileEmbedShell
+                  ? cn(
+                      'p-3 lg:rounded-3xl lg:border lg:border-gray-100 lg:bg-white lg:shadow-2xl',
+                      urbaniaUnifiedShell
+                        ? 'max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none'
+                        : 'max-lg:overflow-hidden max-lg:rounded-[1.25rem] max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:p-0 max-lg:shadow-[0_2px_12px_-4px_rgba(15,23,42,0.07)]'
+                    )
+                  : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2'
+              }
+            >
               
               
               {!showGuestDetailsForm ? (
                 <>
                   {(currentStep === 1 || isSlidingSearch) && (
-                    <div className="max-lg:space-y-1.5 space-y-6 sm:space-y-8 lg:space-y-0">
+                    <div
+                      className={cn(
+                        'space-y-6 sm:space-y-8 lg:space-y-0',
+                        heroUrbaniaMobileTicketStyle
+                          ? urbaniaUnifiedShell
+                            ? 'max-lg:space-y-2'
+                            : 'max-lg:space-y-0.5'
+                          : 'max-lg:space-y-1.5'
+                      )}
+                    >
                       {/* Urbania promo — mobile/tablet (desktop strip in TabTripSelector); hidden when already on Urbania booking */}
                       {normalizedLockSlug !== 'urbania' && (
                       <div
@@ -2111,6 +2343,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           showTripModeToggle
                           tripModeToggleMobileOnly
                           hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
+                          suppressMobileCardChrome={urbaniaMobileEmbedShell}
+                          urbaniaMobileTripTiles={normalizedLockSlug === 'urbania'}
                         />
                       </div>
 
@@ -2118,104 +2352,225 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       <div className="lg:hidden">
                       <div
                         key={`booking-form-mobile-${editTrigger}`}
-                        className="mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5"
+                        className={
+                          urbaniaMobileEmbedShell
+                            ? 'mb-2 bg-transparent px-0 pb-2 pt-0 shadow-none'
+                            : 'mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5'
+                        }
                       >
-                        <div className="flex flex-col gap-3">
-                          <LocationInput
-                            key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                            variant="app"
-                            label="From"
-                            placeholder="Enter pickup location"
-                            value={pickupLocation ? { ...pickupLocation } : undefined}
-                            onLocationChange={handlePickupLocationChange}
-                            isPickupLocation={true}
-                            tripType={tripType}
-                          />
+                        <div
+                          className={cn(
+                            'flex flex-col',
+                            heroUrbaniaMobileTicketStyle
+                              ? cn(
+                                  'divide-y divide-gray-200 overflow-hidden',
+                                  urbaniaMobileEmbedShell
+                                    ? 'rounded-lg border-0 bg-transparent'
+                                    : 'rounded-xl border border-gray-200 bg-white shadow-sm'
+                                )
+                              : 'gap-3'
+                          )}
+                        >
+                          {heroUrbaniaMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
+                            <div className="flex min-h-0 items-stretch bg-white">
+                              <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
+                                <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
+                                <div className="absolute bottom-[1.25rem] left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
+                                <div className="absolute left-1/2 top-[1.85rem] bottom-[1.85rem] w-0 -translate-x-1/2 border-l-2 border-dashed border-blue-500/55" />
+                              </div>
+                              <div className="min-w-0 flex-1 divide-y divide-gray-200">
+                                <LocationInput
+                                  key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                                  variant={heroMobileUrbaniaFieldVariant}
+                                  className={heroUrbaniaTicketCellPad}
+                                  label="From"
+                                  placeholder="Enter pickup location"
+                                  value={pickupLocation ? { ...pickupLocation } : undefined}
+                                  onLocationChange={handlePickupLocationChange}
+                                  isPickupLocation={true}
+                                  tripType={tripType}
+                                  hideLeadingIcon
+                                />
+                                <LocationInput
+                                  key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                  variant={heroMobileUrbaniaFieldVariant}
+                                  className={heroUrbaniaTicketCellPad}
+                                  label="To"
+                                  placeholder="Enter destination location"
+                                  value={dropLocation ? { ...dropLocation } : undefined}
+                                  onLocationChange={handleDropLocationChange}
+                                  isPickupLocation={false}
+                                  tripType={tripType}
+                                  hideLeadingIcon
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <LocationInput
+                                key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                                variant={heroMobileUrbaniaFieldVariant}
+                                className={heroUrbaniaTicketCellPad}
+                                label="From"
+                                placeholder="Enter pickup location"
+                                value={pickupLocation ? { ...pickupLocation } : undefined}
+                                onLocationChange={handlePickupLocationChange}
+                                isPickupLocation={true}
+                                tripType={tripType}
+                              />
 
-                          {(tripType === 'outstation' || tripType === 'airport') && (
-                            <LocationInput
-                              key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                              variant="app"
-                              label="To"
-                              placeholder="Enter drop location"
-                              value={dropLocation ? { ...dropLocation } : undefined}
-                              onLocationChange={handleDropLocationChange}
-                              isPickupLocation={false}
-                              tripType={tripType}
-                            />
+                              {(tripType === 'outstation' || tripType === 'airport') && (
+                                <LocationInput
+                                  key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                  variant={heroMobileUrbaniaFieldVariant}
+                                  className={heroUrbaniaTicketCellPad}
+                                  label="To"
+                                  placeholder="Enter destination location"
+                                  value={dropLocation ? { ...dropLocation } : undefined}
+                                  onLocationChange={handleDropLocationChange}
+                                  isPickupLocation={false}
+                                  tripType={tripType}
+                                />
+                              )}
+                            </>
                           )}
 
                           {tripType === 'tour' && (
-                            <div className="w-full">
-                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
-                                Tour package
-                              </label>
-                              <Select
-                                value={
-                                  dropLocation?.id?.startsWith('tour_')
-                                    ? dropLocation.id.slice('tour_'.length)
-                                    : undefined
-                                }
-                                onValueChange={(tourId) => {
-                                  if (tourId === '__all_tours__') {
-                                    navigate('/tours', { state: { pickupLocation, pickupDate } });
-                                    return;
-                                  }
-                                  const t = sortedHeroTours.find((x) => x.tourId === tourId);
-                                  applyHeroTourPackageSelection(t ?? null);
-                                }}
-                                disabled={heroTourListLoading}
+                            <div
+                              className={cn(
+                                'w-full',
+                                heroUrbaniaTourLocalRowClass
+                              )}
+                            >
+                              {heroUrbaniaMobileTicketStyle && (
+                                <TourTabIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+                              )}
+                              <div
+                                className={cn(
+                                  heroUrbaniaMobileTicketStyle
+                                    ? 'min-w-0 flex-1 flex flex-col gap-0.5'
+                                    : 'w-full'
+                                )}
                               >
-                                <SelectTrigger className="flex h-11 min-h-[3rem] w-full items-center rounded-lg border border-gray-200 bg-white px-3 text-[1rem] font-semibold text-gray-900 shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 data-[placeholder]:font-normal data-[placeholder]:text-gray-500">
-                                  <SelectValue
-                                    placeholder={
-                                      heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                                {heroUrbaniaMobileTicketStyle ? (
+                                  <span className="text-[11px] font-medium leading-none text-gray-500">Tour package</span>
+                                ) : (
+                                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                                    Tour package
+                                  </label>
+                                )}
+                                <Select
+                                  value={
+                                    dropLocation?.id?.startsWith('tour_')
+                                      ? dropLocation.id.slice('tour_'.length)
+                                      : undefined
+                                  }
+                                  onValueChange={(tourId) => {
+                                    if (tourId === '__all_tours__') {
+                                      navigate('/tours', { state: { pickupLocation, pickupDate } });
+                                      return;
                                     }
-                                  />
-                                </SelectTrigger>
-                                <SelectContent {...heroTourPackageSelectContentProps}>
-                                  {sortedHeroTours.map((t) => (
-                                    <SelectItem key={t.tourId} value={t.tourId}>
-                                      {t.tourName}
-                                    </SelectItem>
-                                  ))}
-                                  <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                    const t = sortedHeroTours.find((x) => x.tourId === tourId);
+                                    applyHeroTourPackageSelection(t ?? null);
+                                  }}
+                                  disabled={heroTourListLoading}
+                                >
+                                  <SelectTrigger
+                                    className={cn(
+                                      heroUrbaniaMobileTicketStyle
+                                        ? heroUrbaniaMobileTourSelectTrigger
+                                        : heroMobileTourSelectTriggerDefault
+                                    )}
+                                  >
+                                    <SelectValue
+                                      placeholder={
+                                        heroTourListLoading ? 'Loading packages…' : 'Select a tour package'
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent
+                          {...(heroUrbaniaMobileTicketStyle
+                            ? heroUrbaniaMobileSelectContentProps
+                            : heroTourPackageSelectContentProps)}
+                        >
+                                    {sortedHeroTours.map((t) => (
+                                      <SelectItem key={t.tourId} value={t.tourId}>
+                                        {t.tourName}
+                                      </SelectItem>
+                                    ))}
+                                    <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                           )}
 
                           {tripType === 'local' && (
-                            <div className="w-full">
-                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
-                                Package
-                              </label>
-                              <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
-                                {/* Native select avoids Radix Select's RemoveScroll (scrollbar compensation + overflow-x on root causes horizontal jump). */}
-                                <div className="relative w-full">
-                                  <select
-                                    value={hourlyPackage}
-                                    onChange={(e) => setHourlyPackage(e.target.value)}
-                                    aria-label="Hourly package"
-                                    className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
-                                  >
-                                    {hourlyPackageOptions.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <ChevronDown
-                                    className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
-                                    aria-hidden
-                                  />
+                            <div
+                              className={cn(
+                                'w-full',
+                                heroUrbaniaTourLocalRowClass
+                              )}
+                            >
+                              {heroUrbaniaMobileTicketStyle && (
+                                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+                              )}
+                              <div
+                                className={cn(
+                                  heroUrbaniaMobileTicketStyle
+                                    ? 'min-w-0 flex-1 flex flex-col gap-0.5'
+                                    : 'w-full'
+                                )}
+                              >
+                                {heroUrbaniaMobileTicketStyle ? (
+                                  <span className="text-[11px] font-medium leading-none text-gray-500">Package</span>
+                                ) : (
+                                  <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
+                                    Package
+                                  </label>
+                                )}
+                                {heroUrbaniaMobileTicketStyle ? (
+                                  <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                                    <SelectTrigger className={heroUrbaniaMobileTourSelectTrigger} aria-label="Hourly package">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent {...heroUrbaniaMobileSelectContentProps}>
+                                      {hourlyPackageOptions.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
+                                  <div className="relative w-full">
+                                    <select
+                                      value={hourlyPackage}
+                                      onChange={(e) => setHourlyPackage(e.target.value)}
+                                      aria-label="Hourly package"
+                                      className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
+                                    >
+                                      {hourlyPackageOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <ChevronDown
+                                      className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
+                                      aria-hidden
+                                    />
+                                  </div>
                                 </div>
+                                )}
                               </div>
                             </div>
                           )}
 
                           <DateTimePicker
-                            variant="app"
+                            variant={heroMobileUrbaniaFieldVariant}
+                            className={heroUrbaniaTicketCellPad}
                             label="Trip start"
                             date={pickupDate}
                             onDateChange={setPickupDate}
@@ -2224,7 +2579,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
                           {tripType === 'outstation' && tripMode === 'round-trip' && (
                             <DateTimePicker
-                              variant="app"
+                              variant={heroMobileUrbaniaFieldVariant}
+                              className={heroUrbaniaTicketCellPad}
                               label="Return trip"
                               date={returnDate}
                               onDateChange={handleReturnDateChange}
@@ -2233,6 +2589,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             />
                           )}
                         </div>
+
+                        {normalizedLockSlug === 'urbania' && (
+                          <div className="mt-1.5 lg:hidden">
+                            <UrbaniaMobileFeatureBar />
+                          </div>
+                        )}
 
                         {validationError && (
                           <div className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-sm text-red-600">{validationError}</div>
@@ -2248,7 +2610,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         <Button
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                          className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-all duration-300 hover:bg-blue-700 disabled:opacity-60"
+                          className={cn(
+                            'mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-all duration-300 hover:bg-blue-700 disabled:opacity-60',
+                            urbaniaMobileEmbedShell && 'max-lg:mt-2'
+                          )}
                         >
                           {isLoading ? (
                             <div className="flex items-center normal-case">
@@ -2264,10 +2629,20 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   clipRule="evenodd"
                                 />
                               </svg>
-                              Search
+                              {normalizedLockSlug === 'urbania' ? 'SEARCH URBANIA' : 'Search'}
                             </span>
                           )}
                         </Button>
+                        {normalizedLockSlug === 'urbania' && (
+                          <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 px-1 text-center text-[11px] leading-snug text-slate-600 lg:hidden">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                            <span>100% Safe Booking</span>
+                            <span className="text-slate-400" aria-hidden>
+                              ·
+                            </span>
+                            <span>No Hidden Charges</span>
+                          </p>
+                        )}
                       </div>
                       </div>
 

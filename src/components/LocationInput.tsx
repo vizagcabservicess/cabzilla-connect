@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useId } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
-import { X, MapPin } from "lucide-react";
+import { ArrowLeft, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import type { Location } from '@/lib/locationData';
 import type { TripType } from '@/lib/tripTypes';
@@ -64,8 +64,10 @@ interface LocationInputProps {
   isPickupLocation?: boolean;
   tripType?: TripType;
   readOnly?: boolean;
-  /** mobile = floating label; desktop = label + bordered row; app = native-app style (uppercase label, gray row, pin icon) */
-  variant?: 'mobile' | 'desktop' | 'app';
+  /** mobile = floating label; desktop = label + bordered row; app = native-app style (uppercase label, gray row, pin icon); infield = small grey label inside row (Urbania-style) */
+  variant?: 'mobile' | 'desktop' | 'app' | 'infield';
+  /** When pair uses an external dashed rail between From/To (Urbania stacked ticket); omit inset pin icon. */
+  hideLeadingIcon?: boolean;
 }
 
 export function LocationInput({
@@ -84,6 +86,7 @@ export function LocationInput({
   tripType,
   readOnly = false,
   variant = 'mobile',
+  hideLeadingIcon = false,
 }: LocationInputProps) {
   const selectFromListMessage = isPickupLocation
     ? 'Select a valid pickup from suggestions (within 35 KM radius).'
@@ -91,6 +94,8 @@ export function LocationInput({
 
   const isDesktopVariant = variant === 'desktop';
   const isAppVariant = variant === 'app';
+  const isInfieldVariant = variant === 'infield';
+  const [mobileSearchSheetOpen, setMobileSearchSheetOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Location[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
@@ -100,16 +105,19 @@ export function LocationInput({
   const { isLoaded, google, error } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const autocompleteInitializedRef = useRef(false);
-  const initializationAttemptsRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
+  /** Mobile ticket-style row: open a dedicated fullscreen search (Urbania `infield` on narrow viewports). */
+  const fullscreenMobileSearchSheet =
+    isInfieldVariant && !isDesktop && !disabled && !readOnly;
   const [predictionsLoading, setPredictionsLoading] = useState(false);
   const [noGooglePredictions, setNoGooglePredictions] = useState(false);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const predictionsRequestSeq = useRef(0);
   /** Full input row (pin + field); Google `.pac-container` is on `body` — we sync its box to this. */
   const pacAnchorRef = useRef<HTMLDivElement | null>(null);
+  /** Bottom edge of fullscreen search pill — `.pac-container` opens below here (mobile Urbania sheet). */
+  const sheetPacBottomRef = useRef<HTMLDivElement | null>(null);
   const pacHintDomId = useId().replace(/:/g, '');
 
   useEffect(() => {
@@ -242,14 +250,15 @@ export function LocationInput({
     };
   }, [inputValue, isFocused, isLoaded, google, isPickupLocation, tripType]);
 
-  // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row).
+  // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row) or fullscreen sheet.
   useEffect(() => {
     if (typeof document === 'undefined' || !isFocused) return;
 
     let cancelled = false;
     const alignPac = () => {
       if (cancelled) return;
-      const anchor = pacAnchorRef.current;
+      const sheetMode = fullscreenMobileSearchSheet && mobileSearchSheetOpen;
+      const anchor = sheetMode ? sheetPacBottomRef.current : pacAnchorRef.current;
       if (!anchor) return;
       const candidates = Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).filter((el) => {
         const st = window.getComputedStyle(el);
@@ -258,21 +267,40 @@ export function LocationInput({
       const pac = candidates.length > 0 ? candidates[candidates.length - 1] : null;
       if (!pac) return;
 
-      const rect = anchor.getBoundingClientRect();
-      const w = Math.max(200, Math.round(rect.width));
-      const left = Math.round(rect.left);
-      const top = Math.round(rect.bottom + 2);
-
       const s = pac.style;
-      s.setProperty('position', 'fixed', 'important');
-      s.setProperty('box-sizing', 'border-box', 'important');
-      s.setProperty('width', `${w}px`, 'important');
-      s.setProperty('min-width', `${w}px`, 'important');
-      s.setProperty('max-width', `${w}px`, 'important');
-      s.setProperty('left', `${left}px`, 'important');
-      s.setProperty('top', `${top}px`, 'important');
-      s.setProperty('right', 'auto', 'important');
-      s.setProperty('transform', 'none', 'important');
+
+      if (sheetMode) {
+        const rect = anchor.getBoundingClientRect();
+        const margin = 12;
+        const w = Math.max(200, Math.round(window.innerWidth - margin * 2));
+        const left = Math.round(margin);
+        const top = Math.round(rect.bottom + 6);
+
+        s.setProperty('position', 'fixed', 'important');
+        s.setProperty('box-sizing', 'border-box', 'important');
+        s.setProperty('width', `${w}px`, 'important');
+        s.setProperty('min-width', `${w}px`, 'important');
+        s.setProperty('max-width', `${w}px`, 'important');
+        s.setProperty('left', `${left}px`, 'important');
+        s.setProperty('top', `${top}px`, 'important');
+        s.setProperty('right', 'auto', 'important');
+        s.setProperty('transform', 'none', 'important');
+      } else {
+        const rect = anchor.getBoundingClientRect();
+        const w = Math.max(200, Math.round(rect.width));
+        const left = Math.round(rect.left);
+        const top = Math.round(rect.bottom + 2);
+
+        s.setProperty('position', 'fixed', 'important');
+        s.setProperty('box-sizing', 'border-box', 'important');
+        s.setProperty('width', `${w}px`, 'important');
+        s.setProperty('min-width', `${w}px`, 'important');
+        s.setProperty('max-width', `${w}px`, 'important');
+        s.setProperty('left', `${left}px`, 'important');
+        s.setProperty('top', `${top}px`, 'important');
+        s.setProperty('right', 'auto', 'important');
+        s.setProperty('transform', 'none', 'important');
+      }
     };
 
     alignPac();
@@ -291,7 +319,7 @@ export function LocationInput({
       mo.disconnect();
       window.clearInterval(interval);
     };
-  }, [isFocused]);
+  }, [isFocused, fullscreenMobileSearchSheet, mobileSearchSheetOpen]);
 
   // RedBus-style hint inside Google's open suggestion panel (DOM — `.pac-container` is not React-rendered).
   useEffect(() => {
@@ -370,18 +398,48 @@ export function LocationInput({
     };
   }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId, selectFromListMessage]);
   
-  // Initialize Google Maps Autocomplete when ready
   useEffect(() => {
-    if (!isLoaded || !google || !inputRef.current || autocompleteInitializedRef.current) return;
-    
+    if (!mobileSearchSheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileSearchSheetOpen]);
+
+  useEffect(() => {
+    if (!mobileSearchSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileSearchSheetOpen(false);
+        setIsFocused(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileSearchSheetOpen]);
+
+  // Initialize Google Maps Autocomplete when ready (re-attaches when mobile sheet opens / input remounts).
+  useLayoutEffect(() => {
+    if (!isLoaded || !google) return;
+
+    const collapsedInfieldSheet =
+      fullscreenMobileSearchSheet && !mobileSearchSheetOpen;
+    if (collapsedInfieldSheet) {
+      return undefined;
+    }
+
+    const el = inputRef.current;
+    if (!el) return undefined;
+
+    let ac: google.maps.places.Autocomplete | null = null;
+
     try {
-      // For outstation drop: no bounds = India-wide search (Kakinada, Vijayawada, etc.)
-      // For pickup / airport drop / tour: bias toward Vizag (35km)
       const isOutstationDrop = tripType === 'outstation' && !isPickupLocation;
 
       const options: google.maps.places.AutocompleteOptions = {
-        types: ["geocode", "establishment"],
-        componentRestrictions: { country: "in" },
+        types: ['geocode', 'establishment'],
+        componentRestrictions: { country: 'in' },
       };
 
       if (!isOutstationDrop) {
@@ -392,85 +450,93 @@ export function LocationInput({
         });
         const bounds = circle.getBounds() as google.maps.LatLngBounds;
         options.bounds = bounds;
-        options.strictBounds = isPickupLocation; // Only enforce strict bounds for pickup
+        options.strictBounds = isPickupLocation;
       }
 
-      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current as HTMLInputElement, options);
-      
-      // Add place_changed listener
-      autocompleteRef.current.addListener("place_changed", () => {
+      ac = new google.maps.places.Autocomplete(el, options);
+
+      ac.addListener('place_changed', () => {
         setNoGooglePredictions(false);
         setPredictionsLoading(false);
-        const place = autocompleteRef.current?.getPlace();
+        const place = ac?.getPlace();
         if (place && place.geometry?.location) {
-          setInputValue(place.name || place.formatted_address || "");
-          
+          setInputValue(place.name || place.formatted_address || '');
+
           if (onChange && place.formatted_address) {
             onChange(place.formatted_address);
           }
-          
+
           const lat = place.geometry.location.lat();
           const lng = place.geometry.location.lng();
-          
-          // Check if within range for pickup locations
+
           const isAirportTransfer = tripType === 'airport';
           const isTourTrip = tripType === 'tour';
-          
-          // For tour trips, pickup location must be within 35km (matches ToursPage)
+
           if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 35)) {
-            toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-            setInputValue("");
-            if (onChange) onChange("");
+            toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
+            setInputValue('');
+            if (onChange) onChange('');
             if (onLocationChange) onLocationChange(EMPTY_LOCATION);
             return;
           }
-          
-          // For regular pickup locations (non-tour), validate 35km radius
+
           if (isPickupLocation && !isTourTrip && !isWithinVizagRange(lat, lng)) {
-            toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-            setInputValue("");
-            if (onChange) onChange("");
+            toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
+            setInputValue('');
+            if (onChange) onChange('');
             if (onLocationChange) onLocationChange(EMPTY_LOCATION);
             return;
           }
-          
-          // For airport transfers, allow drop locations outside range to trigger automatic switching
+
           if (isAirportTransfer && !isPickupLocation && !isWithinVizagRange(lat, lng)) {
             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
           }
-          
+
           if (onLocationChange) {
             onLocationChange({
-              id: place.place_id || place.formatted_address || "",
-              name: place.name || place.formatted_address || "",
-              address: place.formatted_address || "",
-              lat: lat,
-              lng: lng,
+              id: place.place_id || place.formatted_address || '',
+              name: place.name || place.formatted_address || '',
+              address: place.formatted_address || '',
+              lat,
+              lng,
               isInVizag: isWithinVizagRange(lat, lng),
               city: '',
               state: '',
               type: 'other',
-              popularityScore: 50
+              popularityScore: 50,
             });
           }
+          setMobileSearchSheetOpen(false);
         }
       });
-      
-      autocompleteInitializedRef.current = true;
-      initializationAttemptsRef.current = 0;
-    } catch (error) {
-      console.error("Failed to initialize Google Maps Autocomplete:", error);
-      initializationAttemptsRef.current++;
-      if (initializationAttemptsRef.current < 3) {
-        setTimeout(() => {
-          autocompleteInitializedRef.current = false;
-        }, 500 * initializationAttemptsRef.current);
-      } else {
-        toast("Error initializing location search. Please try refreshing the page.");
-        console.error("Failed to initialize Google Maps Autocomplete after multiple attempts:", error);
-      }
+
+      autocompleteRef.current = ac;
+    } catch (err) {
+      console.error('Failed to initialize Google Maps Autocomplete:', err);
+      toast('Error initializing location search. Please try refreshing the page.');
     }
-     }, [isLoaded, google, inputRef.current, isPickupLocation, tripType, onLocationChange, onChange]);
+
+    return () => {
+      if (ac && google.maps?.event) {
+        google.maps.event.clearInstanceListeners(ac);
+      }
+      autocompleteRef.current = null;
+    };
+  }, [
+    isLoaded,
+    google,
+    isPickupLocation,
+    tripType,
+    onLocationChange,
+    onChange,
+    mobileSearchSheetOpen,
+    fullscreenMobileSearchSheet,
+  ]);
+
+  const closeMobileSearchSheet = () => {
+    setMobileSearchSheetOpen(false);
+    setIsFocused(false);
+  };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -524,6 +590,9 @@ export function LocationInput({
     }
     
     setShowSuggestions(false);
+    if (fullscreenMobileSearchSheet) {
+      setMobileSearchSheetOpen(false);
+    }
   };
   
   const handleInputBlur = () => {
@@ -557,8 +626,53 @@ export function LocationInput({
     inputValue.trim().length >= 2;
 
   const showSelectionInvalid = inputValue.trim().length > 0 && !committedLocation?.id;
+
+  /** Shared markup for curated suggestions (no curated “recent/popular” — only typed matches). */
+  const suggestionsListMarkup = (
+    <>
+      {showSelectionInvalid && (
+        <div
+          className="border-b border-red-100 bg-red-50/70 px-3 py-2.5 text-center text-xs leading-snug text-red-600"
+          role="status"
+        >
+          {selectFromListMessage}
+        </div>
+      )}
+      {filteredSuggestions.map((suggestion) => (
+        <div
+          key={suggestion.id}
+          className="cursor-pointer border-b border-gray-100 p-3 last:border-0 hover:bg-gray-100"
+          onMouseDown={() => handleSuggestionClick(suggestion)}
+        >
+          <div className="font-medium">{suggestion.name}</div>
+          {suggestion.address && suggestion.address !== suggestion.name && (
+            <div className="text-sm text-gray-500">{suggestion.address}</div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+
+  const emptyGooglePanelMarkup = (
+    <>
+      {showSelectionInvalid && (
+        <div className="border-b border-red-100 bg-red-50/70 px-4 py-3 text-center sm:px-5">
+          <p className="text-xs leading-snug text-red-600">{selectFromListMessage}</p>
+        </div>
+      )}
+      <div className="px-5 py-5 text-center sm:px-6 sm:py-6">
+        <p className="text-[15px] font-bold leading-snug tracking-tight text-gray-900 sm:text-[17px]">
+          No Results Found
+        </p>
+        <p className="mx-auto mt-2.5 max-w-[min(100%,20rem)] text-sm leading-relaxed text-gray-500">
+          for <span className="font-medium text-gray-600">&quot;{inputValue.trim()}&quot;</span>
+        </p>
+      </div>
+    </>
+  );
   
   return (
+    <>
     <div className={cn("relative", className)}>
       {error && (
         <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
@@ -568,8 +682,8 @@ export function LocationInput({
         </div>
       )}
 
-      {/* Desktop / app: static label above */}
-      {(isDesktopVariant || isAppVariant) && label && (
+      {/* Desktop / app: static label above (not infield — label lives inside the row) */}
+      {(isDesktopVariant || (isAppVariant && !isInfieldVariant)) && label && (
         <label
           htmlFor={id}
           className={cn(
@@ -584,7 +698,7 @@ export function LocationInput({
         </label>
       )}
       {/* Mobile: floating label when focused/has value */}
-      {!isDesktopVariant && !isAppVariant && label && (isFocused || inputValue) && (
+      {!isDesktopVariant && !isAppVariant && !isInfieldVariant && label && (isFocused || inputValue) && (
         <label
           htmlFor={id}
           className="absolute left-10 -top-2.5 text-xs bg-white px-1 text-blue-600 z-10 pointer-events-none transition-all duration-200"
@@ -601,13 +715,57 @@ export function LocationInput({
           "ios-search-input-wrapper relative",
           isDesktopVariant && "border border-gray-200 rounded-md bg-white flex items-center pl-3 min-h-[2.75rem]",
           isAppVariant &&
-            "flex min-h-[3rem] items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm"
+            !isInfieldVariant &&
+            "flex min-h-[3rem] items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm",
+          isInfieldVariant &&
+            "flex min-h-0 items-center gap-2 rounded-none border-0 bg-transparent p-0 shadow-none"
         )}
       >
-        {(isDesktopVariant || isAppVariant) && (
+        {(isDesktopVariant || (isAppVariant && !isInfieldVariant)) && (
           <MapPin className={cn("flex-shrink-0 text-gray-400", isAppVariant ? "h-5 w-5" : "mr-2 h-4 w-4")} aria-hidden />
         )}
-        <div className={cn("min-w-0 flex-1", (isDesktopVariant || isAppVariant) && "flex items-center")}>
+        {isInfieldVariant && !hideLeadingIcon && (
+          <MapPin className="h-4 w-4 shrink-0 self-center text-gray-500" aria-hidden />
+        )}
+        <div
+          className={cn(
+            "min-w-0 flex-1",
+            (isDesktopVariant || (isAppVariant && !isInfieldVariant)) && "flex items-center relative",
+            isInfieldVariant && "relative flex min-h-0 flex-col gap-0 leading-none"
+          )}
+        >
+          {isInfieldVariant && label && (
+            <label htmlFor={id} className="pointer-events-none text-[11px] font-medium leading-none text-gray-500">
+              {label}
+              {required && <span className="ml-0.5 text-red-500">*</span>}
+            </label>
+          )}
+          <div className={cn(isInfieldVariant ? "relative mt-0.5 w-full" : "relative w-full")}>
+        {fullscreenMobileSearchSheet ? (
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={mobileSearchSheetOpen}
+            disabled={disabled}
+            className={cn(
+              "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none ring-offset-white focus-visible:ring-2 focus-visible:ring-blue-500/30",
+              "touch-manipulation text-[15px] font-bold leading-tight text-gray-900"
+            )}
+            onClick={() => {
+              setMobileSearchSheetOpen(true);
+              queueMicrotask(() => setIsFocused(true));
+            }}
+            >
+            <span
+              className={cn(
+                'block w-full break-words text-left leading-snug line-clamp-2',
+                inputValue ? 'text-gray-900' : 'text-gray-500'
+              )}
+            >
+              {inputValue || placeholder || 'Enter location'}
+            </span>
+          </button>
+        ) : (
         <Input
           id={id}
           ref={inputRef}
@@ -616,27 +774,37 @@ export function LocationInput({
           placeholder={
             isDesktopVariant
               ? placeholder || "Enter a location"
-              : isAppVariant
+              : isAppVariant && !isInfieldVariant
                 ? placeholder || "Enter location"
-                : !isFocused && !inputValue
-                  ? label
-                  : ""
+                : isInfieldVariant
+                  ? placeholder || "Enter location"
+                  : !isFocused && !inputValue
+                    ? label
+                    : ""
           }
           disabled={disabled}
           readOnly={readOnly}
           style={{
             fontSize: isDesktopVariant ? "0.9375rem" : isAppVariant ? "1rem" : isDesktop ? "1.2rem" : "1rem",
-            height: isAppVariant ? "auto" : isDesktopVariant ? "2.75rem" : "3.5rem",
-            minHeight: isAppVariant ? "2.5rem" : undefined,
+            height: isAppVariant && !isInfieldVariant ? "auto" : isDesktopVariant ? "2.75rem" : isInfieldVariant ? "auto" : "3.5rem",
+            minHeight: isAppVariant ? (isInfieldVariant ? "1.25rem" : "2.5rem") : undefined,
           }}
           className={cn(
             "pr-10 ios-search-input",
-            isDesktopVariant || isAppVariant
+            isDesktopVariant || (isAppVariant && !isInfieldVariant)
               ? cn(
                   "border-0 bg-transparent font-semibold text-gray-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500",
-                  isAppVariant && "px-0 pr-10"
+                  isAppVariant && !isInfieldVariant && "px-0 pr-10"
                 )
-              : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
+              : isInfieldVariant && !isDesktop
+                  ? cn(
+                      "rounded-none border-0 bg-transparent px-0 py-0 text-[15px] font-bold leading-tight text-gray-900 shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500"
+                    )
+                  : isInfieldVariant
+                    ? cn(
+                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:text-gray-500"
+                      )
+                    : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
           onFocus={() => { setShowSuggestions(inputValue.length > 0 && suggestions.length > 0); setIsFocused(true); }}
           onBlur={() => {
@@ -644,11 +812,16 @@ export function LocationInput({
             window.setTimeout(() => setIsFocused(false), 200);
           }}
         />
+        )}
         {inputValue && !readOnly && (
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none p-2"
-            onClick={() => {
+            className={cn(
+              "absolute z-[1] text-gray-400 hover:text-gray-600 focus:outline-none p-2",
+              isInfieldVariant ? "right-0 top-1/2 -translate-y-1/2" : "right-2 top-1/2 -translate-y-1/2"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
               setInputValue("");
               if (onChange) onChange("");
               if (onLocationChange) {
@@ -663,61 +836,107 @@ export function LocationInput({
             <X className="w-4 h-4" />
           </button>
         )}
+          </div>
         </div>
       </div>
-      {!isDesktopVariant && subtitleText && (
-        <p className={cn("text-left text-xs text-gray-500", isAppVariant ? "mt-1" : "mt-1.5")}>{subtitleText}</p>
-      )}
-      {showSuggestions && filteredSuggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
-          {showSelectionInvalid && (
-            <div
-              className="border-b border-red-100 bg-red-50/70 px-3 py-2.5 text-center text-xs leading-snug text-red-600"
-              role="status"
-            >
-              {selectFromListMessage}
-            </div>
+      {!isDesktopVariant && subtitleText && !fullscreenMobileSearchSheet && (
+        <p
+          className={cn(
+            "text-left text-xs text-gray-500",
+            isAppVariant || isInfieldVariant ? "mt-1" : "mt-1.5"
           )}
-          {filteredSuggestions.map((suggestion) => (
-            <div
-              key={suggestion.id}
-              className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
-              onMouseDown={() => handleSuggestionClick(suggestion)}
-            >
-              <div className="font-medium">{suggestion.name}</div>
-              {suggestion.address && suggestion.address !== suggestion.name && (
-                <div className="text-sm text-gray-500">{suggestion.address}</div>
-              )}
-            </div>
-          ))}
+        >
+          {subtitleText}
+        </p>
+      )}
+      {showSuggestions && filteredSuggestions.length > 0 && !mobileSearchSheetOpen && (
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+          {suggestionsListMarkup}
         </div>
       )}
 
-      {showEmptyGoogleDropdown && (
+      {showEmptyGoogleDropdown && !mobileSearchSheetOpen && (
         <div
           className={cn(
-            "absolute z-[1001] w-full mt-1.5 overflow-hidden rounded-2xl border border-gray-200/90 bg-white",
+            "absolute z-[1001] mt-1.5 w-full overflow-hidden rounded-2xl border border-gray-200/90 bg-white",
             "shadow-[0_8px_30px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.04)]",
             "animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
           )}
           role="status"
         >
-          {showSelectionInvalid && (
-            <div className="border-b border-red-100 bg-red-50/70 px-4 py-3 text-center sm:px-5">
-              <p className="text-xs leading-snug text-red-600">{selectFromListMessage}</p>
-            </div>
-          )}
-          <div className="px-5 py-5 text-center sm:px-6 sm:py-6">
-            <p className="text-[15px] font-bold leading-snug tracking-tight text-gray-900 sm:text-[17px]">
-              No Results Found
-            </p>
-            <p className="mx-auto mt-2.5 max-w-[min(100%,20rem)] text-sm leading-relaxed text-gray-500">
-              for{' '}
-              <span className="font-medium text-gray-600">&quot;{inputValue.trim()}&quot;</span>
-            </p>
-          </div>
+          {emptyGooglePanelMarkup}
         </div>
       )}
     </div>
+    {fullscreenMobileSearchSheet &&
+    mobileSearchSheetOpen &&
+    typeof document !== 'undefined'
+      ? createPortal(
+        <div
+          className="fixed inset-0 z-[10046] flex flex-col bg-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label={label ? `Search ${label}` : 'Search location'}
+        >
+          <div className="shrink-0 border-b border-gray-100 px-3 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+            <div
+              ref={sheetPacBottomRef}
+              className="flex min-h-[2.875rem] items-center gap-1 rounded-full bg-gray-100 px-1 py-1 pl-1"
+            >
+              <button
+                type="button"
+                className="shrink-0 rounded-full p-2.5 text-gray-800 transition-colors hover:bg-gray-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                aria-label="Back"
+                onClick={() => closeMobileSearchSheet()}
+              >
+                <ArrowLeft className="h-5 w-5" aria-hidden />
+              </button>
+              <Input
+                id={`${id ?? 'location'}-fullscreen-search`}
+                ref={(el) => {
+                  inputRef.current = el;
+                }}
+                value={inputValue}
+                autoCapitalize="words"
+                autoCorrect="off"
+                autoComplete="off"
+                onChange={handleInputChange}
+                placeholder={placeholder || 'Search location'}
+                disabled={disabled}
+                className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-[0.95rem] shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+                autoFocus
+                onFocus={() => {
+                  setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
+                  setIsFocused(true);
+                }}
+                onBlur={() => {
+                  handleInputBlur();
+                  window.setTimeout(() => setIsFocused(false), 200);
+                }}
+              />
+            </div>
+          </div>
+          {subtitleText ? (
+            <p className="px-4 pt-2 text-xs text-gray-500">{subtitleText}</p>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">{suggestionsListMarkup}</div>
+            )}
+            {showEmptyGoogleDropdown && (
+              <div
+                className="relative z-[1] overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.04)]"
+                role="status"
+              >
+                {emptyGooglePanelMarkup}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )
+      : null}
+    </>
   );
 }
