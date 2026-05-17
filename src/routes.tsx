@@ -141,6 +141,7 @@ const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
 const HireDriverTermsPage = lazy(() => import('./pages/HireDriverTermsPage').then(module => ({ default: module.HireDriverTermsPage })));
 const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
 const UrbaniaRentalVizagPage = lazy(() => import('./pages/UrbaniaRentalVizagPage'));
+const LocalCarpoolingPage = lazy(() => import('./pages/LocalCarpoolingPage'));
 const SeventeenSeaterTempoTravellerPage = lazy(() => import('./pages/SeventeenSeaterTempoTravellerPage'));
 const TwelveSeaterTempoTravellerPage = lazy(() => import('./pages/TwelveSeaterTempoTravellerPage'));
 const GroupTravelTempoTravellerPage = lazy(() => import('./pages/GroupTravelTempoTravellerPage'));
@@ -233,6 +234,7 @@ function Root() {
       '/outstation-taxi': 'Hi Kumar! I would like to book an outstation taxi',
       '/airport-taxi': 'Hi Kumar! I would like to book an airport transfer',
       '/pooling': 'Hi Kumar! I would like to know more about your car pooling service',
+      '/local-carpooling': 'Hi Kumar! I would like to enquire about local carpooling (NAD to IT SEZ route)',
       '/rentals': 'Hi Kumar! I would like to know more about your car rental services',
       '/support': 'Hi Kumar! I need support with my booking',
       '/help-center': 'Hi Kumar! I need help with your services',
@@ -589,6 +591,10 @@ const router = createBrowserRouter([
       {
         path: 'urbania-rental-vizag',
         element: <LazyRoute component={UrbaniaRentalVizagPage} />,
+      },
+      {
+        path: 'local-carpooling',
+        element: <LazyRoute component={LocalCarpoolingPage} />,
       },
       {
         path: '17-seater-tempo-traveller-vizag',

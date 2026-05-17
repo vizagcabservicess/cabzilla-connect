@@ -40,6 +40,7 @@ export function getWhatsAppPrefillMessage(pathname: string): string {
     '/outstation-taxi': 'Hi Kumar! I would like to book an outstation taxi',
     '/airport-taxi': 'Hi Kumar! I would like to book an airport transfer',
     '/pooling': 'Hi Kumar! I would like to know more about your car pooling service',
+    '/local-carpooling': 'Hi Kumar! I would like to enquire about local carpooling (NAD to IT SEZ route)',
     '/rentals': 'Hi Kumar! I would like to know more about your car rental services',
     '/support': 'Hi Kumar! I need support with my booking',
     '/help-center': 'Hi Kumar! I need help with your services',
