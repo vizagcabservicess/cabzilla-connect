@@ -1,5 +1,5 @@
 import { getVehicleData, tryLoadVehiclesFromPublicJson } from '@/services/vehicleDataService';
-import { getVehicleUrl, getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
+import { getVehicleUrl, getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
 
 export interface VehicleLoaderData {
   vehicle: {
@@ -54,7 +54,7 @@ export async function vehicleLoader({
       capacity: foundVehicle.capacity,
       pricePerKm: foundVehicle.pricePerKm,
       fuelType: foundVehicle.fuelType,
-      image: getVehicleImageUrl(foundVehicle) || foundVehicle.image,
+      image: getVehicleImageUrlForDisplay(foundVehicle),
       tags: [
         'Comfort Ride',
         foundVehicle.ac ? 'AC' : 'Non-AC',
@@ -87,7 +87,7 @@ export async function vehicleLoader({
         name: v.name,
         capacity: `${v.capacity} Passengers`,
         price: `₹${v.pricePerKm || 12}/km`,
-        image: getVehicleImageUrl(v) || 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop',
+        image: getVehicleImageUrlForDisplay(v),
       }));
 
     return { vehicle, similarVehicles };

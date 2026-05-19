@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, lazy, Suspense, useLayoutEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useLoaderData } from 'react-router-dom';
 import { ArrowLeft, Car, Fuel, Loader2, Phone, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -27,14 +27,14 @@ import {
   URBANIA_SEO_DEFAULTS,
 } from '@/seo/urbaniaStaticMeta';
 import { Hero } from '@/components/Hero';
+import ImageGallery from '@/components/vehicle/ImageGallery';
+import VehicleTabs from '@/components/vehicle/VehicleTabs';
 
 const urbaniaHeroIllustrationSrc = resolveUrbaniaIllustrationSrc();
 const urbaniaHeroIllustrationLocalSrc = `${import.meta.env.BASE_URL.replace(/\/$/, '')}${URBANIA_ILLUSTRATION_PATH}`;
 
-// Lazy load heavy components with prefetch and defer
-const ImageGallery = lazy(() => import('@/components/vehicle/ImageGallery'));
+// Lazy load heavier below-the-fold panels (keep gallery + tabs eager so first paint always has content)
 const RateCardPanel = lazy(() => import('@/components/vehicle/RateCardPanel'));
-const VehicleTabs = lazy(() => import('@/components/vehicle/VehicleTabs'));
 const RateCard = lazy(() => import('@/components/vehicle/RateCard'));
 const SimilarVehicles = lazy(() => import('@/components/vehicle/SimilarVehicles'));
 const VehicleTours = lazy(() => import('@/components/vehicle/VehicleTours'));
@@ -103,7 +103,27 @@ const VehicleDetailPage = () => {
     if (loaderData && 'similarVehicles' in loaderData) return loaderData.similarVehicles;
     return [];
   });
-  const [galleryImages, setGalleryImages] = useState<GalleryItem[]>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryItem[]>(() => {
+    if (loaderData && 'vehicle' in loaderData && loaderData.vehicle.image?.trim()) {
+      return [{ url: loaderData.vehicle.image.trim(), alt: loaderData.vehicle.name }];
+    }
+    return [];
+  });
+  /** Mobile Urbania LCP illustration: show card skeleton until PNG has painted (cached images use `complete`). */
+  const urbaniaLcpImgRef = useRef<HTMLImageElement>(null);
+  const [urbaniaLcpImageReady, setUrbaniaLcpImageReady] = useState(false);
+
+  useLayoutEffect(() => {
+    if (vehicleSlug !== 'urbania') return;
+    setUrbaniaLcpImageReady(false);
+    const id = requestAnimationFrame(() => {
+      const el = urbaniaLcpImgRef.current;
+      if (el?.complete && el.naturalWidth > 0) {
+        setUrbaniaLcpImageReady(true);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [vehicleSlug, urbaniaHeroIllustrationSrc]);
   /** Urbania Hero: hide page content below the widget once user clicks Search (step 2). */
   const [urbaniaEmbedHeroStep, setUrbaniaEmbedHeroStep] = useState(1);
   /** While user edits trip from step 2 (pencil / pickup / date), show gallery + rates again. */
@@ -377,21 +397,29 @@ const VehicleDetailPage = () => {
     window.location.href = 'tel:+919966363662';
   };
 
-  // Load gallery in background (vehicle comes from route loader)
+  // Load gallery in background (vehicle comes from route loader). Reset to hero first so the main slot never stays empty across slug changes or slow API.
   useEffect(() => {
     if (!vehicle?.id) return;
+
+    const hero = vehicle.image?.trim();
+    if (hero) {
+      setGalleryImages([{ url: hero, alt: vehicle.name }]);
+    } else {
+      setGalleryImages([]);
+    }
+
     vehicleGalleryAPI
       .getGallery(vehicle.id)
       .then((gallery) => {
-        if (gallery.length === 0 && vehicle.image) {
-          setGalleryImages([{ url: vehicle.image, alt: vehicle.name }]);
-        } else {
+        if (gallery.length === 0 && hero) {
+          setGalleryImages([{ url: hero, alt: vehicle.name }]);
+        } else if (gallery.length > 0) {
           setGalleryImages(gallery);
         }
       })
       .catch(() => {
-        if (vehicle.image) {
-          setGalleryImages([{ url: vehicle.image, alt: vehicle.name }]);
+        if (hero) {
+          setGalleryImages([{ url: hero, alt: vehicle.name }]);
         }
       });
   }, [vehicle?.id, vehicle?.image, vehicle?.name]);
@@ -455,7 +483,8 @@ const VehicleDetailPage = () => {
         {vehicleSlug === 'urbania' && (
           <link rel="preload" as="image" href={urbaniaHeroIllustrationSrc} fetchPriority="high" />
         )}
-        {vehicle?.image && (
+        {/* Urbania LCP is the illustrator above the fold — avoid a second high-priority image preload. */}
+        {vehicle?.image && vehicleSlug !== 'urbania' && (
           <link rel="preload" as="image" href={getOptimizedImageUrl(vehicle.image)} fetchPriority="high" />
         )}
         {structuredData && (
@@ -568,18 +597,35 @@ const VehicleDetailPage = () => {
                     </div>
                   </div>
 
-                  <div className="relative z-0 w-full bg-white px-4 pb-2 pt-2 sm:px-5" aria-hidden>
+                  <div
+                    className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-4 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-5"
+                    aria-hidden
+                  >
+                    {/* Underlay only — LCP img stays fully opaque so paint is not deferred by opacity/overlay. */}
+                    {!urbaniaLcpImageReady && (
+                      <div className="pointer-events-none absolute inset-x-4 inset-y-2 z-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-50 sm:inset-x-5">
+                        <div className="h-3 w-[72%] max-w-sm animate-pulse rounded-full bg-gray-200" />
+                        <div className="h-[min(11rem,38vw)] w-full max-w-md animate-pulse rounded-xl bg-gray-200/90 sm:h-[min(13rem,34vw)]" />
+                      </div>
+                    )}
                     <img
+                      ref={urbaniaLcpImgRef}
                       src={urbaniaHeroIllustrationSrc}
                       alt=""
                       width={680}
                       height={560}
-                      decoding="async"
+                      sizes="(max-width: 640px) 100vw, min(680px, 100vw)"
+                      decoding="sync"
+                      loading="eager"
                       fetchPriority="high"
-                      className="mx-auto block h-auto w-full max-h-[min(13rem,44vw)] object-contain object-center sm:max-h-[min(15rem,40vw)]"
+                      className="relative z-[1] mx-auto block h-auto w-full max-h-[min(13rem,44vw)] object-contain object-center sm:max-h-[min(15rem,40vw)]"
+                      onLoad={() => setUrbaniaLcpImageReady(true)}
                       onError={(e) => {
                         const el = e.currentTarget;
-                        if (el.dataset.fallbackApplied === '1') return;
+                        if (el.dataset.fallbackApplied === '1') {
+                          setUrbaniaLcpImageReady(true);
+                          return;
+                        }
                         el.dataset.fallbackApplied = '1';
                         const primaryWasRemote = urbaniaHeroIllustrationSrc.includes('vizagtaxihub.com');
                         el.src = primaryWasRemote ? urbaniaHeroIllustrationLocalSrc : URBANIA_ILLUSTRATION_CDN_URL;
@@ -592,24 +638,16 @@ const VehicleDetailPage = () => {
                 <div className="vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:border-0 lg:bg-transparent lg:p-0">
                   <h1 className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageHeadline}</h1>
                   <p className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageSubtitle}</p>
-                  <Suspense
-                    fallback={
-                      <div className="loading-skeleton min-h-[160px] w-full rounded-lg">
-                        <div className="min-h-[160px] w-full rounded-lg bg-[#f3f4f6]" />
-                      </div>
-                    }
-                  >
-                    <Hero
-                      hideBackground
-                      embedCompactLayout
-                      embedStretchToShell
-                      lockedVehicleSlug="urbania"
-                      urbaniaUnifiedMobileLayout
-                      summaryBackHref="/vehicle/urbania"
-                      onStepChange={setUrbaniaEmbedHeroStep}
-                      onTripEditOpenChange={setUrbaniaRevealPageGrid}
-                    />
-                  </Suspense>
+                  <Hero
+                    hideBackground
+                    embedCompactLayout
+                    embedStretchToShell
+                    lockedVehicleSlug="urbania"
+                    urbaniaUnifiedMobileLayout
+                    summaryBackHref="/vehicle/urbania"
+                    onStepChange={setUrbaniaEmbedHeroStep}
+                    onTripEditOpenChange={setUrbaniaRevealPageGrid}
+                  />
                 </div>
               </div>
             </section>
@@ -627,29 +665,11 @@ const VehicleDetailPage = () => {
             <div className="lg:col-span-2 space-y-8">
               {/* Single image area - no duplication */}
               <div className="image-gallery-container" style={{ aspectRatio: '16/10' }}>
-                <Suspense fallback={
-                  vehicle?.image ? (
-                    <div className="w-full overflow-hidden rounded-lg" style={{ aspectRatio: '16/10' }}>
-                      <img
-                        src={getOptimizedImageUrl(vehicle.image)}
-                        alt={`${vehicle.name} - Professional taxi service in Visakhapatnam`}
-                        width={800}
-                        height={500}
-                        className="w-full h-full object-cover rounded-lg"
-                        loading="eager"
-                        fetchPriority="high"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full rounded-lg animate-pulse bg-gray-200" style={{ aspectRatio: '16/10' }} />
-                  )
-                }>
-                  <ImageGallery
-                    images={galleryImages}
-                    vehicleName={vehicle.name}
-                    heroImage={vehicle.image}
-                  />
-                </Suspense>
+                <ImageGallery
+                  images={galleryImages}
+                  vehicleName={vehicle.name}
+                  heroImage={vehicle.image}
+                />
               </div>
 
               {vehicleSlug !== 'urbania' && (
@@ -701,15 +721,13 @@ const VehicleDetailPage = () => {
               )}
 
               <div className="vehicle-tabs-container min-h-[280px]">
-                <Suspense fallback={<div className="loading-skeleton" style={{ height: '280px', width: '100%' }}></div>}>
-              <VehicleTabs 
-                overview={vehicle.overview} 
-                inclusions={vehicle.inclusions}
-                exclusions={vehicle.exclusions}
-                features={vehicle.features}
-                tags={[]} // Empty array since tags are now displayed at the top
-              />
-                </Suspense>
+                <VehicleTabs
+                  overview={vehicle.overview}
+                  inclusions={vehicle.inclusions}
+                  exclusions={vehicle.exclusions}
+                  features={vehicle.features}
+                  tags={[]}
+                />
               </div>
 
               {/* Special SEO Content for Tempo Traveller - Deferred for better performance */}
@@ -879,11 +897,29 @@ const VehicleDetailPage = () => {
                 </Suspense>
               )}
 
-              {/* Defer VehicleTours to reduce initial scripting load */}
-              <div className="min-h-[180px]">
-              <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[180px] rounded-lg"></div>}>
-              <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
-              </Suspense>
+              {/* Defer VehicleTours: Suspense fallback height must match inner loading UI to avoid CLS */}
+              <div className="min-h-[32rem]">
+                <Suspense
+                  fallback={
+                    <div
+                      className="mb-8 min-h-[32rem] animate-pulse rounded-xl border border-gray-200 bg-white p-4 sm:p-5"
+                      aria-hidden
+                    >
+                      <div className="mb-2 h-7 w-56 rounded bg-gray-200" />
+                      <div className="mb-6 h-4 w-full max-w-md rounded bg-gray-100" />
+                      <div className="grid gap-3">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="min-h-[14rem] rounded-lg border border-gray-100 bg-gray-50 p-3 sm:min-h-[15rem] sm:p-4"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  }
+                >
+                  <VehicleTours vehicleId={vehicle.id} vehicleName={vehicle.name} />
+                </Suspense>
               </div>
             </div>
 

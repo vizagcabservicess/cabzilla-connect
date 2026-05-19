@@ -21,6 +21,7 @@ export const URBANIA_SEO_DEFAULTS = {
 /**
  * Hero art (marketing illustration).
  * Default: vizagtaxihub CDN. Override with `VITE_URBANIA_ILLUSTRATION_URL`. Same filename under `public/uploads/` used as `<img onError>` fallback.
+ * Keep this URL in sync with the Urbania `link rel=preload` injector in root `index.html` (script after viewport).
  */
 export const URBANIA_ILLUSTRATION_CDN_URL =
   'https://vizagtaxihub.com/uploads/urbania-illustrator-vth.png' as const;

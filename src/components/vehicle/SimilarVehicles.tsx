@@ -17,31 +17,7 @@ interface SimilarVehiclesProps {
   }[];
 }
 
-const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({ 
-  vehicles = [
-    {
-      id: "honda-amaze",
-      name: "Honda Amaze",
-      capacity: "4 Passengers",
-      price: "₹12/km",
-      image: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300&h=200&fit=crop"
-    },
-    {
-      id: "innova-crysta",
-      name: "Innova Crysta", 
-      capacity: "7 Passengers",
-      price: "₹22/km",
-      image: "https://images.unsplash.com/photo-1570294917816-eceb74fccfa9?w=300&h=200&fit=crop"
-    },
-    {
-      id: "swift-dzire",
-      name: "Swift Dzire",
-      capacity: "4 Passengers", 
-      price: "₹13/km",
-      image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=200&fit=crop"
-    }
-  ]
-}) => {
+const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({ vehicles = [] }) => {
   return (
     <Card className="mb-8">
       <CardHeader>
@@ -49,7 +25,10 @@ const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {vehicles.map((vehicle, index) => (
+          {vehicles.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No similar vehicles to show.</p>
+          ) : (
+          vehicles.map((vehicle, index) => (
             <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 <div className="w-20 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -91,7 +70,8 @@ const SimilarVehicles: React.FC<SimilarVehiclesProps> = ({
                  </div>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </CardContent>
     </Card>

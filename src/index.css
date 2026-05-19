@@ -1,5 +1,5 @@
-/* Fonts: `@fontsource/*` loaded from `src/lib/fonts.ts` (imported in main.tsx) — avoids
-   render-blocking `fonts.googleapis.com` CSS @imports flagged by Lighthouse. */
+/* Fonts: `@fontsource/inter` loads from `src/lib/fonts.ts` via dynamic `import()` in main.tsx
+   after `root.render` so font CSS does not contend with first-paint / LCP on slow devices. */
 
 /* Radix Select uses react-remove-scroll (locks body scroll + scrollbar compensation). Applying
    overflow-x on html fights that padding math and shifts the whole layout when a Select opens.

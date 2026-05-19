@@ -13,6 +13,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import Index from './pages/Index';
+import VehicleDetailPage from '@/pages/VehicleDetailPage';
 
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -130,7 +131,6 @@ const TourDetailPage = lazy(() => import('./pages/TourDetailPage'));
 const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage'));
 
 const RoutePage = lazy(() => import('./pages/RoutePage'));
-const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
 const OperatorProfilesPage = lazy(() => import('@/pages/OperatorProfilesPage'));
 const FleetPage = lazy(() => import('./pages/FleetPage'));
 const CareersPage = lazy(() => import('./pages/CareersPage'));

@@ -1,6 +1,6 @@
-
 import { apiBaseUrl } from '@/config/api';
 import { GalleryItem } from '@/types/cab';
+import { normalizeGalleryItemsFromApi } from '@/utils/vehicleGalleryNormalize';
 
 export interface VehicleGalleryResponse {
   success: boolean;
@@ -21,8 +21,8 @@ export const vehicleGalleryAPI = {
 
       const data = await response.json();
       
-      if (data.success && data.gallery) {
-        return data.gallery;
+      if (data.success && Array.isArray(data.gallery) && data.gallery.length > 0) {
+        return normalizeGalleryItemsFromApi(data.gallery);
       }
       
       return [];

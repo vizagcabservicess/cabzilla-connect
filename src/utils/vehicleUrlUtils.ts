@@ -2,35 +2,52 @@
  * Utility functions for generating vehicle URLs
  */
 
-/** Preferred full URLs for vehicles with verified images (takes precedence over API) */
+/** Site images live on apex domain (same as public marketing URLs). */
+export const VIZAG_SITE_IMAGE_ORIGIN = 'https://vizagtaxihub.com';
+
+/** Preferred full URLs when uploads use a non–taxi-services filename (dashboard assets). */
 const PREFERRED_IMAGE_URLS: Record<string, string> = {
-  'toyota-glanza': 'https://vizagtaxihub.com/uploads/toyota-glanza-vizagtaxihub.png',
-  'innova-crysta': 'https://vizagtaxihub.com/uploads/img_68a32a68407e75.04067794.png',
+  ertiga: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png`,
+  'toyota-glanza': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/toyota-glanza-vizagtaxihub.png`,
+  'innova-crysta': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/img_68a32a68407e75.04067794.png`,
 };
 
-/** Known vehicle slug -> image path (used for fallback when API image is missing) */
-const SLUG_TO_IMAGE_PATH: Record<string, string> = {
-  'innova-crysta': '/uploads/img_68a32a68407e75.04067794.png',
-  'sedan': '/cars/sedan.png',
-  'ertiga': '/cars/ertiga.png',
-  'tempo-traveller': '/cars/tempo.png',
-  'toyota-glanza': '/uploads/toyota-glanza-vizagtaxihub.png',
-  'amaze': '/cars/amaze.png',
-  'swift-dzire': '/cars/sedan.png',
-  'honda-amaze': '/cars/amaze.png',
-  'innova-hycross': '/cars/innova.png',
-  'urbania': '/uploads/og-image-urbania.jpg',
-  'luxury': '/cars/luxury.png',
+/**
+ * Canonical fleet images: `uploads/taxi-services--visakhapatnam-{segment}.png`
+ * (see e.g. sedan: taxi-services--visakhapatnam-sedan.png)
+ */
+const SLUG_TO_TAXI_SERVICES_IMAGE: Record<string, string> = {
+  sedan: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-sedan.png`,
+  'swift-dzire': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-sedan.png`,
+  ertiga: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/ertiga-taxi-services-in-visakhapatnam-vizagtaxihub.png`,
+  'innova-crysta': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-innova-crysta.png`,
+  'toyota-glanza': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-toyota-glanza.png`,
+  amaze: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-amaze.png`,
+  'honda-amaze': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-amaze.png`,
+  'innova-hycross': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-innova-hycross.png`,
+  'tempo-traveller': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-tempo-traveller.png`,
+  urbania: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/og-image-urbania.jpg`,
+  luxury: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-luxury.png`,
 };
+
+const TAXI_SERVICES_DEFAULT_IMAGE = SLUG_TO_TAXI_SERVICES_IMAGE.sedan;
+
+/** Local dev / placeholder paths that must not be prefixed onto production — use slug map instead */
+function isNonProductionImagePlaceholder(path: string): boolean {
+  const p = path.trim().toLowerCase();
+  return (
+    p.startsWith('/cars/') ||
+    p.startsWith('cars/') ||
+    p.includes('/lovable-uploads/')
+  );
+}
 
 /** Get likely LCP image URL for a vehicle slug - for early preload during loading */
 export function getPreloadImageUrlForSlug(slug: string | undefined): string | null {
   if (!slug) return null;
   const preferred = PREFERRED_IMAGE_URLS[slug];
   if (preferred) return preferred;
-  const path = SLUG_TO_IMAGE_PATH[slug];
-  if (!path) return null;
-  return path.startsWith('http') ? path : `https://vizagtaxihub.com${path}`;
+  return SLUG_TO_TAXI_SERVICES_IMAGE[slug] ?? null;
 }
 
 // Mapping from vehicle_id to URL-friendly names
@@ -99,41 +116,54 @@ export function getVehicleUrl(vehicle: any): string {
   return `/vehicle/${generateVehicleUrl(vehicle)}`;
 }
 
-/** Base URL for assets - cars images live on main domain */
-const ASSET_BASE_URL = 'https://www.vizagtaxihub.com';
-
 /**
  * Get a usable image URL for a vehicle - handles relative paths, empty values, and fallbacks.
  * @param vehicle - Vehicle object with id, vehicleId, name, image
- * @param baseUrl - Optional base URL (defaults to vizagtaxihub.com)
+ * @param baseUrl - Origin for non-placeholder relative uploads (defaults to apex vizagtaxihub.com)
  * @returns Absolute image URL or null if no image available
  */
-export function getVehicleImageUrl(vehicle: { id?: string; vehicleId?: string; name?: string; image?: string }, baseUrl = ASSET_BASE_URL): string | null {
+export function getVehicleImageUrl(
+  vehicle: { id?: string; vehicleId?: string; name?: string; image?: string },
+  baseUrl = VIZAG_SITE_IMAGE_ORIGIN,
+): string | null {
   const slug = generateVehicleUrl(vehicle);
 
-  // 1. Use API/dashboard image first when valid - dashboard updates must be respected
+  // 1. Use API/dashboard image when it is a real remote or non-placeholder relative path
   const rawImage = vehicle?.image;
   if (typeof rawImage === 'string' && rawImage.trim() !== '') {
     const trimmed = rawImage.trim();
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       return trimmed;
     }
-    const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    return `${baseUrl.replace(/\/$/, '')}${path}`;
+    if (!isNonProductionImagePlaceholder(trimmed)) {
+      const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      return `${baseUrl.replace(/\/$/, '')}${path}`;
+    }
   }
 
-  // 2. Fallback: preferred URLs or slug mapping when API image is missing
+  // 2. Preferred uploads (non–taxi-services filenames)
   const preferredUrl = PREFERRED_IMAGE_URLS[slug];
   if (preferredUrl) {
     return preferredUrl;
   }
-  const fallbackPath = SLUG_TO_IMAGE_PATH[slug];
-  if (fallbackPath) {
-    const path = fallbackPath.startsWith('http') ? fallbackPath : `${baseUrl.replace(/\/$/, '')}${fallbackPath}`;
-    return path;
+
+  // 3. Canonical taxi-services uploads by slug
+  const taxiUrl = SLUG_TO_TAXI_SERVICES_IMAGE[slug];
+  if (taxiUrl) {
+    return taxiUrl;
   }
 
   return null;
+}
+
+/** Always returns an absolute image URL for lists (e.g. similar vehicles); never third-party placeholders. */
+export function getVehicleImageUrlForDisplay(vehicle: {
+  id?: string;
+  vehicleId?: string;
+  name?: string;
+  image?: string;
+}): string {
+  return getVehicleImageUrl(vehicle) || TAXI_SERVICES_DEFAULT_IMAGE;
 }
 
 /**

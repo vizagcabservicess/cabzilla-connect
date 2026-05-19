@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './lib/fonts';
 import './index.css';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
@@ -54,3 +53,6 @@ root.render(
     </HelmetProvider>
   </ErrorBoundary>
 );
+
+/** Inter @fontsource CSS — load after first paint so it does not contend with LCP decode + hydration. */
+void import('./lib/fonts').catch(() => {});

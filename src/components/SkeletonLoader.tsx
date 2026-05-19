@@ -78,4 +78,23 @@ export const PageSkeleton = () => (
   </div>
 );
 
-
+/**
+ * Mobile Urbania `/vehicle/urbania`: white card + title bars + hero block (matches in-app loading UI).
+ * Use until the LCP illustration `onLoad` or when swapping in after navigation.
+ */
+export function UrbaniaVehicleHeroSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-2xl border border-gray-200/90 bg-white p-4 shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)] sm:p-5 ${className ?? ''}`}
+      aria-hidden
+    >
+      <div className="max-w-xl space-y-2 pb-3">
+        <div className="h-8 w-48 animate-pulse rounded-md bg-gray-200 sm:h-9 sm:w-56" />
+        <div className="h-4 w-full max-w-md animate-pulse rounded-md bg-gray-100" />
+      </div>
+      <div className="mt-1 flex w-full min-h-[min(13rem,44vw)] items-center justify-center rounded-xl bg-gray-100/90 px-2 py-3 sm:min-h-[min(15rem,40vw)] sm:py-4">
+        <div className="h-[min(11rem,38vw)] w-full max-w-md animate-pulse rounded-lg bg-gray-200/90 sm:h-[min(13rem,34vw)]" />
+      </div>
+    </div>
+  );
+}
