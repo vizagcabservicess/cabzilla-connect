@@ -88,14 +88,21 @@ const CookieConsentBanner: React.FC<CookieConsentBannerProps> = ({
   if (!showBanner) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/50">
-      <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cookie-consent-title"
+    >
+      <Card className="pointer-events-auto w-full max-w-2xl max-h-[min(80vh,32rem)] overflow-y-auto shadow-2xl ring-1 ring-black/10">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Shield className="h-5 w-5 text-blue-600" />
               <div>
-                <CardTitle className="text-lg">Cookie Preferences</CardTitle>
+                <CardTitle id="cookie-consent-title" className="text-lg">
+                  Cookie Preferences
+                </CardTitle>
                 <CardDescription className="text-sm">
                   We use cookies to enhance your experience and analyze our traffic
                 </CardDescription>

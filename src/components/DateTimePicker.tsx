@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Calendar } from "@/components/ui/calendar";
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+
+const Calendar = lazy(() =>
+  import('@/components/ui/calendar').then((m) => ({ default: m.Calendar }))
+);
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -249,31 +252,43 @@ export function DateTimePicker({
           className="w-auto p-0" 
           align="start"
         >
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={disabled ? undefined : handleCalendarSelect}
-            disabled={minDate ? { before: minDate } : undefined}
-            initialFocus
-            className="rounded-t-none border-t pointer-events-auto"
-          />
-          <div className="p-3 border-t flex items-center gap-2">
-            <Clock className="h-4 w-4 text-gray-400" />
-            <Input
-              type="time"
-              value={selectedTime || ""}
-              onChange={disabled ? undefined : handleTimeChange}
-              className="max-w-[120px]"
-              disabled={disabled}
-            />
-            <Button 
-              onClick={disabled ? undefined : handleApply}
-              className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              disabled={disabled}
-            >
-              Apply
-            </Button>
-          </div>
+          {open ? (
+            <>
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[280px] min-w-[280px] items-center justify-center p-6 text-sm text-muted-foreground">
+                    Loading calendar…
+                  </div>
+                }
+              >
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={disabled ? undefined : handleCalendarSelect}
+                  disabled={minDate ? { before: minDate } : undefined}
+                  initialFocus
+                  className="rounded-t-none border-t pointer-events-auto"
+                />
+              </Suspense>
+              <div className="p-3 border-t flex items-center gap-2">
+                <Clock className="h-4 w-4 text-gray-400" />
+                <Input
+                  type="time"
+                  value={selectedTime || ""}
+                  onChange={disabled ? undefined : handleTimeChange}
+                  className="max-w-[120px]"
+                  disabled={disabled}
+                />
+                <Button 
+                  onClick={disabled ? undefined : handleApply}
+                  className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+                  disabled={disabled}
+                >
+                  Apply
+                </Button>
+              </div>
+            </>
+          ) : null}
         </PopoverContent>
       </Popover>
     </div>

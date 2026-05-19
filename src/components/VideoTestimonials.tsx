@@ -1,81 +1,99 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
-import { Card, CardContent } from '@/components/ui/card';
-import { Star, Play, ExternalLink } from 'lucide-react';
+import { Pagination } from 'swiper/modules';
+import { Play, ExternalLink } from 'lucide-react';
 
 // Import Swiper styles
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
+/** YouTube CDN thumbnails have ~2h cache; defer + use hqdefault to cut bytes until the section is visible. */
+function LazyYouTubeThumb({
+  videoId,
+  alt,
+  className,
+}: {
+  videoId: string;
+  alt: string;
+  className?: string;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setSrc(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: '240px', threshold: 0.01 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [videoId]);
+
+  return (
+    <div ref={wrapRef} className={`relative overflow-hidden bg-gray-200 ${className ?? ''}`}>
+      {src ? (
+        <img
+          src={src}
+          alt={alt}
+          className="h-64 w-full object-cover"
+          width={480}
+          height={360}
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+        />
+      ) : (
+        <div className="h-64 w-full animate-pulse bg-gradient-to-br from-gray-200 to-gray-300" aria-hidden />
+      )}
+    </div>
+  );
+}
+
 export function VideoTestimonials() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [swiperInstance, setSwiperInstance] = useState<any>(null);
 
+  /** Three unique shorts — avoids duplicate YouTube image fetches and duplicate UI. */
   const videoTestimonials = [
     {
-      id: "wrgfamvCkns",
-      title: "Customer Video Testimonial",
-      customer: "YouTube Shorts",
+      id: 'wrgfamvCkns',
+      title: 'Customer Video Testimonial',
+      customer: 'YouTube Shorts',
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/wrgfamvCkns/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/wrgfamvCkns"
+      url: 'https://www.youtube.com/shorts/wrgfamvCkns',
     },
     {
-      id: "ROa7qu67ECA",
-      title: "Customer Video Testimonial",
-      customer: "YouTube Shorts",
+      id: 'ROa7qu67ECA',
+      title: 'Customer Video Testimonial',
+      customer: 'YouTube Shorts',
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/ROa7qu67ECA/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/ROa7qu67ECA"
+      url: 'https://www.youtube.com/shorts/ROa7qu67ECA',
     },
     {
-      id: "QUUuoF04zfk",
-      title: "Customer Video Testimonial",
-      customer: "YouTube Shorts",
+      id: 'QUUuoF04zfk',
+      title: 'Customer Video Testimonial',
+      customer: 'YouTube Shorts',
       rating: 5,
-      thumbnail: "https://img.youtube.com/vi/QUUuoF04zfk/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/QUUuoF04zfk"
+      url: 'https://www.youtube.com/shorts/QUUuoF04zfk',
     },
-    {
-      id: "abc123def",
-      title: "Family Trip Experience",
-      customer: "YouTube Shorts",
-      rating: 5,
-      thumbnail: "https://img.youtube.com/vi/wrgfamvCkns/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/wrgfamvCkns"
-    },
-    {
-      id: "xyz789ghi",
-      title: "Business Travel Review",
-      customer: "YouTube Shorts",
-      rating: 5,
-      thumbnail: "https://img.youtube.com/vi/ROa7qu67ECA/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/ROa7qu67ECA"
-    },
-    {
-      id: "mno456pqr",
-      title: "Weekend Getaway",
-      customer: "YouTube Shorts",
-      rating: 5,
-      thumbnail: "https://img.youtube.com/vi/QUUuoF04zfk/maxresdefault.jpg",
-      url: "https://www.youtube.com/shorts/QUUuoF04zfk"
-    }
   ];
 
-  const gridVideos = videoTestimonials.slice(0, 3);
-  const sliderVideos = videoTestimonials.slice(3);
+  const gridVideos = videoTestimonials;
+  const sliderVideos: typeof videoTestimonials = [];
 
-  const renderVideoCard = (video: any, index: number) => {
+  const renderVideoCard = (video: (typeof videoTestimonials)[0], index: number) => {
     return (
-      <div key={index} className="bg-white rounded-3xl shadow-md overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-xl">
+      <div key={`${video.id}-${index}`} className="bg-white rounded-3xl shadow-md overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-xl">
         <div className="relative">
-          <img 
-            src={video.thumbnail} 
-            alt={video.title}
-            className="w-full h-64 object-cover"
-          />
+          <LazyYouTubeThumb videoId={video.id} alt={video.title} />
           {/* Gradient overlay for subtitle readability */}
           <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-black/30 to-transparent rounded-t-3xl"></div>
           {/* Subtitle overlay */}

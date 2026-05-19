@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './lib/fonts';
 import './index.css';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
@@ -53,14 +54,3 @@ root.render(
     </HelmetProvider>
   </ErrorBoundary>
 );
-
-// Load fonts after first paint so they don't block FCP (critical CSS uses system font)
-const loadFontsAfterPaint = () => {
-  const cb = () => import('./lib/fonts');
-  if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(cb, { timeout: 2000 });
-  } else {
-    setTimeout(cb, 1);
-  }
-};
-loadFontsAfterPaint();

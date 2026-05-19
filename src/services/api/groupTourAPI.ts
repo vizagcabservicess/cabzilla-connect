@@ -1,9 +1,5 @@
-import React from 'react';
 import axios from 'axios';
-import { pdf } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
 import { getApiUrl } from '@/config/api';
-import GroupTourInvoicePDF from '@/components/invoice/GroupTourInvoicePDF';
 
 const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
@@ -290,6 +286,12 @@ export const groupTourAPI = {
       throw new Error(res.data?.message || 'Failed to fetch invoice');
     }
     const invoiceData = res.data.invoice;
+    const [React, { pdf }, { saveAs }, { default: GroupTourInvoicePDF }] = await Promise.all([
+      import('react'),
+      import('@react-pdf/renderer'),
+      import('file-saver'),
+      import('@/components/invoice/GroupTourInvoicePDF'),
+    ]);
     const blob = await pdf(React.createElement(GroupTourInvoicePDF, { data: invoiceData })).toBlob();
     const bookingNumber = (invoiceData.booking_number || `invoice-${groupTourBookingId}`).replace(/[^a-zA-Z0-9\-]/g, '');
     saveAs(blob, `invoice-${bookingNumber}.pdf`);

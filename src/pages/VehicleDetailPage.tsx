@@ -26,6 +26,7 @@ import {
   URBANIA_ILLUSTRATION_PATH,
   URBANIA_SEO_DEFAULTS,
 } from '@/seo/urbaniaStaticMeta';
+import { Hero } from '@/components/Hero';
 
 const urbaniaHeroIllustrationSrc = resolveUrbaniaIllustrationSrc();
 const urbaniaHeroIllustrationLocalSrc = `${import.meta.env.BASE_URL.replace(/\/$/, '')}${URBANIA_ILLUSTRATION_PATH}`;
@@ -37,9 +38,6 @@ const VehicleTabs = lazy(() => import('@/components/vehicle/VehicleTabs'));
 const RateCard = lazy(() => import('@/components/vehicle/RateCard'));
 const SimilarVehicles = lazy(() => import('@/components/vehicle/SimilarVehicles'));
 const VehicleTours = lazy(() => import('@/components/vehicle/VehicleTours'));
-const HeroBookingEmbed = lazy(() =>
-  import('@/components/Hero').then((m) => ({ default: m.Hero }))
-);
 
 // Note: DeferredComponents would be used for non-critical components
 
@@ -454,6 +452,9 @@ const VehicleDetailPage = () => {
         <style>{criticalStyles}</style>
         
         {/* Preload LCP image early - use optimized URL when backend supports it */}
+        {vehicleSlug === 'urbania' && (
+          <link rel="preload" as="image" href={urbaniaHeroIllustrationSrc} fetchPriority="high" />
+        )}
         {vehicle?.image && (
           <link rel="preload" as="image" href={getOptimizedImageUrl(vehicle.image)} fetchPriority="high" />
         )}
@@ -598,7 +599,7 @@ const VehicleDetailPage = () => {
                       </div>
                     }
                   >
-                    <HeroBookingEmbed
+                    <Hero
                       hideBackground
                       embedCompactLayout
                       embedStretchToShell

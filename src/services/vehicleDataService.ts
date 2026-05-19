@@ -21,7 +21,7 @@ let lastSuccessfulRefresh = 0;
 let pendingRefreshPromise: Promise<CabType[]> | null = null;
 
 /** Normalize API vehicle data: ensure pricePerKm from price_per_km, consistent field names */
-function normalizeVehicles(vehicles: CabType[]): CabType[] {
+export function normalizeVehicles(vehicles: CabType[]): CabType[] {
   return vehicles.map((v) => {
     const pricePerKm = v.pricePerKm ?? (v as any).price_per_km;
     return { ...v, pricePerKm };
@@ -344,6 +344,25 @@ const refreshVehicleData = async (forceRefresh = false, includeInactive = false)
     return DEFAULT_VEHICLES;
   }
 };
+
+/**
+ * Route-loader fast path: fetch public `data/vehicles.json` only.
+ * Avoids the `refreshVehicleData` waterfall (several admin endpoints tried in sequence),
+ * which can block `/vehicle/*` for many seconds on cold cache / slow PHP.
+ */
+export async function tryLoadVehiclesFromPublicJson(): Promise<CabType[] | null> {
+  try {
+    const jsonResponse = await fetch(getApiUrl(`data/vehicles.json?_t=${Date.now()}`), {
+      cache: 'no-store',
+    });
+    if (!jsonResponse.ok) return null;
+    const jsonVehicles = await jsonResponse.json();
+    if (!Array.isArray(jsonVehicles) || jsonVehicles.length === 0) return null;
+    return normalizeVehicles(jsonVehicles as CabType[]);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Fetches vehicle data, prioritizing database over static JSON

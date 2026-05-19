@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
-import { URBANIA_SEO_DEFAULTS } from "./src/seo/urbaniaStaticMeta";
+import { URBANIA_ILLUSTRATION_CDN_URL, URBANIA_SEO_DEFAULTS } from "./src/seo/urbaniaStaticMeta";
 
 function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -14,7 +14,9 @@ function escapeHtmlAttr(value: string): string {
 function injectUrbaniaSocialMeta(html: string): string {
   const m = URBANIA_SEO_DEFAULTS;
   const keywords = `${m.keywords}, 13 seater urbania`;
+  const lcpPreload = `<link rel="preload" href="${escapeHtmlAttr(URBANIA_ILLUSTRATION_CDN_URL)}" as="image" fetchpriority="high" />`;
   return html
+    .replace(/<head>/i, `<head>\n    ${lcpPreload}`)
     .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(m.title)}</title>`)
     .replace(
       /<meta name="description" content="[^"]*" \/>/,
@@ -100,13 +102,15 @@ export default defineConfig(({ mode }) => ({
           return `assets/[name]-[hash].${ext}`;
         },
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react-dom') || id.includes('react/') || id.includes('react-router')) {
-              return 'react-vendor';
-            }
-            if (id.includes('@tanstack/react-query') || id.includes('react-helmet-async') || id.includes('axios')) {
-              return 'vendor';
-            }
+          if (!id.includes('node_modules')) return;
+          // Router separate from React core so the browser can parse/evaluate smaller units.
+          if (id.includes('react-router')) return 'router-vendor';
+          if (id.includes('react-dom') || id.includes('scheduler')) return 'react-vendor';
+          if (/[/\\]node_modules[/\\]react[/\\]/.test(id)) return 'react-vendor';
+          // Isolated carousel lib — safe separate chunk (avoid splitting recharts alone; caused TDZ).
+          if (id.includes('swiper')) return 'swiper-vendor';
+          if (id.includes('@tanstack/react-query') || id.includes('react-helmet-async') || id.includes('axios')) {
+            return 'vendor';
           }
         },
       },
@@ -129,6 +133,17 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' &&
     componentTagger(),
+    {
+      name: 'strip-gptengineer-prod',
+      apply: 'build' as const,
+      transformIndexHtml(html: string) {
+        if (mode !== 'production') return html;
+        return html.replace(
+          /<script src="https:\/\/cdn\.gpteng\.co\/gptengineer\.js"[^>]*>\s*<\/script>\s*/i,
+          '',
+        );
+      },
+    },
     {
       name: 'emit-urbania-social-index-html',
       apply: 'build' as const,

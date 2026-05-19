@@ -14,7 +14,6 @@ import { useSearchParams } from 'react-router-dom';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
-import { PopularDestinations } from '@/components/PopularDestinations';
 import { PopularGroupTours } from '@/components/PopularGroupTours';
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,11 +98,8 @@ const Index = () => {
               <FleetShowcase />
               <TempoTravellerShowcase />
               <ServicesShowcase />
-             
               <WhyChooseUs />
               <PopularRoutes />
-       
-              
               <EnhancedCTA />
               <TestimonialsSection />
               <VideoTestimonials />

@@ -1,6 +1,8 @@
 import React, { Component, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { extractChunkUrlFromErrorMessage } from '@/utils/dynamicImportRetry';
+import { clearAllCaches } from '@/utils/serviceWorkerCache';
 
 interface Props {
   children: ReactNode;
@@ -48,17 +50,12 @@ export class DynamicImportErrorBoundary extends Component<Props, State> {
     if (error.message.includes('Failed to fetch dynamically imported module')) {
       console.error('Dynamic import failed:', {
         error: error.message,
-        url: this.extractModuleUrl(error.message),
+        url: extractChunkUrlFromErrorMessage(error.message),
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
         retryCount: this.state.retryCount
       });
     }
-  }
-
-  private extractModuleUrl(errorMessage: string): string | null {
-    const match = errorMessage.match(/https:\/\/[^\s]+\.js/);
-    return match ? match[0] : null;
   }
 
   private handleRetry = () => {
@@ -85,13 +82,26 @@ export class DynamicImportErrorBoundary extends Component<Props, State> {
 
     // Retry after a short delay
     this.retryTimeoutId = setTimeout(() => {
-      if (onRetry) {
-        onRetry();
-      } else {
-        // Force a page reload as fallback
-        window.location.reload();
-      }
-    }, 1000 * (retryCount + 1)); // Exponential backoff
+      void (async () => {
+        try {
+          await clearAllCaches();
+        } catch {
+          /* ignore */
+        }
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          try {
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_ALL_CACHES' });
+          } catch {
+            /* ignore */
+          }
+        }
+        if (onRetry) {
+          onRetry();
+        } else {
+          window.location.reload();
+        }
+      })();
+    }, 1000 * (retryCount + 1));
   };
 
   private clearModuleCache = () => {
@@ -106,7 +116,7 @@ export class DynamicImportErrorBoundary extends Component<Props, State> {
       // Clear browser cache for the specific module
       const { error } = this.state;
       if (error) {
-        const moduleUrl = this.extractModuleUrl(error.message);
+        const moduleUrl = error ? extractChunkUrlFromErrorMessage(error.message) : null;
         if (moduleUrl) {
           // Try to clear the specific module from cache
           fetch(moduleUrl, {

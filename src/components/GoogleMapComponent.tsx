@@ -3,13 +3,7 @@ import type { Location } from '@/lib/locationData';
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { toast } from "sonner";
 
-// Import essential components directly from react-google-maps/api
-import { 
-  GoogleMap, 
-  useJsApiLoader, 
-  Marker, 
-  DirectionsRenderer
-} from "@react-google-maps/api";
+import { GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
 
 interface GoogleMapComponentProps {
   pickupLocation: Location;

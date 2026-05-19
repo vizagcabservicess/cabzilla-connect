@@ -56,6 +56,12 @@ export async function retryDynamicImport<T>(
       if (attempt === maxRetries) {
         console.error(`Dynamic import failed after ${maxRetries} attempts`);
         onMaxRetriesReached?.(lastError);
+        try {
+          const { clearAllCaches } = await import('./serviceWorkerCache');
+          await clearAllCaches();
+        } catch {
+          /* ignore */
+        }
         throw lastError;
       }
 
@@ -98,7 +104,7 @@ async function clearModuleCache(errorMessage: string): Promise<void> {
 
     // Try to clear browser cache for the specific module
     try {
-      await fetch(moduleUrl, {
+      const head = fetch(moduleUrl, {
         method: 'HEAD',
         cache: 'no-cache',
         headers: {
@@ -107,6 +113,10 @@ async function clearModuleCache(errorMessage: string): Promise<void> {
           'Expires': '0'
         }
       });
+      await Promise.race([
+        head,
+        new Promise<void>((resolve) => setTimeout(resolve, 4000))
+      ]);
     } catch (err) {
       // Ignore fetch errors, we're just trying to clear cache
       console.warn('Failed to clear module cache:', err);
@@ -117,11 +127,28 @@ async function clearModuleCache(errorMessage: string): Promise<void> {
 }
 
 /**
- * Extract module URL from error message
+ * Extract chunk URL from Vite / browser error strings (absolute or /assets/... relative).
+ */
+export function extractChunkUrlFromErrorMessage(errorMessage: string): string | null {
+  if (!errorMessage) return null;
+  const abs = errorMessage.match(/https?:\/\/[^\s'")]+?\.m?js(?:\?[^\s'")]*)?/i);
+  if (abs) return abs[0];
+  const rel = errorMessage.match(/\/assets\/[^\s'")]+\.m?js(?:\?[^\s'")]*)?/i);
+  if (rel && typeof window !== 'undefined' && window.location?.origin) {
+    try {
+      return new URL(rel[0], window.location.origin).href;
+    } catch {
+      return rel[0];
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract module URL from error message (legacy name — use extractChunkUrlFromErrorMessage).
  */
 function extractModuleUrl(errorMessage: string): string | null {
-  const match = errorMessage.match(/https:\/\/[^\s]+\.js/);
-  return match ? match[0] : null;
+  return extractChunkUrlFromErrorMessage(errorMessage);
 }
 
 /**

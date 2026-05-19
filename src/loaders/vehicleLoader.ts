@@ -1,4 +1,4 @@
-import { getVehicleData } from '@/services/vehicleDataService';
+import { getVehicleData, tryLoadVehiclesFromPublicJson } from '@/services/vehicleDataService';
 import { getVehicleUrl, getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
 
 export interface VehicleLoaderData {
@@ -35,7 +35,9 @@ export async function vehicleLoader({
   }
 
   try {
-    const allVehicles = await getVehicleData(false, false);
+    const fromJson = await tryLoadVehiclesFromPublicJson();
+    const allVehicles =
+      fromJson && fromJson.length > 0 ? fromJson : await getVehicleData(false, false);
     const foundVehicle = allVehicles.find((v) => {
       const vehicleUrl = getVehicleUrl(v);
       const urlSlug = vehicleUrl.replace('/vehicle/', '');

@@ -31,11 +31,10 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
   const [hasConsent, setHasConsent] = useState(false);
 
   const applyConsentToScripts = useCallback((prefs: CookiePreferences) => {
-    console.log('Applying consent to scripts with preferences:', prefs);
-    
+    const dev = import.meta.env.DEV;
+
     // Apply Google Consent Mode v2
     if (typeof window !== 'undefined' && window.gtag) {
-      console.log('gtag available, updating consent');
       const consentUpdate = {
         'ad_storage': prefs.marketing ? 'granted' : 'denied',
         'analytics_storage': prefs.analytics ? 'granted' : 'denied',
@@ -43,12 +42,11 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
         'personalization_storage': prefs.marketing ? 'granted' : 'denied',
         'security_storage': prefs.necessary ? 'granted' : 'denied'
       };
-      console.log('Sending consent update:', consentUpdate);
+      if (dev) console.log('Sending consent update:', consentUpdate);
       window.gtag('consent', 'update', consentUpdate);
-      
+
       // Send initial page view if analytics consent is granted
       if (prefs.analytics) {
-        console.log('Analytics consent granted, sending page view');
         window.gtag('config', 'G-68BN0C389S', {
           send_page_view: true,
           page_path: window.location.pathname + window.location.search
@@ -57,16 +55,9 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
           page_path: window.location.pathname + window.location.search,
           page_title: document.title
         });
-        console.log('Page view sent to GA4');
       }
-    } else {
+    } else if (dev) {
       console.warn('gtag not available on window object');
-    }
-
-    // Microsoft Clarity is loaded by default without consent requirement
-    // Clarity will track all visitors by default
-    if (typeof window !== 'undefined' && window.clarity) {
-      console.log('Microsoft Clarity active (no consent required)');
     }
 
     // Store preferences for future page loads
@@ -86,7 +77,7 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
         // Apply consent to tracking scripts
         applyConsentToScripts(parsedPreferences);
       } catch (error) {
-        console.error('Error parsing saved cookie preferences:', error);
+        if (import.meta.env.DEV) console.error('Error parsing saved cookie preferences:', error);
       }
     } else {
       // No saved consent, use default granted state (production environment)

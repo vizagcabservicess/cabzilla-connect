@@ -1,33 +1,41 @@
 /**
- * Service Worker for cache management and dynamic import error handling
+ * Service Worker — push notifications + light static precache.
+ *
+ * Do not cache-first JS bundles: after a deploy, missing chunks may return index.html
+ * with HTTP 200; caching that breaks dynamic imports ("Failed to fetch dynamically
+ * imported module") until users clear site data.
  */
 
-const CACHE_NAME = 'vizag-taxi-hub-v2';
-const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v2';
+const CACHE_NAME = 'vizag-taxi-hub-v4';
+const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v4';
+
+/** Real static files only — never precache `/` or other HTML routes (stale app shell). */
 const STATIC_ASSETS = [
-  '/',
-  '/fleet',
-  '/vehicle/tempo-traveller',
-  '/cars/tempo.png',
   '/og-image.png',
-  '/cars/sedan.png',
-  '/cars/ertiga.png',
-  '/cars/innova.png',
-  '/cars/luxury.png'
+  '/cars/sedan.svg',
+  '/cars/ertiga.svg',
+  '/cars/innova.svg',
+  '/cars/luxury.svg',
+  '/cars/tempo.svg',
+  '/cars/amaze.svg',
 ];
 
-// Install event
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const path of STATIC_ASSETS) {
+        try {
+          await cache.add(new Request(path, { cache: 'reload' }));
+        } catch (e) {
+          console.warn('SW precache skip:', path, e);
+        }
+      }
     })
   );
   self.skipWaiting();
 });
 
-// Activate event
 self.addEventListener('activate', (event) => {
   console.log('Service Worker activating...');
   event.waitUntil(
@@ -45,56 +53,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  const url = new URL(request.url);
+  if (request.method !== 'GET') return;
 
-  // Handle dynamic imports and JS chunks
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs')) {
-    event.respondWith(
-      handleDynamicImport(request)
-    );
-  }
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  const isModuleScript = url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs');
+  if (!isModuleScript) return;
+
+  // Network-only for scripts — hashed filenames + browser HTTP cache are enough.
+  event.respondWith(fetch(request));
 });
-
-// Handle dynamic import requests
-async function handleDynamicImport(request) {
-  const url = new URL(request.url);
-  
-  try {
-    // Try to get from cache first
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      console.log('Serving from cache:', url.pathname);
-      return cachedResponse;
-    }
-
-    // Fetch from network
-    const response = await fetch(request);
-    
-    if (response.ok) {
-      // Cache successful responses
-      const cache = await caches.open(DYNAMIC_CACHE_NAME);
-      cache.put(request, response.clone());
-      console.log('Cached dynamic import:', url.pathname);
-    }
-    
-    return response;
-  } catch (error) {
-    console.error('Failed to fetch dynamic import:', url.pathname, error);
-    
-    // Try to serve from cache even if network fails
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      console.log('Serving stale cache for:', url.pathname);
-      return cachedResponse;
-    }
-    
-    // If all else fails, throw the error
-    throw error;
-  }
-}
 
 // Handle messages from the main thread
 self.addEventListener('message', (event) => {
@@ -166,18 +137,10 @@ async function clearAllCaches() {
   }
 }
 
-// Preload a module
+// Preload a module (network only — do not SW-cache scripts; see fetch handler comment)
 async function preloadModule(url) {
   try {
-    const response = await fetch(url, {
-      cache: 'force-cache'
-    });
-    
-    if (response.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE_NAME);
-      await cache.put(url, response);
-      console.log('Preloaded module:', url);
-    }
+    await fetch(url, { cache: 'default' });
   } catch (error) {
     console.warn('Failed to preload module:', url, error);
   }

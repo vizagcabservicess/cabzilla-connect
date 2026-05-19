@@ -12,9 +12,8 @@ import { Button } from '@/components/ui/button';
 import { FaWhatsapp } from 'react-icons/fa';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
-
-// Homepage loaded eagerly to avoid "Failed to fetch dynamically imported module" (no separate Index chunk)
 import Index from './pages/Index';
+
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));

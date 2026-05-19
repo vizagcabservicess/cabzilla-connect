@@ -92,6 +92,14 @@ export function LocationInput({
     ? 'Select a valid pickup from suggestions (within 35 KM radius).'
     : SELECT_FROM_LIST_MESSAGE_DEFAULT;
 
+  /** Parent handlers (e.g. Hero) are often inline — must not be Autocomplete effect deps or Places re-inits every render → duplicate .pac-container */
+  const onLocationChangeRef = useRef(onLocationChange);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onLocationChangeRef.current = onLocationChange;
+    onChangeRef.current = onChange;
+  }, [onLocationChange, onChange]);
+
   const isDesktopVariant = variant === 'desktop';
   const isAppVariant = variant === 'app';
   const isInfieldVariant = variant === 'infield';
@@ -432,6 +440,11 @@ export function LocationInput({
     const el = inputRef.current;
     if (!el) return undefined;
 
+    if (autocompleteRef.current && google.maps?.event) {
+      google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      autocompleteRef.current = null;
+    }
+
     let ac: google.maps.places.Autocomplete | null = null;
 
     try {
@@ -462,8 +475,8 @@ export function LocationInput({
         if (place && place.geometry?.location) {
           setInputValue(place.name || place.formatted_address || '');
 
-          if (onChange && place.formatted_address) {
-            onChange(place.formatted_address);
+          if (onChangeRef.current && place.formatted_address) {
+            onChangeRef.current(place.formatted_address);
           }
 
           const lat = place.geometry.location.lat();
@@ -475,16 +488,16 @@ export function LocationInput({
           if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 35)) {
             toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
             setInputValue('');
-            if (onChange) onChange('');
-            if (onLocationChange) onLocationChange(EMPTY_LOCATION);
+            if (onChangeRef.current) onChangeRef.current('');
+            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
             return;
           }
 
           if (isPickupLocation && !isTourTrip && !isWithinVizagRange(lat, lng)) {
             toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
             setInputValue('');
-            if (onChange) onChange('');
-            if (onLocationChange) onLocationChange(EMPTY_LOCATION);
+            if (onChangeRef.current) onChangeRef.current('');
+            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
             return;
           }
 
@@ -492,8 +505,8 @@ export function LocationInput({
             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
           }
 
-          if (onLocationChange) {
-            onLocationChange({
+          if (onLocationChangeRef.current) {
+            onLocationChangeRef.current({
               id: place.place_id || place.formatted_address || '',
               name: place.name || place.formatted_address || '',
               address: place.formatted_address || '',
@@ -527,8 +540,6 @@ export function LocationInput({
     google,
     isPickupLocation,
     tripType,
-    onLocationChange,
-    onChange,
     mobileSearchSheetOpen,
     fullscreenMobileSearchSheet,
   ]);

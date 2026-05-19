@@ -13,9 +13,9 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import router from './routes'; // Only for original approach
 import { AdminWebPushGate } from '@/components/admin/AdminWebPushGate';
 import { UrbaniaSeatShareCampaignModal } from '@/components/UrbaniaSeatShareCampaignModal';
+import Index from './pages/Index';
 
-// Lazy load pages for better performance
-const Index = lazy(() => import("./pages/Index"));
+// Lazy load pages for better performance (alternate BrowserRouter path only)
 const AdminDashboard = lazy(() => import("./pages/AdminDashboardPage"));
 const CustomerDashboard = lazy(() => import("./pages/DashboardPage"));
 const DriverDashboard = lazy(() => import("./pages/DriverDashboard"));

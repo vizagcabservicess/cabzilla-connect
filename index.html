@@ -41,12 +41,12 @@
     <link rel="preconnect" href="https://maps.googleapis.com" />
     <link rel="preconnect" href="https://maps.gstatic.com" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <!-- Home hero LCP (desktop): banner hidden on mobile — preload only when shown -->
+    <link rel="preload" href="https://vizagtaxihub.com/uploads/banner-vth.jpg" as="image" fetchpriority="high" media="(min-width: 640px)" />
     <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
     <link rel="dns-prefetch" href="https://www.clarity.ms" />
     <link rel="dns-prefetch" href="https://analytics.google.com" />
     
-    <!-- Preload LCP image (hero banner) - high priority for mobile LCP -->
-    <link rel="preload" href="https://vizagtaxihub.com/uploads/banner-vth.jpg" as="image" fetchpriority="high" />
     
     <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, Cloudflare, and Social Login with iOS support -->
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
@@ -108,7 +108,9 @@
 
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
-    <!-- Main app: type=module loads async, doesn't block first paint -->
+    <!-- Main app: type=module loads async, doesn't block first paint.
+         If you use Cloudflare Rocket Loader on vizagtaxihub.com, consider disabling it for this SPA:
+         Rocket Loader defers scripts and often inflates lab LCP/TBT vs a plain module graph. -->
     <script type="module" src="/src/main.tsx"></script>
     
     <!-- Razorpay script - Load only when needed -->
@@ -124,7 +126,7 @@
       };
     </script>
 
-    <!-- Deferred third-party scripts: load after page load to reduce TBT/FCP -->
+    <!-- Deferred third-party scripts: after load + idle to reduce main-thread contention with React -->
     <script>
       function loadAnalyticsAfterLoad() {
         (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -149,8 +151,16 @@
           y.parentNode.insertBefore(t,y);
         })(window, document, 'clarity', 'script', 'htvvpivvo1');
       }
-      if (document.readyState === 'complete') loadAnalyticsAfterLoad();
-      else window.addEventListener('load', loadAnalyticsAfterLoad);
+      function scheduleAnalyticsIdle() {
+        var run = function() { loadAnalyticsAfterLoad(); };
+        if (typeof requestIdleCallback !== 'undefined') {
+          requestIdleCallback(run, { timeout: 5000 });
+        } else {
+          setTimeout(run, 2000);
+        }
+      }
+      if (document.readyState === 'complete') scheduleAnalyticsIdle();
+      else window.addEventListener('load', scheduleAnalyticsIdle);
     </script>
 
     <!-- Google Consent Mode v2 - at end of body so it does not block first paint -->

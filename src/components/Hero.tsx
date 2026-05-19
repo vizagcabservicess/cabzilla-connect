@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
@@ -15,8 +15,10 @@ import { TourTabIcon } from '@/components/icons/CabTabIcons';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
-import GoogleMapComponent from './GoogleMapComponent';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+/** Desktop-only route map: `@react-google-maps/api` is large — keep out of initial mobile bundle. */
+const GoogleMapComponent = lazy(() => import('./GoogleMapComponent'));
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -358,7 +360,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const [isCheckingTravelTime, setIsCheckingTravelTime] = useState<boolean>(false);
   const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
-  const [isVideoLoaded, setIsVideoLoaded] = useState<boolean>(false);
   const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
   // Add new state for airport direction label
   const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
@@ -2235,17 +2236,20 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       
       {/* Hero Banner Section - Only show when not in search mode */}
       {!isSearchActive && currentStep === 1 && !hideBackground && (
-        <section className="hidden sm:block relative min-h-[50vh] sm:min-h-[70vh] flex items-center justify-center overflow-hidden">
+        <section className="hidden sm:flex relative min-h-[50vh] sm:min-h-[70vh] items-center justify-center overflow-hidden">
         {/* Background Video/Image */}
         <div className="absolute inset-0 z-0">
       
           
-          {/* Fallback Image */}
-          <div 
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}
-            style={{
-              backgroundImage: "url('https://vizagtaxihub.com/uploads/banner-vth.jpg')"
-            }}
+          <img
+            src="https://vizagtaxihub.com/uploads/banner-vth.jpg"
+            alt=""
+            role="presentation"
+            width={1920}
+            height={1080}
+            decoding="async"
+            fetchPriority="high"
+            className="absolute inset-0 h-full w-full object-cover object-center"
           />
           
           {/* Overlay */}
@@ -2985,13 +2989,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         )}
                             {!isMobile && (tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
                               <div className={`mt-3 app-card${embedStretchToShell ? ' w-full max-w-full' : ''}`}>
-                                <GoogleMapComponent
-                                  key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
-                                  pickupLocation={pickupLocation}
-                                  dropLocation={dropLocation}
-                                  tripType={tripType}
-                                  onDistanceCalculated={handleDistanceCalculated}
-                                />
+                                <Suspense
+                                  fallback={
+                                    <div
+                                      className="flex h-[400px] items-center justify-center rounded-md bg-gray-100 text-sm text-gray-500"
+                                      aria-hidden
+                                    >
+                                      Loading map…
+                                    </div>
+                                  }
+                                >
+                                  <GoogleMapComponent
+                                    key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
+                                    pickupLocation={pickupLocation}
+                                    dropLocation={dropLocation}
+                                    tripType={tripType}
+                                    onDistanceCalculated={handleDistanceCalculated}
+                                  />
+                                </Suspense>
                               </div>
                             )}
                           </div>

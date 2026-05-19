@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-import { pdf } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
-import { TourQuotationPDF } from '@/components/pdf/TourQuotationPDF';
-import { TourDetail } from '@/types/tour';
+import type { TourDetail } from '@/types/tour';
 
 interface UsePDFExportProps {
   tour: TourDetail;
@@ -26,22 +23,25 @@ export const usePDFExport = () => {
   }: UsePDFExportProps) => {
     try {
       setIsGenerating(true);
-      
-      // Generate PDF
+
+      const [{ pdf }, { saveAs }, { TourQuotationPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('file-saver'),
+        import('@/components/pdf/TourQuotationPDF'),
+      ]);
+
       const pdfElement = TourQuotationPDF({
         tour,
         pickupLocation,
         pickupDate,
         vehicleFares,
       });
-      
+
       const blob = await pdf(pdfElement as React.ReactElement).toBlob();
 
-      // Generate filename with tour name and date
       const tourFileName = (tour.tourName || (tour as any).name || 'Tour').replace(/[^a-zA-Z0-9]/g, '_');
       const fileName = `${tourFileName}_Quotation_${pickupDate.toISOString().split('T')[0]}.pdf`;
 
-      // Download PDF
       saveAs(blob, fileName);
       
       return { success: true, fileName };
