@@ -57,8 +57,8 @@ export const MobileNavigation = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 md:hidden z-50 shadow-lg mobile-safe-bottom">
-      <div className="grid grid-cols-4 h-16">
+    <nav className="fixed bottom-0 left-0 right-0 z-[100] isolate border-t border-gray-200/90 bg-white/85 pb-[max(0.25rem,env(safe-area-inset-bottom,0px))] shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md supports-[backdrop-filter]:bg-white/75 md:hidden mobile-safe-bottom">
+      <div className="grid min-h-[4.25rem] grid-cols-4">
         {navItems.map((item) => {
           if (item.kind === 'external') {
             return (
@@ -67,7 +67,7 @@ export const MobileNavigation = () => {
                 href={item.href}
                 target={item.href.startsWith('http') ? '_blank' : undefined}
                 rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                className="relative flex flex-col items-center justify-center h-full transition-colors text-gray-500 hover:text-gray-700"
+                className="relative flex min-h-[48px] flex-col items-center justify-center px-2 py-2 transition-colors text-gray-500 hover:text-gray-700 active:bg-gray-50/80"
                 aria-label={item.label}
               >
                 <div className="relative">{item.icon}</div>
@@ -81,7 +81,7 @@ export const MobileNavigation = () => {
             <Link
               key={item.label}
               to={item.href}
-              className={`relative flex flex-col items-center justify-center h-full transition-colors ${
+              className={`relative flex min-h-[48px] flex-col items-center justify-center px-2 py-2 transition-colors active:bg-gray-50/80 ${
                 isActive ? 'text-blue-600' : 'text-gray-500'
               }`}
             >

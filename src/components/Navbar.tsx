@@ -33,7 +33,8 @@ import {
   UserPlus,
   MapPin,
   Plane,
-  Calendar
+  Calendar,
+  Users,
 } from 'lucide-react';
 import { CITY_LOOKUP } from './OutstationHeroWidget';
 import { tourAPI } from '@/services/api/tourAPI';
@@ -52,6 +53,7 @@ const megaMenuData = {
       { label: 'Airport Transfer', to: '/airport-taxi' },
       { label: 'Tour Packages', to: '/tours' },
       { label: 'Group Tours', to: '/group-tours' },
+      { label: 'Shared Carpooling', to: '/shared-carpooling' },
       { 
         label: 'Tempo Traveller Rental', 
         to: '/tempo-traveller-rental-vizag',
@@ -76,6 +78,7 @@ const megaMenuData = {
       { label: 'Airport Info', items: ['On-time guarantee', 'Flight tracking', 'Fixed rates'] },
       { label: 'Tour Features', items: ['Professional guides', 'Sightseeing included', 'Best rates'] },
       { label: 'Group Tour Benefits', items: ['Save up to 60% on shared travel', 'Popular routes: Araku, Lambasingi', 'Book individual seats online', 'Tempo Traveller & AC vehicles'] },
+      { label: 'Shared Carpooling', items: ['Daily office & college rides', 'Verified drivers & fixed fares', 'NAD, MVP, IT SEZ routes', 'Book seats online'] },
       { label: 'Tempo Traveller Services', items: ['12-18 seater options', 'Group travel', 'Wedding transport', 'Corporate events'] },
     ],
   },
@@ -153,7 +156,8 @@ const serviceLinks = [
   { name: 'Outstation', href: '/outstation-taxi', description: 'Inter-city travel' },
   { name: 'Airport Transfer', href: '/airport-taxi', description: 'Airport pickup & drop' },
   { name: 'Tour Packages', href: '/tours', description: 'Sightseeing packages' },
-  { name: 'Group Tours', href: '/group-tours', description: 'Shared tours – save up to 60%' }
+  { name: 'Group Tours', href: '/group-tours', description: 'Shared tours – save up to 60%' },
+  { name: 'Shared Carpooling', href: '/shared-carpooling', description: 'Daily office & college commute rides' },
 ];
 
 export function Navbar() {
@@ -614,6 +618,10 @@ export function Navbar() {
                         <Link to="/group-tours" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
                           <Calendar className="h-4 w-4" />
                           <span>Group Tours</span>
+                        </Link>
+                        <Link to="/shared-carpooling" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors text-sm" onClick={() => setIsMobileMenuOpen(false)}>
+                          <Users className="h-4 w-4" />
+                          <span>Shared Carpooling</span>
                         </Link>
                       </div>
                     )}

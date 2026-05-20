@@ -15,6 +15,7 @@ import {
   ArrowLeftRight,
   Building2,
   CalendarDays,
+  ChevronLeft,
   Car,
   ChevronRight,
   Clock,
@@ -399,6 +400,8 @@ export default function LocalCarpoolingPage() {
   const [monthlyBudgetApprox, setMonthlyBudgetApprox] = useState(COMMUTE_BUDGET_DEFAULT);
   /** Raw digits while typing budget; `null` = show committed `monthlyBudgetApprox`. */
   const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
+  /** Mobile (< lg): multi-step wizard to reduce cognitive load; desktop shows full form. */
+  const [mobileFormStep, setMobileFormStep] = useState(1);
 
   const routeWrapRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
@@ -534,6 +537,7 @@ export default function LocalCarpoolingPage() {
     setConsent(false);
     setMonthlyBudgetApprox(COMMUTE_BUDGET_DEFAULT);
     setBudgetDraft(null);
+    setMobileFormStep(1);
   };
 
   const swapStops = () => {
@@ -567,6 +571,32 @@ export default function LocalCarpoolingPage() {
     const opt = SHIFT_PICKUP_OPTIONS.find((o) => o.value === pickupTime);
     return opt?.label ?? pickupTime;
   }, [pickupTime]);
+
+  const goNextMobileWizard = () => {
+    if (mobileFormStep === 1) {
+      if (pickupIndex === null || dropIndex === null) {
+        toast({
+          variant: 'destructive',
+          title: 'Choose your route',
+          description: 'Select a pickup stop and a drop-off stop along the corridor.',
+        });
+        return;
+      }
+    }
+    if (mobileFormStep === 2 && commuteSchedule === 'weekly' && weeklyDays.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Pick your days',
+        description: 'For a weekly schedule, select at least one weekday.',
+      });
+      return;
+    }
+    setMobileFormStep((s) => Math.min(3, s + 1));
+  };
+
+  const goBackMobileWizard = () => {
+    setMobileFormStep((s) => Math.max(1, s - 1));
+  };
 
   const handleSubmit = () => {
     const missing: string[] = [];
@@ -708,15 +738,15 @@ export default function LocalCarpoolingPage() {
           </div>
         </section>
 
-        <main className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-10 pt-3 max-lg:pt-4 sm:px-5 md:px-8 md:pb-14 lg:px-8 lg:pb-14 lg:pl-[clamp(2rem,11vw,7.5rem)] lg:pr-14 lg:pt-14">
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] px-4 pb-10 pt-3 max-lg:pb-[max(7rem,calc(5rem+env(safe-area-inset-bottom,0px)))] max-lg:pt-4 sm:px-5 md:px-8 md:pb-14 lg:px-8 lg:pb-14 lg:pl-[clamp(2rem,11vw,7.5rem)] lg:pr-14 lg:pt-14">
           <div className="mx-auto grid min-w-0 w-full max-w-full max-lg:grid-cols-1 max-lg:gap-y-8 lg:grid-cols-2 lg:grid-rows-[auto_auto] lg:items-start lg:gap-x-12 lg:gap-y-8">
             {/* Booking card — mobile-first: form directly under hero; strip + info follow (see grid-row). */}
             <div className="min-w-0 max-w-full max-lg:row-start-1 scroll-mt-[5rem] lg:col-start-2 lg:row-start-2 lg:self-start lg:sticky lg:top-20">
               <Card
                 id="carpool-booking-card"
-                className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18)] max-lg:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.14)]"
+                className="relative z-10 w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18)] max-lg:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.14)]"
               >
-                <div className="min-w-0 w-full border-b border-slate-100 bg-[#f8fafb] px-3 py-3 lg:px-4 lg:py-4">
+                <div className="relative z-20 min-w-0 w-full isolate border-b border-slate-200/80 bg-white/85 px-3 py-3 shadow-[0_6px_24px_-8px_rgba(15,23,42,0.14)] backdrop-blur-md supports-[backdrop-filter]:bg-white/75 lg:px-4 lg:py-4">
                   <div className="flex min-w-0 w-full max-w-full flex-nowrap gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] lg:flex-wrap lg:gap-2 lg:overflow-visible lg:pb-0 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/80">
                     {SHIFT_TABS.map((tab) => {
                       const Icon = tab.Icon;
@@ -730,7 +760,7 @@ export default function LocalCarpoolingPage() {
                             setPickupTime(shiftToTimeValue(tab));
                           }}
                           className={cn(
-                            'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-semibold transition-all sm:gap-2 sm:px-3 sm:text-sm',
+                            'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2.5 text-xs font-semibold transition-all sm:gap-2 sm:px-3.5 sm:text-sm',
                             active
                               ? 'bg-[#25D366] text-white shadow-md shadow-green-500/25'
                               : 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50',
@@ -754,7 +784,7 @@ export default function LocalCarpoolingPage() {
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="absolute right-3 top-3 z-[2] rounded-full p-1.5 text-white/80 hover:bg-white/10 hover:text-white sm:right-4 sm:top-4"
+                    className="absolute right-3 top-3 z-[2] flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white/80 hover:bg-white/10 hover:text-white sm:right-4 sm:top-4"
                     aria-label="Reset form"
                   >
                     ✕
@@ -811,7 +841,7 @@ export default function LocalCarpoolingPage() {
                         type="button"
                         variant="outline"
                         size="icon"
-                        className="h-10 w-10 border-emerald-400/40 bg-[#25D366]/20 text-white hover:bg-[#25D366]/35 disabled:opacity-35"
+                        className="h-11 w-11 min-h-[44px] min-w-[44px] border-emerald-400/40 bg-[#25D366]/20 text-white hover:bg-[#25D366]/35 disabled:opacity-35 lg:h-10 lg:w-10 lg:min-h-0 lg:min-w-0"
                         disabled={pickupIndex === null || dropIndex === null}
                         onClick={swapStops}
                         aria-label="Swap pickup and drop-off"
@@ -833,8 +863,58 @@ export default function LocalCarpoolingPage() {
                   </div>
                 </div>
 
-                <CardContent className="box-border space-y-6 bg-white px-4 pb-5 pt-6 max-lg:space-y-5 max-lg:pb-4 sm:px-6 sm:pb-6">
-                  <div ref={routeWrapRef} className="relative">
+                <CardContent className="box-border space-y-6 bg-white px-4 pb-5 pt-6 max-lg:space-y-8 max-lg:pb-6 sm:px-6 sm:pb-6">
+                  <div
+                    className="max-lg:flex max-lg:flex-col max-lg:gap-4 lg:hidden"
+                    role="navigation"
+                    aria-label="Carpool form steps"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-500" aria-live="polite">
+                        {mobileFormStep === 1 && 'Step 1 · Route'}
+                        {mobileFormStep === 2 && 'Step 2 · Preferences'}
+                        {mobileFormStep === 3 && 'Step 3 · Confirm'}
+                      </p>
+                      <div className="flex items-center gap-1.5" aria-hidden>
+                        {[1, 2, 3].map((n) => (
+                          <span
+                            key={n}
+                            className={cn(
+                              'h-2 rounded-full transition-colors',
+                              n === mobileFormStep ? 'w-8 bg-[#25D366]' : 'w-2 bg-slate-200',
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-[44px] flex-1 gap-1.5 rounded-xl border-slate-200 px-4 py-3 text-sm font-semibold"
+                        disabled={mobileFormStep <= 1}
+                        onClick={goBackMobileWizard}
+                      >
+                        <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+                        Back
+                      </Button>
+                      {mobileFormStep < 3 ? (
+                        <Button
+                          type="button"
+                          className="min-h-[44px] flex-1 rounded-xl bg-[#25D366] px-4 py-3 text-sm font-bold text-white hover:bg-[#20bd5a]"
+                          onClick={goNextMobileWizard}
+                        >
+                          Continue
+                        </Button>
+                      ) : (
+                        <span className="min-h-[44px] flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-center text-xs font-medium leading-snug text-slate-600">
+                          Review details below, then send via WhatsApp.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div ref={routeWrapRef} className={cn('relative', mobileFormStep !== 1 && 'max-lg:hidden')}>
                     <div
                       aria-hidden
                       style={{
@@ -904,7 +984,7 @@ export default function LocalCarpoolingPage() {
                               type="button"
                               onClick={() => onStopClick(i)}
                               className={cn(
-                                'relative z-[1] flex w-full items-center gap-2 rounded-xl py-2 pl-9 pr-2 text-left transition-colors',
+                                'relative z-[1] flex w-full min-h-[44px] items-center gap-2 rounded-xl py-3 pl-9 pr-3 text-left transition-colors lg:min-h-0 lg:py-2 lg:pr-2',
                                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/50 focus-visible:ring-offset-2',
                                 rowHighlight ? 'bg-emerald-50/95' : 'hover:bg-slate-50',
                               )}
@@ -939,14 +1019,19 @@ export default function LocalCarpoolingPage() {
                     </ul>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/90 px-4 py-4 sm:px-5">
+                  <div
+                    className={cn(
+                      'mt-4 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/90 px-4 py-4 sm:px-5',
+                      mobileFormStep !== 2 && 'max-lg:hidden',
+                    )}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Label id="carpool-budget-label" htmlFor="carpool-budget-input" className="text-sm font-semibold text-[#0B1320]">
                         Daily commute budget
                       </Label>
                       <div
                         id="carpool-budget-value"
-                        className="flex h-9 max-w-[9.5rem] shrink-0 overflow-hidden rounded-lg border border-emerald-400/55 bg-white shadow-sm ring-offset-background focus-within:ring-2 focus-within:ring-[#25D366]/30 focus-within:ring-offset-2"
+                        className="flex h-11 min-h-[44px] max-w-[9.5rem] shrink-0 overflow-hidden rounded-lg border border-emerald-400/55 bg-white shadow-sm ring-offset-background focus-within:ring-2 focus-within:ring-[#25D366]/30 focus-within:ring-offset-2 max-lg:max-w-[11rem]"
                       >
                         <span
                           className="flex h-full shrink-0 items-center justify-center border-r border-emerald-200/70 bg-emerald-50/60 px-2.5 text-emerald-800"
@@ -956,7 +1041,7 @@ export default function LocalCarpoolingPage() {
                         </span>
                         <Input
                           id="carpool-budget-input"
-                          className="h-9 min-w-0 flex-1 rounded-none border-0 bg-transparent px-2.5 text-right text-sm font-bold tabular-nums text-[#0B1320] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                          className="h-11 min-h-[44px] min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 py-3 text-right text-sm font-bold tabular-nums text-[#0B1320] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                           inputMode="numeric"
                           autoComplete="off"
                           maxLength={6}
@@ -1006,7 +1091,7 @@ export default function LocalCarpoolingPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className={cn('grid gap-4 md:grid-cols-2', mobileFormStep !== 3 && 'max-lg:hidden')}>
                     <div className="space-y-2">
                       <Label htmlFor="carpool-name" className="text-sm font-semibold text-[#0B1320]">
                         Full Name*
@@ -1017,7 +1102,7 @@ export default function LocalCarpoolingPage() {
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="Your full name"
                         autoComplete="name"
-                        className="h-11 rounded-xl border-slate-200 bg-white px-3.5 shadow-none placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25"
+                        className="h-12 min-h-[44px] rounded-xl border-slate-200 bg-white px-4 py-3 text-base shadow-none placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25 lg:h-11 lg:min-h-0 lg:px-3.5 lg:text-sm"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1025,12 +1110,12 @@ export default function LocalCarpoolingPage() {
                         WhatsApp Number*
                       </Label>
                       <div className="flex overflow-hidden rounded-xl shadow-sm ring-offset-background focus-within:ring-2 focus-within:ring-[#25D366]/25 focus-within:ring-offset-2">
-                        <span className="flex h-11 shrink-0 items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-600">
+                        <span className="flex h-12 min-h-[44px] shrink-0 items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-600 lg:h-11 lg:min-h-0 lg:px-3">
                           +91
                         </span>
                         <Input
                           id="carpool-wa"
-                          className="h-11 rounded-l-none rounded-r-xl border border-slate-200 border-l-0 bg-white px-3.5 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                          className="h-12 min-h-[44px] rounded-l-none rounded-r-xl border border-slate-200 border-l-0 bg-white px-4 py-3 text-base shadow-none placeholder:text-slate-400 focus-visible:ring-0 lg:h-11 lg:min-h-0 lg:px-3.5 lg:text-sm"
                           inputMode="numeric"
                           maxLength={10}
                           placeholder="9876543210"
@@ -1045,7 +1130,7 @@ export default function LocalCarpoolingPage() {
 
                   {/* Company | Seats | Pickup — one visual row from sm+, mockup-aligned borders */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_9.75rem_minmax(10.5rem,13rem)] sm:items-end sm:gap-x-4">
-                    <div className="min-w-0 space-y-2 sm:pb-px">
+                    <div className={cn('min-w-0 space-y-2 sm:pb-px', mobileFormStep !== 3 && 'max-lg:hidden')}>
                       <Label htmlFor="carpool-co" className="text-sm font-semibold text-[#0B1320]">
                         Company / Organisation*
                       </Label>
@@ -1055,23 +1140,24 @@ export default function LocalCarpoolingPage() {
                         onChange={(e) => setCompany(e.target.value)}
                         placeholder="TCS, Infosys, Wipro..."
                         autoComplete="organization"
-                        className="h-11 rounded-xl border-slate-200 bg-white px-3.5 text-sm shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25"
+                        className="h-12 min-h-[44px] rounded-xl border-slate-200 bg-white px-4 py-3 text-base shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25 lg:h-11 lg:min-h-0 lg:px-3.5 lg:text-sm"
                       />
                     </div>
 
-                    <div className="space-y-2">
+                    <div className={cn('space-y-2', mobileFormStep !== 2 && 'max-lg:hidden')}>
                       <Label className="text-sm font-semibold text-[#0B1320]">Seats Required</Label>
                       <div
                         className={cn(
-                          'flex h-11 items-center justify-center gap-0.5 rounded-xl border-2 px-2',
+                          'flex min-h-[44px] h-12 items-center justify-center gap-1 rounded-xl border-2 px-2',
                           'border-emerald-400/65 bg-emerald-50/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]',
+                          'lg:h-11',
                         )}
                       >
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 shrink-0 rounded-lg border-emerald-200/80 bg-white/90 text-[#0B1320] shadow-sm hover:bg-white"
+                          className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-lg border-emerald-200/80 bg-white/90 text-[#0B1320] shadow-sm hover:bg-white lg:h-9 lg:w-9 lg:min-h-0 lg:min-w-0"
                           disabled={seats <= 1}
                           onClick={() => setSeats((s) => Math.max(1, s - 1))}
                           aria-label="Decrease seats"
@@ -1085,7 +1171,7 @@ export default function LocalCarpoolingPage() {
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 shrink-0 rounded-lg border-emerald-200/80 bg-white/90 text-[#0B1320] shadow-sm hover:bg-white"
+                          className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-lg border-emerald-200/80 bg-white/90 text-[#0B1320] shadow-sm hover:bg-white lg:h-9 lg:w-9 lg:min-h-0 lg:min-w-0"
                           disabled={seats >= 6}
                           onClick={() => setSeats((s) => Math.min(6, s + 1))}
                           aria-label="Increase seats"
@@ -1095,7 +1181,7 @@ export default function LocalCarpoolingPage() {
                       </div>
                     </div>
 
-                    <div className="min-w-0 space-y-2">
+                    <div className={cn('min-w-0 space-y-2', mobileFormStep !== 2 && 'max-lg:hidden')}>
                       <Label htmlFor="carpool-time" className="text-sm font-semibold text-[#0B1320]">
                         Pickup time*
                       </Label>
@@ -1109,14 +1195,15 @@ export default function LocalCarpoolingPage() {
                       >
                         <div
                           className={cn(
-                            'flex h-11 items-center rounded-xl border-2 px-1 sm:min-w-[10.5rem]',
+                            'flex min-h-[44px] h-12 items-center rounded-xl border-2 px-1 sm:min-w-[10.5rem]',
                             'border-emerald-400/65 bg-emerald-50/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]',
+                            'lg:h-11',
                           )}
                         >
                           <SelectTrigger
                             id="carpool-time"
                             className={cn(
-                              'h-11 max-h-full min-h-0 flex-1 justify-between rounded-[10px] border-0 bg-white/95 px-3 py-0',
+                              'h-12 min-h-[44px] max-h-full flex-1 justify-between rounded-[10px] border-0 bg-white/95 px-3 py-2 lg:h-11 lg:min-h-0 lg:py-0',
                               'text-sm font-semibold leading-none text-[#0B1320]',
                               'shadow-none ring-offset-0 focus:ring-offset-0',
                               'focus-visible:ring-2 focus-visible:ring-[#25D366]/30 data-[placeholder]:text-slate-500',
@@ -1124,7 +1211,7 @@ export default function LocalCarpoolingPage() {
                               '[&>svg:last-child]:h-4 [&>svg:last-child]:w-4 [&>svg:last-child]:shrink-0 [&>svg:last-child]:self-center [&>svg:last-child]:text-emerald-700/55',
                             )}
                           >
-                            <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2">
+                            <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 lg:min-h-11">
                               <Clock className="h-4 w-4 shrink-0 self-center text-emerald-700/70" aria-hidden />
                               <SelectValue placeholder="Select time" className="truncate leading-none" />
                             </div>
@@ -1141,7 +1228,7 @@ export default function LocalCarpoolingPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className={cn('space-y-3', mobileFormStep !== 2 && 'max-lg:hidden')}>
                     <Label className="text-sm font-semibold text-[#0B1320]">Commute Schedule*</Label>
                     <div className="flex flex-wrap gap-2">
                       {scheduleOptions.map((opt) => (
@@ -1150,7 +1237,7 @@ export default function LocalCarpoolingPage() {
                           type="button"
                           onClick={() => setCommuteSchedule(opt)}
                           className={cn(
-                            'rounded-full px-4 py-2 text-xs font-semibold tracking-tight transition-all md:text-sm',
+                            'min-h-[44px] rounded-full px-4 py-3 text-xs font-semibold tracking-tight transition-all md:text-sm',
                             commuteSchedule === opt
                               ? 'bg-[#25D366] text-white shadow-sm shadow-green-600/25'
                               : 'bg-slate-100/95 text-slate-600 hover:bg-slate-200/90 hover:text-slate-800',
@@ -1163,7 +1250,7 @@ export default function LocalCarpoolingPage() {
                   </div>
 
                   {commuteSchedule === 'weekly' && (
-                    <div className="space-y-2">
+                    <div className={cn('space-y-2', mobileFormStep !== 2 && 'max-lg:hidden')}>
                       <Label>Select days</Label>
                       <div className="flex flex-wrap gap-2">
                         {(['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const).map((letter, idx) => (
@@ -1172,7 +1259,7 @@ export default function LocalCarpoolingPage() {
                             type="button"
                             onClick={() => toggleWeeklyDay(idx)}
                             className={cn(
-                              'flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold transition-colors',
+                              'flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full text-sm font-bold transition-colors',
                               weeklyDays.includes(idx)
                                 ? 'bg-[#25D366] text-white shadow-md shadow-green-500/25'
                                 : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50',
@@ -1187,7 +1274,7 @@ export default function LocalCarpoolingPage() {
                     </div>
                   )}
 
-                  <div className="space-y-3">
+                  <div className={cn('space-y-3', mobileFormStep !== 2 && 'max-lg:hidden')}>
                     <Label className="text-sm font-semibold text-[#0B1320]">Group Preference</Label>
                     <div className="flex flex-wrap gap-2">
                       {(['mixed', 'women', 'men'] as const).map((opt) => (
@@ -1196,7 +1283,7 @@ export default function LocalCarpoolingPage() {
                           type="button"
                           onClick={() => setGroupPreference(opt)}
                           className={cn(
-                            'rounded-full px-4 py-2 text-xs font-semibold tracking-tight transition-all md:text-sm',
+                            'min-h-[44px] rounded-full px-4 py-3 text-xs font-semibold tracking-tight transition-all md:text-sm',
                             groupPreference === opt
                               ? 'bg-[#25D366] text-white shadow-sm shadow-green-600/25'
                               : 'bg-slate-100/95 text-slate-600 hover:bg-slate-200/90 hover:text-slate-800',
@@ -1208,7 +1295,7 @@ export default function LocalCarpoolingPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className={cn('space-y-2', mobileFormStep !== 2 && 'max-lg:hidden')}>
                     <Label htmlFor="carpool-note" className="text-sm font-semibold text-[#0B1320]">
                       Special Note (optional)
                     </Label>
@@ -1220,16 +1307,44 @@ export default function LocalCarpoolingPage() {
                       placeholder={
                         'E.g. I work from home on Wednesdays, need early morning pickup, need women-only group, etc.'
                       }
-                      className="min-h-[7.5rem] resize-y rounded-2xl border-slate-200 bg-white px-3.5 py-3 text-sm leading-relaxed text-[#0B1320] shadow-none placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25"
+                      className="min-h-[8rem] resize-y rounded-2xl border-slate-200 bg-white px-4 py-3 text-base leading-relaxed text-[#0B1320] shadow-none placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:ring-[#25D366]/25 lg:min-h-[7.5rem] lg:px-3.5 lg:text-sm"
                     />
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/95 p-5">
+                  <div className={cn('lg:hidden', mobileFormStep !== 3 && 'max-lg:hidden')}>
+                    <div className="min-h-[11rem] space-y-3 rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
+                      <h3 className="m-0 text-sm font-bold text-[#0B1320]">Your enquiry summary</h3>
+                      <ul className="m-0 list-none space-y-2.5 p-0 text-sm leading-snug text-slate-600">
+                        <li>
+                          <span className="font-semibold text-slate-800">Route: </span>
+                          {pickupName && dropName ? `${pickupName} → ${dropName}` : '—'}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-slate-800">When: </span>
+                          {todayLabel} · {shift.shortLabel} · {pickupTimeLabel}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-slate-800">Seats & group: </span>
+                          {seats} seat{seats !== 1 ? 's' : ''} · {groupChipLabel(groupPreference)}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-slate-800">Schedule: </span>
+                          {commuteChipLabel(commuteSchedule)}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-slate-800">Budget: </span>₹
+                          {monthlyBudgetApprox.toLocaleString('en-IN')} / day (indicative)
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className={cn('flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/95 p-5', mobileFormStep !== 3 && 'max-lg:hidden')}>
                     <Checkbox
                       id="carpool-consent"
                       checked={consent}
                       onCheckedChange={(v) => setConsent(v === true)}
-                      className="mt-0.5 border-slate-400 data-[state=checked]:border-[#25D366] data-[state=checked]:bg-[#25D366]"
+                      className="mt-0.5 h-5 w-5 max-lg:h-6 max-lg:w-6 border-slate-400 data-[state=checked]:border-[#25D366] data-[state=checked]:bg-[#25D366]"
                     />
                     <label
                       htmlFor="carpool-consent"
@@ -1243,8 +1358,9 @@ export default function LocalCarpoolingPage() {
                   <Button
                     type="button"
                     className={cn(
-                      'box-border !flex h-auto min-h-[3.5rem] w-full max-w-full min-w-0 items-center justify-center rounded-2xl border-0 px-5 py-3.5 text-base font-bold leading-snug text-white shadow-[0_10px_28px_-6px_rgba(37,211,102,0.55)] transition-colors',
+                      'box-border !flex h-auto min-h-[48px] w-full max-w-full min-w-0 items-center justify-center rounded-2xl border-0 px-5 py-4 text-base font-bold leading-snug text-white shadow-[0_10px_28px_-6px_rgba(37,211,102,0.55)] transition-colors',
                       '!whitespace-normal bg-[#25D366] hover:bg-[#20bd5a]',
+                      mobileFormStep !== 3 && 'max-lg:hidden',
                     )}
                     onClick={handleSubmit}
                   >
@@ -1257,7 +1373,7 @@ export default function LocalCarpoolingPage() {
                       </span>
                     </span>
                   </Button>
-                  <p className="mx-auto flex max-w-md flex-col items-center gap-1.5 pt-2 text-center text-xs leading-relaxed text-slate-500 sm:flex-row sm:items-start sm:gap-2 sm:pt-1.5">
+                  <p className={cn('mx-auto flex max-w-md flex-col items-center gap-1.5 pt-2 text-center text-xs leading-relaxed text-slate-500 sm:flex-row sm:items-start sm:gap-2 sm:pt-1.5', mobileFormStep !== 3 && 'max-lg:hidden')}>
                     <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400 sm:mt-0.5" aria-hidden />
                     <span className="text-pretty">Opens WhatsApp with your enquiry prefilled. You can edit it before sending.</span>
                   </p>
@@ -1283,7 +1399,7 @@ export default function LocalCarpoolingPage() {
 
                   <button
                     type="button"
-                    className="flex shrink-0 items-center gap-1 text-sm font-semibold text-slate-600 hover:text-[#25D366] lg:hidden"
+                    className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 py-2 text-sm font-semibold text-slate-600 hover:text-[#25D366] lg:hidden"
                     onClick={() =>
                       document.getElementById('carpool-booking-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }
@@ -1293,7 +1409,7 @@ export default function LocalCarpoolingPage() {
                   </button>
                 </div>
 
-                <div className="grid min-w-0 w-full grid-cols-2 gap-2.5 sm:gap-3 lg:flex lg:flex-1 lg:flex-wrap lg:gap-2.5">
+                <div className="grid min-h-0 w-full min-w-0 grid-cols-2 gap-2.5 max-lg:min-h-[8.5rem] sm:gap-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-wrap lg:gap-2.5">
                   {CARPOOL_STOPS.map((s) => (
                     <span
                       key={s.name}

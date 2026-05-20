@@ -15,6 +15,7 @@ import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { PopularGroupTours } from '@/components/PopularGroupTours';
+import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const isSearch = searchParams.get('search') === '1';
@@ -83,6 +84,7 @@ const Index = () => {
       
       <div className="min-h-screen bg-white flex flex-col pt-20">
         <Navbar />
+        <SharedCarpoolingPopup enabled={!isSearch} />
         <main className="flex-1">
           <Hero
             key={isSearch ? 'search' : 'home'}

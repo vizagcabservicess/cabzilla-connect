@@ -73,13 +73,13 @@ function defaultAirportFareForCab(cab: CabType): AirportFare {
     return {
       basePrice: 800,
       pricePerKm: 14,
-      pickupPrice: 800,
+      pickupPrice: 840,
       dropPrice: 800,
-      tier1Price: 800,
+      tier1Price: 840,
       tier2Price: 1000,
-      tier3Price: 1000,
-      tier4Price: 1200,
-      extraKmCharge: 12,
+      tier3Price: 1500,
+      tier4Price: 2000,
+      extraKmCharge: 14,
     };
   }
   if (normalizedId.includes('ertiga') || name.includes('ertiga')) {
@@ -163,7 +163,8 @@ function mergeAirportFareLayers(
 }
 
 /**
- * Total airport transfer fare (₹), rounded up to nearest ₹10 — same rounding as Hero `calculatePrice`.
+ * Total airport transfer fare (₹), rounded up to nearest ₹10.
+ * Tiers: 0–10 km, 11–20 km, 21–35 km, >35 km (tier 4 base + extra km charge).
  */
 export function getAirportTransferFare(cab: CabType, distance: number): number {
   if (distance <= 0) return 0;
@@ -182,20 +183,18 @@ export function getAirportTransferFare(cab: CabType, distance: number): number {
     else extraKmCharge = 14;
   }
 
-  let basePrice = 0;
   let fare = 0;
 
-  if (distance <= 10) basePrice = af.tier1Price || 1200;
-  else if (distance <= 20) basePrice = af.tier2Price || 1800;
-  else if (distance <= 30) basePrice = af.tier3Price || 2400;
-  else if (distance <= 40) basePrice = af.tier4Price || 1500;
-  else {
-    basePrice = af.tier4Price || 1500;
-    const extraKm = distance - 40;
-    fare = basePrice + extraKm * extraKmCharge;
+  if (distance <= 10) {
+    fare = af.tier1Price || defaults.tier1Price || 840;
+  } else if (distance <= 20) {
+    fare = af.tier2Price || defaults.tier2Price || 1000;
+  } else if (distance <= 35) {
+    fare = af.tier3Price || defaults.tier3Price || 1500;
+  } else {
+    const tier4 = af.tier4Price || defaults.tier4Price || 2000;
+    fare = tier4 + (distance - 35) * extraKmCharge;
   }
-
-  if (distance <= 40) fare = basePrice;
 
   const airportFee = typeof af.airportFee === 'number' && af.airportFee > 0 ? af.airportFee : 0;
   fare += airportFee;

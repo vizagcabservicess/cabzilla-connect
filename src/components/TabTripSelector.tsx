@@ -11,9 +11,9 @@ import {
   TourTabIcon,
 } from "@/components/icons/CabTabIcons";
 import { fareService } from "@/services/fareService";
-import { Link } from "react-router-dom";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HeroPromoSlider } from "@/components/HeroPromoSlider";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -318,26 +318,7 @@ export function TabTripSelector({
                   );
                 })}
               </div>
-              {!hideUrbaniaPromo && (
-              <div
-                className="flex max-w-[min(100%,20rem)] flex-shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 shadow-sm"
-                role="region"
-                aria-label="Urbania van now available"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="shrink-0 rounded-md bg-white/95 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">
-                    New
-                  </span>
-                  <p className="truncate text-xs font-semibold text-white">Urbania now available!</p>
-                </div>
-                <Link
-                  to="/vehicle/urbania"
-                  className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-blue-600 shadow-sm transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700"
-                >
-                  Book →
-                </Link>
-              </div>
-              )}
+              <HeroPromoSlider size="compact" hideUrbaniaPromo={hideUrbaniaPromo} />
             </div>
           </div>
         </>

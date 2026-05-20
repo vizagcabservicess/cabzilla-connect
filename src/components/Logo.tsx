@@ -6,31 +6,42 @@ interface LogoProps {
   variant?: 'default' | 'white' | 'dark';
   size?: 'small' | 'medium' | 'large';
   className?: string;
+  to?: string;
+  linkless?: boolean;
 }
 
 export const Logo: React.FC<LogoProps> = ({
   variant = 'default',
   size = 'medium',
-  className = ''
+  className = '',
+  to = '/',
+  linkless = false,
 }) => {
   const getSizeClass = () => {
     switch (size) {
-      case 'small': return 'h-6';
-      case 'large': return 'h-12';
+      case 'small': return 'h-8';
+      case 'large': return 'h-14';
       default: return 'h-12';
     }
   };
 
-  // Using the correct uploaded logo
   const logoPath = '/uploads/vizagtaxihub-logo.png';
 
+  const img = (
+    <img
+      src={logoPath}
+      alt="Vizag Taxi Hub"
+      className={`${getSizeClass()} w-auto ${variant === 'white' ? 'brightness-0 invert' : ''}`}
+    />
+  );
+
+  if (linkless) {
+    return <span className={`inline-block ${className}`}>{img}</span>;
+  }
+
   return (
-    <Link to="/" className={`block ${className}`}>
-      <img 
-        src={logoPath} 
-        alt="Vizag Taxi Hub" 
-        className={`${getSizeClass()} w-auto`} 
-      />
+    <Link to={to} className={`block ${className}`}>
+      {img}
     </Link>
   );
 };

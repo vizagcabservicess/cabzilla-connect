@@ -102,6 +102,7 @@ const PoolingBookingPage = lazy(() => import('./pages/PoolingBookingPage'));
 const PoolingDashboard = lazy(() => import('./pages/admin/PoolingDashboard'));
 const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashboard'));
 const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursManagementPage'));
+const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const CreateRidePage = lazy(() => import('./components/pooling/CreateRidePage'));
 const BookingsPage = lazy(() => import('./pages/BookingsPage'));
 const FaresPage = lazy(() => import('./pages/FaresPage'));
@@ -141,6 +142,28 @@ const HireDriverTermsPage = lazy(() => import('./pages/HireDriverTermsPage').the
 const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
 const UrbaniaRentalVizagPage = lazy(() => import('./pages/UrbaniaRentalVizagPage'));
 const LocalCarpoolingPage = lazy(() => import('./pages/LocalCarpoolingPage'));
+const SharedCarpoolingLandingPage = lazy(() => import('./pages/SharedCarpoolingLandingPage'));
+const SharedCarpoolingResultsPage = lazy(() => import('./pages/SharedCarpoolingResultsPage'));
+const SharedCarpoolRequestSubmittedPage = lazy(() => import('./pages/SharedCarpoolRequestSubmittedPage'));
+const SharedCarpoolingNoRidesPage = lazy(() => import('./pages/SharedCarpoolingNoRidesPage'));
+const CarpoolUserLayout = lazy(() => import('./providers/CarpoolUserLayout'));
+const SharedCarpoolFindPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolFindPage'));
+const SharedCarpoolRidePage = lazy(() => import('./pages/shared-carpool/SharedCarpoolRidePage'));
+const SharedCarpoolAuthWelcomePage = lazy(() => import('./pages/shared-carpool/SharedCarpoolAuthWelcomePage'));
+const SharedCarpoolOtpPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolOtpPage'));
+const SharedCarpoolPhoneLoginPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolPhoneLoginPage'));
+const SharedCarpoolEmailLoginPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolEmailLoginPage'));
+const SharedCarpoolEmailSignupPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolEmailSignupPage'));
+const SharedCarpoolForgotPasswordPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolForgotPasswordPage'));
+const SharedCarpoolResetPasswordPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolResetPasswordPage'));
+const SharedCarpoolProfileCompletePage = lazy(() =>
+  import('./pages/shared-carpool/SharedCarpoolProfileCompletePage').then((m) => ({ default: m.default })),
+);
+const SharedCarpoolProfilePendingPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolProfilePendingPage'));
+const SharedCarpoolVerifyEmailPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolVerifyEmailPage'));
+const SharedCarpoolHomePage = lazy(() => import('./pages/shared-carpool/SharedCarpoolHomePage'));
+const SharedCarpoolAccountPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolAccountPage'));
+const SharedCarpoolBookingsPage = lazy(() => import('./pages/shared-carpool/SharedCarpoolBookingsPage'));
 const SeventeenSeaterTempoTravellerPage = lazy(() => import('./pages/SeventeenSeaterTempoTravellerPage'));
 const TwelveSeaterTempoTravellerPage = lazy(() => import('./pages/TwelveSeaterTempoTravellerPage'));
 const GroupTravelTempoTravellerPage = lazy(() => import('./pages/GroupTravelTempoTravellerPage'));
@@ -376,6 +399,10 @@ const router = createBrowserRouter([
             element: <GroupToursManagementPage />,
           },
           {
+            path: 'shared-carpooling',
+            element: <SharedCarpoolingAdminPage />,
+          },
+          {
             path: 'vehicles',
             element: <VehiclesPage />,
           },
@@ -594,6 +621,42 @@ const router = createBrowserRouter([
       {
         path: 'local-carpooling',
         element: <LazyRoute component={LocalCarpoolingPage} />,
+      },
+      {
+        path: 'shared-carpooling',
+        element: <LazyRoute component={SharedCarpoolingLandingPage} />,
+      },
+      {
+        path: 'shared-carpooling/results',
+        element: <LazyRoute component={SharedCarpoolingResultsPage} />,
+      },
+      {
+        path: 'shared-carpooling/request-submitted',
+        element: <LazyRoute component={SharedCarpoolRequestSubmittedPage} />,
+      },
+      {
+        path: 'shared-carpooling/no-rides',
+        element: <LazyRoute component={SharedCarpoolingNoRidesPage} />,
+      },
+      {
+        element: <LazyRoute component={CarpoolUserLayout} />,
+        children: [
+          { path: 'shared-carpooling/find', element: <LazyRoute component={SharedCarpoolFindPage} /> },
+          { path: 'shared-carpooling/ride/:id', element: <LazyRoute component={SharedCarpoolRidePage} /> },
+          { path: 'shared-carpooling/auth', element: <LazyRoute component={SharedCarpoolAuthWelcomePage} /> },
+          { path: 'shared-carpooling/auth/otp', element: <LazyRoute component={SharedCarpoolOtpPage} /> },
+          { path: 'shared-carpooling/auth/phone', element: <LazyRoute component={SharedCarpoolPhoneLoginPage} /> },
+          { path: 'shared-carpooling/auth/login', element: <LazyRoute component={SharedCarpoolEmailLoginPage} /> },
+          { path: 'shared-carpooling/auth/signup', element: <LazyRoute component={SharedCarpoolEmailSignupPage} /> },
+          { path: 'shared-carpooling/auth/forgot-password', element: <LazyRoute component={SharedCarpoolForgotPasswordPage} /> },
+          { path: 'shared-carpooling/auth/reset-password', element: <LazyRoute component={SharedCarpoolResetPasswordPage} /> },
+          { path: 'shared-carpooling/profile/complete', element: <LazyRoute component={SharedCarpoolProfileCompletePage} /> },
+          { path: 'shared-carpooling/profile/pending', element: <LazyRoute component={SharedCarpoolProfilePendingPage} /> },
+          { path: 'shared-carpooling/verify-email', element: <LazyRoute component={SharedCarpoolVerifyEmailPage} /> },
+          { path: 'shared-carpooling/home', element: <LazyRoute component={SharedCarpoolHomePage} /> },
+          { path: 'shared-carpooling/account', element: <LazyRoute component={SharedCarpoolAccountPage} /> },
+          { path: 'shared-carpooling/bookings', element: <LazyRoute component={SharedCarpoolBookingsPage} /> },
+        ],
       },
       {
         path: '17-seater-tempo-traveller-vizag',

@@ -49,6 +49,14 @@ function isWithinVizagRange(lat: number, lng: number, maxDistance: number = MAX_
   return getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng) <= maxDistance;
 }
 
+/** Google attaches one `.pac-container` per Autocomplete — hide stale panels so only the focused field shows a list. */
+function hideAllPacContainers(): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll<HTMLElement>('.pac-container').forEach((el) => {
+    el.style.display = 'none';
+  });
+}
+
 interface LocationInputProps {
   id?: string;
   label?: string;
@@ -62,6 +70,8 @@ interface LocationInputProps {
   location?: Location;
   onLocationChange?: (location: Location) => void;
   isPickupLocation?: boolean;
+  /** When true, drop (or any field) uses the same 35 km Vizag radius as pickup. */
+  restrictToVizagRadius?: boolean;
   tripType?: TripType;
   readOnly?: boolean;
   /** mobile = floating label; desktop = label + bordered row; app = native-app style (uppercase label, gray row, pin icon); infield = small grey label inside row (Urbania-style) */
@@ -83,13 +93,15 @@ export function LocationInput({
   location,
   onLocationChange,
   isPickupLocation = false,
+  restrictToVizagRadius = false,
   tripType,
   readOnly = false,
   variant = 'mobile',
   hideLeadingIcon = false,
 }: LocationInputProps) {
-  const selectFromListMessage = isPickupLocation
-    ? 'Select a valid pickup from suggestions (within 35 KM radius).'
+  const enforceVizag35Km = isPickupLocation || restrictToVizagRadius;
+  const selectFromListMessage = enforceVizag35Km
+    ? 'Select a valid location from suggestions (within 35 KM radius).'
     : SELECT_FROM_LIST_MESSAGE_DEFAULT;
 
   /** Parent handlers (e.g. Hero) are often inline — must not be Autocomplete effect deps or Places re-inits every render → duplicate .pac-container */
@@ -184,7 +196,7 @@ export function LocationInput({
        });
        
        // Then apply distance filtering only if needed
-       if (isPickupLocation || isAirportTransfer || isTourTrip) {
+       if (enforceVizag35Km || isAirportTransfer || isTourTrip) {
          filtered = filtered.filter(suggestion => {
            return isWithinVizagRange(suggestion.lat, suggestion.lng);
          });
@@ -194,7 +206,7 @@ export function LocationInput({
      } else {
        setFilteredSuggestions([]);
      }
-   }, [inputValue, suggestions, isPickupLocation, tripType]);
+   }, [inputValue, suggestions, enforceVizag35Km, tripType]);
 
   useEffect(() => {
     if (!isLoaded || !google) return;
@@ -233,7 +245,7 @@ export function LocationInput({
           radius: MAX_DISTANCE_KM * 1000,
         });
         request.bounds = circle.getBounds() as google.maps.LatLngBounds;
-        if (isPickupLocation) {
+        if (enforceVizag35Km) {
           request.strictBounds = true;
         }
       }
@@ -256,7 +268,7 @@ export function LocationInput({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [inputValue, isFocused, isLoaded, google, isPickupLocation, tripType]);
+  }, [inputValue, isFocused, isLoaded, google, enforceVizag35Km, tripType]);
 
   // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row) or fullscreen sheet.
   useEffect(() => {
@@ -274,6 +286,11 @@ export function LocationInput({
       });
       const pac = candidates.length > 0 ? candidates[candidates.length - 1] : null;
       if (!pac) return;
+
+      candidates.forEach((el) => {
+        if (el !== pac) el.style.display = 'none';
+      });
+      pac.style.removeProperty('display');
 
       const s = pac.style;
 
@@ -463,7 +480,7 @@ export function LocationInput({
         });
         const bounds = circle.getBounds() as google.maps.LatLngBounds;
         options.bounds = bounds;
-        options.strictBounds = isPickupLocation;
+        options.strictBounds = enforceVizag35Km;
       }
 
       ac = new google.maps.places.Autocomplete(el, options);
@@ -493,7 +510,7 @@ export function LocationInput({
             return;
           }
 
-          if (isPickupLocation && !isTourTrip && !isWithinVizagRange(lat, lng)) {
+          if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(lat, lng)) {
             toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
             setInputValue('');
             if (onChangeRef.current) onChangeRef.current('');
@@ -501,7 +518,7 @@ export function LocationInput({
             return;
           }
 
-          if (isAirportTransfer && !isPickupLocation && !isWithinVizagRange(lat, lng)) {
+          if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(lat, lng)) {
             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
           }
 
@@ -539,6 +556,7 @@ export function LocationInput({
     isLoaded,
     google,
     isPickupLocation,
+    restrictToVizagRadius,
     tripType,
     mobileSearchSheetOpen,
     fullscreenMobileSearchSheet,
@@ -579,13 +597,13 @@ export function LocationInput({
        return;
      }
      
-     // For regular pickup locations (non-tour), validate 35km radius
-     if (isPickupLocation && !isTourTrip && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
+     // Pickup / carpool: must be within 35km of Vizag
+     if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
        return;
      }
      
-     if (isAirportTransfer && !isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
+     if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
      }
     setInputValue(suggestion.name || suggestion.address || "");
@@ -615,8 +633,8 @@ export function LocationInput({
    const getSubtitleText = () => {
      const isAirportTransfer = tripType === 'airport';
 
-     if (isPickupLocation) {
-       return 'Select a valid pickup from suggestions (within 35 KM radius).';
+     if (enforceVizag35Km) {
+       return 'Select a valid location from suggestions (within 35 KM radius).';
      } else if (isAirportTransfer) {
        return "Please select a location within 35km of Visakhapatnam";
      }
@@ -630,7 +648,10 @@ export function LocationInput({
     location ??
     (typeof value === 'object' && value !== null ? (value as Location) : undefined);
 
+  /** Custom empty panel only when Google Places is unavailable — otherwise it stacks on `.pac-container`. */
   const showEmptyGoogleDropdown =
+    !isLoaded &&
+    !google &&
     isFocused &&
     noGooglePredictions &&
     !predictionsLoading &&
@@ -732,7 +753,7 @@ export function LocationInput({
             "flex min-h-0 items-center gap-2 rounded-none border-0 bg-transparent p-0 shadow-none"
         )}
       >
-        {(isDesktopVariant || (isAppVariant && !isInfieldVariant)) && (
+        {((isDesktopVariant || (isAppVariant && !isInfieldVariant)) && !hideLeadingIcon) && (
           <MapPin className={cn("flex-shrink-0 text-gray-400", isAppVariant ? "h-5 w-5" : "mr-2 h-4 w-4")} aria-hidden />
         )}
         {isInfieldVariant && !hideLeadingIcon && (
@@ -817,10 +838,17 @@ export function LocationInput({
                       )
                     : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
-          onFocus={() => { setShowSuggestions(inputValue.length > 0 && suggestions.length > 0); setIsFocused(true); }}
+          onFocus={() => {
+            hideAllPacContainers();
+            setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
+            setIsFocused(true);
+          }}
           onBlur={() => {
             handleInputBlur();
-            window.setTimeout(() => setIsFocused(false), 200);
+            window.setTimeout(() => {
+              setIsFocused(false);
+              hideAllPacContainers();
+            }, 200);
           }}
         />
         )}
@@ -917,12 +945,16 @@ export function LocationInput({
                 className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-[0.95rem] shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
                 autoFocus
                 onFocus={() => {
+                  hideAllPacContainers();
                   setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
                   setIsFocused(true);
                 }}
                 onBlur={() => {
                   handleInputBlur();
-                  window.setTimeout(() => setIsFocused(false), 200);
+                  window.setTimeout(() => {
+                    setIsFocused(false);
+                    hideAllPacContainers();
+                  }, 200);
                 }}
               />
             </div>

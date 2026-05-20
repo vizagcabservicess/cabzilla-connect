@@ -26,6 +26,9 @@ const Footer = () => {
               <li>
                 <Link to="/group-tours" className="hover:text-white transition-colors block">Group Tours</Link>
               </li>
+              <li>
+                <Link to="/shared-carpooling" className="hover:text-white transition-colors block">Shared Carpooling</Link>
+              </li>
             </ul>
           </div>
           

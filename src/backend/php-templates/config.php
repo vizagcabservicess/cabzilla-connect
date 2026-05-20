@@ -41,6 +41,11 @@ define('URBANIA_SEAT_SHARE_ALERT_WHATSAPP', $_ENV['URBANIA_SEAT_SHARE_ALERT_WHAT
 define('WHATSAPP_ADMIN_PHONES', $_ENV['WHATSAPP_ADMIN_PHONES'] ?? '');
 define('WHATSAPP_TEMPLATE_NAME', $_ENV['WHATSAPP_TEMPLATE_NAME'] ?? 'abandoned_payment_alert');
 define('WHATSAPP_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_TEMPLATE_LANGUAGE'] ?? 'en');
+/** Shared carpool signup/login OTP — Meta Authentication template (Copy code). */
+define('WHATSAPP_OTP_TEMPLATE_NAME', $_ENV['WHATSAPP_OTP_TEMPLATE_NAME'] ?? 'vizag_carpool_login_otp');
+define('WHATSAPP_OTP_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_OTP_TEMPLATE_LANGUAGE'] ?? 'en_US');
+/** trip | payment — which WhatsApp number sends carpool OTPs */
+define('WHATSAPP_OTP_CHANNEL', $_ENV['WHATSAPP_OTP_CHANNEL'] ?? 'trip');
 
 /** Shared secret for cron URLs (e.g. admin tomorrow reminder). Optional; if unset, cron endpoint rejects requests. */
 define('ADMIN_CRON_SECRET', $_ENV['ADMIN_CRON_SECRET'] ?? '');

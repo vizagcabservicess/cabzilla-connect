@@ -539,6 +539,12 @@ Header set Access-Control-Allow-Origin "https://vizagtaxihub.com"
 Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
 Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
 
+# Shared Carpooling API
+RewriteRule ^api/shared-carpool/admin/?$ /api/shared-carpool/admin.php [L,NC,QSA]
+RewriteRule ^api/shared-carpool/public/?$ /api/shared-carpool/public.php [L,NC,QSA]
+RewriteRule ^api/shared-carpool/media/?$ /api/shared-carpool/media.php [L,NC,QSA]
+RewriteRule ^api/shared-carpool/media\.php$ /api/shared-carpool/media.php [L,NC,QSA]
+
 # Map /api/pooling/search and /api/pooling/search.php to /api/pooling/search.php
 RewriteRule ^api/pooling/search/?$ /api/pooling/search.php [L,QSA]
 RewriteRule ^api/pooling/search.php$ /api/pooling/search.php [L,QSA]

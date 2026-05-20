@@ -36,6 +36,18 @@ export const ServiceLinks: React.FC<ServiceLinksProps> = ({
       icon: '🏛️'
     },
     {
+      name: 'Group Tours',
+      href: '/group-tours',
+      description: 'Shared tours – save up to 60%',
+      icon: '👥'
+    },
+    {
+      name: 'Shared Carpooling',
+      href: '/shared-carpooling',
+      description: 'Daily office & college commute',
+      icon: '🚘'
+    },
+    {
       name: 'Urbania Rental Vizag',
       href: '/urbania-rental-vizag',
       description: 'Premium Urbania van hire',

@@ -9,7 +9,8 @@ import {
   CalendarDays, 
   Car, 
   Map, 
-  Users, 
+  Users,
+  UsersRound,
   BarChart3, 
   Settings,
   LogOut,
@@ -97,6 +98,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       label: 'Group Tours', 
       icon: <Bus size={20} />, 
       path: '/admin/group-tours',
+      show: canViewBookings() || canCreateBookings() || isAdmin() || isSuperAdmin()
+    },
+    { 
+      id: 'shared-carpooling', 
+      label: 'Car Pooling', 
+      icon: <UsersRound size={20} />, 
+      path: '/admin/shared-carpooling',
       show: canViewBookings() || canCreateBookings() || isAdmin() || isSuperAdmin()
     },
     

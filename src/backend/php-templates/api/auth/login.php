@@ -32,14 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-// Rate limiting for login attempts
+// Rate limiting applies only to failed login attempts (not every POST)
 $clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-if (!checkRateLimit("login_$clientIP", AUTH_RATE_LIMIT_MAX_REQUESTS, 300)) { // 5 attempts per 5 minutes
-    secureLog("Rate limit exceeded for login", "WARNING", ['ip' => $clientIP]);
-    http_response_code(429);
-    echo json_encode(['error' => 'Too many login attempts. Please try again later.']);
-    exit();
-}
+$loginRateKey = "login_fail_$clientIP";
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -75,6 +70,12 @@ try {
     $user = $result->fetch_assoc();
     
     if (!$user || !password_verify($sanitizedInput['password'], $user['password'])) {
+        if (!recordFailedAuthAttempt($loginRateKey, AUTH_RATE_LIMIT_MAX_REQUESTS, 300)) {
+            secureLog("Rate limit exceeded for login", "WARNING", ['ip' => $clientIP]);
+            http_response_code(429);
+            echo json_encode(['error' => 'Too many failed login attempts. Please wait 5 minutes and try again.']);
+            exit();
+        }
         secureLog("Failed login attempt", "WARNING", ['email' => $sanitizedInput['email'], 'ip' => $clientIP]);
         http_response_code(401);
         echo json_encode(['error' => 'Invalid credentials']);
@@ -102,6 +103,8 @@ try {
     
     // Generate JWT token
     $token = generateJwtToken($user['id'], $user['email'], $user['role']);
+
+    clearRateLimit($loginRateKey);
     
     // Remove password_hash from response
     unset($user['password']);

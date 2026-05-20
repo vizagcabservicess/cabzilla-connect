@@ -260,6 +260,17 @@ font-weight: 500;
 @apply hidden;
 }
 
+/* Hero promo strip — compact height; override global mobile .swiper-slide margin */
+.hero-promo-swiper .swiper-wrapper {
+height: auto !important;
+align-items: flex-start;
+}
+
+.hero-promo-swiper .swiper-slide {
+height: auto !important;
+margin-bottom: 0 !important;
+}
+
 /* Ensure mobile slider is visible */
 @media (max-width: 768px) {
 .services-swiper {
