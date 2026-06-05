@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';import {
+import { format, addDays, startOfDay } from 'date-fns';
+import {
   ArrowLeftRight,
   CalendarDays,
   Clock,
@@ -12,16 +13,24 @@ import { format } from 'date-fns';import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { DateTimePicker } from '@/components/DateTimePicker';
 import type { Location } from '@/lib/locationData';
 import { BRAND_GREEN, HERO_ACCENT, CARPOOL_MAX_SEATS } from './constants';
 import { CarpoolLocationField, carpoolLocationLabel, hasValidCarpoolLocation } from './CarpoolLocationField';
-import { CARPOOL_DATETIME_WRAPPER_CLASS, carpoolNativeDatetimeClass } from './carpoolFormStyles';
+import {
+  CARPOOL_DATETIME_WRAPPER_CLASS,
+  CARPOOL_TICKET_CELL,
+  CARPOOL_TICKET_INFIELD_LABEL,
+  carpoolNativeDatetimeClass,
+} from './carpoolFormStyles';
 import {
   clampTimeInputToMin,
   defaultTimeInputForDate,
   getMinTimeInputForDate,
   hasValidTimeInputWindow,
+  isPickupDateToday,
   isTimeInputBeforeOrEqual,
+  parseTimeInputToMinutes,
 } from './searchUtils';
 
 const HERO_MAX_PICKUP_TIME = '20:00';
@@ -45,10 +54,11 @@ type CarpoolingHeroProps = {
     seats: number;
     fromLocation?: Location;
     toLocation?: Location;
-  }) => void;
+  }) => void | Promise<void>;
+  isSearching?: boolean;
 };
 
-export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
+export function CarpoolingHero({ onSearch, isSearching = false }: CarpoolingHeroProps) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [fromLocation, setFromLocation] = useState<Location | undefined>();
@@ -63,10 +73,42 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
     [date],
   );
 
+  const tripStart = useMemo(() => {
+    try {
+      const d = new Date(`${date}T12:00:00`);
+      const [hours, minutes] = time.split(':').map((part) => parseInt(part, 10));
+      if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+        d.setHours(hours, minutes, 0, 0);
+      }
+      return d;
+    } catch {
+      return new Date();
+    }
+  }, [date, time]);
+
+  const minTripStart = useMemo(() => startOfDay(new Date()), []);
+
+  useEffect(() => {
+    if (!canPickTimeToday && isPickupDateToday(date)) {
+      setDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+      setTime('07:00');
+    }
+  }, [canPickTimeToday, date]);
+
+  const isFormComplete = useMemo(() => {
+    if (!hasValidCarpoolLocation(fromLocation, from)) return false;
+    if (!hasValidCarpoolLocation(toLocation, to)) return false;
+    if (!time.trim()) return false;
+    if (minTime && isTimeInputBeforeOrEqual(time, minTime)) return false;
+    if (seats < 1) return false;
+    return true;
+  }, [from, to, fromLocation, toLocation, time, minTime, seats]);
+
   useEffect(() => {
     if (!minTime) return;
     setTime((current) => clampTimeInputToMin(current, minTime));
   }, [date, minTime]);
+
   const swapLocations = () => {
     setFrom(to);
     setTo(from);
@@ -74,7 +116,19 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
     setToLocation(fromLocation);
   };
 
-  const handleSearch = () => {
+  const handleTripStartChange = (next: Date | undefined) => {
+    if (!next) return;
+    const nextTime = format(next, 'HH:mm');
+    if (parseTimeInputToMinutes(nextTime) > parseTimeInputToMinutes(HERO_MAX_PICKUP_TIME)) {
+      toast.error('Pickup time must be before 8:00 PM');
+      return;
+    }
+    setDate(format(next, 'yyyy-MM-dd'));
+    setTime(nextTime);
+  };
+
+  const handleSearch = async () => {
+    if (!isFormComplete) return;
     if (!hasValidCarpoolLocation(fromLocation, from) || !hasValidCarpoolLocation(toLocation, to)) {
       toast.error('Please select pickup and drop locations from suggestions');
       return;
@@ -88,7 +142,7 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
       return;
     }
 
-    onSearch({
+    await onSearch({
       from: carpoolLocationLabel(fromLocation, from),
       to: carpoolLocationLabel(toLocation, to),
       date,
@@ -97,12 +151,26 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
       fromLocation,
       toLocation,
     });
-    document.getElementById('available-rides')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const searchButton = (
+    <button
+      type="button"
+      onClick={() => void handleSearch()}
+      disabled={!isFormComplete || isSearching}
+      className={cn(
+        'flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 lg:rounded-xl',
+      )}
+      style={{ backgroundColor: BRAND_GREEN }}
+    >
+      <Search className="h-5 w-5" />
+      {isSearching ? 'Searching…' : 'Search Rides'}
+    </button>
+  );
 
   return (
     <section
-      className="relative isolate overflow-hidden"
+      className="relative isolate w-full max-w-full overflow-x-clip"
       style={{
         backgroundImage:
           'linear-gradient(95deg, rgba(8, 20, 14, 0.92) 0%, rgba(8, 20, 14, 0.75) 40%, rgba(8, 20, 14, 0.35) 70%, rgba(8, 20, 14, 0.15) 100%), url(https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=2400&q=85)',
@@ -110,9 +178,9 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
         backgroundPosition: 'center',
       }}
     >
-      <div className="mx-auto grid min-w-0 max-w-[1400px] gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_400px] lg:items-center lg:gap-10 lg:px-8 lg:py-16 xl:grid-cols-[1fr_420px]">
+      <div className="mx-auto grid w-full min-w-0 max-w-[1400px] gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_400px] lg:items-center lg:gap-10 lg:px-8 lg:py-16 xl:grid-cols-[1fr_420px]">
         {/* Left content */}
-        <div className="text-white">
+        <div className="min-w-0 text-white">
           <h1 className="text-[clamp(1.75rem,4vw,2.75rem)] font-bold leading-tight tracking-tight">
             Smart Commute. Shared Rides.{' '}
             <span style={{ color: HERO_ACCENT }}>Stronger Community.</span>
@@ -138,13 +206,106 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
         {/* Search card */}
         <div
           id="find-ride"
-          className="min-w-0 max-w-full scroll-mt-24 overflow-hidden rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
+          className="min-w-0 max-w-full scroll-mt-24 overflow-hidden rounded-2xl bg-white p-4 shadow-2xl sm:p-5 lg:p-6"
         >
-          <h2 className="mb-5 text-lg font-bold" style={{ color: BRAND_GREEN }}>
+          <h2 className="mb-4 text-lg font-bold lg:mb-5" style={{ color: BRAND_GREEN }}>
             Find Your Shared Ride
           </h2>
 
-          <div className="space-y-4">
+          {/* Mobile — Urbania-style ticket layout */}
+          <div className="lg:hidden">
+            <div className="overflow-hidden rounded-xl border border-gray-200 divide-y divide-gray-200">
+              <div className="relative flex min-h-0 items-stretch bg-white">
+                <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
+                  <div
+                    className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 bg-white"
+                    style={{ borderColor: BRAND_GREEN }}
+                  />
+                  <div
+                    className="absolute bottom-[1.25rem] left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border-2 bg-white"
+                    style={{ borderColor: '#ef4444' }}
+                  />
+                  <div
+                    className="absolute bottom-[1.85rem] left-1/2 top-[1.85rem] w-0 -translate-x-1/2 border-l-2 border-dashed opacity-55"
+                    style={{ borderColor: BRAND_GREEN }}
+                  />
+                </div>
+                <div className="relative min-w-0 flex-1 divide-y divide-gray-200 pr-10">
+                  <CarpoolLocationField
+                    id="hero-pickup-mobile"
+                    layout="ticket"
+                    label="From"
+                    value={from}
+                    location={fromLocation}
+                    onChange={setFrom}
+                    onLocationChange={setFromLocation}
+                    isPickup
+                    placeholder="Enter pickup location"
+                  />
+                  <CarpoolLocationField
+                    id="hero-drop-mobile"
+                    layout="ticket"
+                    label="To"
+                    value={to}
+                    location={toLocation}
+                    onChange={setTo}
+                    onLocationChange={setToLocation}
+                    placeholder="Enter destination location"
+                  />
+                  <button
+                    type="button"
+                    onClick={swapLocations}
+                    className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm hover:bg-gray-50"
+                    aria-label="Swap pickup and drop"
+                  >
+                    <ArrowLeftRight className="h-4 w-4 text-gray-600" />
+                  </button>
+                </div>
+              </div>
+
+              <div className={CARPOOL_TICKET_CELL}>
+                <DateTimePicker
+                  variant="infield"
+                  label="Trip start"
+                  date={tripStart}
+                  onDateChange={handleTripStartChange}
+                  minDate={minTripStart}
+                  className="min-w-0"
+                />
+              </div>
+
+              <div className={cn(CARPOOL_TICKET_CELL, 'flex items-center justify-between gap-3')}>
+                <div>
+                  <span className={CARPOOL_TICKET_INFIELD_LABEL}>Seats needed</span>
+                  <p className="mt-0.5 text-[11px] leading-none text-gray-400">Max {CARPOOL_MAX_SEATS}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSeats((s) => Math.max(1, s - 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
+                    aria-label="Decrease seats"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[1.25rem] text-center text-base font-bold text-gray-900">{seats}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSeats((s) => Math.min(CARPOOL_MAX_SEATS, s + 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
+                    aria-label="Increase seats"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">{searchButton}</div>
+          </div>
+
+          {/* Desktop — original boxed layout */}
+          <div className="hidden space-y-4 lg:block">
             <CarpoolLocationField
               id="hero-pickup"
               label="From"
@@ -180,8 +341,7 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
               />
             </div>
 
-            {/* Date & Time — always stack on phones (iOS native inputs need full width) */}
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-2 gap-3">
               <div className="min-w-0">
                 <label className={HERO_LABEL_CLASS}>Date</label>
                 <div className={CARPOOL_DATETIME_WRAPPER_CLASS}>
@@ -204,17 +364,13 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
                     value={time}
                     min={minTime}
                     max={HERO_MAX_PICKUP_TIME}
-                    disabled={!canPickTimeToday}
                     onChange={(e) => setTime(e.target.value)}
-                    className={cn(
-                      HERO_DATETIME_INPUT_CLASS,
-                      !canPickTimeToday && 'cursor-not-allowed text-gray-400',
-                    )}
-                  />                </div>
+                    className={HERO_DATETIME_INPUT_CLASS}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Seats */}
             <div>
               <label className={HERO_LABEL_CLASS}>Seats Needed (max {CARPOOL_MAX_SEATS})</label>
               <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-2">
@@ -238,17 +394,7 @@ export function CarpoolingHero({ onSearch }: CarpoolingHeroProps) {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleSearch}
-              className={cn(
-                'flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90',
-              )}
-              style={{ backgroundColor: BRAND_GREEN }}
-            >
-              <Search className="h-5 w-5" />
-              Search Rides
-            </button>
+            {searchButton}
           </div>
         </div>
       </div>

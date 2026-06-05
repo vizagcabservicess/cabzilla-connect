@@ -379,6 +379,18 @@ z-index: 9999 !important;
 /* Urbania Hero embed: allow flex child to shrink so mobile width stays within the container */
 .vehicle-urbania-search-slot {
   min-width: 0;
+  max-width: 100%;
+}
+
+#booking-widget {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  #booking-widget {
+    overflow-x: clip;
+  }
 }
 
 [data-radix-select-content] {
@@ -424,8 +436,8 @@ min-height: 100vh;
 
 /* Mobile-specific fixes for PopularRoutes and Footer */
 @media (max-width: 767px) {
-  /* Ensure footer is visible above mobile navigation */
-  footer {
+  /* Main site footer only — carpool pages use SharedCarpoolPublicLayout for bottom nav spacing */
+  footer:not(.carpooling-footer) {
     margin-bottom: 4rem !important;
     padding-bottom: 2rem !important;
   }
@@ -523,6 +535,8 @@ min-height: 100vh;
 /* Google Places Autocomplete — sits on document body; z-index + surface so it layers above the booking row */
 .pac-container {
   z-index: 10050 !important;
+  max-width: calc(100vw - 16px) !important;
+  box-sizing: border-box !important;
   border-radius: 0.75rem;
   border: 1px solid rgb(229 231 235);
   box-shadow:
@@ -553,4 +567,21 @@ min-height: 100vh;
 .pac-item:hover,
 .pac-item-selected {
   background-color: rgb(249 250 251);
+}
+
+/* iOS Safari auto-zooms inputs below 16px — enforce minimum on carpool forms (mobile). */
+@media (max-width: 639px) {
+  #commute-form input,
+  #commute-form select,
+  #commute-form textarea,
+  #find-ride input,
+  #find-ride select,
+  #find-ride textarea,
+  #booking-widget input,
+  #booking-widget select,
+  #booking-widget textarea,
+  .carpool-location-input input,
+  .location-search-sheet input {
+    font-size: 16px !important;
+  }
 }

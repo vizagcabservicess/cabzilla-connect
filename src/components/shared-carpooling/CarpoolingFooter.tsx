@@ -40,8 +40,6 @@ const FOOTER_LINKS = {
 
     { label: 'Group Tours', href: '/group-tours' },
 
-    { label: 'Local Carpooling (NAD–IT SEZ)', href: '/local-carpooling' },
-
   ],
 
   Company: [
@@ -110,7 +108,7 @@ export function CarpoolingFooter() {
 
   return (
 
-    <footer style={{ backgroundColor: FOOTER_BG }} className="text-white">
+    <footer style={{ backgroundColor: FOOTER_BG }} className="carpooling-footer text-white">
 
       <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
 

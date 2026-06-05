@@ -543,7 +543,7 @@ const VehicleDetailPage = () => {
         }
       >
         <Navbar />
-        <main id="main-content" className={vehicleSlug === 'urbania' ? 'bg-white' : undefined}>
+        <main id="main-content" className={vehicleSlug === 'urbania' ? 'overflow-x-clip bg-white max-lg:max-w-[100vw]' : undefined}>
         <div
           className={
             vehicleSlug === 'urbania'

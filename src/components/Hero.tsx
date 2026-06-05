@@ -134,6 +134,18 @@ const heroUrbaniaMobileSelectContentProps = {
   ),
 };
 
+/** Mobile ticket shell — matches `/vehicle/urbania` hero card chrome */
+const heroMobileTicketShellCardClass =
+  'max-lg:overflow-hidden max-lg:rounded-2xl max-lg:border max-lg:border-gray-200/90 max-lg:bg-white max-lg:shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)]';
+
+/** Search slot gutters — same as `vehicle-urbania-search-slot` */
+const heroMobileTicketShellPaddingClass = 'max-lg:px-4 max-lg:pb-3 max-lg:pt-0';
+
+/** Home promo banner: small inset from card top edge */
+const heroMobileTicketShellPaddingHomeClass = 'max-lg:px-4 max-lg:pb-3 max-lg:pt-2';
+
+const heroMobileTicketShellFormWrapClass = 'bg-transparent px-0 pt-0 shadow-none';
+
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
 /** Session: guest WhatsApp (E.164) after first successful entry — skip modal on repeat searches in this tab. */
@@ -156,11 +168,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   /** Parent `VehicleDetailPage` wraps hero + embed in a single gray shell below `lg`. */
   const urbaniaUnifiedShell =
     Boolean(urbaniaUnifiedMobileLayout && urbaniaMobileEmbedShell);
-  /** Urbania `/vehicle/*` Hero on mobile / edit overlay: in-field captions + stacked ticket divider (desktop unchanged). */
-  const heroUrbaniaMobileTicketStyle = normalizedLockSlug === 'urbania';
-  const heroMobileUrbaniaFieldVariant: 'app' | 'infield' = heroUrbaniaMobileTicketStyle ? 'infield' : 'app';
-  const heroUrbaniaTicketCellPad = heroUrbaniaMobileTicketStyle ? 'px-2 py-1.5' : '';
-  const heroUrbaniaTourLocalRowClass = heroUrbaniaMobileTicketStyle ? 'flex items-start gap-2 px-3 py-2' : undefined;
+  /** Home Hero + Urbania `/vehicle/*`: in-field captions + stacked ticket divider on mobile/tablet (desktop unchanged). */
+  const heroMobileTicketStyle =
+    normalizedLockSlug === 'urbania' ||
+    (!embedStretchToShell && !embedCompactLayout && !lockedVehicleSlug);
+  const heroMobileFieldVariant: 'app' | 'infield' = heroMobileTicketStyle ? 'infield' : 'app';
+  const heroTicketCellPad = heroMobileTicketStyle ? 'px-2 py-1.5' : '';
+  const heroTourLocalRowClass = heroMobileTicketStyle ? 'flex items-start gap-2 px-2 py-1.5' : undefined;
+  /** Single outer card on mobile — tabs + fields share one frame (home + Urbania embed). */
+  const heroMobileUnifiedShell = heroMobileTicketStyle && !urbaniaUnifiedShell;
   
   const loadFromSessionStorage = () => {
     try {
@@ -1990,21 +2006,33 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 showTripModeToggle
                 tripModeToggleMobileOnly
                 hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
-                suppressMobileCardChrome={urbaniaMobileEmbedShell}
-                urbaniaMobileTripTiles={normalizedLockSlug === 'urbania'}
+                suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
+                urbaniaMobileTripTiles={heroMobileTicketStyle}
               />
             </div>
 
-            <div key={`booking-form-${editTrigger}`} className="mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5">
+            <div
+              key={`booking-form-${editTrigger}`}
+              className={
+                heroMobileUnifiedShell || urbaniaMobileEmbedShell
+                  ? heroMobileTicketShellFormWrapClass
+                  : 'mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5'
+              }
+            >
               <div
                 className={cn(
                   'flex flex-col',
-                  heroUrbaniaMobileTicketStyle
-                    ? 'divide-y divide-gray-200 overflow-hidden bg-transparent'
+                  heroMobileTicketStyle
+                    ? cn(
+                        'divide-y divide-gray-200 overflow-hidden',
+                        heroMobileUnifiedShell || urbaniaMobileEmbedShell
+                          ? 'rounded-lg border-0 bg-transparent'
+                          : 'rounded-xl border border-gray-200 bg-white shadow-sm'
+                      )
                     : 'gap-3'
                 )}
               >
-                {heroUrbaniaMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
+                {heroMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
                   <div className="flex min-h-0 items-stretch bg-white">
                     <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
                       <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
@@ -2014,8 +2042,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     <div className="min-w-0 flex-1 divide-y divide-gray-200">
                       <LocationInput
                         key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                        variant={heroMobileUrbaniaFieldVariant}
-                        className={heroUrbaniaTicketCellPad}
+                        variant={heroMobileFieldVariant}
+                        className={heroTicketCellPad}
                         label="From"
                         placeholder="Enter pickup location"
                         value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -2026,8 +2054,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       />
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                        variant={heroMobileUrbaniaFieldVariant}
-                        className={heroUrbaniaTicketCellPad}
+                        variant={heroMobileFieldVariant}
+                        className={heroTicketCellPad}
                         label="To"
                         placeholder="Enter destination location"
                         value={dropLocation ? { ...dropLocation } : undefined}
@@ -2042,8 +2070,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   <>
                     <LocationInput
                       key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                      variant={heroMobileUrbaniaFieldVariant}
-                      className={heroUrbaniaTicketCellPad}
+                      variant={heroMobileFieldVariant}
+                      className={heroTicketCellPad}
                       label="From"
                       placeholder="Enter pickup location"
                       value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -2055,8 +2083,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     {(tripType === 'outstation' || tripType === 'airport') && (
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                        variant={heroMobileUrbaniaFieldVariant}
-                        className={heroUrbaniaTicketCellPad}
+                        variant={heroMobileFieldVariant}
+                        className={heroTicketCellPad}
                         label="To"
                         placeholder="Enter destination location"
                         value={dropLocation ? { ...dropLocation } : undefined}
@@ -2072,18 +2100,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   <div
                     className={cn(
                       'w-full',
-                      heroUrbaniaTourLocalRowClass
+                      heroTourLocalRowClass
                     )}
                   >
-                    {heroUrbaniaMobileTicketStyle && (
+                    {heroMobileTicketStyle && (
                       <TourTabIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
                     )}
                     <div
                       className={cn(
-                        heroUrbaniaMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
+                        heroMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
                       )}
                     >
-                      {heroUrbaniaMobileTicketStyle ? (
+                      {heroMobileTicketStyle ? (
                         <span className="text-[11px] font-medium leading-none text-gray-500">Tour package</span>
                       ) : (
                         <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
@@ -2108,7 +2136,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       >
                         <SelectTrigger
                           className={cn(
-                            heroUrbaniaMobileTicketStyle
+                            heroMobileTicketStyle
                               ? heroUrbaniaMobileTourSelectTrigger
                               : heroMobileTourSelectTriggerDefault
                           )}
@@ -2120,7 +2148,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           />
                         </SelectTrigger>
                         <SelectContent
-                          {...(heroUrbaniaMobileTicketStyle
+                          {...(heroMobileTicketStyle
                             ? heroUrbaniaMobileSelectContentProps
                             : heroTourPackageSelectContentProps)}
                         >
@@ -2140,25 +2168,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   <div
                     className={cn(
                       'w-full',
-                      heroUrbaniaTourLocalRowClass
+                      heroTourLocalRowClass
                     )}
                   >
-                    {heroUrbaniaMobileTicketStyle && (
+                    {heroMobileTicketStyle && (
                       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
                     )}
                     <div
                       className={cn(
-                        heroUrbaniaMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
+                        heroMobileTicketStyle ? 'min-w-0 flex-1 flex flex-col gap-0.5' : 'w-full'
                       )}
                     >
-                      {heroUrbaniaMobileTicketStyle ? (
+                      {heroMobileTicketStyle ? (
                         <span className="text-[11px] font-medium leading-none text-gray-500">Package</span>
                       ) : (
                         <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
                           Package
                         </label>
                       )}
-                      {heroUrbaniaMobileTicketStyle ? (
+                      {heroMobileTicketStyle ? (
                         <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
                           <SelectTrigger className={heroUrbaniaMobileTourSelectTrigger} aria-label="Hourly package">
                             <SelectValue />
@@ -2198,8 +2226,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 )}
 
                 <DateTimePicker
-                  variant={heroMobileUrbaniaFieldVariant}
-                  className={heroUrbaniaTicketCellPad}
+                  variant={heroMobileFieldVariant}
+                  className={heroTicketCellPad}
                   label="Trip start"
                   date={pickupDate}
                   onDateChange={setPickupDate}
@@ -2208,8 +2236,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
                 {tripType === 'outstation' && tripMode === 'round-trip' && (
                   <DateTimePicker
-                    variant={heroMobileUrbaniaFieldVariant}
-                    className={heroUrbaniaTicketCellPad}
+                    variant={heroMobileFieldVariant}
+                    className={heroTicketCellPad}
                     label="Return trip"
                     date={returnDate}
                     onDateChange={handleReturnDateChange}
@@ -2282,7 +2310,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           className={
             embedStretchToShell
               ? 'w-full'
-              : 'w-full max-lg:px-2 sm:container sm:mx-auto sm:px-4'
+              : cn(
+                  'w-full sm:container sm:mx-auto sm:px-4',
+                  heroMobileUnifiedShell ? 'max-lg:px-0' : 'max-lg:px-2'
+                )
           }
         >
           <div className={embedStretchToShell ? 'w-full' : 'w-full sm:max-w-6xl sm:mx-auto'}>
@@ -2293,9 +2324,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       'p-3 lg:rounded-3xl lg:border lg:border-gray-100 lg:bg-white lg:shadow-2xl',
                       urbaniaUnifiedShell
                         ? 'max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none'
-                        : 'max-lg:overflow-hidden max-lg:rounded-[1.25rem] max-lg:border max-lg:border-gray-200 max-lg:bg-white max-lg:p-0 max-lg:shadow-[0_2px_12px_-4px_rgba(15,23,42,0.07)]'
+                        : cn(heroMobileTicketShellCardClass, heroMobileTicketShellPaddingClass)
                     )
-                  : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2'
+                  : heroMobileUnifiedShell
+                    ? cn(
+                        'p-3 lg:rounded-3xl lg:border lg:border-gray-100 lg:bg-white lg:shadow-2xl',
+                        heroMobileTicketShellCardClass,
+                        heroMobileTicketShellPaddingHomeClass
+                      )
+                    : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2'
               }
             >
               
@@ -2306,18 +2343,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     <div
                       className={cn(
                         'space-y-6 sm:space-y-8 lg:space-y-0',
-                        heroUrbaniaMobileTicketStyle
-                          ? urbaniaUnifiedShell
+                        heroMobileTicketStyle
+                          ? urbaniaUnifiedShell || heroMobileUnifiedShell
                             ? 'max-lg:space-y-2'
                             : 'max-lg:space-y-0.5'
                           : 'max-lg:space-y-1.5'
                       )}
                     >
                       {/* Promo slider — mobile/tablet (desktop in TabTripSelector) */}
-                      <div className="lg:hidden">
+                      <div className="lg:hidden max-lg:min-w-0">
                         <HeroPromoSlider hideUrbaniaPromo={normalizedLockSlug === 'urbania'} />
                       </div>
-                      <div className="w-full max-lg:mb-0 lg:mb-4">
+                      <div className="w-full max-lg:mb-0 max-lg:min-w-0 lg:mb-4">
                         <TabTripSelector
                           selectedTab={ensureCustomerTripType(tripType)}
                           tripMode={tripMode}
@@ -2329,35 +2366,35 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           showTripModeToggle
                           tripModeToggleMobileOnly
                           hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
-                          suppressMobileCardChrome={urbaniaMobileEmbedShell}
-                          urbaniaMobileTripTiles={normalizedLockSlug === 'urbania'}
+                          suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
+                          urbaniaMobileTripTiles={heroMobileTicketStyle}
                         />
                       </div>
 
                       {/* MOBILE/TABLET: current form - hidden on desktop (lg) */}
-                      <div className="lg:hidden">
+                      <div className="lg:hidden max-lg:min-w-0">
                       <div
                         key={`booking-form-mobile-${editTrigger}`}
                         className={
-                          urbaniaMobileEmbedShell
-                            ? 'mb-2 bg-transparent px-0 pb-2 pt-0 shadow-none'
+                          urbaniaMobileEmbedShell || heroMobileUnifiedShell
+                            ? heroMobileTicketShellFormWrapClass
                             : 'mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5'
                         }
                       >
                         <div
                           className={cn(
                             'flex flex-col',
-                            heroUrbaniaMobileTicketStyle
+                            heroMobileTicketStyle
                               ? cn(
                                   'divide-y divide-gray-200 overflow-hidden',
-                                  urbaniaMobileEmbedShell
+                                  urbaniaMobileEmbedShell || heroMobileUnifiedShell
                                     ? 'rounded-lg border-0 bg-transparent'
                                     : 'rounded-xl border border-gray-200 bg-white shadow-sm'
                                 )
                               : 'gap-3'
                           )}
                         >
-                          {heroUrbaniaMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
+                          {heroMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport') ? (
                             <div className="flex min-h-0 items-stretch bg-white">
                               <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
                                 <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
@@ -2367,8 +2404,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               <div className="min-w-0 flex-1 divide-y divide-gray-200">
                                 <LocationInput
                                   key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                                  variant={heroMobileUrbaniaFieldVariant}
-                                  className={heroUrbaniaTicketCellPad}
+                                  variant={heroMobileFieldVariant}
+                                  className={heroTicketCellPad}
                                   label="From"
                                   placeholder="Enter pickup location"
                                   value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -2379,8 +2416,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 />
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                                  variant={heroMobileUrbaniaFieldVariant}
-                                  className={heroUrbaniaTicketCellPad}
+                                  variant={heroMobileFieldVariant}
+                                  className={heroTicketCellPad}
                                   label="To"
                                   placeholder="Enter destination location"
                                   value={dropLocation ? { ...dropLocation } : undefined}
@@ -2395,8 +2432,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <>
                               <LocationInput
                                 key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
-                                variant={heroMobileUrbaniaFieldVariant}
-                                className={heroUrbaniaTicketCellPad}
+                                variant={heroMobileFieldVariant}
+                                className={heroTicketCellPad}
                                 label="From"
                                 placeholder="Enter pickup location"
                                 value={pickupLocation ? { ...pickupLocation } : undefined}
@@ -2408,8 +2445,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               {(tripType === 'outstation' || tripType === 'airport') && (
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
-                                  variant={heroMobileUrbaniaFieldVariant}
-                                  className={heroUrbaniaTicketCellPad}
+                                  variant={heroMobileFieldVariant}
+                                  className={heroTicketCellPad}
                                   label="To"
                                   placeholder="Enter destination location"
                                   value={dropLocation ? { ...dropLocation } : undefined}
@@ -2425,20 +2462,20 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <div
                               className={cn(
                                 'w-full',
-                                heroUrbaniaTourLocalRowClass
+                                heroTourLocalRowClass
                               )}
                             >
-                              {heroUrbaniaMobileTicketStyle && (
+                              {heroMobileTicketStyle && (
                                 <TourTabIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
                               )}
                               <div
                                 className={cn(
-                                  heroUrbaniaMobileTicketStyle
+                                  heroMobileTicketStyle
                                     ? 'min-w-0 flex-1 flex flex-col gap-0.5'
                                     : 'w-full'
                                 )}
                               >
-                                {heroUrbaniaMobileTicketStyle ? (
+                                {heroMobileTicketStyle ? (
                                   <span className="text-[11px] font-medium leading-none text-gray-500">Tour package</span>
                                 ) : (
                                   <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
@@ -2463,7 +2500,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 >
                                   <SelectTrigger
                                     className={cn(
-                                      heroUrbaniaMobileTicketStyle
+                                      heroMobileTicketStyle
                                         ? heroUrbaniaMobileTourSelectTrigger
                                         : heroMobileTourSelectTriggerDefault
                                     )}
@@ -2475,7 +2512,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     />
                                   </SelectTrigger>
                                   <SelectContent
-                          {...(heroUrbaniaMobileTicketStyle
+                          {...(heroMobileTicketStyle
                             ? heroUrbaniaMobileSelectContentProps
                             : heroTourPackageSelectContentProps)}
                         >
@@ -2495,27 +2532,27 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <div
                               className={cn(
                                 'w-full',
-                                heroUrbaniaTourLocalRowClass
+                                heroTourLocalRowClass
                               )}
                             >
-                              {heroUrbaniaMobileTicketStyle && (
+                              {heroMobileTicketStyle && (
                                 <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
                               )}
                               <div
                                 className={cn(
-                                  heroUrbaniaMobileTicketStyle
+                                  heroMobileTicketStyle
                                     ? 'min-w-0 flex-1 flex flex-col gap-0.5'
                                     : 'w-full'
                                 )}
                               >
-                                {heroUrbaniaMobileTicketStyle ? (
+                                {heroMobileTicketStyle ? (
                                   <span className="text-[11px] font-medium leading-none text-gray-500">Package</span>
                                 ) : (
                                   <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-blue-600 pointer-events-none">
                                     Package
                                   </label>
                                 )}
-                                {heroUrbaniaMobileTicketStyle ? (
+                                {heroMobileTicketStyle ? (
                                   <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
                                     <SelectTrigger className={heroUrbaniaMobileTourSelectTrigger} aria-label="Hourly package">
                                       <SelectValue />
@@ -2555,8 +2592,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           )}
 
                           <DateTimePicker
-                            variant={heroMobileUrbaniaFieldVariant}
-                            className={heroUrbaniaTicketCellPad}
+                            variant={heroMobileFieldVariant}
+                            className={heroTicketCellPad}
                             label="Trip start"
                             date={pickupDate}
                             onDateChange={setPickupDate}
@@ -2565,8 +2602,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
                           {tripType === 'outstation' && tripMode === 'round-trip' && (
                             <DateTimePicker
-                              variant={heroMobileUrbaniaFieldVariant}
-                              className={heroUrbaniaTicketCellPad}
+                              variant={heroMobileFieldVariant}
+                              className={heroTicketCellPad}
                               label="Return trip"
                               date={returnDate}
                               onDateChange={handleReturnDateChange}
@@ -2598,7 +2635,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
                           className={cn(
                             'mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-all duration-300 hover:bg-blue-700 disabled:opacity-60',
-                            urbaniaMobileEmbedShell && 'max-lg:mt-2'
+                            (urbaniaMobileEmbedShell || heroMobileUnifiedShell) && 'max-lg:mt-2'
                           )}
                         >
                           {isLoading ? (

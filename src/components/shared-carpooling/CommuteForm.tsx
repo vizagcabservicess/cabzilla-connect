@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { format } from 'date-fns';
+import { format, addDays, startOfDay } from 'date-fns';
 import {
   ArrowLeftRight,
   Building2,
@@ -14,12 +14,19 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { DateTimePicker } from '@/components/DateTimePicker';
 import type { Location } from '@/lib/locationData';
-import { BRAND_GREEN, BRAND_GREEN_LIGHT, CARPOOL_MAX_SEATS, COMMUTE_SCHEDULE_OPTIONS, GroupPreference, PICKUP_TIMES, type CommuteSchedule } from './constants';
+import { BRAND_GREEN, BRAND_GREEN_LIGHT, CARPOOL_MAX_SEATS, COMMUTE_FORM_DEFAULT_BUDGET, COMMUTE_SCHEDULE_OPTIONS, GroupPreference, PICKUP_TIMES, type CommuteSchedule } from './constants';
 import { CarpoolLocationField, carpoolLocationLabel, hasValidCarpoolLocation } from './CarpoolLocationField';
-import { CARPOOL_DATETIME_WRAPPER_CLASS, carpoolNativeDatetimeClass } from './carpoolFormStyles';
 import {
-  COMMUTE_BUDGET_SLIDER_FLOOR,
+  CARPOOL_DATETIME_WRAPPER_CLASS,
+  CARPOOL_FIELD_INPUT_CLASS,
+  CARPOOL_TICKET_CELL,
+  CARPOOL_TICKET_INFIELD_INPUT,
+  CARPOOL_TICKET_INFIELD_LABEL,
+  carpoolNativeDatetimeClass,
+} from './carpoolFormStyles';
+import {
   commuteBudgetDefaultPerSeat,
   commuteBudgetSliderMax,
   commuteBudgetSliderMin,
@@ -27,7 +34,7 @@ import {
 } from './DailyCommuteBudgetSlider';
 import { fetchCommuteBudgetPerSeat } from './commuteBudget';
 import { hasCarpoolRouteCoordinates } from './carpoolSedanFare';
-import { defaultPickupTimeForDate, filterPickupTimesForDate } from './searchUtils';
+import { defaultPickupTimeForDate, filterPickupTimesForDate, isPickupDateToday, parsePickupTimeToMinutes } from './searchUtils';
 import type { CommuteFormData } from './types';
 
 const COMMUTE_DATETIME_INPUT_CLASS = carpoolNativeDatetimeClass('bg-white');
@@ -61,6 +68,29 @@ const GROUP_OPTIONS: { id: GroupPreference; label: string; Icon: typeof Users }[
   { id: 'women', label: 'Women Only', Icon: User },
 ];
 
+function getDefaultBudgetRange() {
+  const min = commuteBudgetSliderMin(COMMUTE_FORM_DEFAULT_BUDGET);
+  const max = commuteBudgetSliderMax(COMMUTE_FORM_DEFAULT_BUDGET, min);
+  return { min, max, value: COMMUTE_FORM_DEFAULT_BUDGET };
+}
+
+const DEFAULT_BUDGET_RANGE = getDefaultBudgetRange();
+
+function snapToNearestPickupTime(date: Date, available: readonly string[]): string {
+  if (available.length === 0) return '';
+  const minutes = date.getHours() * 60 + date.getMinutes();
+  let best = available[0]!;
+  let bestDiff = Infinity;
+  for (const slot of available) {
+    const diff = Math.abs(parsePickupTimeToMinutes(slot) - minutes);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = slot;
+    }
+  }
+  return best;
+}
+
 export function CommuteForm({
   onFindRides,
   onContextChange,
@@ -81,9 +111,9 @@ export function CommuteForm({
   const [fromLocation, setFromLocation] = useState<Location | undefined>();
   const [toLocation, setToLocation] = useState<Location | undefined>();
   const [company, setCompany] = useState(defaultCompany);
-  const [budgetPerDay, setBudgetPerDay] = useState(COMMUTE_BUDGET_SLIDER_FLOOR);
-  const [budgetSliderMin, setBudgetSliderMin] = useState(COMMUTE_BUDGET_SLIDER_FLOOR);
-  const [budgetSliderMax, setBudgetSliderMax] = useState(500);
+  const [budgetPerDay, setBudgetPerDay] = useState(DEFAULT_BUDGET_RANGE.value);
+  const [budgetSliderMin, setBudgetSliderMin] = useState(DEFAULT_BUDGET_RANGE.min);
+  const [budgetSliderMax, setBudgetSliderMax] = useState(DEFAULT_BUDGET_RANGE.max);
   const [fareLoading, setFareLoading] = useState(false);
   const [seats, setSeats] = useState(1);
   const [pickupDate, setPickupDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -99,7 +129,24 @@ export function CommuteForm({
     [pickupDate],
   );
 
+  const minTripStart = useMemo(() => startOfDay(new Date()), []);
+
+  const commuteTripStart = useMemo(() => {
+    const d = new Date(`${pickupDate}T12:00:00`);
+    if (pickupTime) {
+      const mins = parsePickupTimeToMinutes(pickupTime);
+      d.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+    }
+    return d;
+  }, [pickupDate, pickupTime]);
+
   useEffect(() => {
+    if (availablePickupTimes.length === 0 && isPickupDateToday(pickupDate)) {
+      const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+      setPickupDate(tomorrow);
+      setPickupTime(PICKUP_TIMES[0]!);
+      return;
+    }
     if (availablePickupTimes.length === 0) {
       if (pickupTime) setPickupTime('');
       return;
@@ -139,10 +186,12 @@ export function CommuteForm({
 
   useEffect(() => {
     if (!hasCarpoolRouteCoordinates(fromLocation, toLocation)) {
-      setBudgetSliderMin(COMMUTE_BUDGET_SLIDER_FLOOR);
-      setBudgetSliderMax(500);
-      setBudgetPerDay(COMMUTE_BUDGET_SLIDER_FLOOR);
       setFareLoading(false);
+      if (!fromLocation?.lat && !toLocation?.lat && !from.trim() && !to.trim()) {
+        setBudgetSliderMin(DEFAULT_BUDGET_RANGE.min);
+        setBudgetSliderMax(DEFAULT_BUDGET_RANGE.max);
+        setBudgetPerDay(DEFAULT_BUDGET_RANGE.value);
+      }
       return;
     }
 
@@ -170,7 +219,7 @@ export function CommuteForm({
     }, 400);
 
     return () => window.clearTimeout(timer);
-  }, [fromLocation, toLocation, from, to]);
+  }, [fromLocation, toLocation]);
 
   useEffect(() => {
     onContextChange?.({
@@ -192,7 +241,42 @@ export function CommuteForm({
     setToLocation(fromLocation);
   };
 
+  const handleCommuteTripStartChange = (next: Date | undefined) => {
+    if (!next) return;
+    const nextDate = format(next, 'yyyy-MM-dd');
+    setPickupDate(nextDate);
+    const timesForDate = filterPickupTimesForDate(PICKUP_TIMES, nextDate);
+    const snapped = snapToNearestPickupTime(next, timesForDate);
+    if (snapped) setPickupTime(snapped);
+  };
+
+  const routeHasCoordinates = hasCarpoolRouteCoordinates(fromLocation, toLocation);
+
+  const isFormComplete = useMemo(() => {
+    if (!fullName.trim()) return false;
+    if (waDigits.trim().length < 10) return false;
+    if (!hasValidCarpoolLocation(fromLocation, from)) return false;
+    if (!hasValidCarpoolLocation(toLocation, to)) return false;
+    if (!pickupTime.trim()) return false;
+    if (seats < 1 || seats > CARPOOL_MAX_SEATS) return false;
+    if (!routeHasCoordinates || fareLoading) return false;
+    return true;
+  }, [
+    fullName,
+    waDigits,
+    from,
+    to,
+    fromLocation,
+    toLocation,
+    pickupTime,
+    availablePickupTimes.length,
+    seats,
+    routeHasCoordinates,
+    fareLoading,
+  ]);
+
   const handleSubmit = () => {
+    if (!isFormComplete) return;
     if (!fullName.trim()) {
       toast.error('Please enter your full name');
       return;
@@ -230,15 +314,254 @@ export function CommuteForm({
     onFindRides(data);
   };
 
+  const submitButton = (
+    <button
+      type="button"
+      onClick={handleSubmit}
+      disabled={!isFormComplete || isSubmitting}
+      className={cn(
+        'flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50',
+      )}
+      style={{ backgroundColor: BRAND_GREEN }}
+    >
+      {isSubmitting ? 'Searching…' : submitLabel}
+    </button>
+  );
+
+  const scheduleSection = (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-gray-700">
+        Commute Schedule<span className="text-red-500">*</span>
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {COMMUTE_SCHEDULE_OPTIONS.map(({ id, label }) => {
+          const selected = commuteSchedule === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setCommuteSchedule(id)}
+              className={cn(
+                'rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
+                selected ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+              )}
+              style={selected ? { backgroundColor: BRAND_GREEN } : undefined}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const groupSection = (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-gray-700">Group Preference</label>
+      <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2">
+        {GROUP_OPTIONS.map(({ id, label, Icon }) => {
+          const selected = groupPreference === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setGroupPreference(id)}
+              className={cn(
+                'relative flex min-w-0 flex-col items-center gap-2 rounded-xl border-2 px-1.5 py-3 text-center transition-all sm:px-2 sm:py-4',
+                selected ? 'border-green-600 bg-green-50' : 'border-gray-200 bg-white hover:border-gray-300',
+              )}
+              style={selected ? { borderColor: BRAND_GREEN, backgroundColor: BRAND_GREEN_LIGHT } : undefined}
+            >
+              {selected && (
+                <Check className="absolute right-2 top-2 h-4 w-4" style={{ color: BRAND_GREEN }} strokeWidth={3} />
+              )}
+              <Icon className="h-6 w-6 text-gray-600" />
+              <span className="text-xs font-semibold text-gray-800">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const infoBanner = (
+    <div className="flex gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: BRAND_GREEN_LIGHT }}>
+      <Leaf className="h-5 w-5 shrink-0" style={{ color: BRAND_GREEN }} />
+      <p className="text-xs leading-relaxed text-gray-700">
+        This helps us match you with commuters on the same route, schedule, and comfort preferences.
+        Your details are shared only with verified drivers and co-riders.
+      </p>
+    </div>
+  );
+
+  const budgetSection = (
+    <div className="min-w-0">
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">Daily Commute Budget</label>
+      <DailyCommuteBudgetSlider
+        value={budgetPerDay}
+        min={budgetSliderMin}
+        max={budgetSliderMax}
+        onChange={setBudgetPerDay}
+        disabled={!routeHasCoordinates}
+        loading={fareLoading}
+      />
+    </div>
+  );
+
   return (
     <div
       id="commute-form"
-      className="scroll-mt-24 min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6"
+      className="scroll-mt-24 min-w-0 w-full max-w-full overflow-hidden max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none lg:rounded-2xl lg:border lg:border-gray-100 lg:bg-white lg:p-6 lg:shadow-sm"
     >
       <h2 className="text-xl font-bold text-gray-900">Tell us about your daily commute</h2>
       <p className="mt-1 text-sm text-gray-500">We&apos;ll match you with riders on your route</p>
 
-      <div className="mt-6 min-w-0 space-y-4">
+      {/* Mobile — ticket layout (matches Find Your Shared Ride) */}
+      <div className="mt-6 space-y-4 lg:hidden">
+        <div className="overflow-hidden rounded-xl border border-gray-200 divide-y divide-gray-200 max-lg:rounded-lg">
+          <div className={CARPOOL_TICKET_CELL}>
+            <label htmlFor="commute-full-name-mobile" className={CARPOOL_TICKET_INFIELD_LABEL}>
+              Full name
+            </label>
+            <input
+              id="commute-full-name-mobile"
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Enter your full name"
+              className={cn(CARPOOL_TICKET_INFIELD_INPUT, 'mt-1')}
+            />
+          </div>
+
+          <div className={CARPOOL_TICKET_CELL}>
+            <span className={CARPOOL_TICKET_INFIELD_LABEL}>WhatsApp number</span>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <select
+                aria-label="Country code"
+                className="w-14 shrink-0 border-0 bg-transparent p-0 text-base font-bold text-gray-900 focus:outline-none focus:ring-0"
+              >
+                <option>+91</option>
+              </select>
+              <input
+                id="commute-wa-mobile"
+                type="tel"
+                value={waDigits}
+                onChange={(e) => setWaDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit mobile number"
+                className={cn(CARPOOL_TICKET_INFIELD_INPUT, 'min-w-0 flex-1')}
+              />
+            </div>
+          </div>
+
+          <div className="relative flex min-h-0 items-stretch bg-white">
+            <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
+              <div
+                className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 bg-white"
+                style={{ borderColor: BRAND_GREEN }}
+              />
+              <div
+                className="absolute bottom-[1.25rem] left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border-2 bg-white"
+                style={{ borderColor: '#ef4444' }}
+              />
+              <div
+                className="absolute bottom-[1.85rem] left-1/2 top-[1.85rem] w-0 -translate-x-1/2 border-l-2 border-dashed opacity-55"
+                style={{ borderColor: BRAND_GREEN }}
+              />
+            </div>
+            <div className="relative min-w-0 flex-1 divide-y divide-gray-200 pr-10">
+              <CarpoolLocationField
+                id="commute-pickup-mobile"
+                layout="ticket"
+                label="From"
+                value={from}
+                location={fromLocation}
+                onChange={setFrom}
+                onLocationChange={setFromLocation}
+                isPickup
+                placeholder="Enter pickup location"
+              />
+              <CarpoolLocationField
+                id="commute-drop-mobile"
+                layout="ticket"
+                label="To"
+                value={to}
+                location={toLocation}
+                onChange={setTo}
+                onLocationChange={setToLocation}
+                placeholder="Enter destination location"
+              />
+              <button
+                type="button"
+                onClick={swapLocations}
+                className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm hover:bg-gray-50"
+                aria-label="Swap pickup and drop"
+              >
+                <ArrowLeftRight className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          <div className={CARPOOL_TICKET_CELL}>
+            <label htmlFor="commute-company-mobile" className={CARPOOL_TICKET_INFIELD_LABEL}>
+              Company / organisation
+            </label>
+            <input
+              id="commute-company-mobile"
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Your office or college name"
+              className={cn(CARPOOL_TICKET_INFIELD_INPUT, 'mt-1')}
+            />
+          </div>
+
+          <div className={CARPOOL_TICKET_CELL}>
+            <DateTimePicker
+              variant="infield"
+              label="Trip start"
+              date={commuteTripStart}
+              onDateChange={handleCommuteTripStartChange}
+              minDate={minTripStart}
+              className="min-w-0"
+            />
+          </div>
+
+          <div className={cn(CARPOOL_TICKET_CELL, 'flex items-center justify-between gap-3')}>
+            <div>
+              <span className={CARPOOL_TICKET_INFIELD_LABEL}>Seats needed</span>
+              <p className="mt-0.5 text-[11px] leading-none text-gray-400">Max {CARPOOL_MAX_SEATS}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSeats((s) => Math.max(1, s - 1))}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
+                aria-label="Decrease seats"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="min-w-[1.25rem] text-center text-base font-bold text-gray-900">{seats}</span>
+              <button
+                type="button"
+                onClick={() => setSeats((s) => Math.min(CARPOOL_MAX_SEATS, s + 1))}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
+                aria-label="Increase seats"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {budgetSection}
+        {scheduleSection}
+        {groupSection}
+        {infoBanner}
+        {submitButton}
+      </div>
+
+      {/* Desktop — original boxed layout */}
+      <div className="mt-6 hidden min-w-0 space-y-4 lg:block">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Full Name</label>
           <div className="relative">
@@ -248,7 +571,7 @@ export function CommuteForm({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter your full name"
-              className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+              className={cn('w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4', CARPOOL_FIELD_INPUT_CLASS)}
             />
           </div>
         </div>
@@ -256,7 +579,7 @@ export function CommuteForm({
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">WhatsApp Number</label>
           <div className="flex min-w-0 gap-2">
-            <select className="w-16 shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 py-3 text-sm">
+            <select className={cn('w-16 shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 py-3', CARPOOL_FIELD_INPUT_CLASS)}>
               <option>+91</option>
             </select>
             <input
@@ -264,7 +587,7 @@ export function CommuteForm({
               value={waDigits}
               onChange={(e) => setWaDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
               placeholder="10-digit mobile number"
-              className="min-w-0 flex-1 rounded-xl border border-gray-200 py-3 px-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+              className={cn('min-w-0 flex-1 rounded-xl border border-gray-200 py-3 px-4', CARPOOL_FIELD_INPUT_CLASS)}
             />
           </div>
         </div>
@@ -309,7 +632,7 @@ export function CommuteForm({
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="Your office or college name"
-              className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+              className={cn('w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4', CARPOOL_FIELD_INPUT_CLASS)}
             />
           </div>
         </div>
@@ -339,19 +662,9 @@ export function CommuteForm({
           </div>
         </div>
 
-        <div className="min-w-0">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Daily Commute Budget</label>
-          <DailyCommuteBudgetSlider
-            value={budgetPerDay}
-            min={budgetSliderMin}
-            max={budgetSliderMax}
-            onChange={setBudgetPerDay}
-            disabled={!hasCarpoolRouteCoordinates(fromLocation, toLocation)}
-            loading={fareLoading}
-          />
-        </div>
+        {budgetSection}
 
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 grid-cols-2 gap-3">
           <div className="min-w-0">
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Pickup Date</label>
             <div className={CARPOOL_DATETIME_WRAPPER_CLASS}>
@@ -372,8 +685,10 @@ export function CommuteForm({
               <select
                 value={pickupTime}
                 onChange={(e) => setPickupTime(e.target.value)}
-                disabled={availablePickupTimes.length === 0}
-                className="w-full min-w-0 appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 disabled:bg-gray-50 disabled:text-gray-400"
+                className={cn(
+                  'w-full min-w-0 appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 disabled:bg-gray-50 disabled:text-gray-400',
+                  CARPOOL_FIELD_INPUT_CLASS,
+                )}
               >
                 {availablePickupTimes.length === 0 ? (
                   <option value="">No times left today</option>
@@ -387,75 +702,10 @@ export function CommuteForm({
           </div>
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Commute Schedule<span className="text-red-500">*</span>
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {COMMUTE_SCHEDULE_OPTIONS.map(({ id, label }) => {
-              const selected = commuteSchedule === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setCommuteSchedule(id)}
-                  className={cn(
-                    'rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
-                    selected ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                  )}
-                  style={selected ? { backgroundColor: BRAND_GREEN } : undefined}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Group Preference</label>
-          <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2">
-            {GROUP_OPTIONS.map(({ id, label, Icon }) => {
-              const selected = groupPreference === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setGroupPreference(id)}
-                  className={cn(
-                    'relative flex min-w-0 flex-col items-center gap-2 rounded-xl border-2 px-1.5 py-3 text-center transition-all sm:px-2 sm:py-4',
-                    selected ? 'border-green-600 bg-green-50' : 'border-gray-200 bg-white hover:border-gray-300',
-                  )}
-                  style={selected ? { borderColor: BRAND_GREEN, backgroundColor: BRAND_GREEN_LIGHT } : undefined}
-                >
-                  {selected && (
-                    <Check className="absolute right-2 top-2 h-4 w-4" style={{ color: BRAND_GREEN }} strokeWidth={3} />
-                  )}
-                  <Icon className="h-6 w-6 text-gray-600" />
-                  <span className="text-xs font-semibold text-gray-800">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: BRAND_GREEN_LIGHT }}>
-          <Leaf className="h-5 w-5 shrink-0" style={{ color: BRAND_GREEN }} />
-          <p className="text-xs leading-relaxed text-gray-700">
-            This helps us match you with commuters on the same route, schedule, and comfort preferences.
-            Your details are shared only with verified drivers and co-riders.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90 disabled:opacity-70"
-          style={{ backgroundColor: BRAND_GREEN }}
-        >
-          {isSubmitting ? 'Searching…' : submitLabel}
-        </button>
+        {scheduleSection}
+        {groupSection}
+        {infoBanner}
+        {submitButton}
       </div>
     </div>
   );

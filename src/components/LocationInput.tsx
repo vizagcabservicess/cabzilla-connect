@@ -296,9 +296,12 @@ export function LocationInput({
 
       if (sheetMode) {
         const rect = anchor.getBoundingClientRect();
+        const vv = window.visualViewport;
+        const viewportWidth = vv?.width ?? window.innerWidth;
+        const viewportOffsetLeft = vv?.offsetLeft ?? 0;
         const margin = 12;
-        const w = Math.max(200, Math.round(window.innerWidth - margin * 2));
-        const left = Math.round(margin);
+        const w = Math.max(200, Math.round(viewportWidth - margin * 2));
+        const left = Math.round(viewportOffsetLeft + margin);
         const top = Math.round(rect.bottom + 6);
 
         s.setProperty('position', 'fixed', 'important');
@@ -312,8 +315,16 @@ export function LocationInput({
         s.setProperty('transform', 'none', 'important');
       } else {
         const rect = anchor.getBoundingClientRect();
-        const w = Math.max(200, Math.round(rect.width));
-        const left = Math.round(rect.left);
+        const vv = window.visualViewport;
+        const viewportWidth = vv?.width ?? window.innerWidth;
+        const viewportOffsetLeft = vv?.offsetLeft ?? 0;
+        const margin = 8;
+        const w = Math.max(200, Math.round(Math.min(rect.width, viewportWidth - margin * 2)));
+        const rawLeft = Math.round(rect.left);
+        const left = Math.max(
+          viewportOffsetLeft + margin,
+          Math.min(rawLeft, viewportOffsetLeft + viewportWidth - w - margin),
+        );
         const top = Math.round(rect.bottom + 2);
 
         s.setProperty('position', 'fixed', 'important');
@@ -331,6 +342,8 @@ export function LocationInput({
     alignPac();
     window.addEventListener('resize', alignPac);
     window.addEventListener('scroll', alignPac, true);
+    window.visualViewport?.addEventListener('resize', alignPac);
+    window.visualViewport?.addEventListener('scroll', alignPac);
 
     const mo = new MutationObserver(alignPac);
     mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
@@ -341,6 +354,8 @@ export function LocationInput({
       cancelled = true;
       window.removeEventListener('resize', alignPac);
       window.removeEventListener('scroll', alignPac, true);
+      window.visualViewport?.removeEventListener('resize', alignPac);
+      window.visualViewport?.removeEventListener('scroll', alignPac);
       mo.disconnect();
       window.clearInterval(interval);
     };
@@ -425,10 +440,23 @@ export function LocationInput({
   
   useEffect(() => {
     if (!mobileSearchSheetOpen) return;
-    const prev = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
+    const prevTop = document.body.style.top;
+    const prevWidth = document.body.style.width;
+
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.top = prevTop;
+      document.body.style.width = prevWidth;
+      window.scrollTo(0, scrollY);
     };
   }, [mobileSearchSheetOpen]);
 
@@ -750,7 +778,7 @@ export function LocationInput({
             !isInfieldVariant &&
             "flex min-h-[3rem] items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm",
           isInfieldVariant &&
-            "flex min-h-0 items-center gap-2 rounded-none border-0 bg-transparent p-0 shadow-none"
+            "flex min-h-[2.75rem] items-start gap-2 rounded-none border-0 bg-transparent py-1 shadow-none"
         )}
       >
         {((isDesktopVariant || (isAppVariant && !isInfieldVariant)) && !hideLeadingIcon) && (
@@ -781,19 +809,15 @@ export function LocationInput({
             disabled={disabled}
             className={cn(
               "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none ring-offset-white focus-visible:ring-2 focus-visible:ring-blue-500/30",
-              "touch-manipulation text-[15px] font-bold leading-tight text-gray-900"
+              "touch-manipulation text-base leading-tight",
+              inputValue ? "font-bold text-gray-900" : "font-normal text-gray-500"
             )}
             onClick={() => {
               setMobileSearchSheetOpen(true);
               queueMicrotask(() => setIsFocused(true));
             }}
             >
-            <span
-              className={cn(
-                'block w-full break-words text-left leading-snug line-clamp-2',
-                inputValue ? 'text-gray-900' : 'text-gray-500'
-              )}
-            >
+            <span className="block w-full break-words text-left leading-snug line-clamp-2">
               {inputValue || placeholder || 'Enter location'}
             </span>
           </button>
@@ -817,7 +841,15 @@ export function LocationInput({
           disabled={disabled}
           readOnly={readOnly}
           style={{
-            fontSize: isDesktopVariant ? "0.9375rem" : isAppVariant ? "1rem" : isDesktop ? "1.2rem" : "1rem",
+            fontSize: isDesktopVariant
+              ? isDesktop
+                ? "0.9375rem"
+                : "1rem"
+              : isAppVariant
+                ? "1rem"
+                : isDesktop
+                  ? "1.2rem"
+                  : "1rem",
             height: isAppVariant && !isInfieldVariant ? "auto" : isDesktopVariant ? "2.75rem" : isInfieldVariant ? "auto" : "3.5rem",
             minHeight: isAppVariant ? (isInfieldVariant ? "1.25rem" : "2.5rem") : undefined,
           }}
@@ -830,11 +862,11 @@ export function LocationInput({
                 )
               : isInfieldVariant && !isDesktop
                   ? cn(
-                      "rounded-none border-0 bg-transparent px-0 py-0 text-[15px] font-bold leading-tight text-gray-900 shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500"
+                      "rounded-none border-0 bg-transparent px-0 py-0 text-base font-bold leading-tight text-gray-900 shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:font-normal placeholder:text-gray-500"
                     )
                   : isInfieldVariant
                     ? cn(
-                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:text-gray-500"
+                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:font-normal placeholder:text-gray-500"
                       )
                     : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
@@ -912,7 +944,7 @@ export function LocationInput({
     typeof document !== 'undefined'
       ? createPortal(
         <div
-          className="fixed inset-0 z-[10046] flex flex-col bg-white"
+          className="location-search-sheet fixed inset-0 z-[10046] flex w-full max-w-[100vw] flex-col overflow-x-clip bg-white"
           role="dialog"
           aria-modal="true"
           aria-label={label ? `Search ${label}` : 'Search location'}
@@ -942,7 +974,8 @@ export function LocationInput({
                 onChange={handleInputChange}
                 placeholder={placeholder || 'Search location'}
                 disabled={disabled}
-                className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-[0.95rem] shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-base shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+                style={{ fontSize: '16px' }}
                 autoFocus
                 onFocus={() => {
                   hideAllPacContainers();

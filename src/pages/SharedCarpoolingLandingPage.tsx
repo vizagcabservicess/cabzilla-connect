@@ -23,7 +23,7 @@ import {
   savePendingCommuteSearch,
 } from '@/components/shared-carpooling/pendingCommuteSearch';
 import { trackCarpoolCommuteSearch } from '@/components/shared-carpooling/carpoolTrackSearch';
-import { carpoolLoginPath } from '@/components/shared-carpooling/carpoolAuthRoutes';
+import { carpoolSignupPath } from '@/components/shared-carpooling/carpoolAuthRoutes';
 import { useCarpoolUserOptional } from '@/providers/CarpoolUserProvider';
 
 function scrollToForm() {
@@ -51,8 +51,9 @@ function SharedCarpoolingLandingContent() {
     groupPreference: GroupPreference;
   }>({ from: '', to: '', budget: '', pickupTime: '', pickupDate: '', seats: 1, groupPreference: 'mixed' });
   const [findingRides, setFindingRides] = useState(false);
+  const [heroSearching, setHeroSearching] = useState(false);
 
-  const handleSearch = (params: {
+  const handleSearch = async (params: {
     from: string;
     to: string;
     date: string;
@@ -72,6 +73,31 @@ function SharedCarpoolingLandingContent() {
     }
     setSearchTime(formatCarpoolTimeLabel(params.time));
     setSearchSeats(params.seats);
+
+    setHeroSearching(true);
+    try {
+      const search: CarpoolSearchParams = {
+        ...getDefaultSearchParams(),
+        from: params.from,
+        to: params.to,
+        date: format(new Date(`${params.date}T12:00:00`), 'dd MMM, yyyy'),
+        time: formatCarpoolTimeLabel(params.time),
+        seats: params.seats,
+      };
+      const matching = await fetchMatchingRides(search);
+      if (matching.length > 0) {
+        document.getElementById('available-rides')?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        toast.message('No rides on this route yet', {
+          description: 'Tell us about your daily commute below — we\'ll notify you when a ride matches.',
+        });
+        scrollToForm();
+      }
+    } catch {
+      toast.error('Could not search rides. Please try again.');
+    } finally {
+      setHeroSearching(false);
+    }
   };
 
   const runCommuteSearch = useCallback(async (search: CarpoolSearchParams, showDashboardHint = false) => {
@@ -119,8 +145,8 @@ function SharedCarpoolingLandingContent() {
     savePendingCommuteSearch(search);
 
     if (!carpoolUser?.isPhoneVerified) {
-      navigate(carpoolLoginPath(COMMUTE_SEARCH_RETURN));
-      toast.message('Log in with your email to find matching rides');
+      navigate(carpoolSignupPath(COMMUTE_SEARCH_RETURN));
+      toast.message('Create a free account to find matching rides');
       return;
     }
 
@@ -149,10 +175,10 @@ function SharedCarpoolingLandingContent() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white" style={{ fontFamily: "'Poppins', sans-serif" }}>
-      <CarpoolingHero onSearch={handleSearch} />
+      <CarpoolingHero onSearch={handleSearch} isSearching={heroSearching} />
       <QuickAccessBar />
 
-      <section className="mx-auto min-w-0 max-w-[1400px] overflow-x-hidden px-4 py-10 sm:px-6 lg:px-8">
+      <section className="mx-auto min-w-0 max-w-[1400px] overflow-x-hidden px-3 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:items-start xl:grid-cols-[minmax(0,520px)_minmax(0,1fr)] xl:gap-8">
           <CommuteForm
             onFindRides={handleFindRides}
@@ -165,7 +191,7 @@ function SharedCarpoolingLandingContent() {
             defaultFullName={carpoolUser?.user?.fullName ?? ''}
             defaultWaDigits={carpoolUser?.user?.phone?.replace(/\D/g, '').slice(-10) ?? ''}
             defaultCompany={carpoolUser?.user?.company ?? ''}
-            submitLabel={carpoolUser?.isPhoneVerified ? 'Find Matching Rides' : 'Log In & Find Matching Rides'}
+            submitLabel={carpoolUser?.isPhoneVerified ? 'Find Matching Rides' : 'Sign Up & Find Matching Rides'}
           />
           <AvailableRides
             searchFrom={searchFrom || commuteContext.from}

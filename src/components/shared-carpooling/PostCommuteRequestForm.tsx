@@ -17,6 +17,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BRAND_GREEN, BRAND_GREEN_LIGHT, GroupPreference } from './constants';
+import { CARPOOL_FIELD_INPUT_CLASS } from './carpoolFormStyles';
 import type { CarpoolSearchParams } from './types';
 import { commuteScheduleLabel, groupPreferenceLabel } from './searchUtils';
 import { VIZAG_TAXI_HUB_PHONE_E164, buildWhatsAppMeUrl } from '@/utils/whatsappPrefillMessage';
@@ -172,7 +173,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
           </Field>
           <Field label="WhatsApp Number">
             <div className="flex gap-2">
-              <select className="w-20 shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 py-3 text-sm">
+              <select className={cn('w-20 shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 py-3', CARPOOL_FIELD_INPUT_CLASS)}>
                 <option>+91</option>
               </select>
               <input
@@ -180,7 +181,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
                 value={waDigits}
                 onChange={(e) => setWaDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="10-digit mobile number"
-                className="flex-1 rounded-xl border border-gray-200 py-3 px-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                className={cn('flex-1 rounded-xl border border-gray-200 py-3 px-4', CARPOOL_FIELD_INPUT_CLASS)}
               />
             </div>
           </Field>
@@ -199,7 +200,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
               <select
                 value={pickupTime}
                 onChange={(e) => setPickupTime(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm"
+                className={cn('w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4', CARPOOL_FIELD_INPUT_CLASS)}
               >
                 <option>Any time</option>
                 <option>06:30 AM</option>
@@ -217,7 +218,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
               <select
                 value={travelDays}
                 onChange={(e) => setTravelDays(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm"
+                className={cn('w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4', CARPOOL_FIELD_INPUT_CLASS)}
               >
                 {TRAVEL_DAYS.map((d) => (
                   <option key={d}>{d}</option>
@@ -262,7 +263,7 @@ export function PostCommuteRequestForm({ search }: PostCommuteRequestFormProps) 
               <select
                 value={cabType}
                 onChange={(e) => setCabType(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm"
+                className={cn('w-full appearance-none rounded-xl border border-gray-200 py-3 pl-10 pr-4', CARPOOL_FIELD_INPUT_CLASS)}
               >
                 {CAB_TYPES.map((t) => (
                   <option key={t}>{t}</option>
@@ -366,7 +367,8 @@ function IconInput({
         placeholder={placeholder}
         readOnly={readOnly}
         className={cn(
-          'w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20',
+          'w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4',
+          CARPOOL_FIELD_INPUT_CLASS,
           readOnly && 'bg-gray-50 text-gray-700',
         )}
       />

@@ -1,10 +1,12 @@
+import '@/lib/fonts-poppins';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useState } from 'react';
 import type { AxiosError } from 'axios';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { CarpoolAppHeader } from '@/components/shared-carpooling/app/CarpoolAppHeader';
+import { CarpoolingFooter } from '@/components/shared-carpooling/CarpoolingFooter';
+import { SharedCarpoolPublicLayout } from '@/components/shared-carpooling/SharedCarpoolPublicLayout';
 import { BRAND_GREEN } from '@/components/shared-carpooling/constants';
 import { carpoolSignupPath } from '@/components/shared-carpooling/carpoolAuthRoutes';
 import { getPostOtpVerificationPath } from '@/components/shared-carpooling/verificationRoutes';
@@ -64,7 +66,8 @@ export default function SharedCarpoolEmailLoginPage() {
   return (
     <>
       <Helmet><title>Login with Email | Vizag Taxi Hub</title></Helmet>
-      <CarpoolAppHeader showBack title="Login with Email" />
+      <SharedCarpoolPublicLayout onBookSeat={() => navigate('/shared-carpooling#commute-form')}>
+        <div style={{ fontFamily: "'Poppins', sans-serif" }}>
       <main className="mx-auto max-w-lg px-4 py-8">
         <h1 className="text-xl font-bold text-gray-900">Welcome back</h1>
         <p className="mt-1 text-sm text-gray-500">Use your email and password — no WhatsApp OTP needed</p>
@@ -111,6 +114,9 @@ export default function SharedCarpoolEmailLoginPage() {
           </Link>
         </p>
       </main>
+        <CarpoolingFooter />
+        </div>
+      </SharedCarpoolPublicLayout>
     </>
   );
 }

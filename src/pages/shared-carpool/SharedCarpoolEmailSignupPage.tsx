@@ -1,10 +1,12 @@
+import '@/lib/fonts-poppins';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useState } from 'react';
 import type { AxiosError } from 'axios';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { CarpoolAppHeader } from '@/components/shared-carpooling/app/CarpoolAppHeader';
+import { CarpoolingFooter } from '@/components/shared-carpooling/CarpoolingFooter';
+import { SharedCarpoolPublicLayout } from '@/components/shared-carpooling/SharedCarpoolPublicLayout';
 import { BRAND_GREEN } from '@/components/shared-carpooling/constants';
 import { carpoolLoginPath, carpoolOtpSignupPath } from '@/components/shared-carpooling/carpoolAuthRoutes';
 import { authAPI } from '@/services/api/authAPI';
@@ -84,7 +86,8 @@ export default function SharedCarpoolEmailSignupPage() {
   return (
     <>
       <Helmet><title>Create Account | Vizag Taxi Hub</title></Helmet>
-      <CarpoolAppHeader showBack title="Create Account" />
+      <SharedCarpoolPublicLayout onBookSeat={() => navigate('/shared-carpooling#commute-form')}>
+        <div style={{ fontFamily: "'Poppins', sans-serif" }}>
       <main className="mx-auto max-w-lg px-4 py-8">
         <h1 className="text-xl font-bold text-gray-900">Create your account</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -154,6 +157,9 @@ export default function SharedCarpoolEmailSignupPage() {
           </Link>
         </p>
       </main>
+        <CarpoolingFooter />
+        </div>
+      </SharedCarpoolPublicLayout>
     </>
   );
 }
