@@ -59,22 +59,33 @@ import { generateVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { TourListItem } from '@/types/tour';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
-import { URBANIA_FEATURE_STRIP_LABELS } from '@/seo/urbaniaStaticMeta';
+import {
+  getVehicleEmbedConfig,
+  isVehicleEmbedSlug,
+} from '@/seo/vehicleEmbedMeta';
 
 const URB_EMBED_STRIP_ICONS = [Users, Briefcase, Snowflake, Shield] as const;
 
-/** Mobile Urbania reference: segmented USP row with vertical dividers */
-function UrbaniaMobileFeatureBar({ className }: { className?: string }) {
+/** Mobile vehicle embed reference: segmented USP row with vertical dividers */
+function VehicleEmbedMobileFeatureBar({
+  labels,
+  ariaLabel,
+  className,
+}: {
+  labels: readonly string[];
+  ariaLabel: string;
+  className?: string;
+}) {
   return (
     <div
       role="group"
-      aria-label="Urbania van highlights"
+      aria-label={ariaLabel}
       className={cn(
         'flex divide-x divide-[#cfe2f8] overflow-x-auto rounded-xl border border-[#cfe2f8] bg-[#f0f7ff] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className
       )}
     >
-      {URBANIA_FEATURE_STRIP_LABELS.map((label, idx) => {
+      {labels.map((label, idx) => {
         const Icon = URB_EMBED_STRIP_ICONS[idx] ?? Users;
         return (
           <div
@@ -155,6 +166,10 @@ const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
 export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean }) {
   const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
+  const vehicleEmbedConfig = isVehicleEmbedSlug(normalizedLockSlug)
+    ? getVehicleEmbedConfig(normalizedLockSlug)
+    : null;
+  const isVehicleEmbedLock = Boolean(vehicleEmbedConfig);
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -162,15 +177,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const isMobile = useIsMobile();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   const { isLoaded } = useGoogleMaps();
-  /** `/vehicle/urbania` embed on small viewports: one padded bordered card so tabs + form stay aligned like native app chrome. */
+  /** `/vehicle/*` embed on small viewports: one padded bordered card so tabs + form stay aligned like native app chrome. */
   const urbaniaMobileEmbedShell =
-    Boolean(embedStretchToShell && normalizedLockSlug === 'urbania');
+    Boolean(embedStretchToShell && isVehicleEmbedLock);
   /** Parent `VehicleDetailPage` wraps hero + embed in a single gray shell below `lg`. */
   const urbaniaUnifiedShell =
     Boolean(urbaniaUnifiedMobileLayout && urbaniaMobileEmbedShell);
-  /** Home Hero + Urbania `/vehicle/*`: in-field captions + stacked ticket divider on mobile/tablet (desktop unchanged). */
+  /** Home Hero + vehicle embed `/vehicle/*`: in-field captions + stacked ticket divider on mobile/tablet (desktop unchanged). */
   const heroMobileTicketStyle =
-    normalizedLockSlug === 'urbania' ||
+    isVehicleEmbedLock ||
     (!embedStretchToShell && !embedCompactLayout && !lockedVehicleSlug);
   const heroMobileFieldVariant: 'app' | 'infield' = heroMobileTicketStyle ? 'infield' : 'app';
   const heroTicketCellPad = heroMobileTicketStyle ? 'px-2 py-1.5' : '';
@@ -2005,7 +2020,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 visibleTabs={visibleTabs}
                 showTripModeToggle
                 tripModeToggleMobileOnly
-                hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
+                hideUrbaniaPromo={isVehicleEmbedLock}
                 suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
                 urbaniaMobileTripTiles={heroMobileTicketStyle}
               />
@@ -2352,7 +2367,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     >
                       {/* Promo slider — mobile/tablet (desktop in TabTripSelector) */}
                       <div className="lg:hidden max-lg:min-w-0">
-                        <HeroPromoSlider hideUrbaniaPromo={normalizedLockSlug === 'urbania'} />
+                        <HeroPromoSlider hideUrbaniaPromo={isVehicleEmbedLock} />
                       </div>
                       <div className="w-full max-lg:mb-0 max-lg:min-w-0 lg:mb-4">
                         <TabTripSelector
@@ -2365,7 +2380,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           onAirportDirectionChange={tripType === 'airport' ? handleAirportDirectionChange : undefined}
                           showTripModeToggle
                           tripModeToggleMobileOnly
-                          hideUrbaniaPromo={normalizedLockSlug === 'urbania'}
+                          hideUrbaniaPromo={isVehicleEmbedLock}
                           suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
                           urbaniaMobileTripTiles={heroMobileTicketStyle}
                         />
@@ -2613,9 +2628,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           )}
                         </div>
 
-                        {normalizedLockSlug === 'urbania' && (
+                        {vehicleEmbedConfig && (
                           <div className="mt-1.5 lg:hidden">
-                            <UrbaniaMobileFeatureBar />
+                            <VehicleEmbedMobileFeatureBar
+                              labels={vehicleEmbedConfig.featureStripLabels}
+                              ariaLabel={vehicleEmbedConfig.featureBarAriaLabel}
+                            />
                           </div>
                         )}
 
@@ -2652,11 +2670,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   clipRule="evenodd"
                                 />
                               </svg>
-                              {normalizedLockSlug === 'urbania' ? 'SEARCH URBANIA' : 'Search'}
+                              {vehicleEmbedConfig?.searchButtonLabel ?? 'Search'}
                             </span>
                           )}
                         </Button>
-                        {normalizedLockSlug === 'urbania' && (
+                        {isVehicleEmbedLock && (
                           <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 px-1 text-center text-[11px] leading-snug text-slate-600 lg:hidden">
                             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
                             <span>100% Safe Booking</span>

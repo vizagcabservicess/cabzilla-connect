@@ -3,16 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <!-- Urbania LCP: preload hero PNG only (vizagtaxihub.com is already preconnect below — extra preconnect hurts the 4-connection budget). -->
+    <!-- Vehicle embed LCP: preload hero PNG only (vizagtaxihub.com is already preconnect below — extra preconnect hurts the 4-connection budget). -->
     <script>
       (function () {
         try {
           var path = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
-          if (path !== '/vehicle/urbania') return;
+          var preloadByPath = {
+            '/vehicle/urbania': 'https://vizagtaxihub.com/uploads/urbania-illustrator-vth.png',
+            '/vehicle/tempo-traveller': 'https://vizagtaxihub.com/uploads/tempo-traveller-search.jpg'
+          };
+          var href = preloadByPath[path];
+          if (!href) return;
           var pl = document.createElement('link');
           pl.rel = 'preload';
           pl.as = 'image';
-          pl.href = 'https://vizagtaxihub.com/uploads/urbania-illustrator-vth.png';
+          pl.href = href;
           pl.setAttribute('fetchpriority', 'high');
           var head = document.head;
           var charset = head.querySelector('meta[charset]');

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, lazy, Suspense, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate, useLoaderData } from 'react-router-dom';
 import { ArrowLeft, Car, Fuel, Loader2, Phone, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -21,17 +21,14 @@ import { getVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { VehicleLoaderData } from '@/loaders/vehicleLoader';
 import { getOptimizedImageUrl } from '@/utils/imageOptimization';
 import {
-  resolveUrbaniaIllustrationSrc,
-  URBANIA_ILLUSTRATION_CDN_URL,
-  URBANIA_ILLUSTRATION_PATH,
-  URBANIA_SEO_DEFAULTS,
-} from '@/seo/urbaniaStaticMeta';
+  getVehicleEmbedConfig,
+  resolveEmbedIllustrationLocalSrc,
+  resolveEmbedIllustrationSrc,
+  resolveVehicleEmbedSlug,
+} from '@/seo/vehicleEmbedMeta';
 import { Hero } from '@/components/Hero';
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
-
-const urbaniaHeroIllustrationSrc = resolveUrbaniaIllustrationSrc();
-const urbaniaHeroIllustrationLocalSrc = `${import.meta.env.BASE_URL.replace(/\/$/, '')}${URBANIA_ILLUSTRATION_PATH}`;
 
 // Lazy load heavier below-the-fold panels (keep gallery + tabs eager so first paint always has content)
 const RateCardPanel = lazy(() => import('@/components/vehicle/RateCardPanel'));
@@ -109,34 +106,25 @@ const VehicleDetailPage = () => {
     }
     return [];
   });
-  /** Mobile Urbania LCP illustration: show card skeleton until PNG has painted (cached images use `complete`). */
-  const urbaniaLcpImgRef = useRef<HTMLImageElement>(null);
-  const [urbaniaLcpImageReady, setUrbaniaLcpImageReady] = useState(false);
+  const embedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
+  const embedConfig = embedSlug ? getVehicleEmbedConfig(embedSlug) : null;
+  const embedHeroIllustrationSrc = embedConfig
+    ? resolveEmbedIllustrationSrc(embedConfig)
+    : null;
 
-  useLayoutEffect(() => {
-    if (vehicleSlug !== 'urbania') return;
-    setUrbaniaLcpImageReady(false);
-    const id = requestAnimationFrame(() => {
-      const el = urbaniaLcpImgRef.current;
-      if (el?.complete && el.naturalWidth > 0) {
-        setUrbaniaLcpImageReady(true);
-      }
-    });
-    return () => cancelAnimationFrame(id);
-  }, [vehicleSlug, urbaniaHeroIllustrationSrc]);
-  /** Urbania Hero: hide page content below the widget once user clicks Search (step 2). */
-  const [urbaniaEmbedHeroStep, setUrbaniaEmbedHeroStep] = useState(1);
+  /** Embed Hero: hide page content below the widget once user clicks Search (step 2). */
+  const [embedHeroStep, setEmbedHeroStep] = useState(1);
   /** While user edits trip from step 2 (pencil / pickup / date), show gallery + rates again. */
-  const [urbaniaRevealPageGrid, setUrbaniaRevealPageGrid] = useState(false);
+  const [embedRevealPageGrid, setEmbedRevealPageGrid] = useState(false);
 
   useEffect(() => {
-    setUrbaniaEmbedHeroStep(1);
-    setUrbaniaRevealPageGrid(false);
+    setEmbedHeroStep(1);
+    setEmbedRevealPageGrid(false);
   }, [vehicleSlug]);
 
   /** Flush mobile chrome: theme `body` bg can read grey behind square card top corners */
   useEffect(() => {
-    if (vehicleSlug !== 'urbania') return;
+    if (!embedConfig) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.backgroundColor;
@@ -147,23 +135,24 @@ const VehicleDetailPage = () => {
       html.style.backgroundColor = prevHtml;
       body.style.backgroundColor = prevBody;
     };
-  }, [vehicleSlug]);
+  }, [embedConfig]);
 
   // Memoize expensive calculations - must be before early returns
   const seoData = useMemo(() => {
     if (!vehicle) return null;
 
-    const isUrbania =
-      vehicleSlug === 'urbania' ||
-      vehicle.id === 'bus' ||
-      (vehicle.name?.toLowerCase().includes('urbania') ?? false);
+    const resolvedEmbedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
+    const resolvedEmbedConfig = resolvedEmbedSlug
+      ? getVehicleEmbedConfig(resolvedEmbedSlug)
+      : null;
 
-    if (isUrbania) {
-      const title = vehicle.seoContent?.title || URBANIA_SEO_DEFAULTS.title;
-      const description = vehicle.seoContent?.metaDescription || URBANIA_SEO_DEFAULTS.description;
+    if (resolvedEmbedConfig) {
+      const { seo } = resolvedEmbedConfig;
+      const title = vehicle.seoContent?.title || seo.title;
+      const description = vehicle.seoContent?.metaDescription || seo.description;
       const keywords =
         vehicle.seoContent?.keywords ||
-        `${URBANIA_SEO_DEFAULTS.keywords}, ${vehicle.capacity} seater urbania`;
+        `${seo.keywords}, ${vehicle.capacity} ${seo.capacityKeywordSuffix}`;
       return {
         title,
         description,
@@ -171,8 +160,8 @@ const VehicleDetailPage = () => {
         image:
           galleryImages?.[0]?.url ||
           vehicle.image ||
-          URBANIA_SEO_DEFAULTS.ogImageUrl,
-        url: URBANIA_SEO_DEFAULTS.canonicalUrl,
+          seo.ogImageUrl,
+        url: seo.canonicalUrl,
       };
     }
 
@@ -208,179 +197,92 @@ const VehicleDetailPage = () => {
   const structuredData = useMemo(() => {
     if (!vehicle || !seoData) return null;
 
-    const isUrbania =
-      vehicleSlug === 'urbania' ||
-      vehicle.id === 'bus' ||
-      (vehicle.name?.toLowerCase().includes('urbania') ?? false);
+    const resolvedEmbedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
+    const resolvedEmbedConfig = resolvedEmbedSlug
+      ? getVehicleEmbedConfig(resolvedEmbedSlug)
+      : null;
 
-    if (isUrbania) {
-      const cap = vehicle.capacity > 0 ? vehicle.capacity : 13;
-      const pricePerKm =
-        typeof vehicle.pricePerKm === 'number' && vehicle.pricePerKm > 0
-          ? String(vehicle.pricePerKm)
-          : '28';
-      const primaryImage =
-        typeof seoData.image === 'string' && seoData.image.startsWith('http')
-          ? seoData.image
-          : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || 'uploads/og-image-urbania.jpg'}`}`;
-      return {
-        '@context': 'https://schema.org',
-        '@type': ['Product', 'Service'],
-        name: 'Urbania Premium Van Rental in Visakhapatnam',
-        description:
-          'Urbania van hire in Vizag for weddings, corporate travel, pilgrimages, and outstation group trips — AC comfort and professional driver.',
-        url: seoData.url,
-        image: [primaryImage, URBANIA_SEO_DEFAULTS.ogImageUrl],
-        brand: { '@type': 'Brand', name: 'Vizag Taxi Hub' },
-        provider: {
-          '@type': 'LocalBusiness',
-          name: 'Vizag Taxi Hub',
-          url: 'https://vizagtaxihub.com',
-          telephone: '+91-9966363662',
-          email: 'info@vizagtaxihub.com',
-          address: {
-            '@type': 'PostalAddress',
-            streetAddress: '44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram',
-            addressLocality: 'Visakhapatnam',
-            addressRegion: 'Andhra Pradesh',
-            postalCode: '530024',
-            addressCountry: 'IN',
-          },
-          geo: {
-            '@type': 'GeoCoordinates',
-            latitude: 17.7428416,
-            longitude: 83.2889633,
-          },
-          areaServed: { '@type': 'City', name: 'Visakhapatnam' },
-          openingHours: 'Mo-Su 00:00-23:59',
-          paymentAccepted: 'Cash, Credit Card, UPI, Net Banking',
-        },
-        // Match Tempo Traveller Offer shape: Product/Merchant validators expect price + UnitPriceSpecification.price
-        offers: {
-          '@type': 'Offer',
-          price: pricePerKm,
-          priceCurrency: 'INR',
-          priceSpecification: {
-            '@type': 'UnitPriceSpecification',
-            price: pricePerKm,
-            priceCurrency: 'INR',
-            unitText: 'per kilometer',
-          },
-          availability: 'https://schema.org/InStock',
-          seller: {
-            '@type': 'Organization',
-            name: 'Vizag Taxi Hub',
-            url: 'https://vizagtaxihub.com',
-            telephone: '+919966363662',
-          },
-        },
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: '4.8',
-          reviewCount: '127',
-          bestRating: '5',
-          worstRating: '1',
-        },
-        category: 'Transportation Services',
-        additionalProperty: [
-          { '@type': 'PropertyValue', name: 'Capacity', value: `${cap} passengers (approx.)` },
-          { '@type': 'PropertyValue', name: 'Air Conditioning', value: 'Yes' },
-          { '@type': 'PropertyValue', name: 'Driver', value: 'Professional driver included' },
-          { '@type': 'PropertyValue', name: 'Service Area', value: 'Visakhapatnam and Andhra Pradesh' },
-        ],
-      };
-    }
+    if (!resolvedEmbedConfig) return null;
 
-    if (vehicle.id !== 'tempo_traveller') return null;
+    const { seo } = resolvedEmbedConfig;
+    const defaultCapacity = resolvedEmbedSlug === 'tempo-traveller' ? 17 : 13;
+    const cap = vehicle.capacity > 0 ? vehicle.capacity : defaultCapacity;
+    const pricePerKm =
+      typeof vehicle.pricePerKm === 'number' && vehicle.pricePerKm > 0
+        ? String(vehicle.pricePerKm)
+        : seo.defaultPricePerKm;
+    const primaryImage =
+      typeof seoData.image === 'string' && seoData.image.startsWith('http')
+        ? seoData.image
+        : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || seo.structuredDataFallbackImage}`}`;
+    const capacityLabel =
+      resolvedEmbedSlug === 'tempo-traveller'
+        ? `${cap} passengers`
+        : `${cap} passengers (approx.)`;
 
     return {
-      "@context": "https://schema.org",
-      "@type": ["Product", "Service"],
-      "name": "17 Seater AC Tempo Traveller Rental in Vizag",
-      "description": "Best 17 seater tempo traveller rental service in Visakhapatnam with professional drivers, AC comfort, and modern amenities for group travel.",
-      "url": seoData?.url,
-      "image": [
-        `${seoData?.url}/image.jpg`,
-        "https://vizagtaxihub.com/cars/tempo.png"
+      '@context': 'https://schema.org',
+      '@type': ['Product', 'Service'],
+      name: seo.structuredDataName,
+      description: seo.structuredDataDescription,
+      url: seoData.url,
+      image: [primaryImage, seo.ogImageUrl],
+      brand: { '@type': 'Brand', name: 'Vizag Taxi Hub' },
+      provider: {
+        '@type': 'LocalBusiness',
+        name: 'Vizag Taxi Hub',
+        url: 'https://vizagtaxihub.com',
+        telephone: '+91-9966363662',
+        email: 'info@vizagtaxihub.com',
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: '44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram',
+          addressLocality: 'Visakhapatnam',
+          addressRegion: 'Andhra Pradesh',
+          postalCode: '530024',
+          addressCountry: 'IN',
+        },
+        geo: {
+          '@type': 'GeoCoordinates',
+          latitude: 17.7428416,
+          longitude: 83.2889633,
+        },
+        areaServed: { '@type': 'City', name: 'Visakhapatnam' },
+        openingHours: 'Mo-Su 00:00-23:59',
+        paymentAccepted: 'Cash, Credit Card, UPI, Net Banking',
+      },
+      offers: {
+        '@type': 'Offer',
+        price: pricePerKm,
+        priceCurrency: 'INR',
+        priceSpecification: {
+          '@type': 'UnitPriceSpecification',
+          price: pricePerKm,
+          priceCurrency: 'INR',
+          unitText: 'per kilometer',
+        },
+        availability: 'https://schema.org/InStock',
+        seller: {
+          '@type': 'Organization',
+          name: 'Vizag Taxi Hub',
+          url: 'https://vizagtaxihub.com',
+          telephone: '+919966363662',
+        },
+      },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: '4.8',
+        reviewCount: '127',
+        bestRating: '5',
+        worstRating: '1',
+      },
+      category: 'Transportation Services',
+      additionalProperty: [
+        { '@type': 'PropertyValue', name: 'Capacity', value: capacityLabel },
+        { '@type': 'PropertyValue', name: 'Air Conditioning', value: 'Yes' },
+        { '@type': 'PropertyValue', name: 'Driver', value: 'Professional driver included' },
+        { '@type': 'PropertyValue', name: 'Service Area', value: 'Visakhapatnam and Andhra Pradesh' },
       ],
-      "brand": {
-        "@type": "Brand",
-        "name": "Vizag Taxi Hub"
-      },
-      "provider": {
-        "@type": "LocalBusiness",
-        "name": "Vizag Taxi Hub",
-        "url": "https://vizagtaxihub.com",
-        "telephone": "+91-9966363662",
-        "email": "info@vizagtaxihub.com",
-        "address": {
-          "@type": "PostalAddress",
-          "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-          "addressLocality": "Visakhapatnam",
-          "addressRegion": "Andhra Pradesh",
-          "postalCode": "530024",
-          "addressCountry": "IN"
-        },
-        "geo": {
-          "@type": "GeoCoordinates",
-          "latitude": 17.7428416,
-          "longitude": 83.2889633
-        },
-        "areaServed": {
-          "@type": "City",
-          "name": "Visakhapatnam"
-        },
-        "openingHours": "Mo-Su 00:00-23:59",
-        "paymentAccepted": "Cash, Credit Card, UPI, Net Banking"
-      },
-      "offers": {
-        "@type": "Offer",
-        "price": "35",
-        "priceCurrency": "INR",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "35",
-          "priceCurrency": "INR",
-          "unitText": "per kilometer"
-        },
-        "availability": "https://schema.org/InStock",
-        "seller": {
-          "@type": "Organization",
-          "name": "Vizag Taxi Hub",
-          "url": "https://vizagtaxihub.com",
-          "telephone": "+919966363662"
-        }
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.8",
-        "reviewCount": "127",
-        "bestRating": "5",
-        "worstRating": "1"
-      },
-      "category": "Transportation Services",
-      "additionalProperty": [
-        {
-          "@type": "PropertyValue",
-          "name": "Capacity",
-          "value": "17 passengers"
-        },
-        {
-          "@type": "PropertyValue", 
-          "name": "Air Conditioning",
-          "value": "Yes"
-        },
-        {
-          "@type": "PropertyValue",
-          "name": "Driver",
-          "value": "Professional driver included"
-        },
-        {
-          "@type": "PropertyValue",
-          "name": "Service Area",
-          "value": "Visakhapatnam and Andhra Pradesh"
-        }
-      ]
     };
   }, [vehicle, vehicleSlug, seoData]);
 
@@ -480,11 +382,11 @@ const VehicleDetailPage = () => {
         <style>{criticalStyles}</style>
         
         {/* Preload LCP image early - use optimized URL when backend supports it */}
-        {vehicleSlug === 'urbania' && (
-          <link rel="preload" as="image" href={urbaniaHeroIllustrationSrc} fetchPriority="high" />
+        {embedConfig && embedHeroIllustrationSrc && (
+          <link rel="preload" as="image" href={embedHeroIllustrationSrc} fetchPriority="high" />
         )}
-        {/* Urbania LCP is the illustrator above the fold — avoid a second high-priority image preload. */}
-        {vehicle?.image && vehicleSlug !== 'urbania' && (
+        {/* Embed LCP is the illustrator above the fold — avoid a second high-priority image preload. */}
+        {vehicle?.image && !embedConfig && (
           <link rel="preload" as="image" href={getOptimizedImageUrl(vehicle.image)} fetchPriority="high" />
         )}
         {structuredData && (
@@ -523,9 +425,7 @@ const VehicleDetailPage = () => {
         <link rel="canonical" href={seoData?.url || `https://vizagtaxihub.com/vehicle/${vehicleSlug}`} />
         
         {/* Local Business meta for high-intent fleet pages */}
-        {(vehicle?.id === 'tempo_traveller' ||
-          vehicleSlug === 'urbania' ||
-          vehicle?.id === 'bus') && (
+        {(vehicle?.id === 'tempo_traveller' || embedConfig) && (
           <>
             <meta name="business:contact_data:locality" content="Visakhapatnam" />
             <meta name="business:contact_data:region" content="Andhra Pradesh" />
@@ -537,16 +437,16 @@ const VehicleDetailPage = () => {
       
       <div
         className={
-          vehicleSlug === 'urbania'
+          embedConfig
             ? 'min-h-screen bg-white'
             : 'min-h-screen bg-gray-50'
         }
       >
         <Navbar />
-        <main id="main-content" className={vehicleSlug === 'urbania' ? 'overflow-x-clip bg-white max-lg:max-w-[100vw]' : undefined}>
+        <main id="main-content" className={embedConfig ? 'overflow-x-clip bg-white max-lg:max-w-[100vw]' : undefined}>
         <div
           className={
-            vehicleSlug === 'urbania'
+            embedConfig
               ? 'container mx-auto max-w-7xl px-4 pb-16 md:pb-32 max-lg:pt-[calc(5.5rem+env(safe-area-inset-top,0px))] lg:pt-28'
               : 'container mx-auto max-w-7xl px-4 pb-16 pt-[max(6rem,calc(5rem+env(safe-area-inset-top,0px)))] md:pb-32 md:pt-28'
           }
@@ -571,10 +471,10 @@ const VehicleDetailPage = () => {
             </BreadcrumbList>
           </Breadcrumb>
 
-          {vehicleSlug === 'urbania' && (
+          {embedConfig && embedSlug && embedHeroIllustrationSrc && (
             <section
               className="vehicle-urbania-hero mb-3 sm:mb-4 lg:mb-6 max-lg:-mx-4 lg:mx-0"
-              data-vth-urbania-hero="bg-illustration"
+              data-vth-vehicle-embed-hero={embedSlug}
             >
               <div className="flex flex-col overflow-visible max-lg:rounded-t-none max-lg:rounded-b-2xl max-lg:border max-lg:border-gray-200/90 max-lg:border-t-0 max-lg:bg-white max-lg:shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
                 <div
@@ -589,10 +489,10 @@ const VehicleDetailPage = () => {
                   <div className="relative z-[3] shrink-0 bg-white px-4 pb-0 pt-2 sm:px-5 sm:pt-2">
                     <div className="max-w-xl">
                       <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
-                        {URBANIA_SEO_DEFAULTS.pageHeadline}
+                        {embedConfig.seo.pageHeadline}
                       </h1>
                       <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
-                        {URBANIA_SEO_DEFAULTS.pageSubtitle}
+                        {embedConfig.seo.pageSubtitle}
                       </p>
                     </div>
                   </div>
@@ -601,34 +501,24 @@ const VehicleDetailPage = () => {
                     className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-4 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-5"
                     aria-hidden
                   >
-                    {/* Underlay only — LCP img stays fully opaque so paint is not deferred by opacity/overlay. */}
-                    {!urbaniaLcpImageReady && (
-                      <div className="pointer-events-none absolute inset-x-4 inset-y-2 z-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-50 sm:inset-x-5">
-                        <div className="h-3 w-[72%] max-w-sm animate-pulse rounded-full bg-gray-200" />
-                        <div className="h-[min(11rem,38vw)] w-full max-w-md animate-pulse rounded-xl bg-gray-200/90 sm:h-[min(13rem,34vw)]" />
-                      </div>
-                    )}
                     <img
-                      ref={urbaniaLcpImgRef}
-                      src={urbaniaHeroIllustrationSrc}
+                      src={embedHeroIllustrationSrc}
                       alt=""
                       width={680}
                       height={560}
                       sizes="(max-width: 640px) 100vw, min(680px, 100vw)"
-                      decoding="sync"
+                      decoding="async"
                       loading="eager"
                       fetchPriority="high"
                       className="relative z-[1] mx-auto block h-auto w-full max-h-[min(13rem,44vw)] object-contain object-center sm:max-h-[min(15rem,40vw)]"
-                      onLoad={() => setUrbaniaLcpImageReady(true)}
                       onError={(e) => {
                         const el = e.currentTarget;
-                        if (el.dataset.fallbackApplied === '1') {
-                          setUrbaniaLcpImageReady(true);
-                          return;
-                        }
+                        if (el.dataset.fallbackApplied === '1') return;
                         el.dataset.fallbackApplied = '1';
-                        const primaryWasRemote = urbaniaHeroIllustrationSrc.includes('vizagtaxihub.com');
-                        el.src = primaryWasRemote ? urbaniaHeroIllustrationLocalSrc : URBANIA_ILLUSTRATION_CDN_URL;
+                        const primaryWasRemote = embedHeroIllustrationSrc.includes('vizagtaxihub.com');
+                        el.src = primaryWasRemote
+                          ? resolveEmbedIllustrationLocalSrc(embedConfig)
+                          : embedConfig.illustration.cdnUrl;
                       }}
                     />
                   </div>
@@ -636,17 +526,17 @@ const VehicleDetailPage = () => {
                 </div>
 
                 <div className="vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:border-0 lg:bg-transparent lg:p-0">
-                  <h1 className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageHeadline}</h1>
-                  <p className="sr-only max-lg:hidden">{URBANIA_SEO_DEFAULTS.pageSubtitle}</p>
+                  <h1 className="sr-only max-lg:hidden">{embedConfig.seo.pageHeadline}</h1>
+                  <p className="sr-only max-lg:hidden">{embedConfig.seo.pageSubtitle}</p>
                   <Hero
                     hideBackground
                     embedCompactLayout
                     embedStretchToShell
-                    lockedVehicleSlug="urbania"
+                    lockedVehicleSlug={embedSlug}
                     urbaniaUnifiedMobileLayout
-                    summaryBackHref="/vehicle/urbania"
-                    onStepChange={setUrbaniaEmbedHeroStep}
-                    onTripEditOpenChange={setUrbaniaRevealPageGrid}
+                    summaryBackHref={`/vehicle/${embedSlug}`}
+                    onStepChange={setEmbedHeroStep}
+                    onTripEditOpenChange={setEmbedRevealPageGrid}
                   />
                 </div>
               </div>
@@ -654,17 +544,20 @@ const VehicleDetailPage = () => {
           )}
 
           <div
-            className={`grid grid-cols-1 lg:grid-cols-3 ${vehicleSlug === 'urbania' ? 'gap-5 lg:gap-6' : 'gap-8'} ${
-              vehicleSlug === 'urbania' &&
-              urbaniaEmbedHeroStep >= 2 &&
-              !urbaniaRevealPageGrid
+            className={`grid grid-cols-1 lg:grid-cols-3 ${embedConfig ? 'gap-5 lg:gap-6' : 'gap-8'} ${
+              embedConfig &&
+              embedHeroStep >= 2 &&
+              !embedRevealPageGrid
                 ? 'hidden'
                 : ''
             }`}
           >
             <div className="lg:col-span-2 space-y-8">
               {/* Single image area - no duplication */}
-              <div className="image-gallery-container" style={{ aspectRatio: '16/10' }}>
+              <div
+                className={`image-gallery-container ${embedConfig ? 'max-lg:hidden' : ''}`}
+                style={{ aspectRatio: '16/10' }}
+              >
                 <ImageGallery
                   images={galleryImages}
                   vehicleName={vehicle.name}
@@ -672,7 +565,7 @@ const VehicleDetailPage = () => {
                 />
               </div>
 
-              {vehicleSlug !== 'urbania' && (
+              {!embedConfig && (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
                   <div className="flex-1">
@@ -704,7 +597,7 @@ const VehicleDetailPage = () => {
               </div>
               )}
 
-              {vehicleSlug !== 'urbania' && (
+              {!embedConfig && (
               <div className="rate-card-container min-h-[420px]">
                 <Suspense fallback={
                   <div className="loading-skeleton" style={{ height: '420px', width: '100%' }}>
@@ -924,7 +817,7 @@ const VehicleDetailPage = () => {
             </div>
 
             <div className="lg:col-span-1 space-y-6">
-              <div className="min-h-[420px]">
+              <div className={`min-h-[420px] ${embedConfig ? 'hidden lg:block' : ''}`}>
                 <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[420px] rounded-lg"></div>}>
                   <RateCardPanel vehicleId={vehicle.id} vehicleName={vehicle.name} />
                 </Suspense>

@@ -10,9 +10,11 @@ RewriteBase /
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
-# WhatsApp / Facebook / Telegram link previews: crawlers do not run React — serve built HTML with Urbania OG tags (see vite: index-vehicle-urbania.html)
+# WhatsApp / Facebook / Telegram link previews: crawlers do not run React — serve built HTML with vehicle embed OG tags (see vite: index-vehicle-*.html)
 RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|LinkedInBot|TelegramBot|vkShare|Pinterest|Slackbot|Discordbot|Applebot) [NC]
 RewriteRule ^vehicle/urbania/?$ /index-vehicle-urbania.html [L]
+RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|LinkedInBot|TelegramBot|vkShare|Pinterest|Slackbot|Discordbot|Applebot) [NC]
+RewriteRule ^vehicle/tempo-traveller/?$ /index-vehicle-tempo-traveller.html [L]
 
 # Force HTTPS redirect (optional - only if you want to force HTTPS)
 # RewriteCond %{HTTPS} off

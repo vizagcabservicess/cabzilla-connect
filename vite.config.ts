@@ -4,17 +4,22 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
-import { URBANIA_ILLUSTRATION_CDN_URL, URBANIA_SEO_DEFAULTS } from "./src/seo/urbaniaStaticMeta";
+import { VEHICLE_EMBED_CONFIGS } from "./src/seo/vehicleEmbedMeta";
 
 function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-/** Duplicate of dist/index.html with Urbania head tags for WhatsApp / Facebook (no-JS crawlers). */
-function injectUrbaniaSocialMeta(html: string): string {
-  const m = URBANIA_SEO_DEFAULTS;
-  const keywords = `${m.keywords}, 13 seater urbania`;
-  const lcpPreload = `<link rel="preload" href="${escapeHtmlAttr(URBANIA_ILLUSTRATION_CDN_URL)}" as="image" fetchpriority="high" />`;
+/** Duplicate of dist/index.html with vehicle embed head tags for WhatsApp / Facebook (no-JS crawlers). */
+function injectVehicleEmbedSocialMeta(
+  html: string,
+  slug: keyof typeof VEHICLE_EMBED_CONFIGS,
+  capacitySuffix: string,
+): string {
+  const config = VEHICLE_EMBED_CONFIGS[slug];
+  const m = config.seo;
+  const keywords = `${m.keywords}, ${capacitySuffix}`;
+  const lcpPreload = `<link rel="preload" href="${escapeHtmlAttr(config.illustration.cdnUrl)}" as="image" fetchpriority="high" />`;
   return html
     .replace(/<head>/i, `<head>\n    ${lcpPreload}`)
     .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(m.title)}</title>`)
@@ -145,20 +150,38 @@ export default defineConfig(({ mode }) => ({
       },
     },
     {
-      name: 'emit-urbania-social-index-html',
+      name: 'emit-vehicle-embed-social-index-html',
       apply: 'build' as const,
       closeBundle() {
         const distIndex = join(process.cwd(), 'dist', 'index.html');
         try {
           const html = readFileSync(distIndex, 'utf8');
-          writeFileSync(
-            join(process.cwd(), 'dist', 'index-vehicle-urbania.html'),
-            injectUrbaniaSocialMeta(html),
-            'utf8',
-          );
-          console.log('✅ Wrote dist/index-vehicle-urbania.html (Urbania OG / WhatsApp preview)');
+          const embedPages: Array<{
+            slug: keyof typeof VEHICLE_EMBED_CONFIGS;
+            outfile: string;
+            capacitySuffix: string;
+          }> = [
+            {
+              slug: 'urbania',
+              outfile: 'index-vehicle-urbania.html',
+              capacitySuffix: '13 seater urbania',
+            },
+            {
+              slug: 'tempo-traveller',
+              outfile: 'index-vehicle-tempo-traveller.html',
+              capacitySuffix: '17 seater tempo traveller',
+            },
+          ];
+          for (const page of embedPages) {
+            writeFileSync(
+              join(process.cwd(), 'dist', page.outfile),
+              injectVehicleEmbedSocialMeta(html, page.slug, page.capacitySuffix),
+              'utf8',
+            );
+            console.log(`✅ Wrote dist/${page.outfile} (vehicle embed OG / WhatsApp preview)`);
+          }
         } catch (e) {
-          console.warn('emit-urbania-social-index-html:', e);
+          console.warn('emit-vehicle-embed-social-index-html:', e);
         }
       },
     },
