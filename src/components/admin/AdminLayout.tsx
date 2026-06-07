@@ -7,9 +7,8 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
   const [tab, setTab] = useState(activeTab);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  const toggleMobileSidebar = () => {
-    setIsMobileSidebarOpen(!isMobileSidebarOpen);
-  };
+  const closeMobileSidebar = () => setIsMobileSidebarOpen(false);
+  const toggleMobileSidebar = () => setIsMobileSidebarOpen((open) => !open);
 
   return (
     <div className="flex flex-col md:flex-row bg-background min-h-screen">
@@ -21,23 +20,28 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
           </div>
           <span className="font-bold text-lg">Vizag Taxi Hub</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={toggleMobileSidebar}>
+        <Button variant="ghost" size="icon" onClick={toggleMobileSidebar} aria-label="Open menu">
           <Menu className="h-6 w-6" />
         </Button>
-      </div>
-
-      {/* Sidebar - fixed positioned, hidden on mobile by default */}
-      <div className={`${isMobileSidebarOpen ? 'block' : 'hidden'} md:block md:fixed md:left-0 md:top-0 md:h-screen md:w-64 md:overflow-y-auto md:z-30`}>
-        <EnhancedAdminSidebar activeTab={tab} setActiveTab={setTab} />
       </div>
 
       {/* Mobile overlay when sidebar is open */}
       {isMobileSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden" 
-          onClick={toggleMobileSidebar}
+          onClick={closeMobileSidebar}
+          aria-hidden="true"
         />
       )}
+
+      {/* Sidebar - slide-in drawer on mobile, fixed on desktop */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] overflow-y-auto transition-transform duration-200 ease-in-out md:translate-x-0 md:max-w-none md:z-30 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <EnhancedAdminSidebar activeTab={tab} setActiveTab={setTab} onClose={closeMobileSidebar} />
+      </div>
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 md:ml-64">

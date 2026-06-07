@@ -15,6 +15,7 @@ import {
   Settings,
   LogOut,
   User,
+  X,
   Fuel,
   Wrench,
   Book,
@@ -254,15 +255,29 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
   const visibleMenuItems = menuItems.filter(item => item.show);
 
   return (
-    <aside className="w-64 bg-gray-900 text-white flex flex-col z-20">
+    <aside className="h-full min-h-screen w-full bg-gray-900 text-white flex flex-col">
       {/* Sidebar Header/Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-800">
-        <Link to="/admin" className="flex items-center space-x-2">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-gray-800">
+        <Link to="/admin" className="hidden md:flex items-center space-x-2">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg">
             VT
           </div>
           <span className="font-bold text-lg">Vizag Taxi Hub</span>
         </Link>
+        {onClose && (
+          <div className="flex w-full items-center justify-between md:hidden">
+            <span className="font-bold text-lg">Menu</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-400 hover:text-white hover:bg-gray-800"
+              onClick={onClose}
+              aria-label="Close menu"
+            >
+              <X size={20} />
+            </Button>
+          </div>
+        )}
       </div>
       
       {/* User Role Badge */}
