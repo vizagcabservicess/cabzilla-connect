@@ -29,25 +29,27 @@ export interface OutstationFareData {
   [key: string]: any;
 }
 
+const ALL_FARES_CACHE_MS = 60_000;
+let allFaresCache: { at: number; data: Record<string, OutstationFareData> } | null = null;
+let allFaresInFlight: Promise<Record<string, OutstationFareData>> | null = null;
+
 /**
  * Fetch outstation fares for all vehicles
  */
 export const fetchAllOutstationFares = async (includeInactive = true): Promise<Record<string, OutstationFareData>> => {
+  const now = Date.now();
+  if (allFaresCache && now - allFaresCache.at < ALL_FARES_CACHE_MS) {
+    return allFaresCache.data;
+  }
+  if (allFaresInFlight) {
+    return allFaresInFlight;
+  }
+
+  allFaresInFlight = (async () => {
   try {
     const timestamp = Date.now();
     const url = getApiUrl(`api/admin/direct-outstation-fares.php?includeInactive=${includeInactive}&_t=${timestamp}&force_refresh=true`);
     console.log('Fetching all outstation fares from:', url);
-    
-    // Clear any existing cache
-    if ('caches' in window) {
-      try {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-        console.log('Cleared browser cache');
-      } catch (error) {
-        console.warn('Failed to clear cache:', error);
-      }
-    }
     
     const response = await fetch(url, {
       method: 'GET',
@@ -67,6 +69,7 @@ export const fetchAllOutstationFares = async (includeInactive = true): Promise<R
     console.log('Fetched outstation fares data:', data);
     
     if (data && data.status === 'success' && data.fares) {
+      allFaresCache = { at: Date.now(), data: data.fares };
       return data.fares;
     }
     
@@ -74,7 +77,12 @@ export const fetchAllOutstationFares = async (includeInactive = true): Promise<R
   } catch (error) {
     console.error('Error fetching outstation fares:', error);
     throw error;
+  } finally {
+    allFaresInFlight = null;
   }
+  })();
+
+  return allFaresInFlight;
 };
 
 /**

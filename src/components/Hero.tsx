@@ -48,7 +48,6 @@ import {
   trackGuestSearch,
   formatDepartureForTrack,
   buildTripTypeLabelForTrack,
-  buildTripTypeFieldForGuestTrack,
   buildGuestTrackRouteKey,
 } from '@/services/trackSearchAPI';
 import { buildVehicleFareLinesForGuestTrack } from '@/lib/guestSearchFareLines';
@@ -1334,15 +1333,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       durationMinutesForTrack !== undefined && durationMinutesForTrack > 0
         ? Math.round(durationMinutesForTrack)
         : undefined;
-    /** Includes route lines in `tripType` so production PHP that only echoes `tripType` still shows km & hours. */
-    const tripTypePayload = buildTripTypeFieldForGuestTrack(tripTypeLabel, distRounded, durRounded, tripMode);
     const departure = formatDepartureForTrack(pickupDate);
-
+    /** PHP `search_alerts_format_route_summary` reads distance/duration fields — keep trip type label only. */
     trackGuestSearch({
       guestPhone,
       pickup,
       drop,
-      tripType: tripTypePayload,
+      tripType: tripTypeLabel,
       departure,
       distanceKmOneWay: distRounded,
       durationMinutesOneWay: durRounded,
@@ -1360,7 +1357,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             guestPhone,
             pickup,
             drop,
-            tripType: tripTypePayload,
+            tripType: tripTypeLabel,
             tripTypeLabel,
             departure,
             carsShown,

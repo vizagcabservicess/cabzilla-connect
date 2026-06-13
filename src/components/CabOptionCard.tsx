@@ -41,10 +41,7 @@ export function CabOptionCard({
   const needsAsyncFare =
     tripType === 'outstation' || tripType === 'airport' || tripType === 'local';
   const fareIsError = fareDetails === 'Error fetching price';
-  const fareNotReady =
-    !fareIsError &&
-    (isCalculating ||
-      (needsAsyncFare && numericFare !== null && numericFare <= 0));
+  const fareNotReady = !fareIsError && isCalculating;
 
   const fareLabel = fareIsError
     ? fareDetails

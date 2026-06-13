@@ -30,7 +30,8 @@ import {
   Building2,
   Bus,
   Eye,
-  Gauge
+  Gauge,
+  BellRing
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -107,6 +108,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <UsersRound size={20} />, 
       path: '/admin/shared-carpooling',
       show: canViewBookings() || canCreateBookings() || isAdmin() || isSuperAdmin()
+    },
+    { 
+      id: 'search-alerts', 
+      label: 'Search Alerts', 
+      icon: <BellRing size={20} />, 
+      path: '/admin/search-alerts',
+      show: canViewBookings() || isAdmin() || isSuperAdmin()
     },
     
     // Fleet Management
