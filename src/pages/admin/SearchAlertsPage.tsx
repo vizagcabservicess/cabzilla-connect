@@ -17,8 +17,9 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
-import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload } from 'lucide-react';
+import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus } from 'lucide-react';
 import { searchAlertsAPI, type SearchAlert } from '@/services/api/searchAlertsAPI';
+import { ConvertToBookingModal } from '@/components/admin/ConvertToBookingModal';
 import {
   buildSearchAlertExportRows,
   formatSearchAlertDateTime,
@@ -87,6 +88,7 @@ export default function SearchAlertsPage() {
   const [whatsappImportText, setWhatsappImportText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<SearchAlert | null>(null);
+  const [convertAlert, setConvertAlert] = useState<SearchAlert | null>(null);
 
   const showImportStats = (stats: { imported: number; duplicates: number; parsed?: number }) => {
     const parsed = stats.parsed != null ? ` from ${stats.parsed} message(s)` : '';
@@ -327,19 +329,20 @@ export default function SearchAlertsPage() {
                     <TableHead>Departure</TableHead>
                     <TableHead>Route</TableHead>
                     <TableHead className="min-w-[200px]">Results</TableHead>
+                    <TableHead className="w-[140px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                         Loading search alerts…
                       </TableCell>
                     </TableRow>
                   ) : filteredAlerts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                         No search alerts found for the selected filters.
                       </TableCell>
                     </TableRow>
@@ -383,6 +386,21 @@ export default function SearchAlertsPage() {
                               <Eye className="h-4 w-4" />
                             </Button>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs whitespace-nowrap"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConvertAlert(alert);
+                            }}
+                          >
+                            <CalendarPlus className="h-3.5 w-3.5 mr-1" />
+                            Convert to Booking
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
@@ -436,6 +454,12 @@ export default function SearchAlertsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConvertToBookingModal
+        alert={convertAlert}
+        open={!!convertAlert}
+        onOpenChange={(open) => !open && setConvertAlert(null)}
+      />
 
       <Dialog open={!!selectedAlert} onOpenChange={(open) => !open && setSelectedAlert(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

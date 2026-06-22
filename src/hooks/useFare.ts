@@ -365,13 +365,22 @@ export function useFare(
                 console.log(`useFare: Distance ${distance}km is below Tier 1, using traditional calculation: ₹${basePrice} + ₹${extraDistanceFare} extra`);
               }
 
-              fare = basePrice + extraDistanceFare + driverAllowance;
+              let nightCharges = 0;
+              if (
+                pickupDate &&
+                (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)
+              ) {
+                nightCharges = Math.round(basePrice * 0.1);
+              }
 
-              console.log(`useFare: Final calculation for ${distance}km: Base ₹${basePrice} + Extra ₹${extraDistanceFare} + Driver ₹${driverAllowance} = Total ₹${fare}`);
+              fare = basePrice + extraDistanceFare + driverAllowance + nightCharges;
+
+              console.log(`useFare: Final calculation for ${distance}km: Base ₹${basePrice} + Extra ₹${extraDistanceFare} + Driver ₹${driverAllowance} + Night ₹${nightCharges} = Total ₹${fare}`);
 
               breakdown = {
                 basePrice,
                 driverAllowance,
+                nightCharges,
                 extraDistanceFare,
                 extraKmCharge: extraKmCharge,
                 tierUsed: tierUsed

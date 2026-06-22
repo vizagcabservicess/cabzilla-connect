@@ -1745,8 +1745,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   let totalPrice = calculatePrice();
-  /** Use the higher of BookingSummary callback vs Hero estimate so pay UI never stays hidden if one path lags (common on mobile/embed). */
-  const payReadyTotal = Math.max(finalTotal, totalPrice);
+  /** Prefer BookingSummary's calculated total; fall back to Hero estimate only while fare is still loading. */
+  const payReadyTotal = finalTotal > 0 ? finalTotal : totalPrice;
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
   const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
 

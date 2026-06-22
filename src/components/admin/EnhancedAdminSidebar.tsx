@@ -31,7 +31,8 @@ import {
   Bus,
   Eye,
   Gauge,
-  BellRing
+  BellRing,
+  Bot
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -108,6 +109,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <UsersRound size={20} />, 
       path: '/admin/shared-carpooling',
       show: canViewBookings() || canCreateBookings() || isAdmin() || isSuperAdmin()
+    },
+    { 
+      id: 'ai-assistant', 
+      label: 'AI Assistant', 
+      icon: <Bot size={20} />, 
+      path: '/admin/ai-assistant',
+      show: canCreateBookings() || isAdmin() || isSuperAdmin()
     },
     { 
       id: 'search-alerts', 

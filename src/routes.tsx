@@ -104,6 +104,7 @@ const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashb
 const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursManagementPage'));
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
+const AIAssistantPage = lazy(() => import('./pages/admin/AIAssistantPage'));
 const CreateRidePage = lazy(() => import('./components/pooling/CreateRidePage'));
 const BookingsPage = lazy(() => import('./pages/BookingsPage'));
 const FaresPage = lazy(() => import('./pages/FaresPage'));
@@ -400,6 +401,10 @@ const router = createBrowserRouter([
           {
             path: 'shared-carpooling',
             element: <SharedCarpoolingAdminPage />,
+          },
+          {
+            path: 'ai-assistant',
+            element: <AIAssistantPage />,
           },
           {
             path: 'search-alerts',

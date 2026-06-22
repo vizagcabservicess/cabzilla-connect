@@ -50,13 +50,13 @@ RewriteRule .* - [R=200,L]
         Header always set Expires "0"
     </FilesMatch>
     
-    # Long-term caching for hashed assets (Vite's built-in hash system)
-    <FilesMatch ".*-[a-f0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$">
-        Header always set Cache-Control "public, max-age=31536000, immutable"
+    # Hashed assets: cache but allow revalidation (avoid immutable — Cloudflare kept stale react-vendor when hash unchanged across deploys)
+    <FilesMatch ".*-[a-zA-Z0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
+        Header always set Cache-Control "public, max-age=604800, must-revalidate"
     </FilesMatch>
     
-    # No cache for non-hashed assets
-    <FilesMatch "\.(js|css)$">
+    # No cache for non-hashed JS/CSS only
+    <FilesMatch "^(?!.*-[a-zA-Z0-9]{8,}\.(js|css)$).*\.(js|css)$">
         Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
         Header always set Pragma "no-cache"
         Header always set Expires "0"
@@ -441,6 +441,11 @@ RewriteRule ^tempo-traveller-rushikonda$ /vehicle/tempo-traveller [R=301,L]
 
 # Handle trailing slashes
 RewriteRule ^(.+)/$ /$1 [R=301,L]
+
+# Missing Vite hashed assets must not return SPA HTML (stale /assets/*.js URLs)
+RewriteCond %{REQUEST_URI} ^/assets/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ - [R=404,L]
 
 # CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f

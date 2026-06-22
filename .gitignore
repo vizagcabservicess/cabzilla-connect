@@ -45,4 +45,5 @@ src/backend/
 
 # Google Cloud credentials - NEVER commit
 **/config/gcp-service-account.json
+**/config/google-credentials.json
 **/gcp-*.json

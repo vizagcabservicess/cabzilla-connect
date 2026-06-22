@@ -65,6 +65,9 @@ function injectVehicleEmbedSocialMeta(
     );
 }
 
+/** Per-deploy id so unchanged chunk hashes (e.g. react-vendor) still get new URLs after deploy. */
+const buildId = process.env.VITE_BUILD_ID || Date.now().toString(36);
+
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
@@ -99,8 +102,8 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: `assets/[name]-${buildId}-[hash].js`,
+        entryFileNames: `assets/[name]-${buildId}-[hash].js`,
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.') || [];
           const ext = info[info.length - 1] || 'asset';

@@ -44,7 +44,9 @@ export async function retryDynamicImport<T>(
         lastError.message.includes('Failed to fetch dynamically imported module') ||
         lastError.message.includes('Loading chunk') ||
         lastError.message.includes('Loading CSS chunk') ||
-        lastError.message.includes('ChunkLoadError');
+        lastError.message.includes('ChunkLoadError') ||
+        lastError.message.includes('does not provide an export') ||
+        lastError.message.includes("Unexpected token '<'");
 
       if (!isDynamicImportError) {
         // If it's not a dynamic import error, don't retry
@@ -214,6 +216,8 @@ export function isDynamicImportError(error: Error): boolean {
     error.message.includes('Loading chunk') ||
     error.message.includes('Loading CSS chunk') ||
     error.message.includes('ChunkLoadError') ||
-    error.message.includes('Loading module')
+    error.message.includes('Loading module') ||
+    error.message.includes('does not provide an export') ||
+    error.message.includes("Unexpected token '<'")
   );
 }

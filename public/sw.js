@@ -6,8 +6,8 @@
  * imported module") until users clear site data.
  */
 
-const CACHE_NAME = 'vizag-taxi-hub-v4';
-const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v4';
+const CACHE_NAME = 'vizag-taxi-hub-v5';
+const DYNAMIC_CACHE_NAME = 'vizag-taxi-hub-dynamic-v5';
 
 /** Real static files only — never precache `/` or other HTML routes (stale app shell). */
 const STATIC_ASSETS = [

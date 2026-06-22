@@ -1033,11 +1033,13 @@ export const BookingSummary = ({
         onFinalTotalChange(localTotal);
       } else if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
         onFinalTotalChange(outstationBreakdown.totalFare);
+      } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
+        onFinalTotalChange(fareData.totalPrice);
       } else {
         onFinalTotalChange(sumBreakdown(fareData?.breakdown || {}));
       }
     }
-  }, [passedBreakdown, totalPrice, localTotal, fareData?.breakdown, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
+  }, [passedBreakdown, totalPrice, localTotal, fareData?.breakdown, fareData?.totalPrice, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;

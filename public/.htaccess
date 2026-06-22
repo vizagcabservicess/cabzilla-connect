@@ -56,9 +56,9 @@ RewriteRule .* - [R=200,L]
         Header always set Expires "0"
     </FilesMatch>
     
-   # Long-term caching for hashed assets (Vite: name-hash.ext, hash is alphanumeric)
+    # Hashed assets: cache but allow revalidation (avoid immutable — Cloudflare kept stale react-vendor when hash unchanged across deploys)
     <FilesMatch ".*-[a-zA-Z0-9]{8,}\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
-        Header always set Cache-Control "public, max-age=31536000, immutable"
+        Header always set Cache-Control "public, max-age=604800, must-revalidate"
     </FilesMatch>
     
    # No cache for non-hashed JS/CSS only

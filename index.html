@@ -3,6 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="app-version" content="__BUILD_TIME__" />
+    <!-- Recover from stale CDN/browser chunks (same hash, different deploy) before React boots -->
+    <script>
+      (function () {
+        var RELOAD_KEY = 'vth-chunk-recover-v1';
+        function isChunkError(msg) {
+          if (!msg) return false;
+          return /does not provide an export/i.test(msg)
+            || /Failed to fetch dynamically imported module/i.test(msg)
+            || /Importing a module script failed/i.test(msg)
+            || /ChunkLoadError/i.test(msg)
+            || /Loading chunk/i.test(msg)
+            || /Loading CSS chunk/i.test(msg)
+            || /Unexpected token '<'/i.test(msg);
+        }
+        function reloadFresh() {
+          if (sessionStorage.getItem(RELOAD_KEY)) return;
+          sessionStorage.setItem(RELOAD_KEY, '1');
+          var done = function () {
+            var u = new URL(location.href);
+            u.searchParams.set('_v', Date.now().toString(36));
+            location.replace(u.toString());
+          };
+          if ('caches' in window) {
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }).finally(done);
+          } else {
+            done();
+          }
+        }
+        window.addEventListener('error', function (e) {
+          var msg = (e.message || '') + ((e.error && e.error.message) || '');
+          if (isChunkError(msg)) reloadFresh();
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var msg = (e.reason && e.reason.message) || String(e.reason || '');
+          if (isChunkError(msg)) reloadFresh();
+        });
+      })();
+    </script>
     <!-- Vehicle embed LCP: preload hero PNG only (vizagtaxihub.com is already preconnect below — extra preconnect hurts the 4-connection budget). -->
     <script>
       (function () {
@@ -72,7 +113,7 @@
     <link rel="dns-prefetch" href="https://analytics.google.com" />
     
     <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, Cloudflare, and Social Login with iOS support -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://ad.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
   </head>
 
   <body>

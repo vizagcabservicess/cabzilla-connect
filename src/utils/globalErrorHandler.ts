@@ -69,7 +69,9 @@ class GlobalErrorHandler {
       'Loading CSS chunk',
       'ChunkLoadError',
       'Loading module',
-      'Importing a module script failed'
+      'Importing a module script failed',
+      'does not provide an export',
+      "Unexpected token '<'",
     ];
 
     return dynamicImportErrorPatterns.some(pattern => 
