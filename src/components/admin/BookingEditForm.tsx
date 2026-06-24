@@ -144,9 +144,7 @@ export function BookingEditForm({
       newErrors.passengerPhone = 'Invalid phone number format';
     }
     
-    if (!formData.passengerEmail.trim()) {
-      newErrors.passengerEmail = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.passengerEmail)) {
+    if (formData.passengerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.passengerEmail)) {
       newErrors.passengerEmail = 'Invalid email format';
     }
     

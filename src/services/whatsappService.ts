@@ -11,6 +11,8 @@ import {
   isTourBooking,
   resolveTourDurationForConfirmation,
 } from '@/utils/tourConfirmationHelpers';
+import { parseSeatsFromVehicleLabel } from '@/utils/enrichBookingForWhatsApp';
+import { computeOutstationRoundTripIncludedKm } from '@/utils/outstationRoundTripLimits';
 
 /** True if we should show this value in customer-facing messages (omit N/A clutter). */
 function isPresentableValue(v: unknown): boolean {
@@ -39,6 +41,57 @@ function stringifyOptionalNum(v: unknown): string {
   if (Number.isFinite(n) && n >= 0) return String(Math.round(n));
   const s = String(v).trim();
   return s;
+}
+
+function resolveOneWayDistanceKm(booking: Booking): number {
+  const raw = Number((booking as Booking & Record<string, unknown>).distance ?? booking.distance ?? 0);
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.round(raw);
+  }
+
+  const isRoundTrip =
+    booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
+  const kmi = Number(
+    (booking as Booking & Record<string, unknown>).km_included ??
+      booking.kmIncluded ??
+      0
+  );
+  if (isRoundTrip && Number.isFinite(kmi) && kmi > 0) {
+    return Math.round(kmi / 2);
+  }
+
+  return 0;
+}
+
+function resolveOutstationKmIncluded(
+  booking: Booking,
+  oneWayDistance: number,
+  isRoundTrip: boolean
+): string {
+  const kmiRaw =
+    (booking as Booking & Record<string, unknown>).km_included ?? booking.kmIncluded;
+  const kmi = Number(kmiRaw);
+
+  if (isRoundTrip) {
+    if (Number.isFinite(kmi) && kmi > 0) {
+      return String(Math.round(kmi));
+    }
+    const pickup = booking.pickup_date ?? booking.pickupDate;
+    const returnDate =
+      booking.return_date ?? (booking as Booking & { returnDate?: string }).returnDate;
+    if (pickup) {
+      return String(computeOutstationRoundTripIncludedKm(pickup, returnDate));
+    }
+    if (oneWayDistance > 0) {
+      return String(oneWayDistance * 2);
+    }
+    return 'N/A';
+  }
+
+  if (Number.isFinite(kmi) && kmi > 0) {
+    return String(Math.round(kmi));
+  }
+  return '0';
 }
 
 export function formatPhoneNumber(phone: string): string {
@@ -246,11 +299,23 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
                        [];
 
   // If vehicle specifications are not available in booking data, provide defaults based on vehicle type
+  const parsedSeatsFromLabel = parseSeatsFromVehicleLabel(vehicleModel);
+  if (parsedSeatsFromLabel && (vehicleCapacity === 'N/A' || !String(vehicleCapacity).trim())) {
+    vehicleCapacity = String(parsedSeatsFromLabel);
+  }
+
   if (vehicleCapacity === 'N/A' && vehicleModel !== 'To be assigned') {
     // Provide default specifications based on vehicle type
     const vehicleType = vehicleModel.toLowerCase();
     
-    if (vehicleType.includes('swift') || vehicleType.includes('dzire')) {
+    if (vehicleType.includes('urbania')) {
+      if (parsedSeatsFromLabel) {
+        vehicleCapacity = String(parsedSeatsFromLabel);
+      }
+      vehicleLuggage = vehicleLuggage === 'N/A' ? '6' : vehicleLuggage;
+      vehicleFuelType = vehicleFuelType === 'N/A' ? 'Diesel' : vehicleFuelType;
+      vehicleFeatures = vehicleFeatures.length ? vehicleFeatures : ['AC', 'Music System', 'Spacious'];
+    } else if (vehicleType.includes('swift') || vehicleType.includes('dzire')) {
       vehicleCapacity = '4';
       vehicleLuggage = '3';
       vehicleFuelType = 'Petrol';
@@ -301,7 +366,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   }
 
   const vmForCap = vehicleModel.toLowerCase();
-  const isTempoVehicle = vmForCap.includes('tempo') || vmForCap.includes('traveller');
+  if (vmForCap.includes('urbania') && Number(vehicleCapacity) === 7) {
+    vehicleCapacity = parsedSeatsFromLabel ? String(parsedSeatsFromLabel) : 'N/A';
+  }
+  const isTempoVehicle =
+    vmForCap.includes('tempo') || vmForCap.includes('traveller') || vmForCap.includes('urbania');
   const capNum = Number(vehicleCapacity);
   const tempoLabelSpecifies7 =
     /\b7\s*-?\s*seater\b/i.test(vehicleModel) ||
@@ -591,9 +660,8 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   }) : 'N/A';
   
 
-  // Calculate distance for round-trip (double the one-way distance); same km as guest saw when booking
-  const oneWayDistance =
-    Number((booking as any).distance ?? booking.distance ?? 0) || 0;
+  // Calculate distance for round-trip (double the one-way distance); prefer saved booking km
+  const oneWayDistance = resolveOneWayDistanceKm(booking);
   const isRoundTrip = booking.trip_mode === 'round-trip' || booking.tripMode === 'round-trip';
   const totalDistance = isRoundTrip ? oneWayDistance * 2 : oneWayDistance;
 
@@ -603,18 +671,19 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   let outstationKmIncluded = 'N/A';
   
   if (tripType === 'outstation') {
-    // Get extra charges from booking data
-    outstationExtraKm = booking.extra_per_km || (booking as any).extraPerKm || (booking as any).price_per_km || 'N/A';
+    // Get extra charges from booking data (enriched from vehicle/outstation fare catalog when missing)
+    const rawExtraKm =
+      booking.extra_per_km ??
+      (booking as any).extraPerKm ??
+      (booking as any).price_per_km ??
+      (booking as any).pricePerKm;
+    outstationExtraKm =
+      rawExtraKm !== null && rawExtraKm !== undefined && String(rawExtraKm).trim() !== ''
+        ? String(rawExtraKm)
+        : 'N/A';
     outstationExtraHour = booking.extra_per_hour || (booking as any).extraPerHour || (booking as any).price_per_hour || 'N/A';
     
-    // Get included km based on trip mode
-    if (isRoundTrip) {
-      // For round-trip, included km is 2x the distance
-      outstationKmIncluded = oneWayDistance ? `${oneWayDistance * 2}` : 'N/A';
-    } else {
-      // For one-way, no km included (0)
-      outstationKmIncluded = '0';
-    }
+    outstationKmIncluded = resolveOutstationKmIncluded(booking, oneWayDistance, isRoundTrip);
     
     // Fallback inference based on vehicle type if not found in booking data
     if (outstationExtraKm === 'N/A') {
@@ -625,6 +694,9 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
       } else if (vehicleType.includes('ertiga')) {
         outstationExtraKm = '18';
         outstationExtraHour = '400';
+      } else if (vehicleType.includes('urbania')) {
+        outstationExtraKm = '40';
+        outstationExtraHour = '850';
       } else if (vehicleType.includes('tempo') || vehicleType.includes('traveller')) {
         outstationExtraKm = '35';
         outstationExtraHour = '850';

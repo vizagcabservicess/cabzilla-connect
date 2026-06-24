@@ -13,6 +13,7 @@ import { BookingStatusFlow } from './BookingStatusFlow';
 import { formatPrice } from '@/lib/utils';
 import { convertUTCToLocal } from '@/lib/dateUtils';
 import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } from '@/utils/bookingUtils';
+import { mergeTripSummary, getDefaultTripSummary, getDefaultBillingAddress } from '@/utils/invoiceTripSummaryDefaults';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -55,10 +56,17 @@ export function BookingDetails({
               gstNumber: (booking as any).gstDetails?.gstNumber || '',
               companyName: (booking as any).gstDetails?.companyName || '',
               companyAddress: (booking as any).gstDetails?.companyAddress || ''
-            }
+            },
+            tripSummary: mergeTripSummary(parsed?.tripSummary, booking),
+            billingAddress: parsed?.billingAddress ?? getDefaultBillingAddress(booking),
           };
         }
-        return { adminNotes: '', ...parsed };
+        return {
+          adminNotes: parsed?.adminNotes ?? '',
+          ...parsed,
+          tripSummary: mergeTripSummary(parsed?.tripSummary, booking),
+          billingAddress: parsed?.billingAddress ?? getDefaultBillingAddress(booking),
+        };
       }
     } catch (error) {
       console.error('Error loading stored invoice settings:', error);
@@ -70,6 +78,8 @@ export function BookingDetails({
       includeTax: true,
       customInvoiceNumber: '',
       adminNotes: (booking as any).adminNotes || '',
+      billingAddress: getDefaultBillingAddress(booking),
+      tripSummary: getDefaultTripSummary(booking),
       gstDetails: {
         gstNumber: (booking as any).gstDetails?.gstNumber || '',
         companyName: (booking as any).gstDetails?.companyName || '',

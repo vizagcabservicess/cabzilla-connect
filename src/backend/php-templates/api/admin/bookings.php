@@ -1,6 +1,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/admin_booking_format.inc.php';
 
 // Include auth utilities for JWT verification
 require_once __DIR__ . '/../utils/auth.php';
@@ -230,6 +231,7 @@ try {
             'gstEnabled' => !empty($row['gst_enabled']) || (!empty($row['gst_number'])),
             'gstDetails' => $parsedGstDetails
         ];
+        admin_booking_append_messaging_fields($row, $booking);
         $bookings[] = $booking;
     }
     

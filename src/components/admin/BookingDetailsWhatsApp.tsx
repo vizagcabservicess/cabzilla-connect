@@ -19,8 +19,7 @@ import {
   formatPhoneNumber
 } from '@/services/whatsappService';
 import { getApiUrl } from '@/config/api';
-import { coalesceTourItinerary } from '@/utils/tourConfirmationHelpers';
-import { enrichTourBookingFromCatalog } from '@/utils/enrichTourBookingForConfirmation';
+import { enrichBookingForWhatsApp } from '@/utils/enrichBookingForWhatsApp';
 
 interface BookingDetailsWhatsAppProps {
   booking: Booking;
@@ -32,25 +31,25 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
   const [customMessage, setCustomMessage] = useState('');
   const [customPhone, setCustomPhone] = useState('');
   const [bookingForMsg, setBookingForMsg] = useState<Booking>(booking);
+  const [enrichingMsg, setEnrichingMsg] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
     setBookingForMsg(booking);
-
-    const tid = String(booking.tour_id ?? booking.tourId ?? '').trim();
-    const hasRef = Boolean(tid);
-    const hasItin = coalesceTourItinerary(booking).length > 0;
-    if (hasItin && hasRef) return;
-
+    setEnrichingMsg(true);
     let cancelled = false;
+
     (async () => {
       try {
-        const enriched = await enrichTourBookingFromCatalog(booking);
+        const enriched = await enrichBookingForWhatsApp(booking);
         if (!cancelled) setBookingForMsg(enriched);
       } catch {
-        /* keep booking as-is */
+        if (!cancelled) setBookingForMsg(booking);
+      } finally {
+        if (!cancelled) setEnrichingMsg(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -133,6 +132,11 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
                     <CardTitle className="text-sm font-medium">Booking Confirmation</CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {enrichingMsg ? (
+                      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md mb-3">
+                        Loading trip details from fleet pricing…
+                      </div>
+                    ) : null}
                     <div className="text-xs whitespace-pre-line bg-gray-50 p-3 rounded-md mb-3 max-h-40 overflow-y-auto">
                       {bookingConfirmationMsg}
                     </div>
@@ -141,6 +145,7 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
                         variant="outline" 
                         size="sm"
                         onClick={() => handleCopyMessage(bookingConfirmationMsg)}
+                        disabled={enrichingMsg}
                       >
                         <Share2 className="w-4 h-4 mr-2" />
                         Copy
@@ -149,6 +154,7 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
                         phone={booking.passengerPhone} 
                         message={bookingConfirmationMsg}
                         size="sm"
+                        disabled={enrichingMsg}
                       >
                         Send via WhatsApp
                       </WhatsAppButton>

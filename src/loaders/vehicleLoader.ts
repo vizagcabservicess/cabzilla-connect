@@ -1,5 +1,10 @@
-import { getVehicleData, tryLoadVehiclesFromPublicJson } from '@/services/vehicleDataService';
-import { getVehicleUrl, getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
+import {
+  getVehicleData,
+  mergeVehicleCatalog,
+  resolveVehicleOverviewText,
+  tryLoadVehiclesFromPublicJson,
+} from '@/services/vehicleDataService';
+import { getVehicleImageUrlForDisplay, findVehicleByRouteSlug } from '@/utils/vehicleUrlUtils';
 
 export interface VehicleLoaderData {
   vehicle: {
@@ -35,18 +40,21 @@ export async function vehicleLoader({
   }
 
   try {
-    const fromJson = await tryLoadVehiclesFromPublicJson();
+    // API/admin DB is source of truth for description; JSON is fallback for missing fleet rows.
+    const apiVehicles = await getVehicleData(true, false);
+    const jsonVehicles = await tryLoadVehiclesFromPublicJson();
     const allVehicles =
-      fromJson && fromJson.length > 0 ? fromJson : await getVehicleData(false, false);
-    const foundVehicle = allVehicles.find((v) => {
-      const vehicleUrl = getVehicleUrl(v);
-      const urlSlug = vehicleUrl.replace('/vehicle/', '');
-      return urlSlug === vehicleSlug;
-    });
+      jsonVehicles && jsonVehicles.length > 0
+        ? mergeVehicleCatalog(apiVehicles, jsonVehicles)
+        : apiVehicles;
+
+    const foundVehicle = findVehicleByRouteSlug(allVehicles, vehicleSlug);
 
     if (!foundVehicle) {
       return { error: `Vehicle "${vehicleSlug}" not found` };
     }
+
+    const overviewText = resolveVehicleOverviewText(foundVehicle);
 
     const vehicle = {
       id: foundVehicle.id || vehicleSlug,
@@ -55,12 +63,12 @@ export async function vehicleLoader({
       pricePerKm: foundVehicle.pricePerKm,
       fuelType: foundVehicle.fuelType,
       image: getVehicleImageUrlForDisplay(foundVehicle),
+      overview: overviewText,
       tags: [
         'Comfort Ride',
         foundVehicle.ac ? 'AC' : 'Non-AC',
         foundVehicle.capacity > 4 ? 'Family Friendly' : 'Compact',
       ],
-      overview: foundVehicle.description,
       inclusions:
         foundVehicle.inclusions ||
         foundVehicle.amenities ||

@@ -12,6 +12,11 @@ import {
 import { tourAPI } from '@/services/api/tourAPI';
 import { useNavigate } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import {
+  getFleetFareLookupIds,
+  pickFleetPricingAmount,
+  resolveCanonicalFareVehicleId,
+} from '@/utils/vehicleUrlUtils';
 
 interface RateCardPanelProps {
   vehicleId: string;
@@ -36,16 +41,19 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
 
   useEffect(() => {
     const fetchRates = async () => {
+      const fareVehicleId = resolveCanonicalFareVehicleId(vehicleId, vehicleName);
+      const fareLookupIds = getFleetFareLookupIds(vehicleId, vehicleName);
+
       try {
         setLoading(true);
-        console.log(`Fetching rates for vehicle: ${vehicleId}`);
+        console.log(`Fetching rates for vehicle: ${vehicleId} (fare tier: ${fareVehicleId})`);
         
         const [localFares, airportFares, tourFares] = await Promise.all([
-          fetchLocalFares(vehicleId).catch((err) => {
+          fetchLocalFares(fareVehicleId).catch((err) => {
             console.error('Local fares fetch failed:', err);
             return [];
           }),
-          fetchAirportFares(vehicleId).catch((err) => {
+          fetchAirportFares(fareVehicleId).catch((err) => {
             console.error('Airport fares fetch failed:', err);
             return [];
           }),
@@ -86,13 +94,18 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
 
         // Add outstation rates - fetch from the pricing API
         try {
-          const outstationResponse = await fetch(`https://www.vizagtaxihub.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
+          const outstationResponse = await fetch(`https://www.vizagtaxihub.com/api/admin/vehicle-pricing.php?vehicleId=${encodeURIComponent(fareVehicleId)}&tripType=outstation`);
           if (outstationResponse.ok) {
             const outstationData = await outstationResponse.json();
             console.log('Outstation data:', outstationData);
             
             if (outstationData.status === 'success' && outstationData.data) {
-              const vehicleData = outstationData.data.find((v: any) => v.vehicleId === vehicleId);
+              const vehicleData = outstationData.data.find((v: { vehicleId?: string; id?: string }) =>
+                fareLookupIds.some(
+                  (id) =>
+                    v.vehicleId?.toLowerCase() === id || v.id?.toLowerCase() === id,
+                ),
+              );
               if (vehicleData?.pricing?.outstation) {
                 const outstation = vehicleData.pricing.outstation;
                 if (outstation.pricePerKm && outstation.pricePerKm > 0) {
@@ -133,18 +146,16 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
           console.log('Processing tour fares:', tourFares);
           
           tourFares.forEach(tour => {
-            if (tour.pricing && tour.pricing[vehicleId]) {
-              const tourPrice = tour.pricing[vehicleId];
-              if (tourPrice > 0) {
-                formattedRates.push({
-                  tripType: tour.tourName,
-                  baseFare: `₹${tourPrice}`,
-                  distanceIncluded: `${tour.distance || 260} km`,
-                  notes: `Full day - AC, Driver, Fuel, Parking included`,
-                  bookingType: "tour",
-                  tourId: tour.tourId
-                });
-              }
+            const tourPrice = pickFleetPricingAmount(tour.pricing, fareLookupIds);
+            if (tourPrice && tourPrice > 0) {
+              formattedRates.push({
+                tripType: tour.tourName,
+                baseFare: `₹${tourPrice}`,
+                distanceIncluded: `${tour.distance || 260} km`,
+                notes: `Full day - AC, Driver, Fuel, Parking included`,
+                bookingType: "tour",
+                tourId: tour.tourId
+              });
             }
           });
         }
@@ -185,7 +196,7 @@ const RateCardPanel: React.FC<RateCardPanelProps> = ({ vehicleId, vehicleName = 
     if (vehicleId) {
       fetchRates();
     }
-  }, [vehicleId]);
+  }, [vehicleId, vehicleName]);
 
   const handleTripTypeClick = (rate: VehicleRate) => {
     setSelectedRate(rate);

@@ -36,7 +36,6 @@ const PREVIEW_FIELDS: Array<{ key: keyof ParsedBooking; label: string; format?: 
   { key: 'vehicle_type', label: 'Vehicle Type' },
   { key: 'seating_capacity', label: 'Seating Capacity' },
   { key: 'cost', label: 'Cost', format: 'rupee' },
-  { key: 'advance_received', label: 'Advance Received', format: 'rupee' },
   { key: 'payment_mode', label: 'Payment Mode' },
   { key: 'manager_name', label: 'Manager Name' },
   { key: 'manager_mobile', label: 'Manager Mobile' },
@@ -94,7 +93,7 @@ export default function AIAssistantPage() {
         setShowPreview(false);
         return;
       }
-      setParsed(res.data);
+      setParsed({ ...res.data, advance_received: 0 });
       setParseErrors(res.parse_errors ?? []);
       setParsedLocally(!!res.parsed_locally);
       setLocalParseReason(res.local_parse_reason ?? null);
@@ -135,7 +134,7 @@ export default function AIAssistantPage() {
     setSuccessBanner(null);
     setSheetWarningBanner(null);
     try {
-      const res = await aiBookingAPI.createBooking(parsed, rawText);
+      const res = await aiBookingAPI.createBooking({ ...parsed, advance_received: 0 }, rawText);
       setLastInvoiceNo(res.invoice_no ?? null);
       if (res.sheet_synced) {
         setSuccessBanner(
@@ -377,7 +376,7 @@ export default function AIAssistantPage() {
                         parsed[key] === 0 ||
                         parsed[key] === null ||
                         parsed[key] === undefined;
-                      const highlight = hasError || (empty && key !== 'manager_name' && key !== 'manager_mobile' && key !== 'driver_name' && key !== 'pickup_time' && key !== 'advance_received');
+                      const highlight = hasError || (empty && key !== 'manager_name' && key !== 'manager_mobile' && key !== 'driver_name' && key !== 'pickup_time');
                       return (
                         <div
                           key={key}

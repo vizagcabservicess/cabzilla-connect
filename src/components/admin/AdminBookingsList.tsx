@@ -23,6 +23,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
 import { Booking, BookingStatus } from '@/types/api';
+import {
+  tripSummaryForApiBody,
+  type TripSummaryOverrides,
+} from '@/utils/invoiceTripSummaryDefaults';
 import { AlertCircle, MapPin, Phone, Mail, MoreHorizontal, RefreshCw, Wifi, Calendar, Car, IndianRupee, Trash2, Download } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
@@ -594,7 +598,9 @@ export function AdminBookingsList() {
     isIGST?: boolean,
     includeTax?: boolean,
     customInvoiceNumber?: string,
-    adminNotes?: string
+    adminNotes?: string,
+    tripSummary?: TripSummaryOverrides,
+    billingAddress?: string,
   ) => {
     if (!selectedBooking) return null;
     setIsSubmitting(true);
@@ -630,7 +636,9 @@ export function AdminBookingsList() {
         includeTax: finalIncludeTax,
         invoiceNumber: customInvoiceNumber || '',
         gstDetails: gstDetails || {},
-        adminNotes: (adminNotes || '').trim() || undefined
+        adminNotes: (adminNotes || '').trim() || undefined,
+        tripSummary: tripSummary ? tripSummaryForApiBody(tripSummary) : undefined,
+        billingAddress: (billingAddress || '').trim() || undefined,
       };
       
       // #region agent log
@@ -1022,6 +1030,7 @@ export function AdminBookingsList() {
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="admin_created">Admin created</SelectItem>
+                <SelectItem value="pending_offline_booking">Pending - offline booking</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="assigned">Assigned</SelectItem>
@@ -1205,7 +1214,9 @@ export function AdminBookingsList() {
                             View details
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          {(rowStatus === 'pending' || rowStatus === 'admin_created') && (
+                          {(rowStatus === 'pending' ||
+                            rowStatus === 'admin_created' ||
+                            rowStatus === 'pending_offline_booking') && (
                             <DropdownMenuItem onClick={() => {
                               handleStatusChange('confirmed', booking);
                             }}>
@@ -1214,6 +1225,7 @@ export function AdminBookingsList() {
                           )}
                           {(rowStatus === 'pending' ||
                             rowStatus === 'admin_created' ||
+                            rowStatus === 'pending_offline_booking' ||
                             rowStatus === 'confirmed') && (
                             <DropdownMenuItem onClick={() => {
                               handleCancelBooking(booking);

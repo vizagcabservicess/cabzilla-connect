@@ -37,6 +37,7 @@ function formatDate(dateStr: string, timeStr?: string): string {
 const STATUS_FILTERS = [
   { label: 'All', value: '' },
   { label: 'Admin created', value: 'admin_created' },
+  { label: 'Pending - offline booking', value: 'pending_offline_booking' },
   { label: 'Pending', value: 'pending' },
   { label: 'Confirmed', value: 'confirmed' },
   { label: 'Completed', value: 'completed' },

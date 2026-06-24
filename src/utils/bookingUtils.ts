@@ -5,7 +5,13 @@ type EffectiveStatusInput = {
   status?: string | null;
   createdBy?: string | null;
   created_by?: string | null;
+  booking_source?: string | null;
+  bookingSource?: string | null;
 };
+
+function normalizeStatusToken(status: string): string {
+  return status.trim().toLowerCase().replace(/\s+/g, '_');
+}
 
 /**
  * Trip status shown in admin lists. If the DB rejected `admin_created` (e.g. narrow ENUM)
@@ -14,6 +20,22 @@ type EffectiveStatusInput = {
 export function getEffectiveBookingStatus(booking: EffectiveStatusInput): BookingStatus {
   const raw = String(booking.status ?? '').trim();
   if (raw) {
+    const normalized = normalizeStatusToken(raw);
+    if (normalized === 'pending_offline_booking') {
+      return 'pending_offline_booking';
+    }
+    const source = normalizeStatusToken(
+      String(booking.bookingSource ?? booking.booking_source ?? '')
+    );
+    if (normalized === 'pending' && source === 'ai') {
+      return 'pending_offline_booking';
+    }
+    if (normalized === 'pending' || normalized === 'confirmed' || normalized === 'assigned' ||
+        normalized === 'in_progress' || normalized === 'completed' || normalized === 'cancelled' ||
+        normalized === 'payment_pending' || normalized === 'payment_received' || normalized === 'continued' ||
+        normalized === 'admin_created') {
+      return normalized as BookingStatus;
+    }
     return raw as BookingStatus;
   }
   const created = String(booking.createdBy ?? booking.created_by ?? '')
@@ -42,7 +64,7 @@ export const isBookingEditable = (status: BookingStatus): boolean => {
  * @returns The next logical status in the flow or null if at end of flow
  */
 export const getNextBookingStatus = (currentStatus: BookingStatus): BookingStatus | null => {
-  if (currentStatus === 'admin_created') {
+  if (currentStatus === 'admin_created' || currentStatus === 'pending_offline_booking') {
     return 'confirmed';
   }
   const statusFlow: BookingStatus[] = [
@@ -68,6 +90,9 @@ export const getNextBookingStatus = (currentStatus: BookingStatus): BookingStatu
  * @returns Formatted status string
  */
 export const formatBookingStatus = (status: BookingStatus): string => {
+  if (status === 'pending_offline_booking') {
+    return 'Pending - Offline Booking';
+  }
   return status
     .replace(/_/g, ' ')
     .split(' ')
@@ -84,6 +109,8 @@ export const getStatusColorClass = (status: BookingStatus): string => {
   switch (status) {
     case 'admin_created':
       return 'bg-violet-100 text-violet-900';
+    case 'pending_offline_booking':
+      return 'bg-sky-100 text-sky-900';
     case 'pending':
       return 'bg-yellow-100 text-yellow-800';
     case 'confirmed':

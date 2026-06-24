@@ -1,5 +1,6 @@
 import { hourlyPackages } from '@/lib/packageData';
 import type { Booking } from '@/types/api';
+import type { TripSummaryOverrides } from '@/utils/invoiceTripSummaryDefaults';
 import { normalizeTripTypeForConfirmation } from '@/utils/localPackageLimitsForConfirmation';
 
 /** When trip_type is wrong but DB has standard local package caps, still show Local on invoice. */
@@ -246,6 +247,88 @@ function patchInvoiceTripTypeWithRegex(html: string, line: string): string {
 }
 
 /**
+ * Insert billing address into Customer Details when missing from server HTML.
+ */
+export function patchInvoiceHtmlBillingAddress(html: string, billingAddress: string): string {
+  const value = billingAddress.trim();
+  if (!html || !value || /billing\s*address\s*:/i.test(html)) {
+    return html;
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const paragraphs = Array.from(doc.querySelectorAll('p.compact-p, p[class*="compact"]'));
+      const emailParagraph = paragraphs.find((p) =>
+        /^email\s*:?\s*$/i.test((p.querySelector('strong')?.textContent ?? '').replace(/\s+/g, ' ').trim())
+      );
+      if (emailParagraph) {
+        const billing = doc.createElement('p');
+        billing.className = emailParagraph.className || 'compact-p';
+        const strong = doc.createElement('strong');
+        strong.textContent = 'Billing Address:';
+        billing.appendChild(strong);
+        billing.appendChild(doc.createTextNode(` ${value}`));
+        emailParagraph.insertAdjacentElement('afterend', billing);
+        return doc.documentElement.outerHTML;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return html.replace(
+    /(<p class="compact-p"><strong>Email:<\/strong>[\s\S]*?<\/p>)/i,
+    `$1<p class="compact-p"><strong>Billing Address:</strong> ${value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
+  );
+}
+
+/**
+ * Replace invoice number in server-generated HTML using stored admin override.
+ */
+export function patchInvoiceHtmlInvoiceNumber(html: string, invoiceNumber: string): string {
+  const value = invoiceNumber.trim();
+  if (!html || !value) {
+    return html;
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      let changed = false;
+
+      doc.querySelectorAll('p.compact-p, p[class*="compact"]').forEach((p) => {
+        const strong = p.querySelector('strong');
+        if (!strong) {
+          return;
+        }
+        const label = (strong.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!/^invoice\s*#\s*:?\s*$/i.test(label)) {
+          return;
+        }
+        while (strong.nextSibling) {
+          strong.nextSibling.remove();
+        }
+        p.appendChild(doc.createTextNode(` ${value}`));
+        changed = true;
+      });
+
+      if (changed) {
+        return doc.documentElement.outerHTML;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return html.replace(
+    /(<p class="compact-p"><strong>Invoice\s*#:<\/strong>)\s*[^<]*/i,
+    `$1 ${escaped}`
+  );
+}
+
+/**
  * Rewrite Trip Type everywhere it appears in server-generated invoice HTML.
  */
 export function patchInvoiceHtmlTripTypeCell(html: string, booking: Booking): string {
@@ -267,4 +350,236 @@ export function patchInvoiceHtmlTripTypeCell(html: string, booking: Booking): st
   }
 
   return patchInvoiceTripTypeWithRegex(html, line);
+}
+
+function isTripSummaryLabel(text: string, pattern: RegExp): boolean {
+  return pattern.test(text.replace(/\s+/g, ' ').trim());
+}
+
+function patchCompactPTripSummaryField(paragraph: Element, pattern: RegExp, value: string): boolean {
+  const strongs = paragraph.querySelectorAll('strong');
+  for (let i = 0; i < strongs.length; i++) {
+    const strong = strongs[i]!;
+    if (!isTripSummaryLabel(String(strong.textContent || ''), pattern)) {
+      continue;
+    }
+    while (strong.nextSibling) {
+      strong.nextSibling.remove();
+    }
+    const doc = paragraph.ownerDocument;
+    if (doc) {
+      paragraph.appendChild(doc.createTextNode(` ${value}`));
+    }
+    return true;
+  }
+  return false;
+}
+
+function isVehicleNoLabel(text: string): boolean {
+  return /^vehicle\s*no\.?\s*:?\s*$/i.test(text.replace(/\s+/g, ' ').trim());
+}
+
+function isVehicleTypeLabel(text: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  return /^vehicle\s*:?\s*$/i.test(normalized) && !/^vehicle\s*no/i.test(normalized);
+}
+
+function removeVehicleNoParagraphs(doc: Document): boolean {
+  let changed = false;
+  doc.querySelectorAll('p.compact-p, p[class*="compact"]').forEach((p) => {
+    const strong = p.querySelector('strong');
+    if (strong && isVehicleNoLabel(String(strong.textContent || ''))) {
+      p.remove();
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function patchVehicleNoInParagraph(paragraph: Element, value: string): boolean {
+  const strongs = paragraph.querySelectorAll('strong');
+  for (let i = 0; i < strongs.length; i++) {
+    const strong = strongs[i]!;
+    if (!isVehicleNoLabel(String(strong.textContent || ''))) {
+      continue;
+    }
+    while (strong.nextSibling) {
+      strong.nextSibling.remove();
+    }
+    const doc = paragraph.ownerDocument;
+    if (doc) {
+      paragraph.appendChild(doc.createTextNode(` ${value}`));
+    }
+    return true;
+  }
+  return false;
+}
+
+function insertVehicleNoAfterVehicleLine(doc: Document, value: string): boolean {
+  const paragraphs = doc.querySelectorAll('p.compact-p, p[class*="compact"]');
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i]!;
+    const strong = p.querySelector('strong');
+    if (!strong || !isVehicleTypeLabel(String(strong.textContent || ''))) {
+      continue;
+    }
+    const newP = doc.createElement('p');
+    newP.className = p.className || 'compact-p';
+    const newStrong = doc.createElement('strong');
+    newStrong.textContent = 'Vehicle No.:';
+    newP.appendChild(newStrong);
+    newP.appendChild(doc.createTextNode(` ${value}`));
+    p.insertAdjacentElement('afterend', newP);
+    return true;
+  }
+  return false;
+}
+
+function patchInvoiceVehicleNumberWithDom(doc: Document, vehicleNumber?: string): boolean {
+  if (vehicleNumber === undefined) {
+    return false;
+  }
+  const trimmed = vehicleNumber.trim();
+  if (trimmed === '') {
+    return removeVehicleNoParagraphs(doc);
+  }
+
+  let changed = false;
+  doc.querySelectorAll('p.compact-p, p[class*="compact"]').forEach((p) => {
+    if (patchVehicleNoInParagraph(p, trimmed)) {
+      changed = true;
+    }
+  });
+
+  if (!changed) {
+    changed = insertVehicleNoAfterVehicleLine(doc, trimmed);
+  }
+  return changed;
+}
+
+/**
+ * Insert, update, or remove the vehicle registration line in invoice HTML.
+ */
+export function patchInvoiceHtmlVehicleNumber(html: string, vehicleNumber?: string): string {
+  if (!html || vehicleNumber === undefined) {
+    return html;
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      if (patchInvoiceVehicleNumberWithDom(doc, vehicleNumber)) {
+        return doc.documentElement.outerHTML;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (vehicleNumber.trim() === '') {
+    return html.replace(
+      /<p class="compact-p"><strong>Vehicle\s*No\.?:<\/strong>[\s\S]*?<\/p>\s*/gi,
+      ''
+    );
+  }
+
+  const escaped = vehicleNumber
+    .trim()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const vehicleNoLine = `<p class="compact-p"><strong>Vehicle No.:</strong> ${escaped}</p>`;
+
+  if (/Vehicle\s*No\.?:/i.test(html)) {
+    return html.replace(
+      /<p class="compact-p"><strong>Vehicle\s*No\.?:<\/strong>[\s\S]*?<\/p>/i,
+      vehicleNoLine
+    );
+  }
+
+  return html.replace(
+    /(<p class="compact-p"><strong>Vehicle:<\/strong>[\s\S]*?<\/p>)/i,
+    `$1${vehicleNoLine}`
+  );
+}
+
+function patchInvoiceTripSummaryWithDom(doc: Document, overrides: Partial<TripSummaryOverrides>): boolean {
+  const fields: Array<{ pattern: RegExp; value?: string }> = [
+    { pattern: /^trip\s*type\s*:?\s*$/i, value: overrides.tripType },
+    { pattern: /^date\s*:?\s*$/i, value: overrides.tripDate },
+    { pattern: /^vehicle\s*:?\s*$/i, value: overrides.vehicleType },
+    { pattern: /^no\.?\s*of\s*hours?\s*:?\s*$/i, value: overrides.noOfHours },
+    { pattern: /^no\.?\s*of\s*kilometers?\s*:?\s*$/i, value: overrides.noOfKilometers },
+    { pattern: /^no\.?\s*of\s*kms?\s*:?\s*$/i, value: overrides.noOfKilometers },
+  ];
+
+  let changed = false;
+
+  doc.querySelectorAll('p.compact-p, p[class*="compact"]').forEach((p) => {
+    fields.forEach(({ pattern, value }) => {
+      if (value != null && value !== '' && patchCompactPTripSummaryField(p, pattern, value)) {
+        changed = true;
+      }
+    });
+  });
+
+  doc.querySelectorAll('tr').forEach((row) => {
+    const cells = row.querySelectorAll('td, th');
+    if (cells.length < 2) {
+      return;
+    }
+    const label = (cells[0].textContent || '').replace(/\s+/g, ' ').trim();
+    fields.forEach(({ pattern, value }) => {
+      if (value != null && value !== '' && isTripSummaryLabel(label, pattern)) {
+        cells[1].textContent = value;
+        changed = true;
+      }
+    });
+  });
+
+  if (overrides.vehicleNumber !== undefined) {
+  changed = patchInvoiceVehicleNumberWithDom(doc, overrides.vehicleNumber) || changed;
+  }
+
+  return changed;
+}
+
+/**
+ * Rewrite Trip Summary fields in server-generated invoice HTML using admin overrides.
+ */
+export function patchInvoiceHtmlTripSummary(
+  html: string,
+  overrides: Partial<TripSummaryOverrides>
+): string {
+  if (!html) {
+    return html;
+  }
+
+  const hasOverride = Object.entries(overrides).some(([key, value]) => {
+    if (key === 'vehicleNumber') {
+      return value !== undefined;
+    }
+    return value != null && String(value).trim() !== '';
+  });
+  if (!hasOverride) {
+    return html;
+  }
+
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      if (patchInvoiceTripSummaryWithDom(doc, overrides)) {
+        return doc.documentElement.outerHTML;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  let patched = html;
+  if (overrides.vehicleNumber !== undefined) {
+    patched = patchInvoiceHtmlVehicleNumber(patched, overrides.vehicleNumber);
+  }
+
+  return patched;
 }

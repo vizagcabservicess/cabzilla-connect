@@ -23,9 +23,61 @@ let pendingRefreshPromise: Promise<CabType[]> | null = null;
 /** Normalize API vehicle data: ensure pricePerKm from price_per_km, consistent field names */
 export function normalizeVehicles(vehicles: CabType[]): CabType[] {
   return vehicles.map((v) => {
-    const pricePerKm = v.pricePerKm ?? (v as any).price_per_km;
+    const pricePerKm = v.pricePerKm ?? (v as { price_per_km?: number }).price_per_km;
     return { ...v, pricePerKm };
   });
+}
+
+function catalogKey(vehicle: CabType): string {
+  return (vehicle.id || vehicle.vehicleId || vehicle.name || '').toLowerCase();
+}
+
+function pickNonEmptyText(primary?: string, fallback?: string): string {
+  const trimmedPrimary = primary?.trim();
+  if (trimmedPrimary) return trimmedPrimary;
+  return fallback?.trim() ?? '';
+}
+
+/**
+ * Merge vehicle lists — API/admin data wins, static JSON fills missing vehicles/fields.
+ */
+export function mergeVehicleCatalog(primary: CabType[], fallback: CabType[]): CabType[] {
+  const merged = new Map<string, CabType>();
+
+  for (const vehicle of fallback) {
+    const key = catalogKey(vehicle);
+    if (key) merged.set(key, vehicle);
+  }
+
+  for (const vehicle of primary) {
+    const key = catalogKey(vehicle);
+    if (!key) continue;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, vehicle);
+      continue;
+    }
+    merged.set(key, {
+      ...existing,
+      ...vehicle,
+      description: pickNonEmptyText(vehicle.description, existing.description),
+      inclusions: vehicle.inclusions?.length ? vehicle.inclusions : existing.inclusions,
+      exclusions: vehicle.exclusions?.length ? vehicle.exclusions : existing.exclusions,
+      amenities: vehicle.amenities?.length ? vehicle.amenities : existing.amenities,
+      image: pickNonEmptyText(vehicle.image, existing.image),
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
+/** Overview tab text: admin `description` field, then optional `overview` alias. */
+export function resolveVehicleOverviewText(
+  vehicle: CabType & { overview?: string },
+): string {
+  const description = vehicle.description?.trim();
+  if (description) return description;
+  return vehicle.overview?.trim() ?? '';
 }
 
 // Add throttling for cache clearing to prevent cascading refreshes
@@ -65,6 +117,38 @@ const DEFAULT_VEHICLES: CabType[] = [
     nightHaltCharge: 1000,
     driverAllowance: 250,
     isActive: true
+  },
+  {
+    id: 'glanza',
+    name: 'Toyota Glanza',
+    capacity: 4,
+    luggageCapacity: 2,
+    price: 4200,
+    pricePerKm: 14,
+    image: '/uploads/toyota-glanza-vizagtaxihub.png',
+    amenities: ['AC', 'Bottle Water', 'Music System'],
+    description:
+      'Comfortable Toyota Glanza hatchback for 4 passengers — ideal for city rides, airport transfers, and outstation trips in Vizag.',
+    ac: true,
+    nightHaltCharge: 700,
+    driverAllowance: 250,
+    isActive: true,
+  },
+  {
+    id: 'amaze',
+    name: 'Honda Amaze',
+    capacity: 4,
+    luggageCapacity: 2,
+    price: 4200,
+    pricePerKm: 14,
+    image: '/uploads/taxi-services--visakhapatnam-amaze.png',
+    amenities: ['AC', 'Bottle Water', 'Music System'],
+    description:
+      'Comfortable Honda Amaze sedan for 4 passengers — ideal for city rides, airport transfers, and outstation trips in Vizag.',
+    ac: true,
+    nightHaltCharge: 700,
+    driverAllowance: 250,
+    isActive: true,
   },
   {
     id: 'innova_crysta',

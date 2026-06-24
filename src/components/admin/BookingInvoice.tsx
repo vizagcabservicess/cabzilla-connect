@@ -11,7 +11,17 @@ import { Input } from "@/components/ui/input";
 import { getApiUrl } from '@/config/api';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
-import { patchInvoiceHtmlTripTypeCell } from '@/utils/invoiceTripTypeDisplay';
+import { patchInvoiceHtmlTripTypeCell, patchInvoiceHtmlTripSummary, patchInvoiceHtmlBillingAddress, patchInvoiceHtmlInvoiceNumber } from '@/utils/invoiceTripTypeDisplay';
+import {
+  appendTripSummaryParams,
+  getDefaultTripSummary,
+  getDefaultBillingAddress,
+  mergeTripSummary,
+  readStoredInvoiceSettings,
+  type TripSummaryOverrides,
+  tripSummaryForApiBody,
+} from '@/utils/invoiceTripSummaryDefaults';
+import { FleetVehicle } from '@/types/cab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function parseAmount(text?: string | null): number | null {
@@ -106,11 +116,22 @@ interface InvoiceState {
   customInvoiceNumber: string;
   gstDetails: GSTDetails;
   adminNotes: string;
+  billingAddress: string;
+  tripSummary: TripSummaryOverrides;
 }
 
 interface BookingInvoiceProps {
   booking: Booking;
-  onGenerateInvoice: (gstEnabled?: boolean, gstDetails?: any, isIGST?: boolean, includeTax?: boolean, customInvoiceNumber?: string, adminNotes?: string) => Promise<any>;
+  onGenerateInvoice: (
+    gstEnabled?: boolean,
+    gstDetails?: any,
+    isIGST?: boolean,
+    includeTax?: boolean,
+    customInvoiceNumber?: string,
+    adminNotes?: string,
+    tripSummary?: TripSummaryOverrides,
+    billingAddress?: string
+  ) => Promise<any>;
   onClose: () => void;
   isSubmitting: boolean;
   pdfUrl: string;
@@ -140,9 +161,79 @@ export function BookingInvoice({
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
+  const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>([]);
+  const [isLoadingFleetVehicles, setIsLoadingFleetVehicles] = useState(false);
   
   // Use lifted state from props
-  const { gstEnabled, isIGST, includeTax, customInvoiceNumber, gstDetails, adminNotes } = invoiceState;
+  const {
+    gstEnabled,
+    isIGST,
+    includeTax,
+    customInvoiceNumber,
+    gstDetails,
+    adminNotes,
+    billingAddress: storedBillingAddress,
+    tripSummary: storedTripSummary,
+  } = invoiceState;
+  const tripSummary = storedTripSummary ?? getDefaultTripSummary(booking);
+  const billingAddress = storedBillingAddress ?? getDefaultBillingAddress(booking);
+  const displayInvoiceNumber =
+    customInvoiceNumber.trim() ||
+    invoiceData?.invoiceNumber ||
+    invoiceData?.invoice_number ||
+    'Generated';
+
+  const updateTripSummaryField = (field: keyof TripSummaryOverrides, value: string) => {
+    onInvoiceStateChange({
+      ...invoiceState,
+      tripSummary: { ...tripSummary, [field]: value },
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadFleetVehicles = async () => {
+      setIsLoadingFleetVehicles(true);
+      try {
+        const response = await fetch(getApiUrl('/api/admin/fleet_vehicles.php/vehicles')).then((res) =>
+          res.json()
+        );
+        const vehicles = response.vehicles || [];
+        if (!cancelled) {
+          setFleetVehicles(vehicles);
+        }
+      } catch (error) {
+        console.warn('Failed to load fleet vehicles for invoice settings:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingFleetVehicles(false);
+        }
+      }
+    };
+    loadFleetVehicles();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const formatFleetVehicleLabel = (vehicle: FleetVehicle): string => {
+    const reg = vehicle.vehicleNumber || vehicle.vehicle_number || 'No Number';
+    const name = vehicle.name || '';
+    const model = vehicle.model || '';
+    const year = vehicle.year || '';
+    return `${reg} - ${name} ${model} (${year})`.replace(/\s+/g, ' ').trim();
+  };
+
+  const fleetVehiclesWithNumber = fleetVehicles.filter((v) => {
+    const reg = v.vehicleNumber || v.vehicle_number;
+    return typeof reg === 'string' && reg.trim() !== '';
+  });
+
+  const selectedFleetVehicleId = fleetVehiclesWithNumber.find(
+    (v) =>
+      (v.vehicleNumber || v.vehicle_number || '').trim().toUpperCase() ===
+      tripSummary.vehicleNumber.trim().toUpperCase()
+  )?.id?.toString() ?? '';
   const { toast } = useToast();
   const [downloadCount, setDownloadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<string>("html");
@@ -907,13 +998,28 @@ export function BookingInvoice({
       }
 
       let out = doc.documentElement.outerHTML;
-      out = patchInvoiceHtmlTripTypeCell(out, booking);
+      out = patchInvoiceHtmlTripSummary(out, tripSummary);
+      out = patchInvoiceHtmlBillingAddress(out, billingAddress);
+      if (customInvoiceNumber.trim()) {
+        out = patchInvoiceHtmlInvoiceNumber(out, customInvoiceNumber.trim());
+      }
+      if (!tripSummary.tripType.trim()) {
+        out = patchInvoiceHtmlTripTypeCell(out, booking);
+      }
       return out;
     } catch (error) {
       console.error('Failed to sanitize admin invoice HTML:', error);
-      return patchInvoiceHtmlTripTypeCell(html, booking);
+      let out = patchInvoiceHtmlTripSummary(html, tripSummary);
+      out = patchInvoiceHtmlBillingAddress(out, billingAddress);
+      if (customInvoiceNumber.trim()) {
+        out = patchInvoiceHtmlInvoiceNumber(out, customInvoiceNumber.trim());
+      }
+      if (!tripSummary.tripType.trim()) {
+        out = patchInvoiceHtmlTripTypeCell(out, booking);
+      }
+      return out;
     }
-  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking]);
+  }, [gstEnabled, summaryIsIGST, fallbackBaseFare, fallbackExtras, includeTax, baseFare, invoiceData, summaryBaseFare, summaryTaxes, summaryTotal, originalTotalAmount, backendTaxAmount, backendCgstAmount, backendSgstAmount, booking, tripSummary, billingAddress, customInvoiceNumber]);
 
   const htmlContent = useMemo(
     () => sanitizeInvoiceHtml(rawHtmlContent),
@@ -936,13 +1042,33 @@ export function BookingInvoice({
           
           if (data.status === 'success' && data.invoice) {
             const rawHtml = data.invoice.invoice_html ?? data.invoice.invoiceHtml ?? null;
-            // Only sanitize if we have HTML content
-            const sanitizedHtml = rawHtml ? sanitizeInvoiceHtml(rawHtml) : null;
-            // CRITICAL: Normalize all field names to camelCase for consistent access
+            const fetchedInvoiceNumber = (data.invoice.invoice_number || data.invoice.invoiceNumber || '').trim();
+            const storedSettings = readStoredInvoiceSettings(booking.id);
+            const storedCustomNumber = String(storedSettings?.customInvoiceNumber ?? '').trim();
+            const effectiveInvoiceNumber = storedCustomNumber || fetchedInvoiceNumber;
+
+            let patchedHtml = rawHtml;
+            if (patchedHtml && storedSettings) {
+              if (storedCustomNumber) {
+                patchedHtml = patchInvoiceHtmlInvoiceNumber(patchedHtml, storedCustomNumber);
+              }
+              patchedHtml = patchInvoiceHtmlTripSummary(
+                patchedHtml,
+                mergeTripSummary(storedSettings.tripSummary, booking)
+              );
+              patchedHtml = patchInvoiceHtmlBillingAddress(
+                patchedHtml,
+                storedSettings.billingAddress ?? getDefaultBillingAddress(booking)
+              );
+            }
+
+            const sanitizedHtml = patchedHtml ? sanitizeInvoiceHtml(patchedHtml) : null;
             const invoicePayload = {
               ...data.invoice,
-              invoiceHtml: sanitizedHtml ?? rawHtml,
-              invoice_html: sanitizedHtml ?? rawHtml,
+              invoiceNumber: effectiveInvoiceNumber,
+              invoice_number: effectiveInvoiceNumber,
+              invoiceHtml: sanitizedHtml ?? patchedHtml ?? rawHtml,
+              invoice_html: sanitizedHtml ?? patchedHtml ?? rawHtml,
               // Normalize field names - use camelCase with fallback to snake_case
               baseAmount: data.invoice.baseAmount ?? data.invoice.base_amount ?? 0,
               taxAmount: data.invoice.taxAmount ?? data.invoice.tax_amount ?? 0,
@@ -971,7 +1097,6 @@ export function BookingInvoice({
                 companyName: data.invoice.company_name || data.invoice.companyName || '',
                 companyAddress: data.invoice.company_address || data.invoice.companyAddress || ''
               };
-              const fetchedInvoiceNumber = data.invoice.invoice_number || data.invoice.invoiceNumber || '';
               const fetchedIncludeTax = !!(data.invoice.include_tax ?? data.invoice.includeTax ?? true);
               const fetchedIsIGST = !!(data.invoice.is_igst ?? data.invoice.isIGST);
               onInvoiceStateChange({
@@ -982,11 +1107,17 @@ export function BookingInvoice({
                 includeTax: fetchedIncludeTax,
                 isIGST: fetchedIsIGST
               });
+            } else if (storedCustomNumber && storedCustomNumber !== fetchedInvoiceNumber) {
+              // Stored custom number differs from DB — keep settings field and patched preview in sync
+              onInvoiceStateChange({
+                ...invoiceState,
+                customInvoiceNumber: storedCustomNumber,
+              });
             }
             
             // Set HTML content if available
-            if (rawHtml) {
-              setRawHtmlContent(sanitizedHtml ?? rawHtml);
+            if (patchedHtml || rawHtml) {
+              setRawHtmlContent(sanitizedHtml ?? patchedHtml ?? rawHtml);
             } else {
               setRawHtmlContent(null);
             }
@@ -1177,7 +1308,9 @@ export function BookingInvoice({
         isIGST,
         includeTax,
         customInvoiceNumber.trim() || undefined,
-        (adminNotes || '').trim() || undefined
+        (adminNotes || '').trim() || undefined,
+        tripSummary,
+        billingAddress.trim() || undefined
       );
       
       console.log('📨 Invoice generation result received:', result);
@@ -1212,6 +1345,7 @@ export function BookingInvoice({
         
         const invoicePayload = {
           ...result.data,
+          invoiceNumber: customInvoiceNumber.trim() || result.data.invoiceNumber || result.data.invoice_number,
           invoiceHtml: sanitizedHtml ?? rawHtml,
           invoice_html: sanitizedHtml ?? rawHtml,
           // Normalize field names - use camelCase with fallback to snake_case
@@ -1251,6 +1385,16 @@ export function BookingInvoice({
         });
         setInvoiceData(invoicePayload);
         setRawHtmlContent(sanitizedHtml ?? rawHtml ?? null);
+
+        const resolvedInvoiceNumber =
+          customInvoiceNumber.trim() ||
+          String(result.data.invoiceNumber ?? result.data.invoice_number ?? '').trim();
+        if (resolvedInvoiceNumber) {
+          onInvoiceStateChange({
+            ...invoiceState,
+            customInvoiceNumber: resolvedInvoiceNumber,
+          });
+        }
 
         toast({
           title: "Invoice Generated",
@@ -1370,6 +1514,10 @@ export function BookingInvoice({
     }
     if ((adminNotes || '').trim()) {
       params.append('adminNotes', (adminNotes || '').trim());
+    }
+    appendTripSummaryParams(params, tripSummary);
+    if (billingAddress.trim()) {
+      params.append('billingAddress', billingAddress.trim());
     }
     
     return getApiUrl(`${endpoint}?${params.toString()}`);
@@ -1583,6 +1731,127 @@ export function BookingInvoice({
           <p className="text-xs text-gray-500 mt-1">
             If provided, this will replace the auto-generated invoice number
           </p>
+        </div>
+
+        <div>
+          <Label htmlFor="invoice-billing-address">Billing Address</Label>
+          <Input
+            id="invoice-billing-address"
+            value={billingAddress}
+            onChange={(e) => onInvoiceStateChange({ ...invoiceState, billingAddress: e.target.value })}
+            placeholder="Company or billing address shown on invoice"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Shown under Customer Details. Prefilled from the booking; edit here to override on the invoice only.
+          </p>
+        </div>
+
+        <div className="space-y-3 border-t pt-4">
+          <div>
+            <h4 className="text-sm font-medium mb-1">Trip Summary (Invoice)</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              Override trip details shown on the invoice without changing the booking record.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="invoice-trip-type">Trip Type</Label>
+            <Input
+              id="invoice-trip-type"
+              value={tripSummary.tripType}
+              onChange={(e) => updateTripSummaryField('tripType', e.target.value)}
+              placeholder="e.g. Local or Outstation (One way)"
+            />
+          </div>
+          <div>
+            <Label htmlFor="invoice-vehicle-type">Vehicle Type</Label>
+            <Input
+              id="invoice-vehicle-type"
+              value={tripSummary.vehicleType}
+              onChange={(e) => updateTripSummaryField('vehicleType', e.target.value)}
+              placeholder="e.g. Sedan"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="invoice-fleet-vehicle">Vehicle Number (Registration)</Label>
+            <select
+              id="invoice-fleet-vehicle"
+              value={selectedFleetVehicleId}
+              onChange={(e) => {
+                const vehicle = fleetVehiclesWithNumber.find(
+                  (v) => String(v.id) === e.target.value
+                );
+                if (vehicle) {
+                  updateTripSummaryField(
+                    'vehicleNumber',
+                    (vehicle.vehicleNumber || vehicle.vehicle_number || '').trim()
+                  );
+                }
+              }}
+              disabled={isLoadingFleetVehicles}
+              className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">
+                {isLoadingFleetVehicles ? 'Loading fleet vehicles...' : 'Select from fleet (optional)'}
+              </option>
+              {fleetVehiclesWithNumber.map((vehicle) => (
+                <option key={vehicle.id} value={String(vehicle.id)}>
+                  {formatFleetVehicleLabel(vehicle)}
+                </option>
+              ))}
+            </select>
+            <Input
+              id="invoice-vehicle-number"
+              value={tripSummary.vehicleNumber}
+              onChange={(e) => updateTripSummaryField('vehicleNumber', e.target.value)}
+              placeholder="e.g. AP39AX0007"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-500">
+                Shown on invoice as Vehicle No. Prefilled from assigned fleet vehicle; edit here to override on the invoice only.
+                {booking.vehicleNumber && tripSummary.vehicleNumber !== booking.vehicleNumber
+                  ? ` Booking has: ${booking.vehicleNumber}`
+                  : ''}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => updateTripSummaryField('vehicleNumber', '')}
+                disabled={!tripSummary.vehicleNumber.trim()}
+              >
+                Remove from invoice
+              </Button>
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="invoice-trip-date">Date</Label>
+            <Input
+              id="invoice-trip-date"
+              value={tripSummary.tripDate}
+              onChange={(e) => updateTripSummaryField('tripDate', e.target.value)}
+              placeholder="e.g. 22 Jun 2026"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="invoice-no-hours">No. of Hours</Label>
+              <Input
+                id="invoice-no-hours"
+                value={tripSummary.noOfHours}
+                onChange={(e) => updateTripSummaryField('noOfHours', e.target.value)}
+                placeholder="e.g. 8 or --"
+              />
+            </div>
+            <div>
+              <Label htmlFor="invoice-no-km">No. of Kilometers</Label>
+              <Input
+                id="invoice-no-km"
+                value={tripSummary.noOfKilometers}
+                onChange={(e) => updateTripSummaryField('noOfKilometers', e.target.value)}
+                placeholder="e.g. 80 or --"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -1840,7 +2109,7 @@ export function BookingInvoice({
       return (
         <div>
           <div className="mb-4 flex justify-between">
-            <h3 className="font-medium">Invoice #{invoiceData?.invoiceNumber || 'Generated'}</h3>
+            <h3 className="font-medium">Invoice #{displayInvoiceNumber}</h3>
             <span>Generated: {invoiceData?.invoiceDate || new Date().toLocaleDateString()}</span>
           </div>
           
@@ -1986,7 +2255,7 @@ export function BookingInvoice({
               <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="settings" key={`settings-${invoiceData?.id || 'new'}-${gstEnabled}-${customInvoiceNumber}`}>
+            <TabsContent value="settings" key={`settings-${invoiceData?.id || 'new'}-${gstEnabled}-${includeTax}`}>
               {renderInvoiceSettings()}
             </TabsContent>
             

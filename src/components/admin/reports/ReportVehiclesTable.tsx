@@ -33,6 +33,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BookingDetailsModal } from '../BookingDetailsModal';
 import { Booking, BookingStatus } from '@/types/api';
+import {
+  tripSummaryForApiBody,
+  type TripSummaryOverrides,
+} from '@/utils/invoiceTripSummaryDefaults';
 import { getApiUrl } from '@/config/api';
 
 interface VehiclesReportData {
@@ -199,7 +203,9 @@ export function ReportVehiclesTable({
       isIGST?: boolean,
       includeTax?: boolean,
       customInvoiceNumber?: string,
-      adminNotes?: string
+      adminNotes?: string,
+      tripSummary?: TripSummaryOverrides,
+      billingAddress?: string,
     ) => {
       if (!selectedBooking) return null;
       setIsSubmitting(true);
@@ -216,6 +222,8 @@ export function ReportVehiclesTable({
           invoiceNumber: customInvoiceNumber || '',
           gstDetails: gstDetails || {},
           adminNotes: (adminNotes || '').trim() || undefined,
+          tripSummary: tripSummary ? tripSummaryForApiBody(tripSummary) : undefined,
+          billingAddress: (billingAddress || '').trim() || undefined,
         };
 
         if (gstDetails && typeof gstDetails === 'object' && 'lockedBaseFare' in gstDetails) {

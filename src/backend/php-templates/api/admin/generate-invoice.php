@@ -2,6 +2,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../utils/invoice_trip_type_display.inc.php';
+require_once __DIR__ . '/../utils/invoice_trip_summary_overrides.inc.php';
 
 // CRITICAL: Set all response headers first before any output
 // Turn off error display to prevent output before JSON
@@ -344,6 +345,8 @@ try {
     $customInvoiceNumber = '';
     $lockedBaseFare = null;
     $requestAdminNotes = null;
+    $billingAddressOverride = '';
+    $tripSummaryOverrides = [];
     $gstRate = 0.18; // GST rate is 18% (CGST 9% + SGST 9% or IGST 18%)
     
     // Handle both GET and POST methods
@@ -469,6 +472,10 @@ try {
         if (isset($data['adminNotes']) && is_string($data['adminNotes'])) {
             $requestAdminNotes = trim($data['adminNotes']);
         }
+        if (isset($data['billingAddress']) && is_string($data['billingAddress'])) {
+            $billingAddressOverride = trim($data['billingAddress']);
+        }
+        $tripSummaryOverrides = invoice_parse_trip_summary_overrides_from_request($_GET, $data);
     }
     else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (isset($_GET['id'])) {
@@ -506,6 +513,10 @@ try {
         if (isset($_GET['adminNotes']) && is_string($_GET['adminNotes'])) {
             $requestAdminNotes = trim($_GET['adminNotes']);
         }
+        if (isset($_GET['billingAddress']) && is_string($_GET['billingAddress'])) {
+            $billingAddressOverride = trim($_GET['billingAddress']);
+        }
+        $tripSummaryOverrides = invoice_parse_trip_summary_overrides_from_request($_GET, null);
     }
     
     logInvoiceError("Generate invoice request", [
@@ -1640,6 +1651,23 @@ try {
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
     $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
 
+    $tripDateDisplay = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
+    $vehicleDisplay = htmlspecialchars($booking['cab_type'] ?? 'N/A');
+    invoice_apply_trip_summary_overrides(
+        $tripTypeLabel,
+        $tripDateDisplay,
+        $vehicleDisplay,
+        $noOfHours,
+        $noOfKm,
+        $tripSummaryOverrides
+    );
+
+    $vehicleNumberDisplay = invoice_resolve_vehicle_number_display($booking, $tripSummaryOverrides);
+    $vehicleNumberHtml = invoice_vehicle_number_html($vehicleNumberDisplay);
+
+    $billingAddressDisplay = invoice_resolve_billing_address($booking, $billingAddressOverride);
+    $billingAddressHtml = invoice_billing_address_html($billingAddressDisplay);
+
     // Create HTML content for invoice - compact layout for single-page PDF
     $invoiceHtml = '<!DOCTYPE html>
 <html>
@@ -1713,12 +1741,14 @@ try {
                 <p class="compact-p"><strong>Name:</strong> ' . htmlspecialchars($booking['passenger_name']) . '</p>
                 <p class="compact-p"><strong>Phone:</strong> ' . htmlspecialchars($booking['passenger_phone']) . '</p>
                 <p class="compact-p"><strong>Email:</strong> ' . htmlspecialchars($booking['passenger_email']) . '</p>
+                ' . $billingAddressHtml . '
             </div>
             <div>
                 <h3 class="section-title">Trip Summary</h3>
                 <p class="compact-p"><strong>Trip Type:</strong> ' . $tripTypeLabel . '</p>
-                <p class="compact-p"><strong>Date:</strong> ' . date('d M Y', strtotime($booking['pickup_date'])) . '</p>
-                <p class="compact-p"><strong>Vehicle:</strong> ' . htmlspecialchars($booking['cab_type'] ?? 'N/A') . '</p>
+                <p class="compact-p"><strong>Date:</strong> ' . $tripDateDisplay . '</p>
+                <p class="compact-p"><strong>Vehicle:</strong> ' . $vehicleDisplay . '</p>
+                ' . $vehicleNumberHtml . '
                 <p class="compact-p"><strong>No. of Hours:</strong> ' . $noOfHours . '</p>
                 <p class="compact-p"><strong>No. of Kilometers:</strong> ' . $noOfKm . '</p>
             </div>

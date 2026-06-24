@@ -10,6 +10,11 @@ import {
 } from '@/services/fareManagementService';
 import { tourAPI } from '@/services/api/tourAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import {
+  getFleetFareLookupIds,
+  pickFleetPricingAmount,
+  resolveCanonicalFareVehicleId,
+} from '@/utils/vehicleUrlUtils';
 
 interface RateCardProps {
   vehicleId?: string;
@@ -38,16 +43,24 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
         const fareRows: FareRow[] = [];
 
         if (vehicleId) {
+          const fareVehicleId = resolveCanonicalFareVehicleId(vehicleId, vehicleName);
+          const fareLookupIds = getFleetFareLookupIds(vehicleId, vehicleName);
+
           // Fetch vehicle-specific fares
           const [localFares, airportFares, tourFares] = await Promise.all([
-            fetchLocalFares(vehicleId).catch(() => []),
-            fetchAirportFares(vehicleId).catch(() => []),
+            fetchLocalFares(fareVehicleId).catch(() => []),
+            fetchAirportFares(fareVehicleId).catch(() => []),
             tourAPI.getTourFares().catch(() => [])
           ]);
 
           // Add local fare (8hrs/80km only - City Tour 4hr/40km removed)
-          if (localFares.length > 0 && vehicleId) {
-            const localFare = localFares.find(f => f.vehicle_id === vehicleId) || localFares[0];
+          if (localFares.length > 0 && fareVehicleId) {
+            const localFare =
+              localFares.find(
+                (f) =>
+                  f.vehicle_id?.toLowerCase() === fareVehicleId.toLowerCase() ||
+                  f.vehicleId?.toLowerCase() === fareVehicleId.toLowerCase(),
+              ) || localFares[0];
             const price8hr = localFare?.price_8hrs_80km ?? localFare?.price8hrs80km;
             const extraKm = localFare?.price_extra_km ?? localFare?.priceExtraKm ?? 0;
             const extraHr = localFare?.price_extra_hour ?? localFare?.priceExtraHour ?? 0;
@@ -64,11 +77,16 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
 
           // Fetch outstation rates
           try {
-            const outstationResponse = await fetch(`https://www.vizagtaxihub.com/api/admin/vehicle-pricing.php?vehicleId=${vehicleId}&tripType=outstation`);
+            const outstationResponse = await fetch(`https://www.vizagtaxihub.com/api/admin/vehicle-pricing.php?vehicleId=${encodeURIComponent(fareVehicleId)}&tripType=outstation`);
             if (outstationResponse.ok) {
               const outstationData = await outstationResponse.json();
               if (outstationData.status === 'success' && outstationData.data) {
-                const vehicleData = outstationData.data.find((v: any) => v.vehicleId === vehicleId);
+                const vehicleData = outstationData.data.find((v: { vehicleId?: string; id?: string }) =>
+                  fareLookupIds.some(
+                    (id) =>
+                      v.vehicleId?.toLowerCase() === id || v.id?.toLowerCase() === id,
+                  ),
+                );
                 if (vehicleData?.pricing?.outstation?.pricePerKm) {
                   fareRows.push({
                     tripType: "Outstation",
@@ -102,29 +120,27 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
           // Add tour fares with proper duration display
           if (tourFares.length > 0) {
             tourFares.forEach(tour => {
-              if (tour.pricing && tour.pricing[vehicleId]) {
-                const tourPrice = tour.pricing[vehicleId];
-                if (tourPrice > 0) {
-                  // Get duration from timeDuration field, fallback to "Full Day"
-                  let durationText = 'Full Day';
-                  if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
-                    durationText = tour.timeDuration.trim();
-                  } else if (tour.days && tour.days > 0) {
-                    durationText = tour.days === 1 ? 'Full Day' : `${tour.days} Days`;
-                  }
-                  
-                  let distanceText = tour.distance ? `${tour.distance} km` : 'N/A';
-                  
-                  fareRows.push({
-                    tripType: tour.tourName,
-                    baseFare: `₹${tourPrice}`,
-                    distance: distanceText,
-                    duration: durationText,
-                    bookingType: "tour",
-                    tourId: tour.tourId,
-                    tourName: tour.tourName
-                  });
+              const tourPrice = pickFleetPricingAmount(tour.pricing, fareLookupIds);
+              if (tourPrice && tourPrice > 0) {
+                // Get duration from timeDuration field, fallback to "Full Day"
+                let durationText = 'Full Day';
+                if (tour.timeDuration && tour.timeDuration.trim().length > 0) {
+                  durationText = tour.timeDuration.trim();
+                } else if (tour.days && tour.days > 0) {
+                  durationText = tour.days === 1 ? 'Full Day' : `${tour.days} Days`;
                 }
+                
+                let distanceText = tour.distance ? `${tour.distance} km` : 'N/A';
+                
+                fareRows.push({
+                  tripType: tour.tourName,
+                  baseFare: `₹${tourPrice}`,
+                  distance: distanceText,
+                  duration: durationText,
+                  bookingType: "tour",
+                  tourId: tour.tourId,
+                  tourName: tour.tourName
+                });
               }
             });
           }
@@ -175,7 +191,7 @@ const RateCard: React.FC<RateCardProps> = ({ vehicleId, vehicleName }) => {
     };
 
     fetchAllFares();
-  }, [vehicleId]);
+  }, [vehicleId, vehicleName]);
 
   const handleRowClick = (fare: FareRow) => {
     if (fare.bookingType === 'tour' && (fare.tourId || fare.tourName)) {

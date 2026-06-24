@@ -13,6 +13,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/common/db_helper.php';
 require_once __DIR__ . '/utils/response.php';
 require_once __DIR__ . '/utils/invoice_trip_type_display.inc.php';
+require_once __DIR__ . '/utils/invoice_trip_summary_overrides.inc.php';
 
 // Import DomPDF classes at the top level
 use Dompdf\Dompdf;
@@ -132,6 +133,9 @@ try {
     $customInvoiceNumber = isset($_GET['invoiceNumber']) ? $_GET['invoiceNumber'] : '';
     $lockedBaseFare = isset($_GET['lockedBaseFare']) ? floatval($_GET['lockedBaseFare']) : null;
     $requestAdminNotes = isset($_GET['adminNotes']) && is_string($_GET['adminNotes']) ? trim($_GET['adminNotes']) : null;
+    $billingAddressOverride = isset($_GET['billingAddress']) && is_string($_GET['billingAddress'])
+        ? trim($_GET['billingAddress'])
+        : '';
     
     // Check for direct download flag - special handling for ensuring proper download
     $directDownload = isset($_GET['direct_download']) && $_GET['direct_download'] === '1';
@@ -522,6 +526,24 @@ try {
     list($tripTypeRaw, $tripTypeLabel) = invoice_resolve_trip_type_for_booking($booking, $noOfHours, $noOfKm);
     $noOfKm = invoice_round_trip_display_km($booking, $noOfKm, $tripTypeRaw);
 
+    $tripDateDisplay = isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A';
+    $vehicleDisplay = htmlspecialchars($booking['cab_type'] ?? 'N/A');
+    $tripSummaryOverrides = invoice_parse_trip_summary_overrides($_GET);
+    invoice_apply_trip_summary_overrides(
+        $tripTypeLabel,
+        $tripDateDisplay,
+        $vehicleDisplay,
+        $noOfHours,
+        $noOfKm,
+        $tripSummaryOverrides
+    );
+
+    $vehicleNumberDisplay = invoice_resolve_vehicle_number_display($booking, $tripSummaryOverrides);
+    $vehicleNumberHtml = invoice_vehicle_number_html($vehicleNumberDisplay);
+
+    $billingAddressDisplay = invoice_resolve_billing_address($booking, $billingAddressOverride);
+    $billingAddressHtml = invoice_billing_address_html($billingAddressDisplay);
+
     // Create HTML content for the invoice
     $content = '
     <!DOCTYPE html>
@@ -558,11 +580,13 @@ try {
                 <td><div style="width:100%;"><h3 class="section-title">Customer Details</h3>
                     <p class="compact-p"><strong>Name:</strong> '.htmlspecialchars($booking['passenger_name'] ?? 'N/A').'</p>
                     <p class="compact-p"><strong>Phone:</strong> '.htmlspecialchars($booking['passenger_phone'] ?? 'N/A').'</p>
-                    <p class="compact-p"><strong>Email:</strong> '.htmlspecialchars($booking['passenger_email'] ?? 'N/A').'</p></div></td>
+                    <p class="compact-p"><strong>Email:</strong> '.htmlspecialchars($booking['passenger_email'] ?? 'N/A').'</p>
+                    '.$billingAddressHtml.'</div></td>
                 <td><div style="width:100%;"><h3 class="section-title">Trip Summary</h3>
                     <p class="compact-p"><strong>Trip Type:</strong> '.$tripTypeLabel.'</p>
-                    <p class="compact-p"><strong>Date:</strong> '.(isset($booking['pickup_date']) ? date('d M Y', strtotime($booking['pickup_date'])) : 'N/A').'</p>
-                    <p class="compact-p"><strong>Vehicle:</strong> '.htmlspecialchars($booking['cab_type'] ?? 'N/A').'</p>
+                    <p class="compact-p"><strong>Date:</strong> '.$tripDateDisplay.'</p>
+                    <p class="compact-p"><strong>Vehicle:</strong> '.$vehicleDisplay.'</p>
+                    '.$vehicleNumberHtml.'
                     <p class="compact-p"><strong>No. of Hours:</strong> '.$noOfHours.'</p>
                     <p class="compact-p"><strong>No. of Kilometers:</strong> '.$noOfKm.'</p></div></td>
             </tr></table>

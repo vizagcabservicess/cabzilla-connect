@@ -60,7 +60,6 @@ import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import {
   getVehicleEmbedConfig,
-  isVehicleEmbedSlug,
 } from '@/seo/vehicleEmbedMeta';
 
 const URB_EMBED_STRIP_ICONS = [Users, Briefcase, Snowflake, Shield] as const;
@@ -165,7 +164,7 @@ const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
 export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean }) {
   const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
-  const vehicleEmbedConfig = isVehicleEmbedSlug(normalizedLockSlug)
+  const vehicleEmbedConfig = lockedVehicleSlug
     ? getVehicleEmbedConfig(normalizedLockSlug)
     : null;
   const isVehicleEmbedLock = Boolean(vehicleEmbedConfig);

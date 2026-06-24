@@ -7,6 +7,10 @@ import { MapPin, Clock, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { tourAPI } from '@/services/api/tourAPI';
+import {
+  getFleetFareLookupIds,
+  pickFleetPricingAmount,
+} from '@/utils/vehicleUrlUtils';
 
 interface VehicleToursProps {
   vehicleId: string;
@@ -24,8 +28,10 @@ interface TourData {
   timeDuration?: string;
 }
 
+type TourWithPrice = TourData & { displayPrice: number };
+
 const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'Vehicle' }) => {
-  const [tours, setTours] = useState<TourData[]>([]);
+  const [tours, setTours] = useState<TourWithPrice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,15 +42,20 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
     }
 
     let cancelled = false;
+    const fareLookupIds = getFleetFareLookupIds(vehicleId, vehicleName);
 
     const runFetch = async () => {
       try {
         setLoading(true);
         const tourData = await tourAPI.getTourFares();
         if (cancelled) return;
-        const vehicleTours = tourData.filter(
-          (tour) => tour.pricing && tour.pricing[vehicleId]
-        );
+        const vehicleTours = tourData
+          .map((tour) => {
+            const displayPrice = pickFleetPricingAmount(tour.pricing, fareLookupIds);
+            if (!displayPrice) return null;
+            return { ...tour, displayPrice };
+          })
+          .filter((tour): tour is TourWithPrice => tour !== null);
         setTours(vehicleTours);
       } catch (error) {
         console.error('Error fetching tours:', error);
@@ -68,7 +79,7 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
     return () => {
       cancelled = true;
     };
-  }, [vehicleId]);
+  }, [vehicleId, vehicleName]);
 
   /** Same shell + `grid gap-3` as loaded state so CLS does not spike when data arrives. */
   if (loading) {
@@ -78,18 +89,17 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
           <CardTitle className="text-xl font-semibold">
             Available Tours for {vehicleName}
           </CardTitle>
-          <p className="text-sm text-gray-600">Perfect destinations for your {vehicleName}</p>
         </CardHeader>
         <CardContent className="p-0 px-4 pb-4 pt-0 sm:px-5">
-          <div className="grid gap-3" aria-busy="true" aria-label="Loading tours">
+          <div className="grid gap-3">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="min-h-[14rem] animate-pulse rounded-lg border border-gray-200 p-3 sm:p-4 sm:min-h-[15rem]"
+                className="min-h-[14rem] animate-pulse rounded-lg border border-gray-100 bg-gray-50 p-3 sm:min-h-[15rem] sm:p-4"
               >
-                <div className="mb-2 flex justify-between gap-4">
-                  <div className="h-5 flex-1 rounded bg-gray-200" />
-                  <div className="h-8 w-24 shrink-0 rounded bg-gray-200" />
+                <div className="mb-3 flex justify-between gap-4">
+                  <div className="h-5 w-2/3 rounded bg-gray-200" />
+                  <div className="h-6 w-20 rounded bg-gray-200" />
                 </div>
                 <div className="mb-3 space-y-2">
                   <div className="h-3 w-full rounded bg-gray-100" />
@@ -112,18 +122,7 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
   }
 
   if (tours.length === 0) {
-    return (
-      <Card className="mb-8">
-        <CardHeader className="space-y-1 p-4 sm:p-5">
-          <CardTitle className="text-xl font-semibold">Available Tours</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 px-4 pb-4 pt-0 sm:px-5">
-          <p className="text-gray-600 text-center py-6">
-            No tours available for {vehicleName} at the moment.
-          </p>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   return (
@@ -148,7 +147,7 @@ const VehicleTours: React.FC<VehicleToursProps> = ({ vehicleId, vehicleName = 'V
                 </h4>
                 <div className="text-right shrink-0">
                   <Badge className="bg-green-100 text-green-800 border-green-200 mb-1">
-                    ₹{tour.pricing[vehicleId].toLocaleString()}
+                    ₹{tour.displayPrice.toLocaleString()}
                   </Badge>
                   <p className="text-xs text-gray-500">Total package</p>
                 </div>

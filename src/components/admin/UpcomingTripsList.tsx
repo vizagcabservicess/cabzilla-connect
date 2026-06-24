@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/select';
 import { bookingAPI } from '@/services/api';
 import { Booking, BookingStatus } from '@/types/api';
+import {
+  tripSummaryForApiBody,
+  type TripSummaryOverrides,
+} from '@/utils/invoiceTripSummaryDefaults';
 import { AlertCircle, Calendar, Car, MapPin, MessageCircle, MoreHorizontal, Phone, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -251,6 +255,8 @@ export function UpcomingTripsList() {
     includeTax?: boolean,
     customInvoiceNumber?: string,
     adminNotes?: string,
+    tripSummary?: TripSummaryOverrides,
+    billingAddress?: string,
   ) => {
     if (!selectedBooking) return null;
     setIsSubmitting(true);
@@ -265,6 +271,8 @@ export function UpcomingTripsList() {
         invoiceNumber: customInvoiceNumber || '',
         gstDetails: gstDetails || {},
         adminNotes: (adminNotes || '').trim() || undefined,
+        tripSummary: tripSummary ? tripSummaryForApiBody(tripSummary) : undefined,
+        billingAddress: (billingAddress || '').trim() || undefined,
       };
       if (gstDetails && typeof gstDetails === 'object' && 'lockedBaseFare' in gstDetails) {
         requestBody.lockedBaseFare = (gstDetails as { lockedBaseFare?: number }).lockedBaseFare;

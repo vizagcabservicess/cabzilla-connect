@@ -55,6 +55,8 @@ const vehicleUrlMapping: Record<string, string> = {
   'sedan': 'sedan',
   'ertiga': 'ertiga', 
   'toyota': 'toyota-glanza',
+  'glanza': 'toyota-glanza',
+  'toyota_glanza': 'toyota-glanza',
   'innova_crysta': 'innova-crysta',
   'tempo_traveller': 'tempo-traveller',
   'amaze': 'amaze',
@@ -73,6 +75,101 @@ const vehicleNameMapping: Record<string, string> = {
   'Innova Hycross': 'innova-hycross',
   'Urbania': 'urbania'
 };
+
+/** Wide hero banners above the booking widget on `/vehicle/*` landing pages. */
+const SLUG_SEARCH_HERO_IMAGES: Record<string, string> = {
+  ertiga: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/ertiga-search.jpg`,
+  'innova-crysta': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/crysta-search.jpg`,
+  sedan: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/dzire-search.jpg`,
+  'swift-dzire': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/dzire-search.jpg`,
+  amaze: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/amaze-search.jpg`,
+  'honda-amaze': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/amaze-search.jpg`,
+  'toyota-glanza': `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/glanza-search.jpg`,
+};
+
+export function getVehicleSearchHeroImageUrl(slug: string | undefined): string | null {
+  if (!slug?.trim()) return null;
+  return SLUG_SEARCH_HERO_IMAGES[slug.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Fare tables in admin often key sedan-class vehicles as `sedan` even when the fleet id is `glanza`.
+ */
+export function resolveCanonicalFareVehicleId(
+  vehicleId: string,
+  vehicleName?: string,
+): string {
+  const id = vehicleId.trim().toLowerCase();
+  const name = (vehicleName ?? '').toLowerCase();
+
+  if (
+    id === 'glanza' ||
+    id === 'toyota' ||
+    id === 'toyota_glanza' ||
+    name.includes('glanza')
+  ) {
+    return 'sedan';
+  }
+  if (id === 'amaze' || name.includes('amaze')) {
+    return 'sedan';
+  }
+  if (
+    id === 'sedan' ||
+    id === 'swift_dzire' ||
+    id === 'swift-dzire' ||
+    name.includes('swift') ||
+    name.includes('dzire')
+  ) {
+    return 'sedan';
+  }
+  if (id === 'bus' || name.includes('urbania')) {
+    return 'bus';
+  }
+  return vehicleId;
+}
+
+/** Candidate fleet ids when reading tour / pricing maps from the API. */
+export function getFleetFareLookupIds(vehicleId: string, vehicleName?: string): string[] {
+  const canonical = resolveCanonicalFareVehicleId(vehicleId, vehicleName);
+  const ids = new Set<string>();
+  const add = (value?: string) => {
+    const key = value?.trim().toLowerCase();
+    if (key) ids.add(key);
+  };
+
+  add(vehicleId);
+  add(canonical);
+
+  const name = (vehicleName ?? '').toLowerCase();
+  if (name.includes('glanza') || vehicleId === 'glanza') {
+    add('glanza');
+    add('toyota');
+    add('toyota_glanza');
+    add('sedan');
+  }
+  if (name.includes('amaze') || vehicleId === 'amaze') {
+    add('amaze');
+    add('sedan');
+  }
+  if (name.includes('swift') || name.includes('dzire')) {
+    add('swift_dzire');
+    add('sedan');
+  }
+
+  return Array.from(ids);
+}
+
+export function pickFleetPricingAmount(
+  pricing: Record<string, number> | undefined,
+  lookupIds: string[],
+): number | undefined {
+  if (!pricing) return undefined;
+  for (const id of lookupIds) {
+    const key = Object.keys(pricing).find((k) => k.toLowerCase() === id);
+    if (key && pricing[key] > 0) return pricing[key];
+  }
+  return undefined;
+}
 
 /**
  * Generate a URL-friendly slug from vehicle data
@@ -189,6 +286,81 @@ export function getVehicleDisplayName(slug: string): string {
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/** Route slug → fleet record matchers when canonical URL slug does not match stored id/name. */
+const SLUG_VEHICLE_MATCHERS: Record<
+  string,
+  { ids?: readonly string[]; nameIncludes?: readonly string[] }
+> = {
+  'toyota-glanza': {
+    ids: ['glanza', 'toyota', 'toyota_glanza'],
+    nameIncludes: ['toyota glanza', 'glanza'],
+  },
+  'swift-dzire': {
+    ids: ['sedan', 'swift_dzire', 'swift-dzire'],
+    nameIncludes: ['swift dzire', 'dzire'],
+  },
+  sedan: {
+    ids: ['sedan'],
+    nameIncludes: ['sedan', 'swift dzire'],
+  },
+  amaze: {
+    ids: ['amaze'],
+    nameIncludes: ['honda amaze', 'amaze'],
+  },
+  'honda-amaze': {
+    ids: ['amaze'],
+    nameIncludes: ['honda amaze', 'amaze'],
+  },
+  'innova-hycross': {
+    ids: ['mpv', 'innova_hycross', 'innova-hycross'],
+    nameIncludes: ['innova hycross', 'hycross'],
+  },
+  luxury: {
+    ids: ['luxury'],
+    nameIncludes: ['luxury'],
+  },
+};
+
+function vehicleRecordMatchesSlug(
+  vehicle: { id?: string; vehicleId?: string; name?: string },
+  slug: string,
+): boolean {
+  const id = (vehicle.id ?? '').toLowerCase();
+  const vehicleId = (vehicle.vehicleId ?? '').toLowerCase();
+  const name = (vehicle.name ?? '').toLowerCase();
+  const matchers = SLUG_VEHICLE_MATCHERS[slug];
+
+  if (matchers?.ids?.some((candidate) => id === candidate || vehicleId === candidate)) {
+    return true;
+  }
+  if (matchers?.nameIncludes?.some((fragment) => name.includes(fragment))) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Find a fleet vehicle for a `/vehicle/:slug` route param. */
+export function findVehicleByRouteSlug<T extends { id?: string; vehicleId?: string; name?: string }>(
+  vehicles: T[],
+  slug: string,
+): T | undefined {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  const direct = vehicles.find((vehicle) => {
+    const urlSlug = getVehicleUrl(vehicle).replace('/vehicle/', '');
+    return urlSlug === normalized;
+  });
+  if (direct) return direct;
+
+  if (SLUG_VEHICLE_MATCHERS[normalized]) {
+    return vehicles.find((vehicle) => vehicleRecordMatchesSlug(vehicle, normalized));
+  }
+
+  return undefined;
 }
 
 

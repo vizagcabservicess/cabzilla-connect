@@ -234,6 +234,7 @@ function finalizeResult(data: ParsedBooking, errors: string[]): ParseResult {
   }
   data.pickup_location = dedupeLocation(data.pickup_location);
   data.drop_location = dedupeLocation(data.drop_location);
+  data.advance_received = 0;
   return { data, parse_errors: [...new Set(errors)] };
 }
 
@@ -260,8 +261,6 @@ function parseManagerDriverFormat(text: string): ParseResult {
   const costRaw = matchLine(text, /Cost:\s*(.+)/i);
   data.cost = parseMoney(costRaw);
   if (data.cost <= 0) errors.push('cost');
-
-  data.advance_received = parseMoney(matchLine(text, /Advance Received:\s*(.+)/i));
 
   data.customer_name = parseCustomerName(matchLine(text, /Passenger name:\s*(.+)/i));
   if (!data.customer_name) errors.push('customer_name');
@@ -349,7 +348,6 @@ function parseVizagConfirmation(text: string): ParseResult {
   if (data.cost <= 0) errors.push('cost');
 
   const advanceRaw = matchLine(text, /\*Advance:\*\s*(.+)/i);
-  data.advance_received = parseMoney(advanceRaw);
   if (/razorpay|online|upi/i.test(advanceRaw)) data.payment_mode = 'Online';
   else if (/phonepe/i.test(advanceRaw)) data.payment_mode = 'PhonePe';
   else data.payment_mode = 'Cash';
@@ -366,7 +364,7 @@ function mergePreferPrimary(primary: ParseResult, secondary: ParseResult): Parse
   const data = { ...secondary.data };
   const fields: (keyof ParsedBooking)[] = [
     'pickup_date', 'pickup_time', 'pickup_location', 'drop_location', 'trip_type',
-    'cost', 'advance_received', 'customer_name', 'customer_mobile',
+    'cost', 'customer_name', 'customer_mobile',
     'manager_name', 'manager_mobile', 'driver_name', 'vehicle_type',
     'seating_capacity', 'payment_mode',
   ];

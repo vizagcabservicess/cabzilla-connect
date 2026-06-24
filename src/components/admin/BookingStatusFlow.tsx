@@ -28,7 +28,9 @@ export function BookingStatusFlow({
   };
 
   const currentIndex = getStatusIndex(
-    currentStatus === 'admin_created' ? 'pending' : currentStatus
+    currentStatus === 'admin_created' || currentStatus === 'pending_offline_booking'
+      ? 'pending'
+      : currentStatus
   );
   
   // Determine if a status is completed, active, or upcoming
@@ -37,7 +39,9 @@ export function BookingStatusFlow({
   };
   
   const isActive = (status: BookingStatus) => {
-    if (status === 'pending' && currentStatus === 'admin_created') return true;
+    if (status === 'pending' && (currentStatus === 'admin_created' || currentStatus === 'pending_offline_booking')) {
+      return true;
+    }
     return status === currentStatus;
   };
   
@@ -47,7 +51,9 @@ export function BookingStatusFlow({
   
   // Get the next status in the flow
   const getNextStatus = (): BookingStatus | null => {
-    if (currentStatus === 'admin_created') return 'confirmed';
+    if (currentStatus === 'admin_created' || currentStatus === 'pending_offline_booking') {
+      return 'confirmed';
+    }
     const nextIndex = currentIndex + 1;
     return nextIndex < statusFlow.length ? statusFlow[nextIndex] : null;
   };
@@ -62,6 +68,9 @@ export function BookingStatusFlow({
   
   const formatStatusLabel = (status: BookingStatus) => {
     if (status === 'pending' && currentStatus === 'admin_created') return 'Admin created';
+    if (status === 'pending' && currentStatus === 'pending_offline_booking') {
+      return 'Pending - Offline Booking';
+    }
     return status
       .split('_')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))

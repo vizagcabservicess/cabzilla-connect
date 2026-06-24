@@ -97,6 +97,7 @@ export interface User {
 
 export type BookingStatus = 
   | 'admin_created'
+  | 'pending_offline_booking'
   | 'pending' 
   | 'confirmed' 
   | 'assigned' 
@@ -180,6 +181,8 @@ export interface Booking {
   /** From DB `created_by` — admin list maps to camelCase. */
   createdBy?: string | null;
   created_by?: string | null;
+  booking_source?: string | null;
+  bookingSource?: string | null;
   // GST fields (optional)
   gstEnabled?: boolean;
   gstDetails?: {

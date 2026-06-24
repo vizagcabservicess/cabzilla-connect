@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/admin_booking_format.inc.php';
 
 // CRITICAL: Set all response headers first before any output
 header('Content-Type: application/json');
@@ -302,6 +303,7 @@ try {
                 $formattedBooking['endOdometer'] = (int)round((float)$booking['end_odometer']);
             }
             admin_booking_attach_trip_odometer($conn, (int)$booking['id'], $formattedBooking);
+            admin_booking_append_messaging_fields($booking, $formattedBooking);
 
             sendJsonResponse(['status' => 'success', 'data' => $formattedBooking]);
         } else {
@@ -430,10 +432,10 @@ try {
                         'createdAt' => $row['created_at'],
                         'updatedAt' => $row['updated_at']
                     ];
+                    admin_booking_append_messaging_fields($row, $booking);
                     $bookings[] = $booking;
                 }
                 
-                // Return bookings array (even if empty)
                 sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
             } catch (Exception $e) {
                 error_log("Database query error: " . $e->getMessage());

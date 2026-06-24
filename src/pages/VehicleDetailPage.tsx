@@ -82,6 +82,8 @@ interface VehicleData {
     keywords?: string;
     localKeywords?: string[];
   };
+  description?: string;
+  amenities?: string[];
 }
 
 const VehicleDetailPage = () => {
@@ -107,7 +109,7 @@ const VehicleDetailPage = () => {
     return [];
   });
   const embedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
-  const embedConfig = embedSlug ? getVehicleEmbedConfig(embedSlug) : null;
+  const embedConfig = embedSlug ? getVehicleEmbedConfig(embedSlug, vehicle) : null;
   const embedHeroIllustrationSrc = embedConfig
     ? resolveEmbedIllustrationSrc(embedConfig)
     : null;
@@ -143,7 +145,7 @@ const VehicleDetailPage = () => {
 
     const resolvedEmbedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
     const resolvedEmbedConfig = resolvedEmbedSlug
-      ? getVehicleEmbedConfig(resolvedEmbedSlug)
+      ? getVehicleEmbedConfig(resolvedEmbedSlug, vehicle)
       : null;
 
     if (resolvedEmbedConfig) {
@@ -199,13 +201,18 @@ const VehicleDetailPage = () => {
 
     const resolvedEmbedSlug = resolveVehicleEmbedSlug(vehicleSlug, vehicle);
     const resolvedEmbedConfig = resolvedEmbedSlug
-      ? getVehicleEmbedConfig(resolvedEmbedSlug)
+      ? getVehicleEmbedConfig(resolvedEmbedSlug, vehicle)
       : null;
 
     if (!resolvedEmbedConfig) return null;
 
     const { seo } = resolvedEmbedConfig;
-    const defaultCapacity = resolvedEmbedSlug === 'tempo-traveller' ? 17 : 13;
+    const defaultCapacity =
+      resolvedEmbedSlug === 'tempo-traveller'
+        ? 17
+        : resolvedEmbedSlug === 'urbania'
+          ? 13
+          : 4;
     const cap = vehicle.capacity > 0 ? vehicle.capacity : defaultCapacity;
     const pricePerKm =
       typeof vehicle.pricePerKm === 'number' && vehicle.pricePerKm > 0
@@ -216,9 +223,9 @@ const VehicleDetailPage = () => {
         ? seoData.image
         : `https://vizagtaxihub.com${String(seoData.image || '').startsWith('/') ? seoData.image : `/${seoData.image || seo.structuredDataFallbackImage}`}`;
     const capacityLabel =
-      resolvedEmbedSlug === 'tempo-traveller'
-        ? `${cap} passengers`
-        : `${cap} passengers (approx.)`;
+      resolvedEmbedSlug === 'urbania'
+        ? `${cap} passengers (approx.)`
+        : `${cap} passengers`;
 
     return {
       '@context': 'https://schema.org',

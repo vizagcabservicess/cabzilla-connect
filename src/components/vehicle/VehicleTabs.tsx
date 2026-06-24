@@ -21,7 +21,7 @@ interface VehicleTabsProps {
 }
 
 const VehicleTabs: React.FC<VehicleTabsProps> = ({ 
-  overview = "The Ertiga is a versatile MPV with a spacious interior and comfortable seating for six passengers. It's ideal for families, business trips, or small group tours. The vehicle offers excellent fuel efficiency and a smooth ride experience with full air conditioning to keep you comfortable throughout your journey.",
+  overview,
   specs = {
     seatingCapacity: "6 Passengers",
     fuelType: "Diesel",
@@ -59,9 +59,13 @@ const VehicleTabs: React.FC<VehicleTabsProps> = ({
           
           <TabsContent value="overview" className="mt-6">
             <div className="space-y-4">
-              <p className="text-gray-700 leading-relaxed">{overview}</p>
-              
-              
+              {overview?.trim() ? (
+                <p className="text-gray-700 leading-relaxed">{overview}</p>
+              ) : (
+                <p className="text-gray-500 leading-relaxed">
+                  Vehicle details will appear here once a description is added in the admin panel.
+                </p>
+              )}
             </div>
           </TabsContent>
           
