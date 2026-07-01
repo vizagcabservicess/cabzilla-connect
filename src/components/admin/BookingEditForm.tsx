@@ -2,15 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { CalendarIcon, Plus, X } from "lucide-react";
-import { Booking, BookingStatus } from '@/types/api';
-import { isBookingEditable } from '@/utils/bookingUtils';
+import { Plus, X } from "lucide-react";
+import { Booking } from '@/types/api';
+import { getEffectiveBookingStatus, isBookingEditable } from '@/utils/bookingUtils';
 import { convertUTCToLocal, formatDateForAPI } from '@/lib/dateUtils';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+function resolveBookingPickupDate(booking: Booking): Date {
+  const raw =
+    booking.pickupDate ??
+    (booking as Booking & { pickup_date?: string }).pickup_date ??
+    '';
+  if (!raw) {
+    return new Date();
+  }
+  return convertUTCToLocal(String(raw));
+}
 
 interface BookingEditFormProps {
   booking: Booking;
@@ -33,7 +41,7 @@ export function BookingEditForm({
     passengerEmail: booking.passengerEmail || '',
     pickupLocation: booking.pickupLocation || '',
     dropLocation: booking.dropLocation || '',
-    pickupDate: booking.pickupDate ? convertUTCToLocal(booking.pickupDate) : new Date(),
+    pickupDate: resolveBookingPickupDate(booking),
     billingAddress: booking.billingAddress || '',
   });
 
@@ -45,7 +53,7 @@ export function BookingEditForm({
       passengerEmail: booking.passengerEmail || '',
       pickupLocation: booking.pickupLocation || '',
       dropLocation: booking.dropLocation || '',
-      pickupDate: booking.pickupDate ? convertUTCToLocal(booking.pickupDate) : new Date(),
+      pickupDate: resolveBookingPickupDate(booking),
       billingAddress: booking.billingAddress || '',
     });
   }, [booking]);
@@ -91,19 +99,25 @@ export function BookingEditForm({
     }
   };
 
-  const handleDateChange = (date: Date | undefined) => {
-    if (date) {
-      setFormData(prev => ({
-        ...prev,
-        pickupDate: date
-      }));
-      
-      if (errors.pickupDate) {
-        setErrors(prev => ({
-          ...prev,
-          pickupDate: ''
-        }));
-      }
+  const handlePickupDatePartChange = (dateValue: string) => {
+    if (!dateValue) return;
+    const [year, month, day] = dateValue.split('-').map(Number);
+    const next = new Date(formData.pickupDate);
+    next.setFullYear(year, month - 1, day);
+    setFormData((prev) => ({ ...prev, pickupDate: next }));
+    if (errors.pickupDate) {
+      setErrors((prev) => ({ ...prev, pickupDate: '' }));
+    }
+  };
+
+  const handlePickupTimeChange = (timeValue: string) => {
+    if (!timeValue) return;
+    const [hours, minutes] = timeValue.split(':').map(Number);
+    const next = new Date(formData.pickupDate);
+    next.setHours(hours, minutes, 0, 0);
+    setFormData((prev) => ({ ...prev, pickupDate: next }));
+    if (errors.pickupDate) {
+      setErrors((prev) => ({ ...prev, pickupDate: '' }));
     }
   };
 
@@ -199,7 +213,8 @@ export function BookingEditForm({
     }
   };
 
-  const isEditable = isBookingEditable(booking.status);
+  const effectiveStatus = getEffectiveBookingStatus(booking);
+  const isEditable = isBookingEditable(effectiveStatus);
 
   useEffect(() => {
     console.log('Booking prop in modal changed:', booking);
@@ -252,48 +267,25 @@ export function BookingEditForm({
         
         <div className="space-y-2">
           <Label htmlFor="pickupDate">Pickup Date & Time</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !formData.pickupDate && "text-muted-foreground"
-                )}
-                disabled={!isEditable || isSubmitting}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {formData.pickupDate ? (
-                  format(formData.pickupDate, "PPP p")
-                ) : (
-                  <span>Pick a date</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={formData.pickupDate}
-                onSelect={handleDateChange}
-                initialFocus
-              />
-              <div className="p-3 border-t">
-                <Label htmlFor="pickupTime">Time</Label>
-                <Input
-                  id="pickupTime"
-                  type="time"
-                  className="mt-1"
-                  value={formData.pickupDate ? format(formData.pickupDate, "HH:mm") : ""}
-                  onChange={(e) => {
-                    const [hours, minutes] = e.target.value.split(':').map(Number);
-                    const newDate = new Date(formData.pickupDate);
-                    newDate.setHours(hours, minutes);
-                    handleDateChange(newDate);
-                  }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              id="pickupDate"
+              type="date"
+              value={format(formData.pickupDate, 'yyyy-MM-dd')}
+              onChange={(e) => handlePickupDatePartChange(e.target.value)}
+              disabled={!isEditable || isSubmitting}
+            />
+            <Input
+              id="pickupTime"
+              type="time"
+              value={format(formData.pickupDate, 'HH:mm')}
+              onChange={(e) => handlePickupTimeChange(e.target.value)}
+              disabled={!isEditable || isSubmitting}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {format(formData.pickupDate, 'PPP p')}
+          </p>
           {errors.pickupDate && (
             <p className="text-sm text-red-500">{errors.pickupDate}</p>
           )}

@@ -1,6 +1,22 @@
 import axios from 'axios';
+import { format } from 'date-fns';
 import { getApiUrl } from '@/config/api';
 import { parseBookingText, normalizeVehicleName } from '@/utils/bookingParser';
+
+export const AI_SHEET_TAB_STORAGE_KEY = 'ai_assistant_sheet_tab';
+
+export function defaultAiSheetTabName(): string {
+  return format(new Date(), 'MMM yyyy');
+}
+
+export function readStoredAiSheetTab(): string {
+  try {
+    const stored = localStorage.getItem(AI_SHEET_TAB_STORAGE_KEY)?.trim();
+    return stored || defaultAiSheetTabName();
+  } catch {
+    return defaultAiSheetTabName();
+  }
+}
 
 export const AI_VEHICLE_TYPES = [
   'Sedan',
@@ -46,6 +62,7 @@ export type CreateBookingResponse = {
   message?: string;
   sheet_synced?: boolean;
   sheet_sync_error?: string | null;
+  tab_name?: string;
   errors?: string[];
 };
 
@@ -157,12 +174,14 @@ export const aiBookingAPI = {
 
   async createBooking(
     booking: ParsedBooking,
-    rawInput?: string
+    rawInput?: string,
+    sheetTabName?: string
   ): Promise<CreateBookingResponse> {
     try {
+      const tab = sheetTabName?.trim();
       const { data } = await axios.post<CreateBookingResponse>(
         getApiUrl('/api/admin/create-booking-ai.php'),
-        { ...booking, raw_input: rawInput },
+        { ...booking, raw_input: rawInput, sheet_tab_name: tab },
         { headers: adminHeaders() }
       );
       if (!data.success) {
@@ -188,11 +207,15 @@ export const aiBookingAPI = {
     }
   },
 
-  async resyncSheetBooking(invoiceNo: number): Promise<CreateBookingResponse> {
+  async resyncSheetBooking(
+    invoiceNo: number,
+    sheetTabName?: string
+  ): Promise<CreateBookingResponse> {
     try {
+      const tab = sheetTabName?.trim();
       const { data } = await axios.post<CreateBookingResponse>(
         getApiUrl('/api/admin/resync-sheet-booking.php'),
-        { invoice_no: invoiceNo },
+        { invoice_no: invoiceNo, sheet_tab_name: tab },
         { headers: adminHeaders() }
       );
       if (!data.success) {
@@ -205,12 +228,16 @@ export const aiBookingAPI = {
     }
   },
 
-  async testSheetsSync(): Promise<SheetsTestResponse> {
+  async testSheetsSync(sheetTabName?: string): Promise<SheetsTestResponse> {
     try {
-      const { data } = await axios.get<SheetsTestResponse>(
-        getApiUrl('/api/admin/test-sheets-sync.php'),
-        { headers: adminHeaders(), timeout: 20000 }
-      );
+      const tab = sheetTabName?.trim();
+      const url = tab
+        ? `${getApiUrl('/api/admin/test-sheets-sync.php')}?tab_name=${encodeURIComponent(tab)}`
+        : getApiUrl('/api/admin/test-sheets-sync.php');
+      const { data } = await axios.get<SheetsTestResponse>(url, {
+        headers: adminHeaders(),
+        timeout: 20000,
+      });
       return data;
     } catch (error) {
       throw new Error(formatApiError(error, 'Sheets test failed'));

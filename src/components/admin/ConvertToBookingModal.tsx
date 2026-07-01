@@ -27,6 +27,7 @@ import {
   mapSearchAlertTripType,
   normalizeGuestPhone,
   parseSearchAlertDeparture,
+  readStoredAiSheetTab,
   type ParsedBooking,
   validateBookingClient,
 } from '@/services/api/aiBookingAPI';
@@ -98,7 +99,11 @@ export function ConvertToBookingModal({
 
     setIsSubmitting(true);
     try {
-      const res = await aiBookingAPI.createBooking(booking as ParsedBooking);
+      const res = await aiBookingAPI.createBooking(
+        booking as ParsedBooking,
+        undefined,
+        readStoredAiSheetTab()
+      );
       toast.success(res.message || `Invoice #${res.invoice_no} created`);
       onCreated?.(res.invoice_no ?? 0);
       onOpenChange(false);

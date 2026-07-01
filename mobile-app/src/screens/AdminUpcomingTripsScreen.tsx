@@ -254,7 +254,7 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
   const handleBulkTomorrowAdmin = () => {
     Alert.alert(
       'WhatsApp admins (tomorrow)',
-      'Send the same grouped summary as the daily cron to WHATSAPP_ADMIN_PHONE(S)? Only confirmed pickups for tomorrow.',
+      'Send the same grouped summary as the daily cron to WHATSAPP_ADMIN_PHONE(S)? Includes all active tomorrow pickups (pending, confirmed, assigned, etc.).',
       [
         { text: 'Cancel', style: 'cancel' },
         {

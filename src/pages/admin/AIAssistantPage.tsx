@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,11 @@ import { Bot, Loader2, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   aiBookingAPI,
+  AI_SHEET_TAB_STORAGE_KEY,
+  defaultAiSheetTabName,
   formatPickupDateDisplay,
   formatRupee,
+  readStoredAiSheetTab,
   type ParsedBooking,
   validateBookingClient,
 } from '@/services/api/aiBookingAPI';
@@ -67,6 +70,18 @@ export default function AIAssistantPage() {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isTestingSheets, setIsTestingSheets] = useState(false);
   const [lastInvoiceNo, setLastInvoiceNo] = useState<number | null>(null);
+  const [sheetTabName, setSheetTabName] = useState(readStoredAiSheetTab);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_SHEET_TAB_STORAGE_KEY, sheetTabName.trim());
+    } catch {
+      // ignore storage errors
+    }
+  }, [sheetTabName]);
+
+  const sheetTabTrimmed = sheetTabName.trim();
+  const sheetTabMissing = sheetTabTrimmed === '';
 
   const [commandText, setCommandText] = useState('');
   const [commandOutput, setCommandOutput] = useState<string | null>(null);
@@ -124,6 +139,10 @@ export default function AIAssistantPage() {
 
   const handleConfirm = async () => {
     if (!parsed) return;
+    if (sheetTabMissing) {
+      toast.error('Enter the Google Sheet tab name (e.g. Jul 2026)');
+      return;
+    }
     const clientErrors = validateBookingClient(parsed);
     if (clientErrors.length > 0) {
       setErrorBanner(clientErrors.join(', '));
@@ -134,7 +153,11 @@ export default function AIAssistantPage() {
     setSuccessBanner(null);
     setSheetWarningBanner(null);
     try {
-      const res = await aiBookingAPI.createBooking({ ...parsed, advance_received: 0 }, rawText);
+      const res = await aiBookingAPI.createBooking(
+        { ...parsed, advance_received: 0 },
+        rawText,
+        sheetTabTrimmed
+      );
       setLastInvoiceNo(res.invoice_no ?? null);
       if (res.sheet_synced) {
         setSuccessBanner(
@@ -158,10 +181,14 @@ export default function AIAssistantPage() {
   };
 
   const handleTestSheets = async () => {
+    if (sheetTabMissing) {
+      toast.error('Enter the Google Sheet tab name first');
+      return;
+    }
     setIsTestingSheets(true);
     setErrorBanner(null);
     try {
-      const res = await aiBookingAPI.testSheetsSync();
+      const res = await aiBookingAPI.testSheetsSync(sheetTabTrimmed);
       if (res.success) {
         toast.success(`Google Sheets OK — tab "${res.tab_name}" is reachable`);
         setSheetWarningBanner(null);
@@ -191,8 +218,12 @@ export default function AIAssistantPage() {
       toast.error('No recent invoice to resync');
       return;
     }
+    if (sheetTabMissing) {
+      toast.error('Enter the Google Sheet tab name first');
+      return;
+    }
     try {
-      const res = await aiBookingAPI.resyncSheetBooking(lastInvoiceNo);
+      const res = await aiBookingAPI.resyncSheetBooking(lastInvoiceNo, sheetTabTrimmed);
       if (res.sheet_synced) {
         setSheetWarningBanner(null);
         toast.success(`Invoice #${lastInvoiceNo} synced to Google Sheet`);
@@ -238,29 +269,53 @@ export default function AIAssistantPage() {
   return (
     <AdminLayout activeTab="ai-assistant">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Bot className="h-7 w-7 text-blue-600" />
-            AI Assistant
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Paste WhatsApp booking details, confirm, and sync to Google Sheets.
-          </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleTestSheets()}
-              disabled={isTestingSheets}
-            >
-              {isTestingSheets ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Test Google Sheets
-            </Button>
-            {lastInvoiceNo ? (
-              <Button variant="outline" size="sm" onClick={() => void handleResyncLast()}>
-                Resync Invoice #{lastInvoiceNo} to Sheet
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Bot className="h-7 w-7 text-blue-600" />
+              AI Assistant
+            </h1>
+            <p className="text-gray-500 mt-1">
+              Paste WhatsApp booking details, confirm, and sync to Google Sheets.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleTestSheets()}
+                disabled={isTestingSheets || sheetTabMissing}
+              >
+                {isTestingSheets ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Test Google Sheets
               </Button>
-            ) : null}
+              {lastInvoiceNo ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleResyncLast()}
+                  disabled={sheetTabMissing}
+                >
+                  Resync Invoice #{lastInvoiceNo} to Sheet
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="w-full lg:w-72 shrink-0 space-y-2">
+            <Label htmlFor="sheet-tab-name">Google Sheet tab</Label>
+            <Input
+              id="sheet-tab-name"
+              value={sheetTabName}
+              onChange={(e) => setSheetTabName(e.target.value)}
+              placeholder="Jul 2026"
+              list="sheet-tab-suggestions"
+            />
+            <datalist id="sheet-tab-suggestions">
+              <option value={defaultAiSheetTabName()} />
+            </datalist>
+            <p className="text-xs text-muted-foreground">
+              Must match the tab name in your spreadsheet exactly (e.g. Jul 2026). Saved in this browser.
+            </p>
           </div>
         </div>
 
@@ -392,7 +447,10 @@ export default function AIAssistantPage() {
                   </dl>
 
                   <div className="flex flex-wrap gap-2 pt-2">
-                    <Button onClick={() => void handleConfirm()} disabled={isCreating || missingRequired.length > 0}>
+                    <Button
+                      onClick={() => void handleConfirm()}
+                      disabled={isCreating || missingRequired.length > 0 || sheetTabMissing}
+                    >
                       {isCreating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Confirm &amp; Create Booking
                     </Button>

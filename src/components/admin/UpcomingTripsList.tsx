@@ -487,9 +487,9 @@ export function UpcomingTripsList() {
                 <AlertDialogTitle>Send tomorrow&apos;s trip summary to admin WhatsApp?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Sends the same grouped summary as the daily cron to numbers in{' '}
-                  <strong>WHATSAPP_ADMIN_PHONES</strong> (trip Cloud API line). Only bookings with pickup{' '}
-                  <strong>tomorrow</strong> and status <strong>confirmed</strong> are included. Long lists are split
-                  into multiple messages per admin number.
+                  <strong>WHATSAPP_ADMIN_PHONES</strong> (trip Cloud API line). Includes all active bookings
+                  with pickup <strong>tomorrow</strong> (pending, confirmed, assigned, etc. — not completed or
+                  cancelled). Long lists are split into multiple messages per admin number.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
