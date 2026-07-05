@@ -260,6 +260,22 @@ try {
         ]);
         
         $stmt->close();
+
+        // Sync to Google Sheet ledger (non-blocking)
+        try {
+            $syncBootstrap = __DIR__ . '/ai-booking/services/OnlineBookingSheetSync.php';
+            if (is_readable($syncBootstrap)) {
+                require_once __DIR__ . '/utils/ai-booking-db.php';
+                require_once __DIR__ . '/ai-booking/config/sheets-config.php';
+                require_once __DIR__ . '/ai-booking/services/GoogleSheetService.php';
+                require_once $syncBootstrap;
+                $sheetSync = OnlineBookingSheetSync::syncByBookingId((int) $insertedId);
+                logBooking('Google Sheet sync', $sheetSync);
+            }
+        } catch (Throwable $sheetError) {
+            logBooking('Google Sheet sync failed (non-fatal)', $sheetError->getMessage());
+        }
+
         $conn->close();
 
         // Notify super_admin users of new booking (non-blocking)

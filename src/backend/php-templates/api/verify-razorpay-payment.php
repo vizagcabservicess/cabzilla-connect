@@ -265,6 +265,21 @@ try {
                     $update->execute();
                     $update->close();
                 }
+
+                // Update Google Sheet with payment details (non-blocking)
+                try {
+                    $syncBootstrap = __DIR__ . '/ai-booking/services/OnlineBookingSheetSync.php';
+                    if (is_readable($syncBootstrap)) {
+                        require_once __DIR__ . '/utils/ai-booking-db.php';
+                        require_once __DIR__ . '/ai-booking/config/sheets-config.php';
+                        require_once __DIR__ . '/ai-booking/services/GoogleSheetService.php';
+                        require_once $syncBootstrap;
+                        $sheetSync = OnlineBookingSheetSync::updatePaymentAfterVerify((int) $booking_id, (float) $payAmount);
+                        file_put_contents(__DIR__ . '/debug.log', 'Google Sheet payment sync: ' . json_encode($sheetSync) . PHP_EOL, FILE_APPEND);
+                    }
+                } catch (Throwable $sheetError) {
+                    file_put_contents(__DIR__ . '/debug.log', 'Google Sheet payment sync failed (non-fatal): ' . $sheetError->getMessage() . PHP_EOL, FILE_APPEND);
+                }
                 
                 // Send payment confirmation email only for successful payments
                 file_put_contents(__DIR__ . '/debug.log', 'Checking email conditions - booking_data: ' . (!empty($booking_data) ? 'yes' : 'no') . ', payAmount: ' . $payAmount . ', dbAvailable: ' . ($dbAvailable ? 'yes' : 'no') . PHP_EOL, FILE_APPEND);
