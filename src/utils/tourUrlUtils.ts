@@ -102,9 +102,11 @@ export function getTourDisplayName(slug: string): string {
   const reverseMapping: Record<string, string> = {
     'araku-valley-tour': 'Araku Valley Tour',
     'lambasingi-tour': 'Lambasingi Tour',
+    'vanajangi-tour': 'Vanajangi Tour',
     'vizag-north-city-tour': 'Vizag North City Tour',
     'vizag-south-city-tour': 'Vizag South City Tour',
-    'araku-vizag-3d-2n': 'Araku-Vizag 3D/2N Tour'
+    'arasavalli-srikurmam-tour': 'Arasavalli & Srikurmam Tour',
+    'araku-vizag-3d-2n': 'Araku-Vizag 3D/2N Tour',
   };
   
   return reverseMapping[slug] || slug

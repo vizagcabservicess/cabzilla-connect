@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { LocationInput } from './LocationInput';
-import { DateTimePicker } from './DateTimePicker';
+import { LocationInput, type LocationInputHandle } from './LocationInput';
+import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { vizagLocations, Location } from '@/lib/locationData';
@@ -10,12 +10,17 @@ import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { filterAvailableVehicles } from '@/utils/vehicleAvailability';
-import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car, Clock, Briefcase, Snowflake, Shield, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, Users, Car, Clock, Briefcase, Snowflake, Shield, CheckCircle2, ShieldCheck, Search } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 import { TourTabIcon } from '@/components/icons/CabTabIcons';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
 import { HeroPromoSlider } from './HeroPromoSlider';
+import { HomeHeroBanner } from '@/components/home/HomeHeroBanner';
+import { HeroValueProps } from '@/components/home/HeroValueProps';
+import { BOOKING_HOME_RESET_EVENT } from '@/lib/bookingSessionReset';
+import { resetPageScroll, scrollToBookingWidget } from '@/lib/bookingWidgetScroll';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 /** Desktop-only route map: `@react-google-maps/api` is large — keep out of initial mobile bundle. */
@@ -79,7 +84,7 @@ function VehicleEmbedMobileFeatureBar({
       role="group"
       aria-label={ariaLabel}
       className={cn(
-        'flex divide-x divide-[#cfe2f8] overflow-x-auto rounded-xl border border-[#cfe2f8] bg-[#f0f7ff] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'flex divide-x divide-blue-200 overflow-x-auto rounded-xl border border-blue-200 bg-blue-50 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className
       )}
     >
@@ -90,7 +95,7 @@ function VehicleEmbedMobileFeatureBar({
             key={label}
             className="flex min-w-[6.75rem] flex-1 flex-col items-center justify-center gap-1 px-1.5 py-2.5 sm:min-w-0"
           >
-            <Icon className="h-4 w-4 shrink-0 text-[#3b71ca]" aria-hidden />
+            <Icon className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
             <span className="text-center text-[10px] font-semibold leading-tight text-[#4f5d6a]">{label}</span>
           </div>
         );
@@ -145,13 +150,13 @@ const heroUrbaniaMobileSelectContentProps = {
 
 /** Mobile ticket shell — matches `/vehicle/urbania` hero card chrome */
 const heroMobileTicketShellCardClass =
-  'max-lg:overflow-hidden max-lg:rounded-2xl max-lg:border max-lg:border-gray-200/90 max-lg:bg-white max-lg:shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)]';
+  'max-lg:overflow-hidden max-lg:rounded-2xl max-lg:border-0 max-lg:bg-white max-lg:shadow-none';
 
 /** Search slot gutters — same as `vehicle-urbania-search-slot` */
 const heroMobileTicketShellPaddingClass = 'max-lg:px-4 max-lg:pb-3 max-lg:pt-0';
 
 /** Home promo banner: small inset from card top edge */
-const heroMobileTicketShellPaddingHomeClass = 'max-lg:px-4 max-lg:pb-3 max-lg:pt-2';
+const heroMobileTicketShellPaddingHomeClass = 'max-lg:px-2.5 max-lg:pb-2.5 max-lg:pt-2';
 
 const heroMobileTicketShellFormWrapClass = 'bg-transparent px-0 pt-0 shadow-none';
 
@@ -181,15 +186,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   /** Parent `VehicleDetailPage` wraps hero + embed in a single gray shell below `lg`. */
   const urbaniaUnifiedShell =
     Boolean(urbaniaUnifiedMobileLayout && urbaniaMobileEmbedShell);
-  /** Home Hero + vehicle embed `/vehicle/*`: in-field captions + stacked ticket divider on mobile/tablet (desktop unchanged). */
+  /** Home + vehicle embed: in-field captions + stacked ticket divider on mobile/tablet. */
   const heroMobileTicketStyle =
     isVehicleEmbedLock ||
     (!embedStretchToShell && !embedCompactLayout && !lockedVehicleSlug);
   const heroMobileFieldVariant: 'app' | 'infield' = heroMobileTicketStyle ? 'infield' : 'app';
   const heroTicketCellPad = heroMobileTicketStyle ? 'px-2 py-1.5' : '';
   const heroTourLocalRowClass = heroMobileTicketStyle ? 'flex items-start gap-2 px-2 py-1.5' : undefined;
-  /** Single outer card on mobile — tabs + fields share one frame (home + Urbania embed). */
-  const heroMobileUnifiedShell = heroMobileTicketStyle && !urbaniaUnifiedShell;
+  /** Home page premium shell — desktop mesh banner + glass card; mobile keeps classic ticket widget. */
+  const isHomePremiumHero =
+    !hideBackground &&
+    !embedCompactLayout &&
+    !embedStretchToShell &&
+    !isSearchActive &&
+    !isVehicleEmbedLock &&
+    !lockedVehicleSlug;
+  /** Classic mobile ticket chrome: home + vehicle embeds (max-lg classes only). */
+  const heroMobileUnifiedShell =
+    !urbaniaUnifiedShell &&
+    heroMobileTicketStyle &&
+    (isHomePremiumHero || isVehicleEmbedLock || Boolean(lockedVehicleSlug));
+  const heroMobileFormShellWrap =
+    urbaniaMobileEmbedShell || heroMobileUnifiedShell;
   
   const loadFromSessionStorage = () => {
     try {
@@ -401,6 +419,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const skipPhoneGateRef = useRef(false);
   /** When true, `proceedWithSearch` skips a duplicate track (modal path already called `runGuestSearchTracking`). */
   const skipNextGuestTrackRef = useRef(false);
+  /** Latest SEARCH handler — used by header-search / route-prefill auto-trigger (must include phone gate). */
+  const handleContinueRef = useRef<() => void>(() => {});
+  /** Header search asked to run SEARCH once locations are valid (phone gate included). */
+  const pendingAutoSearchRef = useRef(false);
   /** Google Distance Matrix leg for {@link buildGuestTrackRouteKey} — matches CabList km & duration (avoids stale state). */
   const routedKmForRouteRef = useRef<{ key: string; km: number; durationMinutes: number }>({
     key: '',
@@ -418,6 +440,147 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     () => [...heroTourList].sort((a, b) => a.tourName.localeCompare(b.tourName)),
     [heroTourList]
   );
+
+  type LocationInputSlot = { mobile: LocationInputHandle | null; desktop: LocationInputHandle | null };
+  type DatePickerSlot = { mobile: DateTimePickerHandle | null; desktop: DateTimePickerHandle | null };
+  const dropLocationInputRefs = useRef<LocationInputSlot>({ mobile: null, desktop: null });
+  const departurePickerRefs = useRef<DatePickerSlot>({ mobile: null, desktop: null });
+  const returnPickerRefs = useRef<DatePickerSlot>({ mobile: null, desktop: null });
+  const desktopTripModeFocusRef = useRef<HTMLButtonElement | null>(null);
+  const mobileTripModeFocusRef = useRef<HTMLButtonElement | null>(null);
+  const packageSelectRefs = useRef<{ mobile: HTMLSelectElement | null; desktop: HTMLSelectElement | null }>({
+    mobile: null,
+    desktop: null,
+  });
+  const tourPackageTriggerRefs = useRef<{ mobile: HTMLButtonElement | null; desktop: HTMLButtonElement | null }>({
+    mobile: null,
+    desktop: null,
+  });
+  const searchButtonRefs = useRef<{ mobile: HTMLButtonElement | null; desktop: HTMLButtonElement | null }>({
+    mobile: null,
+    desktop: null,
+  });
+  const tripTypeRef = useRef(tripType);
+  const tripModeRef = useRef(tripMode);
+  tripTypeRef.current = tripType;
+  tripModeRef.current = tripMode;
+
+  const isDesktopBookingViewport = () =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+
+  const scheduleBookingFocus = (fn: () => void) => {
+    window.setTimeout(fn, 100);
+  };
+
+  const focusDropLocationField = () => {
+    const slot = isDesktopBookingViewport()
+      ? dropLocationInputRefs.current.desktop
+      : dropLocationInputRefs.current.mobile;
+    slot?.focus();
+  };
+
+  const focusTripModeControl = () => {
+    const target = isDesktopBookingViewport()
+      ? desktopTripModeFocusRef.current
+      : mobileTripModeFocusRef.current;
+    target?.focus();
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  const openDeparturePicker = () => {
+    const slot = isDesktopBookingViewport()
+      ? departurePickerRefs.current.desktop
+      : departurePickerRefs.current.mobile;
+    slot?.open();
+  };
+
+  const openReturnPicker = () => {
+    const slot = isDesktopBookingViewport()
+      ? returnPickerRefs.current.desktop
+      : returnPickerRefs.current.mobile;
+    slot?.open();
+  };
+
+  const focusSearchButton = () => {
+    const target = isDesktopBookingViewport()
+      ? searchButtonRefs.current.desktop
+      : searchButtonRefs.current.mobile;
+    target?.focus();
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  const focusPackageSelect = () => {
+    const target = isDesktopBookingViewport()
+      ? packageSelectRefs.current.desktop
+      : packageSelectRefs.current.mobile;
+    target?.focus();
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  const focusTourPackageSelect = () => {
+    const target = isDesktopBookingViewport()
+      ? tourPackageTriggerRefs.current.desktop
+      : tourPackageTriggerRefs.current.mobile;
+    target?.focus();
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  const advanceAfterPickupSelected = () => {
+    scheduleBookingFocus(() => {
+      const type = tripTypeRef.current;
+      if (type === 'outstation' || type === 'airport') {
+        focusDropLocationField();
+        return;
+      }
+      if (type === 'local') {
+        focusPackageSelect();
+        return;
+      }
+      if (type === 'tour') {
+        focusTourPackageSelect();
+        return;
+      }
+      openDeparturePicker();
+    });
+  };
+
+  const advanceAfterDropSelected = () => {
+    scheduleBookingFocus(() => {
+      const type = tripTypeRef.current;
+      if (type === 'outstation' || type === 'airport' || type === 'tour') {
+        focusTripModeControl();
+        return;
+      }
+      openDeparturePicker();
+    });
+  };
+
+  const advanceAfterTripModeSelected = () => {
+    scheduleBookingFocus(() => {
+      openDeparturePicker();
+    });
+  };
+
+  const advanceAfterDepartureApplied = () => {
+    scheduleBookingFocus(() => {
+      if (tripTypeRef.current === 'outstation' && tripModeRef.current === 'round-trip') {
+        openReturnPicker();
+        return;
+      }
+      focusSearchButton();
+    });
+  };
+
+  const advanceAfterReturnApplied = () => {
+    scheduleBookingFocus(() => {
+      focusSearchButton();
+    });
+  };
+
+  const handleTripModeChangeWithAdvance = (mode: TripMode) => {
+    setTripMode(mode);
+    advanceAfterTripModeSelected();
+  };
 
   const applyHeroTourPackageSelection = useCallback((tour: TourListItem | null) => {
     if (!tour) {
@@ -447,6 +610,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     } catch {
       /* ignore */
     }
+    window.setTimeout(() => {
+      const target = window.matchMedia('(min-width: 1024px)').matches
+        ? desktopTripModeFocusRef.current
+        : mobileTripModeFocusRef.current;
+      target?.focus();
+      target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 100);
   }, []);
 
   useEffect(() => {
@@ -482,6 +652,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setEditTrigger(prev => prev + 1);
     setIsSlidingSearch(true);
     setShowGuestDetailsForm(false);
+    if (isSearchActive) resetPageScroll();
     if (onEditStart) onEditStart();
     onTripEditOpenChange?.(true);
   };
@@ -491,9 +662,38 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setEditTrigger(prev => prev + 1);
     setIsSlidingSearch(true);
     setShowGuestDetailsForm(false);
+    if (isSearchActive) resetPageScroll();
     if (onEditStart) onEditStart();
     onTripEditOpenChange?.(true);
   };
+
+  /** Reset homepage booking widget back to step 1 (logo click, back navigation). */
+  const resetToHomeBookingForm = useCallback(() => {
+    setPickupLocation(null);
+    setDropLocation(null);
+    setReturnDate(null);
+    setPickupDate(getMinimumAllowedDate());
+    setSelectedCabState(null);
+    setDistance(0);
+    setDuration(0);
+    routedKmForRouteRef.current = { key: '', km: 0, durationMinutes: 0 };
+    setFinalTotal(0);
+    setCurrentStep(1);
+    setShowGuestDetailsForm(false);
+    setIsSlidingSearch(false);
+    setShowMobileEditForm(false);
+    setValidationError(null);
+    setTripType('outstation');
+    setTripMode('one-way');
+    if (onStepChange) onStepChange(1);
+    onTripEditOpenChange?.(false);
+    const scrollHomeTop = () => {
+      resetPageScroll();
+    };
+    scrollHomeTop();
+    requestAnimationFrame(scrollHomeTop);
+    window.setTimeout(scrollHomeTop, 100);
+  }, [onStepChange, onTripEditOpenChange]);
 
   /** When `navigate(summaryBackHref)` stays on the same URL (Urbania embed), React keeps Hero mounted — explicitly reset booking flow back to step 1. */
   const handleBookingSummaryBack = () => {
@@ -515,30 +715,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       summaryBackHref != null && summaryBackHref.length > 0 && backPath === here;
 
     if (samePageEmbedded) {
-      setPickupLocation(null);
-      setDropLocation(null);
-      setReturnDate(null);
-      setPickupDate(getMinimumAllowedDate());
-      setSelectedCabState(null);
-      setDistance(0);
-      setDuration(0);
-      routedKmForRouteRef.current = { key: '', km: 0, durationMinutes: 0 };
-      setFinalTotal(0);
-      setCurrentStep(1);
-      setShowGuestDetailsForm(false);
-      setIsSlidingSearch(false);
-      setShowMobileEditForm(false);
-      setValidationError(null);
-      if (onStepChange) onStepChange(1);
-      onTripEditOpenChange?.(false);
-      requestAnimationFrame(() => {
-        document.getElementById('booking-widget')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      resetToHomeBookingForm();
       return;
     }
 
     navigate(target);
   };
+
+  useEffect(() => {
+    const handleHomeReset = () => {
+      resetToHomeBookingForm();
+    };
+
+    window.addEventListener(BOOKING_HOME_RESET_EVENT, handleHomeReset);
+    return () => window.removeEventListener(BOOKING_HOME_RESET_EVENT, handleHomeReset);
+  }, [resetToHomeBookingForm]);
 
   // Load dynamic vehicles with inactive dates
   useEffect(() => {
@@ -591,23 +782,30 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     );
   }, [filteredAvailableForDates, normalizedLockSlug]);
 
-  // Listen for route prefill events
+  // Listen for route prefill events (header search widget)
   useEffect(() => {
     const handleRoutePrefill = (event: CustomEvent) => {
-      const { pickupLocation: pickup, dropLocation: drop, tripType: type, tripMode: mode } = event.detail;
-      setPickupLocation(pickup);
-      setDropLocation(drop);
-      setTripType(type);
-      setTripMode(mode);
-      // Don't reset pickup date when switching tabs - preserve user's selection
-      // setPickupDate(new Date());
-      
-      // Auto-trigger search after a short delay
-      setTimeout(() => {
-        if (pickup && drop) {
-          setCurrentStep(2);
-        }
-      }, 500);
+      const {
+        pickupLocation: pickup,
+        dropLocation: drop,
+        tripType: type,
+        tripMode: mode,
+        autoTriggerSearch,
+      } = event.detail;
+      setPickupLocation(pickup ?? null);
+      setDropLocation(drop ?? null);
+      if (type) setTripType(type);
+      if (mode) setTripMode(mode);
+      sessionStorage.setItem('tripType', type || 'outstation');
+
+      window.requestAnimationFrame(() => {
+        scrollToBookingWidget();
+      });
+
+      // Queue SEARCH (with WhatsApp phone gate) — runs when form becomes valid
+      if (autoTriggerSearch !== false && pickup && drop) {
+        pendingAutoSearchRef.current = true;
+      }
     };
 
     window.addEventListener('routePrefill', handleRoutePrefill as EventListener);
@@ -635,29 +833,37 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
   }, []);
 
-  // Handle autoTriggerSearch functionality
+  // Bootstrap pending auto-search from session prefill (navigate-from-other-page case)
   useEffect(() => {
-    const hasRoutePrefillData = !!sessionStorage.getItem('routePrefillData');
-    const shouldAutoSearch = savedData.autoTriggerSearch || hasRoutePrefillData;
-
-    if (shouldAutoSearch && pickupLocation && dropLocation && isFormValid) {
-      // Auto-trigger search after a short delay to ensure all state is properly set
-      const timer = setTimeout(() => {
-        setCurrentStep(2);
-      }, 100);
-      
-      return () => clearTimeout(timer);
+    if (savedData.autoTriggerSearch === true && savedData.pickupLocation && savedData.dropLocation) {
+      pendingAutoSearchRef.current = true;
     }
-  }, [savedData.autoTriggerSearch, pickupLocation, dropLocation, isFormValid]);
+  }, []);
+
+  // Run queued header/deep-link search via the same SEARCH path (phone modal included)
+  useEffect(() => {
+    if (!pendingAutoSearchRef.current) return;
+    if (!pickupLocation || !dropLocation || !isFormValid) return;
+
+    pendingAutoSearchRef.current = false;
+    try {
+      sessionStorage.removeItem('routePrefillData');
+    } catch {
+      /* ignore */
+    }
+    const timer = window.setTimeout(() => {
+      handleContinueRef.current();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [pickupLocation, dropLocation, isFormValid, tripType, tripMode, pickupDate]);
 
   // Clear routePrefillData after processing to prevent stale data
   useEffect(() => {
     const routePrefillData = sessionStorage.getItem('routePrefillData');
     if (routePrefillData) {
-      // Clear the prefill data after a short delay to ensure it's been processed
       const timer = setTimeout(() => {
         sessionStorage.removeItem('routePrefillData');
-      }, 200);
+      }, 2000);
       
       return () => clearTimeout(timer);
     }
@@ -941,6 +1147,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
 
     setPickupLocation({ ...location, isInVizag: true });
+    advanceAfterPickupSelected();
   };
   
   const handleDropLocationChange = (location: Location) => {
@@ -965,6 +1172,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       location.isInVizag = isLocationInVizag(location);
     }
     setDropLocation(location);
+    advanceAfterDropSelected();
   };
 
   // Automatic tab switching based on distance between pickup and drop locations
@@ -1238,7 +1446,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
     // If no distance check needed or distance check passed, proceed normally
     void proceedWithSearch();
-  };
+  }
+  handleContinueRef.current = handleContinue;
 
   /** POST / track-search + session snapshot (guest phone must already be in session if skipping modal). */
   async function runGuestSearchTracking(guestPhone: string) {
@@ -1587,6 +1796,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       hourlyPackage,
       selectedCab
     });
+    resetPageScroll();
     setIsLoading(true);
     
     // If trip type is tour, go to chosen package detail or browse all tours
@@ -1908,6 +2118,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   useEffect(() => {
     if (isSearchActive) {
       setCurrentStep(2);
+      resetPageScroll();
     } else {
       setCurrentStep(1);
     }
@@ -1982,13 +2193,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation]);
 
   const canSubmitGuestPhone = guestPhoneDigits.length === guestPhoneCountry.maxLength;
+  const isPremiumHomeShell = !hideBackground && !embedCompactLayout && !isSearchActive;
+  const axisHomeLayout = isHomePremiumHero && currentStep === 1;
+  const showHomeHeroBanner = axisHomeLayout;
+  const showPremiumHomeBookingStack =
+    isPremiumHomeShell && (currentStep === 1 || (isSlidingSearch && currentStep === 2));
 
   return (
     <div className="relative">
-      {/* Mobile Edit Form Overlay */}
+      {/* Mobile Edit Form Overlay — above fixed site navbar (z-[9999]) */}
       {isMobile && showMobileEditForm && (
-        <div className="fixed inset-0 bg-white z-50 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="fixed inset-0 z-[10050] overflow-y-auto overscroll-contain bg-white" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="sticky top-0 z-10 flex flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
             <Button
               variant="ghost"
               size="sm"
@@ -1998,10 +2214,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               }}
               className="text-gray-600"
             >
-              <X className="w-5 h-5 mr-2" />
+              <X className="mr-2 h-5 w-5" />
               Cancel
             </Button>
-            <h2 className="font-semibold text-lg">Edit Booking</h2>
+            <h2 className="text-lg font-semibold">Edit Booking</h2>
             <div className="w-16"></div> {/* Spacer for center alignment */}
           </div>
           
@@ -2012,7 +2228,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 selectedTab={ensureCustomerTripType(tripType)}
                 tripMode={tripMode}
                 onTabChange={handleTabChange}
-                onTripModeChange={setTripMode}
+                onTripModeChange={handleTripModeChangeWithAdvance}
+                tripModeFocusRef={mobileTripModeFocusRef}
                 visibleTabs={visibleTabs}
                 showTripModeToggle
                 tripModeToggleMobileOnly
@@ -2025,7 +2242,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             <div
               key={`booking-form-${editTrigger}`}
               className={
-                heroMobileUnifiedShell || urbaniaMobileEmbedShell
+                heroMobileFormShellWrap
                   ? heroMobileTicketShellFormWrapClass
                   : 'mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5'
               }
@@ -2036,7 +2253,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   heroMobileTicketStyle
                     ? cn(
                         'divide-y divide-gray-200 overflow-hidden',
-                        heroMobileUnifiedShell || urbaniaMobileEmbedShell
+                        heroMobileFormShellWrap
                           ? 'rounded-lg border-0 bg-transparent'
                           : 'rounded-xl border border-gray-200 bg-white shadow-sm'
                       )
@@ -2274,60 +2491,68 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         </div>
       )}
       
-      {/* Hero Banner Section - Only show when not in search mode */}
-      {!isSearchActive && currentStep === 1 && !hideBackground && (
-        <section className="hidden sm:flex relative min-h-[50vh] sm:min-h-[70vh] items-center justify-center overflow-hidden">
-        {/* Background Video/Image */}
-        <div className="absolute inset-0 z-0">
-      
-          
-          <img
-            src="https://vizagtaxihub.com/uploads/banner-vth.jpg"
-            alt=""
-            role="presentation"
-            width={1920}
-            height={1080}
-            decoding="async"
-            fetchPriority="high"
-            className="absolute inset-0 h-full w-full object-cover object-center"
-          />
-          
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
-        </div>
-
-        {/* Hero Content */}
-        <div className="relative z-10 container mx-auto px-4 text-white">
-          
-        </div>
-      </section>
-      )}
-
-      {/* Booking Widget Section - Mobile: positioned after banner, Desktop: centered in banner */}
-      <section id="booking-widget" className={`
-        ${!isSearchActive && currentStep === 1 
-          ? embedCompactLayout
-            ? 'relative z-20 py-0'
-            : 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0' 
-          : 'relative z-20 py-0 sm:py-0'
-        } ${
+      {/* Booking Widget Section */}
+      <section
+        id="booking-widget"
+        className={cn(
+          axisHomeLayout && 'premium-hero-section',
+          !isSearchActive && currentStep === 1
+            ? embedCompactLayout
+              ? 'relative z-20 py-0'
+              : axisHomeLayout
+                ? 'relative z-20 w-full py-0 max-lg:py-1 max-lg:pb-2 lg:pb-14'
+                : 'relative z-20 py-1 sm:absolute sm:inset-0 sm:flex sm:items-center sm:justify-center sm:z-30 sm:py-0'
+            : 'relative z-20 py-0 sm:py-0',
           (currentStep === 1 || isSlidingSearch) && embedCompactLayout
             ? 'hero-embed-page-spacing'
-            : (isSearchActive || hideBackground) && (currentStep === 1 || isSlidingSearch)
+            : hideBackground && (currentStep === 1 || isSlidingSearch)
               ? 'hero-edit-form-spacing'
-              : ''
-        } ${embedStretchToShell ? 'hero-embed-pay-footer-compact' : ''} w-full px-0 sm:px-0 ${isSlidingSearch ? 'animate-slide-down' : ''}`}>
+              : isSearchActive || currentStep === 2 || showGuestDetailsForm
+                ? 'hero-booking-flow-spacing'
+                : '',
+          embedStretchToShell ? 'hero-embed-pay-footer-compact' : '',
+          'w-full px-0 sm:px-0',
+          isSlidingSearch && !isSearchActive ? 'animate-slide-down' : ''
+        )}
+      >
         <div
           className={
             embedStretchToShell
               ? 'w-full'
               : cn(
-                  'w-full sm:container sm:mx-auto sm:px-4',
-                  heroMobileUnifiedShell ? 'max-lg:px-0' : 'max-lg:px-2'
+                  'w-full',
+                  axisHomeLayout
+                    ? 'max-w-none px-0'
+                    : cn('sm:container sm:mx-auto sm:px-4', heroMobileUnifiedShell ? 'max-lg:px-0' : 'max-lg:px-2'),
                 )
           }
         >
-          <div className={embedStretchToShell ? 'w-full' : 'w-full sm:max-w-6xl sm:mx-auto'}>
+          <div
+            className={
+              embedStretchToShell
+                ? 'w-full'
+                : cn(
+                    'w-full sm:mx-auto',
+                    axisHomeLayout
+                      ? 'premium-hero-shell w-full px-0'
+                      : cn('sm:container sm:px-4', heroMobileUnifiedShell ? 'max-lg:px-0' : 'max-lg:px-2'),
+                  )
+            }
+          >
+            {showHomeHeroBanner && (
+              <div className="hidden lg:block">
+                <HomeHeroBanner />
+              </div>
+            )}
+            <div
+              className={cn(
+                showPremiumHomeBookingStack &&
+                  cn(
+                    'premium-hero-booking-wrap premium-home-stack home-page-container',
+                    isSlidingSearch && currentStep === 2 && 'premium-hero-booking-wrap--inline-edit',
+                  ),
+              )}
+            >
             <div
               className={
                 urbaniaMobileEmbedShell
@@ -2337,13 +2562,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         ? 'max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:shadow-none'
                         : cn(heroMobileTicketShellCardClass, heroMobileTicketShellPaddingClass)
                     )
-                  : heroMobileUnifiedShell
+                    : showPremiumHomeBookingStack
                     ? cn(
-                        'p-3 lg:rounded-3xl lg:border lg:border-gray-100 lg:bg-white lg:shadow-2xl',
+                        'premium-booking-card premium-booking-card--glass animate-booking-slide-up w-full p-3.5 sm:p-4 lg:p-4',
+                        // Classic home ticket chrome below lg — desktop keeps glass card
                         heroMobileTicketShellCardClass,
-                        heroMobileTicketShellPaddingHomeClass
+                        heroMobileTicketShellPaddingHomeClass,
+                        'max-lg:animate-none',
                       )
-                    : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-2xl border-0 sm:border sm:border-gray-100 p-3 max-lg:p-0 max-lg:py-2'
+                    : heroMobileUnifiedShell
+                      ? cn(
+                          'p-3 lg:rounded-3xl lg:border lg:border-gray-100 lg:bg-white lg:shadow-2xl',
+                          heroMobileTicketShellCardClass,
+                          heroMobileTicketShellPaddingHomeClass
+                        )
+                      : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-[0_20px_60px_-15px_rgba(37,99,235,0.12)] border-0 sm:border sm:border-blue-100 p-3 max-lg:p-0 max-lg:py-2'
               }
             >
               
@@ -2370,10 +2603,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           selectedTab={ensureCustomerTripType(tripType)}
                           tripMode={tripMode}
                           onTabChange={handleTabChange}
-                          onTripModeChange={setTripMode}
+                          onTripModeChange={handleTripModeChangeWithAdvance}
+                          tripModeFocusRef={mobileTripModeFocusRef}
                           visibleTabs={visibleTabs}
                           airportDirectionLabel={tripType === 'airport' ? airportDirectionLabel : undefined}
-                          onAirportDirectionChange={tripType === 'airport' ? handleAirportDirectionChange : undefined}
+                          onAirportDirectionChange={
+                            tripType === 'airport'
+                              ? (direction) => {
+                                  handleAirportDirectionChange(direction);
+                                  advanceAfterTripModeSelected();
+                                }
+                              : undefined
+                          }
                           showTripModeToggle
                           tripModeToggleMobileOnly
                           hideUrbaniaPromo={isVehicleEmbedLock}
@@ -2387,7 +2628,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       <div
                         key={`booking-form-mobile-${editTrigger}`}
                         className={
-                          urbaniaMobileEmbedShell || heroMobileUnifiedShell
+                          heroMobileFormShellWrap
                             ? heroMobileTicketShellFormWrapClass
                             : 'mb-4 rounded-2xl border border-gray-200 bg-white px-3 pb-3 pt-3 shadow-md shadow-gray-900/5'
                         }
@@ -2398,7 +2639,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             heroMobileTicketStyle
                               ? cn(
                                   'divide-y divide-gray-200 overflow-hidden',
-                                  urbaniaMobileEmbedShell || heroMobileUnifiedShell
+                                  heroMobileFormShellWrap
                                     ? 'rounded-lg border-0 bg-transparent'
                                     : 'rounded-xl border border-gray-200 bg-white shadow-sm'
                                 )
@@ -2427,6 +2668,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 />
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                  ref={(instance) => {
+                                    dropLocationInputRefs.current.mobile = instance;
+                                  }}
                                   variant={heroMobileFieldVariant}
                                   className={heroTicketCellPad}
                                   label="To"
@@ -2456,6 +2700,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               {(tripType === 'outstation' || tripType === 'airport') && (
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                  ref={(instance) => {
+                                    dropLocationInputRefs.current.mobile = instance;
+                                  }}
                                   variant={heroMobileFieldVariant}
                                   className={heroTicketCellPad}
                                   label="To"
@@ -2510,6 +2757,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   disabled={heroTourListLoading}
                                 >
                                   <SelectTrigger
+                                    ref={(el) => {
+                                      tourPackageTriggerRefs.current.mobile = el;
+                                    }}
                                     className={cn(
                                       heroMobileTicketStyle
                                         ? heroUrbaniaMobileTourSelectTrigger
@@ -2564,8 +2814,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   </label>
                                 )}
                                 {heroMobileTicketStyle ? (
-                                  <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
-                                    <SelectTrigger className={heroUrbaniaMobileTourSelectTrigger} aria-label="Hourly package">
+                                  <Select
+                                    value={hourlyPackage}
+                                    onValueChange={(value) => {
+                                      setHourlyPackage(value);
+                                      advanceAfterTripModeSelected();
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      ref={(el) => {
+                                        // Radix SelectTrigger is a button — reuse package focus via tour-style focus helper for local ticket UI
+                                        packageSelectRefs.current.mobile = el as unknown as HTMLSelectElement;
+                                      }}
+                                      className={heroUrbaniaMobileTourSelectTrigger}
+                                      aria-label="Hourly package"
+                                    >
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent {...heroUrbaniaMobileSelectContentProps}>
@@ -2580,8 +2843,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 <div className="flex min-h-[3rem] items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm">
                                   <div className="relative w-full">
                                     <select
+                                      ref={(el) => {
+                                        packageSelectRefs.current.mobile = el;
+                                      }}
                                       value={hourlyPackage}
-                                      onChange={(e) => setHourlyPackage(e.target.value)}
+                                      onChange={(e) => {
+                                        setHourlyPackage(e.target.value);
+                                        advanceAfterTripModeSelected();
+                                      }}
                                       aria-label="Hourly package"
                                       className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-0"
                                     >
@@ -2603,21 +2872,29 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           )}
 
                           <DateTimePicker
+                            ref={(instance) => {
+                              departurePickerRefs.current.mobile = instance;
+                            }}
                             variant={heroMobileFieldVariant}
                             className={heroTicketCellPad}
                             label="Trip start"
                             date={pickupDate}
                             onDateChange={setPickupDate}
+                            onDateApplied={advanceAfterDepartureApplied}
                             minDate={getMinimumAllowedDate()}
                           />
 
                           {tripType === 'outstation' && tripMode === 'round-trip' && (
                             <DateTimePicker
+                              ref={(instance) => {
+                                returnPickerRefs.current.mobile = instance;
+                              }}
                               variant={heroMobileFieldVariant}
                               className={heroTicketCellPad}
                               label="Return trip"
                               date={returnDate}
                               onDateChange={handleReturnDateChange}
+                              onDateApplied={advanceAfterReturnApplied}
                               minDate={pickupDate}
                               disabled={!isReturnTimeEnabled}
                             />
@@ -2645,10 +2922,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         )}
 
                         <Button
+                          ref={(el) => {
+                            searchButtonRefs.current.mobile = el;
+                          }}
                           onClick={handleContinue}
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
                           className={cn(
-                            'mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition-all duration-300 hover:bg-blue-700 disabled:opacity-60',
+                            'axis-search-btn mt-4 flex h-11 w-full items-center justify-center px-4 text-sm uppercase tracking-wide shadow-md disabled:opacity-60',
                             (urbaniaMobileEmbedShell || heroMobileUnifiedShell) && 'max-lg:mt-2'
                           )}
                         >
@@ -2684,7 +2964,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       </div>
 
                       {/* DESKTOP ONLY: single horizontal row (reference design) - !mt-5 overrides parent space-y */}
-                      <div className="hidden lg:block !mt-5" style={{ marginTop: '20px' }}>
+                      <div className="hidden lg:block !mt-3" style={{ marginTop: '12px' }}>
                         <div className="flex flex-row items-end gap-4 flex-nowrap">
                           <div className="flex-1 min-w-0">
                             <LocationInput
@@ -2702,6 +2982,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <div className="flex-1 min-w-0">
                               <LocationInput
                                 key={`drop-desk-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
+                                ref={(instance) => {
+                                  dropLocationInputRefs.current.desktop = instance;
+                                }}
                                 label="Drop location"
                                 placeholder="Enter a location"
                                 value={dropLocation ? { ...dropLocation } : undefined}
@@ -2733,7 +3016,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 }}
                                 disabled={heroTourListLoading}
                               >
-                                <SelectTrigger className="flex h-[2.75rem] w-full items-center rounded-md border border-gray-200 bg-white text-sm font-bold shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:ring-offset-0 data-[placeholder]:font-semibold data-[placeholder]:text-gray-500 disabled:opacity-60">
+                                <SelectTrigger
+                                  ref={(el) => {
+                                    tourPackageTriggerRefs.current.desktop = el;
+                                  }}
+                                  className="flex h-[2.75rem] w-full items-center rounded-md border border-gray-200 bg-white text-sm font-bold shadow-sm hover:bg-gray-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:ring-offset-0 data-[placeholder]:font-semibold data-[placeholder]:text-gray-500 disabled:opacity-60"
+                                >
                                   <SelectValue
                                     placeholder={
                                       heroTourListLoading ? 'Loading packages…' : 'Select package'
@@ -2754,31 +3042,42 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           {(tripType === 'outstation' || tripType === 'airport' || tripType === 'tour') && (
                             <div className="flex flex-col gap-1 flex-shrink-0">
                               <span className="text-xs text-gray-600 font-medium pointer-events-none">Trip</span>
-                              <div className="flex rounded-md overflow-hidden border border-gray-200 bg-gray-100 p-0.5">
+                              <div className="axis-trip-toggle">
                                 {tripType === 'airport' ? (
                                   <>
                                     <button
+                                      ref={desktopTripModeFocusRef}
                                       type="button"
-                                      onClick={() => handleAirportDirectionChange('from-airport')}
-                                      className={`px-3 py-2 text-xs font-medium transition-colors flex-1 whitespace-nowrap ${airportDirectionLabel === 'From Airport' ? 'bg-blue-600 text-white rounded-md shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                      onClick={() => {
+                                        handleAirportDirectionChange('from-airport');
+                                        advanceAfterTripModeSelected();
+                                      }}
+                                      data-active={airportDirectionLabel === 'From Airport' ? 'true' : 'false'}
+                                      className="axis-trip-toggle-btn flex-1 whitespace-nowrap text-xs"
                                     >
                                       From Airport
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handleAirportDirectionChange('to-airport')}
-                                      className={`px-3 py-2 text-xs font-medium transition-colors flex-1 whitespace-nowrap ${airportDirectionLabel === 'To Airport' ? 'bg-blue-600 text-white rounded-md shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                      onClick={() => {
+                                        handleAirportDirectionChange('to-airport');
+                                        advanceAfterTripModeSelected();
+                                      }}
+                                      data-active={airportDirectionLabel === 'To Airport' ? 'true' : 'false'}
+                                      className="axis-trip-toggle-btn flex-1 whitespace-nowrap text-xs"
                                     >
                                       To Airport
                                     </button>
                                   </>
                                 ) : (
-                                  [{ label: 'One Way', value: 'one-way' }, { label: 'Round Trip', value: 'round-trip' }].map((option) => (
+                                  [{ label: 'One Way', value: 'one-way' }, { label: 'Round Trip', value: 'round-trip' }].map((option, optionIndex) => (
                                     <button
                                       key={option.value}
+                                      ref={optionIndex === 0 ? desktopTripModeFocusRef : undefined}
                                       type="button"
-                                      onClick={() => setTripMode(option.value as 'one-way' | 'round-trip')}
-                                      className={`px-3 py-2 text-sm font-medium transition-colors ${tripMode === option.value ? 'bg-blue-600 text-white rounded-md shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                      onClick={() => handleTripModeChangeWithAdvance(option.value as 'one-way' | 'round-trip')}
+                                      data-active={tripMode === option.value ? 'true' : 'false'}
+                                      className="axis-trip-toggle-btn"
                                     >
                                       {option.label}
                                     </button>
@@ -2792,8 +3091,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               <label className="text-xs text-gray-600 font-medium">Package</label>
                               <div className="relative w-full">
                                 <select
+                                  ref={(el) => {
+                                    packageSelectRefs.current.desktop = el;
+                                  }}
                                   value={hourlyPackage}
-                                  onChange={(e) => setHourlyPackage(e.target.value)}
+                                  onChange={(e) => {
+                                    setHourlyPackage(e.target.value);
+                                    advanceAfterTripModeSelected();
+                                  }}
                                   aria-label="Hourly package"
                                   className="h-[2.75rem] w-full cursor-pointer appearance-none rounded-md border border-gray-200 bg-white pl-3 pr-9 text-sm font-bold text-gray-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/25 focus-visible:ring-offset-0"
                                 >
@@ -2812,8 +3117,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           )}
                           <div className="flex-1 min-w-0 min-w-[11rem]">
                             <DateTimePicker
+                              ref={(instance) => {
+                                departurePickerRefs.current.desktop = instance;
+                              }}
                               date={pickupDate}
                               onDateChange={setPickupDate}
+                              onDateApplied={advanceAfterDepartureApplied}
                               minDate={getMinimumAllowedDate()}
                               label="Departure"
                               variant="desktop"
@@ -2822,8 +3131,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           {tripType === 'outstation' && tripMode === 'round-trip' && (
                             <div className="flex-1 min-w-0 min-w-[11rem]">
                               <DateTimePicker
+                                ref={(instance) => {
+                                  returnPickerRefs.current.desktop = instance;
+                                }}
                                 date={returnDate}
                                 onDateChange={handleReturnDateChange}
+                                onDateApplied={advanceAfterReturnApplied}
                                 minDate={pickupDate}
                                 label="Return"
                                 disabled={!isReturnTimeEnabled}
@@ -2833,9 +3146,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           )}
                           <div className="flex-shrink-0">
                             <Button
+                              ref={(el) => {
+                                searchButtonRefs.current.desktop = el;
+                              }}
                               onClick={handleContinue}
                               disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 h-[2.75rem] rounded-md text-sm font-medium flex items-center gap-2"
+                              className="axis-search-btn flex h-[2.75rem] items-center gap-2 px-6 py-2.5 text-sm"
                             >
                               {isLoading ? (
                                 <>
@@ -2921,8 +3237,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 setShowMobileEditForm(true);
                               } else {
                                 setIsSlidingSearch(true);
-                                // Keep in step 2, don't change step
                                 setShowGuestDetailsForm(false);
+                                if (isSearchActive) {
+                                  resetPageScroll();
+                                } else {
+                                  requestAnimationFrame(() => {
+                                    scrollToBookingWidget({ smooth: true });
+                                  });
+                                }
                               }
                               if (onEditStart) onEditStart();
                               onTripEditOpenChange?.(true);
@@ -3241,13 +3563,19 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 </div>
               )}
             </div>
+            {showHomeHeroBanner && !showGuestDetailsForm && (
+              <div className="hidden lg:block">
+                <HeroValueProps />
+              </div>
+            )}
+            </div>
           </div>
         </div>
       </section>
       
       {/* Slide-up Booking Summary Modal - Mobile Only */}
       {showBookingSummaryModal && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[10050] md:hidden">
           {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-black bg-opacity-50"
@@ -3328,54 +3656,103 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           }
         }}
       >
-        <DialogContent className="sm:max-w-md rounded-2xl border border-gray-200 p-6 shadow-xl" showClose>
-          <DialogHeader className="space-y-2 text-left">
-            <DialogTitle className="text-xl font-semibold tracking-tight text-gray-900">
-              Continue with WhatsApp
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed text-gray-600">
-              Enter your WhatsApp number to see available cabs. We&apos;ll use this to share booking updates.
-            </DialogDescription>
-          </DialogHeader>
-          <WhatsAppCountryPhoneRow
-            idPrefix="hero-guest-wa"
-            selectedCountry={guestPhoneCountry}
-            onCountryChange={(c) => {
-              setGuestPhoneCountry(c);
-              setGuestPhoneDigits('');
-            }}
-            phoneDigits={guestPhoneDigits}
-            onPhoneDigitsChange={setGuestPhoneDigits}
-          />
-          <DialogFooter className="mt-4 flex flex-col gap-0 sm:justify-stretch">
-            <Button
-              type="button"
-              disabled={!canSubmitGuestPhone}
-              className="h-12 w-full rounded-full text-base font-semibold shadow-sm transition-colors enabled:bg-blue-600 enabled:text-white enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:opacity-100 disabled:hover:bg-gray-200"
-              onClick={handleGuestPhoneModalSubmit}
-            >
-              Search Cabs
-            </Button>
-            <p className="mt-3 text-center text-[11px] leading-snug text-gray-600 sm:text-xs">
-              By clicking on <span className="font-medium text-gray-800">Search Cabs</span>, I agree to the{' '}
-              <Link
-                to="/terms-conditions"
-                className="text-blue-600 underline-offset-2 hover:underline"
-                onClick={() => setShowGuestPhoneModal(false)}
+        <DialogContent
+          className="guest-wa-dialog w-[calc(100%-2rem)] max-w-[400px] gap-0 overflow-visible rounded-3xl border-0 bg-white p-0 shadow-[0_24px_64px_-16px_rgba(15,23,42,0.28)] sm:w-full"
+          showClose
+        >
+          <div className="relative overflow-hidden rounded-t-3xl bg-[linear-gradient(165deg,#e8f3ff_0%,#f0f7ff_42%,#ffffff_100%)] px-5 pb-4 pt-6 sm:px-6 sm:pt-7">
+            <div
+              className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-[#25D366]/15 blur-2xl"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute -left-8 top-8 h-28 w-28 rounded-full bg-blue-500/10 blur-2xl"
+              aria-hidden
+            />
+
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366] shadow-[0_10px_24px_-8px_rgba(37,211,102,0.65)]">
+                <FaWhatsapp className="h-7 w-7 text-white" aria-hidden />
+              </div>
+              <DialogHeader className="space-y-1.5 text-center sm:text-center">
+                <DialogTitle className="text-[1.35rem] font-bold tracking-tight text-slate-900">
+                  Continue with WhatsApp
+                </DialogTitle>
+                <DialogDescription className="mx-auto max-w-[20rem] text-[13px] leading-relaxed text-slate-600">
+                  Enter your number to unlock cab fares. We&apos;ll send trip updates on WhatsApp.
+                </DialogDescription>
+              </DialogHeader>
+
+              {pickupLocation?.name && dropLocation?.name ? (
+                <div className="mt-3.5 inline-flex max-w-full items-center gap-1.5 rounded-full border border-blue-100 bg-white/90 px-3 py-1.5 text-[12px] font-medium text-slate-700 shadow-sm">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
+                  <span className="truncate">{pickupLocation.name}</span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                  <span className="truncate">{dropLocation.name}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="relative z-10 space-y-4 overflow-visible rounded-b-3xl bg-white px-5 pb-5 pt-1 sm:px-6 sm:pb-6">
+            <WhatsAppCountryPhoneRow
+              idPrefix="hero-guest-wa"
+              selectedCountry={guestPhoneCountry}
+              onCountryChange={(c) => {
+                setGuestPhoneCountry(c);
+                setGuestPhoneDigits('');
+              }}
+              phoneDigits={guestPhoneDigits}
+              onPhoneDigitsChange={setGuestPhoneDigits}
+            />
+
+            <ul className="flex flex-col gap-1.5 text-[11px] text-slate-500 sm:text-xs">
+              <li className="flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
+                Used only for booking updates — no spam
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden />
+                Instant WhatsApp confirmation after you book
+              </li>
+            </ul>
+
+            <DialogFooter className="mt-0 flex flex-col gap-0 sm:justify-stretch">
+              <Button
+                type="button"
+                disabled={!canSubmitGuestPhone}
+                className={cn(
+                  'h-12 w-full rounded-full text-[15px] font-bold tracking-wide shadow-sm transition-all',
+                  canSubmitGuestPhone
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+                    : 'cursor-not-allowed bg-slate-200 text-slate-500 opacity-100 hover:bg-slate-200',
+                )}
+                onClick={handleGuestPhoneModalSubmit}
               >
-                Terms &amp; Conditions
-              </Link>{' '}
-              &amp;{' '}
-              <Link
-                to="/privacy-policy"
-                className="text-blue-600 underline-offset-2 hover:underline"
-                onClick={() => setShowGuestPhoneModal(false)}
-              >
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </DialogFooter>
+                <Search className="mr-2 h-4 w-4" aria-hidden />
+                Search Cabs
+              </Button>
+              <p className="mt-3 text-center text-[11px] leading-snug text-slate-500">
+                By continuing, you agree to our{' '}
+                <Link
+                  to="/terms-conditions"
+                  className="font-medium text-blue-600 underline-offset-2 hover:underline"
+                  onClick={() => setShowGuestPhoneModal(false)}
+                >
+                  Terms
+                </Link>{' '}
+                &amp;{' '}
+                <Link
+                  to="/privacy-policy"
+                  className="font-medium text-blue-600 underline-offset-2 hover:underline"
+                  onClick={() => setShowGuestPhoneModal(false)}
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

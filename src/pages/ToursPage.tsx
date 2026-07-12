@@ -20,10 +20,12 @@ import { Helmet } from 'react-helmet-async';
 
 const ToursPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const locationState = useLocation().state as { 
-    pickupLocation?: Location, 
-    pickupDate?: Date 
+  const locationState = location.state as {
+    pickupLocation?: Location;
+    pickupDate?: Date;
+    tourNotFound?: string;
   } | null;
   
   const [pickupLocation, setPickupLocation] = useState<Location | null>(
@@ -38,6 +40,24 @@ const ToursPage = () => {
   const [isLoadingTours, setIsLoadingTours] = useState<boolean>(false);
   const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!locationState?.tourNotFound) return;
+
+    toast({
+      title: 'Tour not available',
+      description: `${locationState.tourNotFound} is not available right now. Please choose from our active packages below.`,
+      variant: 'destructive',
+    });
+
+    navigate('/tours', {
+      replace: true,
+      state: {
+        pickupLocation: locationState?.pickupLocation,
+        pickupDate: locationState?.pickupDate,
+      },
+    });
+  }, [locationState?.pickupLocation, locationState?.pickupDate, locationState?.tourNotFound, navigate, toast]);
   
   const handleSearchTours = useCallback(async () => {
     if (!pickupLocation) {
@@ -274,7 +294,7 @@ const ToursPage = () => {
       
       <div className="min-h-screen bg-white flex flex-col">
         <Navbar />
-        <main className="flex-1 pt-16 md:pt-20">
+        <main className="flex-1">
           
           {/* Hero Section - Only show when not searching */}
           {!searchInitiated && (

@@ -7,6 +7,7 @@ import { MapPin, Calendar, Users, Clock, Star, Shield, Plane, Tag } from 'lucide
 import { tourAPI } from '@/services/api/tourAPI';
 import { Link } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import { SectionHeader } from '@/components/home/SectionHeader';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -69,10 +70,10 @@ export function DestinationsShowcase() {
 
   // Helper to get bg gradient
   function getBgGradient(type: string) {
-    if (type.toLowerCase().includes('valley') || type.toLowerCase().includes('araku')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    if (type.toLowerCase().includes('city') || type.toLowerCase().includes('vizag')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    if (type.toLowerCase().includes('lambasingi') || type.toLowerCase().includes('mountain')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    if (type.toLowerCase().includes('valley') || type.toLowerCase().includes('araku')) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
+    if (type.toLowerCase().includes('city') || type.toLowerCase().includes('vizag')) return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
+    if (type.toLowerCase().includes('lambasingi') || type.toLowerCase().includes('mountain')) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
+    return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
   }
 
   // Helper to get promo code
@@ -124,28 +125,28 @@ export function DestinationsShowcase() {
         className="block"
       >
         <Card
-          className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[320px]"
+          className="group hover:shadow-xl transition-all duration-300 border border-slate-200/60 bg-white rounded-3xl overflow-hidden cursor-pointer relative h-[340px] shadow-[0_10px_32px_rgba(15,23,42,0.06)]"
         >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}
-          <div className={`absolute inset-0 ${getBgGradient(tourType)} opacity-50`}></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+          <div className={`absolute inset-0 ${getBgGradient(tourType)} opacity-60`}></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/40 via-transparent to-blue-50/30"></div>
 
           {/* Content */}
           <div className="relative z-10 flex flex-col h-full">
             {/* Category Tag */}
             <div className="flex justify-between items-start mb-3">
-              <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+              <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                 {tour.name}
               </div>
             </div>
 
             {/* Main Price and Duration Row */}
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-bold text-gray-900 leading-tight">
+              <h3 className="text-xl font-semibold tracking-tight text-slate-900 leading-tight">
                 {getPrice(tour)} Onwards
               </h3>
-              <p className="text-sm text-gray-600 inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:border-gray-400 transition-colors">
+              <p className="text-sm text-slate-600 inline-flex items-center gap-2 bg-white/90 border border-slate-200 rounded-full px-3 py-1.5 font-medium shadow-sm">
                 {getDuration(tour)}
               </p>
             </div>
@@ -156,15 +157,15 @@ export function DestinationsShowcase() {
                 <img
                   src={tour.image}
                   alt={tour.name}
-                  className="w-full h-32 object-cover rounded-lg"
+                  className="w-full h-36 object-cover rounded-2xl shadow-sm"
                   onError={e => {
                     (e.target as HTMLImageElement).style.display = 'none';
                     (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                   }}
                 />
               ) : (
-                <div className="w-full h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <MapPin className="h-12 w-12 text-gray-400" />
+                <div className="w-full h-36 bg-slate-100 rounded-2xl flex items-center justify-center">
+                  <MapPin className="h-12 w-12 text-slate-400" />
                 </div>
               )}
             </div>
@@ -172,7 +173,7 @@ export function DestinationsShowcase() {
             {/* Highlights */}
             <div className="flex flex-wrap gap-2">
               {getHighlights(tour).map((highlight: string, idx: number) => (
-                <div key={idx} className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                <div key={idx} className="text-xs text-slate-500 bg-white/80 border border-slate-100 px-2.5 py-1 rounded-full">
                   {highlight}
                 </div>
               ))}
@@ -201,17 +202,13 @@ export function DestinationsShowcase() {
   };
 
   return (
-    <section className="pt-4 md:pt-8 pb-0 bg-white">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            Explore Amazing Destinations
-          </h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Discover the beauty of Andhra Pradesh with our carefully curated tour packages.
-          </p>
-        </div>
+    <section className="home-section-band">
+      <div className="home-page-container">
+        <SectionHeader
+          eyebrow="DESTINATIONS"
+          title="Explore Amazing Destinations"
+          subtitle="Discover the beauty of Andhra Pradesh with our carefully curated tour packages."
+        />
 
         {/* Loading State */}
         {loading ? (
@@ -221,7 +218,7 @@ export function DestinationsShowcase() {
         ) : (
           <>
             {/* Desktop Layout - 4-card window with proper navigation */}
-            <div className="hidden lg:block mb-8 relative overflow-hidden">
+            <div className="hidden lg:block mb-4 relative overflow-hidden">
               <div className="flex gap-4 justify-center">
                 {currentWindowItems.map((tour, index) => (
                   <div key={tour.id || index} className="w-full max-w-[calc(25%-12px)]">
@@ -241,7 +238,7 @@ export function DestinationsShowcase() {
               {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
               {shouldShowNavigation && !isAtBeginning && (
                 <button
-                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                   onClick={handlePrev}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -253,7 +250,7 @@ export function DestinationsShowcase() {
               {/* Next Arrow - only show if there are multiple slides and not at end */}
               {shouldShowNavigation && !isAtEnd && (
                 <button
-                  className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                  className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                   onClick={handleNext}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -264,14 +261,14 @@ export function DestinationsShowcase() {
             </div>
 
             {/* Tablet Layout - Grid with exactly 4 items */}
-            <div className="hidden md:block lg:hidden mb-8">
+            <div className="hidden md:block lg:hidden mb-4">
               <div className="grid grid-cols-2 gap-4">
                 {tours.slice(0, 4).map((tour, index) => renderTourCard(tour, index))}
               </div>
             </div>
 
             {/* Mobile Slider */}
-            <div className="md:hidden mb-8">
+            <div className="md:hidden mb-4">
               <Swiper
                 modules={[Pagination]}
                 spaceBetween={12}
@@ -297,7 +294,7 @@ export function DestinationsShowcase() {
                       return (
                         <div 
                           key={index}
-                          className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                          className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
                         >
                           {currentSlide + 1}/{tours.length}
                         </div>
@@ -320,7 +317,7 @@ export function DestinationsShowcase() {
         )}
 
         {/* Bottom Info */}
-        <div className="text-center mt-8 bg-gray-50 rounded-2xl p-6">
+        <div className="text-center mt-4 bg-gray-50 rounded-2xl p-4">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Expert Guides</span>

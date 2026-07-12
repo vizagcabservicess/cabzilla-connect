@@ -5,6 +5,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Pagination } from 'swiper/modules';
 import { groupTourAPI, type RouteOption } from '@/services/api/groupTourAPI';
 import { format } from 'date-fns';
+import { SectionHeader } from '@/components/home/SectionHeader';
 import 'swiper/css';
 import 'swiper/css/pagination';
 
@@ -24,10 +25,10 @@ export function PopularGroupTours() {
   });
 
   const gradients = [
-    'from-teal-600 via-cyan-700 to-blue-900',
-    'from-amber-600 via-orange-600 to-rose-700',
-    'from-emerald-600 via-green-700 to-teal-900',
-    'from-violet-600 via-purple-700 to-indigo-900',
+    'from-blue-500 via-blue-600 to-slate-700',
+    'from-sky-500 via-blue-600 to-blue-800',
+    'from-indigo-500 via-blue-600 to-slate-800',
+    'from-cyan-500 via-blue-600 to-blue-900',
   ];
 
   const displayRoutes = sortedRoutes.slice(0, 4);
@@ -57,7 +58,7 @@ export function PopularGroupTours() {
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           )}
-          <div className="absolute top-3 right-3 px-3 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-medium shadow whitespace-nowrap">
+          <div className="absolute top-3 right-3 home-soft-tag px-3 py-1 rounded-full text-xs font-medium shadow whitespace-nowrap">
             {route.first_date
               ? `Tour Date ${format(new Date(route.first_date + 'T12:00:00'), 'dd MMM')}`
               : 'Tour Date Available'}
@@ -86,23 +87,21 @@ export function PopularGroupTours() {
   };
 
   return (
-    <section className="pt-0 md:pt-2 pb-0 bg-white -mb-4 md:-mb-6">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-4 md:mb-5">
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 mb-2">
-            Popular Group Tours
-          </h2>
-          <p className="text-slate-500 text-sm md:text-base max-w-2xl mx-auto mb-1.5">
-            Check out our best-selling group tours
-          </p>
+    <section className="home-section-band">
+      <div className="home-page-container">
+        <SectionHeader
+          eyebrow="GROUP TOURS"
+          title="Popular Group Tours"
+          subtitle="Check out our best-selling group tours"
+        >
           <Link
             to="/group-tours/search"
-            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-sm"
+            className="mt-3 inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-sm"
           >
             View All Tours
             <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
           </Link>
-        </div>
+        </SectionHeader>
 
         {/* Mobile Slider */}
         <div className="md:hidden">
@@ -129,7 +128,7 @@ export function PopularGroupTours() {
                     index === currentSlide ? (
                       <div
                         key={index}
-                        className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                        className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
                       >
                         {currentSlide + 1}/{displayRoutes.length}
                       </div>

@@ -7,6 +7,7 @@ import { Car, Users, MapPin, CheckCircle, Star, Shield, Bus, Plane } from 'lucid
 import { getVehicleData } from '@/services/vehicleDataService';
 import { Link } from 'react-router-dom';
 import { getVehicleUrl, getVehicleImageUrl } from '@/utils/vehicleUrlUtils';
+import { SectionHeader } from '@/components/home/SectionHeader';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -75,21 +76,20 @@ export function FleetShowcase() {
 
   // Helper to get bg gradient
   function getBgGradient(type: string, index: number) {
-    // Apply yellow color to the last vehicle
-    if (index === vehicles.length - 1) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    if (index === vehicles.length - 1) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
     
-    if (type.toLowerCase().includes('sedan')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    if (type.toLowerCase().includes('tempo')) return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
-    return 'bg-gradient-to-br from-[#fff8f0] to-[#fff8f0]';
+    if (type.toLowerCase().includes('sedan')) return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
+    if (type.toLowerCase().includes('tempo')) return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
+    return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
   }
 
   // Helper to get icon color
   function getIconColor(type: string) {
     if (type.toLowerCase().includes('sedan')) return 'text-blue-600';
-    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'text-green-600';
-    if (type.toLowerCase().includes('tempo')) return 'text-purple-600';
-    return 'text-orange-600';
+    if (type.toLowerCase().includes('suv') || type.toLowerCase().includes('ertiga') || type.toLowerCase().includes('innova')) return 'text-slate-600';
+    if (type.toLowerCase().includes('tempo')) return 'text-blue-600';
+    return 'text-slate-600';
   }
 
   // Helper to get icon
@@ -135,28 +135,28 @@ export function FleetShowcase() {
         className="block"
       >
         <Card 
-          className="group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl overflow-hidden cursor-pointer relative h-[380px]"
+          className="group hover:shadow-xl transition-all duration-300 border border-slate-200/60 bg-white rounded-3xl overflow-hidden cursor-pointer relative h-[380px] shadow-[0_10px_32px_rgba(15,23,42,0.06)]"
         >
         <CardContent className="p-5 relative h-full flex flex-col">
           {/* Background Pattern */}
-          <div className={`absolute inset-0 ${getBgGradient(vehicleType, index)} opacity-50`}></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-transparent to-white/20"></div>
+          <div className={`absolute inset-0 ${getBgGradient(vehicleType, index)} opacity-60`}></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/40 via-transparent to-blue-50/30"></div>
           
           {/* Content */}
           <div className="relative z-10 flex flex-col h-full">
             {/* Category Tag */}
             <div className="flex justify-between items-start mb-3">
-              <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+              <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                 {vehicle.name}
               </div>
             </div>
 
             {/* Main Offer and Passenger Count Row */}
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-bold text-gray-900 leading-tight">
+              <h3 className="text-xl font-semibold tracking-tight text-slate-900 leading-tight">
                 {getOfferText(vehicle)}
               </h3>
-              <div className="inline-flex items-center gap-2 bg-white border-2 border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800">
+              <div className="inline-flex items-center gap-2 bg-white/90 border border-slate-200 rounded-full px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm">
                 <Users className="h-4 w-4" />
                 {getCapacity(vehicle)}
               </div>
@@ -228,17 +228,13 @@ export function FleetShowcase() {
   };
 
   return (
-    <section className="pt-4 md:pt-8 pb-0 bg-white">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            Our Premium Fleet
-          </h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Choose from our well-maintained fleet of vehicles, each equipped with professional drivers and modern amenities.
-          </p>
-        </div>
+    <section className="home-section-band">
+      <div className="home-page-container">
+        <SectionHeader
+          eyebrow="FLEET"
+          title="Our Premium Fleet"
+          subtitle="Choose from our well-maintained fleet of vehicles, each equipped with professional drivers and modern amenities."
+        />
 
         {/* Loading State */}
         {loading ? (
@@ -248,7 +244,7 @@ export function FleetShowcase() {
         ) : (
           <>
             {/* Desktop Layout - 4-card window with proper navigation */}
-            <div className="hidden lg:block mb-8 relative overflow-hidden">
+            <div className="hidden lg:block mb-4 relative overflow-hidden">
               <div className="flex gap-4 justify-center">
                 {currentWindowItems.map((vehicle, index) => (
                   <div key={vehicle.id || index} className="w-full max-w-[calc(25%-12px)]">
@@ -268,7 +264,7 @@ export function FleetShowcase() {
               {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
               {shouldShowNavigation && !isAtBeginning && (
                   <button
-                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                   onClick={handlePrev}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -280,7 +276,7 @@ export function FleetShowcase() {
               {/* Next Arrow - only show if there are multiple slides and not at end */}
               {shouldShowNavigation && !isAtEnd && (
                   <button
-                    className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                    className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                     onClick={handleNext}
                   >
                     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -291,14 +287,14 @@ export function FleetShowcase() {
             </div>
 
             {/* Tablet Layout - Grid */}
-            <div className="hidden md:block lg:hidden mb-8">
+            <div className="hidden md:block lg:hidden mb-4">
               <div className="grid grid-cols-2 gap-4">
                 {vehicles.slice(0, 4).map((vehicle, index) => renderVehicleCard(vehicle, index))}
               </div>
                 </div>
 
             {/* Mobile Slider */}
-            <div className="md:hidden mb-8">
+            <div className="md:hidden mb-4">
                 <Swiper
                 modules={[Pagination]}
                 spaceBetween={12}
@@ -324,7 +320,7 @@ export function FleetShowcase() {
                         return (
                           <div 
                             key={index}
-                            className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                            className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
                           >
                             {currentSlide + 1}/{vehicles.length}
                           </div>
@@ -347,7 +343,7 @@ export function FleetShowcase() {
         )}
 
         {/* Bottom Info */}
-        <div className="text-center mt-8 bg-gray-50 rounded-2xl p-6">
+        <div className="text-center mt-4 bg-gray-50 rounded-2xl p-4">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Safety Guaranteed</span>

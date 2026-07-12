@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Pagination } from 'swiper/modules';
 import { Play, ExternalLink } from 'lucide-react';
+import { SectionHeader } from '@/components/home/SectionHeader';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -114,24 +115,16 @@ export function VideoTestimonials() {
   };
 
   return (
-    <section className="px-4 py-8 md:py-12 bg-gray-50">
+    <section className="home-section-band--soft px-4">
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 bg-red-50 px-4 py-2 rounded-full mb-4">
-            <Play className="h-4 w-4 text-red-600 fill-current" />
-            <span className="text-sm font-medium text-red-600">VIDEO TESTIMONIALS</span>
-          </div>
-          <h2 className="text-2xl md:text-3xl font-medium text-gray-900 mb-3">
-            Real Customer Stories
-          </h2>
-          <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto">
-            Watch what our customers say about their experience with Vizag Taxi Hub
-          </p>
-        </div>
+        <SectionHeader
+          eyebrow="VIDEO STORIES"
+          title="Real Customer Stories"
+          subtitle="Watch what our customers say about their experience with Vizag Taxi Hub"
+        />
 
         {/* Desktop Layout - Sliding Row */}
-        <div className="hidden lg:block mb-8 relative overflow-hidden">
+        <div className="hidden lg:block mb-4 relative overflow-hidden">
           <div className="flex gap-6 transition-transform duration-500 ease-in-out" style={{ 
             transform: `translateX(-${Math.min(currentSlide * 50, Math.max(0, (gridVideos.length + sliderVideos.length - 3) * 50))}%)` 
           }}>
@@ -178,14 +171,14 @@ export function VideoTestimonials() {
         </div>
 
         {/* Tablet Layout - Grid */}
-        <div className="hidden md:block lg:hidden mb-8">
+        <div className="hidden md:block lg:hidden mb-4">
           <div className="grid grid-cols-3 gap-6">
             {gridVideos.map((video, index) => renderVideoCard(video, index))}
           </div>
         </div>
 
         {/* Mobile Slider */}
-        <div className="md:hidden mb-8">
+        <div className="md:hidden mb-4">
           <Swiper
             modules={[Pagination]}
             spaceBetween={12}
@@ -211,7 +204,7 @@ export function VideoTestimonials() {
                   return (
                     <div 
                       key={index}
-                      className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                      className="home-slider-dot-active text-white px-3 py-1 rounded-full text-sm font-medium"
                     >
                       {currentSlide + 1}/{gridVideos.length}
                     </div>
@@ -237,7 +230,7 @@ export function VideoTestimonials() {
             href="https://www.youtube.com/@vizagtaxihub" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-medium transition-colors"
+            className="inline-flex items-center gap-2 bg-red-500/90 hover:bg-red-600 text-white px-6 py-3 rounded-xl font-medium transition-colors"
           >
             <Play className="h-5 w-5" />
             <span>Watch More on YouTube</span>

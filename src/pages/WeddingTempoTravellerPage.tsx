@@ -403,7 +403,7 @@ const WeddingTempoTravellerPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         
-        <div className="container mx-auto px-4 py-8 max-w-7xl pt-20 md:pt-28 pb-16 md:pb-32">
+        <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
           {/* Breadcrumb */}
           <Breadcrumb items={[
             { label: 'Services', href: '/services' },

@@ -1,88 +1,91 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Car, Phone, MessageCircle, Calendar, MapPin, Shield } from 'lucide-react';
+import { Car, Phone, Calendar, MapPin, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FaWhatsapp } from 'react-icons/fa';
 
 export function EnhancedCTA() {
   const features = [
-    { icon: Shield, text: "Verified Drivers" },
-    { icon: Car, text: "Clean Vehicles" },
-    { icon: MapPin, text: "GPS Tracking" },
-    { icon: Calendar, text: "24/7 Service" }
+    { icon: Shield, text: 'Verified Drivers' },
+    { icon: Car, text: 'Clean Vehicles' },
+    { icon: MapPin, text: 'GPS Tracking' },
+    { icon: Calendar, text: '24/7 Service' },
   ];
 
   return (
-    <section className="py-16 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full -translate-x-32 -translate-y-32"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full translate-x-48 translate-y-48"></div>
+    <section className="relative overflow-hidden home-section-band--soft py-8 md:py-10">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-0 h-64 w-64 -translate-x-32 -translate-y-32 rounded-full bg-blue-100/60 blur-2xl" />
+        <div className="absolute bottom-0 right-0 h-96 w-96 translate-x-48 translate-y-48 rounded-full bg-slate-100/70 blur-2xl" />
       </div>
-      
-      <div className="container mx-auto px-4 relative z-10">
-        <motion.div 
-          className="text-center text-white"
-          initial={{ opacity: 0, y: 30 }}
+
+      <div className="home-page-container relative z-10">
+        <motion.div
+          className="text-center text-slate-900"
+          initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.55 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-2xl md:text-4xl lg:text-5xl font-medium mb-4">
+          <h2 className="mb-3 text-xl font-semibold tracking-tight text-slate-900 md:text-2xl lg:text-[1.75rem]">
             Ready to Book Your Ride?
           </h2>
-          <p className="px-4 text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
+          <p className="mx-auto mb-6 max-w-xl px-4 text-sm leading-relaxed text-slate-500 md:text-[0.9375rem]">
             Experience hassle-free travel with Vizag Taxi Hub. Professional service guaranteed.
           </p>
-          {/* Features */}
-          <div className="flex flex-wrap justify-center gap-6 mb-12">
+
+          <div className="mb-6 flex flex-wrap justify-center gap-3">
             {features.map((feature, index) => (
               <motion.div
-                key={index}
-                className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full"
+                key={feature.text}
+                className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-4 py-2 shadow-sm"
                 initial={{ opacity: 0, scale: 0.8 }}
                 whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
+                transition={{ duration: 0.4, delay: index * 0.08 }}
                 viewport={{ once: true }}
               >
-                <feature.icon className="h-5 w-5 text-blue-200" />
-                <span className="text-sm font-medium">{feature.text}</span>
+                <feature.icon className="h-4 w-4 text-[#0066FF]" />
+                <span className="text-sm font-medium text-slate-700">{feature.text}</span>
               </motion.div>
             ))}
           </div>
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button 
-              size="lg" 
-              className="bg-white text-blue-700 hover:bg-gray-100 px-12 py-4 text-lg font-semibold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
-              onClick={() => window.location.href = '/outstation-taxi'}
+
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button
+              size="lg"
+              className="rounded-2xl bg-[#0066FF] px-10 py-3 text-base font-semibold text-white shadow-sm transition-all duration-300 hover:bg-[#0052CC] hover:shadow-md"
+              onClick={() => {
+                window.location.href = '/outstation-taxi';
+              }}
             >
-              <Car className="mr-3 h-6 w-6" />
+              <Car className="mr-2 h-5 w-5" />
               Book Your Taxi Now
             </Button>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="lg"
-                className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-blue-700 px-8 py-4 rounded-2xl font-semibold transition-all duration-300"
+                className="rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition-all duration-300 hover:bg-slate-50 hover:text-slate-900"
                 onClick={() => window.open('tel:+919966363662', '_self')}
               >
                 <Phone className="mr-2 h-5 w-5" />
                 Call Now
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="lg"
-                className="bg-green-600 border-2 border-green-500 text-white hover:bg-green-500 px-8 py-4 rounded-2xl font-semibold transition-all duration-300"
-                onClick={() => window.open('https://wa.me/919966363662?text=Hi Kumar! I would like to know more about your taxi services', '_blank')}
+                className="rounded-2xl border-2 border-emerald-600 bg-emerald-600 px-6 py-3 font-semibold text-white transition-all duration-300 hover:border-emerald-700 hover:bg-emerald-700"
+                onClick={() =>
+                  window.open(
+                    'https://wa.me/919966363662?text=Hi Kumar! I would like to know more about your taxi services',
+                    '_blank',
+                  )
+                }
               >
                 <FaWhatsapp className="mr-2 h-5 w-5" />
                 WhatsApp
               </Button>
             </div>
-          </div>
-          <div className="mt-8 text-blue-200 text-sm">
-            ⭐ Rated 4.8/5 by 500+ satisfied customers
           </div>
         </motion.div>
       </div>

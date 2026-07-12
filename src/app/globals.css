@@ -102,17 +102,12 @@ html, body {
 
 /* Driver Slider Styles - Using ServicesShowcase styling */
 .services-swiper {
-  padding-bottom: 16px;
-}
-
-@media (min-width: 768px) {
-  .services-swiper {
-    padding-bottom: 20px;
-  }
+  padding-bottom: 0;
 }
 
 .services-swiper .swiper-slide {
   height: auto;
+  background: transparent;
 }
 
 .services-swiper .swiper-slide .card {
@@ -120,12 +115,8 @@ html, body {
   min-height: 250px;
 }
 
-/* Specific height for services cards */
 .services-swiper .swiper-slide .card[class*="h-[320px]"] {
   min-height: 320px;
-}
-  background-color: hsl(var(--muted));
-  border-radius: 0.5rem;
 }
 
 /* Fix nested tabs spacing in admin dashboard */

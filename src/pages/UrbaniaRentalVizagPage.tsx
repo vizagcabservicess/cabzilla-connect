@@ -125,7 +125,7 @@ const UrbaniaRentalVizagPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
 
-        <div className="container mx-auto max-w-7xl px-4 pb-16 pt-20 md:pb-32 md:pt-28">
+        <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 md:pb-32">
           <div className="mb-8 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white">
             <h1 className="mb-4 text-2xl font-bold md:text-3xl">Urbania Van Rental in Vizag</h1>
             <p className="mb-6 text-lg md:text-xl">

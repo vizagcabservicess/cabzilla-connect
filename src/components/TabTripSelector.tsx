@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { useEffect, useCallback, useState, useRef, useLayoutEffect } from "react";
+import { useEffect, useCallback, useState, useRef, useLayoutEffect, type RefObject } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { reloadCabTypes } from "@/lib/cabData";
 import { TabBar } from "@/components/TabBar";
@@ -41,6 +41,8 @@ interface TabTripSelectorProps {
   suppressMobileCardChrome?: boolean;
   /** `/vehicle/urbania`: One Way / Round Trip row matches marketing layout (label left, check / empty circle right). */
   urbaniaMobileTripTiles?: boolean;
+  /** Focus target for the first mobile trip-mode button (booking field auto-advance). */
+  tripModeFocusRef?: RefObject<HTMLButtonElement | null>;
 }
 
 export function TabTripSelector({ 
@@ -57,10 +59,11 @@ export function TabTripSelector({
   hideUrbaniaPromo = false,
   suppressMobileCardChrome = false,
   urbaniaMobileTripTiles = false,
+  tripModeFocusRef,
 }: TabTripSelectorProps) {
   const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
-  const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
+  const [refreshTimer, setRefreshTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const lastClearTimeRef = useRef<number>(0);
   const clearThrottleTime = 2000; // 2 seconds minimum between clears
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -300,16 +303,17 @@ export function TabTripSelector({
             </div>
           </div>
           {/* Desktop: underline tabs with icons + tagline */}
-          <div className="hidden lg:block mb-0 pb-4 border-b border-gray-200">
-            <div className="flex w-full items-center justify-between gap-4">
-              <div className="flex min-w-0 flex-1 gap-0">
+          <div className="mb-0 hidden border-b border-gray-200/80 pb-0 lg:block">
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 gap-0.5">
                 {tabs.map((tab, idx) => {
                   const isActive = selectedTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       ref={(el) => { if (el) tabRefs.current[idx] = el; }}
-                      className={`flex items-center gap-2 py-2 px-3 border-b-2 transition-colors duration-200 text-sm font-medium focus:outline-none -mb-[1px] ${isActive ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-gray-800"}`}
+                      type="button"
+                      className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-semibold transition-colors duration-250 focus:outline-none -mb-px border-b-2 ${isActive ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-800"}`}
                       onClick={() => handleTabChange(tab.id)}
                     >
                       {tabIcons[tab.id]}
@@ -340,12 +344,13 @@ export function TabTripSelector({
                 { label: "One Way", sub: "Get dropped off", value: "one-way" },
                 { label: "Round Trip", sub: "Keep cab till return", value: "round-trip" },
               ] as const
-            ).map((option) => {
+            ).map((option, optionIndex) => {
               const active = tripMode === option.value;
               if (urbaniaMobileTripTiles) {
                 return (
                   <button
                     key={option.value}
+                    ref={optionIndex === 0 ? tripModeFocusRef : undefined}
                     type="button"
                     onClick={() => onTripModeChange(option.value)}
                     className={cn(
@@ -388,6 +393,7 @@ export function TabTripSelector({
               return (
                 <button
                   key={option.value}
+                  ref={optionIndex === 0 ? tripModeFocusRef : undefined}
                   type="button"
                   onClick={() => onTripModeChange(option.value)}
                   className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors duration-200 focus:outline-none ${
@@ -452,8 +458,9 @@ export function TabTripSelector({
           transition={{ delay: 0.1 }}
         >
           <button
+            ref={tripModeFocusRef}
             type="button"
-            onClick={() => onAirportDirectionChange("from-airport")}
+            onClick={() => onAirportDirectionChange?.("from-airport")}
             className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors focus:outline-none ${
               airportDirectionLabel === "From Airport"
                 ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"
@@ -467,7 +474,7 @@ export function TabTripSelector({
           </button>
           <button
             type="button"
-            onClick={() => onAirportDirectionChange("to-airport")}
+            onClick={() => onAirportDirectionChange?.("to-airport")}
             className={`flex ${mobileChromeOff ? 'min-h-[2.5rem] py-1' : 'min-h-[3rem] py-1.5'} flex-1 basis-0 flex-col items-center justify-center rounded-lg border-2 bg-white px-2 text-center shadow-sm transition-colors focus:outline-none ${
               airportDirectionLabel === "To Airport"
                 ? "border-blue-600 text-blue-600 ring-1 ring-blue-600/20"

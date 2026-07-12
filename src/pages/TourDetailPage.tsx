@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
@@ -36,7 +36,7 @@ import { usePrivileges } from '@/hooks/usePrivileges';
 import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
-import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug } from '@/utils/tourUrlUtils';
+import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug, getTourDisplayName } from '@/utils/tourUrlUtils';
 
 interface VehicleWithPricing extends CabType {
   price: number;
@@ -239,11 +239,7 @@ const TourDetailPage = () => {
       if (tourDetail) {
         setTour(tourDetail);
       } else {
-        toast({
-          title: "Tour not found",
-          description: "The requested tour could not be found",
-          variant: "destructive",
-        });
+        setTour(null);
       }
     } catch (error) {
       console.error('Error loading tour detail:', error);
@@ -467,23 +463,11 @@ const TourDetailPage = () => {
 
   if (!tour) {
     return (
-      <>
-        <Helmet>
-          <title>Tour Not Found - Vizag Taxi Hub</title>
-          <meta name="description" content="The requested tour could not be found. Browse our available tour packages in Visakhapatnam." />
-        </Helmet>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <div className="container mx-auto px-4 py-8 text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Tour Not Found</h1>
-            <Button onClick={() => navigate('/tours')}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Tours
-            </Button>
-          </div>
-          <MobileNavigation />
-        </div>
-      </>
+      <Navigate
+        to="/tours"
+        replace
+        state={{ tourNotFound: getTourDisplayName(tourSlug || '') }}
+      />
     );
   }
 
@@ -564,7 +548,7 @@ const TourDetailPage = () => {
 
           
           {/* Edit Module with PDF Export for Super Admin */}
-          <div className="flex items-center justify-between gap-4 mb-4 py-8">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <div className="flex-1">
               <TourEditModule
                 pickupLocation={pickupLocation.name}

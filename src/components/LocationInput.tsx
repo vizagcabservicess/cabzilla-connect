@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useId, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
@@ -7,6 +7,10 @@ import { toast } from "sonner";
 import type { Location } from '@/lib/locationData';
 import type { TripType } from '@/lib/tripTypes';
 import { cn } from '@/lib/utils';
+
+export type LocationInputHandle = {
+  focus: () => void;
+};
 
 // Vizag coordinates
 const VIZAG_LAT = 17.6868;
@@ -80,7 +84,7 @@ interface LocationInputProps {
   hideLeadingIcon?: boolean;
 }
 
-export function LocationInput({
+export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>(function LocationInput({
   id,
   label,
   value,
@@ -98,7 +102,7 @@ export function LocationInput({
   readOnly = false,
   variant = 'mobile',
   hideLeadingIcon = false,
-}: LocationInputProps) {
+}, ref) {
   const enforceVizag35Km = isPickupLocation || restrictToVizagRadius;
   const selectFromListMessage = enforceVizag35Km
     ? 'Select a valid location from suggestions (within 35 KM radius).'
@@ -124,12 +128,26 @@ export function LocationInput({
   const initializedRef = useRef(false);
   const { isLoaded, google, error } = useGoogleMaps();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const fieldTriggerRef = useRef<HTMLButtonElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
   /** Mobile ticket-style row: open a dedicated fullscreen search (Urbania `infield` on narrow viewports). */
   const fullscreenMobileSearchSheet =
     isInfieldVariant && !isDesktop && !disabled && !readOnly;
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      if (disabled || readOnly) return;
+      if (fullscreenMobileSearchSheet) {
+        setMobileSearchSheetOpen(true);
+        fieldTriggerRef.current?.focus();
+        return;
+      }
+      inputRef.current?.focus();
+      inputRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+  }), [disabled, readOnly, fullscreenMobileSearchSheet]);
   const [predictionsLoading, setPredictionsLoading] = useState(false);
   const [noGooglePredictions, setNoGooglePredictions] = useState(false);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -804,6 +822,7 @@ export function LocationInput({
         {fullscreenMobileSearchSheet ? (
           <button
             type="button"
+            ref={fieldTriggerRef}
             aria-haspopup="dialog"
             aria-expanded={mobileSearchSheetOpen}
             disabled={disabled}
@@ -1015,4 +1034,4 @@ export function LocationInput({
       : null}
     </>
   );
-}
+});

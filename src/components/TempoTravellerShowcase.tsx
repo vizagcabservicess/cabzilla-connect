@@ -4,9 +4,17 @@ import { Bus, Users, Building, Heart, MapPin, Star, Car, Shield } from 'lucide-r
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
 import { Link } from 'react-router-dom';
+import { SectionHeader } from '@/components/home/SectionHeader';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
+
+const softCardPalettes = [
+  { bgColor: 'bg-gradient-to-br from-blue-50 to-blue-100', iconColor: 'text-blue-600' },
+  { bgColor: 'bg-gradient-to-br from-sky-50 to-sky-100', iconColor: 'text-sky-600' },
+  { bgColor: 'bg-gradient-to-br from-slate-50 to-slate-100', iconColor: 'text-slate-600' },
+  { bgColor: 'bg-gradient-to-br from-blue-50 to-slate-100', iconColor: 'text-blue-600' },
+];
 
 export function TempoTravellerShowcase() {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -19,8 +27,7 @@ export function TempoTravellerShowcase() {
       offer: "Best tempo traveller rental service in Vizag",
       description: "Premium tempo traveller rental with professional drivers",
       features: ["12-18 seater options", "AC comfort", "Professional drivers"],
-      bgColor: "bg-gradient-to-br from-blue-50 to-blue-100",
-      iconColor: "text-blue-600",
+      ...softCardPalettes[0],
       link: "/tempo-traveller-rental-vizag"
     },
     {
@@ -29,8 +36,7 @@ export function TempoTravellerShowcase() {
       offer: "Perfect for large group travel",
       description: "Spacious 17-seater tempo traveller for big groups",
       features: ["17 passenger capacity", "AC comfort", "Luggage space"],
-      bgColor: "bg-gradient-to-br from-green-50 to-green-100",
-      iconColor: "text-green-600",
+      ...softCardPalettes[1],
       link: "/17-seater-tempo-traveller-vizag"
     },
     {
@@ -39,8 +45,7 @@ export function TempoTravellerShowcase() {
       offer: "Ideal for medium group travel",
       description: "Comfortable 12-seater tempo traveller for groups",
       features: ["12 passenger capacity", "AC comfort", "Economical"],
-      bgColor: "bg-gradient-to-br from-purple-50 to-purple-100",
-      iconColor: "text-purple-600",
+      ...softCardPalettes[2],
       link: "/12-seater-tempo-traveller-vizag"
     },
     {
@@ -49,8 +54,7 @@ export function TempoTravellerShowcase() {
       offer: "Large group travel solutions",
       description: "18-seater tempo traveller for biggest groups",
       features: ["18 passenger capacity", "AC comfort", "Maximum capacity"],
-      bgColor: "bg-gradient-to-br from-cyan-50 to-cyan-100",
-      iconColor: "text-cyan-600",
+      ...softCardPalettes[3],
       link: "/18-seater-tempo-traveller-vizag"
     },
     {
@@ -59,8 +63,7 @@ export function TempoTravellerShowcase() {
       offer: "Specialized group travel solutions",
       description: "Tailored group travel packages for all occasions",
       features: ["Custom packages", "Group discounts", "Event planning"],
-      bgColor: "bg-gradient-to-br from-orange-50 to-orange-100",
-      iconColor: "text-orange-600",
+      ...softCardPalettes[0],
       link: "/group-travel-tempo-traveller-vizag"
     },
     {
@@ -69,8 +72,7 @@ export function TempoTravellerShowcase() {
       offer: "Business travel and corporate events",
       description: "Professional corporate transportation services",
       features: ["Business class comfort", "Professional drivers", "Corporate packages"],
-      bgColor: "bg-gradient-to-br from-indigo-50 to-indigo-100",
-      iconColor: "text-indigo-600",
+      ...softCardPalettes[1],
       link: "/corporate-tempo-traveller-vizag"
     },
     {
@@ -79,8 +81,7 @@ export function TempoTravellerShowcase() {
       offer: "Wedding party transportation",
       description: "Special wedding transportation services",
       features: ["Decorated vehicles", "Wedding packages", "Professional service"],
-      bgColor: "bg-gradient-to-br from-pink-50 to-pink-100",
-      iconColor: "text-pink-600",
+      ...softCardPalettes[2],
       link: "/wedding-tempo-traveller-vizag"
     },
     {
@@ -89,8 +90,7 @@ export function TempoTravellerShowcase() {
       offer: "Religious and pilgrimage tours",
       description: "Sacred journey transportation services",
       features: ["Pilgrimage packages", "Religious sites", "Comfortable travel"],
-      bgColor: "bg-gradient-to-br from-yellow-50 to-yellow-100",
-      iconColor: "text-yellow-600",
+      ...softCardPalettes[3],
       link: "/pilgrimage-tempo-traveller-vizag"
     },
     {
@@ -99,8 +99,7 @@ export function TempoTravellerShowcase() {
       offer: "Mini bus rental services",
       description: "Reliable mini bus rental for all occasions",
       features: ["Various capacities", "AC comfort", "Professional drivers"],
-      bgColor: "bg-gradient-to-br from-teal-50 to-teal-100",
-      iconColor: "text-teal-600",
+      ...softCardPalettes[0],
       link: "/mini-bus-travels-vizag"
     }
   ];
@@ -138,20 +137,16 @@ export function TempoTravellerShowcase() {
           transform: translateX(100%);
         }
       `}</style>
-      <section className="pt-4 md:pt-8 pb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
-            Specialized Tempo Traveller Services
-          </h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Explore our comprehensive tempo traveller services designed for different travel needs and group sizes
-          </p>
-        </div>
+      <section className="home-section-band--soft">
+        <div className="home-page-container">
+        <SectionHeader
+          eyebrow="TEMPO TRAVELLER"
+          title="Specialized Tempo Traveller Services"
+          subtitle="Explore our comprehensive tempo traveller services designed for different travel needs and group sizes"
+        />
 
         {/* Desktop Layout - Sliding Row */}
-        <div className="hidden xl:block mb-8 relative overflow-hidden">
+        <div className="hidden xl:block mb-4 relative overflow-hidden">
           <div className="flex gap-4 transition-transform duration-500 ease-in-out" style={{ 
             transform: `translateX(-${Math.min(currentSlide * 25, Math.max(0, (tempoTravellerServices.length - 4) * 25))}%)` 
           }}>
@@ -170,7 +165,7 @@ export function TempoTravellerShowcase() {
                     <div className="relative z-10 flex flex-col h-full">
                       {/* Category Tag and Icon */}
                       <div className="flex justify-between items-start mb-3">
-                        <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                        <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                           {service.title}
                         </div>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
@@ -218,7 +213,7 @@ export function TempoTravellerShowcase() {
           {/* Previous Arrow - show when not at first slide */}
           {currentSlide > 0 && (
             <button
-              className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+              className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
               onClick={() => {
                 if (currentSlide > 0) {
                   setCurrentSlide(currentSlide - 1);
@@ -234,7 +229,7 @@ export function TempoTravellerShowcase() {
           {/* Next Arrow - only show if there are additional services and we're not at the end */}
           {tempoTravellerServices.length > 4 && currentSlide < Math.max(0, (tempoTravellerServices.length - 4)) && (
             <button
-              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+              className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
               onClick={() => {
                 const maxSlides = Math.max(0, tempoTravellerServices.length - 4);
                 if (currentSlide < maxSlides) {
@@ -250,7 +245,7 @@ export function TempoTravellerShowcase() {
         </div>
 
         {/* Tablet Layout - Grid */}
-        <div className="hidden lg:block xl:hidden mb-8">
+        <div className="hidden lg:block xl:hidden mb-4">
           <div className="grid grid-cols-2 gap-4">
             {tempoTravellerServices.slice(0, 4).map((service, index) => (
               <Card 
@@ -266,7 +261,7 @@ export function TempoTravellerShowcase() {
                   <div className="relative z-10 flex flex-col h-full">
                     {/* Category Tag and Icon */}
                     <div className="flex justify-between items-start mb-3">
-                      <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                      <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                         {service.title}
                       </div>
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
@@ -298,7 +293,7 @@ export function TempoTravellerShowcase() {
                     <div className="mt-4">
                       <Link 
                         to={service.link}
-                        className="block w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-center py-2 px-4 rounded-lg font-medium transition-all"
+                        className="block w-full bg-[#0066FF] hover:bg-[#0052CC] text-white text-center py-2 px-4 rounded-lg font-medium transition-all"
                       >
                         Book Now
                       </Link>
@@ -311,7 +306,7 @@ export function TempoTravellerShowcase() {
         </div>
 
         {/* Mobile Slider */}
-        <div className="block xl:hidden mb-8 relative">
+        <div className="block xl:hidden mb-4 relative">
           <Swiper
             modules={[Pagination]}
             spaceBetween={12}
@@ -335,7 +330,7 @@ export function TempoTravellerShowcase() {
                     <div className="relative z-10 flex flex-col h-full">
                       {/* Category Tag and Icon */}
                       <div className="flex justify-between items-start mb-3">
-                        <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                        <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                           {service.title}
                         </div>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${service.bgColor.replace('bg-gradient-to-br', 'bg')} shadow-sm`}>
@@ -389,7 +384,7 @@ export function TempoTravellerShowcase() {
                   return (
                     <div 
                       key={index}
-                      className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                      className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
                     >
                       {currentSlide + 1}/{tempoTravellerServices.length}
                     </div>
@@ -410,7 +405,7 @@ export function TempoTravellerShowcase() {
         </div>
 
         {/* Bottom Info */}
-        <div className="text-center mt-8 bg-white rounded-2xl p-6 shadow-sm">
+        <div className="text-center mt-4 bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Safety Guaranteed</span>

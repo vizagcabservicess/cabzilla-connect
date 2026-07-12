@@ -3,6 +3,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, Clock, TrendingUp, Star, Shield } from 'lucide-react';
+import { SectionHeader } from '@/components/home/SectionHeader';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -21,7 +22,7 @@ export function PopularRoutes() {
       startingPrice: "₹3,000",
       description: "Simhachalam, Kanaka Maha Lakshmi, Sampath Vinayagar, ISKCON, Kailasagiri, TTD & Kali Temple",
       popularity: "Weekend Favorite",
-      gradient: "from-teal-500 to-cyan-600",
+      gradient: "from-blue-400 to-blue-600",
       savings: "Sedan"
     },
     {
@@ -31,7 +32,7 @@ export function PopularRoutes() {
       startingPrice: "₹4,500",
       description: "Sri Veera Venkata Satyanarayana Swamy Temple is a Hindu-Vaishnavite temple located in Annavaram ",
       popularity: "Most Popular",
-      gradient: "from-blue-500 to-indigo-600",
+      gradient: "from-slate-400 to-slate-600",
       savings: "Sedan"
     },
     {
@@ -41,7 +42,7 @@ export function PopularRoutes() {
       startingPrice: "₹4,500",
       description: "Srikakulam is known for its temples, with the Srikurmam Temple and Arasavalli Sun God Temple",
       popularity: "Trending",
-      gradient: "from-green-500 to-emerald-600",
+      gradient: "from-sky-400 to-blue-600",
       savings: "Sedan"
     },
     {
@@ -51,7 +52,7 @@ export function PopularRoutes() {
       startingPrice: "₹5,000",
       description: "Pithapuram is one of the oldest and famous pilgrim places of India",
       popularity: "Spiritual",
-      gradient: "from-purple-500 to-violet-600",
+      gradient: "from-blue-400 to-slate-600",
       savings: "Sedan"
     },
     {
@@ -61,7 +62,7 @@ export function PopularRoutes() {
       startingPrice: "₹11,500",
       description: "Situated in the heart of the Vijayawada city, Kanaka Durga temple is located on the Indrakeeladri hill, on the banks of the River Krishna.",
       popularity: "Weekend Favorite",
-      gradient: "from-emerald-500 to-green-600",
+      gradient: "from-slate-400 to-blue-600",
       savings: "Sedan"
     },
     {
@@ -71,7 +72,7 @@ export function PopularRoutes() {
       startingPrice: "₹24,000",
       description: "Tirumala is the riches pilgrimage centre in the world",
       popularity: "Weekend Favorite",
-      gradient: "from-orange-500 to-red-600",
+      gradient: "from-sky-500 to-slate-600",
       savings: "Sedan"
     },
   ];
@@ -110,7 +111,7 @@ export function PopularRoutes() {
           <div className="relative z-10 flex flex-col h-full">
             {/* Category Tag */}
             <div className="flex justify-between items-start mb-3">
-              <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+              <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
                 {route.destination}
               </div>
             </div>
@@ -157,23 +158,18 @@ export function PopularRoutes() {
   };
 
   return (
-    <section className="pt-4 md:pt-8 pb-0 bg-white">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
-            Top Destinations from Vizag
-          </h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Explore popular destinations from Visakhapatnam with our reliable outstation taxi services. 
-            All prices include driver allowance and toll charges.
-          </p>
-        </div>
+    <section className="home-section-band">
+      <div className="home-page-container">
+        <SectionHeader
+          eyebrow="ROUTES"
+          title="Top Destinations from Vizag"
+          subtitle="Explore popular destinations from Visakhapatnam with our reliable outstation taxi services. All prices include driver allowance and toll charges."
+        />
 
         {/* Route Cards with Sliding Functionality */}
         <>
           {/* Desktop Layout - 4-card window with proper navigation */}
-          <div className="hidden lg:block mb-8 relative overflow-hidden">
+          <div className="hidden lg:block mb-4 relative overflow-hidden">
             <div className="flex gap-4 justify-center">
               {currentWindowItems.map((route, index) => (
                 <div key={index} className="w-full max-w-[calc(25%-12px)]">
@@ -193,7 +189,7 @@ export function PopularRoutes() {
             {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
             {shouldShowNavigation && !isAtBeginning && (
               <button
-                className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                 onClick={handlePrev}
               >
                 <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -205,7 +201,7 @@ export function PopularRoutes() {
             {/* Next Arrow - only show if there are multiple slides and not at end */}
             {shouldShowNavigation && !isAtEnd && (
               <button
-                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-gray-300 rounded-full shadow-xl flex items-center justify-center hover:bg-gray-400 transition-colors border-2 border-gray-400"
+                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
                 onClick={handleNext}
               >
                 <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -216,14 +212,14 @@ export function PopularRoutes() {
           </div>
 
           {/* Tablet Layout - Grid */}
-          <div className="hidden md:block lg:hidden mb-8">
+          <div className="hidden md:block lg:hidden mb-4">
             <div className="grid grid-cols-2 gap-4">
               {routes.slice(0, 4).map((route, index) => renderRouteCard(route, index))}
             </div>
           </div>
 
           {/* Mobile Slider */}
-          <div className="md:hidden mb-8">
+          <div className="md:hidden mb-4">
             <Swiper
               modules={[Pagination]}
               spaceBetween={12}
@@ -249,7 +245,7 @@ export function PopularRoutes() {
                     return (
                       <div 
                         key={index}
-                        className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                        className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
                       >
                         {currentSlide + 1}/{routes.length}
                       </div>
@@ -271,7 +267,7 @@ export function PopularRoutes() {
         </>
 
         {/* Bottom Info */}
-        <div className="text-center mt-8 bg-gray-50 rounded-2xl p-6">
+        <div className="text-center mt-4 bg-gray-50 rounded-2xl p-4">
           <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Reliable Service</span>

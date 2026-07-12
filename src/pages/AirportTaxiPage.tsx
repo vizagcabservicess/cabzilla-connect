@@ -149,7 +149,7 @@ export function AirportTaxiPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-16 md:pt-20">
+      <main className="flex-1">
       <Helmet>
         <title>Cabs in Visakhapatnam Airport | Vizag Airport Taxi</title>
         <meta name="description" content="Book Cabs in Visakhapatnam Airport at fixed rates. 24/7 airport pickup & drop with professional drivers. Call +91 9966363662" />

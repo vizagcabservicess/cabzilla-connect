@@ -44,7 +44,7 @@ export function SharedCarpoolingPopup({ enabled = true }: SharedCarpoolingPopupP
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showClose={false}
-        className="max-w-[min(92vw,20rem)] gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-xs"
+        className="left-auto top-auto max-w-[min(92vw,20rem)] translate-x-0 translate-y-0 gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none bottom-20 right-4 sm:bottom-6 sm:right-6 sm:max-w-xs"
       >
         <DialogTitle className="sr-only">
           Travel together, save together — Vizag Taxi Hub shared carpooling

@@ -11,14 +11,22 @@ import { VideoTestimonials } from "@/components/VideoTestimonials";
 import { SocialMediaSection } from "@/components/SocialMediaSection";
 import { EnhancedCTA } from "@/components/EnhancedCTA";
 import { useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { PopularGroupTours } from '@/components/PopularGroupTours';
 import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
+import { resetPageScroll } from '@/lib/bookingWidgetScroll';
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const isSearch = searchParams.get('search') === '1';
+
+  useEffect(() => {
+    if (!isSearch) {
+      resetPageScroll();
+    }
+  }, [isSearch]);
 
   return (
     <>
@@ -82,19 +90,22 @@ const Index = () => {
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-white flex flex-col pt-20">
+      <div className="home-soft-page min-h-screen flex flex-col">
         <Navbar />
         <SharedCarpoolingPopup enabled={!isSearch} />
         <main className="flex-1">
           <Hero
             key={isSearch ? 'search' : 'home'}
-            onSearch={() => setSearchParams({ search: '1' })}
+            onSearch={() => {
+              resetPageScroll();
+              setSearchParams({ search: '1' });
+            }}
             isSearchActive={isSearch}
           />
           
-          {/* Main Content with Optimized Spacing */}
+          {/* Main Content — soft premium rhythm */}
           {!isSearch && (
-            <div className="space-y-8 md:space-y-12">
+            <div className="space-y-0 md:space-y-0">
               <DestinationsShowcase />
               <PopularGroupTours />
               <FleetShowcase />
@@ -111,7 +122,7 @@ const Index = () => {
         </main>
         
         <Footer />
-        
+
         {/* Mobile Navigation */}
         <MobileNavigation />
       </div>

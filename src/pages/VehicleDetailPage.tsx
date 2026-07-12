@@ -454,8 +454,8 @@ const VehicleDetailPage = () => {
         <div
           className={
             embedConfig
-              ? 'container mx-auto max-w-7xl px-4 pb-16 md:pb-32 max-lg:pt-[calc(5.5rem+env(safe-area-inset-top,0px))] lg:pt-28'
-              : 'container mx-auto max-w-7xl px-4 pb-16 pt-[max(6rem,calc(5rem+env(safe-area-inset-top,0px)))] md:pb-32 md:pt-28'
+              ? 'container mx-auto max-w-7xl px-4 pb-16 pt-2 md:pb-32 lg:pt-28'
+              : 'container mx-auto max-w-7xl px-4 pb-16 pt-4 md:pb-32'
           }
         >
           <Breadcrumb className="mb-6 hidden lg:block">

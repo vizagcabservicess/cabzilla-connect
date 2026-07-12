@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/providers/AuthProvider';
 import { Logo } from './Logo';
+import { HeaderSearchBar } from '@/components/header/HeaderSearchBar';
 import { Button } from '@/components/ui/button';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import {
@@ -35,9 +36,27 @@ import {
   Plane,
   Calendar,
   Users,
+  Bell,
+  Headphones,
+  HelpCircle,
+  Briefcase,
+  Building2,
 } from 'lucide-react';
 import { CITY_LOOKUP } from './OutstationHeroWidget';
 import { tourAPI } from '@/services/api/tourAPI';
+import { cn } from '@/lib/utils';
+import { dispatchBookingHomeReset } from '@/lib/bookingSessionReset';
+
+const MEGA_MENU_CATEGORIES = ['Services', 'Tour Packages', 'Fleet', 'Company', 'Support'] as const;
+type MegaMenuCategory = (typeof MEGA_MENU_CATEGORIES)[number];
+
+const MEGA_MENU_ICONS: Record<MegaMenuCategory, React.ComponentType<{ className?: string }>> = {
+  Services: Car,
+  'Tour Packages': MapPin,
+  Fleet: Users,
+  Company: Building2,
+  Support: Headphones,
+};
 
 interface NavLink {
   to: string;
@@ -45,7 +64,10 @@ interface NavLink {
   subItems?: NavLink[];
 }
 
-const megaMenuData = {
+const megaMenuData: Record<
+  MegaMenuCategory,
+  { left: NavLink[]; right: { label: string; items: string[] }[] }
+> = {
   Services: {
     left: [
       { label: 'Local Taxi', to: '/local-taxi' },
@@ -163,9 +185,11 @@ const serviceLinks = [
 export function Navbar() {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [megaMenuOpen, setMegaMenuOpen] = useState(null);
-  const [activeCategory, setActiveCategory] = useState('Services');
+  const [megaMenuOpen, setMegaMenuOpen] = useState<MegaMenuCategory | null>(null);
+  const [activeCategory, setActiveCategory] = useState<MegaMenuCategory>('Services');
   const [activeLeftIndex, setActiveLeftIndex] = useState(0);
   const [tourData, setTourData] = useState([]);
   const [mobileMenuSections, setMobileMenuSections] = useState({
@@ -175,11 +199,33 @@ export function Navbar() {
     legal: false
   });
   const megaMenuRef = useRef(null);
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const siteNavbarRef = useRef<HTMLElement | null>(null);
   const buttonRefs = {
     Services: useRef(null),
     'Tour Packages': useRef(null),
+    Fleet: useRef(null),
     Company: useRef(null),
     Support: useRef(null),
+  };
+
+  const cancelMegaMenuClose = () => {
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  };
+
+  const openMegaMenu = (cat: MegaMenuCategory) => {
+    cancelMegaMenuClose();
+    setMegaMenuOpen(cat);
+    setActiveCategory(cat);
+    setActiveLeftIndex(0);
+  };
+
+  const scheduleMegaMenuClose = () => {
+    cancelMegaMenuClose();
+    hoverCloseTimerRef.current = setTimeout(() => setMegaMenuOpen(null), 180);
   };
 
   const handleDashboard = () => {
@@ -200,6 +246,45 @@ export function Navbar() {
   };
 
   // Close mega menu on outside click
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Keep page spacer flush with the fixed navbar (avoids white gap above hero)
+  useEffect(() => {
+    const nav = siteNavbarRef.current;
+    if (!nav) return;
+
+    const syncHeaderOffset = () => {
+      const height = Math.ceil(nav.getBoundingClientRect().height);
+      if (height > 0) {
+        document.documentElement.style.setProperty('--site-header-offset', `${height}px`);
+      }
+    };
+
+    syncHeaderOffset();
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHeaderOffset) : null;
+    observer?.observe(nav);
+    window.addEventListener('resize', syncHeaderOffset);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', syncHeaderOffset);
+    };
+  }, [isScrolled]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimerRef.current) {
+        clearTimeout(hoverCloseTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (
@@ -262,28 +347,17 @@ export function Navbar() {
         // Check if this is the outstation menu (wider)
         const isOutstation = megaMenuOpen === 'Services' && activeLeftIndex === 1; // Outstation is at index 1
         
-        // Calculate horizontal position
-        let left = buttonRect.left + buttonRect.width / 2 - menuRect.width / 2;
-        
-        // For outstation menu, ensure it doesn't go off screen
-        if (isOutstation) {
-          // Ensure menu stays within viewport bounds with more margin for wider menu
-          if (left < 40) {
-            left = 40;
-          } else if (left + menuRect.width > viewportWidth - 40) {
-            left = viewportWidth - menuRect.width - 40;
-          }
-        } else {
-          // Regular positioning for other menus
-          if (left < 20) {
-            left = 20;
-          } else if (left + menuRect.width > viewportWidth - 20) {
-            left = viewportWidth - menuRect.width - 20;
-          }
+        // Calculate horizontal position — anchor under nav item (Axis-style)
+        let left = buttonRect.left;
+        if (left + menuRect.width > viewportWidth - 20) {
+          left = viewportWidth - menuRect.width - 20;
         }
-        
-        // Calculate vertical position
-        let top = buttonRect.bottom + 16;
+        if (left < 20) {
+          left = 20;
+        }
+
+        // Calculate vertical position — tight gap for hover bridge
+        let top = buttonRect.bottom + 6;
         const menuHeight = menuRect.height;
         
         // If menu would overflow below viewport, position it above the button
@@ -300,40 +374,46 @@ export function Navbar() {
   }, [megaMenuOpen, activeLeftIndex]);
 
       // Helper to render a mega menu for a given category
-  function renderMegaMenu(category) {
+  function renderMegaMenu(category: MegaMenuCategory) {
     const left = megaMenuData[category].left;
     const right = megaMenuData[category].right;
-    
-    // Set different widths based on category
+
     const isOutstation = category === 'Services' && left[activeLeftIndex]?.label === 'Outstation';
     const isCompany = category === 'Company';
     const isSupport = category === 'Support';
-    const menuWidth = isOutstation ? '1000px' : (isCompany || isSupport) ? '400px' : '800px';
-    
+    const menuWidth = isOutstation ? '920px' : isCompany || isSupport ? '320px' : '720px';
+
+    const megaLinkClass =
+      'block rounded-md px-3 py-2 text-[13px] font-normal leading-snug text-gray-600 transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600';
+    const megaGridLinkClass =
+      'block rounded-md px-3 py-2 text-[13px] font-normal text-gray-600 transition-colors duration-200 hover:bg-blue-50 hover:text-blue-600 text-left';
+    const megaSectionTitle = 'mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400';
+
     return (
       <div
         ref={megaMenuRef}
-        className="fixed bg-white text-gray-900 shadow-2xl rounded-xl p-0 flex z-[9998] border border-gray-200"
+        className="premium-mega-menu fixed z-[9998] flex animate-mega-menu-in rounded-xl border border-gray-200/90 bg-white p-0 shadow-[0_12px_40px_rgba(15,23,42,0.12)]"
         tabIndex={-1}
-        style={{ 
-          minHeight: isOutstation ? 400 : (isCompany || isSupport) ? 200 : 260,
+        onMouseEnter={cancelMegaMenuClose}
+        onMouseLeave={scheduleMegaMenuClose}
+        style={{
+          minHeight: isOutstation ? 360 : isCompany || isSupport ? 180 : 240,
           width: menuWidth,
           maxWidth: '95vw',
           left: '50%',
           top: '50%',
-          transform: 'translateX(-50%) translateY(-50%)'
+          transform: 'translateX(-50%) translateY(-50%)',
         }}
       >
-        {/* Company/Support Menu - Single Column Layout */}
-        {(isCompany || isSupport) ? (
-          <div className="w-full py-8 px-6">
-            <div className="font-semibold text-gray-800 mb-4 text-lg">{category}</div>
-            <div className="space-y-2">
-              {left.map((item, idx) => (
+        {isCompany || isSupport ? (
+          <div className="w-full px-5 py-4">
+            <div className={megaSectionTitle}>{category}</div>
+            <div className="space-y-0.5">
+              {left.map((item) => (
                 <Link
                   key={item.label}
                   to={item.to}
-                  className="flex items-center w-full text-left px-3 py-3 rounded-lg font-medium transition-colors hover:bg-blue-50 hover:text-blue-700 text-gray-700"
+                  className={megaLinkClass}
                   onClick={() => setMegaMenuOpen(null)}
                 >
                   {item.label}
@@ -343,32 +423,31 @@ export function Navbar() {
           </div>
         ) : (
           <>
-            {/* Left column: Categories */}
-            <div className="w-1/3 py-8 px-6 border-r border-gray-100 bg-gray-50 rounded-l-xl">
+            <div className="w-[34%] shrink-0 rounded-l-xl border-r border-gray-100 bg-gray-50/80 px-4 py-4">
               {left.map((item, idx) => (
                 <Link
                   key={item.label}
                   to={item.to}
-                  className={`flex items-center w-full text-left px-3 py-3 rounded-lg mb-1 font-medium transition-colors ${activeLeftIndex === idx ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100'}`}
+                  className={cn(
+                    'mb-0.5 flex w-full items-center rounded-md px-3 py-2 text-left text-[13px] transition-colors duration-200',
+                    activeLeftIndex === idx
+                      ? 'bg-white font-medium text-blue-600 shadow-sm'
+                      : 'font-normal text-gray-600 hover:bg-white/80 hover:text-blue-600'
+                  )}
                   onMouseEnter={() => setActiveLeftIndex(idx)}
                   onClick={() => setMegaMenuOpen(null)}
                 >
                   {item.label}
-                  {item.subItems ? (
-                    <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
-                  ) : (
-                    <ChevronDown className="ml-auto h-4 w-4 rotate-[-90deg]" />
-                  )}
+                  <ChevronDown className="ml-auto h-3.5 w-3.5 rotate-[-90deg] opacity-40" />
                 </Link>
               ))}
             </div>
-            {/* Right column: Submenu for selected category */}
-            <div className="flex-1 py-6 px-6 md:px-8 lg:px-10">
+            <div className="flex-1 px-5 py-4">
               {/* If Services > Outstation is selected, show dynamic city links */}
               {category === 'Services' && left[activeLeftIndex]?.label === 'Outstation' ? (
                 <div>
-                  <div className="font-semibold text-gray-800 mb-3">Long Distance</div>
-                  <div className="grid grid-cols-4 gap-2 max-h-[500px] overflow-y-auto">
+                  <div className={megaSectionTitle}>Long Distance</div>
+                  <div className="grid max-h-[420px] grid-cols-4 gap-1 overflow-y-auto">
                     {Object.keys(CITY_LOOKUP)
                       .filter(city => city !== 'Visakhapatnam')
                       .sort((a, b) => a.localeCompare(b))
@@ -376,7 +455,7 @@ export function Navbar() {
                         <Link
                           key={city}
                           to={`/outstation-taxi/visakhapatnam-to-${city.toLowerCase().replace(/ /g, '-')}`}
-                          className="block py-2 px-3 rounded hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          className={megaGridLinkClass}
                           onClick={() => setMegaMenuOpen(null)}
                         >
                           {city}
@@ -386,8 +465,8 @@ export function Navbar() {
                 </div>
               ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tour Packages' ? (
                 <div>
-                  <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
-                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                  <div className={megaSectionTitle}>Tour Packages</div>
+                  <div className="grid max-h-[420px] grid-cols-2 gap-1 overflow-y-auto">
                     {tourData
                       .filter(tour => tour.tourName)
                       .sort((a, b) => a.tourName.localeCompare(b.tourName))
@@ -395,7 +474,7 @@ export function Navbar() {
                         <Link
                           key={tour.tourId}
                           to={getTourUrl(tour)}
-                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          className={megaGridLinkClass}
                           onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
@@ -405,13 +484,13 @@ export function Navbar() {
                 </div>
               ) : category === 'Services' && left[activeLeftIndex]?.label === 'Tempo Traveller Rental' ? (
                 <div>
-                  <div className="font-semibold text-gray-800 mb-3">Tempo Traveller Services</div>
-                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                  <div className={megaSectionTitle}>Tempo Traveller Services</div>
+                  <div className="grid max-h-[420px] grid-cols-2 gap-1 overflow-y-auto">
                     {left[activeLeftIndex]?.subItems?.map((subItem, idx) => (
                       <Link
                         key={idx}
                         to={subItem.to}
-                        className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                        className={megaGridLinkClass}
                         onClick={() => setMegaMenuOpen(null)}
                       >
                         {subItem.label}
@@ -421,8 +500,8 @@ export function Navbar() {
                 </div>
               ) : category === 'Tour Packages' ? (
                 <div>
-                  <div className="font-semibold text-gray-800 mb-3">Tour Packages</div>
-                  <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+                  <div className={megaSectionTitle}>Tour Packages</div>
+                  <div className="grid max-h-[420px] grid-cols-2 gap-1 overflow-y-auto">
                     {tourData
                       .filter(tour => tour.tourName)
                       .sort((a, b) => a.tourName.localeCompare(b.tourName))
@@ -430,7 +509,7 @@ export function Navbar() {
                         <Link
                           key={tour.tourId}
                           to={getTourUrl(tour)}
-                          className="block py-3 px-4 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium text-gray-700 hover:border-blue-300 text-left"
+                          className={megaGridLinkClass}
                           onClick={() => setMegaMenuOpen(null)}
                         >
                           {tour.tourName}
@@ -440,17 +519,12 @@ export function Navbar() {
                 </div>
               ) : right[activeLeftIndex] && (
                 <div>
-                  <div className="font-semibold text-gray-800 mb-3">{right[activeLeftIndex].label}</div>
-                  <div className="grid grid-cols-1 gap-2">
+                  <div className={megaSectionTitle}>{right[activeLeftIndex].label}</div>
+                  <div className="grid grid-cols-1 gap-0.5">
                     {right[activeLeftIndex].items.map((sub, i) => (
-                      <Link 
-                        key={i} 
-                        to="#" 
-                        className="block py-1 px-2 rounded hover:bg-blue-50 transition-colors"
-                        onClick={() => setMegaMenuOpen(null)}
-                      >
+                      <span key={i} className="px-3 py-1.5 text-[13px] text-gray-500">
                         {sub}
-                      </Link>
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -462,99 +536,219 @@ export function Navbar() {
     );
   }
 
+  const topNavLinks = [
+    { label: 'Local Taxi', to: '/local-taxi' },
+    { label: 'Outstation', to: '/outstation-taxi' },
+    { label: 'Airport', to: '/airport-taxi' },
+    { label: 'Tours', to: '/tours' },
+  ];
+
+  const isNavLinkActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
+
   return (
-    <nav className="bg-white shadow-lg fixed top-0 left-0 right-0 z-[9999] w-full">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center py-4">
+    <>
+    <nav
+      ref={siteNavbarRef}
+      className={cn(
+        'site-navbar fixed top-0 left-0 right-0 z-[9999] w-full overflow-x-clip animate-header-slide-down transition-shadow duration-300',
+        isScrolled && 'site-navbar--shrunk shadow-[0_2px_20px_rgba(15,23,42,0.06)]'
+      )}
+    >
+      {/* Top Navigation — desktop only (mobile uses search above the logo row) */}
+      <div className="hidden overflow-x-clip bg-blue-800 text-white lg:block">
+        <div className="container mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 overflow-hidden px-6 py-2 text-[11px] lg:px-8">
+          <div className="flex min-w-0 items-center">
+            <span className="inline-flex items-center gap-1.5 font-medium text-white/95">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Visakhapatnam, Andhra Pradesh
+            </span>
+          </div>
+
+          <div className="flex items-center justify-center gap-1.5">
+            {topNavLinks.map((item) => {
+              const active = isNavLinkActive(item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    'premium-top-nav-link shrink-0 rounded-full px-3 py-1 font-medium transition-all duration-250',
+                    active
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-white/88 hover:bg-white/10 hover:text-white',
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-5">
+            <Link
+              to="/our-story"
+              className={cn(
+                'font-medium transition-colors duration-250 hover:text-white',
+                isNavLinkActive('/our-story') ? 'text-white' : 'text-white/85',
+              )}
+            >
+              About Us
+            </Link>
+            <Link
+              to="/contact-us"
+              className={cn(
+                'font-medium transition-colors duration-250 hover:text-white',
+                isNavLinkActive('/contact-us') ? 'text-white' : 'text-white/85',
+              )}
+            >
+              Contact
+            </Link>
+            <a
+              href="tel:+919966363662"
+              className="flex items-center gap-1.5 font-semibold text-white transition-opacity duration-250 hover:opacity-90"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              9966363662
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Middle Navigation */}
+      <div className="border-b border-gray-100/80 bg-white/[0.97] backdrop-blur-xl">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Mobile: search + voice above logo / menu */}
+          <div className="pb-2 pt-2.5 lg:hidden">
+            <HeaderSearchBar className="max-w-none" />
+          </div>
+          <div
+            className={cn(
+              'site-navbar-brand-row flex items-center gap-5 transition-all duration-300',
+              isScrolled ? 'py-2' : 'py-2.5 lg:py-3'
+            )}
+          >
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <Logo />
+          <Link
+            to="/"
+            className="flex shrink-0 items-center"
+            onClick={(event) => {
+              dispatchBookingHomeReset();
+              if (location.pathname === '/') {
+                event.preventDefault();
+                // Clear ?search=1 (and any other home query) so Index exits search mode
+                if (location.search || location.hash) {
+                  navigate('/', { replace: true });
+                }
+              }
+            }}
+          >
+            <Logo size="small" linkless className="h-8 w-auto sm:h-9 lg:h-10" />
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-8">
-            {/* Mega Menu Triggers */}
-            {['Services', 'Tour Packages', 'Company', 'Support'].map((cat) => (
-              <div key={cat} className="relative">
-                <button
-                  ref={buttonRefs[cat]}
-                  className={`flex items-center transition-colors font-medium focus:outline-none ${megaMenuOpen === cat ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
-                  onClick={() => {
-                    setMegaMenuOpen(megaMenuOpen === cat ? null : cat);
-                    setActiveCategory(cat);
-                    setActiveLeftIndex(0);
-                  }}
-                >
-                  {cat}
-                  {megaMenuOpen === cat ? (
-                    <ChevronUp className="ml-1 h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                </button>
-                                 {megaMenuOpen === cat && createPortal(renderMegaMenu(cat), document.body)}
-              </div>
-            ))}
+          {/* Center search */}
+          <div className="hidden min-w-0 flex-1 justify-center px-3 lg:flex">
+            <HeaderSearchBar />
+          </div>
 
-            {/* Standalone: Hire Driver */}
+          {/* Desktop — support + auth */}
+          <div className="premium-header-actions hidden shrink-0 items-center gap-2.5 lg:flex xl:gap-3">
             <Link
-              to="/hire-driver"
-              className={`transition-colors font-medium ${megaMenuOpen === 'Hire Driver' ? 'text-blue-700' : 'text-gray-700 hover:text-blue-600'}`}
+              to="/support"
+              className="premium-nav-action group relative inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium text-gray-600 transition-all duration-250 hover:bg-gray-50/80 hover:text-blue-600"
             >
-              Hire Driver
+              <Headphones className="h-4 w-4 shrink-0 text-gray-400 transition-colors group-hover:text-blue-600" aria-hidden />
+              <span className="hidden lg:inline">Support</span>
+              <span className="premium-nav-action-underline" aria-hidden />
+            </Link>
+            <Link
+              to="/help-center"
+              className="premium-nav-action group relative inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium text-gray-600 transition-all duration-250 hover:bg-gray-50/80 hover:text-blue-600"
+            >
+              <HelpCircle className="h-4 w-4 shrink-0 text-gray-400 transition-colors group-hover:text-blue-600" aria-hidden />
+              <span className="hidden lg:inline">Help Center</span>
+              <span className="premium-nav-action-underline" aria-hidden />
+            </Link>
+            <button
+              type="button"
+              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-all duration-250 hover:bg-gray-50 hover:text-blue-600 premium-btn-scale"
+              aria-label="Notifications"
+            >
+              <Bell className="h-[17px] w-[17px]" />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-blue-600 ring-2 ring-white" />
+            </button>
+            <Link
+              to="/signup"
+              className="premium-book-btn premium-btn-scale relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold leading-none text-white"
+            >
+              <Car className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Book a Cab
             </Link>
 
-            {/* Contact Information */}
-            <div className="flex items-center space-x-4 text-sm">
-              <a 
-                href="tel:+919966363662" 
-                className="flex items-center bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all duration-200 font-medium px-3 py-2 rounded-lg border border-blue-200 hover:border-blue-300"
-              >
-                <Phone className="h-4 w-4 mr-1" />
-                9966363662
-              </a>
-            </div>
-
-            {/* Auth Section */}
             {user ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 px-2 rounded-full">
-                      <Avatar className="mr-2 h-8 w-8">
-                        <AvatarImage src={''} alt={user.name} />
-                        <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <span>{user.name}</span>
-                      <ChevronDown className="ml-1 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleDashboard}>
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Dashboard</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Logout</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="premium-profile-trigger flex items-center gap-2 rounded-full border border-gray-200/80 bg-white py-1 pl-1 pr-3 transition-all duration-250 hover:border-gray-300 hover:shadow-sm"
+                  >
+                    <Avatar className="h-8 w-8 ring-2 ring-white">
+                      <AvatarImage src={''} alt={user.name} />
+                      <AvatarFallback className="bg-blue-600 text-xs font-semibold text-white">
+                        {user.name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="max-w-[7rem] truncate text-[12px] font-medium text-gray-800">{user.name}</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleDashboard}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
-              <div className="flex items-center space-x-4">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">
-                  Login
-                </Link>
-                <Link to="/signup" className="bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors font-medium">
-                  Sign Up
-                </Link>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="premium-btn-scale h-9 shrink-0 rounded-full bg-blue-600 px-4 text-[12px] font-semibold leading-none text-white hover:bg-blue-700"
+                  >
+                    Login
+                    <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem asChild>
+                    <Link to="/login" className="w-full cursor-pointer">
+                      Login
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/signup" className="w-full cursor-pointer">
+                      Sign Up
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
           {/* Mobile menu button */}
-          <div className="lg:hidden">
+          <div className="ml-auto flex items-center gap-1 lg:hidden">
+            <a
+              href="tel:+919966363662"
+              className="flex items-center rounded-full border border-blue-200 bg-blue-50 p-2 text-blue-700 transition-colors hover:bg-blue-100 sm:hidden"
+              aria-label="Call 9966363662"
+            >
+              <Phone className="h-5 w-5" />
+            </a>
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" className="p-2">
@@ -752,7 +946,67 @@ export function Navbar() {
             </Sheet>
           </div>
         </div>
+
+          {/* Bottom Navigation — hover opens mega menu (desktop) */}
+          <div className="hidden items-center gap-1 border-t border-gray-100/70 pb-1.5 pt-1 text-[12px] font-medium lg:flex">
+            {MEGA_MENU_CATEGORIES.map((cat) => {
+              const MenuIcon = MEGA_MENU_ICONS[cat];
+              return (
+              <div
+                key={cat}
+                className="relative"
+                onMouseEnter={() => openMegaMenu(cat)}
+                onMouseLeave={scheduleMegaMenuClose}
+              >
+                <button
+                  ref={buttonRefs[cat]}
+                  type="button"
+                  className={cn(
+                    'premium-nav-link group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-all duration-250 hover:bg-white/60 focus:outline-none',
+                    megaMenuOpen === cat ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                  )}
+                  aria-expanded={megaMenuOpen === cat}
+                  aria-haspopup="true"
+                  onClick={() => {
+                    if (megaMenuOpen === cat) {
+                      setMegaMenuOpen(null);
+                    } else {
+                      openMegaMenu(cat);
+                    }
+                  }}
+                >
+                  <MenuIcon className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                  {cat}
+                  <ChevronDown
+                    className={cn(
+                      'ml-0.5 h-3.5 w-3.5 transition-transform duration-250',
+                      megaMenuOpen === cat && 'rotate-180'
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'premium-nav-underline absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-blue-600 transition-transform duration-250 origin-left',
+                      megaMenuOpen === cat ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                    )}
+                  />
+                </button>
+                {megaMenuOpen === cat && createPortal(renderMegaMenu(cat), document.body)}
+              </div>
+            );
+            })}
+            <Link
+              to="/hire-driver"
+              className="premium-nav-link group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-gray-600 transition-all duration-250 hover:bg-white/60 hover:text-blue-600"
+            >
+              <Briefcase className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+              Hire Driver
+              <span className="premium-nav-underline absolute bottom-0 left-3.5 right-3.5 h-[2px] scale-x-0 rounded-full bg-blue-600 transition-transform duration-250 origin-left group-hover:scale-x-100" />
+            </Link>
+          </div>
+        </div>
       </div>
     </nav>
+    <div className="site-navbar-spacer shrink-0" aria-hidden="true" />
+    </>
   );
 }

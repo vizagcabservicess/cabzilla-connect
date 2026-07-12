@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Car,
@@ -28,10 +28,12 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { HeaderSearchBar } from './HeaderSearchBar';
+import { dispatchBookingHomeReset } from '@/lib/bookingSessionReset';
 
 export function MobileHeader() {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [sections, setSections] = useState({
     services: false,
@@ -61,8 +63,19 @@ export function MobileHeader() {
     <div className="border-b border-gray-200 bg-white shadow-sm lg:hidden">
       <div className="px-4">
         <div className="flex items-center justify-between py-3">
-          <Link to="/">
-            <Logo size="small" />
+          <Link
+            to="/"
+            onClick={(event) => {
+              dispatchBookingHomeReset();
+              if (location.pathname === '/') {
+                event.preventDefault();
+                if (location.search || location.hash) {
+                  navigate('/', { replace: true });
+                }
+              }
+            }}
+          >
+            <Logo size="small" linkless />
           </Link>
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>

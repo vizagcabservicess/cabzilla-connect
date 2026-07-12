@@ -20,6 +20,20 @@ export default {
 		},
 		extend: {
 			colors: {
+				/** Vizag Taxi Hub brand blue */
+				blue: {
+					50: '#EEF4FF',
+					100: '#E8F0FE',
+					200: '#C7DAFE',
+					300: '#94B8FF',
+					400: '#5C94FF',
+					500: '#0066FF',
+					600: '#0066FF',
+					700: '#0052CC',
+					800: '#0047AB',
+					900: '#003D99',
+					950: '#002966',
+				},
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -54,16 +68,16 @@ export default {
 					foreground: 'hsl(var(--card-foreground))'
 				},
 				cabBlue: {
-					50: '#F0F7FF',
-					100: '#E0EFFF',
-					200: '#C0DFFF',
-					300: '#92C5FF',
-					400: '#64A8FF',
-					500: '#3478F6',
-					600: '#2A5FC7',
-					700: '#1F4287',
-					800: '#0A2540',
-					900: '#051220',
+					50: '#fdf2f6',
+					100: '#fce7ef',
+					200: '#f9cede',
+					300: '#f3a6c2',
+					400: '#e8719a',
+					500: '#97144D',
+					600: '#861F41',
+					700: '#6b1833',
+					800: '#4f1126',
+					900: '#3a0c1c',
 				},
 				cabGray: {
 					50: '#F9FAFB',
@@ -148,7 +162,7 @@ export default {
 			boxShadow: {
 				'card': '0px 4px 16px 0px rgba(0, 0, 0, 0.04), 0px 2px 4px 0px rgba(0, 0, 0, 0.01)',
 				'elevated': '0px 10px 40px 0px rgba(0, 0, 0, 0.08), 0px 4px 12px 0px rgba(0, 0, 0, 0.05)',
-				'button': '0px 2px 6px 0px rgba(26, 60, 168, 0.1)',
+				'button': '0px 2px 6px 0px rgba(134, 31, 65, 0.15)',
 			},
 			backdropBlur: {
 				'xs': '2px',

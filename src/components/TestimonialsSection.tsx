@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
+import { Pagination } from 'swiper/modules';
 import { Card, CardContent } from '@/components/ui/card';
-import { Star, Quote, User } from 'lucide-react';
+import { Star, Quote } from 'lucide-react';
+import { SectionHeader } from '@/components/home/SectionHeader';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -20,7 +21,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `We recently went for a one-week vacation to Vizag. Exceptional service by Vizag Taxi Hub. Our driver Nagaraj was fantastic—knowledgeable, friendly, and attentive. He showed us hidden gems and made our trip memorable. Highly recommended!`,
       avatar: "S",
-      color: "from-purple-500 to-purple-600"
+      color: "from-blue-500 to-blue-600"
     },
     {
       name: "munta sanju",
@@ -28,7 +29,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `Great experience with Verma car ride. The driver was professional, polite, and drove safely. The car was clean and comfortable. Highly recommend for a stress-free journey!`,
       avatar: "M",
-      color: "from-blue-500 to-blue-600"
+      color: "from-slate-400 to-slate-500"
     },
     {
       name: "Ayyalasomayajula phani babu",
@@ -36,7 +37,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `Tempo Traveller was fully conditioned. Staff Nagesh drove very nicely and politely. We are very happy with the trip. Thanks to Vizag Taxi Hub!`,
       avatar: "A",
-      color: "from-orange-500 to-orange-600"
+      color: "from-blue-400 to-blue-500"
     },
     {
       name: "Karri Reddy",
@@ -44,7 +45,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `Second time using Vizag Taxi Hub. Customer care is excellent. Outstanding service and highly recommended to all future customers!`,
       avatar: "K",
-      color: "from-green-500 to-green-600"
+      color: "from-slate-500 to-slate-600"
     },
     {
       name: "Ravi Kumar",
@@ -52,7 +53,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `Amazing experience with Vizag Taxi Hub! The driver was punctual, professional, and the vehicle was spotless. Will definitely use their services again.`,
       avatar: "R",
-      color: "from-indigo-500 to-indigo-600"
+      color: "from-blue-500 to-blue-600"
     },
     {
       name: "Priya Sharma",
@@ -60,7 +61,7 @@ export function TestimonialsSection() {
       rating: 5,
       comment: `Excellent service for our family trip. The driver was very patient with our kids and made sure we were comfortable throughout the journey. Highly recommended!`,
       avatar: "P",
-      color: "from-pink-500 to-pink-600"
+      color: "from-slate-400 to-slate-500"
     }
   ];
 
@@ -137,24 +138,16 @@ export function TestimonialsSection() {
   };
 
   return (
-    <section className="px-4 py-4 pb-2 md:py-12 bg-white">
+    <section className="home-section-band--soft px-4">
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-4 md:mb-8">
-          <div className="inline-flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-full mb-4">
-            <Star className="h-4 w-4 text-yellow-600 fill-current" />
-            <span className="text-sm font-medium text-yellow-600">TESTIMONIALS</span>
-          </div>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium text-gray-900 mb-3 leading-tight">
-            What Our Customers Say
-          </h2>
-          <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
-            Don't just take our word for it. Here's what our satisfied customers have to say about their experience with Vizag Taxi Hub.
-          </p>
-        </div>
+        <SectionHeader
+          eyebrow="TESTIMONIALS"
+          title="What Our Customers Say"
+          subtitle="Don't just take our word for it. Here's what our satisfied customers have to say about their experience with Vizag Taxi Hub."
+        />
 
         {/* Desktop Layout - 4-card window with proper navigation */}
-        <div className="hidden lg:block mb-8 relative overflow-hidden">
+        <div className="hidden lg:block mb-4 relative overflow-hidden">
           <div className="flex gap-4 justify-center">
             {currentWindowItems.map((testimonial, index) => (
               <div key={index} className="w-full max-w-[calc(25%-12px)]">
@@ -197,14 +190,14 @@ export function TestimonialsSection() {
         </div>
 
         {/* Tablet Layout - Grid */}
-        <div className="hidden md:block lg:hidden mb-8">
+        <div className="hidden md:block lg:hidden mb-4">
           <div className="grid grid-cols-2 gap-4">
             {testimonials.slice(0, 4).map((testimonial, index) => renderTestimonialCard(testimonial, index))}
           </div>
         </div>
 
         {/* Mobile Slider */}
-        <div className="md:hidden mb-8">
+        <div className="md:hidden mb-4">
           <Swiper
             modules={[Pagination]}
             spaceBetween={12}
@@ -230,7 +223,7 @@ export function TestimonialsSection() {
                   return (
                     <div 
                       key={index}
-                      className="bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-medium"
+                      className="home-slider-dot-active text-white px-3 py-1 rounded-full text-sm font-medium"
                     >
                       {currentSlide + 1}/{testimonials.length}
                     </div>
@@ -251,32 +244,32 @@ export function TestimonialsSection() {
         </div>
 
         {/* CTA Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl p-6 md:p-8 mt-8 md:mt-12 text-center">
+        <div className="bg-white border border-slate-200/80 text-slate-900 rounded-3xl shadow-sm p-5 md:p-6 mt-4 md:mt-6 text-center">
           <div className="max-w-2xl mx-auto">
-            <h3 className="text-xl md:text-2xl font-medium mb-2">Ready to Join Our Happy Customers?</h3>
-            <p className="mb-4 opacity-90 text-sm md:text-base">Experience the best taxi service in Visakhapatnam. Book now and see why thousands choose us!</p>
+            <h3 className="text-xl md:text-2xl font-medium mb-2 text-slate-900">Ready to Join Our Happy Customers?</h3>
+            <p className="mb-4 text-slate-500 text-sm md:text-base">Experience the best taxi service in Visakhapatnam. Book now and see why thousands choose us!</p>
             
             {/* Quick Stats */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-medium">4.9★</div>
-                <div className="text-sm opacity-80">Average Rating</div>
+                <div className="text-2xl md:text-3xl font-medium text-slate-900">4.9★</div>
+                <div className="text-sm text-slate-500">Average Rating</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-medium">10K+</div>
-                <div className="text-sm opacity-80">Happy Customers</div>
+                <div className="text-2xl md:text-3xl font-medium text-slate-900">10K+</div>
+                <div className="text-sm text-slate-500">Happy Customers</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-medium">24/7</div>
-                <div className="text-sm opacity-80">Support</div>
+                <div className="text-2xl md:text-3xl font-medium text-slate-900">24/7</div>
+                <div className="text-sm text-slate-500">Support</div>
               </div>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-              <div className="bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm">
+              <div className="bg-[#0066FF] hover:bg-[#0052CC] text-white px-4 py-2 rounded-full transition-colors">
                 <span className="text-sm font-medium">📞 +91 9966363662</span>
               </div>
-              <span className="text-sm opacity-75">Call now or book online!</span>
+              <span className="text-sm text-slate-500">Call now or book online!</span>
             </div>
           </div>
         </div>
