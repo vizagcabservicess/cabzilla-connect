@@ -1,2 +1,2 @@
 
-export type TripType = 'local' | 'outstation' | 'airport' | 'tour';
+export type TripType = 'local' | 'outstation' | 'airport' | 'tour' | 'custom';

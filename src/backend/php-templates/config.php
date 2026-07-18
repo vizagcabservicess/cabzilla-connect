@@ -47,6 +47,30 @@ define('WHATSAPP_OTP_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_OTP_TEMPLATE_LANGUAGE']
 /** trip | payment — which WhatsApp number sends carpool OTPs */
 define('WHATSAPP_OTP_CHANNEL', $_ENV['WHATSAPP_OTP_CHANNEL'] ?? 'trip');
 
+/** Smart Budget marketplace lead alerts to vendors (Meta Utility template `whatsapp_sb_lead`). */
+define('WHATSAPP_SB_LEAD_CHANNEL', $_ENV['WHATSAPP_SB_LEAD_CHANNEL'] ?? 'trip');
+define('WHATSAPP_SB_LEAD_TEMPLATE_NAME', $_ENV['WHATSAPP_SB_LEAD_TEMPLATE_NAME'] ?? 'whatsapp_sb_lead');
+define('WHATSAPP_SB_LEAD_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_SB_LEAD_TEMPLATE_LANGUAGE'] ?? 'en');
+
+/**
+ * Smart Budget customer WhatsApp when a trip is accepted / fee paid.
+ * Free-form text fails outside Meta's 24h window — use approved Utility templates.
+ *
+ * Accept template body (0 variables) should match:
+ *   🎉 Your trip request has been accepted by the vendor!
+ *   To confirm your booking, please pay the token amount. ...
+ *   Thank you for choosing us!
+ *
+ * Optional: set WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_URL_PARAM=1 if template has {{1}} = pay URL.
+ */
+define('WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_NAME', $_ENV['WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_NAME'] ?? 'whatsapp_sb_customer_accept');
+define('WHATSAPP_SB_CUSTOMER_CONFIRMED_TEMPLATE_NAME', $_ENV['WHATSAPP_SB_CUSTOMER_CONFIRMED_TEMPLATE_NAME'] ?? 'whatsapp_sb_customer_confirmed');
+define('WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_LANGUAGE', $_ENV['WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_LANGUAGE'] ?? 'en');
+define(
+    'WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_URL_PARAM',
+    filter_var($_ENV['WHATSAPP_SB_CUSTOMER_ACCEPT_TEMPLATE_URL_PARAM'] ?? '0', FILTER_VALIDATE_BOOLEAN)
+);
+
 /** Shared secret for cron URLs (e.g. admin tomorrow reminder). Optional; if unset, cron endpoint rejects requests. */
 define('ADMIN_CRON_SECRET', $_ENV['ADMIN_CRON_SECRET'] ?? '');
 

@@ -32,7 +32,8 @@ import {
   Eye,
   Gauge,
   BellRing,
-  Bot
+  Bot,
+  Wallet
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -123,6 +124,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <BellRing size={20} />, 
       path: '/admin/search-alerts',
       show: canViewBookings() || isAdmin() || isSuperAdmin()
+    },
+    {
+      id: 'smart-budget',
+      label: 'Smart Budget',
+      icon: <Wallet size={20} />,
+      path: '/admin/smart-budget',
+      show: checkPrivilege('smart-budget') || canViewBookings() || isAdmin() || isSuperAdmin()
     },
     
     // Fleet Management

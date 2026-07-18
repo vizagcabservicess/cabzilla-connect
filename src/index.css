@@ -12,6 +12,13 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Keep layout stable when Radix still locks scroll (Select/Dialog/Popover). */
+body[data-scroll-locked] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
 #booking-widget {
   scroll-margin-top: var(--site-header-offset);
 }
@@ -1274,12 +1281,28 @@ min-height: 100vh;
   box-shadow: 0 2px 8px rgba(0, 82, 204, 0.32);
 }
 
-.premium-booking-card input:focus,
+.premium-booking-card input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
+  border-color: rgba(100, 116, 139, 0.45);
+}
+
+/* Bordered package / tour selects — soft slate focus (not neon blue box) */
 .premium-booking-card [data-radix-select-trigger]:focus,
 .premium-booking-card button[data-radix-select-trigger]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 163, 255, 0.18);
-  border-color: rgba(0, 102, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
+  border-color: rgba(100, 116, 139, 0.4);
+}
+
+/* Ticket-row borderless selects — never draw a focus box around the value */
+.premium-booking-card button[data-radix-select-trigger].border-0:focus,
+.premium-booking-card button[data-radix-select-trigger].border-0:focus-visible,
+.premium-booking-card button[data-radix-select-trigger][class*='border-0']:focus,
+.premium-booking-card button[data-radix-select-trigger][class*='border-0']:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
 }
 
 /* Value proposition row below booking widget */

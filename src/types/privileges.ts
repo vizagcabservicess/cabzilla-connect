@@ -13,6 +13,7 @@ export const AVAILABLE_MODULES: ModulePrivilege[] = [
   { id: 'bookings_create', name: 'Create Bookings', description: 'Create new bookings', category: 'booking' },
   { id: 'bookings_edit', name: 'Edit Bookings', description: 'Edit existing bookings', category: 'booking' },
   { id: 'bookings_delete', name: 'Delete Bookings', description: 'Delete bookings', category: 'booking' },
+  { id: 'smart-budget', name: 'Smart Budget Marketplace', description: 'Create negotiation links, admin priority, vendor marketplace oversight', category: 'booking' },
   
   // Fleet Management
   { id: 'vehicles_view', name: 'View Vehicles', description: 'View vehicle fleet', category: 'fleet' },

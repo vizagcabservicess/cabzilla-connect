@@ -191,7 +191,15 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                     };
 
                     let fare = 0;
-                    let breakdown = firstCabFareData.breakdown || {};
+                    let breakdown: {
+                      basePrice?: number;
+                      airportFee?: number;
+                      extraDistanceFare?: number;
+                      extraKmCharge?: number;
+                      extraHourCharge?: number;
+                      priceExtraKm?: number;
+                      priceExtraHour?: number;
+                    } = firstCabFareData.breakdown || {};
 
                     // For outstation one-way, use totalPrice directly (same as CabList does)
                     if (tripDetails.tripType === 'outstation' && (tripDetails.tripMode === 'one-way' || !tripDetails.tripMode)) {
@@ -211,7 +219,6 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                         const selectedPackage = localPackageLimits[tripDetails.package || '8hrs-80km'] || { km: 80, hours: 8 };
                         const extraKm = Math.max(0, distance - selectedPackage.km);
                         const extraKmCharge = breakdown.extraKmCharge || breakdown.priceExtraKm || 0;
-                        const extraHourCharge = breakdown.extraHourCharge || breakdown.priceExtraHour || 0;
                         const extraKmFare = extraKm * extraKmCharge;
                         fare = (breakdown.basePrice || fare) + extraKmFare;
                     }
@@ -355,7 +362,10 @@ export const CabBookingInterface = ({ initialTripDetails }: CabBookingInterfaceP
                 <TabTripSelector
                     selectedTab={tripDetails.tripType}
                     tripMode={tripDetails.tripMode}
-                    onTabChange={(tab) => setTripDetails(prev => ({ ...prev, tripType: tab }))}
+                    onTabChange={(tab) => {
+                      if (tab === 'custom') return;
+                      setTripDetails((prev) => ({ ...prev, tripType: tab }));
+                    }}
                     onTripModeChange={(mode) => setTripDetails(prev => ({ ...prev, tripMode: mode }))}
                 />
             </Card>

@@ -71,7 +71,7 @@ const CabFareCard = ({
   isCalculatingFares = false,
 }: any) => {
   const awaitingRouteKm =
-    (tripType === 'outstation' || tripType === 'airport') && distance <= 0;
+    (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && distance <= 0;
   const normalizeVehicleId = (id: string): string => {
     return id.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   };

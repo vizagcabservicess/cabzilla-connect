@@ -75,3 +75,19 @@ export function TourTabIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** Multi-stop / freeform itinerary (admin Smart Budget). */
+export function CustomItineraryTabIcon(props: IconProps) {
+  return (
+    <svg viewBox="4 4 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <g {...strokeProps}>
+        <circle cx={20} cy={22} r={8} />
+        <circle cx={20} cy={22} r={2.5} fill="currentColor" stroke="none" />
+        <path d="M20 30 C20 38 28 42 36 48 C44 54 52 56 52 66" />
+        <circle cx={52} cy={58} r={8} />
+        <circle cx={52} cy={58} r={2.5} fill="currentColor" stroke="none" />
+        <path d="M58 52 L68 42 M68 42 L60 42 M68 42 L68 50" />
+      </g>
+    </svg>
+  );
+}

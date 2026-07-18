@@ -6,6 +6,7 @@ import { reloadCabTypes } from "@/lib/cabData";
 import { TabBar } from "@/components/TabBar";
 import {
   AirportTabIcon,
+  CustomItineraryTabIcon,
   LocalTabIcon,
   OutstationTabIcon,
   TourTabIcon,
@@ -15,13 +16,17 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeroPromoSlider } from "@/components/HeroPromoSlider";
 
+export type CustomerTripSelectorTab = 'outstation' | 'local' | 'airport' | 'tour' | 'custom';
+export type TripSelectorTab = CustomerTripSelectorTab;
+
 interface TabTripSelectorProps {
-  selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
+  selectedTab: TripSelectorTab;
   tripMode: 'one-way' | 'round-trip';
-  onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
+  /** Receives `custom` only when that tab is included in `visibleTabs` (Smart Budget). */
+  onTabChange: (tab: TripSelectorTab) => void;
   onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
   onClearLocations?: () => void;
-  visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour'>;
+  visibleTabs?: TripSelectorTab[];
   /** Airport tab: show From Airport / To Airport instead of One Way / Round Trip */
   airportDirectionLabel?: string;
   onAirportDirectionChange?: (direction: 'from-airport' | 'to-airport') => void;
@@ -34,6 +39,8 @@ interface TabTripSelectorProps {
   tripModeToggleMobileOnly?: boolean;
   /** Hide "Urbania now available!" strip on `/vehicle/urbania` etc. — redundant while already on Urbania. */
   hideUrbaniaPromo?: boolean;
+  /** Hide the entire promo slider (Urbania / car pooling) so all trip tabs stay visible (admin embeds). */
+  hidePromoSlider?: boolean;
   /**
    * Urbania `/vehicle/*` embed: parent Hero already renders one outer card — drop duplicated
    * max-lg border/shadow/padding on this wrapper so tabs + fields share a single frame.
@@ -57,6 +64,7 @@ export function TabTripSelector({
   showTripModeToggle = false,
   tripModeToggleMobileOnly = false,
   hideUrbaniaPromo = false,
+  hidePromoSlider = false,
   suppressMobileCardChrome = false,
   urbaniaMobileTripTiles = false,
   tripModeFocusRef,
@@ -215,7 +223,7 @@ export function TabTripSelector({
       if (onClearLocations) onClearLocations();
     }
     
-    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+    onTabChange(value as TripSelectorTab);
   };
   
   const tabIcons: Record<string, React.ReactNode> = {
@@ -223,6 +231,7 @@ export function TabTripSelector({
     local: <LocalTabIcon className="h-4 w-4" />,
     airport: <AirportTabIcon className="h-4 w-4" />,
     tour: <TourTabIcon className="h-4 w-4" />,
+    custom: <CustomItineraryTabIcon className="h-4 w-4" />,
   };
 
   const allTabs = [
@@ -230,12 +239,18 @@ export function TabTripSelector({
     { id: 'local' as const, label: 'Local', mobileLine1: 'Hourly', mobileLine2: 'Rentals' },
     { id: 'airport' as const, label: 'Airport', mobileLine1: 'Airport', mobileLine2: 'Transfer' },
     { id: 'tour' as const, label: 'Tour', mobileLine1: 'Tour', mobileLine2: 'Packages' },
+    { id: 'custom' as const, label: 'Custom', mobileLine1: 'Custom', mobileLine2: 'Itinerary' },
   ];
-  const tabs = visibleTabs ? allTabs.filter((tab) => visibleTabs.includes(tab.id)) : allTabs;
+  // Homepage / default: Outstation–Tour only. `custom` is Smart Budget–only (pass it in visibleTabs).
+  const defaultPublicTabs: TripSelectorTab[] = ['outstation', 'local', 'airport', 'tour'];
+  const tabs = allTabs.filter((tab) =>
+    (visibleTabs ?? defaultPublicTabs).includes(tab.id)
+  );
 
   const showTabBar = !visibleTabs || visibleTabs.length > 1;
   const showTripMode =
-    showTripModeToggle && (selectedTab === 'outstation' || selectedTab === 'tour');
+    showTripModeToggle &&
+    (selectedTab === 'outstation' || selectedTab === 'tour' || selectedTab === 'custom');
   const showAirportDirection = selectedTab === 'airport' && Boolean(onAirportDirectionChange);
 
   /** Local-only embed: single tab + no trip-mode row → avoid empty bordered box on mobile */
@@ -322,7 +337,9 @@ export function TabTripSelector({
                   );
                 })}
               </div>
-              <HeroPromoSlider size="compact" hideUrbaniaPromo={hideUrbaniaPromo} />
+              {!hidePromoSlider && (
+                <HeroPromoSlider size="compact" hideUrbaniaPromo={hideUrbaniaPromo} />
+              )}
             </div>
           </div>
         </>

@@ -16,6 +16,9 @@ interface FareBreakdown {
   packageLabel?: string;
   extraKmCharge?: number;
   extraHourCharge?: number;
+  /** Alternate keys from local fare API / stored rows */
+  priceExtraKm?: number;
+  priceExtraHour?: number;
   airportFee?: number; // Added airportFee property
   tierUsed?: string; // Added tierUsed property for tiered pricing
 }

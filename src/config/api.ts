@@ -13,7 +13,7 @@ function getRuntimeProductionOrigin(): string {
 
 function getRuntimeApiBaseUrl(): string {
   if (typeof window === 'undefined') {
-    return process.env.NODE_ENV === 'development'
+    return import.meta.env.DEV
       ? 'http://localhost:8080'
       : 'https://vizagtaxihub.com';
   }
@@ -23,7 +23,7 @@ function getRuntimeApiBaseUrl(): string {
     window.location.hostname === '127.0.0.1';
 
   // Use local backend only when app itself runs on localhost.
-  if (process.env.NODE_ENV === 'development' && isLocalHost) {
+  if (import.meta.env.DEV && isLocalHost) {
     return 'http://localhost:8080';
   }
 

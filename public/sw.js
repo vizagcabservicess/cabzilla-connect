@@ -148,7 +148,7 @@ async function preloadModule(url) {
 
 // Web Push — show OS/browser notification (payload JSON: { title, body, url, data })
 self.addEventListener('push', (event) => {
-  let payload = { title: 'Vizag Taxi Hub', body: '', url: '/admin' };
+  let payload = { title: 'Vizag Taxi Hub', body: '', url: '/admin', tag: 'vizag-taxi-hub' };
   try {
     if (event.data) {
       const j = event.data.json();
@@ -157,6 +157,7 @@ self.addEventListener('push', (event) => {
           title: j.title || payload.title,
           body: j.body || '',
           url: j.url || '/admin',
+          tag: j.tag || (j.data && j.data.type) || payload.tag,
         };
       }
     }
@@ -174,7 +175,7 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       icon: '/og-image.png',
       badge: '/og-image.png',
-      tag: 'fuel-refill',
+      tag: payload.tag || 'vizag-taxi-hub',
       renotify: true,
       data: { url: payload.url },
     })

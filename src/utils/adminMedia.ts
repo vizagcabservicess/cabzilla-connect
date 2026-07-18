@@ -13,7 +13,7 @@ export function extractStorageObject(sourceUrl: string): string | null {
   const trimmed = sourceUrl.trim();
   if (!trimmed) return null;
 
-  if (/^(carpool-id|app-uploads|odometer-readings)\/.+/.test(trimmed)) {
+  if (/^(carpool-id|app-uploads|odometer-readings|sb-vendor)\/.+/.test(trimmed)) {
     return trimmed;
   }
 

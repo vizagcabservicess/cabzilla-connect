@@ -248,7 +248,7 @@ export function BookingDetailsModal({
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent 
-        className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content z-[10001] bg-background"
+        className="max-w-4xl max-h-[85vh] overflow-y-auto booking-details-modal-content bg-background"
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement;
           const isSwitch = target.closest('button[role="switch"]') || target.closest('[id*="toggle"]');

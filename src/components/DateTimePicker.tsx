@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, startOfDay } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -25,6 +25,40 @@ export interface DateTimePickerProps {
   variant?: 'mobile' | 'desktop' | 'app' | 'infield';
   /** Fired after the user confirms date/time via Apply. */
   onDateApplied?: () => void;
+}
+
+/** Compare / store trip times at minute precision (avoids Apply failing on leftover seconds). */
+function atMinutePrecision(d: Date): Date {
+  const x = new Date(d);
+  x.setSeconds(0, 0);
+  return x;
+}
+
+function combineDateAndTime(base: Date | undefined, timeHm: string): Date | null {
+  const [hours, minutes] = timeHm.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  const next = base ? new Date(base) : new Date();
+  next.setHours(hours, minutes, 0, 0);
+  return next;
+}
+
+/**
+ * Earliest selectable instant.
+ * - With `minDate` (Hero passes now+1h): use a fresh floor at Apply/open time.
+ * - Without: now (same-day still needs +1h advance below).
+ */
+function resolveFloor(minDate: Date | undefined, forSameDayAdvance: boolean): Date {
+  const now = atMinutePrecision(new Date());
+  if (minDate) {
+    const floor = atMinutePrecision(minDate);
+    return floor > now ? floor : now;
+  }
+  if (forSameDayAdvance) {
+    return new Date(now.getTime() + 60 * 60 * 1000);
+  }
+  return now;
 }
 
 export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerProps>(function DateTimePicker({
@@ -91,7 +125,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
 
   useEffect(() => {
     if (!date && !selectedTime) {
-      const now = new Date();
+      const now = atMinutePrecision(new Date());
       setSelectedTime(format(now, 'HH:mm'));
       onDateChange(now);
     }
@@ -99,12 +133,27 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
 
   useEffect(() => {
     if (date) {
-      setSelectedTime(format(date, 'HH:mm'));
+      setSelectedTime(format(atMinutePrecision(date), 'HH:mm'));
     }
   }, [date]);
 
+  const ensureSelectableInstant = (candidate: Date): Date => {
+    const normalized = atMinutePrecision(candidate);
+    const isToday = isSameDay(normalized, new Date());
+    const floor = resolveFloor(minDate, Boolean(!minDate && isToday));
+    return normalized < floor ? floor : normalized;
+  };
+
   const openPicker = () => {
     if (disabled) return;
+    const combined =
+      (selectedTime && combineDateAndTime(date, selectedTime)) ||
+      (date ? atMinutePrecision(date) : atMinutePrecision(new Date()));
+    const next = ensureSelectableInstant(combined);
+    setSelectedTime(format(next, 'HH:mm'));
+    if (!date || next.getTime() !== atMinutePrecision(date).getTime()) {
+      onDateChange(next);
+    }
     setOpen(true);
   };
 
@@ -120,7 +169,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
       triggerRef.current?.focus();
       triggerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
-  }), [disabled]);
+  }), [disabled, date, selectedTime, minDate]);
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedTime(e.target.value);
@@ -132,8 +181,8 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
 
     if (!selectedTime) return;
 
-    const [hours, minutes] = selectedTime.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    const combined = combineDateAndTime(date, selectedTime);
+    if (!combined) {
       toast({
         title: 'Invalid time format',
         description: 'Please use HH:mm (24-hour format).',
@@ -142,56 +191,28 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
       return;
     }
 
-    const newDate = date ? new Date(date) : new Date();
-    newDate.setHours(hours);
-    newDate.setMinutes(minutes);
-
-    const now = new Date();
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    const isToday = newDate.toDateString() === now.toDateString();
-
-    if (minDate) {
-      if (newDate < minDate) {
-        toast({
-          title: 'Invalid selection',
-          description: 'You cannot select a past date or time.',
-          variant: 'destructive',
-        });
-        return;
-      }
-    } else {
-      if (newDate < now) {
-        toast({
-          title: 'Invalid selection',
-          description: 'You cannot select a past date or time.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (isToday && newDate < oneHourFromNow) {
-        toast({
-          title: 'Advance booking required',
-          description: 'Please book at least 1 hour in advance for same-day trips.',
-          variant: 'destructive',
-        });
-        return;
-      }
+    // Stale "now+1h" from page load often falls behind live minDate — bump instead of blocking Apply.
+    const applied = ensureSelectableInstant(combined);
+    if (applied.getTime() !== combined.getTime()) {
+      setSelectedTime(format(applied, 'HH:mm'));
     }
 
-    onDateChange(newDate);
+    onDateChange(applied);
     setOpen(false);
     window.setTimeout(() => onDateAppliedRef.current?.(), 50);
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
-      if (date && selectedTime) {
+      if (selectedTime) {
         const [hours, minutes] = selectedTime.split(':').map(Number);
-        selectedDate.setHours(hours);
-        selectedDate.setMinutes(minutes);
+        if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+          selectedDate.setHours(hours, minutes, 0, 0);
+        }
+      } else {
+        selectedDate.setHours(0, 0, 0, 0);
       }
-      onDateChange(selectedDate);
+      onDateChange(ensureSelectableInstant(selectedDate));
     } else {
       onDateChange(undefined);
     }
@@ -304,7 +325,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
         mode="single"
         selected={date}
         onSelect={disabled ? undefined : handleCalendarSelect}
-        disabled={minDate ? { before: minDate } : undefined}
+        disabled={minDate ? { before: startOfDay(minDate) } : undefined}
         initialFocus
         className="pointer-events-auto mx-auto w-full max-w-sm"
       />
@@ -384,7 +405,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
                   mode="single"
                   selected={date}
                   onSelect={disabled ? undefined : handleCalendarSelect}
-                  disabled={minDate ? { before: minDate } : undefined}
+                  disabled={minDate ? { before: startOfDay(minDate) } : undefined}
                   initialFocus
                   className="pointer-events-auto mx-auto w-full max-w-none p-1"
                   classNames={mobileCalendarClassNames}
@@ -454,7 +475,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
             type="button"
             className={cn(
               'relative flex w-full cursor-pointer items-center justify-start border-0 bg-transparent p-0 text-left touch-manipulation [-webkit-tap-highlight-color:transparent]',
-              'min-h-[2.75rem] py-1 active:bg-gray-50/80',
+              'min-h-[2.75rem] py-1 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 active:bg-gray-50/80',
               disabled && 'cursor-not-allowed opacity-60',
             )}
             disabled={disabled}
@@ -469,7 +490,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
           {mobileSheet}
         </>
       ) : (
-        <Popover open={open} onOpenChange={setOpen} modal>
+        <Popover open={open} onOpenChange={setOpen} modal={false}>
           <PopoverTrigger asChild>
             <Button
               ref={triggerRef}
@@ -482,7 +503,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
                   : isAppVariant && !isInfieldVariant
                     ? 'h-auto min-h-[3rem] rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm hover:bg-white'
                     : isInfieldVariant
-                      ? 'h-auto min-h-[2.75rem] rounded-none border border-transparent bg-transparent px-0 py-1 shadow-none hover:bg-transparent'
+                      ? 'h-auto min-h-[2.75rem] rounded-none border border-transparent bg-transparent px-0 py-1 shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0'
                       : 'h-[3.5rem] border-gray-200 bg-white text-[1rem] font-normal hover:bg-gray-50',
               )}
               disabled={disabled}

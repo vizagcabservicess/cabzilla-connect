@@ -82,6 +82,8 @@ interface LocationInputProps {
   variant?: 'mobile' | 'desktop' | 'app' | 'infield';
   /** When pair uses an external dashed rail between From/To (Urbania stacked ticket); omit inset pin icon. */
   hideLeadingIcon?: boolean;
+  /** When airport drop is outside Vizag radius, parent should switch trip type to outstation. */
+  onRequestOutstationSwitch?: () => void;
 }
 
 export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>(function LocationInput({
@@ -102,6 +104,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   readOnly = false,
   variant = 'mobile',
   hideLeadingIcon = false,
+  onRequestOutstationSwitch,
 }, ref) {
   const enforceVizag35Km = isPickupLocation || restrictToVizagRadius;
   const selectFromListMessage = enforceVizag35Km
@@ -111,10 +114,12 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   /** Parent handlers (e.g. Hero) are often inline — must not be Autocomplete effect deps or Places re-inits every render → duplicate .pac-container */
   const onLocationChangeRef = useRef(onLocationChange);
   const onChangeRef = useRef(onChange);
+  const onRequestOutstationSwitchRef = useRef(onRequestOutstationSwitch);
   useEffect(() => {
     onLocationChangeRef.current = onLocationChange;
     onChangeRef.current = onChange;
-  }, [onLocationChange, onChange]);
+    onRequestOutstationSwitchRef.current = onRequestOutstationSwitch;
+  }, [onLocationChange, onChange, onRequestOutstationSwitch]);
 
   const isDesktopVariant = variant === 'desktop';
   const isAppVariant = variant === 'app';
@@ -249,7 +254,8 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     const seq = ++predictionsRequestSeq.current;
 
     const timer = window.setTimeout(() => {
-      const isOutstationDrop = tripType === 'outstation' && !isPickupLocation;
+      const isOutstationDrop =
+        (tripType === 'outstation' || tripType === 'custom') && !isPickupLocation;
       const request: google.maps.places.AutocompletionRequest & { strictBounds?: boolean } = {
         input: q,
         componentRestrictions: { country: 'in' },
@@ -511,7 +517,8 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     let ac: google.maps.places.Autocomplete | null = null;
 
     try {
-      const isOutstationDrop = tripType === 'outstation' && !isPickupLocation;
+      const isOutstationDrop =
+        (tripType === 'outstation' || tripType === 'custom') && !isPickupLocation;
 
       const options: google.maps.places.AutocompleteOptions = {
         types: ['geocode', 'establishment'],
@@ -566,6 +573,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
           if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(lat, lng)) {
             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
+            onRequestOutstationSwitchRef.current?.();
           }
 
           if (onLocationChangeRef.current) {
@@ -651,6 +659,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      
      if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
+       onRequestOutstationSwitchRef.current?.();
      }
     setInputValue(suggestion.name || suggestion.address || "");
     
@@ -827,7 +836,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             aria-expanded={mobileSearchSheetOpen}
             disabled={disabled}
             className={cn(
-              "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none ring-offset-white focus-visible:ring-2 focus-visible:ring-blue-500/30",
+              "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
               "touch-manipulation text-base leading-tight",
               inputValue ? "font-bold text-gray-900" : "font-normal text-gray-500"
             )}
@@ -885,7 +894,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                     )
                   : isInfieldVariant
                     ? cn(
-                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:font-normal placeholder:text-gray-500"
+                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:font-normal placeholder:text-gray-500"
                       )
                     : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}

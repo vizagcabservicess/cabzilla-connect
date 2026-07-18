@@ -17,9 +17,15 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
-import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus } from 'lucide-react';
+import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus, Link2 } from 'lucide-react';
 import { searchAlertsAPI, type SearchAlert } from '@/services/api/searchAlertsAPI';
 import { ConvertToBookingModal } from '@/components/admin/ConvertToBookingModal';
+import { smartBudgetAPI } from '@/services/api/smartBudgetAPI';
+import {
+  mapSearchAlertToSmartBudgetSession,
+  smartBudgetCustomerSessionUrl,
+  smartBudgetWhatsAppShareUrl,
+} from '@/utils/searchAlertSmartBudget';
 import {
   buildSearchAlertExportRows,
   formatSearchAlertDateTime,
@@ -89,6 +95,32 @@ export default function SearchAlertsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<SearchAlert | null>(null);
   const [convertAlert, setConvertAlert] = useState<SearchAlert | null>(null);
+  const [creatingSbAlertId, setCreatingSbAlertId] = useState<number | null>(null);
+
+  const handleCreateSmartBudgetLink = async (alert: SearchAlert) => {
+    setCreatingSbAlertId(alert.id);
+    try {
+      const input = mapSearchAlertToSmartBudgetSession(alert);
+      const session = await smartBudgetAPI.admin.createSession(input);
+      const url = session.customer_url || smartBudgetCustomerSessionUrl(session.token);
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Smart Budget link created and copied');
+      } catch {
+        toast.success('Smart Budget link created');
+      }
+      const wa = smartBudgetWhatsAppShareUrl({
+        token: session.token,
+        customerUrl: url,
+        customerPhone: session.customer_phone || input.customer_phone,
+      });
+      window.open(wa, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not create Smart Budget link');
+    } finally {
+      setCreatingSbAlertId(null);
+    }
+  };
 
   const showImportStats = (stats: { imported: number; duplicates: number; parsed?: number }) => {
     const parsed = stats.parsed != null ? ` from ${stats.parsed} message(s)` : '';
@@ -388,19 +420,39 @@ export default function SearchAlertsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs whitespace-nowrap"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setConvertAlert(alert);
-                            }}
-                          >
-                            <CalendarPlus className="h-3.5 w-3.5 mr-1" />
-                            Convert to Booking
-                          </Button>
+                          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="h-8 text-xs whitespace-nowrap bg-emerald-700 hover:bg-emerald-800"
+                              disabled={creatingSbAlertId === alert.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCreateSmartBudgetLink(alert);
+                              }}
+                            >
+                              {creatingSbAlertId === alert.id ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              ) : (
+                                <Link2 className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              Smart Budget link
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs whitespace-nowrap"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConvertAlert(alert);
+                              }}
+                            >
+                              <CalendarPlus className="h-3.5 w-3.5 mr-1" />
+                              Convert to Booking
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

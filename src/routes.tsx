@@ -14,6 +14,8 @@ import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import Index from './pages/Index';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
+import SmartBudgetVendorAuthLayout from './pages/smart-budget/SmartBudgetVendorAuthLayout';
+import SmartBudgetCustomerAuthLayout from './pages/smart-budget/SmartBudgetCustomerAuthLayout';
 
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -104,7 +106,28 @@ const PoolingAdminDashboard = lazy(() => import('./pages/admin/PoolingAdminDashb
 const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursManagementPage'));
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
+const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
 const AIAssistantPage = lazy(() => import('./pages/admin/AIAssistantPage'));
+const SmartBudgetCustomerSessionPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerSessionPage'));
+const SmartBudgetCustomerChatPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerChatPage'));
+const SmartBudgetCustomerPayPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerPayPage'));
+const SmartBudgetCustomerLoginPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerLoginPage'));
+const SmartBudgetCustomerDashboardPage = lazy(
+  () => import('./pages/smart-budget/SmartBudgetCustomerDashboardPage')
+);
+const SmartBudgetVendorLoginPage = lazy(() => import('./pages/smart-budget/SmartBudgetVendorLoginPage'));
+const SmartBudgetVendorSignupPage = lazy(() => import('./pages/smart-budget/SmartBudgetVendorSignupPage'));
+const SmartBudgetVendorVerifyOtpPage = lazy(
+  () => import('./pages/smart-budget/SmartBudgetVendorVerifyOtpPage')
+);
+const SmartBudgetVendorOnboardingPage = lazy(
+  () => import('./pages/smart-budget/SmartBudgetVendorOnboardingPage')
+);
+const SmartBudgetVendorDashboardPage = lazy(() => import('./pages/smart-budget/SmartBudgetVendorDashboardPage'));
+const SmartBudgetVendorLeadPage = lazy(() => import('./pages/smart-budget/SmartBudgetVendorLeadPage'));
+const SmartBudgetVendorOfferConfirmPage = lazy(
+  () => import('./pages/smart-budget/SmartBudgetVendorOfferConfirmPage')
+);
 const CreateRidePage = lazy(() => import('./components/pooling/CreateRidePage'));
 const BookingsPage = lazy(() => import('./pages/BookingsPage'));
 const FaresPage = lazy(() => import('./pages/FaresPage'));
@@ -411,6 +434,10 @@ const router = createBrowserRouter([
             element: <SearchAlertsPage />,
           },
           {
+            path: 'smart-budget',
+            element: <SmartBudgetPage />,
+          },
+          {
             path: 'vehicles',
             element: <VehiclesPage />,
           },
@@ -629,6 +656,66 @@ const router = createBrowserRouter([
       {
         path: 'shared-carpooling',
         element: <LazyRoute component={SharedCarpoolingLandingPage} />,
+      },
+      {
+        path: 'smart-budget/s/:token',
+        element: <LazyRoute component={SmartBudgetCustomerSessionPage} />,
+      },
+      {
+        path: 'smart-budget/s/:token/chat',
+        element: <LazyRoute component={SmartBudgetCustomerChatPage} />,
+      },
+      {
+        path: 'smart-budget/s/:token/pay',
+        element: <LazyRoute component={SmartBudgetCustomerPayPage} />,
+      },
+      {
+        path: 'smart-budget/customer',
+        element: <SmartBudgetCustomerAuthLayout />,
+        children: [
+          {
+            index: true,
+            element: <LazyRoute component={SmartBudgetCustomerDashboardPage} />,
+          },
+          {
+            path: 'login',
+            element: <LazyRoute component={SmartBudgetCustomerLoginPage} />,
+          },
+        ],
+      },
+      {
+        path: 'smart-budget/v/:token',
+        element: <LazyRoute component={SmartBudgetVendorOfferConfirmPage} />,
+      },
+      {
+        path: 'smart-budget/vendor/signup',
+        element: <LazyRoute component={SmartBudgetVendorSignupPage} />,
+      },
+      {
+        path: 'smart-budget/vendor/verify-otp',
+        element: <LazyRoute component={SmartBudgetVendorVerifyOtpPage} />,
+      },
+      {
+        path: 'smart-budget/vendor',
+        element: <SmartBudgetVendorAuthLayout />,
+        children: [
+          {
+            index: true,
+            element: <LazyRoute component={SmartBudgetVendorDashboardPage} />,
+          },
+          {
+            path: 'login',
+            element: <LazyRoute component={SmartBudgetVendorLoginPage} />,
+          },
+          {
+            path: 'onboarding',
+            element: <LazyRoute component={SmartBudgetVendorOnboardingPage} />,
+          },
+          {
+            path: 'leads/:id',
+            element: <LazyRoute component={SmartBudgetVendorLeadPage} />,
+          },
+        ],
       },
       {
         path: 'shared-carpooling/results',

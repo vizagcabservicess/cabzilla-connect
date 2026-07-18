@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LocationInput } from '@/components/LocationInput';
 import { DateTimePicker } from '@/components/DateTimePicker';
-import { TabTripSelector } from '@/components/TabTripSelector';
+import { TabTripSelector, type TripSelectorTab } from '@/components/TabTripSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -66,7 +66,8 @@ export function AdminSearchWidget({ onSearch, initialData, isLoading = false }: 
   };
 
   // Handle trip type changes
-  const handleTabChange = (type: TripType) => {
+  const handleTabChange = (type: TripSelectorTab) => {
+    if (type === 'custom') return;
     setTripType(type);
     setDistance(0);
     
