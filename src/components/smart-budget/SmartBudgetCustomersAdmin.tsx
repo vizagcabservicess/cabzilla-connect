@@ -147,7 +147,8 @@ export function SmartBudgetCustomersAdmin() {
             Customers & bids
           </h2>
           <p className="text-xs text-muted-foreground">
-            Portal logins and Smart Budget bids (customer budgets) by phone number.
+            Customers who posted a bid — offer-link WhatsApp OTP or customer portal (after signup
+            OTP). Portal accounts with no trips are hidden.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -174,23 +175,29 @@ export function SmartBudgetCustomersAdmin() {
       </div>
 
       {summary && (
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="shadow-none">
             <CardContent className="p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Customers</p>
+              <p className="text-[10px] uppercase text-muted-foreground">Posted customers</p>
               <p className="text-lg font-semibold">{summary.total}</p>
             </CardContent>
           </Card>
           <Card className="shadow-none">
             <CardContent className="p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Portal logins</p>
+              <p className="text-[10px] uppercase text-muted-foreground">Portal accounts</p>
               <p className="text-lg font-semibold">{summary.with_portal}</p>
             </CardContent>
           </Card>
           <Card className="shadow-none">
             <CardContent className="p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">With bids</p>
-              <p className="text-lg font-semibold">{summary.with_bids}</p>
+              <p className="text-[10px] uppercase text-muted-foreground">OTP link trips</p>
+              <p className="text-lg font-semibold">{summary.otp_link_trips ?? 0}</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-none">
+            <CardContent className="p-3">
+              <p className="text-[10px] uppercase text-muted-foreground">Portal trips</p>
+              <p className="text-lg font-semibold">{summary.portal_trips ?? 0}</p>
             </CardContent>
           </Card>
         </div>
@@ -221,7 +228,9 @@ export function SmartBudgetCustomersAdmin() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : customers.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No customers yet.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No posted trips yet (OTP link or portal).
+              </p>
             ) : (
               customers.map((customer) => (
                 <button
@@ -242,8 +251,14 @@ export function SmartBudgetCustomersAdmin() {
                         variant={customer.has_portal_login ? 'default' : 'secondary'}
                         className="text-[10px]"
                       >
-                        {customer.has_portal_login ? 'Portal' : 'Link only'}
+                        {customer.has_portal_login ? 'Portal' : 'OTP link'}
                       </Badge>
+                      {(customer.portal_trip_count ?? 0) > 0 &&
+                        (customer.otp_link_count ?? 0) > 0 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            Both sources
+                          </Badge>
+                        )}
                       <Badge variant="outline" className="text-[10px]">
                         {customer.sessions_count} bid{customer.sessions_count === 1 ? '' : 's'}
                       </Badge>

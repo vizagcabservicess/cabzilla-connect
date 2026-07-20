@@ -233,6 +233,10 @@ export interface SmartBudgetAdminCustomer {
   has_portal_login: boolean;
   sessions_count: number;
   active_count: number;
+  /** Trips posted via offer-link WhatsApp OTP. */
+  otp_link_count?: number;
+  /** Trips posted via customer portal after signup OTP. */
+  portal_trip_count?: number;
   max_budget?: number | null;
   last_activity?: string | null;
   created_at?: string | null;
@@ -242,6 +246,8 @@ export interface SmartBudgetAdminCustomerSummary {
   total: number;
   with_portal: number;
   with_bids: number;
+  otp_link_trips?: number;
+  portal_trips?: number;
 }
 
 export interface CreateSmartBudgetVendorInput {

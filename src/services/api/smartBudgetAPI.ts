@@ -328,6 +328,8 @@ export const smartBudgetAPI = {
             total: Number(result.summary?.total ?? 0),
             with_portal: Number(result.summary?.with_portal ?? 0),
             with_bids: Number(result.summary?.with_bids ?? 0),
+            otp_link_trips: Number(result.summary?.otp_link_trips ?? 0),
+            portal_trips: Number(result.summary?.portal_trips ?? 0),
           },
         };
       } catch (error) {
