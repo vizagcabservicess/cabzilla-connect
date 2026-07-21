@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
@@ -28,6 +28,11 @@ interface BookingSummaryProps {
   onEditPickupDate?: () => void;
   hideInclusionsExclusions?: boolean;
   breakdown?: any; // Breakdown passed from selected cab - should be used instead of recalculating
+  /** Rendered under Total Price (e.g. coupon entry). */
+  couponSlot?: ReactNode;
+  /** Coupon discount to show as a line before Total Price. */
+  discountAmount?: number;
+  discountCode?: string | null;
 }
 
 export const BookingSummary = ({
@@ -45,7 +50,10 @@ export const BookingSummary = ({
   onEditPickupLocation,
   onEditPickupDate,
   hideInclusionsExclusions = false,
-  breakdown: passedBreakdown
+  breakdown: passedBreakdown,
+  couponSlot,
+  discountAmount = 0,
+  discountCode = null,
 }: BookingSummaryProps) => {
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
@@ -1096,6 +1104,14 @@ export const BookingSummary = ({
     summaryTotal = outstationBreakdown.totalFare;
   }
 
+  const listTotalBeforeDiscount =
+    tripType === 'local' ? localTotal : tripType === 'tour' ? tourBaseFare : summaryTotal;
+  const appliedDiscount = Math.max(
+    0,
+    Math.min(Number(discountAmount) || 0, listTotalBeforeDiscount)
+  );
+  const totalAfterDiscount = Math.max(0, listTotalBeforeDiscount - appliedDiscount);
+
   const canShareOnWhatsApp =
     !!pickupLocation && !!pickupDate && !!selectedCab && summaryTotal > 0;
 
@@ -1273,8 +1289,11 @@ export const BookingSummary = ({
             extraDistance > 0 ? ` (${extraDistance} KM)` : ''
           }`
         : undefined,
+      appliedDiscount > 0
+        ? `Discount${discountCode ? ` (${discountCode})` : ''}: -${formatPrice(appliedDiscount)}`
+        : undefined,
       '',
-      `Total Price: ${formatPrice(summaryTotal)}`,
+      `Total Price: ${formatPrice(totalAfterDiscount)}`,
       '',
       'Parking and tolls fees are extra.',
       '',
@@ -1626,9 +1645,19 @@ export const BookingSummary = ({
                   </div>
                 )}
                 <Separator className="my-3" />
+                {appliedDiscount > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-emerald-700 text-[14px]">
+                      Discount{discountCode ? ` (${discountCode})` : ''}
+                    </p>
+                    <p className="font-semibold text-emerald-700 text-[14px]">
+                      -{formatPrice(appliedDiscount)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <p className="font-semibold text-[14px]">Total Price</p>
-                  <p className="font-bold text-[14px]">{formatPrice(localTotal)}</p>
+                  <p className="font-bold text-[14px]">{formatPrice(totalAfterDiscount)}</p>
                 </div>
               </>
             ) : tripType === 'tour' ? (
@@ -1638,9 +1667,19 @@ export const BookingSummary = ({
                   <p className="font-semibold text-[14px]">{formatPrice(tourBaseFare)}</p>
                 </div>
                 <Separator className="my-3" />
+                {appliedDiscount > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-emerald-700 text-[14px]">
+                      Discount{discountCode ? ` (${discountCode})` : ''}
+                    </p>
+                    <p className="font-semibold text-emerald-700 text-[14px]">
+                      -{formatPrice(appliedDiscount)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <p className="font-semibold text-[14px]">Total Price</p>
-                  <p className="font-bold text-[14px]">{formatPrice(tourBaseFare)}</p>
+                  <p className="font-bold text-[14px]">{formatPrice(totalAfterDiscount)}</p>
                 </div>
               </>
             ) : (
@@ -1670,12 +1709,23 @@ export const BookingSummary = ({
                   </div>
                 )}
                 <Separator className="my-3" />
+                {appliedDiscount > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-emerald-700 text-[14px]">
+                      Discount{discountCode ? ` (${discountCode})` : ''}
+                    </p>
+                    <p className="font-semibold text-emerald-700 text-[14px]">
+                      -{formatPrice(appliedDiscount)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <p className="font-semibold text-[14px]">Total Price</p>
-                  <p className="font-bold text-[14px]">{formatPrice(summaryTotal)}</p>
+                  <p className="font-bold text-[14px]">{formatPrice(totalAfterDiscount)}</p>
                 </div>
               </>
             )}
+            {couponSlot ? <div className="mt-3">{couponSlot}</div> : null}
             <div className="mt-3">
               <button
                 type="button"

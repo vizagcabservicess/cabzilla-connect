@@ -41,6 +41,7 @@ import {
   HelpCircle,
   Briefcase,
   Building2,
+  BadgePercent,
 } from 'lucide-react';
 import { CITY_LOOKUP } from './OutstationHeroWidget';
 import { tourAPI } from '@/services/api/tourAPI';
@@ -774,6 +775,10 @@ export function Navbar() {
                     <User className="h-5 w-5" />
                     <span>Hire Driver</span>
                   </Link>
+                  <Link to="/offers" className="flex items-center space-x-2 py-2 px-4 rounded-md hover:bg-gray-100 transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
+                    <BadgePercent className="h-5 w-5" />
+                    <span>Offers</span>
+                  </Link>
 
                   {/* Services Section */}
                   <div className="space-y-2">
@@ -1000,6 +1005,14 @@ export function Navbar() {
             >
               <Briefcase className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
               Hire Driver
+              <span className="premium-nav-underline absolute bottom-0 left-3.5 right-3.5 h-[2px] scale-x-0 rounded-full bg-blue-600 transition-transform duration-250 origin-left group-hover:scale-x-100" />
+            </Link>
+            <Link
+              to="/offers"
+              className="premium-nav-link group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-gray-600 transition-all duration-250 hover:bg-white/60 hover:text-blue-600"
+            >
+              <BadgePercent className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+              Offers
               <span className="premium-nav-underline absolute bottom-0 left-3.5 right-3.5 h-[2px] scale-x-0 rounded-full bg-blue-600 transition-transform duration-250 origin-left group-hover:scale-x-100" />
             </Link>
           </div>

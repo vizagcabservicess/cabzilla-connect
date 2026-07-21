@@ -49,6 +49,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  OfferCampaignPopup,
+  clearHomePendingOffer,
+  computeOfferPricing,
+  loadOfferCampaignForSearch,
+  readHomePendingOffer,
+} from '@/components/offers/OfferCampaignPopup';
+import {
+  BookingCouponSection,
+  BookingOfferStickyBanner,
+} from '@/components/offers/BookingCouponSection';
+import type { OfferCampaignPublic } from '@/types/offerCampaign';
+import { resolveOfferCampaignCategory, toOfferTravelDateYmd } from '@/types/offerCampaign';
+import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
+import {
   trackGuestSearch,
   formatDepartureForTrack,
   buildTripTypeLabelForTrack,
@@ -411,6 +425,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [finalTotal, setFinalTotal] = useState<number>(0);
+  const [offerCampaign, setOfferCampaign] = useState<OfferCampaignPublic | null>(null);
+  const [offerPopupOpen, setOfferPopupOpen] = useState(false);
+  const [offerApplied, setOfferApplied] = useState(false);
+  const [offerRedemptionId, setOfferRedemptionId] = useState<number | null>(null);
+  const offerCampaignIdRef = useRef<number | null>(null);
+  /** Pre-discount fare from BookingSummary — used for coupon math & API apply. */
+  const [websiteFareTotal, setWebsiteFareTotal] = useState(0);
   const [bookingPaymentMode, setBookingPaymentMode] = useState<'partial' | 'full'>(() => {
     if (typeof sessionStorage === 'undefined') return 'partial';
     const m = sessionStorage.getItem('paymentMode');
@@ -1329,22 +1350,29 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
   }, [pickupDate, returnDate]);
 
-  // Keep trip start at least 1 hour ahead while the homepage stays open (stale clock → Apply/Search fails).
+  // Keep trip start ≥1h ahead only on the search form (step 1).
+  // Do NOT run on results — bumping every 30s chased "now+1h" forever and
+  // re-triggered fare calc / looked like a page refresh.
   useEffect(() => {
+    if (currentStep !== 1 || isSearchActive) return;
+
     const bumpIfStale = () => {
       setPickupDate((prev) => {
-        const floor = new Date(Date.now() + 60 * 60 * 1000);
+        const floorMs = Date.now() + 60 * 60 * 1000;
+        const floor = new Date(floorMs);
         floor.setSeconds(0, 0);
         if (!prev) return floor;
         const cur = new Date(prev);
         cur.setSeconds(0, 0);
-        return cur < floor ? floor : prev;
+        // 5-minute grace so we don't re-bump on every interval after setting to floor
+        if (cur.getTime() >= floorMs - 5 * 60 * 1000) return prev;
+        return floor;
       });
     };
     bumpIfStale();
     const id = window.setInterval(bumpIfStale, 30_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [currentStep, isSearchActive]);
 
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
@@ -1850,6 +1878,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (onStepChange) onStepChange(2);
     onTripEditOpenChange?.(false);
 
+    // Offer campaign is loaded by the step-2 effect (also covers homepage Hero remount)
+
     // If we're in sliding search mode, hide the search widget after updating
     if (isSlidingSearch) {
       setTimeout(() => {
@@ -1982,8 +2012,73 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   let totalPrice = calculatePrice();
   /** Prefer BookingSummary's calculated total; fall back to Hero estimate only while fare is still loading. */
   const payReadyTotal = finalTotal > 0 ? finalTotal : totalPrice;
+  const websiteFareBase =
+    websiteFareTotal > 0
+      ? websiteFareTotal
+      : !offerApplied && finalTotal > 0
+        ? finalTotal
+        : totalPrice;
+  const offerCategoryKey = resolveOfferCampaignCategory(tripType, tripMode);
+  const offerTravelYmd = toOfferTravelDateYmd(pickupDate);
+  const offerDiscountAmount =
+    offerApplied && offerCampaign
+      ? Math.max(
+          0,
+          offerCampaign.pricing?.savings ??
+            computeOfferPricing(offerCampaign, websiteFareBase || 0).savings
+        )
+      : 0;
+  const offerDiscountCode =
+    offerApplied && offerCampaign ? offerCampaign.coupon_code : null;
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
   const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
+
+  const handleBaseFareChange = (total: number) => {
+    const next = Math.max(0, Number(total) || 0);
+    setWebsiteFareTotal((prev) => (prev === next ? prev : next));
+    if (offerApplied && offerCampaign && next > 0) {
+      const pricing = computeOfferPricing(offerCampaign, next);
+      setOfferCampaign((prev) => {
+        if (
+          prev &&
+          prev.pricing?.offer_fare === pricing.offer_fare &&
+          prev.pricing?.savings === pricing.savings &&
+          prev.pricing?.website_fare === pricing.website_fare
+        ) {
+          return prev;
+        }
+        return prev ? { ...prev, pricing } : prev;
+      });
+      setFinalTotal((prev) => (prev === pricing.offer_fare ? prev : pricing.offer_fare));
+      return;
+    }
+    setFinalTotal((prev) => (prev === next ? prev : next));
+  };
+
+  const applyOfferCampaign = (c: OfferCampaignPublic) => {
+    const base = websiteFareTotal > 0 ? websiteFareTotal : totalPrice;
+    const pricing =
+      c.pricing && c.pricing.website_fare > 0
+        ? c.pricing
+        : computeOfferPricing(c, base || 0);
+    setOfferCampaign({ ...c, pricing });
+    offerCampaignIdRef.current = c.id;
+    setOfferApplied(true);
+    if (pricing.offer_fare >= 0 && base > 0) {
+      setFinalTotal(pricing.offer_fare);
+    }
+    toast({
+      title: 'Coupon applied',
+      description: `${c.coupon_code} · you save ₹${pricing.savings.toLocaleString('en-IN')}`,
+      duration: 3000,
+    });
+  };
+
+  const removeOfferCampaign = () => {
+    setOfferApplied(false);
+    setOfferRedemptionId(null);
+    setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
+  };
 
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
@@ -1991,7 +2086,36 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       const authToken = localStorage.getItem('authToken');
       
       // Use the totalPrice passed from GuestDetailsForm
-      const latestTotal = guestDetails.totalPrice;
+      let latestTotal = guestDetails.totalPrice;
+      let discountAmount = 0;
+      let redemptionId: number | null = null;
+      const websiteFare =
+        websiteFareTotal > 0 ? websiteFareTotal : Number(guestDetails.totalPrice) || 0;
+
+      if (
+        offerApplied &&
+        offerCampaign &&
+        resolveOfferCampaignCategory(tripType, tripMode) &&
+        websiteFare > 0 &&
+        guestDetails.phone
+      ) {
+        try {
+          const applied = await offerCampaignAPI.public.applyCoupon({
+            coupon_code: offerCampaign.coupon_code,
+            customer_phone: String(guestDetails.phone),
+            website_fare: websiteFare,
+            travel_date: toOfferTravelDateYmd(pickupDate),
+          });
+          redemptionId = applied.redemption_id;
+          setOfferRedemptionId(applied.redemption_id);
+          latestTotal = applied.pricing.offer_fare;
+          discountAmount = applied.pricing.savings;
+        } catch (offerErr) {
+          console.warn('Offer apply failed, continuing at regular fare', offerErr);
+          setOfferApplied(false);
+        }
+      }
+
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
         dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
@@ -2008,7 +2132,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         passengerCountryCode: guestDetails.countryCode,
         passengerEmail: guestDetails.email,
         additionalRequirements: guestDetails.additionalRequirements,
-        // pass GST details if captured
         gstEnabled: !!guestDetails.gstEnabled,
         gstDetails: guestDetails.gstEnabled ? {
           gstNumber: guestDetails.gstNumber,
@@ -2020,9 +2143,22 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       };
 
       const response = await bookingAPI.createBooking(bookingData);
+      const bookingId =
+        response.data?.data?.id ?? response.data?.id ?? response.id ?? response.booking_id;
+
+      if (redemptionId && discountAmount > 0) {
+        try {
+          await offerCampaignAPI.public.completeRedemption(
+            redemptionId,
+            String(bookingId ?? '')
+          );
+        } catch {
+          /* payment may complete later */
+        }
+      }
       
       const bookingDataForStorage = {
-        bookingId: response.data?.data?.id ?? response.data?.id ?? response.id ?? response.booking_id,
+        bookingId,
         bookingNumber: response.data?.data?.bookingNumber ?? response.data?.bookingNumber ?? response.bookingNumber ?? response.data?.booking_number ?? response.booking_number,
         pickupLocation,
         dropLocation,
@@ -2030,9 +2166,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         selectedCab,
         distance,
-        totalPrice: latestTotal,
-        discountAmount: 0,
+        totalPrice: websiteFare || latestTotal,
+        discountAmount,
         finalPrice: latestTotal,
+        offerCoupon: discountAmount > 0 && offerCampaign ? offerCampaign.coupon_code : null,
+        offerRedemptionId: redemptionId,
         guestDetails,
         tripType,
         tripMode,
@@ -2148,6 +2286,74 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       setCurrentStep(1);
     }
   }, [isSearchActive]);
+
+  /**
+   * Load / refresh the active offer whenever results are shown.
+   * Homepage used to remount Hero on `?search=1`, dropping in-flight offer loads;
+   * this effect also covers direct `?search=1` landings and trip-type / date changes.
+   */
+  useEffect(() => {
+    const onResults = currentStep >= 2 || Boolean(isSearchActive);
+    if (!onResults) return;
+
+    const offerCategory = resolveOfferCampaignCategory(tripType, tripMode);
+    if (!offerCategory) {
+      setOfferCampaign(null);
+      offerCampaignIdRef.current = null;
+      setOfferApplied(false);
+      setOfferRedemptionId(null);
+      setOfferPopupOpen(false);
+      return;
+    }
+
+    const travelYmd = offerTravelYmd;
+    let cancelled = false;
+    void (async () => {
+      const result = await loadOfferCampaignForSearch(offerCategory, 0, travelYmd);
+      if (cancelled) return;
+
+      if (!result.campaign) {
+        setOfferCampaign(null);
+        offerCampaignIdRef.current = null;
+        setOfferApplied(false);
+        setOfferRedemptionId(null);
+        return;
+      }
+
+      const next = result.campaign;
+      const pending = readHomePendingOffer();
+      const homeApplied =
+        Boolean(pending) &&
+        pending!.id === next.id &&
+        pending!.category === next.category;
+      const sameCampaign = offerCampaignIdRef.current === next.id;
+
+      if (homeApplied) {
+        setOfferCampaign(next);
+        offerCampaignIdRef.current = next.id;
+        setOfferApplied(true);
+        clearHomePendingOffer();
+        return;
+      }
+
+      if (sameCampaign) {
+        // Same offer already loaded — do not setState (avoids re-render loops)
+        return;
+      }
+
+      setOfferCampaign(next);
+      offerCampaignIdRef.current = next.id;
+      setOfferApplied(false);
+      setOfferRedemptionId(null);
+      if (result.shouldShowPopup) {
+        setOfferPopupOpen(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, isSearchActive, tripType, tripMode, offerTravelYmd]);
 
   // Notify parent on initial step as well
   useEffect(() => {
@@ -3444,10 +3650,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               tripMode={tripMode} 
                               totalPrice={totalPrice}
                               hourlyPackage={hourlyPackage}
-                              onFinalTotalChange={setFinalTotal}
+                              onFinalTotalChange={handleBaseFareChange}
                               onEditPickupLocation={handleEditPickupLocation}
                               onEditPickupDate={handleEditPickupDate}
                               hideInclusionsExclusions={true}
+                              discountAmount={offerDiscountAmount}
+                              discountCode={offerDiscountCode}
+                              couponSlot={
+                                <BookingCouponSection
+                                  category={offerCategoryKey || tripType}
+                                  websiteFare={websiteFareBase}
+                                  travelDate={pickupDate}
+                                  suggestedCampaign={offerCampaign}
+                                  applied={offerApplied}
+                                  appliedCampaign={offerCampaign}
+                                  onApply={applyOfferCampaign}
+                                  onRemove={removeOfferCampaign}
+                                />
+                              }
                             />
                           </div>
                           {selectedCab && payReadyTotal > 0 && (
@@ -3565,6 +3785,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         <h3 className="text-xl font-semibold">Complete Your Booking</h3>
                       </div>
                       
+                      <BookingCouponSection
+                        className="mb-4"
+                        category={offerCategoryKey || tripType}
+                        websiteFare={websiteFareBase}
+                        travelDate={pickupDate}
+                        suggestedCampaign={offerCampaign}
+                        applied={offerApplied}
+                        appliedCampaign={offerCampaign}
+                        onApply={applyOfferCampaign}
+                        onRemove={removeOfferCampaign}
+                      />
                       <GuestDetailsForm 
                         onSubmit={handleGuestDetailsSubmit}
                         totalPrice={payReadyTotal}
@@ -3588,10 +3819,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       tripType={tripType}
                       tripMode={tripMode}
                       hourlyPackage={hourlyPackage}
-                      onFinalTotalChange={setFinalTotal}
+                      onFinalTotalChange={handleBaseFareChange}
                       onEditPickupLocation={handleEditPickupLocation}
                       onEditPickupDate={handleEditPickupDate}
                       hideInclusionsExclusions={false}
+                      discountAmount={offerDiscountAmount}
+                      discountCode={offerDiscountCode}
+                      couponSlot={
+                        <BookingCouponSection
+                          category={offerCategoryKey || tripType}
+                          websiteFare={websiteFareBase}
+                          travelDate={pickupDate}
+                          suggestedCampaign={offerCampaign}
+                          applied={offerApplied}
+                          appliedCampaign={offerCampaign}
+                          onApply={applyOfferCampaign}
+                          onRemove={removeOfferCampaign}
+                        />
+                      }
                     />
                     </div>
                   </div>
@@ -3650,10 +3895,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   tripType={tripType}
                   tripMode={tripMode}
                   hourlyPackage={hourlyPackage}
-                  onFinalTotalChange={setFinalTotal}
+                  onFinalTotalChange={handleBaseFareChange}
                   onEditPickupLocation={handleEditPickupLocation}
                   onEditPickupDate={handleEditPickupDate}
                   hideInclusionsExclusions={false}
+                  discountAmount={offerDiscountAmount}
+                  discountCode={offerDiscountCode}
+                  couponSlot={
+                    <BookingCouponSection
+                      category={offerCategoryKey || tripType}
+                      websiteFare={websiteFareBase}
+                      travelDate={pickupDate}
+                      suggestedCampaign={offerCampaign}
+                      applied={offerApplied}
+                      appliedCampaign={offerCampaign}
+                      onApply={applyOfferCampaign}
+                      onRemove={removeOfferCampaign}
+                    />
+                  }
                 />
               </div>
             </div>
@@ -3669,6 +3928,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         payReadyTotal > 0 && (
           <div className="fixed inset-x-0 bottom-0 z-[60] max-md:bottom-16 lg:hidden">
             <div className="border-t border-gray-200 bg-white px-3 pt-2 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] mobile-safe-bottom">
+              <BookingOfferStickyBanner
+                campaign={offerCampaign}
+                websiteFare={websiteFareBase}
+                applied={offerApplied}
+                onApply={applyOfferCampaign}
+              />
               <BookingPaymentFooter
                 finalTotal={payReadyTotal}
                 mode={bookingPaymentMode}
@@ -3681,6 +3946,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           </div>
         )}
       
+      <OfferCampaignPopup
+        category={offerCategoryKey || tripType}
+        websiteFare={websiteFareBase || totalPrice || 0}
+        open={offerPopupOpen}
+        campaign={offerCampaign}
+        onOpenChange={setOfferPopupOpen}
+        onApply={applyOfferCampaign}
+        onContinueRegular={removeOfferCampaign}
+      />
+
       <Dialog
         open={showGuestPhoneModal}
         onOpenChange={(open) => {

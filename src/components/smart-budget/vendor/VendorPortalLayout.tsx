@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart3,
+  BadgePercent,
   Car,
   CircleHelp,
   ClipboardList,
@@ -24,6 +25,7 @@ export type VendorPortalSection =
   | 'requests'
   | 'bookings'
   | 'earnings'
+  | 'campaigns'
   | 'vehicles'
   | 'drivers'
   | 'profile'
@@ -35,6 +37,7 @@ const NAV: Array<{ id: VendorPortalSection; label: string; icon: typeof LayoutDa
   { id: 'requests', label: 'Requests', icon: ClipboardList },
   { id: 'bookings', label: 'My Bookings', icon: Car },
   { id: 'earnings', label: 'Earnings', icon: IndianRupee },
+  { id: 'campaigns', label: 'Campaigns', icon: BadgePercent },
   { id: 'vehicles', label: 'Vehicles', icon: Car },
   { id: 'drivers', label: 'Drivers', icon: Users },
   { id: 'profile', label: 'Profile', icon: UserRound },

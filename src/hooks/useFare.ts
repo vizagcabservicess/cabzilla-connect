@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useToast } from '@/components/ui/use-toast';
 import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { fetchOutstationFare } from '@/services/outstationFareService';
@@ -45,7 +44,6 @@ export function useFare(
   /** Start true so the first paint does not flash ₹0 before the effect runs. */
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { toast } = useToast();
 
   const storeFareData = (key: string, fare: number, source: string, breakdown: FareBreakdown) => {
     try {
@@ -664,7 +662,9 @@ export function useFare(
     };
 
     calculateFareData();
-  }, [cabId, tripType, distance, packageType, pickupDate, toast]);
+    // Do not depend on toast — useToast() returns a new object identity every render
+    // and was never used inside this effect (would infinite-loop fare calc).
+  }, [cabId, tripType, distance, packageType, pickupDate]);
 
   return { fareData, isLoading, error };
 }

@@ -23,6 +23,7 @@ const MAIN_NAV_MENUS = {
     { label: 'Shared Carpooling', to: '/shared-carpooling' },
     { label: 'Tempo Traveller Rental', to: '/tempo-traveller-rental-vizag' },
     { label: 'Hire Driver', to: '/hire-driver' },
+    { label: 'Offers', to: '/offers' },
   ],
   'Tour Packages': [
     { label: 'View All Tours', to: '/tours' },

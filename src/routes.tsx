@@ -107,6 +107,7 @@ const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursMana
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
 const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
+const OfferCampaignsAdminPage = lazy(() => import('./pages/admin/OfferCampaignsAdminPage'));
 const AIAssistantPage = lazy(() => import('./pages/admin/AIAssistantPage'));
 const SmartBudgetCustomerSessionPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerSessionPage'));
 const SmartBudgetCustomerChatPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerChatPage'));
@@ -164,6 +165,7 @@ const OurStoryPage = lazy(() => import('./pages/OurStoryPage'));
 const VisionMissionPage = lazy(() => import('./pages/VisionMissionPage'));
 const HireDriverPage = lazy(() => import('./pages/HireDriverPage'));
 const HireDriverTermsPage = lazy(() => import('./pages/HireDriverTermsPage').then(module => ({ default: module.HireDriverTermsPage })));
+const OffersPage = lazy(() => import('./pages/OffersPage'));
 const TempoTravellerRentalPage = lazy(() => import('./pages/TempoTravellerRentalPage'));
 const UrbaniaRentalVizagPage = lazy(() => import('./pages/UrbaniaRentalVizagPage'));
 const SharedCarpoolingLandingPage = lazy(() => import('./pages/SharedCarpoolingLandingPage'));
@@ -436,6 +438,10 @@ const router = createBrowserRouter([
           {
             path: 'smart-budget',
             element: <SmartBudgetPage />,
+          },
+          {
+            path: 'campaigns',
+            element: <OfferCampaignsAdminPage />,
           },
           {
             path: 'vehicles',
@@ -834,6 +840,10 @@ const router = createBrowserRouter([
       {
         path: 'hire-driver-terms',
         element: <HireDriverTermsPage />,
+      },
+      {
+        path: 'offers',
+        element: <OffersPage />,
       },
 
       // Catch-all route for 404s

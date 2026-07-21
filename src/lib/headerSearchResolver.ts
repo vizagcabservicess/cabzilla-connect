@@ -61,6 +61,7 @@ const PAGE_ROUTES: { keywords: string[]; path: string; label: string }[] = [
   { keywords: ['urbania'], path: '/vehicle/urbania', label: 'Urbania Rental' },
   { keywords: ['tempo traveller', 'tempo', 'mini bus'], path: '/tempo-traveller-rental-vizag', label: 'Tempo Traveller Rental' },
   { keywords: ['hire driver', 'driver hire'], path: '/hire-driver', label: 'Hire Driver' },
+  { keywords: ['offer', 'offers', 'coupon', 'coupons', 'deal', 'deals'], path: '/offers', label: 'Offers' },
   { keywords: ['group tour', 'group tours'], path: '/group-tours', label: 'Group Tours' },
   { keywords: ['fleet', 'vehicles', 'cars'], path: '/fleet', label: 'Our Fleet' },
 ];

@@ -96,6 +96,9 @@ const Footer = () => {
               <li>
                 <Link to="/hire-driver" className="hover:text-white transition-colors block">Hire Driver</Link>
               </li>
+              <li>
+                <Link to="/offers" className="hover:text-white transition-colors block">Offers</Link>
+              </li>
             </ul>
           </div>
         </div>

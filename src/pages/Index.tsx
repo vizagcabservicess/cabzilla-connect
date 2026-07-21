@@ -17,6 +17,7 @@ import Footer from '@/components/Footer';
 import { Helmet } from 'react-helmet-async';
 import { PopularGroupTours } from '@/components/PopularGroupTours';
 import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
+import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
 import { resetPageScroll } from '@/lib/bookingWidgetScroll';
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,10 +93,12 @@ const Index = () => {
       
       <div className="home-soft-page min-h-screen flex flex-col">
         <Navbar />
-        <SharedCarpoolingPopup enabled={!isSearch} />
+        {/* Home carpool promo popup — off for now */}
+        <SharedCarpoolingPopup enabled={false} />
+        {/* Active campaign coupon popup on homepage (Airport / Local) */}
+        {!isSearch && <HomeOfferCampaignPopup enabled />}
         <main className="flex-1">
           <Hero
-            key={isSearch ? 'search' : 'home'}
             onSearch={() => {
               resetPageScroll();
               setSearchParams({ search: '1' });

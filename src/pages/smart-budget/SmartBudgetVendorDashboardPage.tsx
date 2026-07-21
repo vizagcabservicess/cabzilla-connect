@@ -36,6 +36,7 @@ import {
   VendorPortalLayout,
   type VendorPortalSection,
 } from '@/components/smart-budget/vendor/VendorPortalLayout';
+import { VendorCampaignsSection } from '@/components/offers/VendorCampaignsSection';
 import { useSmartBudgetVendorAuth } from '@/providers/SmartBudgetVendorAuthProvider';
 import { subscribeVendorWebPush } from '@/services/webPushService';
 
@@ -1113,6 +1114,9 @@ function VendorDashboard() {
           detail="Settlements, invoices, and payout history for completed marketplace trips."
         />
       );
+      break;
+    case 'campaigns':
+      body = <VendorCampaignsSection vendor={activeVendor} />;
       break;
     case 'vehicles':
       body = (

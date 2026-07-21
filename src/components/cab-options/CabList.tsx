@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useFare } from '@/hooks/useFare';
 import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
@@ -240,24 +240,7 @@ export const CabList: React.FC<CabListProps> = ({
   // Use the cabTypes prop directly instead of local state
   const [loading, setLoading] = useState(false);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
-  const [refreshKey, setRefreshKey] = useState<number>(Date.now());
   const isMobile = useIsMobile();
-  
-  useEffect(() => {
-    const handleFareUpdate = () => {
-      setRefreshKey(Date.now());
-    };
-    
-    window.addEventListener('fare-calculated', handleFareUpdate);
-    window.addEventListener('fare-cache-cleared', handleFareUpdate);
-    window.addEventListener('significant-fare-difference', handleFareUpdate);
-    
-    return () => {
-      window.removeEventListener('fare-calculated', handleFareUpdate);
-      window.removeEventListener('fare-cache-cleared', handleFareUpdate);
-      window.removeEventListener('significant-fare-difference', handleFareUpdate);
-    };
-  }, []);
 
   // Removed the useEffect that was fetching vehicles since we're using the prop directly
 

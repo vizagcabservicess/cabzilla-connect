@@ -132,6 +132,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       path: '/admin/smart-budget',
       show: checkPrivilege('smart-budget') || canViewBookings() || isAdmin() || isSuperAdmin()
     },
+    {
+      id: 'campaigns',
+      label: 'Campaigns',
+      icon: <BadgePercent size={20} />,
+      path: '/admin/campaigns',
+      show: checkPrivilege('campaigns') || checkPrivilege('smart-budget') || canViewBookings() || isAdmin() || isSuperAdmin()
+    },
     
     // Fleet Management
     { 

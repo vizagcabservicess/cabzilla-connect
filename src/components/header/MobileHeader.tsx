@@ -15,6 +15,7 @@ import {
   User,
   UserPlus,
   Users,
+  BadgePercent,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { Logo } from '@/components/Logo';
@@ -104,6 +105,14 @@ export function MobileHeader() {
                 >
                   <User className="h-5 w-5" />
                   Hire Driver
+                </Link>
+                <Link
+                  to="/offers"
+                  className="flex items-center gap-2 rounded-md px-4 py-2 hover:bg-gray-100"
+                  onClick={close}
+                >
+                  <BadgePercent className="h-5 w-5" />
+                  Offers
                 </Link>
 
                 {(
