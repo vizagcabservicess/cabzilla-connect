@@ -15,6 +15,8 @@ export const AVAILABLE_MODULES: ModulePrivilege[] = [
   { id: 'bookings_delete', name: 'Delete Bookings', description: 'Delete bookings', category: 'booking' },
   { id: 'smart-budget', name: 'Smart Budget Marketplace', description: 'Create negotiation links, admin priority, vendor marketplace oversight', category: 'booking' },
   { id: 'campaigns', name: 'Campaign Management', description: 'Promotional campaigns for Airport and Local (v1)', category: 'booking' },
+  { id: 'visitor_analytics', name: 'Visitor Analytics', description: 'Live visitors, session replay, heatmaps, funnels, and reports', category: 'system' },
+  { id: 'live_chat', name: 'Live Chat', description: 'Visitor live chat inbox, AI handoff, and operator tools', category: 'system' },
   
   // Fleet Management
   { id: 'vehicles_view', name: 'View Vehicles', description: 'View vehicle fleet', category: 'fleet' },

@@ -170,14 +170,14 @@ const DEFAULT_VEHICLES: CabType[] = [
     name: 'Urbania',
     capacity: 13,
     luggageCapacity: 6,
-    price: 8500,
-    pricePerKm: 28,
+    price: 12000,
+    pricePerKm: 40,
     image: '/cars/tempo.png',
     amenities: ['AC', 'Music System', 'USB Charging', 'Push-back Seats', 'Spacious Cabin', 'Professional Driver'],
     description:
       'Premium Urbania van hire in Visakhapatnam for weddings, corporate groups, pilgrimages, and outstation trips. Spacious AC cabin for up to 13 passengers with experienced drivers.',
     ac: true,
-    nightHaltCharge: 1200,
+    nightHaltCharge: 800,
     driverAllowance: 300,
     isActive: true
   }

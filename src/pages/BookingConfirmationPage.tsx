@@ -33,6 +33,18 @@ function BookingConfirmationPage() {
 
   const paymentStatus = booking?.payment_status || booking?.paymentStatus || booking?.status || 'Pending';
 
+  useEffect(() => {
+    if (!booking?.id) return;
+    window.visitorAnalytics?.trackConversion?.(
+      'booking_completed',
+      typeof booking.totalPrice === 'number' ? booking.totalPrice : undefined,
+    );
+    window.visitorAnalytics?.trackInteraction?.('booking_completed', 'booking', {
+      bookingId: booking.id,
+      bookingNumber: booking.bookingNumber,
+    });
+  }, [booking?.id]);
+
   // Debug logging for payment details
   useEffect(() => {
     if (booking) {

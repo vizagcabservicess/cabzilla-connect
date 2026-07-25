@@ -4,15 +4,18 @@ import { Phone, MessageCircle } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useLocation } from 'react-router-dom';
 import { buildWhatsAppMeUrl } from '@/utils/whatsappPrefillMessage';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 export function FloatingButtons({ onChatbotClick }: { onChatbotClick: () => void }) {
   const location = useLocation();
 
   const handleCall = () => {
+    trackContactCta('phone', { name: 'floating_call', path: location.pathname });
     window.location.href = 'tel:+919966363662';
   };
 
   const handleWhatsApp = () => {
+    trackContactCta('whatsapp', { name: 'floating_whatsapp', path: location.pathname });
     window.open(buildWhatsAppMeUrl(location.pathname), '_blank');
   };
 

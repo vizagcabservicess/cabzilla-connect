@@ -268,6 +268,13 @@ const PaymentPage = () => {
       
       // First update the booking
       await bookingAPI.updateBooking(bookingDetails.bookingId, updateData);
+
+      window.visitorAnalytics?.trackInteraction?.('razorpay_payment', 'payment', {
+        bookingId: bookingDetails.bookingId,
+        amount,
+        paymentMode,
+      });
+      window.visitorAnalytics?.trackConversion?.('razorpay_payment', amount);
       
       // Then verify the payment to trigger email sending
       try {

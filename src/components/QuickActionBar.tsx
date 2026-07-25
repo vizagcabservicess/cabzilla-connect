@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FloatingButtons } from './FloatingButtons';
 import { useLocation } from 'react-router-dom';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 interface ChatMessage {
   id: number | string;
@@ -29,6 +30,7 @@ export const QuickActionBar = () => {
   const [isBotTyping, setIsBotTyping] = useState(false);
 
   const handleCall = () => {
+    trackContactCta('phone', { name: 'mobile_bar_call', path: location.pathname });
     window.location.href = 'tel:+919966363662';
   };
 
@@ -96,6 +98,7 @@ export const QuickActionBar = () => {
   };
 
   const handleWhatsApp = () => {
+    trackContactCta('whatsapp', { name: 'mobile_bar_whatsapp', path: location.pathname });
     const message = getWhatsAppMessage();
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://wa.me/919966363662?text=${encodedMessage}`, '_blank');

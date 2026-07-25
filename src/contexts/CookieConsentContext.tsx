@@ -62,6 +62,15 @@ export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({ ch
 
     // Store preferences for future page loads
     localStorage.setItem('cookie-preferences', JSON.stringify(prefs));
+
+    // Sync first-party Visitor Analytics tracker consent
+    try {
+      localStorage.setItem('vth_va_consent', prefs.analytics ? 'granted' : 'denied');
+      document.documentElement.setAttribute('data-va-consent', prefs.analytics ? 'granted' : 'denied');
+      document.dispatchEvent(new CustomEvent('vth:consent', { detail: { analytics: prefs.analytics } }));
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {

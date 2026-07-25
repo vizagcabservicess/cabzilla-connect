@@ -1,3 +1,5 @@
+import { CITY_LOOKUP } from './cityLookup';
+
 export interface Location {
   id: string;
   name: string;
@@ -234,6 +236,21 @@ export const apDestinations: Location[] = [
     address: 'Nellore, Andhra Pradesh'
   }
 ];
+
+// Replace Vizag placeholder coords on outstation destinations with real CITY_LOOKUP values
+for (const loc of apDestinations) {
+  const hit =
+    CITY_LOOKUP[loc.name] ||
+    CITY_LOOKUP[loc.city] ||
+    Object.entries(CITY_LOOKUP).find(
+      ([k]) => k.toLowerCase() === loc.name.toLowerCase() || k.toLowerCase() === loc.city.toLowerCase(),
+    )?.[1];
+  if (hit) {
+    loc.lat = hit.lat;
+    loc.lng = hit.lng;
+    loc.state = hit.state || loc.state;
+  }
+}
 
 export const popularLocations: Location[] = [
   ...vizagLocations,

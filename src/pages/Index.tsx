@@ -19,9 +19,25 @@ import { PopularGroupTours } from '@/components/PopularGroupTours';
 import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
 import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
 import { resetPageScroll } from '@/lib/bookingWidgetScroll';
+import { applyVthAiCheckoutPrefill } from '@/lib/vthAiCheckoutPrefill';
+
+// Sync before Hero mounts so loadFromSessionStorage sees AI checkout prefill
+if (typeof window !== 'undefined') {
+  try {
+    applyVthAiCheckoutPrefill(new URLSearchParams(window.location.search));
+  } catch {
+    /* ignore */
+  }
+}
+
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const isSearch = searchParams.get('search') === '1';
+  const isSearch =
+    searchParams.get('search') === '1' || searchParams.get('step') === 'guest';
+
+  useEffect(() => {
+    applyVthAiCheckoutPrefill(searchParams);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isSearch) {

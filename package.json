@@ -8,11 +8,20 @@
     "build": "vite build --mode production",
     "build:dev": "vite build --mode development",
     "build:prod": "vite build --mode production",
+    "pack:upload": "node scripts/pack-dist-upload.mjs",
+    "build:upload": "npm run build:tracker && npm run build && npm run pack:upload",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "vite preview --port 3000",
     "dev:track-search": "node server/track-search-server.mjs",
-    "dev:full": "concurrently -n vite,track -c blue,green \"vite\" \"node server/track-search-server.mjs\""
+    "dev:full": "concurrently -n vite,track -c blue,green \"vite\" \"node server/track-search-server.mjs\"",
+    "dev:analytics": "npm --prefix visitor-analytics run dev",
+    "dev:with-analytics": "concurrently -n vite,va -c blue,magenta \"vite\" \"npm --prefix visitor-analytics run dev\"",
+    "build:tracker": "npm --prefix visitor-analytics/sdk run build",
+    "build:analytics": "npm --prefix visitor-analytics run build",
+    "test:ai-lead": "npm --prefix visitor-analytics run test:ai-lead",
+    "test:checkout-prefill": "npx tsx src/lib/vthAiCheckoutPrefill.selftest.ts",
+    "test:vth-ai": "npm run test:ai-lead && npm run test:checkout-prefill"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

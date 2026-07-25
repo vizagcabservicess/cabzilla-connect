@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Navigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { MobileNavigation } from '@/components/MobileNavigation';
 import Footer from '@/components/Footer';
@@ -37,6 +37,7 @@ import { usePDFExport } from '@/hooks/usePDFExport';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
 import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug, getTourDisplayName } from '@/utils/tourUrlUtils';
+import { getVehicleData } from '@/services/vehicleDataService';
 
 interface VehicleWithPricing extends CabType {
   price: number;
@@ -46,6 +47,7 @@ const TourDetailPage = () => {
   const { tourSlug } = useParams<{ tourSlug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { isSuperAdmin } = usePrivileges();
   const { generateAndDownloadPDF, isGenerating } = usePDFExport();
@@ -57,7 +59,7 @@ const TourDetailPage = () => {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
-
+  const [aiPrefillDone, setAiPrefillDone] = useState(false);
   
   // Load pickup details from session storage or navigation state
   const loadPickupData = () => {
@@ -169,6 +171,93 @@ const TourDetailPage = () => {
       console.log("Tour Exclusions:", tour.exclusions);
     }
   }, [tour]);
+
+  // VTH AI deep-link: /tours/araku-valley-tour?source=vth_ai&step=guest&vehicle=Sedan&...
+  useEffect(() => {
+    if (!tour || aiPrefillDone) return;
+    if (searchParams.get('source') !== 'vth_ai') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const vehicleHint = (searchParams.get('vehicle') || 'Sedan').toLowerCase();
+        const from = searchParams.get('from') || 'Visakhapatnam';
+        const dateRaw = searchParams.get('date');
+        const timeRaw = searchParams.get('time');
+        const name = searchParams.get('name') || '';
+        const phone = searchParams.get('phone') || '';
+        const openGuest = searchParams.get('step') === 'guest';
+
+        if (name) sessionStorage.setItem('guestName', name);
+        if (phone) {
+          const digits = phone.replace(/\D/g, '').slice(-10);
+          sessionStorage.setItem('guestPhone', digits);
+          sessionStorage.setItem('countryCode', '+91');
+        }
+
+        // Pickup / date from AI
+        setPickupLocation({ name: from, isInVizag: true });
+        if (dateRaw) {
+          let d = new Date(dateRaw);
+          if (Number.isNaN(d.getTime()) && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+            const [y, m, day] = dateRaw.split('-').map(Number);
+            d = new Date(y, m - 1, day, 10, 0, 0);
+          }
+          if (timeRaw && !Number.isNaN(d.getTime())) {
+            const tm = timeRaw.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+            if (tm) {
+              let h = parseInt(tm[1], 10);
+              const min = tm[2] ? parseInt(tm[2], 10) : 0;
+              const ap = (tm[3] || '').toLowerCase();
+              if (ap === 'pm' && h < 12) h += 12;
+              if (ap === 'am' && h === 12) h = 0;
+              d.setHours(h, min, 0, 0);
+            }
+          }
+          if (!Number.isNaN(d.getTime())) setPickupDate(d);
+        }
+
+        const vehicles = await getVehicleData(false, false);
+        const pricing = tour.pricing || {};
+        const withPrices = (vehicles || [])
+          .map((v) => {
+            const id = (v.vehicleId || v.id || '').toLowerCase();
+            const price =
+              pricing[id] ||
+              pricing[v.vehicleId || ''] ||
+              pricing[v.id] ||
+              0;
+            return { ...v, price } as VehicleWithPricing;
+          })
+          .filter((v) => v.price > 0);
+
+        const match =
+          withPrices.find((v) => {
+            const n = `${v.name} ${v.id} ${v.vehicleId || ''}`.toLowerCase();
+            if (vehicleHint.includes('innova') || vehicleHint.includes('crysta')) {
+              return n.includes('innova') || n.includes('crysta');
+            }
+            if (vehicleHint.includes('ertiga')) return n.includes('ertiga');
+            if (vehicleHint.includes('tempo')) return n.includes('tempo');
+            if (vehicleHint.includes('urbania')) return n.includes('urbania');
+            if (vehicleHint.includes('luxury')) return n.includes('luxury');
+            return n.includes('sedan') || n.includes('dzire') || n.includes('swift');
+          }) || withPrices[0];
+
+        if (cancelled || !match) return;
+        setSelectedVehicle(match);
+        if (openGuest) setShowBookingForm(true);
+        setAiPrefillDone(true);
+      } catch (err) {
+        console.error('VTH AI tour prefill failed', err);
+        setAiPrefillDone(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tour, searchParams, aiPrefillDone]);
 
   // Reset booking form state when coming back from payment page
   useEffect(() => {

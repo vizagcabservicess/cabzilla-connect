@@ -1,7 +1,7 @@
 import { searchLocations, vizagLocations } from '@/lib/locationData';
 import type { Location } from '@/lib/locationData';
 import type { TripMode, TripType } from '@/lib/tripTypes';
-import { CITY_LOOKUP } from '@/components/OutstationHeroWidget';
+import { CITY_LOOKUP } from '@/lib/cityLookup';
 import { AVAILABLE_TOUR_ROUTES, findTourRouteByKeywords, isKnownTourSlug } from '@/lib/availableTours';
 import { getTourDisplayName } from '@/utils/tourUrlUtils';
 import { scrollToBookingWidget } from '@/lib/bookingWidgetScroll';

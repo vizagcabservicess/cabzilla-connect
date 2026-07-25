@@ -82,6 +82,26 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: true,
       },
+      '/api/track-vth-ai-lead.php': {
+        target: 'https://www.vizagtaxihub.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/api/va': {
+        target: 'http://127.0.0.1:4090',
+        changeOrigin: true,
+        timeout: 30_000,
+        proxyTimeout: 30_000,
+        // /api/va/api/auth/exchange → /api/auth/exchange
+        rewrite: (p) => p.replace(/^\/api\/va/, ''),
+      },
+      '/va-ws': {
+        target: 'ws://127.0.0.1:4090',
+        ws: true,
+        changeOrigin: true,
+        timeout: 30_000,
+        rewrite: (p) => p.replace(/^\/va-ws/, '/ws'),
+      },
       '/api': {
         target: 'https://www.vizagtaxihub.com',
         changeOrigin: true,

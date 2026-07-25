@@ -1,0 +1,14 @@
+﻿node.exe : npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+At C:\Users\naren\AppData\Roaming\npm\npm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/npm/bin/npm-cli.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...version of npm.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+> @vizagtaxihub/visitor-analytics@1.0.0 build
+> node ./scripts/ensure-build.mjs
+
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+[build] TypeScript compile OK
+[build] Wrote app.js, index.js, server.js, server.cjs

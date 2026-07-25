@@ -1,0 +1,139 @@
+﻿[
+    {
+        "id":  6,
+        "tourId":  "araku_vizag_3D_2N",
+        "tourName":  "3 Days Vizag \u0026 Araku Valley Tour ",
+        "distance":  460,
+        "days":  3,
+        "description":  "Embark on a 3 Days / 2 Nights Vizag and Araku Valley Tour with Vizag Taxi Hub. Explore Rushikonda Beach, Kailasagiri, RK Beach, Borra Caves, Katiki Waterfalls, Araku Valley, Coffee Plantations, and Simhachalam Temple. Enjoy scenic hill viewpoints, cultural museums, and lush gardens while traveling in comfort with our chauffeur-driven sedan. Perfect for family trips, friends, and couples seeking a memorable Vizag sightseeing and Araku getaway",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/banner-vth.jpg",
+        "timeDuration":  "3D / 2N",
+        "pricing":  {
+                        "ertiga":  15000,
+                        "amaze":  12000,
+                        "innova_crysta":  17000,
+                        "sedan":  12000,
+                        "tempo_traveller":  30000,
+                        "toyota":  12000,
+                        "bus":  35000
+                    }
+    },
+    {
+        "id":  2,
+        "tourId":  "araku",
+        "tourName":  "Araku Valley Tour",
+        "distance":  260,
+        "days":  1,
+        "description":  "Araku Valley is one of the most beautiful hill stations in Andhra Pradesh, located just 120 km from Visakhapatnam (Vizag). Surrounded by lush green Eastern Ghats, Araku is famous for its cool climate, waterfalls, coffee plantations, beautiful viewpoints, and tribal culture.\n\nA major attraction on the way is the historic Borra Caves, known for their million-year-old limestone formations and colorful lighting.\n\nOur Vizag to Araku Valley Tour Package offers a perfect combination of nature, adventure, photography spots, and cultural experiences - making it ideal for families, couples, friends, and corporate groups.\n\n",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/araku-valley-vizagtaxihub.jpg",
+        "timeDuration":  "13 hours ",
+        "pricing":  {
+                        "ertiga":  6500,
+                        "amaze":  5000,
+                        "innova_crysta":  7500,
+                        "sedan":  5000,
+                        "tempo_traveller":  13000,
+                        "toyota_glanza":  5000,
+                        "toyota":  5000,
+                        "bus":  14000
+                    }
+    },
+    {
+        "id":  9,
+        "tourId":  "arasavalli_srikurmam",
+        "tourName":  "Arasavalli \u0026 Srikurmam Temple Tour",
+        "distance":  250,
+        "days":  1,
+        "description":  "Experience a divine one-day temple tour from Visakhapatnam covering two of Andhra Pradesh’s most sacred pilgrimage sites - Arasavalli Sun Temple and Srikurmam Sri Kurmanatha Swamy Temple.\n\nThis spiritually enriching tour is ideal for families and devotees seeking a comfortable, well-planned journey with experienced drivers and reliable vehicles. The trip starts early from Vizag and returns by night, ensuring peaceful darshan and smooth travel throughout the day.\n",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/arsavalli\u0026srikurmam-opt.jpg",
+        "timeDuration":  "12 Hours",
+        "pricing":  {
+                        "ertiga":  5400,
+                        "amaze":  4500,
+                        "innova_crysta":  6200,
+                        "sedan":  4500,
+                        "tempo_traveller":  11000,
+                        "toyota":  4500,
+                        "bus":  12500
+                    }
+    },
+    {
+        "id":  3,
+        "tourId":  "lambasingi",
+        "tourName":  "Lambasingi Tour",
+        "distance":  260,
+        "days":  1,
+        "description":  "In South India, the Lambasingi Hills are commonly referred to as the “Kashmir of Andhra Pradesh.”. You can sometimes encounter snowfall in the Lambasingi Hills in winter. A few hours of sunlight fall in the morning during seasons other than winter, but it is cold. Due to the high temperatures hovering near the freezing point, dew turns to ice instead of snow. There has been a case of this happening once in the past and it has since become a legend surrounding the area.",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/Lambasingi-tour-01.webp",
+        "timeDuration":  "13 Hours",
+        "pricing":  {
+                        "ertiga":  7000,
+                        "toyota":  5000,
+                        "amaze":  5000,
+                        "innova_crysta":  8000,
+                        "mpv":  8000,
+                        "sedan":  5000,
+                        "tempo_traveller":  13000,
+                        "bus":  14000
+                    }
+    },
+    {
+        "id":  8,
+        "tourId":  "Vanajangi-Tour",
+        "tourName":  "Vanajangi Tour",
+        "distance":  260,
+        "days":  1,
+        "description":  "Wake up to a golden sunrise floating over a bed of clouds at 3,400 ft in the Eastern Ghats, with panoramic views, cool weather, and lush green hills that make Vanajangi one of Andhra Pradesh’s most talked‑about new viewpoints.\n\nHighlights\nCloud‑bed sunrise viewpoint with dramatic golden hour shots between 5:00–6:30 AM in winter.\n\nOffbeat hilltop near Paderu with trekking, camping, and nature photography opportunities.\n\nChilly, misty winters and scenic drives through forests, coffee estates, and rolling hills.\n\nBest Time to Visit\nOctober to February offers clear skies, misty mornings, and the most reliable above‑the‑clouds sunrises; monsoon trails can turn foggy and slippery, reducing visibility.\n\nLocation and Distance\nVanajangi lies near Paderu in Alluri Sitharama Raju district, about 100–120 km from Visakhapatnam and roughly 15 km from Paderu town.\n\nHow to Reach\nBy road: Drive ~3 hours from Vizag via Vaddadi–Madugula–Paderu–Dumbriguda Road; start around 2:00 AM to catch sunrise.\n\nLast stretch: Motorable road up to near the base, then a 45–60 minute trek to the top for the viewpoint.\n\nTransport options: Drive or hire a taxi from Vizag; typical road distance ~100–122 km depending on the route.\n\nTrek and Safety Tips\nBegin the trek by 4:30–5:00 AM with a torch, grippy shoes, warm layers, and water.\n\nAvoid peak monsoon due to slippery trails; winter mornings are cold but offer the best views",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/vanajangi-tour.webp",
+        "timeDuration":  "13 Hours",
+        "pricing":  {
+                        "ertiga":  7000,
+                        "amaze":  5000,
+                        "innova_crysta":  8000,
+                        "sedan":  5000,
+                        "tempo_traveller":  13000,
+                        "toyota":  5000,
+                        "bus":  14000
+                    }
+    },
+    {
+        "id":  5,
+        "tourId":  "vizag_north_city_tour",
+        "tourName":  "Vizag North City Tour",
+        "distance":  100,
+        "days":  1,
+        "description":  "Embark on a captivating journey through the southern charm of Visakhapatnam with our Vizag North City Tour, combining spiritual heritage, breathtaking coastal views, and pristine beaches in one unforgettable day.\n\nYour tour begins at the sacred Simhachalam Temple, an architectural masterpiece dedicated to Lord Varaha Lakshmi Narasimha. Known for its intricate carvings and spiritual significance, this centuries-old temple is a must-visit for devotees and history lovers alike.\n\nNext, head to the iconic Dolphin’s Nose Lighthouse, perched 174 meters above sea level, where panoramic views of the Bay of Bengal, Visakhapatnam Harbor, and the surrounding hills await. The journey concludes at Yarada Beach, a tranquil paradise with golden sands and lush green hills, perfect for relaxation, photography, and soaking in nature’s beauty.\n\nIdeal for travelers seeking a blend of culture, scenic landscapes, and peaceful retreats, the Vizag North City Tour offers a memorable exploration of the city’s southern treasures in just one day.",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/VTH-simhachalam-banner.jpg",
+        "timeDuration":  "10 Hours",
+        "pricing":  {
+                        "ertiga":  4000,
+                        "toyota":  3000,
+                        "amaze":  3000,
+                        "innova_crysta":  4500,
+                        "mpv":  5000,
+                        "sedan":  3000,
+                        "tempo_traveller":  8000,
+                        "bus":  8500
+                    }
+    },
+    {
+        "id":  4,
+        "tourId":  "vizag_south_city_tour",
+        "tourName":  "Vizag South City Tour",
+        "distance":  100,
+        "days":  1,
+        "description":  "Experience the vibrant coastal charm of Visakhapatnam with the South City Tour - a perfect blend of beachside serenity, historical landmarks, and family-friendly attractions.\nThis full-day guided tour covers the most iconic spots in the southern part of the city, starting with a peaceful walk along RK Beach, followed by immersive visits to the Submarine Museum (INS Kurusura) and the Fighter Jet Museum. These maritime museums offer a glimpse into India’s naval history and aviation pride.\n\nContinue the journey to Kalimatha Temple, a tranquil seaside shrine offering panoramic views of the Bay of Bengal. Unwind amidst lush greenery and sea breeze at Tenneti Park, a cliffside park ideal for photos and relaxation.\n\nWith a scenic route running along Vizag’s famous Beach Road, this tour is ideal for families, first-time visitors, and photography lovers who want to soak in the soul of the city’s coast in a single day.",
+        "imageUrl":  "https://vizagtaxihub.com/uploads/VTH-RK-beach.jpg",
+        "timeDuration":  "10 Hours",
+        "pricing":  {
+                        "ertiga":  4000,
+                        "toyota":  3000,
+                        "amaze":  3000,
+                        "innova_crysta":  4500,
+                        "mpv":  5000,
+                        "sedan":  3000,
+                        "tempo_traveller":  8000,
+                        "bus":  8500
+                    }
+    }
+]

@@ -33,7 +33,9 @@ import {
   Gauge,
   BellRing,
   Bot,
-  Wallet
+  Wallet,
+  Activity,
+  MessageCircle
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -138,6 +140,20 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <BadgePercent size={20} />,
       path: '/admin/campaigns',
       show: checkPrivilege('campaigns') || checkPrivilege('smart-budget') || canViewBookings() || isAdmin() || isSuperAdmin()
+    },
+    {
+      id: 'visitor-analytics',
+      label: 'Visitor Analytics',
+      icon: <Activity size={20} />,
+      path: '/admin/visitor-analytics',
+      show: checkPrivilege('visitor_analytics') || checkPrivilege('reports_view') || isAdmin() || isSuperAdmin()
+    },
+    {
+      id: 'live-chat',
+      label: 'Live Chat',
+      icon: <MessageCircle size={20} />,
+      path: '/admin/visitor-analytics?tab=chat',
+      show: checkPrivilege('live_chat') || checkPrivilege('visitor_analytics') || isAdmin() || isSuperAdmin()
     },
     
     // Fleet Management

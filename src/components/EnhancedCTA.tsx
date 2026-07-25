@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Car, Phone, Calendar, MapPin, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { FaWhatsapp } from 'react-icons/fa';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 export function EnhancedCTA() {
   const features = [
@@ -66,7 +67,10 @@ export function EnhancedCTA() {
                 variant="outline"
                 size="lg"
                 className="rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 font-semibold text-slate-700 transition-all duration-300 hover:bg-slate-50 hover:text-slate-900"
-                onClick={() => window.open('tel:+919966363662', '_self')}
+                onClick={() => {
+                  trackContactCta('phone', { name: 'enhanced_cta_call' });
+                  window.open('tel:+919966363662', '_self');
+                }}
               >
                 <Phone className="mr-2 h-5 w-5" />
                 Call Now
@@ -75,12 +79,13 @@ export function EnhancedCTA() {
                 variant="outline"
                 size="lg"
                 className="rounded-2xl border-2 border-emerald-600 bg-emerald-600 px-6 py-3 font-semibold text-white transition-all duration-300 hover:border-emerald-700 hover:bg-emerald-700"
-                onClick={() =>
+                onClick={() => {
+                  trackContactCta('whatsapp', { name: 'enhanced_cta_whatsapp' });
                   window.open(
                     'https://wa.me/919966363662?text=Hi Kumar! I would like to know more about your taxi services',
                     '_blank',
-                  )
-                }
+                  );
+                }}
               >
                 <FaWhatsapp className="mr-2 h-5 w-5" />
                 WhatsApp

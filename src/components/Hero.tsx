@@ -244,8 +244,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         const prefillData = JSON.parse(routePrefillData);
         // sessionStorage.removeItem('routePrefillData'); // Do NOT clear after use
         const prePick = prefillData.pickupLocation as Location | undefined;
+        const allowAnyPickup = Boolean(prefillData.openGuestDetails);
         return {
-          pickupLocation: prePick && isLocationInVizag(prePick) ? prePick : null,
+          pickupLocation: prePick && (allowAnyPickup || isLocationInVizag(prePick)) ? prePick : null,
           dropLocation: prefillData.dropLocation,
           pickupDate: prefillData.pickupDate ? (() => {
             const parsedDate = new Date(prefillData.pickupDate);
@@ -270,7 +271,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           tripMode: prefillData.tripMode || 'one-way',
           hourlyPackage: prefillData.hourlyPackage || hourlyPackageOptions[0].value,
           selectedCab: prefillData.selectedCab || null,
-          autoTriggerSearch: prefillData.autoTriggerSearch
+          autoTriggerSearch: prefillData.autoTriggerSearch,
+          openGuestDetails: Boolean(prefillData.openGuestDetails),
+          vehicleHint: typeof prefillData.vehicleHint === 'string' ? prefillData.vehicleHint : '',
+          estimatedFare:
+            typeof prefillData.estimatedFare === 'number' && prefillData.estimatedFare > 0
+              ? prefillData.estimatedFare
+              : 0,
+          estimatedKm:
+            typeof prefillData.estimatedKm === 'number' && prefillData.estimatedKm > 0
+              ? prefillData.estimatedKm
+              : 0,
         };
       }
 
@@ -320,7 +331,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         tripMode: tripModeData as TripMode || 'one-way',
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
         selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
-        autoTriggerSearch: false
+        autoTriggerSearch: false,
+        openGuestDetails: false,
+        vehicleHint: '',
+        estimatedFare: 0,
+        estimatedKm: 0,
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
@@ -344,7 +359,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         tripMode: 'one-way' as TripMode,
         hourlyPackage: hourlyPackageOptions[0].value,
         selectedCab: null,
-        autoTriggerSearch: false
+        autoTriggerSearch: false,
+        openGuestDetails: false,
+        vehicleHint: '',
+        estimatedFare: 0,
+        estimatedKm: 0,
       };
     }
   };
@@ -457,6 +476,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const handleContinueRef = useRef<() => void>(() => {});
   /** Header search asked to run SEARCH once locations are valid (phone gate included). */
   const pendingAutoSearchRef = useRef(false);
+  const openGuestDetailsRef = useRef(Boolean(savedData.openGuestDetails));
+  const vehicleHintRef = useRef(savedData.vehicleHint || '');
+  const estimatedFareRef = useRef(savedData.estimatedFare || 0);
+  const estimatedKmRef = useRef(savedData.estimatedKm || 0);
   /** Google Distance Matrix leg for {@link buildGuestTrackRouteKey} — matches CabList km & duration (avoids stale state). */
   const routedKmForRouteRef = useRef<{ key: string; km: number; durationMinutes: number }>({
     key: '',
@@ -869,10 +892,80 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   // Bootstrap pending auto-search from session prefill (navigate-from-other-page case)
   useEffect(() => {
+    if (openGuestDetailsRef.current) return;
     if (savedData.autoTriggerSearch === true && savedData.pickupLocation && savedData.dropLocation) {
       pendingAutoSearchRef.current = true;
     }
   }, []);
+
+  // VTH AI deep-link: skip cab list and open Guest Details (GST / contact) with prefilled trip
+  useEffect(() => {
+    if (!openGuestDetailsRef.current) return;
+    if (!vehiclesLoaded) return;
+    if (!pickupLocation || !dropLocation) return;
+    if (showGuestDetailsForm) return;
+
+    openGuestDetailsRef.current = false;
+
+    const hint = (vehicleHintRef.current || '').toLowerCase();
+    const list = heroBookingCabList;
+    let matched: CabType | null = null;
+    if (hint && list.length) {
+      matched =
+        list.find((v) => v.name.toLowerCase().includes(hint) || hint.includes(v.name.toLowerCase().split(' ')[0])) ||
+        list.find((v) => {
+          const n = v.name.toLowerCase();
+          if (hint.includes('innova') || hint.includes('crysta')) return n.includes('innova') || n.includes('crysta');
+          if (hint.includes('ertiga')) return n.includes('ertiga');
+          if (hint.includes('tempo')) return n.includes('tempo');
+          if (hint.includes('urbania') || hint.includes('bus')) return n.includes('urbania') || n.includes('bus');
+          if (hint.includes('luxury')) return n.includes('luxury');
+          if (hint.includes('sedan') || hint.includes('dzire')) return n.includes('sedan') || n.includes('dzire') || n.includes('swift');
+          return false;
+        }) ||
+        null;
+    }
+    if (!matched && list.length) matched = list[0];
+    if (matched) setSelectedCabState(matched);
+
+    if (estimatedFareRef.current > 0) {
+      setFinalTotal(estimatedFareRef.current);
+      setWebsiteFareTotal(estimatedFareRef.current);
+    }
+
+    const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
+    const syncKm = estimateRoadKmSync(pickupLocation, dropForKm);
+    const km =
+      estimatedKmRef.current > 0
+        ? estimatedKmRef.current
+        : syncKm > 0
+          ? syncKm
+          : 0;
+    if (km > 0) setDistance(km);
+    setIsCalculatingDistance(false);
+
+    setCurrentStep(2);
+    if (onStepChange) onStepChange(2);
+    setShowGuestDetailsForm(true);
+    if (onSearch) {
+      onSearch({
+        pickupLocation,
+        dropLocation,
+        pickupDate,
+        returnDate,
+        tripType,
+        tripMode,
+        hourlyPackage,
+        selectedCab: matched,
+      });
+    }
+    try {
+      sessionStorage.removeItem('routePrefillData');
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehiclesLoaded, pickupLocation, dropLocation, heroBookingCabList, showGuestDetailsForm]);
 
   // Run queued header/deep-link search via the same SEARCH path (phone modal included)
   useEffect(() => {

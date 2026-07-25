@@ -1,0 +1,17 @@
+{
+  "name": "@vizagtaxihub/visitor-analytics-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Visitor Analytics JavaScript tracker SDK for Vizag Taxi Hub",
+  "type": "module",
+  "main": "./dist/tracker.js",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

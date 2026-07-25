@@ -6,6 +6,9 @@ import { HelmetProvider } from 'react-helmet-async';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import App from './App';
 import './utils/globalErrorHandler'; // Initialize global error handler
+import { installScrollLockShiftFix } from './utils/scrollLockShiftFix';
+
+installScrollLockShiftFix();
 
 // Note: Consent mode is initialized in index.html with default granted state
 // This is intentional for production environment

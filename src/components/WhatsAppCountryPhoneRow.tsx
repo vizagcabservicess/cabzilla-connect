@@ -15,6 +15,8 @@ type Props = {
   phoneDigits: string;
   onPhoneDigitsChange: (digits: string) => void;
   disabled?: boolean;
+  /** Defaults to "WhatsApp number" */
+  label?: string;
 };
 
 export function WhatsAppCountryPhoneRow({
@@ -24,6 +26,7 @@ export function WhatsAppCountryPhoneRow({
   phoneDigits,
   onPhoneDigitsChange,
   disabled = false,
+  label = 'WhatsApp number',
 }: Props) {
   const [countrySearchTerm, setCountrySearchTerm] = useState('');
   const [open, setOpen] = useState(false);
@@ -67,7 +70,7 @@ export function WhatsAppCountryPhoneRow({
   return (
     <div ref={rootRef} className="relative space-y-2">
       <Label htmlFor={`${idPrefix}-phone`} className="text-[13px] font-semibold text-slate-700">
-        WhatsApp number
+        {label}
       </Label>
 
       <div

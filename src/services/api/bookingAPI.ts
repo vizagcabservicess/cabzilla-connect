@@ -142,6 +142,11 @@ export const bookingAPI = {
    */
   createBooking: async (bookingData: BookingRequest) => {
     try {
+      window.visitorAnalytics?.trackConversion?.('booking_started', undefined);
+      window.visitorAnalytics?.trackInteraction?.('booking_started', 'booking', {
+        tripType: (bookingData as { trip_type?: string }).trip_type,
+      });
+
       const headers = {
         'Content-Type': 'application/json',
       };

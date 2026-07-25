@@ -10,6 +10,7 @@ import { UserRole, EnhancedUser } from '@/types/privileges';
 import { HeroSkeleton, PageSkeleton } from './components/SkeletonLoader';
 import { Button } from '@/components/ui/button';
 import { FaWhatsapp } from 'react-icons/fa';
+import { trackContactCta } from './utils/trackContactCta';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import Index from './pages/Index';
@@ -107,7 +108,9 @@ const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursMana
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
 const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
+import LiveChatWidget from './components/visitor-analytics/chat/LiveChatWidget';
 const OfferCampaignsAdminPage = lazy(() => import('./pages/admin/OfferCampaignsAdminPage'));
+const VisitorAnalyticsPage = lazy(() => import('./pages/admin/visitor-analytics/VisitorAnalyticsPage'));
 const AIAssistantPage = lazy(() => import('./pages/admin/AIAssistantPage'));
 const SmartBudgetCustomerSessionPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerSessionPage'));
 const SmartBudgetCustomerChatPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerChatPage'));
@@ -301,6 +304,7 @@ function Root() {
   };
 
   const handleWhatsApp = () => {
+    trackContactCta('whatsapp', { name: 'desktop_float_whatsapp', path: location.pathname });
     const message = encodeURIComponent(getWhatsAppMessage());
     window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
   };
@@ -325,6 +329,11 @@ function Root() {
           WhatsApp
         </Button>
       </div>
+
+      {/* VTH AI travel assistant — bottom left */}
+      {!location.pathname.startsWith('/admin') && (
+        <LiveChatWidget position="bottom-left" />
+      )}
     </>
   );
 }
@@ -442,6 +451,10 @@ const router = createBrowserRouter([
           {
             path: 'campaigns',
             element: <OfferCampaignsAdminPage />,
+          },
+          {
+            path: 'visitor-analytics',
+            element: <VisitorAnalyticsPage />,
           },
           {
             path: 'vehicles',

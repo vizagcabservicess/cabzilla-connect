@@ -113,7 +113,7 @@
     <link rel="dns-prefetch" href="https://analytics.google.com" />
     
     <!-- Content Security Policy to allow Google Maps, Razorpay, Clarity, Cloudflare, and Social Login with iOS support -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://ad.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://connect.facebook.net https://cdn.gpteng.co https://checkout.razorpay.com https://api.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com; frame-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://www.facebook.com https://api.razorpay.com https://checkout.razorpay.com; img-src 'self' data: https: blob: https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://*.clarity.ms https://graph.facebook.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://maps.google.com https://www.google.com https://accounts.google.com https://graph.facebook.com https://www.vizagtaxihub.com https://vizagtaxihub.com https://vizagup.com https://www.vizagup.com wss://vizagup.com wss://www.vizagup.com https://analytics.google.com https://www.google-analytics.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://ad.doubleclick.net https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://*.clarity.ms https://q.clarity.ms https://c.clarity.ms https://z.clarity.ms https://v.clarity.ms https://i.clarity.ms https://www.clarity.ms https://lumberjack.razorpay.com;">
   </head>
 
   <body>
@@ -175,6 +175,26 @@
          If you use Cloudflare Rocket Loader on vizagtaxihub.com, consider disabling it for this SPA:
          Rocket Loader defers scripts and often inflates lab LCP/TBT vs a plain module graph. -->
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Vizag Taxi Hub first-party visitor analytics + session recording -->
+    <script>
+      (function () {
+        var isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        window.VTH_ANALYTICS = {
+          siteKey: window.VTH_ANALYTICS_SITE_KEY || 'vth_pk_live_replace_me',
+          // Dev: Vite proxy. Prod: Hostinger Node app on vizagup.com
+          apiBase: window.VTH_ANALYTICS_API || (isLocal ? (location.origin + '/api/va') : 'https://vizagup.com'),
+          wsUrl: window.VTH_ANALYTICS_WS || (isLocal
+            ? ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/va-ws')
+            : 'wss://vizagup.com/ws'),
+          recording: true,
+          // Local: track immediately. Production keeps consent gate.
+          requireConsent: isLocal ? false : true,
+          maskSelectors: ['.mask-me', '[data-va-mask]', 'input[type=password]', 'input[name*=otp i]', 'input[name*=cvv i]', 'input[name*=card i]']
+        };
+      })();
+    </script>
+    <script src="/tracker.js" defer></script>
     
     <!-- Razorpay script - Load only when needed -->
     <script>

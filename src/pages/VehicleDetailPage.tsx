@@ -29,6 +29,7 @@ import {
 import { Hero } from '@/components/Hero';
 import ImageGallery from '@/components/vehicle/ImageGallery';
 import VehicleTabs from '@/components/vehicle/VehicleTabs';
+import { trackContactCta } from '@/utils/trackContactCta';
 
 // Lazy load heavier below-the-fold panels (keep gallery + tabs eager so first paint always has content)
 const RateCardPanel = lazy(() => import('@/components/vehicle/RateCardPanel'));
@@ -302,7 +303,7 @@ const VehicleDetailPage = () => {
   };
 
   const handleCallNow = () => {
-    // Open phone dialer
+    trackContactCta('phone', { name: 'vehicle_detail_call' });
     window.location.href = 'tel:+919966363662';
   };
 

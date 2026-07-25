@@ -43,7 +43,7 @@ import {
   Building2,
   BadgePercent,
 } from 'lucide-react';
-import { CITY_LOOKUP } from './OutstationHeroWidget';
+import { CITY_LOOKUP } from '@/lib/cityLookup';
 import { tourAPI } from '@/services/api/tourAPI';
 import { cn } from '@/lib/utils';
 import { dispatchBookingHomeReset } from '@/lib/bookingSessionReset';
