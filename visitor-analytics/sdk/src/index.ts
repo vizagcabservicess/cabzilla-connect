@@ -516,8 +516,26 @@ class TrackerRuntime {
   }
 }
 
+function isAdminPath(): boolean {
+  try {
+    return (location.pathname || '').startsWith('/admin');
+  } catch {
+    return false;
+  }
+}
+
 async function bootstrap(overrides?: Partial<VTHAnalyticsConfig>): Promise<VisitorAnalyticsPublicApi | null> {
   try {
+    // Admin UI (vehicles edit, etc.) must not run session recording — it freezes heavy dialogs
+    if (isAdminPath()) {
+      if (active) {
+        active.destroy();
+        active = null;
+      }
+      window.visitorAnalytics = undefined;
+      return null;
+    }
+
     const cfg = readConfig(overrides);
     if (active) {
       active.destroy();

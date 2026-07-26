@@ -74,5 +74,8 @@
     "http-proxy-middleware": "^3.0.5",
     "typescript": "~5.9.2"
   },
+  "overrides": {
+    "shell-quote": "1.10.0"
+  },
   "private": true
 }

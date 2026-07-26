@@ -176,9 +176,11 @@
          Rocket Loader defers scripts and often inflates lab LCP/TBT vs a plain module graph. -->
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Vizag Taxi Hub first-party visitor analytics + session recording -->
+    <!-- Vizag Taxi Hub first-party visitor analytics + session recording (skip admin — recording freezes heavy admin UIs) -->
     <script>
       (function () {
+        var path = location.pathname || '';
+        if (path.indexOf('/admin') === 0) return;
         var isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
         window.VTH_ANALYTICS = {
           siteKey: window.VTH_ANALYTICS_SITE_KEY || 'vth_pk_live_replace_me',
@@ -192,9 +194,12 @@
           requireConsent: isLocal ? false : true,
           maskSelectors: ['.mask-me', '[data-va-mask]', 'input[type=password]', 'input[name*=otp i]', 'input[name*=cvv i]', 'input[name*=card i]']
         };
+        var s = document.createElement('script');
+        s.src = '/tracker.js';
+        s.defer = true;
+        document.head.appendChild(s);
       })();
     </script>
-    <script src="/tracker.js" defer></script>
     
     <!-- Razorpay script - Load only when needed -->
     <script>

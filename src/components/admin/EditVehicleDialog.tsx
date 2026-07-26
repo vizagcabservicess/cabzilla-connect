@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,7 @@ export function EditVehicleDialog({
   const [galleryAlt, setGalleryAlt] = useState('');
   const [galleryCaption, setGalleryCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const galleryPersistTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     if (initialVehicle && open) {
@@ -371,29 +372,28 @@ export function EditVehicleDialog({
     }
   };
 
-  const updateGalleryItem = async (index: number, field: 'alt' | 'caption', value: string) => {
+  const updateGalleryItem = (index: number, field: 'alt' | 'caption', value: string) => {
     const item = gallery[index];
     if (!item?.id) return;
 
-    try {
-      const success = await vehicleGalleryAPI.updateImage(item.id, {
-        [field]: value
-      });
+    // Update UI immediately — do not call API on every keystroke (that froze the dialog)
+    setGallery((prev) =>
+      prev.map((galleryItem, i) => (i === index ? { ...galleryItem, [field]: value } : galleryItem)),
+    );
 
-      if (success) {
-        setGallery(prev => 
-          prev.map((galleryItem, i) => 
-            i === index ? { ...galleryItem, [field]: value } : galleryItem
-          )
-        );
-        toast.success('Image updated successfully');
-      } else {
+    const key = `${item.id}:${field}`;
+    if (galleryPersistTimers.current[key]) {
+      clearTimeout(galleryPersistTimers.current[key]);
+    }
+    galleryPersistTimers.current[key] = setTimeout(async () => {
+      try {
+        const success = await vehicleGalleryAPI.updateImage(item.id!, { [field]: value });
+        if (!success) toast.error('Failed to update image');
+      } catch (error) {
+        console.error('Error updating gallery item:', error);
         toast.error('Failed to update image');
       }
-    } catch (error) {
-      console.error('Error updating gallery item:', error);
-      toast.error('Failed to update image');
-    }
+    }, 600);
   };
 
   const removeGalleryItem = async (index: number) => {

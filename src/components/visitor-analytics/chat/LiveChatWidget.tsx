@@ -864,7 +864,7 @@ export function LiveChatWidget({
   // (do not hide the whole assistant when widget.enabled is false from a stale config)
 
   const isLeft = position === 'bottom-left';
-  const posClass = isLeft ? 'left-4 sm:left-6' : 'right-4 sm:right-6';
+  const posClass = isLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6';
   const panelAlign = isLeft ? 'items-start' : 'items-end';
   const showWelcome = !messages.length && !loading;
   const visitorHasSpoken = messages.some((m) => m.sender_type === 'visitor');
@@ -873,9 +873,31 @@ export function LiveChatWidget({
   const showQuickReplies = !visitorHasSpoken && !loading;
   const showMidSuggestions = visitorHasSpoken && !loading && !sending;
 
+  // Mobile after cab search: redBus-style circular FAB (no wide "VTH AI" pill)
+  const [compactFab, setCompactFab] = useState(false);
+  useEffect(() => {
+    const sync = () => {
+      const afterSearch = document.documentElement.dataset.vthBookingUi === 'results';
+      const narrow = window.matchMedia('(max-width: 1023px)').matches;
+      setCompactFab(afterSearch && narrow);
+    };
+    sync();
+    const mql = window.matchMedia('(max-width: 1023px)');
+    mql.addEventListener('change', sync);
+    const mo = new MutationObserver(sync);
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-vth-booking-ui'],
+    });
+    return () => {
+      mql.removeEventListener('change', sync);
+      mo.disconnect();
+    };
+  }, []);
+
   return (
     <div
-      className={`fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 ${posClass} z-[9999] flex flex-col ${panelAlign} gap-3 font-sans`}
+      className={`fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px)+var(--vth-chat-clearance,0px))] sm:bottom-[calc(1.5rem+var(--vth-chat-clearance,0px))] ${posClass} z-[9999] flex flex-col ${panelAlign} gap-3 font-sans`}
       data-va-ignore
     >
       {open && (
@@ -1269,7 +1291,11 @@ export function LiveChatWidget({
           setOpen((o) => !o);
           setShowCallbackForm(false);
         }}
-        className="group relative flex items-center gap-3 rounded-full pl-1.5 pr-4 py-1.5 text-left shadow-[0_12px_28px_-8px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98]"
+        className={
+          compactFab
+            ? 'group relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-6px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.03] active:scale-[0.97]'
+            : 'group relative flex items-center gap-3 rounded-full pl-1.5 pr-4 py-1.5 text-left shadow-[0_12px_28px_-8px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98]'
+        }
         style={{
           background: open
             ? '#0f172a'
@@ -1278,22 +1304,33 @@ export function LiveChatWidget({
         aria-label={open ? 'Close assistant' : `Open ${ASSISTANT_NAME}`}
         aria-expanded={open}
       >
-        <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white border border-white/20">
-          {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-          {!open && (
-            <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
-          )}
-        </span>
-        <span className="text-white pr-1">
-          <span className="block text-sm font-semibold leading-tight">
-            {open ? 'Close' : ASSISTANT_NAME}
-          </span>
-          <span className="block text-[11px] text-white/80 leading-tight mt-0.5">
-            {open ? 'Hide chat' : 'AI travel assistant'}
-          </span>
-        </span>
+        {compactFab ? (
+          <>
+            {open ? <X className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+            {!open && (
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
+            )}
+          </>
+        ) : (
+          <>
+            <span className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/15 text-white">
+              {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+              {!open && (
+                <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+              )}
+            </span>
+            <span className="pr-1 text-white">
+              <span className="block text-sm font-semibold leading-tight">
+                {open ? 'Close' : ASSISTANT_NAME}
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-tight text-white/80">
+                {open ? 'Hide chat' : 'AI travel assistant'}
+              </span>
+            </span>
+          </>
+        )}
         {!open && unread > 0 && (
-          <Badge className="absolute -top-2 -right-2 h-5 min-w-5 justify-center bg-rose-500 hover:bg-rose-500 text-[10px] border-2 border-white">
+          <Badge className="absolute -right-1 -top-1 h-5 min-w-5 justify-center border-2 border-white bg-rose-500 text-[10px] hover:bg-rose-500">
             {unread > 99 ? '99+' : unread}
           </Badge>
         )}

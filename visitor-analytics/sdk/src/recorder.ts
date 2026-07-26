@@ -323,14 +323,16 @@ export class SessionRecorder {
     };
 
     const onKey = (ev: KeyboardEvent) => {
-      const el = ev.target as Element | null;
+      const el = ev.target instanceof Element ? ev.target : null;
       if (isSensitiveElement(el)) return;
+      // Some browsers / IME / autofill fire keydown without `key`
+      const key = typeof ev.key === 'string' ? ev.key : '';
+      if (!key || key.length === 1) return;
       // Do not record actual characters for privacy; only key meta for non-text shortcuts
-      if (ev.key.length === 1) return;
       this.push({
         t: this.t(),
         op: 'key',
-        k: ev.key,
+        k: key,
         sel: el ? cssPath(el) : undefined,
       });
     };

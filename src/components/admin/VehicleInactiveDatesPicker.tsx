@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Plus, Trash2, X } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+
+const MAX_PREVIEW_DAYS = 366;
 
 interface InactiveDateRange {
   id: string;
@@ -31,6 +33,25 @@ export function VehicleInactiveDatesPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
   const [reason, setReason] = useState('');
+
+  const previewSelectedDates = useMemo(() => {
+    const dates: Date[] = [];
+    for (const range of inactiveDates) {
+      if (!range?.from || !range?.to) continue;
+      const start = new Date(range.from);
+      const end = new Date(range.to);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) continue;
+      const current = new Date(start);
+      let added = 0;
+      while (current <= end && dates.length < MAX_PREVIEW_DAYS && added < MAX_PREVIEW_DAYS) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+        added += 1;
+      }
+      if (dates.length >= MAX_PREVIEW_DAYS) break;
+    }
+    return dates;
+  }, [inactiveDates]);
 
   const addInactiveDateRange = () => {
     if (selectedRange?.from && selectedRange?.to) {
@@ -174,15 +195,7 @@ export function VehicleInactiveDatesPicker({
             <CardContent className="p-4">
               <Calendar
                 mode="multiple"
-                selected={inactiveDates.flatMap(range => {
-                  const dates = [];
-                  const current = new Date(range.from);
-                  while (current <= range.to) {
-                    dates.push(new Date(current));
-                    current.setDate(current.getDate() + 1);
-                  }
-                  return dates;
-                })}
+                selected={previewSelectedDates}
                 disabled={(date) => date < new Date()}
                 className="rounded-md border"
                 modifiers={{

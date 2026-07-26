@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, Outlet, useLocation, useSearchParams, Navigate } from 'react-router-dom';
 import { vehicleLoader } from './loaders/vehicleLoader';
-import { lazy, Suspense, startTransition } from 'react';
+import { lazy, Suspense, startTransition, useEffect } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { RedirectHandler } from './components/RedirectHandler';
@@ -109,7 +109,9 @@ const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpool
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
 const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
 import LiveChatWidget from './components/visitor-analytics/chat/LiveChatWidget';
+import { SitePromoPopup } from './components/promos/SitePromoPopup';
 const OfferCampaignsAdminPage = lazy(() => import('./pages/admin/OfferCampaignsAdminPage'));
+const PromosAdminPage = lazy(() => import('./pages/admin/PromosAdminPage'));
 const VisitorAnalyticsPage = lazy(() => import('./pages/admin/visitor-analytics/VisitorAnalyticsPage'));
 const AIAssistantPage = lazy(() => import('./pages/admin/AIAssistantPage'));
 const SmartBudgetCustomerSessionPage = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerSessionPage'));
@@ -309,6 +311,17 @@ function Root() {
     window.open(`https://wa.me/919966363662?text=${message}`, '_blank');
   };
 
+  // Stop session recording when entering admin (prevents vehicles edit freeze)
+  useEffect(() => {
+    if (!location.pathname.startsWith('/admin')) return;
+    try {
+      window.visitorAnalytics?.destroy?.();
+      window.visitorAnalytics = undefined;
+    } catch {
+      /* ignore */
+    }
+  }, [location.pathname]);
+
   return (
     <>
       <ScrollToTop />
@@ -334,6 +347,9 @@ function Root() {
       {!location.pathname.startsWith('/admin') && (
         <LiveChatWidget position="bottom-left" />
       )}
+
+      {/* Admin-managed promo banner popup (public pages only) */}
+      {!location.pathname.startsWith('/admin') && <SitePromoPopup enabled />}
     </>
   );
 }
@@ -451,6 +467,10 @@ const router = createBrowserRouter([
           {
             path: 'campaigns',
             element: <OfferCampaignsAdminPage />,
+          },
+          {
+            path: 'promos',
+            element: <PromosAdminPage />,
           },
           {
             path: 'visitor-analytics',

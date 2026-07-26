@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { LocationInput, type LocationInputHandle } from './LocationInput';
 import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
@@ -2105,6 +2105,51 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   let totalPrice = calculatePrice();
   /** Prefer BookingSummary's calculated total; fall back to Hero estimate only while fare is still loading. */
   const payReadyTotal = finalTotal > 0 ? finalTotal : totalPrice;
+  const bookingPaybarRef = useRef<HTMLDivElement>(null);
+  const showMobileBookingPaybar =
+    currentStep === 2 &&
+    !showGuestDetailsForm &&
+    !isSlidingSearch &&
+    !!selectedCab &&
+    payReadyTotal > 0;
+
+  // After cab search on mobile: compact AI FAB + lift above sticky Part Pay / Book Now
+  const showMobileBookingResults =
+    currentStep === 2 && !showGuestDetailsForm && !isSlidingSearch;
+
+  useLayoutEffect(() => {
+    if (showMobileBookingResults) {
+      document.documentElement.dataset.vthBookingUi = 'results';
+    } else {
+      delete document.documentElement.dataset.vthBookingUi;
+    }
+    return () => {
+      delete document.documentElement.dataset.vthBookingUi;
+    };
+  }, [showMobileBookingResults]);
+
+  useLayoutEffect(() => {
+    if (!showMobileBookingPaybar) {
+      document.documentElement.style.setProperty('--vth-chat-clearance', '0px');
+      return;
+    }
+    const el = bookingPaybarRef.current;
+    if (!el) {
+      document.documentElement.style.setProperty('--vth-chat-clearance', '0px');
+      return;
+    }
+    const publish = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--vth-chat-clearance', `${Math.max(0, h)}px`);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.setProperty('--vth-chat-clearance', '0px');
+    };
+  }, [showMobileBookingPaybar, bookingPaymentMode, offerApplied, offerCampaign, payReadyTotal]);
   const websiteFareBase =
     websiteFareTotal > 0
       ? websiteFareTotal
@@ -4014,13 +4059,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       )}
 
       {/* Mobile: Part / Full pay + Book Now — fixed above bottom nav (z above mobile tab bar) */}
-      {currentStep === 2 &&
-        !showGuestDetailsForm &&
-        !isSlidingSearch &&
-        selectedCab &&
-        payReadyTotal > 0 && (
+      {showMobileBookingPaybar && (
           <div className="fixed inset-x-0 bottom-0 z-[60] max-md:bottom-16 lg:hidden">
-            <div className="border-t border-gray-200 bg-white px-3 pt-2 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] mobile-safe-bottom">
+            <div
+              ref={bookingPaybarRef}
+              className="border-t border-gray-200 bg-white px-3 pt-2 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] mobile-safe-bottom"
+            >
               <BookingOfferStickyBanner
                 campaign={offerCampaign}
                 websiteFare={websiteFareBase}

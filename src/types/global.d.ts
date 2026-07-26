@@ -32,6 +32,7 @@ interface VisitorAnalytics {
   trackScroll: (percentage: number) => void;
   trackFormSubmission: (formName: string, data?: Record<string, unknown>) => void;
   trackConversion: (event: string, value?: number) => void;
+  destroy?: () => void;
   chat?: VisitorAnalyticsChatBridge;
   getSessionId?: () => string | null;
   getVisitorId?: () => string | null;

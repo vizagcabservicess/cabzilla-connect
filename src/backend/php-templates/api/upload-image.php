@@ -90,6 +90,33 @@ if ($category === 'carpool-id') {
 }
 
 /**
+ * Site banner / notice — local public uploads (GCS bucket is private).
+ * Use notice_ prefix (not img_) so ad blockers are less likely to block the URL.
+ */
+if ($category === 'site-banner' || $category === 'site-notice' || $category === 'site-promo') {
+    $folderPrefix = 'site-banners/';
+    $fileBase = 'notice_' . uniqid('', true) . '.' . $ext;
+    $objectName = $folderPrefix . $fileBase;
+    $localDir = $uploadsRoot . '/site-banners';
+    if (!is_dir($localDir)) {
+        mkdir($localDir, 0755, true);
+    }
+    $localPath = $localDir . '/' . $fileBase;
+    if (!move_uploaded_file($tmpPath, $localPath)) {
+        echo json_encode(['error' => 'Failed to save banner']);
+        exit;
+    }
+    if (function_exists('uploadToGcs') && gcloudEnv('GCS_BUCKET')) {
+        uploadToGcs($localPath, $objectName, $contentType);
+    }
+    echo json_encode([
+        'url' => '/uploads/site-banners/' . $fileBase,
+        'object' => $objectName,
+    ]);
+    exit;
+}
+
+/**
  * Smart Budget vendor profile + KYC.
  * GCS objects are private (AccessDenied for anonymous), so always use public /uploads/.
  */

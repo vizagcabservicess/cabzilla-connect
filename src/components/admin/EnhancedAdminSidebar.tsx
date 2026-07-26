@@ -35,7 +35,8 @@ import {
   Bot,
   Wallet,
   Activity,
-  MessageCircle
+  MessageCircle,
+  Megaphone,
 } from 'lucide-react';
 
 interface EnhancedAdminSidebarProps {
@@ -140,6 +141,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       icon: <BadgePercent size={20} />,
       path: '/admin/campaigns',
       show: checkPrivilege('campaigns') || checkPrivilege('smart-budget') || canViewBookings() || isAdmin() || isSuperAdmin()
+    },
+    {
+      id: 'promos',
+      label: 'Promos',
+      icon: <Megaphone size={20} />,
+      path: '/admin/promos',
+      show: checkPrivilege('promos') || checkPrivilege('campaigns') || canViewBookings() || isAdmin() || isSuperAdmin()
     },
     {
       id: 'visitor-analytics',
