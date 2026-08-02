@@ -56,8 +56,36 @@ export function getVaWsUrl(): string {
   return WS_URL;
 }
 
+function parseJwtExpMs(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')),
+    ) as { exp?: number };
+    return payload.exp ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** VA operator JWT still valid (with 2 min skew for clock drift). */
+function isVaOperatorTokenFresh(token: string): boolean {
+  const expMs = parseJwtExpMs(token);
+  if (!expMs) return false;
+  return expMs - 120_000 > Date.now();
+}
+
+function getVaOperatorToken(): string | null {
+  const token = localStorage.getItem(VA_TOKEN_KEY);
+  if (!token || token === 'demo-web-only-token') return null;
+  if (!isVaOperatorTokenFresh(token)) return null;
+  return token;
+}
+
 export function getStoredVaToken(): string | null {
-  return localStorage.getItem(VA_TOKEN_KEY) || localStorage.getItem('auth_token');
+  // Only VA-issued JWT works on admin routes — never send main-site auth_token directly.
+  return getVaOperatorToken();
 }
 
 export function getStoredSiteId(): string | null {
@@ -113,6 +141,7 @@ async function parseError(res: Response): Promise<string> {
 async function request<T>(
   path: string,
   init?: RequestInit & { siteKey?: string },
+  retried = false,
 ): Promise<T> {
   const { siteKey, ...rest } = init || {};
   const headers = {
@@ -130,7 +159,31 @@ async function request<T>(
     );
   }
 
-  if (!res.ok) throw new Error(await parseError(res));
+  if (!res.ok) {
+    const msg = await parseError(res);
+    const isAuthPath = path.startsWith('/api/auth/');
+    if (
+      res.status === 401 &&
+      !retried &&
+      !siteKey &&
+      !isAuthPath &&
+      /invalid token|session expired|unauthorized/i.test(msg)
+    ) {
+      const siteId = getStoredSiteId() || undefined;
+      clearVaAuth();
+      try {
+        await exchangeOperatorToken(undefined, siteId);
+        return request<T>(path, init, true);
+      } catch {
+        throw new Error(
+          msg.includes('Invalid token')
+            ? 'Visitor Analytics session expired — log out and log in again, or clear site data for vizagtaxihub.com'
+            : msg,
+        );
+      }
+    }
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -163,9 +216,9 @@ export async function exchangeOperatorToken(
 }
 
 export async function ensureVaAuth(siteId?: string): Promise<string> {
-  const existing = localStorage.getItem(VA_TOKEN_KEY);
-  if (existing && existing !== 'demo-web-only-token') return existing;
-  if (existing === 'demo-web-only-token') clearVaAuth();
+  const existing = getVaOperatorToken();
+  if (existing) return existing;
+  if (localStorage.getItem(VA_TOKEN_KEY)) clearVaAuth();
   const exchanged = await exchangeOperatorToken(undefined, siteId);
   return exchanged.token;
 }

@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import {
   ensureVaAuth,
   exchangeOperatorToken,
+  clearVaAuth,
   getAttributionReport,
   getDailyReport,
   getLiveVisitors,
@@ -186,17 +187,22 @@ export function VisitorAnalyticsLayout() {
   const [opStatus, setOpStatus] = useState<'online' | 'away' | 'offline'>('online');
 
   const bootstrap = useCallback(async () => {
+    setAuthError(null);
     try {
       await ensureVaAuth();
       setReady(true);
-      setAuthError(null);
-    } catch (e) {
+    } catch (err) {
+      clearVaAuth();
       try {
         await exchangeOperatorToken();
         setReady(true);
         setAuthError(null);
-      } catch (err) {
-        setAuthError(err instanceof Error ? err.message : 'Authentication failed');
+      } catch (retryErr) {
+        setAuthError(
+          retryErr instanceof Error
+            ? retryErr.message
+            : 'Authentication failed — log out and log in again',
+        );
         setReady(false);
       }
     }
