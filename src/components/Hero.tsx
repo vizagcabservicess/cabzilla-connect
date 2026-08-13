@@ -1,10 +1,26 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  lazy,
+  Suspense,
+  type CSSProperties,
+} from 'react';
 import { LocationInput, type LocationInputHandle } from './LocationInput';
 import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { vizagLocations, Location } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
+import {
+  getServicePathForTripType,
+  inferTripServiceType,
+  isVizagAirportLocation,
+  type CustomerTripService,
+} from '@/lib/inferTripService';
 import { cabTypes, formatPrice, loadCabTypes } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
@@ -18,6 +34,7 @@ import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector, type TripSelectorTab } from './TabTripSelector';
 import { HomeHeroBanner } from '@/components/home/HomeHeroBanner';
 import { HeroValueProps } from '@/components/home/HeroValueProps';
+import { MobileTrustBanner } from '@/components/home/MobileTrustBanner';
 import { BOOKING_HOME_RESET_EVENT } from '@/lib/bookingSessionReset';
 import { resetPageScroll, scrollToBookingWidget } from '@/lib/bookingWidgetScroll';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -60,7 +77,7 @@ import {
   BookingOfferStickyBanner,
 } from '@/components/offers/BookingCouponSection';
 import type { OfferCampaignPublic } from '@/types/offerCampaign';
-import { resolveOfferCampaignCategory, toOfferTravelDateYmd } from '@/types/offerCampaign';
+import { resolveOfferCampaignCategory, toOfferTravelDateYmd, normalizeOfferTargetId } from '@/types/offerCampaign';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import {
   trackGuestSearch,
@@ -122,14 +139,20 @@ const hourlyPackageOptions = [
   { value: "10hrs-100km", label: "10 Hours / 100 KM" }
 ];
 
-/** Match dropdown width to trigger so long tour names wrap instead of widening toward Trip/Search; Radix scrollbar restore is in index.css. */
+/** Match dropdown width to trigger (and never exceed the viewport) so Package/Tour menus stay on-screen. */
 const heroTourPackageSelectContentProps = {
   side: 'bottom' as const,
   align: 'start' as const,
   sideOffset: 4,
-  collisionPadding: 16,
+  collisionPadding: 12,
+  position: 'popper' as const,
+  style: {
+    width: 'var(--radix-select-trigger-width)',
+    maxWidth: 'min(var(--radix-select-trigger-width), calc(100vw - 1.5rem))',
+    minWidth: 0,
+  } as CSSProperties,
   className:
-    'w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)] min-w-0 [&_[role=option]]:items-start [&_[role=option]]:whitespace-normal [&_[role=option]]:break-words [&_[role=option]]:py-2 [&_[role=option]]:leading-snug',
+    'box-border min-w-0 overflow-x-hidden [&_[data-radix-select-viewport]]:max-w-full [&_[data-radix-select-viewport]]:min-w-0 [&_[role=option]]:items-start [&_[role=option]]:whitespace-normal [&_[role=option]]:break-words [&_[role=option]]:py-2 [&_[role=option]]:leading-snug',
 };
 
 const heroMobileTourSelectTriggerDefault = cn(
@@ -194,7 +217,7 @@ const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
-export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour' | 'custom'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean }) {
+export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, embedCompactLayout, embedStretchToShell, onEditStart, onTripEditOpenChange, onStepChange, lockedVehicleSlug, summaryBackHref, urbaniaUnifiedMobileLayout, embedDesktopCardLayout, embedDesktopCardTitle }: { onSearch?: (searchData: any) => void; isSearchActive?: boolean; visibleTabs?: Array<'outstation' | 'local' | 'airport' | 'tour' | 'custom'>; hideBackground?: boolean; /** Local /embed pages only: normal flow layout, no banner-centering absolute + lighter widget padding */ embedCompactLayout?: boolean; /** When embedded in a route that already wraps `container`/padding: drop inner max-width + nested container so the widget aligns with breadcrumbs */ embedStretchToShell?: boolean; onEditStart?: () => void; /** Urbania embed parent: show page content below the widget while user edits trip search (step 2). */ onTripEditOpenChange?: (open: boolean) => void; onStepChange?: (step: number) => void; lockedVehicleSlug?: string; summaryBackHref?: string; /** `/vehicle/urbania`: parent already renders one gray shell — hide duplicate mobile white card around this embed */ urbaniaUnifiedMobileLayout?: boolean; /** Desktop: stacked booking card (title + fields + full-width Search) for service marketing hero */ embedDesktopCardLayout?: boolean; /** Booking-card heading when `embedDesktopCardLayout` is on */ embedDesktopCardTitle?: string }) {
   const normalizedLockSlug = lockedVehicleSlug?.trim().toLowerCase() ?? '';
   const vehicleEmbedConfig = lockedVehicleSlug
     ? getVehicleEmbedConfig(normalizedLockSlug)
@@ -213,9 +236,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   /** Parent `VehicleDetailPage` wraps hero + embed in a single gray shell below `lg`. */
   const urbaniaUnifiedShell =
     Boolean(urbaniaUnifiedMobileLayout && urbaniaMobileEmbedShell);
-  /** Home + vehicle embed: in-field captions + stacked ticket divider on mobile/tablet. */
+  /** Home + vehicle/service embeds: in-field captions + stacked ticket divider on mobile/tablet.
+   *  Service landings (local/airport/outstation) pass embedCompactLayout — use ticket UI so Package
+   *  uses constrained Radix Select (native <select> popups overflow the viewport in Chrome). */
   const heroMobileTicketStyle =
     isVehicleEmbedLock ||
+    Boolean(embedCompactLayout) ||
     (!embedStretchToShell && !embedCompactLayout && !lockedVehicleSlug);
   const heroMobileFieldVariant: 'app' | 'infield' = heroMobileTicketStyle ? 'infield' : 'app';
   const heroTicketCellPad = heroMobileTicketStyle ? 'px-2 py-1.5' : '';
@@ -1186,16 +1212,56 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setIsFormValid(valid);
   }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode]);
 
-  // Add function to check if a location is Vizag Airport
-  const isVizagAirport = (location: Location | null): boolean => {
-    if (!location) return false;
-    
-    const isAirport = location.name === 'Visakhapatnam International Airport' || 
-                     location.id === 'vizag_airport' ||
-                     location.name.toLowerCase().includes('airport');
-    
-    return isAirport;
-  };
+  const isVizagAirport = (location: Location | null): boolean => isVizagAirportLocation(location);
+
+  /** When trip intent no longer matches a locked service page, jump to the right landing with prefill. */
+  const redirectToInferredServicePage = useCallback(
+    (inferred: CustomerTripService) => {
+      const path = getServicePathForTripType(inferred);
+      if (!path) return false;
+      if (location.pathname === path || location.pathname.startsWith(`${path}/`)) return false;
+
+      const prefill = {
+        pickupLocation,
+        dropLocation: inferred === 'local' ? dropLocation : dropLocation,
+        tripType: inferred,
+        tripMode: inferred === 'outstation' ? tripMode : 'one-way',
+        hourlyPackage,
+        pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
+        returnDate: returnDate ? returnDate.toISOString() : undefined,
+      };
+      sessionStorage.setItem('tripType', inferred);
+      sessionStorage.setItem('tripMode', prefill.tripMode);
+      sessionStorage.setItem('routePrefillData', JSON.stringify(prefill));
+      if (pickupLocation) sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
+      if (dropLocation) sessionStorage.setItem('dropLocation', JSON.stringify(dropLocation));
+
+      const labels: Record<CustomerTripService, string> = {
+        local: 'Local Taxi',
+        airport: 'Airport Taxi',
+        outstation: 'Outstation Taxi',
+        tour: 'Tours',
+      };
+      toast({
+        title: `Switched to ${labels[inferred]}`,
+        description: 'Your locations look like a different trip type — we moved you to the matching page.',
+        duration: 3500,
+      });
+      navigate(path);
+      return true;
+    },
+    [
+      location.pathname,
+      pickupLocation,
+      dropLocation,
+      tripMode,
+      hourlyPackage,
+      pickupDate,
+      returnDate,
+      toast,
+      navigate,
+    ]
+  );
 
   // Add function to check if a location should be treated as airport for current trip type
   const shouldTreatAsAirport = (location: Location | null): boolean => {
@@ -1311,46 +1377,35 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     advanceAfterDropSelected();
   };
 
-  // Automatic tab switching based on distance between pickup and drop locations
+  // Locked service landings only (local/airport/outstation) — never change homepage widget tabs
   useEffect(() => {
-    if (pickupLocation && dropLocation && !isTabSwitching) {
-      if (pickupLocation.lat && pickupLocation.lng && dropLocation.lat && dropLocation.lng) {
-        const toRad = (value: number) => (value * Math.PI) / 180;
-        const R = 6371;
-        const dLat = toRad(dropLocation.lat - pickupLocation.lat);
-        const dLng = toRad(dropLocation.lng - pickupLocation.lng);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRad(pickupLocation.lat)) *
-            Math.cos(toRad(dropLocation.lat)) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const calculatedDistance = R * c;
-        
-        if (tripType === 'outstation' && calculatedDistance <= 35) {
-          setIsTabSwitching(true); // Set flag to prevent re-triggering
-          // toast({
-          //   title: "Trip Type Updated",
-          //   description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
-          //   duration: 3000,
-          // });
-          setTripType('airport');
-          // Reset flag after a short delay
-          setTimeout(() => setIsTabSwitching(false), 1000);
-        } else if (tripType === 'airport' && calculatedDistance > 35) {
-          setIsTabSwitching(true); // Set flag to prevent re-triggering
-          // toast({
-          //   title: "Trip Type Updated",
-          //   description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
-          //   duration: 3000,
-          // });
-          setTripType('outstation');
-          // Reset flag after a short delay
-          setTimeout(() => setIsTabSwitching(false), 1000);
-        }
-      }
-    }
-  }, [pickupLocation, dropLocation, tripType, toast, isTabSwitching]);
+    if (isTabSwitching) return;
+    if (tripType === 'tour' || tripType === 'custom') return;
+
+    const lockedTab =
+      visibleTabs && visibleTabs.length === 1 ? (visibleTabs[0] as CustomerTripService) : null;
+    if (!lockedTab || lockedTab === 'tour') return;
+
+    const inferred = inferTripServiceType(pickupLocation, dropLocation);
+    if (!inferred || inferred === 'tour' || inferred === lockedTab) return;
+
+    // Local hourly packages may start or end at the airport — stay on Local Taxi.
+    if (lockedTab === 'local' && inferred === 'airport') return;
+
+    const airportHit = isVizagAirportLocation(pickupLocation) || isVizagAirportLocation(dropLocation);
+    if (!dropLocation && !airportHit) return;
+
+    setIsTabSwitching(true);
+    redirectToInferredServicePage(inferred);
+    setTimeout(() => setIsTabSwitching(false), 1200);
+  }, [
+    pickupLocation,
+    dropLocation,
+    tripType,
+    visibleTabs,
+    isTabSwitching,
+    redirectToInferredServicePage,
+  ]);
 
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
@@ -1363,16 +1418,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       // Clear airport direction label for non-airport trips
       setAirportDirectionLabel('');
       
-      // Only clear airport locations when switching to local or tour tabs
-      // Don't clear when switching between outstation and airport for automatic switching
-      if (tripType === 'local' || tripType === 'tour') {
-        // Clear drop location if it's the airport when switching away from airport tab
+      // Tour packages shouldn't keep an airport endpoint from a prior airport tab.
+      // Local trips may intentionally use the airport as pickup/drop — do not clear.
+      if (tripType === 'tour') {
         if (dropLocation && shouldTreatAsAirport(dropLocation)) {
           setDropLocation(null);
           sessionStorage.removeItem('dropLocation');
         }
         
-        // Clear pickup location if it's the airport when switching away from airport tab
         if (pickupLocation && shouldTreatAsAirport(pickupLocation)) {
           setPickupLocation(null);
           sessionStorage.removeItem('pickupLocation');
@@ -1505,93 +1558,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
 
-    // Check distance between pickup and drop locations before proceeding
-    if (pickupLocation && dropLocation && (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom')) {
-      
-      // Calculate distance using Haversine formula
-      if (pickupLocation.lat && pickupLocation.lng && dropLocation.lat && dropLocation.lng) {
-        const toRad = (value: number) => (value * Math.PI) / 180;
-        const R = 6371; // Earth radius in km
-        const dLat = toRad(dropLocation.lat - pickupLocation.lat);
-        const dLng = toRad(dropLocation.lng - pickupLocation.lng);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRad(pickupLocation.lat)) *
-            Math.cos(toRad(dropLocation.lat)) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const calculatedDistance = R * c;
-        
-        // If distance is within 35km and currently on outstation tab, switch to airport
-        if (calculatedDistance <= 35 && tripType === 'outstation') {
-          toast({
-            title: "Trip Type Updated",
-            description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (within 35km). We've updated your trip type to Airport Transfer for better rates.`,
-            duration: 4000,
-          });
-          setTripType('airport');
-          
-          // Wait a moment for the trip type change to take effect, then proceed
-          setTimeout(() => {
-            void proceedWithSearch();
-          }, 500);
-          return;
-        }
-        
-        // If distance is beyond 35km and currently on airport tab, switch to outstation
-        if (calculatedDistance > 35 && tripType === 'airport') {
-          toast({
-            title: "Trip Type Updated",
-            description: `Distance between locations is ${calculatedDistance.toFixed(1)}km (beyond 35km). We've updated your trip type to Outstation for better rates.`,
-            duration: 4000,
-          });
-          setTripType('outstation');
-          
-          // Wait a moment for the trip type change to take effect, then proceed
-          setTimeout(() => {
-            void proceedWithSearch();
-          }, 500);
-          return;
-        }
-      } else {
-        // Fallback: Use isLocationInVizag function if coordinates are not available
-        const isDropInVizag = isLocationInVizag(dropLocation);
-        
-        // If drop location is within Vizag and currently on outstation tab, switch to airport
-        if (isDropInVizag && tripType === 'outstation') {
-          toast({
-            title: "Trip Type Updated",
-            description: "Drop location is within Visakhapatnam city limits. We've updated your trip type to Airport Transfer for better rates.",
-            duration: 4000,
-          });
-          setTripType('airport');
-          
-          // Wait a moment for the trip type change to take effect, then proceed
-          setTimeout(() => {
-            void proceedWithSearch();
-          }, 500);
-          return;
-        }
-        
-        // If drop location is outside Vizag and currently on airport tab, switch to outstation
-        if (!isDropInVizag && tripType === 'airport') {
-          toast({
-            title: "Trip Type Updated",
-            description: "Drop location is outside Visakhapatnam city limits. We've updated your trip type to Outstation for better rates.",
-            duration: 4000,
-          });
-          setTripType('outstation');
-          
-          // Wait a moment for the trip type change to take effect, then proceed
-          setTimeout(() => {
-            void proceedWithSearch();
-          }, 500);
+    // Locked service pages only — redirect if locations imply a different service
+    if (pickupLocation && dropLocation && tripType !== 'tour' && tripType !== 'custom') {
+      const lockedTab =
+        visibleTabs && visibleTabs.length === 1 ? (visibleTabs[0] as CustomerTripService) : null;
+      if (lockedTab && lockedTab !== 'tour') {
+        const inferred = inferTripServiceType(pickupLocation, dropLocation);
+        if (
+          inferred &&
+          inferred !== 'tour' &&
+          inferred !== lockedTab &&
+          !(lockedTab === 'local' && inferred === 'airport')
+        ) {
+          redirectToInferredServicePage(inferred);
           return;
         }
       }
     }
 
-    // If no distance check needed or distance check passed, proceed normally
     void proceedWithSearch();
   }
   handleContinueRef.current = handleContinue;
@@ -2158,6 +2142,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         : totalPrice;
   const offerCategoryKey = resolveOfferCampaignCategory(tripType, tripMode);
   const offerTravelYmd = toOfferTravelDateYmd(pickupDate);
+  const offerVehicleId = normalizeOfferTargetId(selectedCab?.vehicleId || selectedCab?.id || null);
+  const offerTourId = normalizeOfferTargetId(
+    dropLocation?.id?.startsWith('tour_') ? dropLocation.id.slice('tour_'.length) : null
+  );
   const offerDiscountAmount =
     offerApplied && offerCampaign
       ? Math.max(
@@ -2243,6 +2231,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             customer_phone: String(guestDetails.phone),
             website_fare: websiteFare,
             travel_date: toOfferTravelDateYmd(pickupDate),
+            vehicle_id: offerVehicleId,
+            tour_id: offerTourId,
           });
           redemptionId = applied.redemption_id;
           setOfferRedemptionId(applied.redemption_id);
@@ -2403,17 +2393,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     });
   };
 
-  // Test function to manually trigger automatic switching (for debugging)
+  // Test helper for locked-page redirects only (debug)
   const testAutomaticSwitching = () => {
-    if (pickupLocation && dropLocation) {
-      const isDropInVizag = isLocationInVizag(dropLocation);
-      
-      if (tripType === 'outstation' && isDropInVizag) {
-        setTripType('airport');
-      } else if (tripType === 'airport' && !isDropInVizag) {
-        setTripType('outstation');
-      }
-    }
+    const lockedTab =
+      visibleTabs && visibleTabs.length === 1 ? (visibleTabs[0] as CustomerTripService) : null;
+    if (!lockedTab || lockedTab === 'tour') return;
+    const inferred = inferTripServiceType(pickupLocation, dropLocation);
+    if (!inferred || inferred === 'tour' || inferred === lockedTab) return;
+    if (lockedTab === 'local' && inferred === 'airport') return;
+    redirectToInferredServicePage(inferred);
   };
 
   useEffect(() => {
@@ -2447,7 +2435,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const travelYmd = offerTravelYmd;
     let cancelled = false;
     void (async () => {
-      const result = await loadOfferCampaignForSearch(offerCategory, 0, travelYmd);
+      const result = await loadOfferCampaignForSearch(
+        offerCategory,
+        0,
+        travelYmd,
+        offerVehicleId,
+        offerTourId
+      );
       if (cancelled) return;
 
       if (!result.campaign) {
@@ -2491,7 +2485,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     return () => {
       cancelled = true;
     };
-  }, [currentStep, isSearchActive, tripType, tripMode, offerTravelYmd]);
+  }, [currentStep, isSearchActive, tripType, tripMode, offerTravelYmd, offerVehicleId, offerTourId]);
 
   // Notify parent on initial step as well
   useEffect(() => {
@@ -2800,26 +2794,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           </SelectContent>
                         </Select>
                       ) : (
-                      <div className="flex min-h-[3rem] items-center rounded-xl border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition-[border-color,box-shadow] focus-within:border-slate-300 focus-within:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]">
-                        <div className="relative w-full">
-                          <select
-                            value={hourlyPackage}
-                            onChange={(e) => setHourlyPackage(e.target.value)}
+                        <Select value={hourlyPackage} onValueChange={setHourlyPackage}>
+                          <SelectTrigger
+                            className={cn(heroMobileTourSelectTriggerDefault, 'pr-8')}
                             aria-label="Hourly package"
-                            className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus:outline-none focus-visible:ring-0"
                           >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent {...heroTourPackageSelectContentProps}>
                             {hourlyPackageOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
+                              <SelectItem key={option.value} value={option.value}>
                                 {option.label}
-                              </option>
+                              </SelectItem>
                             ))}
-                          </select>
-                          <ChevronDown
-                            className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
-                            aria-hidden
-                          />
-                        </div>
-                      </div>
+                          </SelectContent>
+                        </Select>
                       )}
                     </div>
                   </div>
@@ -2948,7 +2937,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           heroMobileTicketShellCardClass,
                           heroMobileTicketShellPaddingHomeClass
                         )
-                      : 'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-[0_20px_60px_-15px_rgba(37,99,235,0.12)] border-0 sm:border sm:border-blue-100 p-3 max-lg:p-0 max-lg:py-2'
+                      : cn(
+                          'max-lg:bg-white lg:bg-white rounded-none sm:rounded-3xl shadow-none sm:shadow-[0_20px_60px_-15px_rgba(37,99,235,0.12)] border-0 sm:border sm:border-blue-100 p-3 max-lg:p-0 max-lg:py-2',
+                          embedDesktopCardLayout &&
+                            'lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none',
+                        )
               }
             >
               
@@ -2967,7 +2960,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       )}
                     >
                       {/* Promo slider removed on home — Custom Itinerary is a 5th tab instead */}
-                      <div className="w-full max-lg:mb-0 max-lg:min-w-0 lg:mb-4">
+                      <div
+                        className={cn(
+                          'w-full max-lg:mb-0 max-lg:min-w-0 lg:mb-4',
+                          embedDesktopCardLayout && 'lg:hidden lg:mb-0',
+                        )}
+                      >
                         <TabTripSelector
                           selectedTab={ensureCustomerTripType(tripType)}
                           tripMode={tripMode}
@@ -3185,60 +3183,38 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     Package
                                   </label>
                                 )}
-                                {heroMobileTicketStyle ? (
-                                  <Select
-                                    value={hourlyPackage}
-                                    onValueChange={(value) => {
-                                      setHourlyPackage(value);
-                                      advanceAfterTripModeSelected();
+                                <Select
+                                  value={hourlyPackage}
+                                  onValueChange={(value) => {
+                                    setHourlyPackage(value);
+                                    advanceAfterTripModeSelected();
+                                  }}
+                                >
+                                  <SelectTrigger
+                                    ref={(el) => {
+                                      packageSelectRefs.current.mobile = el as unknown as HTMLSelectElement;
                                     }}
+                                    className={
+                                      heroMobileTicketStyle
+                                        ? heroUrbaniaMobileTourSelectTrigger
+                                        : cn(heroMobileTourSelectTriggerDefault, 'pr-8')
+                                    }
+                                    aria-label="Hourly package"
                                   >
-                                    <SelectTrigger
-                                      ref={(el) => {
-                                        // Radix SelectTrigger is a button — reuse package focus via tour-style focus helper for local ticket UI
-                                        packageSelectRefs.current.mobile = el as unknown as HTMLSelectElement;
-                                      }}
-                                      className={heroUrbaniaMobileTourSelectTrigger}
-                                      aria-label="Hourly package"
-                                    >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent {...heroUrbaniaMobileSelectContentProps}>
-                                      {hourlyPackageOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                <div className="flex min-h-[3rem] items-center rounded-xl border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition-[border-color,box-shadow] focus-within:border-slate-300 focus-within:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]">
-                                  <div className="relative w-full">
-                                    <select
-                                      ref={(el) => {
-                                        packageSelectRefs.current.mobile = el;
-                                      }}
-                                      value={hourlyPackage}
-                                      onChange={(e) => {
-                                        setHourlyPackage(e.target.value);
-                                        advanceAfterTripModeSelected();
-                                      }}
-                                      aria-label="Hourly package"
-                                      className="h-11 w-full cursor-pointer appearance-none rounded-md bg-transparent pr-8 text-[1rem] font-semibold text-gray-900 outline-none focus:outline-none focus-visible:ring-0"
-                                    >
-                                      {hourlyPackageOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                          {option.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <ChevronDown
-                                      className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
-                                      aria-hidden
-                                    />
-                                  </div>
-                                </div>
-                                )}
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    {...(heroMobileTicketStyle
+                                      ? heroUrbaniaMobileSelectContentProps
+                                      : heroTourPackageSelectContentProps)}
+                                  >
+                                    {hourlyPackageOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
                           )}
@@ -3322,6 +3298,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             </span>
                           )}
                         </Button>
+                        {showHomeHeroBanner && <MobileTrustBanner />}
                         {isVehicleEmbedLock && (
                           <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 px-1 text-center text-[11px] leading-snug text-slate-600 lg:hidden">
                             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
@@ -3335,14 +3312,30 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       </div>
                       </div>
 
-                      {/* DESKTOP ONLY: single horizontal row (reference design) - !mt-5 overrides parent space-y */}
-                      <div className="hidden lg:block !mt-3" style={{ marginTop: '12px' }}>
-                        <div className="flex flex-row items-end gap-4 flex-nowrap">
-                          <div className="flex-1 min-w-0">
+                      {/* DESKTOP ONLY: horizontal row, or stacked card for Local marketing hero */}
+                      <div
+                        className={cn('hidden lg:block', embedDesktopCardLayout ? 'mt-0' : '!mt-3')}
+                        style={embedDesktopCardLayout ? undefined : { marginTop: '12px' }}
+                      >
+                        {embedDesktopCardLayout && (
+                          <h2 className="mb-4 text-left text-xl font-bold tracking-tight text-slate-900">
+                            {embedDesktopCardTitle || 'Book Your Cab'}
+                          </h2>
+                        )}
+                        <div
+                          className={
+                            embedDesktopCardLayout
+                              ? 'flex flex-col gap-3'
+                              : 'flex flex-row flex-nowrap items-end gap-4'
+                          }
+                        >
+                          <div className={embedDesktopCardLayout ? 'w-full min-w-0' : 'min-w-0 flex-1'}>
                             <LocationInput
                               key={`pickup-desk-${editTrigger}-${pickupLocation?.id || 'empty'}`}
                               label="Pickup location"
-                              placeholder="Enter a location"
+                              placeholder={
+                                embedDesktopCardLayout ? 'Enter pickup location' : 'Enter a location'
+                              }
                               value={pickupLocation ? { ...pickupLocation } : undefined}
                               onLocationChange={handlePickupLocationChange}
                               isPickupLocation={true}
@@ -3351,14 +3344,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             />
                           </div>
                           {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && (
-                            <div className="flex-1 min-w-0">
+                            <div className={embedDesktopCardLayout ? 'w-full min-w-0' : 'min-w-0 flex-1'}>
                               <LocationInput
                                 key={`drop-desk-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                 ref={(instance) => {
                                   dropLocationInputRefs.current.desktop = instance;
                                 }}
                                 label="Drop location"
-                                placeholder="Enter a location"
+                                placeholder={
+                                  embedDesktopCardLayout ? 'Enter drop location' : 'Enter a location'
+                                }
                                 value={dropLocation ? { ...dropLocation } : undefined}
                                 onLocationChange={handleDropLocationChange}
                                 isPickupLocation={false}
@@ -3419,9 +3414,19 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             </div>
                           )}
                           {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom' || tripType === 'tour') && (
-                            <div className="flex flex-col gap-1 flex-shrink-0">
+                            <div
+                              className={cn(
+                                'flex flex-col gap-1',
+                                embedDesktopCardLayout ? 'w-full' : 'flex-shrink-0',
+                              )}
+                            >
                               <span className="text-xs text-gray-600 font-medium pointer-events-none">Trip</span>
-                              <div className="axis-trip-toggle">
+                              <div
+                                className={cn(
+                                  'axis-trip-toggle',
+                                  embedDesktopCardLayout && 'w-full',
+                                )}
+                              >
                                 {tripType === 'airport' ? (
                                   <>
                                     <button
@@ -3456,7 +3461,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                       type="button"
                                       onClick={() => handleTripModeChangeWithAdvance(option.value as 'one-way' | 'round-trip')}
                                       data-active={tripMode === option.value ? 'true' : 'false'}
-                                      className="axis-trip-toggle-btn"
+                                      className="axis-trip-toggle-btn flex-1 whitespace-nowrap text-xs"
                                     >
                                       {option.label}
                                     </button>
@@ -3465,77 +3470,183 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               </div>
                             </div>
                           )}
-                          {tripType === 'local' && (
-                            <div className="flex min-w-0 flex-1 flex-col gap-1">
-                              <label className="text-xs font-medium text-slate-500">Package</label>
-                              <div className="relative w-full rounded-xl transition-[box-shadow,border-color] focus-within:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]">
-                                <select
-                                  ref={(el) => {
-                                    packageSelectRefs.current.desktop = el;
-                                  }}
+                          {embedDesktopCardLayout && tripType === 'local' ? (
+                            <div className="grid w-full grid-cols-2 gap-3">
+                              <div className="flex min-w-0 flex-col gap-1">
+                                <label className="text-xs font-medium text-slate-500">Package</label>
+                                <Select
                                   value={hourlyPackage}
-                                  onChange={(e) => {
-                                    setHourlyPackage(e.target.value);
+                                  onValueChange={(value) => {
+                                    setHourlyPackage(value);
                                     advanceAfterTripModeSelected();
                                   }}
-                                  aria-label="Hourly package"
-                                  className="h-[2.75rem] w-full cursor-pointer appearance-none rounded-xl border border-slate-200/90 bg-white pl-3 pr-9 text-sm font-bold text-gray-900 outline-none focus:border-slate-300 focus:outline-none focus-visible:ring-0"
                                 >
-                                  {hourlyPackageOptions.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown
-                                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 opacity-60"
-                                  aria-hidden
+                                  <SelectTrigger
+                                    ref={(el) => {
+                                      packageSelectRefs.current.desktop = el as unknown as HTMLSelectElement;
+                                    }}
+                                    aria-label="Hourly package"
+                                    className={cn(
+                                      'flex h-[2.75rem] w-full items-center rounded-xl border border-slate-200/90 bg-white pl-3 pr-9 text-sm font-bold shadow-sm',
+                                      'hover:bg-slate-50/80',
+                                      'focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                                      'focus-visible:border-slate-300 focus-visible:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]',
+                                      'data-[state=open]:border-slate-300 data-[state=open]:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]'
+                                    )}
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent {...heroTourPackageSelectContentProps}>
+                                    {hourlyPackageOptions.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="min-w-0">
+                                <DateTimePicker
+                                  ref={(instance) => {
+                                    departurePickerRefs.current.desktop = instance;
+                                  }}
+                                  date={pickupDate}
+                                  onDateChange={setPickupDate}
+                                  onDateApplied={advanceAfterDepartureApplied}
+                                  minDate={getMinimumAllowedDate()}
+                                  label="Date & Time"
+                                  variant="desktop"
                                 />
                               </div>
                             </div>
-                          )}
-                          <div className="flex-1 min-w-0 min-w-[11rem]">
-                            <DateTimePicker
-                              ref={(instance) => {
-                                departurePickerRefs.current.desktop = instance;
-                              }}
-                              date={pickupDate}
-                              onDateChange={setPickupDate}
-                              onDateApplied={advanceAfterDepartureApplied}
-                              minDate={getMinimumAllowedDate()}
-                              label="Departure"
-                              variant="desktop"
-                            />
-                          </div>
-                          {tripType === 'outstation' && tripMode === 'round-trip' && (
-                            <div className="flex-1 min-w-0 min-w-[11rem]">
-                              <DateTimePicker
-                                ref={(instance) => {
-                                  returnPickerRefs.current.desktop = instance;
-                                }}
-                                date={returnDate}
-                                onDateChange={handleReturnDateChange}
-                                onDateApplied={advanceAfterReturnApplied}
-                                minDate={pickupDate}
-                                label="Return"
-                                disabled={!isReturnTimeEnabled}
-                                variant="desktop"
-                              />
+                          ) : embedDesktopCardLayout ? (
+                            <div
+                              className={cn(
+                                'grid w-full gap-3',
+                                tripType === 'outstation' && tripMode === 'round-trip'
+                                  ? 'grid-cols-2'
+                                  : 'grid-cols-1',
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <DateTimePicker
+                                  ref={(instance) => {
+                                    departurePickerRefs.current.desktop = instance;
+                                  }}
+                                  date={pickupDate}
+                                  onDateChange={setPickupDate}
+                                  onDateApplied={advanceAfterDepartureApplied}
+                                  minDate={getMinimumAllowedDate()}
+                                  label="Date & Time"
+                                  variant="desktop"
+                                />
+                              </div>
+                              {tripType === 'outstation' && tripMode === 'round-trip' && (
+                                <div className="min-w-0">
+                                  <DateTimePicker
+                                    ref={(instance) => {
+                                      returnPickerRefs.current.desktop = instance;
+                                    }}
+                                    date={returnDate}
+                                    onDateChange={handleReturnDateChange}
+                                    onDateApplied={advanceAfterReturnApplied}
+                                    minDate={pickupDate}
+                                    label="Return"
+                                    disabled={!isReturnTimeEnabled}
+                                    variant="desktop"
+                                  />
+                                </div>
+                              )}
                             </div>
+                          ) : (
+                            <>
+                              {tripType === 'local' && (
+                                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                  <label className="text-xs font-medium text-slate-500">Package</label>
+                                  <Select
+                                    value={hourlyPackage}
+                                    onValueChange={(value) => {
+                                      setHourlyPackage(value);
+                                      advanceAfterTripModeSelected();
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      ref={(el) => {
+                                        packageSelectRefs.current.desktop = el as unknown as HTMLSelectElement;
+                                      }}
+                                      aria-label="Hourly package"
+                                      className={cn(
+                                        'flex h-[2.75rem] w-full items-center rounded-xl border border-slate-200/90 bg-white pl-3 pr-9 text-sm font-bold shadow-sm',
+                                        'hover:bg-slate-50/80',
+                                        'focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                                        'focus-visible:border-slate-300 focus-visible:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]',
+                                        'data-[state=open]:border-slate-300 data-[state=open]:shadow-[0_0_0_3px_rgba(15,23,42,0.06)]'
+                                      )}
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent {...heroTourPackageSelectContentProps}>
+                                      {hourlyPackageOptions.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                          {opt.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                              <div className="min-w-0 min-w-[11rem] flex-1">
+                                <DateTimePicker
+                                  ref={(instance) => {
+                                    departurePickerRefs.current.desktop = instance;
+                                  }}
+                                  date={pickupDate}
+                                  onDateChange={setPickupDate}
+                                  onDateApplied={advanceAfterDepartureApplied}
+                                  minDate={getMinimumAllowedDate()}
+                                  label="Departure"
+                                  variant="desktop"
+                                />
+                              </div>
+                              {tripType === 'outstation' && tripMode === 'round-trip' && (
+                                <div className="min-w-0 min-w-[11rem] flex-1">
+                                  <DateTimePicker
+                                    ref={(instance) => {
+                                      returnPickerRefs.current.desktop = instance;
+                                    }}
+                                    date={returnDate}
+                                    onDateChange={handleReturnDateChange}
+                                    onDateApplied={advanceAfterReturnApplied}
+                                    minDate={pickupDate}
+                                    label="Return"
+                                    disabled={!isReturnTimeEnabled}
+                                    variant="desktop"
+                                  />
+                                </div>
+                              )}
+                            </>
                           )}
-                          <div className="flex-shrink-0">
+                          <div className={embedDesktopCardLayout ? 'w-full' : 'flex-shrink-0'}>
                             <Button
                               ref={(el) => {
                                 searchButtonRefs.current.desktop = el;
                               }}
                               onClick={handleContinue}
                               disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
-                              className="axis-search-btn flex h-[2.75rem] items-center gap-2 px-6 py-2.5 text-sm"
+                              className={cn(
+                                'axis-search-btn flex h-[2.75rem] items-center gap-2 px-6 py-2.5 text-sm',
+                                embedDesktopCardLayout && 'mt-1 h-12 w-full justify-center text-base font-semibold',
+                              )}
                             >
                               {isLoading ? (
                                 <>
                                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                                   <span>Searching...</span>
+                                </>
+                              ) : embedDesktopCardLayout ? (
+                                <>
+                                  <Search className="h-4 w-4" />
+                                  <span>Search Cabs</span>
                                 </>
                               ) : (
                                 <>
@@ -3799,6 +3910,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   category={offerCategoryKey || tripType}
                                   websiteFare={websiteFareBase}
                                   travelDate={pickupDate}
+                                  vehicleId={offerVehicleId}
+                                  tourId={offerTourId}
                                   suggestedCampaign={offerCampaign}
                                   applied={offerApplied}
                                   appliedCampaign={offerCampaign}
@@ -3928,6 +4041,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         category={offerCategoryKey || tripType}
                         websiteFare={websiteFareBase}
                         travelDate={pickupDate}
+                        vehicleId={offerVehicleId}
+                        tourId={offerTourId}
                         suggestedCampaign={offerCampaign}
                         applied={offerApplied}
                         appliedCampaign={offerCampaign}
@@ -3968,6 +4083,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           category={offerCategoryKey || tripType}
                           websiteFare={websiteFareBase}
                           travelDate={pickupDate}
+                          vehicleId={offerVehicleId}
+                          tourId={offerTourId}
                           suggestedCampaign={offerCampaign}
                           applied={offerApplied}
                           appliedCampaign={offerCampaign}
@@ -4044,6 +4161,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       category={offerCategoryKey || tripType}
                       websiteFare={websiteFareBase}
                       travelDate={pickupDate}
+                      vehicleId={offerVehicleId}
+                      tourId={offerTourId}
                       suggestedCampaign={offerCampaign}
                       applied={offerApplied}
                       appliedCampaign={offerCampaign}

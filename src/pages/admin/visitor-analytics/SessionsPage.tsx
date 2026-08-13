@@ -170,7 +170,10 @@ export default function SessionsPage() {
                         <TableCell className="text-sm max-w-[120px] truncate" title={s.utm_campaign || ''}>
                           {s.utm_campaign || '—'}
                         </TableCell>
-                        <TableCell className="text-sm max-w-[140px] truncate" title={s.utm_term || ''}>
+                        <TableCell
+                          className="text-sm min-w-[12rem] max-w-[22rem] whitespace-normal break-words"
+                          title={s.utm_term || ''}
+                        >
                           {s.utm_term || '—'}
                         </TableCell>
                         <TableCell className="text-right">

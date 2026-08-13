@@ -34,17 +34,18 @@ export const popularRoutes: RouteInfo[] = [
     image: 'https://images.unsplash.com/photo-1594774591439-ed8e4fe33400?w=500&h=300&fit=crop',
     fares: { sedan: '₹5,000', suv: '₹6,500' },
     seo: {
-      title: 'Visakhapatnam to Araku Valley Taxi | Book Cabs at Best Fares',
-      description: 'Book a taxi from Visakhapatnam to Araku Valley. Enjoy a comfortable journey to explore serene hills and coffee plantations. Safe, reliable, and affordable cabs.',
-      keywords: 'visakhapatnam to araku valley taxi, vizag to araku cabs, araku valley tour package',
+      title: 'Vizag to Araku Cab | Araku Valley Cab Booking & Taxi Fare',
+      description: 'Book Vizag to Araku cab and Araku Valley cab booking at clear taxi fares. Comfortable cabs and tempo traveller from Visakhapatnam to Araku. Call +91 9966363662.',
+      keywords: 'vizag to araku cab, araku valley cab booking, cab to araku from vizag, vizag to araku taxi fare, vizag to araku tempo traveller, visakhapatnam to araku valley taxi, vizag to araku cabs',
       faq: [
         { question: 'What is the distance from Visakhapatnam to Araku Valley?', answer: 'The distance is approximately 120 KM by road.' },
         { question: 'How long does it take to reach Araku Valley from Vizag?', answer: 'It usually takes about 3-4 hours depending on traffic and weather conditions.' },
+        { question: 'What is the Vizag to Araku taxi fare?', answer: 'Fares vary by vehicle (sedan, SUV, tempo traveller). Check live rates on this page or call +91 9966363662 for Araku Valley cab booking.' },
         { question: 'Are there sightseeing stops on the way?', answer: 'Yes, you can visit Borra Caves, coffee plantations, and Padmapuram Gardens en route.' }
       ],
-      extraContent: '<p><strong>Travel Tip:</strong> The best time to visit Araku Valley is from October to March for pleasant weather and lush green views. Don\'t forget to try the local coffee and tribal cuisine!</p>'
+      extraContent: '<p><strong>Travel Tip:</strong> The best time to visit Araku Valley is from October to March for pleasant weather and lush green views. Book a Vizag to Araku cab or tempo traveller for a comfortable ghat-road ride.</p>'
     },
-    content: `<p>Embark on a scenic journey from Visakhapatnam to the breathtaking Araku Valley. Our reliable taxi service ensures a comfortable and memorable trip through winding ghat roads, lush green landscapes, and mesmerizing coffee plantations. Araku Valley is a perfect getaway for nature lovers, offering attractions like the Borra Caves, Padmapuram Gardens, and tribal museums.</p>`
+    content: `<p>Book a Vizag to Araku cab for a scenic journey from Visakhapatnam to Araku Valley. Our Araku Valley cab booking covers sedan, SUV, and tempo traveller options with transparent Vizag to Araku taxi fare. Travel through winding ghat roads to Borra Caves, Padmapuram Gardens, and coffee plantations with a professional driver.</p>`
   },
   {
     from: 'Visakhapatnam',
@@ -72,17 +73,17 @@ export const popularRoutes: RouteInfo[] = [
     image: '',
     fares: { sedan: '₹4,200', suv: '₹5,400' },
     seo: {
-      title: 'Visakhapatnam to Annavaram Taxi | Book Cabs at Best Fares',
-      description: 'Book a taxi from Visakhapatnam to Annavaram. Enjoy a comfortable journey to the temple town, famous for the Satyanarayana Swamy Temple.',
-      keywords: 'visakhapatnam to annavaram taxi, vizag to annavaram cabs, annavaram travel',
+      title: 'Vizag to Annavaram Cabs | Visakhapatnam to Annavaram Taxi',
+      description: 'Book Vizag to Annavaram cabs for a comfortable temple trip. Safe Visakhapatnam to Annavaram taxi with professional drivers. Call +91 9966363662.',
+      keywords: 'vizag to annavaram cabs, visakhapatnam to annavaram taxi, annavaram cab from vizag, annavaram travel, outstation taxi annavaram',
       faq: [
         { question: 'What is the distance from Visakhapatnam to Annavaram?', answer: 'The distance is approximately 125 KM by road.' },
         { question: 'How long does it take to reach Annavaram from Vizag?', answer: 'It usually takes about 3 hours depending on traffic and road conditions.' },
         { question: 'What is Annavaram famous for?', answer: 'Annavaram is renowned for the Satyanarayana Swamy Temple.' }
       ],
-      extraContent: '<p><strong>Travel Tip:</strong> The best time to visit Annavaram is during the temple festivals for a spiritual experience.</p>'
+      extraContent: '<p><strong>Travel Tip:</strong> Book Vizag to Annavaram cabs early during temple festivals for a smoother pilgrimage trip.</p>'
     },
-    content: `<p>Travel from Visakhapatnam to Annavaram, a spiritual destination in Andhra Pradesh. Our taxi service ensures a safe and comfortable ride to the famous Satyanarayana Swamy Temple, located on Ratnagiri hill.</p>`
+    content: `<p>Book Vizag to Annavaram cabs for a safe ride from Visakhapatnam to the Satyanarayana Swamy Temple on Ratnagiri hill. Our Visakhapatnam to Annavaram taxi service offers sedan and SUV options with experienced drivers.</p>`
   },
   {
     from: 'Visakhapatnam',

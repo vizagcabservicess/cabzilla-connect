@@ -11,6 +11,11 @@ interface OutstationHeroWidgetProps {
   onSearch?: (searchData: any) => void;
   onStepChange?: (step: number) => void;
   onEditStart?: () => void;
+  onTripEditOpenChange?: (open: boolean) => void;
+  embedStretchToShell?: boolean;
+  summaryBackHref?: string;
+  embedDesktopCardLayout?: boolean;
+  embedDesktopCardTitle?: string;
 }
 
 // Lookup for known cities (see @/lib/cityLookup)
@@ -22,7 +27,18 @@ function getLocationData(name: string) {
   return { city: key, state: 'Unknown', lat: 0, lng: 0 };
 }
 
-export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: OutstationHeroWidgetProps) {
+export function OutstationHeroWidget({
+  initialPickup,
+  initialDrop,
+  onSearch,
+  onStepChange,
+  onEditStart,
+  onTripEditOpenChange,
+  embedStretchToShell,
+  summaryBackHref,
+  embedDesktopCardLayout,
+  embedDesktopCardTitle,
+}: OutstationHeroWidgetProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -79,9 +95,26 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
   // Use a stable key that only changes when pickup/drop change
   const heroKey = useMemo(() => (pickup && drop ? `${pickup}-${drop}` : 'default'), [pickup, drop]);
 
-  // Synchronously set sessionStorage prefill before rendering Hero
-  sessionStorage.removeItem('pickupLocation');
-  sessionStorage.removeItem('dropLocation');
+  // Keep cross-page redirect prefill (Hero → /outstation-taxi) when URL has no from/to.
+  let hasCrossPagePrefill = false;
+  try {
+    const raw = sessionStorage.getItem('routePrefillData');
+    if (raw) {
+      const existing = JSON.parse(raw) as {
+        pickupLocation?: { name?: string } | null;
+        dropLocation?: { name?: string } | null;
+        tripType?: string;
+      };
+      hasCrossPagePrefill = Boolean(
+        existing?.pickupLocation?.name &&
+          existing?.dropLocation?.name &&
+          (!existing.tripType || existing.tripType === 'outstation')
+      );
+    }
+  } catch {
+    hasCrossPagePrefill = false;
+  }
+
   sessionStorage.setItem('tripType', 'outstation');
   if (pickup && drop) {
     const pickupData = getLocationData(pickup);
@@ -130,8 +163,13 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
       autoTriggerSearch
     };
     sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
-  } else {
+    sessionStorage.setItem('pickupLocation', JSON.stringify(prefillData.pickupLocation));
+    sessionStorage.setItem('dropLocation', JSON.stringify(prefillData.dropLocation));
+  } else if (!hasCrossPagePrefill) {
+    // Only clear when this visit is a blank outstation landing (not a service-page redirect)
     sessionStorage.removeItem('routePrefillData');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropLocation');
   }
 
   // Clean up on unmount
@@ -144,14 +182,19 @@ export function OutstationHeroWidget({ initialPickup, initialDrop, onSearch, onS
 
   return (
     <div>
-      <Hero 
-        key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}`} 
-        onSearch={onSearch} 
+      <Hero
+        key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}`}
+        onSearch={onSearch}
         onEditStart={onEditStart}
         onStepChange={onStepChange}
-        visibleTabs={['outstation']} 
+        onTripEditOpenChange={onTripEditOpenChange}
+        visibleTabs={['outstation']}
         hideBackground={true}
         embedCompactLayout
+        embedStretchToShell={embedStretchToShell}
+        summaryBackHref={summaryBackHref}
+        embedDesktopCardLayout={embedDesktopCardLayout}
+        embedDesktopCardTitle={embedDesktopCardTitle}
       />
     </div>
   );

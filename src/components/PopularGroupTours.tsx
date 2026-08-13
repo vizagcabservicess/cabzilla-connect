@@ -9,13 +9,42 @@ import { SectionHeader } from '@/components/home/SectionHeader';
 import 'swiper/css';
 import 'swiper/css/pagination';
 
-export function PopularGroupTours() {
+type PopularGroupToursProps = {
+  /** Hide the entire section when the API returns no upcoming tours */
+  hideWhenEmpty?: boolean;
+};
+
+function TourCardSkeleton({ className = '' }: { className?: string }) {
+  return (
+    <div className={`rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 animate-pulse ${className}`}>
+      <div className="h-44 sm:h-48 bg-slate-200" />
+      <div className="p-4">
+        <div className="h-5 bg-slate-200 rounded w-3/4" />
+        <div className="h-4 bg-slate-200 rounded w-1/2 mt-2" />
+        <div className="h-3 bg-slate-200 rounded w-1/3 mt-2" />
+      </div>
+    </div>
+  );
+}
+
+export function PopularGroupTours({ hideWhenEmpty = false }: PopularGroupToursProps) {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [swiperInstance, setSwiperInstance] = useState<any>(null);
 
   useEffect(() => {
-    groupTourAPI.getRoutes().then(setRoutes).catch(() => setRoutes([]));
+    setLoading(true);
+    setLoadError(false);
+    groupTourAPI
+      .getRoutes()
+      .then(setRoutes)
+      .catch(() => {
+        setRoutes([]);
+        setLoadError(true);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const sortedRoutes = [...routes].sort((a, b) => {
@@ -32,6 +61,10 @@ export function PopularGroupTours() {
   ];
 
   const displayRoutes = sortedRoutes.slice(0, 4);
+
+  if (!loading && !loadError && displayRoutes.length === 0 && hideWhenEmpty) {
+    return null;
+  }
 
   const renderTourCard = (route: RouteOption, i: number) => {
     const bgClass = gradients[i % gradients.length];
@@ -105,7 +138,17 @@ export function PopularGroupTours() {
 
         {/* Mobile Slider */}
         <div className="md:hidden">
-          {displayRoutes.length > 0 ? (
+          {loading ? (
+            <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
+              {[...Array(2)].map((_, i) => (
+                <TourCardSkeleton key={i} className="flex-shrink-0 w-[85%]" />
+              ))}
+            </div>
+          ) : loadError ? (
+            <p className="text-sm text-slate-500 text-center py-6">
+              Unable to load group tours right now. Please refresh the page.
+            </p>
+          ) : displayRoutes.length > 0 ? (
             <>
               <Swiper
                 modules={[Pagination]}
@@ -144,39 +187,35 @@ export function PopularGroupTours() {
               </div>
             </>
           ) : (
-            <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex-shrink-0 w-[85%] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 animate-pulse">
-                  <div className="h-44 sm:h-48 bg-slate-200" />
-                  <div className="p-4">
-                    <div className="h-5 bg-slate-200 rounded w-3/4" />
-                    <div className="h-4 bg-slate-200 rounded w-1/2 mt-2" />
-                    <div className="h-3 bg-slate-200 rounded w-1/3 mt-2" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-slate-500 text-center py-6">
+              No group tours are scheduled yet. Check back soon or contact us to plan a trip.
+            </p>
           )}
         </div>
 
         {/* Tablet & Desktop Grid */}
         <div className="hidden md:block">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            {displayRoutes.map((route, i) => (
-              <div key={i}>{renderTourCard(route, i)}</div>
-            ))}
-            {displayRoutes.length === 0 &&
-              [...Array(4)].map((_, i) => (
-                <div key={i} className="rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 animate-pulse">
-                  <div className="h-44 sm:h-48 bg-slate-200" />
-                  <div className="p-4">
-                    <div className="h-5 bg-slate-200 rounded w-3/4" />
-                    <div className="h-4 bg-slate-200 rounded w-1/2 mt-2" />
-                    <div className="h-3 bg-slate-200 rounded w-1/3 mt-2" />
-                  </div>
-                </div>
+          {loading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              {[...Array(4)].map((_, i) => (
+                <TourCardSkeleton key={i} />
               ))}
-          </div>
+            </div>
+          ) : loadError ? (
+            <p className="text-sm text-slate-500 text-center py-6">
+              Unable to load group tours right now. Please refresh the page.
+            </p>
+          ) : displayRoutes.length > 0 ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              {displayRoutes.map((route, i) => (
+                <div key={i}>{renderTourCard(route, i)}</div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 text-center py-6">
+              No group tours are scheduled yet. Check back soon or contact us to plan a trip.
+            </p>
+          )}
         </div>
       </div>
     </section>

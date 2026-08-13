@@ -106,7 +106,7 @@ async function topCampaigns(siteId: string, from: string, to: string, limit = 10
   );
 }
 
-async function topSearchTerms(siteId: string, from: string, to: string, limit = 10) {
+async function topSearchTerms(siteId: string, from: string, to: string, limit = 100) {
   return query<Array<{ term: string; count: number }>>(
     `SELECT term, COUNT(*) AS count FROM (
        SELECT utm_term AS term
@@ -115,7 +115,12 @@ async function topSearchTerms(siteId: string, from: string, to: string, limit = 
          AND started_at BETWEEN :from AND :to
          AND utm_term IS NOT NULL AND utm_term <> ''
        UNION ALL
-       SELECT COALESCE(event_name, JSON_UNQUOTE(JSON_EXTRACT(meta, '$.query'))) AS term
+       SELECT COALESCE(
+         NULLIF(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.query')), ''),
+         NULLIF(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.term')), ''),
+         NULLIF(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.keyword')), ''),
+         event_name
+       ) AS term
        FROM va_events
        WHERE site_id = :siteId
          AND occurred_at BETWEEN :from AND :to
@@ -124,7 +129,9 @@ async function topSearchTerms(siteId: string, from: string, to: string, limit = 
            OR JSON_UNQUOTE(JSON_EXTRACT(meta, '$.kind')) = 'search'
          )
      ) t
-     WHERE term IS NOT NULL AND term <> ''
+     WHERE term IS NOT NULL
+       AND term <> ''
+       AND term NOT IN ('search', 'search_submit', 'search_query', 'search_term')
      GROUP BY term
      ORDER BY count DESC
      LIMIT :limit`,
@@ -213,7 +220,7 @@ export async function buildReport(siteId: string, from: string, to: string) {
     topVehicles(siteId, from, to),
     topButtons(siteId, from, to),
     topCampaigns(siteId, from, to),
-    topSearchTerms(siteId, from, to),
+    topSearchTerms(siteId, from, to, 100),
   ]);
 
   return {

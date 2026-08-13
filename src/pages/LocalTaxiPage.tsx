@@ -1,551 +1,580 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { LocalHeroWidget } from "@/components/LocalHeroWidget";
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Car, Shield, Star, Phone, Clock, Users, MapPin, Zap, CheckCircle, ArrowRight, Navigation } from 'lucide-react';
-import { Helmet } from 'react-helmet-async';
-import { Navbar } from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { MobileNavigation } from '@/components/MobileNavigation';
-import { ServiceLinks } from '@/components/ServiceLinks';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  Phone,
+  Clock,
+  Shield,
+  Star,
+  Zap,
+  CheckCircle,
+  Car,
+  MapPin,
+  Headphones,
+  ChevronRight,
+  Plane,
+  Route,
+  MapPinned,
+  Users,
+  CarFront,
+  Bus,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { LocalHeroWidget } from '@/components/LocalHeroWidget';
+import { ServiceLinks } from '@/components/ServiceLinks';
+import { ServiceEmbedShell } from '@/components/service/ServiceEmbedShell';
+import { loadCabTypes } from '@/lib/cabData';
+import { fetchLocalFares, parseNumericValue, type FareData } from '@/services/fareManagementService';
+import type { CabType, LocalFare } from '@/types/cab';
+import { getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
+
+const WHATSAPP_URL =
+  'https://wa.me/919966363662?text=' +
+  encodeURIComponent('Hi! I need help booking a local cab in Vizag.');
+
+type LocalRideOption = {
+  id: string;
+  label: string;
+  image: string;
+  packagePrice: number;
+  extraKm: number;
+};
+
+function pickLocal8hrPrice(source?: FareData | LocalFare | null): number {
+  if (!source) return 0;
+  const record = source as Record<string, unknown>;
+  return parseNumericValue(
+    record.price_8hrs_80km ??
+      record.price8hrs80km ??
+      record.package8hr80km ??
+      record.local_package_8hr ??
+      record.price_8hrs80km,
+  );
+}
+
+function pickLocalExtraKm(source?: FareData | LocalFare | null): number {
+  if (!source) return 0;
+  const record = source as Record<string, unknown>;
+  return parseNumericValue(
+    record.price_extra_km ??
+      record.priceExtraKm ??
+      record.extraKmRate ??
+      record.extra_km_charge ??
+      record.extraKmCharge,
+  );
+}
+
+function formatInr(amount: number): string {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
+}
+
+function vehicleIdsMatch(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function buildLocalRideOptions(vehicles: CabType[], fares: FareData[]): LocalRideOption[] {
+  const options: LocalRideOption[] = [];
+
+  for (const vehicle of vehicles) {
+    if (vehicle.isActive === false) continue;
+
+    const vehicleKeys = [vehicle.id, vehicle.vehicleId, vehicle.name].filter(Boolean) as string[];
+    const matchedFare =
+      fares.find((fare) =>
+        vehicleKeys.some(
+          (key) =>
+            vehicleIdsMatch(key, fare.vehicleId) ||
+            vehicleIdsMatch(key, fare.vehicle_id) ||
+            vehicleIdsMatch(key, fare.vehicle_name) ||
+            vehicleIdsMatch(key, fare.vehicleName),
+        ),
+      ) ?? null;
+
+    const packagePrice =
+      pickLocal8hrPrice(matchedFare) || pickLocal8hrPrice(vehicle.localPackageFares);
+    if (packagePrice <= 0) continue;
+
+    const extraKm =
+      pickLocalExtraKm(matchedFare) ||
+      pickLocalExtraKm(vehicle.localPackageFares) ||
+      parseNumericValue(vehicle.pricePerKm);
+
+    const capacity = Number(vehicle.capacity) || 0;
+    const label =
+      capacity > 0 ? `${vehicle.name} (${capacity}+1)` : vehicle.name;
+
+    options.push({
+      id: vehicle.id || vehicle.vehicleId || vehicle.name,
+      label,
+      image: getVehicleImageUrlForDisplay(vehicle),
+      packagePrice,
+      extraKm,
+    });
+  }
+
+  return options.sort((a, b) => a.packagePrice - b.packagePrice);
+}
 
 export function LocalTaxiPage() {
-  const widgetRef = React.useRef<HTMLDivElement>(null);
-  const [isSearchActive, setIsSearchActive] = React.useState(false);
-  const scrollWithOffset = (el: HTMLElement | null, offset: number = 120) => {
-    if (!el) return;
-    const y = el.getBoundingClientRect().top + window.pageYOffset - offset;
-    window.scrollTo({ top: y, behavior: 'smooth' });
-  };
+  const [rideOptions, setRideOptions] = useState<LocalRideOption[]>([]);
+  const [ridesLoading, setRidesLoading] = useState(true);
 
-  const scrollToWidget = () => {
-    if (widgetRef.current) {
-      widgetRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-    } else {
-      // Fallback: scroll to top of page
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRideOptions = async () => {
+      setRidesLoading(true);
+      try {
+        const [vehicles, fares] = await Promise.all([
+          loadCabTypes(false, true),
+          fetchLocalFares().catch(() => [] as FareData[]),
+        ]);
+        if (cancelled) return;
+        setRideOptions(buildLocalRideOptions(vehicles, fares));
+      } catch (error) {
+        console.error('Failed to load local ride options:', error);
+        if (!cancelled) setRideOptions([]);
+      } finally {
+        if (!cancelled) setRidesLoading(false);
+      }
+    };
+
+    void loadRideOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const features = [
-    { 
-      icon: <Zap className="w-6 h-6" />, 
-      title: 'Quick Pickup', 
-      description: 'Average pickup time of 3-5 minutes in city areas.',
-      color: 'bg-blue-500'
+    {
+      icon: <Zap className="w-5 h-5" />,
+      title: 'Quick Pickup',
+      description: 'Pickup within 15–30 mins',
     },
-    { 
-      icon: <Shield className="w-6 h-6" />, 
-      title: 'Safe Rides', 
-      description: 'All drivers verified with background checks and GPS tracking.',
-      color: 'bg-green-500'
+    {
+      icon: <Shield className="w-5 h-5" />,
+      title: 'Safe Rides',
+      description: 'Well maintained cars with GPS tracking',
     },
-    { 
-      icon: <Clock className="w-6 h-6" />, 
-      title: '24/7 Service', 
-      description: 'Available round the clock for all your local travel needs.',
-      color: 'bg-purple-500'
+    {
+      icon: <Clock className="w-5 h-5" />,
+      title: '24/7 Service',
+      description: 'Available round the clock for city travel',
     },
-    { 
-      icon: <Star className="w-6 h-6" />, 
-      title: 'Fair Pricing', 
-      description: 'Transparent meter rates with no surge pricing ever.',
-      color: 'bg-amber-500'
-    }
+    {
+      icon: <Star className="w-5 h-5" />,
+      title: 'Fair Pricing',
+      description: 'Transparent rates with no surge pricing',
+    },
   ];
 
   const serviceAreas = [
-    { area: 'MVP Colony', distance: '10 km', time: '30 min' },
-    { area: 'Dwaraka Nagar', distance: '7 km', time: '30 min' },
-    { area: 'Gajuwaka', distance: '12 km', time: '40 min' },
-    { area: 'Madhurawada', distance: '15 km', time: '45 min' },
-    { area: 'Beach Road', distance: '12 km', time: '30 min' },
-    { area: 'Rushikonda', distance: '20 km', time: '45 min' },
+    'MVP Colony',
+    'Dwaraka Nagar',
+    'Gajuwaka',
+    'Madhurawada',
+    'Beach Road',
+    'Rushikonda',
+    'Yendada',
+    'Pendurthi',
+    'Kailasagiri',
+    'Simhachalam',
   ];
 
-  const [selectedDuration, setSelectedDuration] = React.useState('08hrs');
-
-  const vehicleOptions = {
-    '08hrs': [
-      { type: 'Innova Crysta (7+1)', capacity: '7+1', rate: '₹4,000', features: ['AC', 'Music', 'Spacious', 'Premium'], extraTime: '₹450/hr', extraKm: '₹20/km' },
-      { type: 'Ertiga (6+1)', capacity: '6+1', rate: '₹3,500', features: ['AC', 'Music', 'Comfortable'], extraTime: '₹400/hr', extraKm: '₹18/km' },
-      { type: 'Sedan (4+1)', capacity: '4+1', rate: '₹2,400', features: ['AC', 'Music', 'Economical'], extraTime: '₹300/hr', extraKm: '₹14/km' },
-    ],
-    '10hrs': [
-      { type: 'Innova Crysta (7+1)', capacity: '7+1', rate: '₹4,500', features: ['AC', 'Music', 'Spacious', 'Premium'], extraTime: '₹450/hr', extraKm: '₹20/km' },
-      { type: 'Ertiga (6+1)', capacity: '6+1', rate: '₹4,000', features: ['AC', 'Music', 'Comfortable'], extraTime: '₹400/hr', extraKm: '₹18/km' },
-      { type: 'Sedan (4+1)', capacity: '4+1', rate: '₹3,000', features: ['AC', 'Music', 'Economical'], extraTime: '₹300/hr', extraKm: '₹14/km' },
-    ]
-  };
+  const otherServices = [
+    {
+      name: 'Outstation Taxi',
+      description: 'Inter-city travel',
+      href: '/outstation-taxi',
+      Icon: Route,
+    },
+    {
+      name: 'Airport Transfer',
+      description: 'Airport pickup & drop',
+      href: '/airport-taxi',
+      Icon: Plane,
+    },
+    {
+      name: 'Tour Packages',
+      description: 'Sightseeing packages',
+      href: '/tours',
+      Icon: MapPinned,
+    },
+    {
+      name: 'Group Tours',
+      description: 'Shared tours – save more',
+      href: '/group-tours',
+      Icon: Users,
+    },
+    {
+      name: 'Shared Carpooling',
+      description: 'Daily office commute',
+      href: '/shared-carpooling',
+      Icon: CarFront,
+    },
+    {
+      name: 'Tempo Traveller Rental',
+      description: 'Group travel solutions',
+      href: '/tempo-traveller-rental-vizag',
+      Icon: Bus,
+    },
+  ];
 
   const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": "Vizag Taxi Hub - Local Taxi Service",
-    "description": "Professional local cab booking service in Visakhapatnam. City taxi, point to point rides, and hourly rentals available 24/7.",
-    "url": "https://vizagtaxihub.com/local-taxi",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-      "addressLocality": "Visakhapatnam",
-      "addressRegion": "Andhra Pradesh",
-      "postalCode": "530024",
-      "addressCountry": "IN"
-    },
-    "telephone": "+91-9966363662",
-    "openingHours": "Mo-Su 00:00-23:59",
-    "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
-    "priceRange": "₹2400-₹7500 per 08 hours",
-    "areaServed": {
-      "@type": "City",
-      "name": "Visakhapatnam"
-    },
-    "hasOfferCatalog": {
-      "@type": "OfferCatalog",
-      "name": "Local Taxi Services",
-      "itemListElement": [
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service",
-            "name": "Point to Point Taxi",
-            "description": "Direct rides within the city"
-          }
-        },
-        {
-          "@type": "Offer", 
-          "itemOffered": {
-            "@type": "Service",
-            "name": "Hourly Rental",
-            "description": "Multi-stop city tours"
-          }
-        }
-      ]
-    }
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: 'Vizag Taxi Hub - Local Taxi Service',
+    description:
+      'Professional local cab booking service in Visakhapatnam. City taxi, point to point rides, and hourly rentals available 24/7.',
+    url: 'https://vizagtaxihub.com/local-taxi',
+    telephone: '+91-9966363662',
+    areaServed: { '@type': 'City', name: 'Visakhapatnam' },
   };
 
-  return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Navbar />
-      <main className="flex-1">
-      <Helmet>
-        <title>Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub</title>
-        <meta name="description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
-        <meta name="keywords" content="local taxi visakhapatnam, city cab vizag, local cab booking visakhapatnam, vizag city taxi, point to point taxi vizag" />
-        <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/local-taxi" />
-        <meta property="og:title" content="Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub" />
-        <meta property="og:description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/local-taxi" />
-        <meta property="twitter:title" content="Local Taxi Service Visakhapatnam | City Cab Booking | Vizag Taxi Hub" />
-        <meta property="twitter:description" content="Book local taxi in Visakhapatnam for city rides, airport transfers, point to point travel. 24/7 available city cab service with verified drivers and fair pricing." />
-        <meta property="twitter:image" content="/og-image.png" />
-        
-        {/* Additional SEO */}
-        <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://vizagtaxihub.com/local-taxi" />
-      </Helmet>
-
-      {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-blue-50 to-white ${isSearchActive ? 'pt-28 md:pt-36 pb-16 md:pb-20' : 'pt-8 md:pt-12 pb-8 md:pb-10'}`}>
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
-          {!isSearchActive && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-5 md:mb-8"
-          >
-            <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-blue-100 text-blue-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
-              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
-              Visakhapatnam's Premier Local Taxi Service
-            </div>
-            <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-6 leading-tight">
-              Your City
-              <br />
-              <span className="text-blue-500">Your Ride</span>
-            </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-0 max-w-2xl mx-auto">
-              Quick, safe, and affordable local taxi service across Visakhapatnam. Available 24/7 for all your city travel needs.
-            </p>
-          </motion.div>
-          )}
-          
-          <motion.div 
-            ref={widgetRef}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl md:p-8"
-          >
-            <LocalHeroWidget 
-              onSearch={() => {
-                setIsSearchActive(true);
-                setTimeout(() => scrollWithOffset(widgetRef.current, 120), 50);
-              }}
-              onStepChange={(step) => {
-                // Reduce top/bottom spacing when we're firmly in step 2
-                if (step === 2) {
-                  const section = document.querySelector('section.relative.bg-gradient-to-br.from-blue-50.to-white');
-                  if (section) {
-                    (section as HTMLElement).style.paddingTop = '24px';
-                    (section as HTMLElement).style.paddingBottom = '24px';
-                  }
-                }
-              }}
-              onEditStart={() => {
-                // Ensure enough top offset before scroll when opening edit
-                const section = document.querySelector('section.relative.bg-gradient-to-br.from-blue-50.to-white');
-                if (section) {
-                  (section as HTMLElement).style.paddingTop = '120px';
-                  (section as HTMLElement).style.paddingBottom = '120px';
-                }
-                setTimeout(() => scrollWithOffset(widgetRef.current, 140), 50);
-              }}
-            />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Features */}
-      {!isSearchActive && (
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Why Choose Our Local Service</h2>
-            <p className="text-xl text-gray-600">Designed for the modern city traveler</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-xl p-6 text-center hover:shadow-lg transition-shadow"
-              >
-                <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
-                  {feature.icon}
+  const mobileBelowFold = (
+    <>
+      <div className="space-y-6">
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">Why book a local cab with us</h2>
+          <p className="mb-5 text-sm leading-relaxed text-gray-600 sm:text-base">
+            Fast city rides across Visakhapatnam — verified drivers, fair packages, and 24/7 booking.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {features.map((f) => (
+              <div key={f.title} className="flex gap-3 rounded-lg bg-blue-50/80 p-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-white">
+                  {f.icon}
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">{feature.title}</h4>
-                <p className="text-gray-600 text-sm">{feature.description}</p>
-              </motion.div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">{f.title}</h3>
+                  <p className="mt-0.5 text-xs text-gray-600">{f.description}</p>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-      </section>
-      )}
+        </section>
 
-      {/* Vehicle Options */}
-      {!isSearchActive && (
-      <section className="py-8 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-4"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Choose Your Ride</h2>
-            <p className="text-xl text-gray-600">Perfect vehicle for every journey</p>
-          </motion.div>
-          
-          {/* Duration Tabs */}
-          <div className="flex justify-center mb-8">
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              {['08hrs', '10hrs'].map((duration) => (
-                <button
-                  key={duration}
-                  onClick={() => setSelectedDuration(duration)}
-                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                    selectedDuration === duration
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {duration}
-                </button>
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-4 text-lg font-bold text-gray-900">Choose Your Ride (8hrs package)</h2>
+          {ridesLoading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-28 animate-pulse rounded-lg bg-slate-100" />
               ))}
             </div>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {vehicleOptions[selectedDuration].map((vehicle, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-gray-50 rounded-xl p-6 hover:bg-blue-50 transition-colors group"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-xl text-gray-900">{vehicle.type}</h3>
-                  <Car className="w-8 h-8 text-blue-500" />
-                </div>
-                <div className="text-sm text-gray-600 mb-2">{vehicle.capacity} Seater</div>
-                <div className="text-2xl font-bold text-blue-500 mb-4">{vehicle.rate}</div>
-                <div className="space-y-2 mb-4">
-                  {vehicle.features.map((feature, i) => (
-                    <div key={i} className="flex items-center text-sm text-gray-600">
-                      <CheckCircle className="w-4 h-4 text-blue-500 mr-2" />
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t pt-4">
-                  <div className="text-xs text-gray-500 mb-2">Extra charges:</div>
-                  <div className="text-sm text-gray-600">
-                    <div>Time: {vehicle.extraTime}</div>
-                    <div>Distance: {vehicle.extraKm}</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {rideOptions.slice(0, 3).map((v) => (
+                <div key={v.id} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900">{v.label}</h3>
+                    <Car className="h-5 w-5 shrink-0 text-blue-500" />
                   </div>
+                  <p className="text-lg font-bold text-blue-600">
+                    {formatInr(v.packagePrice)} / 8hrs
+                  </p>
+                  {v.extraKm > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">Extra {formatInr(v.extraKm)}/km</p>
+                  )}
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* Service Areas */}
-      {!isSearchActive && (
-      <section className="py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-4"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Service Areas</h2>
-            <p className="text-xl text-gray-600">Quick pickups across Visakhapatnam</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {serviceAreas.map((area, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-xl p-6 hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-center mb-4">
-                  <MapPin className="w-5 h-5 text-blue-500 mr-2" />
-                  <h5 className="font-bold text-gray-900">{area.area}</h5>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Distance from center:</span>
-                    <span className="font-medium">{area.distance}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Pickup time:</span>
-                    <span className="font-medium text-blue-500">{area.time}</span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-      
-      {/* CTA */}
-      {!isSearchActive && (
-      <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20"></div>
-        <div className="relative max-w-3xl mx-auto text-center px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-2xl md:text-3xl lg:text-5xl font-bold mb-6">Need a Ride Right Now?</h2>
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Quick pickups, safe rides, and fair pricing. Your trusted local taxi service in Visakhapatnam.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                size="lg" 
-                className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-8 py-4 rounded-xl"
-                onClick={() => window.open(`tel:+91-9966363662`)}
-              >
-                <Phone className="w-5 h-5 mr-2" />
-                Call Now: +91-9966363662
-              </Button>
-              <div className="text-gray-400 text-sm">
-                Available 24/7 • No Surge Pricing • Instant Booking
-              </div>
+              ))}
             </div>
-          </motion.div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-3 text-lg font-bold text-gray-900">Popular Local Areas</h2>
+          <div className="flex flex-wrap gap-2">
+            {serviceAreas.slice(0, 6).map((area) => (
+              <span
+                key={area}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 text-sm text-gray-700"
+              >
+                <MapPin className="h-3.5 w-3.5 text-blue-500" />
+                {area}
+              </span>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <aside className="space-y-4">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-2 text-base font-bold text-gray-900">Book Local Cab</h2>
+          <p className="mb-4 text-sm text-gray-600">City rides · Hourly packages · Point-to-point</p>
+          <ul className="mb-4 space-y-2 text-sm text-gray-700">
+            {['Verified drivers', 'Fair city rates', '24/7 availability'].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 shrink-0 text-blue-500" />
+                {item}
+              </li>
+            ))}
+          </ul>
+          <Button
+            className="w-full bg-blue-500 text-white hover:bg-blue-600"
+            onClick={() => window.open('tel:+919966363662')}
+          >
+            <Phone className="mr-2 h-4 w-4" />
+            Call +91 9966363662
+          </Button>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-white p-4">
+          <ServiceLinks currentService="/local-taxi" title="Other Services" variant="sidebar" />
+        </div>
+      </aside>
+    </>
+  );
+
+  const desktopBelowFold = (
+    <div className="hidden space-y-8 lg:block">
+      {/* Help bar */}
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 xl:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[var(--brand-primary)] shadow-sm">
+            <Headphones className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="text-sm text-slate-700 xl:text-base">
+            <span className="font-semibold text-slate-900">Need help with your booking?</span>{' '}
+            Our team is ready to assist you anytime.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white hover:bg-white"
+            onClick={() => window.open(WHATSAPP_URL, '_blank')}
+          >
+            <svg viewBox="0 0 24 24" className="mr-2 h-4 w-4 fill-[#25D366]" aria-hidden>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+            </svg>
+            Chat on WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white text-[var(--brand-primary)] hover:bg-white"
+            onClick={() => window.open('tel:+919966363662')}
+          >
+            <Phone className="mr-2 h-4 w-4" />
+            Call +91 9966363662
+          </Button>
         </div>
       </section>
-      )}
 
-      {/* Service Types */}
-      {!isSearchActive && (
-      <section className="py-8 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-4"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Our Services</h2>
-            <p className="text-xl text-gray-600">Flexible options for every need</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 text-center"
+      {/* Why book */}
+      <section className="text-center">
+        <h2 className="text-2xl font-bold text-slate-900 xl:text-3xl">Why book a local cab with us</h2>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600 xl:text-base">
+          Fast city rides across Visakhapatnam — verified drivers, fair packages, and 24/7 booking.
+        </p>
+        <div className="mt-6 grid grid-cols-4 gap-4">
+          {features.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 text-left shadow-[var(--home-card-shadow)]"
             >
-              <div className="w-16 h-16 bg-blue-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <Navigation className="w-8 h-8 text-white" />
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+                {f.icon}
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Point to Point</h3>
-              <p className="text-gray-600 mb-6">Quick rides to your destination with meter-based pricing</p>
-              <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={scrollToWidget}>
-                Book Now
-              </Button>
-            </motion.div>
+              <h3 className="text-base font-bold text-slate-900">{f.title}</h3>
+              <p className="mt-1 text-sm leading-snug text-slate-600">{f.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="bg-gradient-to-br from-green-50 to-white rounded-xl p-8 text-center"
-            >
-              <div className="w-16 h-16 bg-green-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <Clock className="w-8 h-8 text-white" />
+      {/* Choose ride — fares + images from backend */}
+      <section>
+        <h2 className="mb-5 text-2xl font-bold text-slate-900">Choose Your Ride (8hrs package)</h2>
+        {ridesLoading ? (
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-56 animate-pulse rounded-2xl border border-slate-100 bg-slate-100"
+              />
+            ))}
+          </div>
+        ) : rideOptions.length === 0 ? (
+          <p className="rounded-2xl border border-slate-100 bg-white px-4 py-6 text-sm text-slate-600">
+            Local package fares are loading from our pricing system. Please use Search Cabs above for
+            live rates.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {rideOptions.map((v) => (
+              <div
+                key={v.id}
+                className="rounded-2xl border border-[var(--home-card-border)] bg-white p-4 shadow-[var(--home-card-shadow)] transition-colors hover:border-blue-200"
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">{v.label}</h3>
+                  <Car className="h-5 w-5 shrink-0 text-[var(--brand-primary)]" aria-hidden />
+                </div>
+                <div className="mb-3 flex h-28 items-center justify-center rounded-xl bg-slate-50 px-2">
+                  <img
+                    src={v.image}
+                    alt={v.label}
+                    className="max-h-24 w-full object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+                <p className="text-xl font-bold text-[var(--brand-primary)]">
+                  {formatInr(v.packagePrice)} / 8hrs
+                </p>
+                {v.extraKm > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">Extra {formatInr(v.extraKm)}/km</p>
+                )}
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Hourly Rental</h3>
-              <p className="text-gray-600 mb-6">Rent a cab for multiple stops and shopping trips</p>
-              <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={scrollToWidget}>
-                Book Now
-              </Button>
-            </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
 
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="bg-gradient-to-br from-purple-50 to-white rounded-xl p-8 text-center"
+      {/* Areas + Other services */}
+      <section className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-5 xl:gap-6">
+        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+          <h2 className="mb-4 text-xl font-bold text-slate-900">Popular Local Areas</h2>
+          <div className="flex flex-wrap gap-2.5">
+            {serviceAreas.map((area) => (
+              <span
+                key={area}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-[var(--brand-primary-light)]/50 px-3 py-1.5 text-sm font-medium text-[var(--brand-primary-dark)]"
+              >
+                <MapPin className="h-3.5 w-3.5" aria-hidden />
+                {area}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Link
+              to="/vehicle/innova-crysta"
+              className="group flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-[var(--brand-primary-light)]/70 px-4 py-3.5 transition-colors hover:bg-[var(--brand-primary-light)]"
             >
-              <div className="w-16 h-16 bg-purple-500 rounded-xl flex items-center justify-center mb-6 mx-auto">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Corporate</h3>
-              <p className="text-gray-600 mb-6">Special rates for business travel and corporate accounts</p>
-              <Button className="bg-purple-500 hover:bg-purple-600 text-white">
-                Contact Us
-              </Button>
-            </motion.div>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">
+                  Innova Crysta Taxi Booking
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-600">
+                  Premium comfort for your city rides
+                </span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white">
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </span>
+            </Link>
+            <Link
+              to="/airport-taxi"
+              className="group flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-[var(--brand-primary-light)]/70 px-4 py-3.5 transition-colors hover:bg-[var(--brand-primary-light)]"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">
+                  Airport Transfer Vizag
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-600">On-time pickups & drop</span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white">
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </span>
+            </Link>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+          <h2 className="mb-4 text-xl font-bold text-slate-900">Other Services</h2>
+          <div className="grid grid-cols-2 gap-2.5">
+            {otherServices.map(({ name, description, href, Icon }) => (
+              <Link
+                key={href}
+                to={href}
+                className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 transition-colors hover:border-blue-200 hover:bg-white"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold leading-snug text-slate-900 group-hover:text-[var(--brand-primary)]">
+                    {name}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+                </span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-[var(--brand-primary)]"
+                  aria-hidden
+                />
+              </Link>
+            ))}
+          </div>
+          <div className="mt-4 text-center">
+            <Link
+              to="/fleet"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--brand-primary)] hover:underline"
+            >
+              View All Services
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
           </div>
         </div>
       </section>
-      )}
 
-      {/* Tempo Traveller Services Section */}
-      <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Need Group Transportation?</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              For larger groups, explore our specialized tempo traveller services designed for different travel needs
+      {/* Custom package CTA */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0B3A7A] via-[var(--brand-primary-dark)] to-[var(--brand-primary)] px-6 py-7 text-white shadow-lg xl:px-8">
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-bold tracking-wide">
+              VTH
+            </span>
+            <p className="max-w-xl text-base font-semibold leading-snug xl:text-lg">
+              Need a custom package? Tell us your plan and we&apos;ll handle the rest.
             </p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Link to="/tempo-traveller-rental-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
-                  <Car className="h-6 w-6 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Tempo Traveller Rental</h3>
-                <p className="text-sm text-gray-600">Best tempo traveller rental service in Vizag</p>
-              </div>
+          <Button
+            asChild
+            className="shrink-0 rounded-full bg-white px-5 text-[var(--brand-primary-dark)] hover:bg-blue-50"
+          >
+            <Link to="/contact">
+              Get a Quote
+              <ArrowRight className="ml-2 h-4 w-4" aria-hidden />
             </Link>
-            
-            <Link to="/17-seater-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">17 Seater Tempo Traveller</h3>
-                <p className="text-sm text-gray-600">Perfect for large group travel</p>
-              </div>
-            </Link>
-            
-            <Link to="/12-seater-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-purple-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">12 Seater Tempo Traveller</h3>
-                <p className="text-sm text-gray-600">Ideal for medium group travel</p>
-              </div>
-            </Link>
-            
-            <Link to="/group-travel-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-orange-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
-                  <Users className="h-6 w-6 text-orange-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Group Travel</h3>
-                <p className="text-sm text-gray-600">Specialized group travel solutions</p>
-              </div>
-            </Link>
-          </div>
+          </Button>
         </div>
       </section>
-
-     {/* Service Links Section */}
-     <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <ServiceLinks 
-            currentService="/local-taxi"
-            title="Explore Our Other Services"
-          />
-        </div>
-      </section>
-
-
-      </main>
-      <Footer />
-   
-      <MobileNavigation />
-      <script type="application/ld+json">
-        {JSON.stringify(structuredData)}
-      </script>
     </div>
   );
+
+  return (
+    <ServiceEmbedShell
+      slug="local"
+      layout="marketing"
+      helmetExtra={<script type="application/ld+json">{JSON.stringify(structuredData)}</script>}
+      hero={({
+        onStepChange,
+        onTripEditOpenChange,
+        summaryBackHref,
+        embedStretchToShell,
+        embedDesktopCardLayout,
+        embedDesktopCardTitle,
+      }) => (
+        <LocalHeroWidget
+          onStepChange={onStepChange}
+          onTripEditOpenChange={onTripEditOpenChange}
+          summaryBackHref={summaryBackHref}
+          embedStretchToShell={embedStretchToShell}
+          embedDesktopCardLayout={embedDesktopCardLayout}
+          embedDesktopCardTitle={embedDesktopCardTitle}
+        />
+      )}
+      belowFold={
+        <>
+          {/* Mobile keeps previous content layout */}
+          <div className="grid grid-cols-1 gap-5 lg:hidden">{mobileBelowFold}</div>
+          {desktopBelowFold}
+        </>
+      }
+    />
+  );
 }
+
+export default LocalTaxiPage;

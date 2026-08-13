@@ -84,14 +84,14 @@ const UrbaniaRentalVizagPage = () => {
   return (
     <>
       <Helmet>
-        <title>Urbania Van Rental in Vizag | Premium AC Mini Bus Hire | Vizag Taxi Hub</title>
+        <title>Urbania Rental Vizag | Force Urbania for Rent | Vizag Taxi Hub</title>
         <meta
           name="description"
-          content="Book Urbania rental in Visakhapatnam for weddings, corporate travel, and outstation trips. Premium AC Urbania with driver — local, airport & AP routes. Call +91 9966363662."
+          content="Book Urbania rental Vizag and Force Urbania for rent in Visakhapatnam — weddings, corporate groups, outstation trips. Premium AC with driver. Call +91 9966363662."
         />
         <meta
           name="keywords"
-          content="urbania rental vizag, urbania hire visakhapatnam, force urbania vizag, mercedes urbania booking vizag, luxury mini bus urbania vizag, corporate urbania vizag, wedding urbania vizag, pilgrimage urbania vizag, group travel urbania ap, AC urbania outstation vizag, urbania tempo alternative vizag, premium van hire vizag, vizag taxi hub urbania"
+          content="urbania rental vizag, force urbania vizag, force urbania for rent vizag, urbania hire visakhapatnam, premium van hire vizag, corporate urbania vizag, wedding urbania vizag"
         />
         <link rel="canonical" href={PAGE_URL} />
         <meta name="author" content="Vizag Taxi Hub" />
@@ -127,11 +127,10 @@ const UrbaniaRentalVizagPage = () => {
 
         <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 md:pb-32">
           <div className="mb-8 rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 p-8 text-white">
-            <h1 className="mb-4 text-2xl font-bold md:text-3xl">Urbania Van Rental in Vizag</h1>
+            <h1 className="mb-4 text-2xl font-bold md:text-3xl">Urbania Rental Vizag — Force Urbania for Rent</h1>
             <p className="mb-6 text-lg md:text-xl">
-              Premium Urbania (premium mini-bus style van) hire in Visakhapatnam — ideal for large
-              families, weddings, corporate shuttles, and comfortable outstation journeys across
-              Andhra Pradesh.
+              Force Urbania Vizag hire for large families, weddings, corporate shuttles, and
+              outstation journeys across Andhra Pradesh — premium AC van with professional driver.
             </p>
             <div className="flex flex-col gap-4 sm:flex-row">
               <Button

@@ -67,19 +67,19 @@ export const VEHICLE_EMBED_CONFIGS: Record<VehicleEmbedSlug, VehicleEmbedConfig>
     slug: 'urbania',
     vehicleIds: ['bus'],
     seo: {
-      title: 'Urbania Van Rental in Vizag | Premium AC Group Travel | Vizag Taxi Hub',
+      title: 'Urbania Rental Vizag | Force Urbania for Rent | Vizag Taxi Hub',
       description:
-        'Book Urbania van hire in Visakhapatnam for weddings, corporate groups, and outstation trips. Premium AC Urbania with professional driver — local, airport & Andhra Pradesh. Call +91 9966363662.',
+        'Book Urbania rental Vizag and Force Urbania for rent — weddings, corporate groups, outstation trips. Premium AC with professional driver. Call +91 9966363662.',
       keywords:
-        'urbania rental vizag, urbania hire visakhapatnam, force urbania vizag, urbania mini bus vizag, corporate urbania vizag, wedding urbania vizag, AC urbania outstation vizag, premium van hire vizag, vizag taxi hub urbania',
+        'urbania rental vizag, force urbania vizag, force urbania for rent vizag, urbania hire visakhapatnam, premium van hire vizag, corporate urbania vizag, wedding urbania vizag',
       capacityKeywordSuffix: 'seater urbania',
       canonicalUrl: 'https://vizagtaxihub.com/vehicle/urbania',
       ogImageUrl: 'https://vizagtaxihub.com/uploads/og-image-urbania.jpg',
-      pageHeadline: 'Book Urbania',
-      pageSubtitle: 'Premium Urbania for group travel',
+      pageHeadline: 'Urbania Rental Vizag',
+      pageSubtitle: 'Force Urbania for rent — premium AC group travel',
       structuredDataName: 'Urbania Premium Van Rental in Visakhapatnam',
       structuredDataDescription:
-        'Urbania van hire in Vizag for weddings, corporate travel, pilgrimages, and outstation group trips — AC comfort and professional driver.',
+        'Force Urbania Vizag hire for weddings, corporate travel, pilgrimages, and outstation group trips — AC comfort and professional driver.',
       defaultPricePerKm: '28',
       structuredDataFallbackImage: 'uploads/og-image-urbania.jpg',
     },
@@ -101,19 +101,19 @@ export const VEHICLE_EMBED_CONFIGS: Record<VehicleEmbedSlug, VehicleEmbedConfig>
     slug: 'tempo-traveller',
     vehicleIds: ['tempo_traveller'],
     seo: {
-      title: '17 Seater Tempo Traveller Rental in Vizag | AC Group Travel | Vizag Taxi Hub',
+      title: 'Tempo Traveller in Vizag | 17 Seater Hire & Van Rental | Vizag Taxi Hub',
       description:
-        'Book 17 seater AC tempo traveller in Visakhapatnam for weddings, corporate groups, and outstation trips. Professional driver, modern amenities — local, airport & AP routes. Call +91 9966363662.',
+        'Book tempo traveller in Vizag — 17 seater vehicle hire and van rental with AC and professional driver for groups, weddings, and outstation. Call +91 9966363662.',
       keywords:
-        'tempo traveller rental vizag, 17 seater tempo visakhapatnam, tempo traveller hire vizag, AC tempo traveller vizag, group travel tempo vizag, wedding tempo traveller vizag, corporate tempo vizag, outstation tempo vizag, vizag taxi hub tempo',
+        'tempo traveller in vizag, tempo traveller hire vizag, tempo traveller rent in vizag, 17 seater vehicle, van rental, traveller van rental, tempo traveller rental vizag',
       capacityKeywordSuffix: 'seater tempo traveller',
       canonicalUrl: 'https://vizagtaxihub.com/vehicle/tempo-traveller',
       ogImageUrl: 'https://vizagtaxihub.com/uploads/taxi-services--visakhapatnam-tempo-traveller.png',
-      pageHeadline: 'Book Tempo Traveller',
-      pageSubtitle: '17-seater AC tempo for group travel',
+      pageHeadline: 'Tempo Traveller in Vizag',
+      pageSubtitle: '17 seater AC hire & van rental for groups',
       structuredDataName: '17 Seater AC Tempo Traveller Rental in Vizag',
       structuredDataDescription:
-        'Best 17 seater tempo traveller rental service in Visakhapatnam with professional drivers, AC comfort, and modern amenities for group travel.',
+        'Tempo traveller hire in Visakhapatnam with professional drivers, AC comfort, and modern amenities for group travel.',
       defaultPricePerKm: '35',
       structuredDataFallbackImage: 'cars/tempo.png',
     },
@@ -151,8 +151,10 @@ function capacityKeywordSuffix(capacity: number): string {
 }
 
 function buildPageSubtitle(name: string, capacity: number): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('innova')) return 'Innova Crysta taxi booking — rates & hire in Vizag';
   if (capacity > 12) return `${capacity}-seater for group travel`;
-  if (capacity > 6) return `Spacious ${name} for family travel`;
+  if (capacity > 6) return `Spacious ${name} taxi for family travel in Vizag`;
   return `Comfortable ${capacity}-seater taxi in Vizag`;
 }
 
@@ -239,13 +241,16 @@ function buildDynamicVehicleEmbedConfig(
     vehicle?.description ??
     `Book ${name} taxi in Visakhapatnam with professional driver, AC comfort, and transparent rates. Local, airport & outstation trips across Vizag and Andhra Pradesh. Call +91 9966363662.`;
 
+  const isInnova = name.toLowerCase().includes('innova');
   return {
     slug,
     vehicleIds: vehicle?.id ? [vehicle.id] : [],
     seo: {
       title:
         vehicle?.seoContent?.title ??
-        `${name} Taxi in Vizag | AC Cab Rental | Vizag Taxi Hub`,
+        (isInnova
+          ? 'Innova Crysta Taxi Booking in Vizag | Rates & Hire | Vizag Taxi Hub'
+          : `${name} Taxi in Vizag | AC Cab Rental | Vizag Taxi Hub`),
       description,
       keywords:
         vehicle?.seoContent?.keywords ??
@@ -253,7 +258,7 @@ function buildDynamicVehicleEmbedConfig(
       capacityKeywordSuffix: capacityKeywordSuffix(capacity),
       canonicalUrl: `https://vizagtaxihub.com/vehicle/${slug}`,
       ogImageUrl,
-      pageHeadline: `Book ${name}`,
+      pageHeadline: isInnova ? 'Innova Crysta Taxi Booking' : `Book ${name}`,
       pageSubtitle: buildPageSubtitle(name, capacity),
       structuredDataName: `${name} Taxi Rental in Visakhapatnam`,
       structuredDataDescription: description,

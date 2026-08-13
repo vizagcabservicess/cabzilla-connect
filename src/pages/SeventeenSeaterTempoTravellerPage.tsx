@@ -57,9 +57,9 @@ const SeventeenSeaterTempoTravellerPage = () => {
   return (
     <>
       <Helmet>
-        <title>17 Seater Tempo Traveller in Vizag | AC Mini Bus Rental | Group Travel</title>
-        <meta name="description" content="Book 17 seater tempo traveller in Vizag for group travel. AC mini bus rental with professional driver. Best rates in Visakhapatnam. Call +91 9966363662" />
-        <meta name="keywords" content="17 seater tempo traveller vizag, AC mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag, family group travel vizag, wedding tempo traveller vizag, pilgrimage tempo traveller vizag, airport tempo traveller vizag, tempo traveller booking vizag, tempo traveller rates vizag" />
+        <title>17 Seater Vehicle in Vizag | Tempo Traveller Hire | Vizag Taxi Hub</title>
+        <meta name="description" content="Book a 17 seater vehicle in Vizag — AC tempo traveller hire for group travel with professional driver. Best rates in Visakhapatnam. Call +91 9966363662." />
+        <meta name="keywords" content="17 seater vehicle, 17 seater tempo traveller vizag, tempo traveller hire vizag, tempo traveller in vizag, AC mini bus rental vizag, group travel vizag" />
         <link rel="canonical" href="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/17-seater-tempo-traveller-vizag" />
@@ -75,8 +75,8 @@ const SeventeenSeaterTempoTravellerPage = () => {
         <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
           {/* Hero Section */}
           <div className="bg-gradient-to-r from-green-600 to-green-800 text-white rounded-xl p-8 mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4">17 Seater Tempo Traveller in Vizag</h1>
-            <p className="text-xl mb-6">Perfect for large group travel with AC comfort and professional drivers</p>
+            <h1 className="text-2xl md:text-3xl font-bold mb-4">17 Seater Vehicle — Tempo Traveller in Vizag</h1>
+            <p className="text-xl mb-6">Hire a 17 seater AC tempo traveller for large group travel with professional drivers</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button 
                 size="lg" 

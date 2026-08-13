@@ -377,7 +377,9 @@ export function OfferCampaignPopup({
 export async function loadOfferCampaignForSearch(
   category: string,
   websiteFare: number,
-  travelDate?: string | null
+  travelDate?: string | null,
+  vehicleId?: string | null,
+  tourId?: string | null
 ): Promise<{
   campaign: OfferCampaignPublic | null;
   shouldShowPopup: boolean;
@@ -390,7 +392,9 @@ export async function loadOfferCampaignForSearch(
     const result = await offerCampaignAPI.public.getActiveOffer(
       category,
       websiteFare,
-      travelDate
+      travelDate,
+      vehicleId,
+      tourId
     );
     let campaign = result.campaign;
     // Legacy fallback: bare "outstation" campaign for one-way lookups
@@ -398,7 +402,9 @@ export async function loadOfferCampaignForSearch(
       const legacy = await offerCampaignAPI.public.getActiveOffer(
         'outstation',
         websiteFare,
-        travelDate
+        travelDate,
+        vehicleId,
+        tourId
       );
       campaign = legacy.campaign;
     }

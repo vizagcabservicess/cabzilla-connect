@@ -767,7 +767,7 @@ npm run dev`}
                                 {s.utm_campaign || '—'}
                               </TableCell>
                               <TableCell
-                                className="text-sm max-w-[160px] truncate"
+                                className="text-sm min-w-[12rem] max-w-[22rem] whitespace-normal break-words"
                                 title={keyword || ''}
                               >
                                 {keyword || '—'}

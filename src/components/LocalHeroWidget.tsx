@@ -7,9 +7,26 @@ interface LocalHeroWidgetProps {
   onSearch?: (searchData: any) => void;
   onStepChange?: (step: number) => void;
   onEditStart?: () => void;
+  onTripEditOpenChange?: (open: boolean) => void;
+  embedStretchToShell?: boolean;
+  summaryBackHref?: string;
+  /** Desktop marketing hero: stacked booking card. */
+  embedDesktopCardLayout?: boolean;
+  embedDesktopCardTitle?: string;
 }
 
-export function LocalHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: LocalHeroWidgetProps) {
+export function LocalHeroWidget({
+  initialPickup,
+  initialDrop,
+  onSearch,
+  onStepChange,
+  onEditStart,
+  onTripEditOpenChange,
+  embedStretchToShell,
+  summaryBackHref,
+  embedDesktopCardLayout,
+  embedDesktopCardTitle,
+}: LocalHeroWidgetProps) {
   // Synchronously prepare prefill data so Hero sees it on first render
   if (typeof window !== 'undefined') {
     // Always set trip type to local for this widget
@@ -29,34 +46,36 @@ export function LocalHeroWidget({ initialPickup, initialDrop, onSearch, onStepCh
     const effectivePickup = initialPickup || pickupFromQuery;
     const effectiveDrop = initialDrop || dropFromQuery;
 
-    if (effectivePickup && effectiveDrop) {
-      const pickupName = effectivePickup;
-      const dropName = effectiveDrop;
+    // Prefer full routePrefillData written by cross-page redirects (Hero).
+    // Fall back to query/slug names when present.
+    const existingPrefill = sessionStorage.getItem('routePrefillData');
+    if (!existingPrefill && effectivePickup) {
       const pickupDate = dateFromQuery ? new Date(dateFromQuery) : undefined;
-
       const prefillData = {
         pickupLocation: {
-          name: pickupName,
-          address: pickupName,
+          name: effectivePickup,
+          address: effectivePickup,
           id: 'prefill-pickup',
-          city: pickupName,
+          city: effectivePickup,
           state: 'Unknown',
           lat: 0,
           lng: 0,
           type: 'other' as const,
           popularityScore: 0,
         },
-        dropLocation: {
-          name: dropName,
-          address: dropName,
-          id: 'prefill-drop',
-          city: dropName,
-          state: 'Unknown',
-          lat: 0,
-          lng: 0,
-          type: 'other' as const,
-          popularityScore: 0,
-        },
+        dropLocation: effectiveDrop
+          ? {
+              name: effectiveDrop,
+              address: effectiveDrop,
+              id: 'prefill-drop',
+              city: effectiveDrop,
+              state: 'Unknown',
+              lat: 0,
+              lng: 0,
+              type: 'other' as const,
+              popularityScore: 0,
+            }
+          : null,
         tripType: 'local',
         tripMode: 'one-way',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined,
@@ -68,14 +87,19 @@ export function LocalHeroWidget({ initialPickup, initialDrop, onSearch, onStepCh
 
   return (
     <div>
-      <Hero 
-        key="local-hero" 
-        onSearch={onSearch} 
+      <Hero
+        key="local-hero"
+        onSearch={onSearch}
         onEditStart={onEditStart}
         onStepChange={onStepChange}
-        visibleTabs={['local']} 
+        onTripEditOpenChange={onTripEditOpenChange}
+        visibleTabs={['local']}
         hideBackground={true}
         embedCompactLayout
+        embedStretchToShell={embedStretchToShell}
+        summaryBackHref={summaryBackHref}
+        embedDesktopCardLayout={embedDesktopCardLayout}
+        embedDesktopCardTitle={embedDesktopCardTitle}
       />
     </div>
   );

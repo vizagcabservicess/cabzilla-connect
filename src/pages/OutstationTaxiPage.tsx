@@ -1,471 +1,468 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { OutstationHeroWidget } from "@/components/OutstationHeroWidget";
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Phone,
+  Shield,
+  Star,
+  Zap,
+  Users,
+  CheckCircle,
+  Car,
+  Headphones,
+  ArrowRight,
+  ChevronRight,
+  Plane,
+  MapPinned,
+  CarFront,
+  Bus,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Car, Shield, Star, Phone, Clock, Users, MapPin, Zap, CheckCircle, ArrowRight, Navigation } from 'lucide-react';
-import { Helmet } from 'react-helmet-async';
-import { Navbar } from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { MobileNavigation } from '@/components/MobileNavigation';
+import { OutstationHeroWidget } from '@/components/OutstationHeroWidget';
 import { ServiceLinks } from '@/components/ServiceLinks';
 import { PopularDestinations } from '@/components/PopularDestinations';
-import { Link } from 'react-router-dom';
+import { ServiceEmbedShell } from '@/components/service/ServiceEmbedShell';
+import { loadCabTypes } from '@/lib/cabData';
+import { parseNumericValue } from '@/services/fareManagementService';
+import type { CabType } from '@/types/cab';
+import { getVehicleImageUrlForDisplay } from '@/utils/vehicleUrlUtils';
+
+const WHATSAPP_URL =
+  'https://wa.me/919966363662?text=' +
+  encodeURIComponent('Hi! I need help booking an outstation cab from Vizag.');
+
+type OutstationRideOption = {
+  id: string;
+  label: string;
+  image: string;
+  pricePerKm: number;
+};
+
+function pickOutstationPerKm(vehicle: CabType): number {
+  const of = vehicle.outstationFares;
+  if (of) {
+    const fromFare = parseNumericValue(
+      of.pricePerKm ??
+        (of as Record<string, unknown>).price_per_km ??
+        (of as Record<string, unknown>).oneWayPricePerKm,
+    );
+    if (fromFare > 0) return fromFare;
+  }
+  return parseNumericValue(vehicle.pricePerKm);
+}
+
+function buildOutstationRideOptions(vehicles: CabType[]): OutstationRideOption[] {
+  const options: OutstationRideOption[] = [];
+  for (const vehicle of vehicles) {
+    if (vehicle.isActive === false) continue;
+    const pricePerKm = pickOutstationPerKm(vehicle);
+    if (pricePerKm <= 0) continue;
+    const capacity = Number(vehicle.capacity) || 0;
+    options.push({
+      id: vehicle.id || vehicle.vehicleId || vehicle.name,
+      label: capacity > 0 ? `${vehicle.name} (${capacity}+1)` : vehicle.name,
+      image: getVehicleImageUrlForDisplay(vehicle),
+      pricePerKm,
+    });
+  }
+  return options.sort((a, b) => a.pricePerKm - b.pricePerKm);
+}
+
+function formatInr(amount: number): string {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
+}
 
 export function OutstationTaxiPage() {
-  const widgetRef = React.useRef<HTMLDivElement>(null);
-  const [isSearchActive, setIsSearchActive] = React.useState(false);
-  const scrollWithOffset = (el: HTMLElement | null, offset: number = 120) => {
-    if (!el) return;
-    const y = el.getBoundingClientRect().top + window.pageYOffset - offset;
-    window.scrollTo({ top: y, behavior: 'smooth' });
-  };
+  const [rideOptions, setRideOptions] = useState<OutstationRideOption[]>([]);
+  const [ridesLoading, setRidesLoading] = useState(true);
 
-  const scrollToWidget = () => {
-    if (widgetRef.current) {
-      widgetRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-    } else {
-      // Fallback: scroll to top of page
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setRidesLoading(true);
+      try {
+        const vehicles = await loadCabTypes(false, true);
+        if (!cancelled) setRideOptions(buildOutstationRideOptions(vehicles));
+      } catch (error) {
+        console.error('Failed to load outstation ride options:', error);
+        if (!cancelled) setRideOptions([]);
+      } finally {
+        if (!cancelled) setRidesLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const features = [
-    { 
-      icon: <Zap className="w-6 h-6" />, 
-      title: 'Instant Booking', 
-      description: 'Book your cab in under 60 seconds with our streamlined process.',
-      color: 'bg-emerald-500'
+    {
+      icon: <Zap className="w-5 h-5" />,
+      title: 'Instant Booking',
+      description: 'Book your cab in under 60 seconds',
     },
-    { 
-      icon: <Shield className="w-6 h-6" />, 
-      title: 'Safe & Reliable', 
-      description: 'GPS tracking, verified drivers, and 24/7 customer support.',
-      color: 'bg-blue-500'
+    {
+      icon: <Shield className="w-5 h-5" />,
+      title: 'Safe & Reliable',
+      description: 'GPS tracking and verified drivers',
     },
-    { 
-      icon: <Star className="w-6 h-6" />, 
-      title: 'Best Rates', 
-      description: 'Competitive pricing with no hidden charges or surge pricing.',
-      color: 'bg-amber-500'
+    {
+      icon: <Star className="w-5 h-5" />,
+      title: 'Best Rates',
+      description: 'Transparent per-km pricing, no surge',
     },
-    { 
-      icon: <Users className="w-6 h-6" />, 
-      title: 'Trusted Service', 
-      description: 'Join 10,000+ satisfied customers who travel with us regularly.',
-      color: 'bg-purple-500'
-    }
+    {
+      icon: <Users className="w-5 h-5" />,
+      title: 'Trusted Service',
+      description: '10,000+ satisfied travellers',
+    },
   ];
 
   const popularRoutes = [
-    { from: 'Visakhapatnam', to: 'Hyderabad', distance: '625 km', price: '₹17,000', duration: '16-18 hrs' },
-    { from: 'Visakhapatnam', to: 'Chennai', distance: '780 km', price: '₹23,200', duration: '16-18 hrs' },
-    { from: 'Visakhapatnam', to: 'Annavaram', distance: '130 km', price: '₹4,500', duration: '3-4 hrs' },
-    { from: 'Visakhapatnam', to: 'Araku Valley', distance: '115 km', price: '₹5,000', duration: '3-4 hrs' },
+    {
+      to: 'Araku Valley',
+      distance: '115 km',
+      href: '/outstation-taxi/visakhapatnam-to-araku-valley',
+    },
+    {
+      to: 'Annavaram',
+      distance: '130 km',
+      href: '/outstation-taxi/visakhapatnam-to-annavaram',
+    },
+    {
+      to: 'Hyderabad',
+      distance: '625 km',
+      href: '/outstation-taxi/visakhapatnam-to-hyderabad',
+    },
+    {
+      to: 'Chennai',
+      distance: '780 km',
+      href: '/outstation-taxi/visakhapatnam-to-chennai',
+    },
   ];
 
-  const vehicleTypes = [
-    { name: 'Sedan', seats: '4+1', price: '₹14/km', features: ['AC', 'Music', 'GPS'] },
-    { name: 'SUV', seats: '6+1', price: '₹18/km', features: ['AC', 'Music', 'GPS', 'Extra Space'] },
-    { name: 'Luxury', seats: '7+1', price: '₹20/km', features: ['Premium AC', 'Premium Music', 'GPS', 'Leather Seats'] },
+  const otherServices = [
+    { name: 'Local Taxi', description: 'City rides & packages', href: '/local-taxi', Icon: Car },
+    { name: 'Airport Transfer', description: 'Airport pickup & drop', href: '/airport-taxi', Icon: Plane },
+    { name: 'Tour Packages', description: 'Sightseeing packages', href: '/tours', Icon: MapPinned },
+    { name: 'Group Tours', description: 'Shared tours – save more', href: '/group-tours', Icon: Users },
+    { name: 'Shared Carpooling', description: 'Daily office commute', href: '/shared-carpooling', Icon: CarFront },
+    { name: 'Tempo Traveller Rental', description: 'Group travel solutions', href: '/tempo-traveller-rental-vizag', Icon: Bus },
   ];
 
   const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": "Vizag Taxi Hub - Outstation Taxi Service",
-    "description": "Professional outstation cab booking service from Visakhapatnam. One way and round trip taxi service to all major cities in India.",
-    "url": "https://vizagtaxihub.com/outstation-taxi",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "44-66-22/4, near Singalamma Temple, Singalammapuram, Kailasapuram",
-      "addressLocality": "Visakhapatnam",
-      "addressRegion": "Andhra Pradesh",
-      "postalCode": "530024",
-      "addressCountry": "IN"
-    },
-    "telephone": "+91-9966363662",
-    "openingHours": "Mo-Su 00:00-23:59",
-    "paymentAccepted": "Cash, Credit Card, UPI, Net Banking",
-    "priceRange": "₹14-35 per km",
-    "areaServed": {
-      "@type": "City",
-      "name": "Visakhapatnam"
-    },
-    "hasOfferCatalog": {
-      "@type": "OfferCatalog",
-      "name": "Outstation Taxi Services",
-      "itemListElement": [
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service",
-            "name": "One Way Taxi",
-            "description": "Single direction outstation travel"
-          }
-        },
-        {
-          "@type": "Offer",
-          "itemOffered": {
-            "@type": "Service", 
-            "name": "Round Trip Taxi",
-            "description": "Return journey bookings"
-          }
-        }
-      ]
-    }
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: 'Vizag Taxi Hub - Outstation Taxi Service',
+    description:
+      'Professional outstation cab booking service from Visakhapatnam. One way and round trip taxi service to all major cities in India.',
+    url: 'https://vizagtaxihub.com/outstation-taxi',
+    telephone: '+91-9966363662',
+    areaServed: { '@type': 'City', name: 'Visakhapatnam' },
   };
 
-  return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Navbar />
-      <main className="flex-1">
-      <Helmet>
-        <title>Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub</title>
-        <meta name="description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
-        <meta name="keywords" content="outstation taxi visakhapatnam, one way cab from vizag, vizag to hyderabad taxi, vizag to chennai cab, outstation cab booking visakhapatnam, vizag taxi service" />
-        <meta name="author" content="Vizag Taxi Hub" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://vizagtaxihub.com/outstation-taxi" />
-        <meta property="og:title" content="Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub" />
-        <meta property="og:description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        
-        {/* Twitter */}
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://vizagtaxihub.com/outstation-taxi" />
-        <meta property="twitter:title" content="Outstation Taxi Service Visakhapatnam | One Way Cab Booking | Vizag Taxi Hub" />
-        <meta property="twitter:description" content="Book outstation taxi from Visakhapatnam to all major cities. One way cab service, round trip booking. Best rates for Vizag to Hyderabad, Chennai, Bangalore. 24/7 available." />
-        <meta property="twitter:image" content="/og-image.png" />
-        
-        {/* Additional SEO */}
-        <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="https://vizagtaxihub.com/outstation-taxi" />
-      </Helmet>
+  const mobileBelowFold = (
+    <>
+      <div className="space-y-6">
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">Why book outstation with us</h2>
+          <p className="mb-5 text-sm leading-relaxed text-gray-600 sm:text-base">
+            One-way and round-trip cabs from Vizag to Araku, Annavaram, Hyderabad and more — transparent
+            rates and professional drivers.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {features.map((f) => (
+              <div key={f.title} className="flex gap-3 rounded-lg bg-emerald-50/80 p-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white">
+                  {f.icon}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">{f.title}</h3>
+                  <p className="mt-0.5 text-xs text-gray-600">{f.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-                                                                                                                     {/* Hero Section */}
-      <section className={`relative bg-gradient-to-br from-emerald-50 to-white ${isSearchActive ? 'pt-28 md:pt-36 pb-16 md:pb-20' : 'pt-8 md:pt-12 pb-8 md:pb-10'}`}>
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
-          {!isSearchActive && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-5 md:mb-8"
-          >
-            <div className="inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-emerald-100 text-emerald-700 text-xs md:text-sm font-medium mb-4 md:mb-6">
-              <CheckCircle className="w-3 h-3 md:w-4 md:h-4 mr-2" />
-              Vizag's Most Trusted Outstation Service
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-4 text-lg font-bold text-gray-900">Popular Outstation Routes</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {popularRoutes.map((r) => (
+              <Link
+                key={r.to}
+                to={r.href}
+                className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 hover:border-emerald-200"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Vizag → {r.to}</p>
+                  <p className="text-xs text-gray-500">{r.distance}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <h2 className="mb-4 text-lg font-bold text-gray-900">Vehicle Options</h2>
+          {ridesLoading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-28 animate-pulse rounded-lg bg-slate-100" />
+              ))}
             </div>
-            <h1 className="text-3xl md:text-5xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-5 leading-tight">
-              Travel Beyond
-              <br />
-              <span className="text-emerald-500">City Limits</span>
-            </h1>
-            <p className="text-base md:text-xl text-gray-600 mb-0 max-w-2xl mx-auto">
-              Professional outstation taxi service connecting you to every corner of India with comfort and reliability.
-            </p>
-          </motion.div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {rideOptions.slice(0, 3).map((v) => (
+                <div key={v.id} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900">{v.label}</h3>
+                    <Car className="h-5 w-5 shrink-0 text-emerald-500" />
+                  </div>
+                  <p className="text-lg font-bold text-emerald-600">{formatInr(v.pricePerKm)}/km</p>
+                </div>
+              ))}
+            </div>
           )}
-        
-          <motion.div 
-            ref={widgetRef}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="rounded-xl md:rounded-2xl  md:p-8"
-          >
-            <OutstationHeroWidget 
-              onSearch={() => {
-                setIsSearchActive(true);
-                setTimeout(() => scrollWithOffset(widgetRef.current, 120), 50);
-              }}
-              onStepChange={(step) => {
-                if (step === 2) {
-                  const section = document.querySelector('section.relative.bg-gradient-to-br.from-emerald-50.to-white');
-                  if (section) {
-                    (section as HTMLElement).style.paddingTop = '24px';
-                    (section as HTMLElement).style.paddingBottom = '24px';
-                  }
-                }
-              }}
-              onEditStart={() => {
-                const section = document.querySelector('section.relative.bg-gradient-to-br.from-emerald-50.to-white');
-                if (section) {
-                  (section as HTMLElement).style.paddingTop = '120px';
-                  (section as HTMLElement).style.paddingBottom = '120px';
-                }
-                setTimeout(() => scrollWithOffset(widgetRef.current, 140), 50);
-              }}
-            />
-          </motion.div>
-        </div>
-      </section>
+        </section>
 
-      {/* Features */}
-      {!isSearchActive && (
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Why Choose Our Service</h2>
-            <p className="text-xl text-gray-600">Premium features for your comfort and safety</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-xl p-6 text-center hover:shadow-lg transition-shadow"
-              >
-                <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-4 mx-auto text-white`}>
-                  {feature.icon}
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">{feature.title}</h4>
-                <p className="text-gray-600 text-sm">{feature.description}</p>
-              </motion.div>
+        <section className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+          <PopularDestinations />
+        </section>
+      </div>
+
+      <aside className="space-y-4">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          <h2 className="mb-2 text-base font-bold text-gray-900">Book Outstation Cab</h2>
+          <p className="mb-4 text-sm text-gray-600">One-way · Round-trip · Transparent per-km rates</p>
+          <ul className="mb-4 space-y-2 text-sm text-gray-700">
+            {['Door-to-door pickup', 'Professional drivers', 'Sedan to luxury options'].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                {item}
+              </li>
             ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* Vehicle Types */}
-      {!isSearchActive && (
-      <section className="py-8 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
+          </ul>
+          <Button
+            className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+            onClick={() => window.open('tel:+919966363662')}
           >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Choose Your Vehicle</h2>
-            <p className="text-xl text-gray-600">Select from our premium fleet</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            {vehicleTypes.map((vehicle, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-gray-50 rounded-xl p-6 hover:bg-emerald-50 transition-colors group"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-xl text-gray-900">{vehicle.name}</h3>
-                  <Car className="w-8 h-8 text-emerald-500" />
-                </div>
-                <div className="text-sm text-gray-600 mb-2">{vehicle.seats} Seater</div>
-                <div className="text-2xl font-bold text-emerald-500 mb-4">{vehicle.price}</div>
-                <div className="space-y-2">
-                  {vehicle.features.map((feature, i) => (
-                    <div key={i} className="flex items-center text-sm text-gray-600">
-                      <CheckCircle className="w-4 h-4 text-emerald-500 mr-2" />
-                      {feature}
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+            <Phone className="mr-2 h-4 w-4" />
+            Call +91 9966363662
+          </Button>
         </div>
-      </section>
-      )}
-
-       {/* CTA */}
-       {!isSearchActive && (
-       <section className="relative py-20 bg-gray-900 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 to-blue-600/20"></div>
-        <div className="relative max-w-3xl mx-auto text-center px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-2xl md:text-3xl lg:text-5xl font-bold mb-6">Ready for Your Journey?</h2>
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Join thousands of satisfied customers who trust us for their outstation travel. 
-              Book now and experience the difference.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                size="lg" 
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-4 rounded-xl"
-                onClick={() => window.open(`tel:+91-9966363662`)}
-              >
-                <Phone className="w-5 h-5 mr-2" />
-                Call Now: +91-9966363662
-              </Button>
-              <div className="text-gray-400 text-sm">
-                Available 24/7 • Instant Booking • Best Rates Guaranteed
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-      )}
-
-      {/* Popular Routes */}
-      {!isSearchActive && (
-      <section className="py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Popular Routes</h2>
-            <p className="text-xl text-gray-600">Most traveled destinations from Visakhapatnam</p>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {popularRoutes.map((route, index) => (
-              <motion.div 
-                key={index} 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-white rounded-xl p-6 hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-center mb-4">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                  <div className="flex-1 h-px bg-gray-200 mx-2"></div>
-                  <Navigation className="w-4 h-4 text-emerald-500" />
-                  <div className="flex-1 h-px bg-gray-200 mx-2"></div>
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                </div>
-                
-                <h5 className="font-bold text-gray-900 mb-2">
-                  {route.from} → {route.to}
-                </h5>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Distance:</span>
-                    <span className="font-medium">{route.distance}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Duration:</span>
-                    <span className="font-medium">{route.duration}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Starting from:</span>
-                    <span className="text-xl font-bold text-emerald-500">{route.price}</span>
-                  </div>
-                </div>
-                
-                <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg" onClick={scrollToWidget}>
-                  Book Now
-                </Button>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-     
-
-      {/* Popular Destinations Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <PopularDestinations 
-            title="Popular Outstation Destinations"
-            limit={8}
-            showFares={true}
-          />
-        </div>
-      </section>
-
-      {/* Tempo Traveller Services Section */}
-      <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Need Group Transportation for Outstation Travel?</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              For larger groups traveling outstation, explore our specialized tempo traveller services with comfortable long-distance travel options
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Link to="/tempo-traveller-rental-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
-                  <Car className="h-6 w-6 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Tempo Traveller Rental</h3>
-                <p className="text-sm text-gray-600">Best tempo traveller rental service in Vizag</p>
-              </div>
-            </Link>
-            
-            <Link to="/17-seater-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">17 Seater Tempo Traveller</h3>
-                <p className="text-sm text-gray-600">Blue perfect for large group outstation travel</p>
-              </div>
-            </Link>
-            
-            <Link to="/corporate-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-indigo-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors">
-                  <Shield className="h-6 w-6 text-indigo-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Corporate Transport</h3>
-                <p className="text-sm text-gray-600">Business travel and corporate events</p>
-              </div>
-            </Link>
-            
-            <Link to="/group-travel-tempo-traveller-vizag" className="group">
-              <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <div className="bg-orange-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
-                  <Users className="h-6 w-6 text-orange-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Group Travel</h3>
-                <p className="text-sm text-gray-600">Specialized group travel solutions</p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Service Links Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <ServiceLinks 
+        <div className="rounded-xl border border-gray-100 bg-white p-4">
+          <ServiceLinks
             currentService="/outstation-taxi"
-            title="Explore Our Other Services"
+            title="Other Services"
+            variant="sidebar"
           />
+        </div>
+      </aside>
+    </>
+  );
+
+  const desktopBelowFold = (
+    <div className="hidden space-y-8 lg:block">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 xl:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+            <Headphones className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="text-sm text-slate-700 xl:text-base">
+            <span className="font-semibold text-slate-900">Need help with your booking?</span>{' '}
+            Our team is ready to assist you anytime.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white hover:bg-white"
+            onClick={() => window.open(WHATSAPP_URL, '_blank')}
+          >
+            Chat on WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white text-[var(--brand-primary)] hover:bg-white"
+            onClick={() => window.open('tel:+919966363662')}
+          >
+            <Phone className="mr-2 h-4 w-4" />
+            Call +91 9966363662
+          </Button>
         </div>
       </section>
 
-      </main>
-      <Footer />
-      <MobileNavigation />
-      <script type="application/ld+json">
-        {JSON.stringify(structuredData)}
-      </script>
+      <section className="text-center">
+        <h2 className="text-2xl font-bold text-slate-900 xl:text-3xl">Why book outstation with us</h2>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600 xl:text-base">
+          One-way and round-trip cabs from Vizag across Andhra Pradesh and beyond — transparent rates
+          and professional drivers.
+        </p>
+        <div className="mt-6 grid grid-cols-4 gap-4">
+          {features.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 text-left shadow-[var(--home-card-shadow)]"
+            >
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+                {f.icon}
+              </div>
+              <h3 className="text-base font-bold text-slate-900">{f.title}</h3>
+              <p className="mt-1 text-sm leading-snug text-slate-600">{f.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-5 text-2xl font-bold text-slate-900">Choose Your Ride</h2>
+        {ridesLoading ? (
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-56 animate-pulse rounded-2xl bg-slate-100" />
+            ))}
+          </div>
+        ) : rideOptions.length === 0 ? (
+          <p className="rounded-2xl border border-slate-100 bg-white px-4 py-6 text-sm text-slate-600">
+            Outstation rates are loading from our pricing system. Use Search Cabs above for live fares.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {rideOptions.map((v) => (
+              <div
+                key={v.id}
+                className="rounded-2xl border border-[var(--home-card-border)] bg-white p-4 shadow-[var(--home-card-shadow)]"
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">{v.label}</h3>
+                  <Car className="h-5 w-5 shrink-0 text-[var(--brand-primary)]" aria-hidden />
+                </div>
+                <div className="mb-3 flex h-28 items-center justify-center rounded-xl bg-slate-50 px-2">
+                  <img
+                    src={v.image}
+                    alt={v.label}
+                    className="max-h-24 w-full object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+                <p className="text-xl font-bold text-[var(--brand-primary)]">
+                  {formatInr(v.pricePerKm)}/km
+                </p>
+                <p className="mt-1 text-xs text-slate-500">One-way outstation rate</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-5 xl:gap-6">
+        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+          <h2 className="mb-4 text-xl font-bold text-slate-900">Popular Outstation Routes</h2>
+          <div className="grid grid-cols-2 gap-2.5">
+            {popularRoutes.map((r) => (
+              <Link
+                key={r.to}
+                to={r.href}
+                className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 transition-colors hover:border-blue-200 hover:bg-white"
+              >
+                <p className="text-sm font-semibold text-slate-900">Vizag → {r.to}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{r.distance}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-5">
+            <PopularDestinations />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[var(--home-card-border)] bg-white p-5 shadow-[var(--home-card-shadow)] xl:p-6">
+          <h2 className="mb-4 text-xl font-bold text-slate-900">Other Services</h2>
+          <div className="grid grid-cols-2 gap-2.5">
+            {otherServices.map(({ name, description, href, Icon }) => (
+              <Link
+                key={href}
+                to={href}
+                className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3 hover:border-blue-200 hover:bg-white"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary-light)] text-[var(--brand-primary)]">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">{name}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+              </Link>
+            ))}
+          </div>
+          <div className="mt-4 text-center">
+            <Link
+              to="/fleet"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--brand-primary)] hover:underline"
+            >
+              View All Services
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0B3A7A] via-[var(--brand-primary-dark)] to-[var(--brand-primary)] px-6 py-7 text-white shadow-lg xl:px-8">
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-bold">
+              VTH
+            </span>
+            <p className="max-w-xl text-base font-semibold leading-snug xl:text-lg">
+              Planning a multi-city trip? Tell us your route and we&apos;ll quote a custom package.
+            </p>
+          </div>
+          <Button
+            asChild
+            className="shrink-0 rounded-full bg-white px-5 text-[var(--brand-primary-dark)] hover:bg-blue-50"
+          >
+            <Link to="/contact">
+              Get a Quote
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
     </div>
   );
+
+  return (
+    <ServiceEmbedShell
+      slug="outstation"
+      layout="marketing"
+      helmetExtra={<script type="application/ld+json">{JSON.stringify(structuredData)}</script>}
+      hero={({
+        onStepChange,
+        onTripEditOpenChange,
+        summaryBackHref,
+        embedStretchToShell,
+        embedDesktopCardLayout,
+        embedDesktopCardTitle,
+      }) => (
+        <OutstationHeroWidget
+          onStepChange={onStepChange}
+          onTripEditOpenChange={onTripEditOpenChange}
+          summaryBackHref={summaryBackHref}
+          embedStretchToShell={embedStretchToShell}
+          embedDesktopCardLayout={embedDesktopCardLayout}
+          embedDesktopCardTitle={embedDesktopCardTitle}
+        />
+      )}
+      belowFold={
+        <>
+          <div className="grid grid-cols-1 gap-5 lg:hidden">{mobileBelowFold}</div>
+          {desktopBelowFold}
+        </>
+      }
+    />
+  );
 }
+
+export default OutstationTaxiPage;

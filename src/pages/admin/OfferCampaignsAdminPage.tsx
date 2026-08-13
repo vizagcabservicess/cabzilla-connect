@@ -10,6 +10,10 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, Megaphone, Plus, RefreshCw, Rocket, Ban, Pencil, Pause, Play } from 'lucide-react';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
+import { vehicleAPI } from '@/services/api/vehicleAPI';
+import { tourManagementAPI } from '@/services/api/tourManagementAPI';
+import type { Vehicle } from '@/types/vehicle';
+import type { TourData } from '@/types/api';
 import {
   OFFER_CAMPAIGN_CATEGORIES,
   OFFER_CAMPAIGN_TYPE_LABELS,
@@ -83,6 +87,8 @@ function campaignToForm(c: OfferCampaign): CreateOfferCampaignInput {
     popup_enabled: c.popup_enabled,
     priority: c.priority,
     publish: false,
+    target_vehicle_ids: c.target_vehicle_ids ?? [],
+    target_tour_ids: c.target_tour_ids ?? [],
   };
 }
 
@@ -110,6 +116,8 @@ function emptyForm(): CreateOfferCampaignInput {
     popup_enabled: true,
     priority: 'high',
     publish: true,
+    target_vehicle_ids: [],
+    target_tour_ids: [],
   };
 }
 
@@ -127,6 +135,8 @@ export default function OfferCampaignsAdminPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingCoupon, setEditingCoupon] = useState('');
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [tours, setTours] = useState<TourData[]>([]);
 
   const loadDashboard = useCallback(async () => {
     const data = await offerCampaignAPI.admin.dashboard();
@@ -158,6 +168,8 @@ export default function OfferCampaignsAdminPage() {
 
   useEffect(() => {
     void loadAll();
+    void vehicleAPI.getVehicles().then((res) => setVehicles(res.vehicles || []));
+    void tourManagementAPI.getTours().then(setTours).catch(() => setTours([]));
   }, [loadAll]);
 
   const loadParticipants = async (campaignId: number) => {
@@ -234,6 +246,8 @@ export default function OfferCampaignsAdminPage() {
           max_per_customer: form.max_per_customer,
           popup_enabled: form.popup_enabled,
           priority: form.priority,
+          target_vehicle_ids: form.target_vehicle_ids ?? [],
+          target_tour_ids: form.target_tour_ids ?? [],
         });
         toast.success('Campaign updated');
       } else {
@@ -321,8 +335,7 @@ export default function OfferCampaignsAdminPage() {
               Campaign Management
             </h1>
             <p className="text-xs text-muted-foreground">
-              Airport, Local, Tour, Outstation one-way &amp; round-trip — one active campaign per
-              category.
+              Airport, Local, Tour, Outstation — category-wide or vehicle/tour-specific campaigns.
             </p>
           </div>
           <div className="flex gap-2">
@@ -654,6 +667,74 @@ export default function OfferCampaignsAdminPage() {
                         <option value="low">Low</option>
                       </select>
                     </div>
+                    <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50/40 p-3 sm:col-span-2">
+                      <p className="text-xs font-medium text-violet-900">Limit to specific vehicles / tours</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Leave all unchecked to run on every vehicle or tour in this category. When
+                        selected, the coupon only works for those choices.
+                      </p>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Vehicles (optional)</Label>
+                        <div className="max-h-36 overflow-y-auto rounded-md border bg-white p-2 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          {vehicles.map((v) => {
+                            const vid = (v.vehicle_id || v.id).toLowerCase();
+                            const checked = (form.target_vehicle_ids ?? []).includes(vid);
+                            return (
+                              <label key={vid} className="flex items-center gap-2 text-xs py-1 px-1">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setForm((f) => {
+                                      const current = f.target_vehicle_ids ?? [];
+                                      const next = e.target.checked
+                                        ? [...current, vid]
+                                        : current.filter((id) => id !== vid);
+                                      return { ...f, target_vehicle_ids: next };
+                                    });
+                                  }}
+                                />
+                                <span>{v.name}</span>
+                              </label>
+                            );
+                          })}
+                          {vehicles.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground px-1">No vehicles loaded</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Tour packages (optional)</Label>
+                        <div className="max-h-36 overflow-y-auto rounded-md border bg-white p-2 grid grid-cols-1 gap-1">
+                          {tours.map((t) => {
+                            const tid = String(t.tourId || t.id || '').toLowerCase();
+                            if (!tid) return null;
+                            const checked = (form.target_tour_ids ?? []).includes(tid);
+                            return (
+                              <label key={tid} className="flex items-center gap-2 text-xs py-1 px-1">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setForm((f) => {
+                                      const current = f.target_tour_ids ?? [];
+                                      const next = e.target.checked
+                                        ? [...current, tid]
+                                        : current.filter((id) => id !== tid);
+                                      return { ...f, target_tour_ids: next };
+                                    });
+                                  }}
+                                />
+                                <span>{t.name || t.tourName || tid}</span>
+                              </label>
+                            );
+                          })}
+                          {tours.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground px-1">No tours loaded</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     <div className="space-y-2 rounded-md border p-3 sm:col-span-2">
                       <p className="text-xs font-semibold uppercase text-muted-foreground">
                         Eligible fleet &amp; who absorbs discount
@@ -790,8 +871,11 @@ export default function OfferCampaignsAdminPage() {
                         </p>
                         <p className="text-[11px] text-muted-foreground">
                           {new Date(c.starts_at).toLocaleString()} →{' '}
-                          {new Date(c.ends_at).toLocaleString()} · {c.participating_vehicles ?? 0}{' '}
-                          vehicles · {c.redemption_count} redemptions
+                          {new Date(c.ends_at).toLocaleString()} ·{' '}
+                          {(c.target_vehicle_count ?? 0) > 0 || (c.target_tour_count ?? 0) > 0
+                            ? `${c.target_vehicle_count ?? 0} targeted vehicles · ${c.target_tour_count ?? 0} targeted tours`
+                            : `${c.participating_vehicles ?? 0} vendor vehicles`}{' '}
+                          · {c.redemption_count} redemptions
                         </p>
                         {formatOfferTravelDateRange(c.travel_date_from, c.travel_date_to) && (
                           <p className="text-[11px] text-emerald-800 mt-0.5">

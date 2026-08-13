@@ -35,9 +35,25 @@ interface AirportHeroWidgetProps {
   onSearch?: (searchData: any) => void;
   onStepChange?: (step: number) => void;
   onEditStart?: () => void;
+  onTripEditOpenChange?: (open: boolean) => void;
+  embedStretchToShell?: boolean;
+  summaryBackHref?: string;
+  embedDesktopCardLayout?: boolean;
+  embedDesktopCardTitle?: string;
 }
 
-export function AirportHeroWidget({ initialPickup, initialDrop, onSearch, onStepChange, onEditStart }: AirportHeroWidgetProps) {
+export function AirportHeroWidget({
+  initialPickup,
+  initialDrop,
+  onSearch,
+  onStepChange,
+  onEditStart,
+  onTripEditOpenChange,
+  embedStretchToShell,
+  summaryBackHref,
+  embedDesktopCardLayout,
+  embedDesktopCardTitle,
+}: AirportHeroWidgetProps) {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const pickupFromQuery = searchParams.get('from') || undefined;
@@ -95,14 +111,19 @@ export function AirportHeroWidget({ initialPickup, initialDrop, onSearch, onStep
 
   return (
     <div>
-      <Hero 
+      <Hero
         key={`airport-hero-${effectivePickup || 'none'}-${effectiveDrop || 'none'}`}
-        onSearch={onSearch} 
-        onEditStart={onEditStart} 
+        onSearch={onSearch}
+        onEditStart={onEditStart}
         onStepChange={onStepChange}
-        visibleTabs={['airport']} 
+        onTripEditOpenChange={onTripEditOpenChange}
+        visibleTabs={['airport']}
         hideBackground={true}
         embedCompactLayout
+        embedStretchToShell={embedStretchToShell}
+        summaryBackHref={summaryBackHref}
+        embedDesktopCardLayout={embedDesktopCardLayout}
+        embedDesktopCardTitle={embedDesktopCardTitle}
       />
     </div>
   );

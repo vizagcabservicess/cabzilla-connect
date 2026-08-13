@@ -126,7 +126,7 @@ const Index = () => {
           {!isSearch && (
             <div className="space-y-0 md:space-y-0">
               <DestinationsShowcase />
-              <PopularGroupTours />
+              <PopularGroupTours hideWhenEmpty />
               <FleetShowcase />
               <TempoTravellerShowcase />
               <ServicesShowcase />

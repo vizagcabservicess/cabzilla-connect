@@ -65,9 +65,9 @@ const TempoTravellerRentalPage = () => {
   return (
     <>
       <Helmet>
-        <title>Tempo Traveller Rental in Vizag | 17 Seater AC Mini Bus Hire | Best Rates</title>
-        <meta name="description" content="Book tempo traveller rental in Vizag at ₹35/km. 17 seater AC tempo traveller with professional driver. Perfect for group travel. Call +91 9966363662" />
-        <meta name="keywords" content="tempo traveller rental vizag, 17 seater tempo traveller visakhapatnam, mini bus rental vizag, group travel vizag, tempo traveller hire vizag, corporate transport vizag, AC tempo traveller vizag, outstation tempo traveller vizag, family group travel vizag, wedding tempo traveller vizag, pilgrimage tempo traveller vizag, airport tempo traveller vizag, araku valley tempo traveller, borra caves tempo traveller, lambasingi tempo traveller, tempo traveller booking vizag, tempo traveller rates vizag" />
+        <title>Tempo Traveller in Vizag | Van Rental & Tempo Traveller Hire | Vizag Taxi Hub</title>
+        <meta name="description" content="Hire tempo traveller in Vizag — van rental, 17 seater vehicle, and tempo traveller hire Vizag with AC and driver. Book online. Call +91 9966363662." />
+        <meta name="keywords" content="tempo traveller in vizag, tempo traveller hire vizag, tempo traveller rent in vizag, van rental, van hire, traveller van rental, 17 seater vehicle, tempo traveller rental vizag, mini bus rental vizag" />
         <link rel="canonical" href="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://vizagtaxihub.com/tempo-traveller-rental-vizag" />
@@ -83,8 +83,8 @@ const TempoTravellerRentalPage = () => {
         <div className="container mx-auto px-4 py-8 max-w-7xl pb-16 md:pb-32">
           {/* Hero Section */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl p-8 mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold mb-4">Tempo Traveller Rental in Vizag</h1>
-            <p className="text-xl mb-6">Best 17 seater AC tempo traveller rental service in Visakhapatnam with professional drivers and modern amenities</p>
+            <h1 className="text-2xl md:text-3xl font-bold mb-4">Tempo Traveller in Vizag — Van Rental & Hire</h1>
+            <p className="text-xl mb-6">Book tempo traveller hire Vizag for group travel — 17 seater AC van rental with professional drivers across Visakhapatnam</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button 
                 size="lg" 

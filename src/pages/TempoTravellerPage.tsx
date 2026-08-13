@@ -24,6 +24,10 @@ interface TempoTravellerPageProps {
   url: string;
   color: string;
   icon: React.ReactNode;
+  /** Search-aligned H1; defaults to "Perfect Group Travel with {title}". */
+  headline?: string;
+  /** Hero intro under H1; defaults to tempo traveller group-travel copy. */
+  subtitle?: string;
 }
 
 const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
@@ -33,7 +37,9 @@ const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
   keywords,
   url,
   color,
-  icon
+  icon,
+  headline,
+  subtitle,
 }) => {
   const [tours, setTours] = useState<TourInfo[]>([]);
   const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>([]);
@@ -235,10 +241,11 @@ const TempoTravellerPage: React.FC<TempoTravellerPageProps> = ({
                     ⚡ INSTANT BOOKING • 🔥 LIMITED TIME OFFER
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold mb-6 leading-tight text-gray-900">
-                    Perfect Group Travel with {title}
+                    {headline || `Perfect Group Travel with ${title}`}
                   </h1>
                   <p className="text-xl mb-8 text-gray-600 leading-relaxed">
-                    Experience comfortable and reliable tempo traveller service for your group travel needs. Professional drivers, well-maintained vehicles, and exceptional service.
+                    {subtitle ||
+                      'Experience comfortable and reliable tempo traveller service for your group travel needs. Professional drivers, well-maintained vehicles, and exceptional service.'}
                   </p>
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
                     <p className="text-yellow-800 font-semibold">🎉 SPECIAL OFFER: Book now and get 5% discount on your first booking!</p>

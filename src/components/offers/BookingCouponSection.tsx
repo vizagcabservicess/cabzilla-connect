@@ -8,6 +8,7 @@ import {
   isOfferTravelDateEligible,
   toOfferTravelDateYmd,
   formatOfferTravelDateRange,
+  normalizeOfferTargetId,
 } from '@/types/offerCampaign';
 import { computeOfferPricing } from '@/components/offers/OfferCampaignPopup';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
@@ -25,6 +26,8 @@ export function BookingCouponSection({
   onApply,
   onRemove,
   travelDate,
+  vehicleId,
+  tourId,
   className = '',
 }: {
   category: string;
@@ -36,6 +39,10 @@ export function BookingCouponSection({
   onRemove: () => void;
   /** Trip pickup date — required when campaign has a travel window. */
   travelDate?: Date | string | null;
+  /** Selected cab slug/id — required when campaign is vehicle-specific. */
+  vehicleId?: string | null;
+  /** Selected tour id — required when campaign is tour-specific. */
+  tourId?: string | null;
   className?: string;
 }) {
   const [manualCode, setManualCode] = useState('');
@@ -45,6 +52,8 @@ export function BookingCouponSection({
   const eligible = isOfferCampaignCategory(category);
   const fare = Math.max(0, websiteFare);
   const travelYmd = toOfferTravelDateYmd(travelDate ?? null);
+  const vehicleTargetId = normalizeOfferTargetId(vehicleId);
+  const tourTargetId = normalizeOfferTargetId(tourId);
 
   const suggestedPricing = useMemo(() => {
     if (!suggestedCampaign || fare <= 0) return null;
@@ -69,13 +78,21 @@ export function BookingCouponSection({
     try {
       let campaign = suggestedCampaign;
       if (!campaign || campaign.coupon_code.toUpperCase() !== code) {
-        const result = await offerCampaignAPI.public.getActiveOffer(category, fare, travelYmd);
+        const result = await offerCampaignAPI.public.getActiveOffer(
+          category,
+          fare,
+          travelYmd,
+          vehicleTargetId,
+          tourTargetId
+        );
         campaign = result.campaign;
         if (!campaign && category === 'outstation_one_way') {
           const legacy = await offerCampaignAPI.public.getActiveOffer(
             'outstation',
             fare,
-            travelYmd
+            travelYmd,
+            vehicleTargetId,
+            tourTargetId
           );
           campaign = legacy.campaign;
         }

@@ -192,13 +192,17 @@ export const offerCampaignAPI = {
     async getActiveOffer(
       category: OfferCampaignCategory | string,
       websiteFare?: number,
-      travelDate?: string | null
+      travelDate?: string | null,
+      vehicleId?: string | null,
+      tourId?: string | null
     ): Promise<{ campaign: OfferCampaignPublic | null; grace_window_minutes: number }> {
       try {
         return await postPublic('getActiveOffer', {
           category,
           website_fare: websiteFare,
           travel_date: travelDate || undefined,
+          vehicle_id: vehicleId || undefined,
+          tour_id: tourId || undefined,
         });
       } catch (e) {
         throw new Error(apiErrorMessage(e, 'Failed to load offer'));
@@ -208,13 +212,17 @@ export const offerCampaignAPI = {
     async previewFare(
       category: OfferCampaignCategory | string,
       websiteFare: number,
-      travelDate?: string | null
+      travelDate?: string | null,
+      vehicleId?: string | null,
+      tourId?: string | null
     ): Promise<{ campaign: OfferCampaignPublic | null; pricing: OfferCampaignPricing }> {
       try {
         return await postPublic('previewFare', {
           category,
           website_fare: websiteFare,
           travel_date: travelDate || undefined,
+          vehicle_id: vehicleId || undefined,
+          tour_id: tourId || undefined,
         });
       } catch (e) {
         throw new Error(apiErrorMessage(e, 'Failed to preview fare'));
@@ -227,6 +235,8 @@ export const offerCampaignAPI = {
       website_fare: number;
       booking_id?: string;
       travel_date?: string | null;
+      vehicle_id?: string | null;
+      tour_id?: string | null;
     }): Promise<ApplyOfferCouponResult> {
       try {
         return await postPublic<ApplyOfferCouponResult>('applyCoupon', { ...input });

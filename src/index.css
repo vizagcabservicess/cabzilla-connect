@@ -429,7 +429,25 @@ z-index: 9999 !important;
 }
 
 [data-radix-select-content] {
-z-index: 9999 !important;
+  z-index: 9999 !important;
+  box-sizing: border-box;
+}
+
+/* Keep portaled Package/Tour (and other) selects inside the viewport on narrow screens */
+@media (max-width: 767px) {
+  [data-radix-select-content] {
+    max-width: min(100vw - 1.5rem, var(--radix-select-trigger-width, calc(100vw - 1.5rem))) !important;
+    width: min(100%, var(--radix-select-trigger-width, 100%)) !important;
+    overflow-x: hidden !important;
+  }
+  [data-radix-select-content] [data-radix-select-viewport] {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  [data-radix-select-content] [role='option'] {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Radix injects scrollbar-hiding rules on Select viewport; restore vertical scrollbar for long lists. */
@@ -1898,17 +1916,23 @@ min-height: 100vh;
 
 .axis-trip-toggle {
   display: flex;
+  width: 100%;
   border-radius: 9999px;
   border: 1px solid rgb(229 231 235);
   background: rgb(249 250 251);
   padding: 3px;
+  gap: 2px;
 }
 
 .axis-trip-toggle-btn {
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 9999px;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 

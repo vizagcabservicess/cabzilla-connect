@@ -106,7 +106,9 @@ export interface GroupTourBooking {
 export const groupTourAPI = {
   getRoutes: async (): Promise<RouteOption[]> => {
     const res = await api.get(fullUrl('/api/group-tour/list-routes'));
-    if (!res.data?.success) return [];
+    if (!res.data?.success) {
+      throw new Error(res.data?.error || 'Failed to load group tour routes');
+    }
     return res.data.routes || [];
   },
 

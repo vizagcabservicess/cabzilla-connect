@@ -331,7 +331,8 @@ function Root() {
         </Suspense>
       </RedirectHandler>
       
-      {/* Global WhatsApp Floating Button - Desktop Only */}
+      {/* Global WhatsApp Floating Button - Desktop Only (public pages) */}
+      {!location.pathname.startsWith('/admin') && (
       <div className="hidden md:block fixed right-6 bottom-6 z-50">
         <Button
           onClick={handleWhatsApp}
@@ -342,6 +343,7 @@ function Root() {
           WhatsApp
         </Button>
       </div>
+      )}
 
       {/* VTH AI travel assistant — bottom left */}
       {!location.pathname.startsWith('/admin') && (

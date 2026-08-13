@@ -70,6 +70,10 @@ export interface OfferCampaign {
   status: OfferCampaignStatus;
   redemption_count: number;
   participating_vehicles?: number;
+  target_vehicle_ids?: string[];
+  target_tour_ids?: string[];
+  target_vehicle_count?: number;
+  target_tour_count?: number;
   bookings?: number;
   revenue?: number;
   created_at?: string | null;
@@ -171,6 +175,10 @@ export interface CreateOfferCampaignInput {
   popup_enabled?: boolean;
   priority?: OfferCampaignPriority;
   publish?: boolean;
+  /** Limit offer to these vehicle slugs/ids. Empty = all vehicles in category. */
+  target_vehicle_ids?: string[];
+  /** Limit offer to these tour ids. Empty = all tours in category. */
+  target_tour_ids?: string[];
 }
 
 /** Fields accepted by admin updateCampaign (category & coupon are immutable). */
@@ -192,6 +200,8 @@ export interface UpdateOfferCampaignInput {
   max_per_customer?: number;
   popup_enabled?: boolean;
   priority?: OfferCampaignPriority;
+  target_vehicle_ids?: string[];
+  target_tour_ids?: string[];
 }
 
 export interface ApplyOfferCouponResult {
@@ -295,4 +305,12 @@ export function isOfferTravelDateEligible(
   if (from && travelYmd < from) return false;
   if (to && travelYmd > to) return false;
   return true;
+}
+
+/** Normalize vehicle/tour id for campaign target matching. */
+export function normalizeOfferTargetId(raw?: string | null): string | null {
+  if (!raw) return null;
+  const id = raw.trim().toLowerCase();
+  if (!id) return null;
+  return id.startsWith('tour_') ? id.slice(5) : id;
 }
