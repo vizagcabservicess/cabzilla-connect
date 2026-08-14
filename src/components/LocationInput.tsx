@@ -4,8 +4,10 @@ import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { ArrowLeft, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
-import type { Location } from '@/lib/locationData';
+import { locationMatchesSearchQuery, type Location } from '@/lib/locationData';
 import type { TripType } from '@/lib/tripTypes';
+import { isVizagAirportLocation } from '@/lib/inferTripService';
+import { isRestrictedAirportDrop } from '@/lib/restrictedAirportRoutes';
 import { cn } from '@/lib/utils';
 
 export type LocationInputHandle = {
@@ -53,10 +55,38 @@ function isWithinVizagRange(lat: number, lng: number, maxDistance: number = MAX_
   return getDistanceFromLatLng(VIZAG_LAT, VIZAG_LNG, lat, lng) <= maxDistance;
 }
 
+function isVizagAirportPlace(args: {
+  name?: string;
+  address?: string;
+  id?: string;
+  lat?: number;
+  lng?: number;
+}): boolean {
+  return isVizagAirportLocation({
+    id: args.id || '',
+    name: args.name || '',
+    address: args.address || '',
+    city: '',
+    state: '',
+    lat: args.lat ?? 0,
+    lng: args.lng ?? 0,
+    type: `${args.name || ''} ${args.address || ''}`.toLowerCase().includes('airport')
+      ? 'airport'
+      : 'other',
+    popularityScore: 0,
+  });
+}
+
 /** Google attaches one `.pac-container` per Autocomplete — hide stale panels so only the focused field shows a list. */
+function restorePacContainerVisibility(el: HTMLElement): void {
+  el.style.removeProperty('visibility');
+  el.style.removeProperty('pointer-events');
+}
+
 function hideAllPacContainers(): void {
   if (typeof document === 'undefined') return;
   document.querySelectorAll<HTMLElement>('.pac-container').forEach((el) => {
+    restorePacContainerVisibility(el);
     el.style.display = 'none';
   });
 }
@@ -84,6 +114,10 @@ interface LocationInputProps {
   hideLeadingIcon?: boolean;
   /** When airport drop is outside Vizag radius, parent should switch trip type to outstation. */
   onRequestOutstationSwitch?: () => void;
+  /** Hide curated Vizianagaram / Srikakulam / Odisha drops when pickup is the airport. */
+  hideRestrictedAirportDrops?: boolean;
+  /** Airport tab endpoint: Vizag city airport or Alluri Sitarama Raju (Bhogapuram). */
+  airportOnly?: boolean;
 }
 
 export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>(function LocationInput({
@@ -105,9 +139,14 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   variant = 'mobile',
   hideLeadingIcon = false,
   onRequestOutstationSwitch,
+  hideRestrictedAirportDrops = false,
+  airportOnly = false,
 }, ref) {
-  const enforceVizag35Km = isPickupLocation || restrictToVizagRadius;
-  const selectFromListMessage = enforceVizag35Km
+  const enforceVizag35Km =
+    isPickupLocation || restrictToVizagRadius || tripType === 'local';
+  const selectFromListMessage = airportOnly
+    ? 'Select Vizag International Airport or Alluri Sitarama Raju International Airport'
+    : enforceVizag35Km
     ? 'Select a valid location from suggestions (within 35 KM radius).'
     : SELECT_FROM_LIST_MESSAGE_DEFAULT;
 
@@ -208,19 +247,41 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   }, [value, location]); // Removed label dependency to reduce re-renders
   
      // Filter suggestions based on input value
-   useEffect(() => {
+     useEffect(() => {
+     if (airportOnly && suggestions.length > 0) {
+       const airports = suggestions.filter((suggestion) => isVizagAirportLocation(suggestion));
+       const q = inputValue.trim();
+       const matched = q
+         ? airports.filter((suggestion) => locationMatchesSearchQuery(suggestion, q))
+         : airports;
+       setFilteredSuggestions(matched.length > 0 ? matched : airports);
+       return;
+     }
+
      if (inputValue && inputValue.length >= 2 && suggestions.length > 0) {
        const isAirportTransfer = tripType === 'airport';
        const isTourTrip = tripType === 'tour';
        
        // First filter by input match (faster than distance calculation)
-       let filtered = suggestions.filter(suggestion => {
-         return (suggestion.name || "").toLowerCase().includes(inputValue.toLowerCase());
-       });
+       let filtered = suggestions.filter((suggestion) =>
+         locationMatchesSearchQuery(suggestion, inputValue)
+       );
+
+       if (airportOnly) {
+         filtered = filtered.filter((suggestion) => isVizagAirportLocation(suggestion));
+         if (filtered.length === 0) {
+           filtered = suggestions.filter((suggestion) => isVizagAirportLocation(suggestion));
+         }
+       }
+
+       if (hideRestrictedAirportDrops) {
+         filtered = filtered.filter((suggestion) => !isRestrictedAirportDrop(suggestion));
+       }
        
        // Then apply distance filtering only if needed
        if (enforceVizag35Km || isAirportTransfer || isTourTrip) {
          filtered = filtered.filter(suggestion => {
+           if (isVizagAirportLocation(suggestion)) return true;
            return isWithinVizagRange(suggestion.lat, suggestion.lng);
          });
        }
@@ -229,7 +290,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      } else {
        setFilteredSuggestions([]);
      }
-   }, [inputValue, suggestions, enforceVizag35Km, tripType]);
+   }, [inputValue, suggestions, enforceVizag35Km, tripType, hideRestrictedAirportDrops, isPickupLocation, airportOnly]);
 
   useEffect(() => {
     if (!isLoaded || !google) return;
@@ -243,7 +304,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     if (!isLoaded || !google || !autocompleteServiceRef.current) return;
 
     const q = inputValue.trim();
-    if (q.length < 2 || !isFocused) {
+    if (airportOnly || readOnly || q.length < 2 || !isFocused) {
       setPredictionsLoading(false);
       setNoGooglePredictions(false);
       return;
@@ -292,7 +353,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     return () => {
       window.clearTimeout(timer);
     };
-  }, [inputValue, isFocused, isLoaded, google, enforceVizag35Km, tripType]);
+  }, [inputValue, isFocused, isLoaded, google, enforceVizag35Km, tripType, isPickupLocation, airportOnly, readOnly]);
 
   // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row) or fullscreen sheet.
   useEffect(() => {
@@ -304,6 +365,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       const sheetMode = fullscreenMobileSearchSheet && mobileSearchSheetOpen;
       const anchor = sheetMode ? sheetPacBottomRef.current : pacAnchorRef.current;
       if (!anchor) return;
+      document.querySelectorAll<HTMLElement>('.pac-container').forEach(restorePacContainerVisibility);
       const candidates = Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).filter((el) => {
         const st = window.getComputedStyle(el);
         return st.display !== 'none' && st.visibility !== 'hidden' && el.getBoundingClientRect().height > 0;
@@ -496,13 +558,19 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     return () => window.removeEventListener('keydown', onKey);
   }, [mobileSearchSheetOpen]);
 
+  useEffect(() => {
+    if (airportOnly || readOnly) {
+      hideAllPacContainers();
+    }
+  }, [airportOnly, readOnly]);
+
   // Initialize Google Maps Autocomplete when ready (re-attaches when mobile sheet opens / input remounts).
   useLayoutEffect(() => {
     if (!isLoaded || !google) return;
 
     const collapsedInfieldSheet =
       fullscreenMobileSearchSheet && !mobileSearchSheetOpen;
-    if (collapsedInfieldSheet) {
+    if (collapsedInfieldSheet || readOnly || disabled || airportOnly) {
       return undefined;
     }
 
@@ -554,8 +622,15 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
           const isAirportTransfer = tripType === 'airport';
           const isTourTrip = tripType === 'tour';
+          const placeIsVizagAirport = isVizagAirportPlace({
+            name: place.name,
+            address: place.formatted_address,
+            id: place.place_id,
+            lat,
+            lng,
+          });
 
-          if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 35)) {
+          if (isTourTrip && isPickupLocation && !isWithinVizagRange(lat, lng, 35) && !placeIsVizagAirport) {
             toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
             setInputValue('');
             if (onChangeRef.current) onChangeRef.current('');
@@ -563,7 +638,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             return;
           }
 
-          if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(lat, lng)) {
+          if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(lat, lng) && !placeIsVizagAirport) {
             toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
             setInputValue('');
             if (onChangeRef.current) onChangeRef.current('');
@@ -571,7 +646,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             return;
           }
 
-          if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(lat, lng)) {
+          if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(lat, lng) && !placeIsVizagAirport) {
             toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
             onRequestOutstationSwitchRef.current?.();
           }
@@ -605,6 +680,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         google.maps.event.clearInstanceListeners(ac);
       }
       autocompleteRef.current = null;
+      hideAllPacContainers();
     };
   }, [
     isLoaded,
@@ -614,6 +690,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     tripType,
     mobileSearchSheetOpen,
     fullscreenMobileSearchSheet,
+    airportOnly,
+    readOnly,
+    disabled,
   ]);
 
   const closeMobileSearchSheet = () => {
@@ -646,18 +725,18 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      
      // Validate location before accepting it
      // For tour trips, pickup location must be within 35km (matches ToursPage)
-     if (isTourTrip && isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng, 35)) {
+     if (isTourTrip && isPickupLocation && !isWithinVizagRange(suggestion.lat, suggestion.lng, 35) && !isVizagAirportLocation(suggestion)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
        return;
      }
      
-     // Pickup / carpool: must be within 35km of Vizag
-     if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
+     // Pickup / carpool: must be within 35km of Vizag (airport pickup is allowed beyond 35 km)
+     if (enforceVizag35Km && !isTourTrip && !isWithinVizagRange(suggestion.lat, suggestion.lng) && !isVizagAirportLocation(suggestion)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
        return;
      }
      
-     if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(suggestion.lat, suggestion.lng)) {
+     if (isAirportTransfer && !enforceVizag35Km && !isWithinVizagRange(suggestion.lat, suggestion.lng) && !isVizagAirportLocation(suggestion)) {
        toast("Selected location is outside the 35km radius from Visakhapatnam. We'll automatically switch to Outstation for this trip.");
        onRequestOutstationSwitchRef.current?.();
      }
@@ -688,6 +767,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
    const getSubtitleText = () => {
      const isAirportTransfer = tripType === 'airport';
 
+     if (airportOnly) {
+       return '';
+     }
      if (enforceVizag35Km) {
        return 'Select a valid location from suggestions (within 35 KM radius).';
      } else if (isAirportTransfer) {
@@ -883,6 +965,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           }}
           className={cn(
             "pr-10 ios-search-input",
+            readOnly && "cursor-default bg-transparent",
             isDesktopVariant || (isAppVariant && !isInfieldVariant)
               ? cn(
                   "border-0 bg-transparent font-semibold text-gray-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-gray-500",
@@ -972,7 +1055,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     typeof document !== 'undefined'
       ? createPortal(
         <div
-          className="location-search-sheet fixed inset-0 z-[10046] flex w-full max-w-[100vw] flex-col overflow-x-clip bg-white"
+          className="location-search-sheet fixed inset-0 z-[10070] flex w-full max-w-[100vw] flex-col overflow-x-clip bg-white"
           role="dialog"
           aria-modal="true"
           aria-label={label ? `Search ${label}` : 'Search location'}

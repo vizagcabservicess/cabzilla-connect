@@ -292,7 +292,7 @@ export function getHeaderSearchSuggestions(rawQuery: string, limit = 6): HeaderS
     add({
       id: 'airport-transfer',
       label: 'Airport transfer',
-      subtitle: 'Visakhapatnam International Airport',
+      subtitle: 'Vizag International Airport or Alluri Sitarama Raju International Airport',
       action: resolveHeaderSearch('airport transfer')!,
     });
   }

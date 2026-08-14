@@ -322,7 +322,7 @@ export function PassengerInfoScreen({ route, navigation }: Props) {
                     <MaterialCommunityIcons name="whatsapp" size={20} color="#fff" />
                     <Text style={styles.bookingDetailsWhatsAppText}>Share summary on WhatsApp</Text>
                   </TouchableOpacity>
-                  <Text style={styles.bookingDetailsDisclaimer}>Parking and tolls fees are extra.</Text>
+                  <Text style={styles.bookingDetailsDisclaimer}>Parking and tolls fees are extra. Kilometers are calculated from garage to garage.</Text>
                   <View style={styles.bookingDetailsInclusions}>
                     <View style={styles.bookingDetailsInclusionsHeader}>
                       <Text style={styles.bookingDetailsInclusionsTitle}>Inclusions/Exclusions</Text>

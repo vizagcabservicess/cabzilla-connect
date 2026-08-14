@@ -86,7 +86,7 @@ export function LocationInput({
         });
         const bounds = circle.getBounds() as google.maps.LatLngBounds;
         options.bounds = bounds;
-        options.strictBounds = isPickupLocation;
+        options.strictBounds = isPickupLocation || tripType === 'local';
       }
 
       const inputEl = inputRef.current;
@@ -115,7 +115,7 @@ export function LocationInput({
           isInVizag: isWithinVizagRange(lat, lng),
         };
 
-        if (isPickupLocation) {
+        if (isPickupLocation || tripType === 'local') {
           const validation = validatePickupLocation(loc, tripType);
           if (!validation.valid) {
             onLocationChange(null);

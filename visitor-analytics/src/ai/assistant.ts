@@ -7,6 +7,7 @@ import {
   extractCalendarDays,
   extractRoutePlaces,
   formatRouteQuoteReply,
+  isRestrictedAirportRouteQuote,
   isTourItineraryIntent,
   isTourPackageIntent,
   quoteOutstationRoute,
@@ -1131,6 +1132,11 @@ async function tryFareEngineReply(
         calendarDays: isRoundTrip ? days || 2 : undefined,
         pricingModel: 'auto',
       });
+      if (isRestrictedAirportRouteQuote(quote)) {
+        return {
+          reply: formatRouteQuoteReply(quote),
+        };
+      }
       if (quote.quotes.length) {
         return {
           reply: formatRouteQuoteReply(quote),
@@ -1256,28 +1262,30 @@ export async function buildBookingCheckoutUrl(lead: AiLeadState): Promise<string
         to: lead.dropoff,
         tripMode: 'one-way',
       });
-      distanceKm = quote.distanceKm || distanceKm;
-      if (/airport|vtz/i.test(hay) || quote.pricingModel === 'airport') tripType = 'airport';
-      const vehicleNeedle = vehicleForForm.toLowerCase();
-      const hit =
-        quote.quotes.find((q) => {
-          const label = q.label.toLowerCase();
-          const id = q.vehicleId.toLowerCase();
-          if (vehicleNeedle.includes('innova') || vehicleNeedle.includes('crysta')) {
-            return label.includes('innova') || id.includes('innova');
-          }
-          if (vehicleNeedle.includes('ertiga')) return label.includes('ertiga') || id.includes('ertiga');
-          if (vehicleNeedle.includes('tempo')) return label.includes('tempo') || id.includes('tempo');
-          if (vehicleNeedle.includes('urbania') || vehicleNeedle.includes('bus')) {
-            return label.includes('urbania') || id.includes('bus');
-          }
-          if (vehicleNeedle.includes('sedan') || vehicleNeedle.includes('dzire')) {
-            return label.includes('sedan') || label.includes('dzire') || id.includes('sedan');
-          }
-          return label.includes(vehicleNeedle) || vehicleNeedle.includes(label.split(' ')[0]!);
-        }) || quote.quotes[0];
-      if (hit) fare = hit.total;
-      if (!fare && quote.quotes[0]) fare = quote.quotes[0].total;
+      if (!isRestrictedAirportRouteQuote(quote)) {
+        distanceKm = quote.distanceKm || distanceKm;
+        if (/airport|vtz/i.test(hay) || quote.pricingModel === 'airport') tripType = 'airport';
+        const vehicleNeedle = vehicleForForm.toLowerCase();
+        const hit =
+          quote.quotes.find((q) => {
+            const label = q.label.toLowerCase();
+            const id = q.vehicleId.toLowerCase();
+            if (vehicleNeedle.includes('innova') || vehicleNeedle.includes('crysta')) {
+              return label.includes('innova') || id.includes('innova');
+            }
+            if (vehicleNeedle.includes('ertiga')) return label.includes('ertiga') || id.includes('ertiga');
+            if (vehicleNeedle.includes('tempo')) return label.includes('tempo') || id.includes('tempo');
+            if (vehicleNeedle.includes('urbania') || vehicleNeedle.includes('bus')) {
+              return label.includes('urbania') || id.includes('bus');
+            }
+            if (vehicleNeedle.includes('sedan') || vehicleNeedle.includes('dzire')) {
+              return label.includes('sedan') || label.includes('dzire') || id.includes('sedan');
+            }
+            return label.includes(vehicleNeedle) || vehicleNeedle.includes(label.split(' ')[0]!);
+          }) || quote.quotes[0];
+        if (hit) fare = hit.total;
+        if (!fare && quote.quotes[0]) fare = quote.quotes[0].total;
+      }
     } catch (err) {
       console.error('[ai.assistant] checkout fare lookup failed', err);
     }
@@ -1414,6 +1422,9 @@ async function fallbackReply(message: string, lead: AiLeadState): Promise<string
         tripMode: /round\s*-?\s*trip|return/i.test(message) ? 'round-trip' : 'one-way',
         calendarDays: extractCalendarDays(message) || undefined,
       });
+      if (isRestrictedAirportRouteQuote(quote)) {
+        return formatRouteQuoteReply(quote);
+      }
       if (quote.quotes.length) {
         lead.meta = {
           ...(lead.meta || {}),

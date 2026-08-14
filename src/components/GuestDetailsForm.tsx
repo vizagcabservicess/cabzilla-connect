@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { formatPrice } from '@/lib/cabData';
 import { motion } from 'framer-motion';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { countryCodes, CountryCode } from '@/lib/countryCodes';
+import { uniqueCountryCodes, type CountryCode } from '@/lib/countryCodes';
 
 interface GuestDetailsFormProps {
   onSubmit: (data: GuestDetails) => void;
@@ -37,6 +37,97 @@ export interface GuestDetails {
   companyEmail?: string;
 }
 
+function highlightSearchTerm(text: string, searchTerm: string) {
+  if (!searchTerm) return text;
+  const regex = new RegExp(`(${searchTerm})`, 'gi');
+  return text.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
+}
+
+const CountryCodeSelect = React.memo(function CountryCodeSelect({
+  selectedCountry,
+  onCountryChange,
+}: {
+  selectedCountry: CountryCode;
+  onCountryChange: (country: CountryCode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [countrySearchTerm, setCountrySearchTerm] = useState('');
+
+  const filteredCountries = uniqueCountryCodes.filter(
+    (country) =>
+      country.name.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
+      country.code.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
+      country.dialCode.includes(countrySearchTerm)
+  );
+
+  return (
+    <Select
+      modal={false}
+      open={open}
+      onOpenChange={setOpen}
+      value={selectedCountry?.code || 'IN'}
+      onValueChange={(value) => {
+        const country = uniqueCountryCodes.find((c) => c.code === value);
+        if (country) {
+          onCountryChange(country);
+          setCountrySearchTerm('');
+        }
+      }}
+    >
+      <SelectTrigger className="w-full px-2 sm:px-3 py-2 h-10 sm:h-11 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        <SelectValue>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <span className="text-sm sm:text-base">{selectedCountry?.flag || '🇮🇳'}</span>
+            <span className="text-xs sm:text-sm">{selectedCountry?.dialCode || '+91'}</span>
+          </div>
+        </SelectValue>
+      </SelectTrigger>
+      {open ? (
+      <SelectContent className="max-h-60">
+        <div className="p-2 border-b">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search countries..."
+              value={countrySearchTerm}
+              onChange={(e) => setCountrySearchTerm(e.target.value)}
+              className="h-8 text-sm pl-8"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+
+        <div className="max-h-48 overflow-y-auto">
+          {filteredCountries.length > 0 ? (
+            filteredCountries.map((country) => (
+              <SelectItem key={country.code} value={country.code}>
+                <div className="flex items-center gap-2">
+                  <span>{country.flag}</span>
+                  <span
+                    className="text-sm"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightSearchTerm(country.dialCode, countrySearchTerm),
+                    }}
+                  />
+                  <span
+                    className="text-xs text-gray-500"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightSearchTerm(country.name, countrySearchTerm),
+                    }}
+                  />
+                </div>
+              </SelectItem>
+            ))
+          ) : (
+            <div className="p-2 text-sm text-gray-500 text-center">No countries found</div>
+          )}
+        </div>
+      </SelectContent>
+      ) : null}
+    </Select>
+  );
+});
+
 export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({ 
   onSubmit, 
   onBack, 
@@ -44,18 +135,16 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   isLoading = false,
   paymentEnabled = true
 }) => {
-  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(countryCodes[0]); // Default to India
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(uniqueCountryCodes[0]);
   
   // Ensure selectedCountry is always valid
   useEffect(() => {
     if (!selectedCountry) {
-      setSelectedCountry(countryCodes[0]);
+      setSelectedCountry(uniqueCountryCodes[0]);
     }
   }, [selectedCountry]);
-  const [countrySearchTerm, setCountrySearchTerm] = useState('');
-  
-  const { register, handleSubmit, formState: { errors, isValid }, watch, setValue, trigger } = useForm<GuestDetails>({
-    mode: 'onChange',
+  const { register, handleSubmit, formState: { errors }, watch, setValue, trigger } = useForm<GuestDetails>({
+    mode: 'onBlur',
     defaultValues: {
       name: sessionStorage.getItem('guestName') || '',
       phone: sessionStorage.getItem('guestPhone') || '',
@@ -72,26 +161,24 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
     }
   });
   
-  const watchedValues = watch();
-  
-  // Filter countries based on search term
-  const filteredCountries = countryCodes.filter(country => 
-    country.name.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
-    country.code.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
-    country.dialCode.includes(countrySearchTerm)
-  );
+  const paymentMode = watch('paymentMode');
+  const gstEnabled = watch('gstEnabled');
 
-  // Function to highlight search term in text
-  const highlightSearchTerm = (text: string, searchTerm: string) => {
-    if (!searchTerm) return text;
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
-    return text.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
-  };
+  const handleCountryChange = useCallback(
+    (country: CountryCode) => {
+      setSelectedCountry(country);
+      setValue('countryCode', country.dialCode);
+      setTimeout(() => {
+        trigger('phone');
+      }, 100);
+    },
+    [setValue, trigger]
+  );
   
   // Initialize selected country from session storage or default
   useEffect(() => {
     const savedCountryCode = sessionStorage.getItem('countryCode') || '+91';
-    const country = countryCodes.find(c => c.dialCode === savedCountryCode);
+    const country = uniqueCountryCodes.find(c => c.dialCode === savedCountryCode);
     if (country) {
       setSelectedCountry(country);
     }
@@ -116,20 +203,8 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
         message: `Please enter a valid ${selectedCountry.maxLength} digit phone number`
       }
     });
-    
-    // Trigger validation if there's already a phone number entered
-    if (watchedValues.phone) {
-      trigger('phone');
-    }
-  }, [selectedCountry, register, trigger, watchedValues.phone]);
+  }, [selectedCountry, register]);
 
-  // Clear search term when component unmounts or when country changes
-  useEffect(() => {
-    return () => {
-      setCountrySearchTerm('');
-    };
-  }, []);
-  
   const onFormSubmit = (data: GuestDetails) => {
     // countryCode is not a registered input — always use the dropdown value so API gets correct dial code (e.g. +1 vs +91)
     const countryCode = selectedCountry.dialCode;
@@ -161,6 +236,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="mx-auto"
+      data-va-ignore
     >
       <Card className="shadow-lg border-0 bg-white">
         <CardHeader className="pb-4 sm:pb-6 px-4 sm:px-6 pt-4 sm:pt-6">
@@ -186,7 +262,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 id="name"
                 className={`w-full px-3 py-2 h-10 sm:h-11 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                   errors.name ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
-                } ${watchedValues.name ? 'border-green-300' : ''}`}
+                }`}
                 placeholder="Enter your full name"
                 {...register('name', { required: 'Name is required' })}
               />
@@ -210,74 +286,10 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {/* Country Code Selector */}
                 <div>
-                  <Select
-                    value={selectedCountry?.code || 'IN'}
-                    onValueChange={(value) => {
-                      const country = countryCodes.find(c => c.code === value);
-                      if (country) {
-                        setSelectedCountry(country);
-                        setValue('countryCode', country.dialCode);
-                        setCountrySearchTerm(''); // Clear search term when country is selected
-                        // Trigger phone validation with new country rules
-                        setTimeout(() => {
-                          trigger('phone');
-                        }, 100);
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full px-2 sm:px-3 py-2 h-10 sm:h-11 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <SelectValue>
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="text-sm sm:text-base">{selectedCountry?.flag || '🇮🇳'}</span>
-                          <span className="text-xs sm:text-sm">{selectedCountry?.dialCode || '+91'}</span>
-                        </div>
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {/* Search Input */}
-                      <div className="p-2 border-b">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          <Input
-                            placeholder="Search countries..."
-                            value={countrySearchTerm}
-                            onChange={(e) => setCountrySearchTerm(e.target.value)}
-                            className="h-8 text-sm pl-8"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      </div>
-                      
-                      {/* Country List */}
-                      <div className="max-h-48 overflow-y-auto">
-                        {filteredCountries.length > 0 ? (
-                          filteredCountries.map((country) => (
-                            <SelectItem key={country.code} value={country.code}>
-                              <div className="flex items-center gap-2">
-                                <span>{country.flag}</span>
-                                <span 
-                                  className="text-sm"
-                                  dangerouslySetInnerHTML={{ 
-                                    __html: highlightSearchTerm(country.dialCode, countrySearchTerm) 
-                                  }}
-                                />
-                                <span 
-                                  className="text-xs text-gray-500"
-                                  dangerouslySetInnerHTML={{ 
-                                    __html: highlightSearchTerm(country.name, countrySearchTerm) 
-                                  }}
-                                />
-                              </div>
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="p-2 text-sm text-gray-500 text-center">
-                            No countries found
-                          </div>
-                        )}
-                      </div>
-                    </SelectContent>
-                  </Select>
+                  <CountryCodeSelect
+                    selectedCountry={selectedCountry}
+                    onCountryChange={handleCountryChange}
+                  />
                 </div>
                 
                 {/* Phone Number Input */}
@@ -286,7 +298,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                     id="phone"
                     className={`w-full px-3 py-2 h-10 sm:h-11 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       errors.phone ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
-                    } ${watchedValues.phone ? 'border-green-300' : ''}`}
+                    }`}
                     placeholder={`Enter ${selectedCountry.maxLength} digit number`}
                     type="tel"
                     inputMode="tel"
@@ -317,10 +329,14 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 id="email"
                 className={`w-full px-3 py-2 h-10 sm:h-11 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                   errors.email ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
-                } ${watchedValues.email ? 'border-green-300' : ''}`}
+                }`}
                 placeholder="Enter your email address"
                 type="email"
                 inputMode="email"
+                autoComplete="email"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 {...register('email', {
                   required: 'Email is required',
                   pattern: {
@@ -351,7 +367,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 id="additionalRequirements"
                 className={`w-full min-h-20 px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none ${
                   errors.additionalRequirements ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'
-                } ${watchedValues.additionalRequirements ? 'border-green-300' : ''}`}
+                }`}
                 placeholder="Enter flight number, special requests, or any other requirements..."
                 {...register('additionalRequirements')}
               />
@@ -377,7 +393,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                       type="radio"
                       name="paymentMode"
                       value="partial"
-                      checked={watchedValues.paymentMode === 'partial'}
+                      checked={paymentMode === 'partial'}
                       onChange={() => setValue('paymentMode', 'partial', { shouldDirty: true, shouldValidate: true })}
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 flex-shrink-0"
                     />
@@ -395,7 +411,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                       type="radio"
                       name="paymentMode"
                       value="full"
-                      checked={watchedValues.paymentMode === 'full'}
+                      checked={paymentMode === 'full'}
                       onChange={() => setValue('paymentMode', 'full', { shouldDirty: true, shouldValidate: true })}
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 flex-shrink-0"
                     />
@@ -417,22 +433,22 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                   <p className="text-xs sm:text-sm text-gray-500">Optional</p>
                 </div>
                 <Switch
-                  checked={!!watchedValues.gstEnabled}
+                  checked={!!gstEnabled}
                   onCheckedChange={(checked) => setValue('gstEnabled', checked, { shouldDirty: true, shouldValidate: true })}
                   aria-label="Toggle GST details"
                   className="flex-shrink-0"
                 />
               </div>
 
-              {watchedValues.gstEnabled && (
+              {gstEnabled && (
                 <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
                   <Input
                     id="gstNumber"
                     placeholder="GSTIN"
                     className={`h-10 sm:h-11 text-sm sm:text-base ${errors.gstNumber ? 'border-red-300' : ''}`}
                     {...register('gstNumber', {
-                      required: watchedValues.gstEnabled ? 'GSTIN is required' : false,
-                      pattern: watchedValues.gstEnabled
+                      required: gstEnabled ? 'GSTIN is required' : false,
+                      pattern: gstEnabled
                         ? {
                             // Basic GSTIN validation pattern for India
                             value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
@@ -450,7 +466,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                     placeholder="Business Name"
                     className={`h-10 sm:h-11 text-sm sm:text-base ${errors.companyName ? 'border-red-300' : ''}`}
                     {...register('companyName', {
-                      required: watchedValues.gstEnabled ? 'Business name is required' : false,
+                      required: gstEnabled ? 'Business name is required' : false,
                     })}
                   />
                   {errors.companyName && (
@@ -471,8 +487,8 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                     inputMode="email"
                     className={`h-10 sm:h-11 text-sm sm:text-base ${errors.companyEmail ? 'border-red-300' : ''}`}
                     {...register('companyEmail', {
-                      required: watchedValues.gstEnabled ? 'Business email is required' : false,
-                      pattern: watchedValues.gstEnabled
+                      required: gstEnabled ? 'Business email is required' : false,
+                      pattern: gstEnabled
                         ? {
                             value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                             message: 'Enter a valid email'
@@ -532,11 +548,11 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
               <Button 
                 type="submit" 
                 className={`w-full h-11 sm:h-12 text-base sm:text-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${
-                  isValid && !isLoading 
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl' 
-                    : 'bg-gray-400 cursor-not-allowed'
+                  isLoading
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
                 }`}
-                disabled={!isValid || isLoading}
+                disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
@@ -546,7 +562,7 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
                 ) : (
                   <>
                     <CreditCard className="h-4 w-4" />
-                    <span className="text-sm sm:text-base">{paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - {formatPrice(watchedValues.paymentMode === 'partial' ? partialAmount : fullAmount)}</span>
+                    <span className="text-sm sm:text-base">{paymentEnabled ? 'Proceed to Payment' : 'Confirm Booking'} - {formatPrice(paymentMode === 'partial' ? partialAmount : fullAmount)}</span>
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}

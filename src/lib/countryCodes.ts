@@ -100,7 +100,6 @@ export const countryCodes: CountryCode[] = [
   { name: 'Libya', code: 'LY', dialCode: '+218', flag: '🇱🇾', maxLength: 9 },
   { name: 'Egypt', code: 'EG', dialCode: '+20', flag: '🇪🇬', maxLength: 10 },
   { name: 'Sudan', code: 'SD', dialCode: '+249', flag: '🇸🇩', maxLength: 9 },
-  { name: 'Ethiopia', code: 'ET', dialCode: '+251', flag: '🇪🇹', maxLength: 9 },
   { name: 'Somalia', code: 'SO', dialCode: '+252', flag: '🇸🇴', maxLength: 9 },
   { name: 'Djibouti', code: 'DJ', dialCode: '+253', flag: '🇩🇯', maxLength: 8 },
   { name: 'Eritrea', code: 'ER', dialCode: '+291', flag: '🇪🇷', maxLength: 7 },
@@ -183,3 +182,16 @@ export const countryCodes: CountryCode[] = [
   { name: 'Trinidad and Tobago', code: 'TT', dialCode: '+1', flag: '🇹🇹', maxLength: 10 },
   { name: 'Turks and Caicos Islands', code: 'TC', dialCode: '+1', flag: '🇹🇨', maxLength: 10 }
 ];
+
+function uniqueByCountryCode(list: CountryCode[]): CountryCode[] {
+  const seen = new Set<string>();
+  const unique: CountryCode[] = [];
+  for (const country of list) {
+    if (seen.has(country.code)) continue;
+    seen.add(country.code);
+    unique.push(country);
+  }
+  return unique;
+}
+
+export const uniqueCountryCodes = uniqueByCountryCode(countryCodes);

@@ -460,7 +460,7 @@ export function BookingSummaryScreen({ route, navigation }: Props) {
           <MaterialCommunityIcons name="whatsapp" size={18} color="#fff" />
           <Text style={styles.whatsappText}>Share on WhatsApp</Text>
         </TouchableOpacity>
-        <Text style={styles.disclaimer}>Parking and tolls fees are extra.</Text>
+        <Text style={styles.disclaimer}>Parking and tolls fees are extra. Kilometers are calculated from garage to garage.</Text>
       </ScrollView>
 
       {/* MakeMyTrip-style sticky bottom bar: Part Pay / Full Pay + BOOK NOW */}

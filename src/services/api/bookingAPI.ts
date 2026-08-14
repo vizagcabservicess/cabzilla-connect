@@ -2,6 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '@/config';
 import { getApiUrl } from '@/config/api';
 import { BookingRequest, BookingStatus, Booking } from '@/types/api';
+import { getRestrictedAirportRouteBlock } from '@/lib/restrictedAirportRoutes';
 
 // Helper function to create API URLs that work in both development and production
 const createApiUrl = (path) => {
@@ -142,6 +143,15 @@ export const bookingAPI = {
    */
   createBooking: async (bookingData: BookingRequest) => {
     try {
+      const restrictedMessage = getRestrictedAirportRouteBlock(
+        bookingData.pickupLocation,
+        bookingData.dropLocation,
+        bookingData.tripType
+      );
+      if (restrictedMessage) {
+        throw new Error(restrictedMessage);
+      }
+
       window.visitorAnalytics?.trackConversion?.('booking_started', undefined);
       window.visitorAnalytics?.trackInteraction?.('booking_started', 'booking', {
         tripType: (bookingData as { trip_type?: string }).trip_type,

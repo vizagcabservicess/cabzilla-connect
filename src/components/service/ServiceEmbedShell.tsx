@@ -119,8 +119,8 @@ export function ServiceEmbedShell({
     <div
       className={
         marketingLanding
-          ? 'vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:rounded-2xl lg:border lg:border-slate-200/80 lg:bg-white lg:p-5 lg:shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] xl:p-6'
-          : 'vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-4 max-lg:pb-3 max-lg:pt-0 lg:rounded-2xl lg:border lg:border-gray-200/90 lg:bg-white lg:p-4 lg:shadow-[0_12px_40px_-24px_rgba(15,23,42,0.18)] xl:p-5'
+          ? 'vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-2.5 max-lg:pb-2.5 max-lg:pt-0 lg:rounded-2xl lg:border lg:border-slate-200/80 lg:bg-white lg:p-5 lg:shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] xl:p-6'
+          : 'vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-2.5 max-lg:pb-2.5 max-lg:pt-0 lg:rounded-2xl lg:border lg:border-gray-200/90 lg:bg-white lg:p-4 lg:shadow-[0_12px_40px_-24px_rgba(15,23,42,0.18)] xl:p-5'
       }
     >
       {hero({
@@ -170,7 +170,7 @@ export function ServiceEmbedShell({
               <section
                 className={
                   marketingLanding
-                    ? 'vehicle-urbania-hero max-lg:mb-3 max-lg:px-4 max-lg:pt-2 sm:max-lg:mb-4 lg:relative lg:mb-0 lg:overflow-hidden lg:bg-gradient-to-b lg:from-[#F4F5F7] lg:via-[#F8F9FB] lg:to-[#F8F9FB] lg:pb-10 lg:pt-10'
+                    ? 'vehicle-urbania-hero max-lg:mb-3 max-lg:px-2.5 max-lg:pt-2 sm:max-lg:mb-4 lg:relative lg:mb-0 lg:overflow-hidden lg:bg-gradient-to-b lg:from-[#F4F5F7] lg:via-[#F8F9FB] lg:to-[#F8F9FB] lg:pb-10 lg:pt-10'
                     : 'vehicle-urbania-hero container mx-auto mb-3 max-w-7xl px-4 pt-2 sm:mb-4 lg:mb-8 lg:pt-8'
                 }
                 data-vth-service-embed-hero={slug}
@@ -196,7 +196,7 @@ export function ServiceEmbedShell({
                     {marketingLanding && (
                       <div className="relative isolate bg-white lg:hidden">
                         <div className="flex flex-col gap-0">
-                          <div className="relative z-[3] shrink-0 bg-white px-4 pb-0 pt-2 sm:px-5 sm:pt-2">
+                          <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
                             <div className="max-w-xl">
                               <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
                                 {config.seo.pageHeadline}
@@ -208,7 +208,7 @@ export function ServiceEmbedShell({
                           </div>
 
                           <div
-                            className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-4 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-5"
+                            className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-2.5 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-3"
                             aria-hidden
                           >
                             <img
@@ -269,7 +269,7 @@ export function ServiceEmbedShell({
                       <div
                         className={
                           marketingLanding
-                            ? 'min-w-0 w-full max-w-[26rem] justify-self-end xl:max-w-[28rem]'
+                            ? 'min-w-0 w-full max-lg:max-w-none lg:max-w-[26rem] justify-self-end xl:max-w-[28rem]'
                             : 'min-w-0 w-full max-w-none'
                         }
                       >
@@ -297,7 +297,7 @@ export function ServiceEmbedShell({
                 <div className="flex flex-col overflow-visible max-lg:rounded-t-none max-lg:rounded-b-2xl max-lg:border max-lg:border-gray-200/90 max-lg:border-t-0 max-lg:bg-white max-lg:shadow-[0_10px_28px_-20px_rgba(15,23,42,0.08)] lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
                   <div className="relative isolate bg-white lg:hidden">
                     <div className="flex flex-col gap-0">
-                      <div className="relative z-[3] shrink-0 bg-white px-4 pb-0 pt-2 sm:px-5 sm:pt-2">
+                      <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
                         <div className="max-w-xl">
                           <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
                             {config.seo.pageHeadline}
@@ -309,7 +309,7 @@ export function ServiceEmbedShell({
                       </div>
 
                       <div
-                        className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-4 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-5"
+                        className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-2.5 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-3"
                         aria-hidden
                       >
                         <img

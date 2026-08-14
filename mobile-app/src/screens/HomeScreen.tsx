@@ -41,14 +41,27 @@ const SUPPORT_WHATSAPP = '919966363662';
 
 const VIZAG_AIRPORT: Location = {
   id: 'vizag_airport',
-  name: 'Visakhapatnam International Airport',
-  address: 'Visakhapatnam International Airport, Visakhapatnam',
-  city: 'Visakhapatnam',
+  name: 'Alluri Sitarama Raju International Airport',
+  address: 'Alluri Sitarama Raju International Airport, Bhogapuram, Vizianagaram District, Andhra Pradesh',
+  city: 'Bhogapuram',
   state: 'Andhra Pradesh',
-  lat: 17.7215,
-  lng: 83.2248,
+  lat: 17.97611,
+  lng: 83.50389,
   type: 'airport',
   popularityScore: 99,
+  isInVizag: false,
+};
+
+const VIZAG_CITY_AIRPORT: Location = {
+  id: 'vizag_city_airport',
+  name: 'Vizag International Airport',
+  address: 'Vizag International Airport (VTZ), NAD, Visakhapatnam, Andhra Pradesh',
+  city: 'Visakhapatnam',
+  state: 'Andhra Pradesh',
+  lat: 17.72111,
+  lng: 83.22444,
+  type: 'airport',
+  popularityScore: 98,
   isInVizag: true,
 };
 
@@ -258,7 +271,10 @@ export function HomeScreen() {
   }, [dropLocation, pickupLocation, tripType]);
 
   const isAirportLocation = (loc: Location | null) =>
-    loc && (loc.id === 'vizag_airport' || loc.name?.toLowerCase().includes('airport'));
+    loc &&
+    (loc.id === VIZAG_AIRPORT.id ||
+      loc.id === VIZAG_CITY_AIRPORT.id ||
+      loc.name?.toLowerCase().includes('airport'));
 
   const handleAirportDirection = (dir: 'from-airport' | 'to-airport') => {
     setAirportDirection(dir);
@@ -273,12 +289,11 @@ export function HomeScreen() {
 
   const handleTabChange = (tab: TripType) => {
     setTripType(tab);
-    if (tab === 'local' || tab === 'tour') {
+    if (tab === 'local' || tab === 'tour' || tripType === 'local') {
       setDropLocation(null);
       if (tab === 'local') {
         setHourlyPackage('8hrs-80km');
       }
-      // Keep pickup (including airport) - valid for local packages (e.g. airport pickup for 8hr tour)
     } else if (tab === 'outstation' && tripType === 'airport') {
       setDropLocation(null);
       if (isAirportLocation(pickupLocation)) {
@@ -290,13 +305,13 @@ export function HomeScreen() {
   const isFormValid =
     pickupLocation &&
     pickupLocation.name &&
-    (tripType === 'local' || tripType === 'tour' || dropLocation) &&
+    (tripType === 'tour' || dropLocation) &&
     (!(tripType === 'outstation' && tripMode === 'round-trip') || (returnDate != null));
 
   const performSearch = useCallback(
     async (effectiveTripType: TripType, pickupHint?: Date) => {
       const drop =
-        effectiveTripType === 'outstation' || effectiveTripType === 'airport' ? dropLocation : pickupLocation;
+        effectiveTripType === 'tour' ? pickupLocation : dropLocation;
       const pickupResolved = resolvePickupForSearch(pickupHint ?? pickupDateRef.current);
       if (pickupResolved.getTime() !== pickupDateRef.current.getTime()) {
         setPickupDate(pickupResolved);
@@ -368,8 +383,8 @@ export function HomeScreen() {
       setPickupDate(effectivePickup);
       pickupDateRef.current = effectivePickup;
     }
-    const drop = tripType === 'outstation' || tripType === 'airport' ? dropLocation : pickupLocation;
-    if ((tripType === 'outstation' || tripType === 'airport') && !drop) return;
+    const drop = tripType === 'tour' ? pickupLocation : dropLocation;
+    if (tripType !== 'tour' && !drop) return;
 
     let effectiveTripType: TripType = tripType;
 
@@ -627,7 +642,7 @@ export function HomeScreen() {
         {/* Booking Form - Card container */}
         <View style={[styles.form, { maxWidth: CARD_MAX_WIDTH }]}>
           <View style={styles.locationCard}>
-            {(tripType === 'outstation' || tripType === 'airport') ? (
+            {(tripType === 'outstation' || tripType === 'airport' || tripType === 'local') ? (
               <View style={styles.fromToContent}>
                 <View style={styles.fromBlock}>
                   <LocationInput
@@ -644,8 +659,8 @@ export function HomeScreen() {
                   <View style={styles.toBlock}>
                     <LocationInput
                       key={`drop-${tripType}`}
-                      label="TO"
-                      placeholder="Enter drop location"
+                      label={tripType === 'local' ? 'LAST DROP AT' : 'TO'}
+                      placeholder={tripType === 'local' ? 'Enter last drop location' : 'Enter drop location'}
                       value={dropLocation}
                       onLocationChange={(loc) => setDropLocation(loc)}
                       isPickupLocation={false}

@@ -163,40 +163,9 @@ export const BookingSummary = ({
     totalPriceRef.current = totalPrice;
 
     if (totalPrice > 0) {
-      setCalculatedFare(totalPrice);
-
-      if (selectedCab) {
-        try {
-          const normalizedId = normalizeVehicleId(selectedCab.id);
-          const fareKey = getFareKey({ tripType, cabId: normalizedId });
-          localStorage.setItem(fareKey, String(calculatedFare));
-          Object.keys(localStorage).forEach(key => {
-            if (key.startsWith(`fare_outstation_${normalizedId}_`)) {
-              localStorage.removeItem(key);
-            }
-          });
-          window.dispatchEvent(new CustomEvent("fare-calculated", {
-            detail: {
-              cabId: normalizedId,
-              tripType,
-              calculated: true,
-              fare: calculatedFare,
-              timestamp: Date.now(),
-            }
-          }));
-          const wrongKey = `fare_outstation_${normalizedId}_${hourlyPackage}`;
-          if (wrongKey !== fareKey) localStorage.removeItem(wrongKey);
-        } catch (error) {
-          console.error('Error storing fare in localStorage:', error);
-        }
-      }
-
-      const estimatedBaseFare = totalPrice - driverAllowance - nightCharges - extraDistanceFare;
-      if (estimatedBaseFare > 0) {
-        setBaseFare(estimatedBaseFare);
-      }
+      setCalculatedFare((prev) => (prev === totalPrice ? prev : totalPrice));
     }
-  }, [totalPrice, driverAllowance, nightCharges, extraDistanceFare, selectedCab, tripType, calculatedFare]);
+  }, [totalPrice]);
 
   useEffect(() => {
     if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
@@ -285,11 +254,9 @@ export const BookingSummary = ({
       };
 
       window.addEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
-      window.addEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
 
       return () => {
         window.removeEventListener('cab-selected-with-fare', handleDirectFareUpdate as EventListener);
-        window.removeEventListener('fare-calculated', handleDirectFareUpdate as EventListener);
       };
     }
   }, [selectedCab, totalPrice, driverAllowance, nightCharges, extraDistanceFare, tripType, calculatedFare, hourlyPackage]);
@@ -1256,10 +1223,9 @@ export const BookingSummary = ({
         pickupLocation.address !== pickupLocation.name
         ? `Pickup address: ${pickupLocation.address}`
         : undefined,
-      tripType !== 'local' &&
-        tripType !== 'tour' &&
+      tripType !== 'tour' &&
         dropLocation
-        ? `Drop-off: ${dropLocation.name}`
+        ? `${tripType === 'local' ? 'Last drop at' : 'Drop-off'}: ${dropLocation.name}`
         : undefined,
       dropLocation?.address &&
         dropLocation.address !== dropLocation.name
@@ -1296,6 +1262,7 @@ export const BookingSummary = ({
       `Total Price: ${formatPrice(totalAfterDiscount)}`,
       '',
       'Parking and tolls fees are extra.',
+      'Kilometers are calculated from garage to garage.',
       '',
       'View / book this trip:',
       buildBookingUrl()
@@ -1518,11 +1485,13 @@ export const BookingSummary = ({
                 )}
               </div>
 
-              {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
+              {tripType !== 'tour' && dropLocation && (
                 <div className="flex items-start gap-2 py-3">
                   <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                   <div className="min-w-0 flex-1 text-left">
-                    <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Drop-off</p>
+                    <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                      {tripType === 'local' ? 'Last drop at' : 'Drop-off'}
+                    </p>
                     <p className="text-left text-[14px] font-semibold text-gray-900">{dropLocation.name}</p>
                     {dropLocation.address && dropLocation.address !== dropLocation.name && (
                       <p className="mt-1 text-left text-[12px] text-gray-600">{dropLocation.address}</p>
@@ -1748,7 +1717,9 @@ export const BookingSummary = ({
             )}
           </div>
           )}
-          <div className="text-[12px] text-gray-500 mt-2">Parking and tolls fees are extra.</div>
+          <div className="mt-2 text-[12px] text-gray-500">
+            Parking and tolls fees are extra. Kilometers are calculated from garage to garage.
+          </div>
 
           {/* Inclusions/Exclusions */}
           {!hideInclusionsExclusions && (

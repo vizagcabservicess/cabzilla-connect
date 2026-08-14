@@ -13,7 +13,7 @@ import { LocationInput, type LocationInputHandle } from './LocationInput';
 import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
-import { vizagLocations, Location } from '@/lib/locationData';
+import { Location, getVizagAirportLocations, resolveCanonicalVizagAirport } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import {
   getServicePathForTripType,
@@ -21,6 +21,7 @@ import {
   isVizagAirportLocation,
   type CustomerTripService,
 } from '@/lib/inferTripService';
+import { getRestrictedAirportRouteBlock, RESTRICTED_AIRPORT_ROUTE_PHONE_DISPLAY, RESTRICTED_AIRPORT_ROUTE_PHONE_TEL, RESTRICTED_AIRPORT_ROUTES_ENABLED } from '@/lib/restrictedAirportRoutes';
 import { cabTypes, formatPrice, loadCabTypes } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
 import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
@@ -210,7 +211,47 @@ const heroMobileTicketShellPaddingHomeClass = 'max-lg:px-2.5 max-lg:pb-2.5 max-l
 
 const heroMobileTicketShellFormWrapClass = 'bg-transparent px-0 pt-0 shadow-none';
 
-const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
+const vizagAirportLocations = getVizagAirportLocations();
+const airportLocation =
+  vizagAirportLocations.find((loc) => loc.id === 'vizag_airport') ?? vizagAirportLocations[0];
+
+function withCanonicalAirportCoords(location: Location | null | undefined): Location | null {
+  if (!location) return null;
+  if (!isVizagAirportLocation(location)) return location;
+  const resolved = resolveCanonicalVizagAirport(location);
+  if (
+    resolved.id === location.id &&
+    resolved.lat === location.lat &&
+    resolved.lng === location.lng &&
+    resolved.name === location.name
+  ) {
+    return location;
+  }
+  return resolved;
+}
+
+function isAllowedPickupLocation(location: Location | null | undefined): boolean {
+  if (!location) return false;
+  return isLocationInVizag(location) || isVizagAirportLocation(location);
+}
+
+function RestrictedAirportRouteNotice({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="relative z-[10041] mt-3 rounded-xl border border-red-300 bg-red-50 px-3.5 py-3 text-left shadow-sm"
+    >
+      <p className="text-base font-bold leading-snug text-red-950">Route unavailable</p>
+      <p className="mt-1.5 text-sm font-medium leading-relaxed text-slate-800">{message}</p>
+      <a
+        href={`tel:${RESTRICTED_AIRPORT_ROUTE_PHONE_TEL}`}
+        className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-lg bg-red-700 px-3 text-sm font-bold text-white"
+      >
+        Call {RESTRICTED_AIRPORT_ROUTE_PHONE_DISPLAY}
+      </a>
+    </div>
+  );
+}
 
 /** Session: guest WhatsApp (E.164) after first successful entry — skip modal on repeat searches in this tab. */
 const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
@@ -259,8 +300,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     !urbaniaUnifiedShell &&
     heroMobileTicketStyle &&
     (isHomePremiumHero || isVehicleEmbedLock || Boolean(lockedVehicleSlug));
+  /** Local / airport / outstation landings: same ticket gutters as home (no nested padded card). */
+  const isServiceLandingEmbed = Boolean(
+    embedCompactLayout && embedStretchToShell && !isVehicleEmbedLock,
+  );
   const heroMobileFormShellWrap =
-    urbaniaMobileEmbedShell || heroMobileUnifiedShell;
+    urbaniaMobileEmbedShell || heroMobileUnifiedShell || isServiceLandingEmbed;
   
   const loadFromSessionStorage = () => {
     try {
@@ -272,7 +317,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         const prePick = prefillData.pickupLocation as Location | undefined;
         const allowAnyPickup = Boolean(prefillData.openGuestDetails);
         return {
-          pickupLocation: prePick && (allowAnyPickup || isLocationInVizag(prePick)) ? prePick : null,
+          pickupLocation: prePick && (allowAnyPickup || isAllowedPickupLocation(prePick))
+            ? withCanonicalAirportCoords(prePick)
+            : null,
           dropLocation: prefillData.dropLocation,
           pickupDate: prefillData.pickupDate ? (() => {
             const parsedDate = new Date(prefillData.pickupDate);
@@ -330,10 +377,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         pickupLocation: pickupData
           ? (() => {
               const p = JSON.parse(pickupData) as Location;
-              return isLocationInVizag(p) ? p : null;
+              return isAllowedPickupLocation(p) ? withCanonicalAirportCoords(p) : null;
             })()
           : null,
-        dropLocation: dropData ? JSON.parse(dropData) as Location : null,
+        dropLocation: dropData
+          ? withCanonicalAirportCoords(JSON.parse(dropData) as Location)
+          : null,
         pickupDate: pickupDateStr ? (() => {
           const parsedDate = new Date(JSON.parse(pickupDateStr));
           const now = new Date();
@@ -483,6 +532,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     return m === 'full' ? 'full' : 'partial';
   });
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [restrictedRouteNotice, setRestrictedRouteNotice] = useState<string | null>(null);
   const [minTravelHours, setMinTravelHours] = useState<number>(0);
   const [isCheckingTravelTime, setIsCheckingTravelTime] = useState<boolean>(false);
   const [isReturnTimeEnabled, setIsReturnTimeEnabled] = useState<boolean>(false);
@@ -766,6 +816,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setIsSlidingSearch(false);
     setShowMobileEditForm(false);
     setValidationError(null);
+    setRestrictedRouteNotice(null);
     setTripType('outstation');
     setTripMode('one-way');
     if (onStepChange) onStepChange(1);
@@ -930,6 +981,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (!vehiclesLoaded) return;
     if (!pickupLocation || !dropLocation) return;
     if (showGuestDetailsForm) return;
+
+    const restrictedMessage = getRestrictedAirportRouteBlock(pickupLocation, dropLocation, tripType);
+    if (restrictedMessage) {
+      openGuestDetailsRef.current = false;
+      notifyRestrictedAirportRoute(restrictedMessage);
+      return;
+    }
 
     openGuestDetailsRef.current = false;
 
@@ -1201,7 +1259,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   useEffect(() => {
     let valid = true;
     if (!pickupLocation || !pickupLocation.name) valid = false;
-    if ((tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && !dropLocation) valid = false;
+    if (
+      (tripType === 'outstation' ||
+        tripType === 'airport' ||
+        tripType === 'custom' ||
+        tripType === 'local') &&
+      (!dropLocation || !dropLocation.name)
+    )
+      valid = false;
     if (
       tripType === 'tour' &&
       (!dropLocation || !dropLocation.name || !String(dropLocation.id || '').startsWith('tour_'))
@@ -1213,6 +1278,53 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode]);
 
   const isVizagAirport = (location: Location | null): boolean => isVizagAirportLocation(location);
+  const hideRestrictedAirportDrops =
+    RESTRICTED_AIRPORT_ROUTES_ENABLED &&
+    tripType === 'airport' &&
+    isVizagAirportLocation(pickupLocation);
+  const airportPickupLocked = tripType === 'airport' && airportDirectionLabel !== 'To Airport';
+  const pickupInputValue =
+    airportPickupLocked && pickupLocation && isVizagAirportLocation(pickupLocation)
+      ? { ...pickupLocation }
+      : airportPickupLocked && airportLocation
+        ? { ...airportLocation }
+        : pickupLocation
+          ? { ...pickupLocation }
+          : undefined;
+  const dropInputValue = dropLocation ? { ...dropLocation } : undefined;
+  const showFromToFields =
+    tripType === 'outstation' || tripType === 'airport' || tripType === 'custom' || tripType === 'local';
+  const dropFieldLabel = tripType === 'local' ? 'Last drop at' : 'To';
+  const dropFieldPlaceholder =
+    tripType === 'local' ? 'Enter last drop location' : 'Enter destination location';
+  const dropFieldDesktopLabel = tripType === 'local' ? 'Last drop at' : 'Drop location';
+  const restrictedAirportRouteMessage = getRestrictedAirportRouteBlock(
+    pickupLocation,
+    dropLocation,
+    tripType
+  );
+  const visibleRestrictedAirportMessage =
+    tripType === 'airport' ? restrictedAirportRouteMessage || restrictedRouteNotice : null;
+
+  const notifyRestrictedAirportRoute = (message: string) => {
+    setRestrictedRouteNotice(message);
+  };
+  const airportLockedPickupProps =
+    airportPickupLocked && vizagAirportLocations.length > 0
+      ? { airportOnly: true, suggestions: vizagAirportLocations }
+      : {};
+
+  const switchAirportTripToOutstation = () => {
+    const pickupIsAirport = isVizagAirportLocation(pickupLocation);
+    const dropIsAirport = isVizagAirportLocation(dropLocation);
+    const otherEnd = pickupIsAirport ? dropLocation : dropIsAirport ? pickupLocation : dropLocation;
+    if (otherEnd && (isLocationInVizag(otherEnd) || isVizagAirportLocation(otherEnd))) {
+      return;
+    }
+    setTripType('outstation');
+    sessionStorage.setItem('tripType', 'outstation');
+    setAirportDirectionLabel('');
+  };
 
   /** When trip intent no longer matches a locked service page, jump to the right landing with prefill. */
   const redirectToInferredServicePage = useCallback(
@@ -1324,6 +1436,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const isLocationCleared = !location || !location.name || location.name === '';
     
     if (isLocationCleared) {
+      if (tripType === 'airport' && airportDirectionLabel !== 'To Airport' && airportLocation) {
+        setPickupLocation(airportLocation);
+        sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
+        return;
+      }
       setPickupLocation(null);
       sessionStorage.removeItem('pickupLocation');
       // Set a flag to prevent automatic airport location setting
@@ -1337,7 +1454,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     
     setIsTabSwitching(false); // Reset tab switching flag when user selects a location
 
-    if (!isLocationInVizag(location)) {
+    if (!isLocationInVizag(location) && !isVizagAirportLocation(location)) {
       toast({
         title: 'Pickup outside service area',
         description:
@@ -1348,7 +1465,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
 
-    setPickupLocation({ ...location, isInVizag: true });
+    const pickupRestrictedMessage = getRestrictedAirportRouteBlock(location, dropLocation, tripType);
+    if (pickupRestrictedMessage) {
+      notifyRestrictedAirportRoute(pickupRestrictedMessage);
+      return;
+    }
+
+    setRestrictedRouteNotice(null);
+    const nextPickup = withCanonicalAirportCoords({ ...location, isInVizag: true }) ?? {
+      ...location,
+      isInVizag: true,
+    };
+    setPickupLocation(nextPickup);
     advanceAfterPickupSelected();
   };
   
@@ -1357,6 +1485,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const isLocationCleared = !location || !location.name || location.name === '';
     
     if (isLocationCleared) {
+      setRestrictedRouteNotice(null);
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
       // Set a flag to prevent automatic airport location setting
@@ -1369,12 +1498,42 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
     
     setIsTabSwitching(false); // Reset tab switching flag when user selects a location
+
+    const dropRestrictedMessage = getRestrictedAirportRouteBlock(pickupLocation, location, tripType);
+    if (dropRestrictedMessage) {
+      notifyRestrictedAirportRoute(dropRestrictedMessage);
+      return;
+    }
+
+    setRestrictedRouteNotice(null);
     
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
-    setDropLocation(location);
+
+    if (
+      tripType === 'local' &&
+      !isLocationInVizag(location) &&
+      !isVizagAirportLocation(location)
+    ) {
+      toast({
+        title: 'Drop outside service area',
+        description:
+          'Last drop must be within 35 km of Visakhapatnam. Please choose a location in or near the city.',
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
+    }
+
+    setDropLocation(withCanonicalAirportCoords(location) ?? location);
     advanceAfterDropSelected();
+
+    const dropOutsideVizag =
+      !isLocationInVizag(location) && !isVizagAirportLocation(location);
+    if (tripType === 'airport' && dropOutsideVizag) {
+      switchAirportTripToOutstation();
+    }
   };
 
   // Locked service landings only (local/airport/outstation) — never change homepage widget tabs
@@ -1406,6 +1565,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     isTabSwitching,
     redirectToInferredServicePage,
   ]);
+
+  useEffect(() => {
+    if (tripType === 'tour' || tripType === 'custom') return;
+    if (!pickupLocation || !dropLocation) return;
+    const inferred = inferTripServiceType(pickupLocation, dropLocation);
+    if (inferred === 'airport' && tripType === 'outstation') {
+      setTripType('airport');
+      sessionStorage.setItem('tripType', 'airport');
+    }
+  }, [pickupLocation, dropLocation, tripType]);
 
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
@@ -1464,6 +1633,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       const userClearedDropLocation = sessionStorage.getItem('userClearedDropLocation') === 'true';
       const userClearedPickupLocation = sessionStorage.getItem('userClearedPickupLocation') === 'true';
       
+      if (!pickupLocation && !dropLocation && !userClearedPickupLocation && !userClearedDropLocation) {
+        setPickupLocation(airportLocation);
+        sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
+        setAirportDirectionLabel('From Airport');
+      }
+
       if (pickupLocation && pickupLocation.name && !dropLocation && !shouldTreatAsAirport(pickupLocation) && !userClearedDropLocation) {
         setDropLocation(airportLocation);
         sessionStorage.setItem('dropLocation', JSON.stringify(airportLocation));
@@ -1532,7 +1707,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (tripType === 'local') {
       const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;
       setDistance(selectedPackage);
-      setDropLocation(null);
     }
   }, [tripType, hourlyPackage]);
 
@@ -1555,6 +1729,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         variant: "destructive",
         duration: 4000,
       });
+      return;
+    }
+
+    const restrictedMessage = getRestrictedAirportRouteBlock(pickupLocation, dropLocation, tripType);
+    if (restrictedMessage) {
+      notifyRestrictedAirportRoute(restrictedMessage);
       return;
     }
 
@@ -1665,7 +1845,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         ? vehicleFares.map((v) => `${v.name}: ${v.fareText}`)
         : availableCabs.map((c) => c.name);
     const pickup = pickupLocation?.name?.trim() || '';
-    const drop = tripType === 'local' ? pickup : (dropLocation?.name?.trim() || '');
+    const drop = dropLocation?.name?.trim() || (tripType === 'local' ? pickup : '');
     const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
     const distRounded = distanceForTrack > 0 ? Math.round(distanceForTrack) : undefined;
     const durRounded =
@@ -1715,6 +1895,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   // Helper function to proceed with the search after distance checks
   async function proceedWithSearch() {
+    const blockedRouteMessage = getRestrictedAirportRouteBlock(pickupLocation, dropLocation, tripType);
+    if (blockedRouteMessage) {
+      notifyRestrictedAirportRoute(blockedRouteMessage);
+      return;
+    }
     if (tripType !== 'tour') {
     // Check if drop location is Araku Valley - redirect to tour page
     if (dropLocation && dropLocation.name) {
@@ -2095,11 +2280,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     !showGuestDetailsForm &&
     !isSlidingSearch &&
     !!selectedCab &&
-    payReadyTotal > 0;
+    payReadyTotal > 0 &&
+    !restrictedAirportRouteMessage;
 
   // After cab search on mobile: compact AI FAB + lift above sticky Part Pay / Book Now
   const showMobileBookingResults =
     currentStep === 2 && !showGuestDetailsForm && !isSlidingSearch;
+
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return;
+    const panels = document.querySelectorAll<HTMLElement>('.pac-container');
+    if (showGuestDetailsForm) {
+      setShowGuestPhoneModal(false);
+      panels.forEach((el) => {
+        el.remove();
+      });
+      return;
+    }
+    panels.forEach((el) => {
+      el.style.removeProperty('visibility');
+      el.style.removeProperty('pointer-events');
+    });
+  }, [showGuestDetailsForm]);
 
   useLayoutEffect(() => {
     if (showMobileBookingResults) {
@@ -2159,7 +2361,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
   const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
 
-  const handleBaseFareChange = (total: number) => {
+  const handleBaseFareChange = useCallback((total: number) => {
     const next = Math.max(0, Number(total) || 0);
     setWebsiteFareTotal((prev) => (prev === next ? prev : next));
     if (offerApplied && offerCampaign && next > 0) {
@@ -2179,7 +2381,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
     setFinalTotal((prev) => (prev === next ? prev : next));
-  };
+  }, [offerApplied, offerCampaign]);
 
   const applyOfferCampaign = (c: OfferCampaignPublic) => {
     const base = websiteFareTotal > 0 ? websiteFareTotal : totalPrice;
@@ -2326,6 +2528,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   function handleBookNow() {
+    if (restrictedAirportRouteMessage) {
+      notifyRestrictedAirportRoute(restrictedAirportRouteMessage);
+      return;
+    }
     if (!isFormValid || !selectedCab) {
       toast({
         title: "Missing information",
@@ -2356,22 +2562,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   // Custom handler for tab (trip type) changes
   const handleTabChange = (type: TripSelectorTab) => {
     setTripType(type === 'custom' ? 'custom' : type);
+    setRestrictedRouteNotice(null);
     setDistance(0);
     setDuration(0);
     
     // Only clear drop location if we're not in a single-tab mode (Hero widgets)
     if (!visibleTabs || visibleTabs.length > 1) {
-      // Clear drop location for local and tour tabs
-      if (type === 'local' || type === 'tour') {
+      if (type === 'local' || type === 'tour' || tripType === 'local') {
         setDropLocation(null);
         sessionStorage.removeItem('dropLocation');
       }
-      // Clear drop location when manually switching from airport to outstation/custom
-      else if ((type === 'outstation' || type === 'custom') && tripType === 'airport') {
-        setDropLocation(null);
-        sessionStorage.removeItem('dropLocation');
-      }
-      // For other cases, preserve drop location for automatic switching
+    }
+
+    if (type === 'airport' && airportLocation) {
+      setPickupLocation(airportLocation);
+      setDropLocation(null);
+      sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
+      sessionStorage.removeItem('dropLocation');
+      setAirportDirectionLabel('From Airport');
     }
     
     // Reset the tab switching flag immediately
@@ -2598,7 +2806,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 tripModeToggleMobileOnly
                 hideUrbaniaPromo
                 hidePromoSlider
-                suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
+                suppressMobileCardChrome={heroMobileFormShellWrap}
                 urbaniaMobileTripTiles={heroMobileTicketStyle}
               />
             </div>
@@ -2624,7 +2832,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     : 'gap-3'
                 )}
               >
-                {heroMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') ? (
+                {heroMobileTicketStyle && showFromToFields ? (
                   <div className="flex min-h-0 items-stretch bg-white">
                     <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
                       <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
@@ -2638,23 +2846,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         className={heroTicketCellPad}
                         label="From"
                         placeholder="Enter pickup location"
-                        value={pickupLocation ? { ...pickupLocation } : undefined}
+                        value={pickupInputValue}
                         onLocationChange={handlePickupLocationChange}
                         isPickupLocation={true}
                         tripType={tripType}
                         hideLeadingIcon
+                        {...airportLockedPickupProps}
                       />
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                         variant={heroMobileFieldVariant}
                         className={heroTicketCellPad}
-                        label="To"
-                        placeholder="Enter destination location"
-                        value={dropLocation ? { ...dropLocation } : undefined}
+                        label={dropFieldLabel}
+                        placeholder={dropFieldPlaceholder}
+                        value={dropInputValue}
                         onLocationChange={handleDropLocationChange}
                         isPickupLocation={false}
                         tripType={tripType}
                         hideLeadingIcon
+                        hideRestrictedAirportDrops={hideRestrictedAirportDrops}
+                        onRequestOutstationSwitch={
+                          tripType === 'airport' ? switchAirportTripToOutstation : undefined
+                        }
                       />
                     </div>
                   </div>
@@ -2666,23 +2879,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       className={heroTicketCellPad}
                       label="From"
                       placeholder="Enter pickup location"
-                      value={pickupLocation ? { ...pickupLocation } : undefined}
+                      value={pickupInputValue}
                       onLocationChange={handlePickupLocationChange}
                       isPickupLocation={true}
                       tripType={tripType}
+                      {...airportLockedPickupProps}
                     />
 
-                    {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && (
+                    {showFromToFields && (
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                         variant={heroMobileFieldVariant}
                         className={heroTicketCellPad}
-                        label="To"
-                        placeholder="Enter destination location"
-                        value={dropLocation ? { ...dropLocation } : undefined}
+                        label={dropFieldLabel}
+                        placeholder={dropFieldPlaceholder}
+                        value={dropInputValue}
                         onLocationChange={handleDropLocationChange}
                         isPickupLocation={false}
                         tripType={tripType}
+                        hideRestrictedAirportDrops={hideRestrictedAirportDrops}
+                        onRequestOutstationSwitch={
+                          tripType === 'airport' ? switchAirportTripToOutstation : undefined
+                        }
                       />
                     )}
                   </>
@@ -2840,8 +3058,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             <Button
               onClick={() => {
                 setShowMobileEditForm(false);
-                setCurrentStep(2);
                 onTripEditOpenChange?.(false);
+                handleContinue();
               }}
               className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-extrabold uppercase tracking-wide text-white shadow-md hover:bg-blue-700"
               disabled={!isFormValid}
@@ -2953,7 +3171,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       className={cn(
                         'space-y-6 sm:space-y-8 lg:space-y-0',
                         heroMobileTicketStyle
-                          ? urbaniaUnifiedShell || heroMobileUnifiedShell
+                          ? urbaniaUnifiedShell || heroMobileUnifiedShell || isServiceLandingEmbed
                             ? 'max-lg:space-y-2'
                             : 'max-lg:space-y-0.5'
                           : 'max-lg:space-y-1.5'
@@ -2986,7 +3204,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           tripModeToggleMobileOnly
                           hideUrbaniaPromo
                           hidePromoSlider
-                          suppressMobileCardChrome={urbaniaMobileEmbedShell || heroMobileUnifiedShell}
+                          suppressMobileCardChrome={heroMobileFormShellWrap}
                           urbaniaMobileTripTiles={heroMobileTicketStyle}
                         />
                       </div>
@@ -3014,7 +3232,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               : 'gap-3'
                           )}
                         >
-                          {heroMobileTicketStyle && (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') ? (
+                          {heroMobileTicketStyle && showFromToFields ? (
                             <div className="flex min-h-0 items-stretch bg-white">
                               <div className="relative w-[14px] shrink-0 self-stretch py-1.5" aria-hidden>
                                 <div className="absolute left-1/2 top-[1.25rem] h-2 w-2 -translate-x-1/2 rounded-full border-2 border-blue-600 bg-white" />
@@ -3028,11 +3246,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   className={heroTicketCellPad}
                                   label="From"
                                   placeholder="Enter pickup location"
-                                  value={pickupLocation ? { ...pickupLocation } : undefined}
+                                  value={pickupInputValue}
                                   onLocationChange={handlePickupLocationChange}
                                   isPickupLocation={true}
                                   tripType={tripType}
                                   hideLeadingIcon
+                                  {...airportLockedPickupProps}
                                 />
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
@@ -3041,13 +3260,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   }}
                                   variant={heroMobileFieldVariant}
                                   className={heroTicketCellPad}
-                                  label="To"
-                                  placeholder="Enter destination location"
-                                  value={dropLocation ? { ...dropLocation } : undefined}
+                                  label={dropFieldLabel}
+                                  placeholder={dropFieldPlaceholder}
+                                  value={dropInputValue}
                                   onLocationChange={handleDropLocationChange}
                                   isPickupLocation={false}
                                   tripType={tripType}
                                   hideLeadingIcon
+                                  hideRestrictedAirportDrops={hideRestrictedAirportDrops}
+                                  onRequestOutstationSwitch={
+                                    tripType === 'airport' ? switchAirportTripToOutstation : undefined
+                                  }
                                 />
                               </div>
                             </div>
@@ -3059,13 +3282,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 className={heroTicketCellPad}
                                 label="From"
                                 placeholder="Enter pickup location"
-                                value={pickupLocation ? { ...pickupLocation } : undefined}
+                                value={pickupInputValue}
                                 onLocationChange={handlePickupLocationChange}
                                 isPickupLocation={true}
                                 tripType={tripType}
+                                {...airportLockedPickupProps}
                               />
 
-                              {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && (
+                              {showFromToFields && (
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                   ref={(instance) => {
@@ -3073,12 +3297,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   }}
                                   variant={heroMobileFieldVariant}
                                   className={heroTicketCellPad}
-                                  label="To"
-                                  placeholder="Enter destination location"
-                                  value={dropLocation ? { ...dropLocation } : undefined}
+                                  label={dropFieldLabel}
+                                  placeholder={dropFieldPlaceholder}
+                                  value={dropInputValue}
                                   onLocationChange={handleDropLocationChange}
                                   isPickupLocation={false}
                                   tripType={tripType}
+                                  hideRestrictedAirportDrops={hideRestrictedAirportDrops}
+                                  onRequestOutstationSwitch={
+                                    tripType === 'airport' ? switchAirportTripToOutstation : undefined
+                                  }
                                 />
                               )}
                             </>
@@ -3277,7 +3505,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
                           className={cn(
                             'axis-search-btn mt-4 flex h-11 w-full items-center justify-center px-4 text-sm uppercase tracking-wide shadow-md disabled:opacity-60',
-                            (urbaniaMobileEmbedShell || heroMobileUnifiedShell) && 'max-lg:mt-2'
+                            (urbaniaMobileEmbedShell || heroMobileUnifiedShell || isServiceLandingEmbed) && 'max-lg:mt-2'
                           )}
                         >
                           {isLoading ? (
@@ -3298,6 +3526,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             </span>
                           )}
                         </Button>
+                        {visibleRestrictedAirportMessage && (
+                          <RestrictedAirportRouteNotice message={visibleRestrictedAirportMessage} />
+                        )}
                         {showHomeHeroBanner && <MobileTrustBanner />}
                         {isVehicleEmbedLock && (
                           <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 px-1 text-center text-[11px] leading-snug text-slate-600 lg:hidden">
@@ -3336,29 +3567,38 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               placeholder={
                                 embedDesktopCardLayout ? 'Enter pickup location' : 'Enter a location'
                               }
-                              value={pickupLocation ? { ...pickupLocation } : undefined}
+                              value={pickupInputValue}
                               onLocationChange={handlePickupLocationChange}
                               isPickupLocation={true}
                               tripType={tripType}
                               variant="desktop"
+                              {...airportLockedPickupProps}
                             />
                           </div>
-                          {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && (
+                          {showFromToFields && (
                             <div className={embedDesktopCardLayout ? 'w-full min-w-0' : 'min-w-0 flex-1'}>
                               <LocationInput
                                 key={`drop-desk-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                 ref={(instance) => {
                                   dropLocationInputRefs.current.desktop = instance;
                                 }}
-                                label="Drop location"
+                                label={dropFieldDesktopLabel}
                                 placeholder={
-                                  embedDesktopCardLayout ? 'Enter drop location' : 'Enter a location'
+                                  tripType === 'local'
+                                    ? 'Enter last drop location'
+                                    : embedDesktopCardLayout
+                                      ? 'Enter drop location'
+                                      : 'Enter a location'
                                 }
-                                value={dropLocation ? { ...dropLocation } : undefined}
+                                value={dropInputValue}
                                 onLocationChange={handleDropLocationChange}
                                 isPickupLocation={false}
                                 tripType={tripType}
                                 variant="desktop"
+                                hideRestrictedAirportDrops={hideRestrictedAirportDrops}
+                                onRequestOutstationSwitch={
+                                  tripType === 'airport' ? switchAirportTripToOutstation : undefined
+                                }
                               />
                             </div>
                           )}
@@ -3660,6 +3900,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         {validationError && (
                           <div className="text-red-600 text-sm mt-3 py-2">{validationError}</div>
                         )}
+                        {visibleRestrictedAirportMessage && (
+                          <RestrictedAirportRouteNotice message={visibleRestrictedAirportMessage} />
+                        )}
                       </div>
 
                       {isCalculatingDistance && (
@@ -3675,7 +3918,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   {currentStep === 2 && !isSlidingSearch && (
                     <>
                       {/* Step Indicator - Mobile Only */}
-                      <div className="md:hidden mb-4 mt-0">
+                      <div className="md:hidden mb-2 mt-0">
                         <StepIndicator 
                           currentStep={1}
                           steps={[
@@ -3692,8 +3935,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       </div>
                       
                       {/* Trip summary — white card (mobile web reference) */}
-                      <div className="mb-4 w-full max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                        <div className="flex items-start justify-between mb-2">
+                      <div className="mb-2 w-full max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm lg:mb-3">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -3745,20 +3988,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <Edit className="w-5 h-5" />
                           </button>
                         </div>
-                         {/* Date and Time */}
-                        <div className="text-xs text-gray-500 font-medium">
-                          {pickupDate && (
-                          <div className="text-xs text-gray-500 font-medium mb-2">
+                        {pickupDate && (
+                          <div className="mt-1 text-xs font-medium text-gray-500">
                             <span>{pickupDate.toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>)}
-                                          
-                        </div>
+                          </div>
+                        )}
                       </div>
                       {/* Step 2: Urbania shell — explicit 50%/50% minus horizontal gap (flex-1 can skew tracks) */}
                       <div
                         className={`${
                           embedStretchToShell
-                            ? 'flex w-full animate-fade-in flex-col gap-y-4 text-xs lg:flex-row lg:flex-nowrap lg:items-start lg:gap-x-6 lg:gap-y-0 xl:gap-x-8 lg:text-[12px]'
+                            ? 'flex w-full animate-fade-in flex-col gap-y-3 text-xs lg:flex-row lg:flex-nowrap lg:items-start lg:gap-x-6 lg:gap-y-0 xl:gap-x-8 lg:text-[12px]'
                             : `grid animate-fade-in grid-cols-1 gap-8 text-xs lg:text-[12px] lg:[grid-template-columns:62%_38%]`
                         } ${
                           selectedCab
@@ -3771,67 +4011,26 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         <div
                           className={
                             embedStretchToShell
-                              ? 'max-lg:order-2 min-w-0 w-full space-y-6 lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
-                              : 'lg:col-span-1 space-y-6'
+                              ? 'max-lg:order-1 min-w-0 w-full space-y-3 lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
+                              : 'lg:col-span-1 space-y-3'
                           }
                         >
+                          {(((tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') &&
+                            distance > 0 &&
+                            duration > 0) ||
+                          (!isMobile &&
+                            (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') &&
+                            pickupLocation &&
+                            dropLocation)) &&
+                          !restrictedAirportRouteMessage ? (
                           <div
                             className={`bg-white rounded-xl shadow-card p-2${embedStretchToShell ? ' w-full max-w-full' : ''}`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              {/* <h3 className="text-xs lg:text-[16px] font-semibold text-left">Trip Details</h3> */}
-                              {/* <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => isMobile ? setShowMobileEditForm(true) : setCurrentStep(1)} 
-                                className="mobile-button text-xs lg:text-[11px]"
-                              >
-                                Edit
-                              </Button> */}
-                            </div>
-                            {/* Hide this section on mobile, show only on desktop/tablet */}
-                            {/*
-                            <div className="hidden md:block">
-                              <div className="grid grid-cols-2 gap-y-1 gap-x-3">
-                                <div>
-                                  <p className="text-[10px] text-left">PICKUP LOCATION</p>
-                                  <p className="font-medium text-left text-xs lg:text-[12px]">{pickupLocation?.name}</p>
-                                </div>
-                                {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && (
-                                  <div>
-                                    <p className="text-[10px] text-left">DROP LOCATION</p>
-                                    <p className="font-medium text-left text-xs lg:text-[12px]">{dropLocation?.name}</p>
-                                  </div>
-                                )}
-                                {tripType === 'local' && (
-                                  <div>
-                                    <p className="text-[10px] text-left">PACKAGE</p>
-                                    <p className="font-medium text-left text-xs lg:text-[12px]">
-                                      {hourlyPackageOptions.find(pkg => pkg.value === hourlyPackage)?.label}
-                                    </p>
-                                  </div>
-                                )}
-                                <div className="col-span-2 border-t pt-1 mt-1 flex justify-between">
-                                  <div>
-                                    <p className="text-[10px] text-left">PICKUP DATE & TIME</p>
-                                    <p className="font-medium text-left text-xs lg:text-[12px]">{pickupDate?.toLocaleString()}</p>
-                                  </div>
-                                  {tripMode === 'round-trip' && returnDate && (
-                                    <div>
-                                      <p className="text-[10px] text-left">RETURN DATE & TIME</p>
-                                      <p className="font-medium text-left text-xs lg:text-[12px]">{returnDate?.toLocaleString()}</p>
-                                    </div>
-                                  )}
-                                </div>
+                            {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && distance > 0 && duration > 0 && (
+                              <div className="text-xs text-gray-500 font-medium">
+                                Rates for {displayDistance} Kms approx distance | {Math.round(displayDuration / 60)} hr(s) approx time
                               </div>
-                            </div>
-                            */}
-                               {/* Distance and Time Info - moved below edit module */}
-                        {(tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && distance > 0 && duration > 0 && (
-                          <div className="text-xs text-gray-500 font-medium">
-                            Rates for {displayDistance} Kms approx distance | {Math.round(displayDuration / 60)} hr(s) approx time
-                          </div>
-                        )}
+                            )}
                             {!isMobile && (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && pickupLocation && dropLocation && (
                               <div className={`mt-3 app-card${embedStretchToShell ? ' w-full max-w-full' : ''}`}>
                                 <Suspense
@@ -3855,8 +4054,22 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               </div>
                             )}
                           </div>
+                          ) : null}
                           <div className={`text-xs lg:text-[12px]${embedStretchToShell ? ' w-full max-w-full' : ''}`}>
-                            {!vehiclesLoaded ? (
+                          {restrictedAirportRouteMessage ? (
+                            <div className="relative z-[10041] rounded-xl border border-red-200 bg-red-50 p-4 text-left shadow-sm">
+                              <p className="text-base font-semibold text-red-800">Route unavailable</p>
+                              <p className="mt-2 text-sm leading-relaxed text-red-700">
+                                {restrictedAirportRouteMessage}
+                              </p>
+                              <a
+                                href={`tel:${RESTRICTED_AIRPORT_ROUTE_PHONE_TEL}`}
+                                className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-red-700 px-4 text-sm font-bold text-white"
+                              >
+                                Call {RESTRICTED_AIRPORT_ROUTE_PHONE_DISPLAY}
+                              </a>
+                            </div>
+                          ) : !vehiclesLoaded ? (
                               <div className="flex items-center justify-center p-4">
                                 <div className="text-gray-500">Loading vehicles...</div>
                               </div>
@@ -3876,10 +4089,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             )}
                           </div>
                         </div>
+                        {!restrictedAirportRouteMessage && (
                         <div
                           className={
                             embedStretchToShell
-                              ? 'max-lg:order-1 min-w-0 w-full text-xs lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none lg:text-[14px] xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
+                              ? 'max-lg:order-2 min-w-0 w-full text-xs lg:order-none lg:w-[calc(50%-0.75rem)] lg:max-w-[calc(50%-0.75rem)] lg:flex-none lg:text-[14px] xl:w-[calc(50%-1rem)] xl:max-w-[calc(50%-1rem)]'
                               : 'lg:col-span-1 text-xs lg:text-[14px] lg:pr-6 max-w-md mobile-nav-fix'
                           }
                         >
@@ -3934,6 +4148,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             </div>
                           )}
                         </div>
+                        )}
                       </div>
                     </>
                   )}

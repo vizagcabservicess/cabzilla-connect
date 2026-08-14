@@ -107,7 +107,7 @@ export function LocationInput({
     try {
       const location = await fetchPlaceDetails(prediction.place_id);
       if (!location) return;
-      if (isPickupLocation) {
+      if (isPickupLocation || tripType === 'local') {
         const validation = validatePickupLocation(location, tripType);
         if (!validation.valid) {
           Alert.alert('Invalid Location', validation.message ?? 'Please select a valid location.');

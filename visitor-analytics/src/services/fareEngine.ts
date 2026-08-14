@@ -74,6 +74,92 @@ export interface RouteQuoteResult {
 /** Same threshold as Hero.tsx — ≤35 km uses Airport tab slabs, not outstation. */
 export const AIRPORT_OUTSTATION_SWITCH_KM = 35;
 
+/**
+ * Keep in sync with src/lib/restrictedAirportRoutes.ts
+ * (this package cannot import @/lib). Set to false to lift the restriction.
+ */
+const RESTRICTED_AIRPORT_ROUTES_ENABLED = false;
+const RESTRICTED_AIRPORT_ROUTE_MESSAGE =
+  "We're currently unable to provide airport transfers to this destination temporarily. Please contact us at +91 99663 63662 for alternate arrangements.";
+const RESTRICTED_AIRPORT_ROUTE_SOURCE = 'restricted-airport-route';
+const RESTRICTED_DROP_STATES = ['odisha', 'orissa'];
+const RESTRICTED_DROP_DISTRICT_KEYWORDS = [
+  'vizianagaram',
+  'vijayanagaram',
+  'vizianagarm',
+  'srikakulam',
+];
+const RESTRICTED_DROP_TOWNS = [
+  'palasa',
+  'sompeta',
+  'ichchapuram',
+  'palakonda',
+  'amadalavalasa',
+  'razam',
+  'rajam',
+  'narasannapeta',
+  'arasavalli',
+  'srimukhalingam',
+  'bobbili',
+  'parvathipuram',
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function blobContainsTerm(blob: string, term: string): boolean {
+  const escaped = escapeRegExp(term.toLowerCase());
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`).test(blob);
+}
+
+function textLooksLikeVizagAirport(text: string): boolean {
+  const blob = (text || '').toLowerCase();
+  if (!blob.trim()) return false;
+  const looksLikeAirport =
+    blob.includes('airport') ||
+    blob.includes('vizag_airport') ||
+    blob.includes('vizag_city_airport') ||
+    blob.includes('vizag international') ||
+    /\bvtz\b/.test(blob);
+  if (!looksLikeAirport) return false;
+  return (
+    blob.includes('vizag_airport') ||
+    blob.includes('vizag_city_airport') ||
+    blob.includes('vizag international') ||
+    blob.includes('vizag') ||
+    blob.includes('visakhapatnam') ||
+    /\bvtz\b/.test(blob) ||
+    blob.includes('alluri') ||
+    blob.includes('sitaram') ||
+    blob.includes('bhogapuram')
+  );
+}
+
+function isRestrictedAirportDropText(text: string): boolean {
+  const blob = (text || '').toLowerCase();
+  if (!blob.trim()) return false;
+  if (RESTRICTED_DROP_STATES.some((s) => blobContainsTerm(blob, s))) return true;
+  if (RESTRICTED_DROP_DISTRICT_KEYWORDS.some((term) => blobContainsTerm(blob, term))) return true;
+  return RESTRICTED_DROP_TOWNS.some((term) => blobContainsTerm(blob, term));
+}
+
+function getRestrictedAirportRouteBlockFromText(
+  from: string,
+  to: string,
+  pricingModel?: 'outstation' | 'airport' | 'auto'
+): string | null {
+  if (!RESTRICTED_AIRPORT_ROUTES_ENABLED) return null;
+  if (pricingModel && pricingModel !== 'airport') return null;
+  if (!textLooksLikeVizagAirport(from)) return null;
+  if (!isRestrictedAirportDropText(to)) return null;
+  return RESTRICTED_AIRPORT_ROUTE_MESSAGE;
+}
+
+export function isRestrictedAirportRouteQuote(q: RouteQuoteResult): boolean {
+  return q.source === RESTRICTED_AIRPORT_ROUTE_SOURCE;
+}
+
 const CACHE_MS = 60_000;
 let outstationCache: { at: number; rows: Record<string, OutstationFareRow> } | null = null;
 let localCache: { at: number; rows: Record<string, LocalFareRow> } | null = null;
@@ -636,6 +722,23 @@ export async function quoteOutstationRoute(input: {
   pricingModel?: 'outstation' | 'airport' | 'auto';
 }): Promise<RouteQuoteResult> {
   const tripMode = input.tripMode || 'one-way';
+  const restrictedMessage = getRestrictedAirportRouteBlockFromText(
+    input.from,
+    input.to,
+    input.pricingModel
+  );
+  if (restrictedMessage) {
+    return {
+      from: input.from,
+      to: input.to,
+      distanceKm: 0,
+      tripMode,
+      pricingModel: 'outstation',
+      quotes: [],
+      source: RESTRICTED_AIRPORT_ROUTE_SOURCE,
+    };
+  }
+
   let distanceKm = input.distanceKm;
   let durationText: string | undefined;
   let source = 'provided-km';
@@ -735,6 +838,10 @@ export async function quoteOutstationRoute(input: {
 }
 
 export function formatRouteQuoteReply(q: RouteQuoteResult): string {
+  if (q.source === RESTRICTED_AIRPORT_ROUTE_SOURCE) {
+    return RESTRICTED_AIRPORT_ROUTE_MESSAGE;
+  }
+
   const short = (p: string) =>
     p
       .replace(/, India$/i, '')

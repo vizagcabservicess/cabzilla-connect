@@ -246,15 +246,26 @@ export class SessionRecorder {
     this.observer = new MutationObserver((mutations) => {
       const serialized: SerializedMutation[] = [];
       for (const m of mutations) {
-        if (m.type === 'childList' && (m.addedNodes.length > 2 || m.removedNodes.length > 2)) {
-          majorDomChanges += 1;
-        }
-        if (serialized.length > 40) break;
         const target = m.target instanceof Element ? m.target : m.target.parentElement;
         if (!target) continue;
         if (target.closest?.('[data-va-ignore]')) continue;
 
+        if (m.type === 'childList' && (m.addedNodes.length > 2 || m.removedNodes.length > 2)) {
+          majorDomChanges += 1;
+        }
+        if (serialized.length > 40) break;
+
         if (m.type === 'attributes') {
+          // Input value is recorded via input events. class/style churn from React
+          // re-renders would freeze the tab if we serialize every keystroke.
+          if (
+            m.attributeName === 'class' ||
+            m.attributeName === 'style' ||
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement
+          ) {
+            continue;
+          }
           if (shouldMaskElement(target, this.cfg.maskSelectors) && m.attributeName === 'value') {
             serialized.push({
               type: 'attributes',

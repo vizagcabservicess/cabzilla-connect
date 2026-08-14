@@ -42,15 +42,27 @@ export const vizagLocations: Location[] = [
   },
   {
     id: 'vizag_airport',
-    name: 'Visakhapatnam International Airport',
-    city: 'Visakhapatnam',
+    name: 'Alluri Sitarama Raju International Airport',
+    city: 'Bhogapuram',
     state: 'Andhra Pradesh',
     type: 'airport',
     popularityScore: 99,
     isPickupLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Visakhapatnam International Airport, Visakhapatnam'
+    lat: 17.97611,
+    lng: 83.50389,
+    address: 'Alluri Sitarama Raju International Airport, Bhogapuram, Vizianagaram District, Andhra Pradesh'
+  },
+  {
+    id: 'vizag_city_airport',
+    name: 'Vizag International Airport',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'airport',
+    popularityScore: 98,
+    isPickupLocation: true,
+    lat: 17.72111,
+    lng: 83.22444,
+    address: 'Vizag International Airport (VTZ), NAD, Visakhapatnam, Andhra Pradesh'
   },
   {
     id: 'rk_beach',
@@ -257,11 +269,96 @@ export const popularLocations: Location[] = [
   ...apDestinations
 ];
 
+export function getVizagAirportLocations(): Location[] {
+  return vizagLocations.filter((loc) => loc.type === 'airport');
+}
+
+function coordsKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  if (
+    !Number.isFinite(aLat) ||
+    !Number.isFinite(aLng) ||
+    !Number.isFinite(bLat) ||
+    !Number.isFinite(bLng)
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthKm = 6371;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h =
+    sinLat * sinLat +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * sinLng * sinLng;
+  return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function isSameKnownAirport(location: Location, airport: Location): boolean {
+  return (
+    location.id === airport.id &&
+    location.name === airport.name &&
+    Math.abs(location.lat - airport.lat) < 0.0001 &&
+    Math.abs(location.lng - airport.lng) < 0.0001
+  );
+}
+
+/** Snap a Google/airport pick to Bhogapuram or the city VTZ airport without mixing the two. */
+export function resolveCanonicalVizagAirport(location: Location): Location {
+  const airports = getVizagAirportLocations();
+  if (airports.length === 0) return location;
+
+  const byId = airports.find((airport) => airport.id === location.id);
+  if (byId) return isSameKnownAirport(location, byId) ? location : { ...byId };
+
+  let nearest = airports[0];
+  let nearestKm = Number.POSITIVE_INFINITY;
+  for (const airport of airports) {
+    const km = coordsKm(location.lat, location.lng, airport.lat, airport.lng);
+    if (km < nearestKm) {
+      nearestKm = km;
+      nearest = airport;
+    }
+  }
+  if (nearestKm <= 8) {
+    return isSameKnownAirport(location, nearest) ? location : { ...nearest };
+  }
+
+  const blob = `${location.name} ${location.address} ${location.city}`.toLowerCase();
+  const bhogapuram = airports.find((airport) => airport.id === 'vizag_airport');
+  const cityAirport = airports.find((airport) => airport.id === 'vizag_city_airport');
+  if (blob.includes('bhogapuram') || blob.includes('alluri') || blob.includes('sitaram')) {
+    return bhogapuram
+      ? isSameKnownAirport(location, bhogapuram)
+        ? location
+        : { ...bhogapuram }
+      : location;
+  }
+  if (
+    blob.includes('nad') ||
+    blob.includes('gajuwaka') ||
+    blob.includes('ins dega') ||
+    blob.includes('vizag international')
+  ) {
+    return cityAirport
+      ? isSameKnownAirport(location, cityAirport)
+        ? location
+        : { ...cityAirport }
+      : location;
+  }
+  return location;
+}
+
 // Map URL slugs to known locations (for prefill from query params)
 const SLUG_TO_LOCATION_ID: Record<string, string> = {
-  'visakhapatnam-vtz-international-airport': 'vizag_airport',
+  'visakhapatnam-vtz-international-airport': 'vizag_city_airport',
+  'vizag-international-airport': 'vizag_city_airport',
+  'vizag-city-airport': 'vizag_city_airport',
+  'vizag_city_airport': 'vizag_city_airport',
   'vizag-airport': 'vizag_airport',
   'vizag_airport': 'vizag_airport',
+  'bhogapuram-airport': 'vizag_airport',
+  'alluri-sitarama-raju-international-airport': 'vizag_airport',
   'mvp-colony': 'mvp_colony',
   'mvp_colony': 'mvp_colony',
   'rk-beach': 'rk_beach',
@@ -312,6 +409,38 @@ export const areBothLocationsInVizag = (pickup: Location | null, drop: Location 
   return isVizagLocation(pickup) && isVizagLocation(drop);
 };
 
+/** Queries that should resolve to Vizag airport (includes common misspellings). */
+export const VIZAG_AIRPORT_QUERY_ALIASES = [
+  'alluri',
+  'alluru',
+  'sitaram',
+  'sitarama',
+  'bhogapuram',
+  'vtz',
+  'vizag airport',
+  'vizag international',
+  'vizag international airport',
+  'visakhapatnam airport',
+  'visakhapatnam international',
+  'alluri sitarama raju',
+  'alluri sitaram raju',
+  'airport',
+];
+
+export function locationMatchesSearchQuery(location: Location, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (
+    location.name.toLowerCase().includes(q) ||
+    location.city.toLowerCase().includes(q) ||
+    location.address.toLowerCase().includes(q)
+  ) {
+    return true;
+  }
+  if (location.type !== 'airport') return false;
+  return VIZAG_AIRPORT_QUERY_ALIASES.some((alias) => alias.includes(q) || q.includes(alias));
+}
+
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {
   if (!query || query.length < 2) {
     if (isPickup) {
@@ -323,12 +452,8 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     return [];
   }
   
-  const lowerQuery = query.toLowerCase();
-  
-  let filteredLocations = popularLocations.filter(
-    location => 
-      location.name.toLowerCase().includes(lowerQuery) || 
-      location.city.toLowerCase().includes(lowerQuery)
+  let filteredLocations = popularLocations.filter((location) =>
+    locationMatchesSearchQuery(location, query)
   );
   
   if (isPickup) {
@@ -360,6 +485,18 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'ongole': 460,
       'kadapa': 660,
       'nellore': 590
+    },
+    'vizag_city_airport': {
+      'araku_valley': 112,
+      'srikakulam': 100,
+      'rajahmundry': 185,
+      'vijayawada': 345,
+      'tirupati': 785,
+      'kakinada': 165,
+      'guntur': 365,
+      'ongole': 455,
+      'kadapa': 655,
+      'nellore': 585
     },
     'vizag_railway': {
       'araku_valley': 112,

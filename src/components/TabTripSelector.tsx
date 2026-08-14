@@ -213,8 +213,8 @@ export function TabTripSelector({
         sessionStorage.removeItem('dropLocation');
         sessionStorage.removeItem('dropCoordinates');
       }
-      // Clear drop location for local and tour tabs
-      else if (value === 'local' || value === 'tour') {
+      // Tour packages use drop as the selected tour; local keeps a real drop-off.
+      else if (value === 'local' || value === 'tour' || selectedTab === 'local') {
         sessionStorage.removeItem('dropLocation');
         sessionStorage.removeItem('dropCoordinates');
       }

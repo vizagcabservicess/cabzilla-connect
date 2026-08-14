@@ -599,7 +599,7 @@ min-height: 100vh;
 
 /* Google Places Autocomplete — sits on document body; z-index + surface so it layers above the booking row */
 .pac-container {
-  z-index: 10070 !important;
+  z-index: 10080 !important;
   max-width: calc(100vw - 16px) !important;
   box-sizing: border-box !important;
   border-radius: 0.75rem;
