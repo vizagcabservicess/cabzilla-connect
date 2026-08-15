@@ -94,9 +94,8 @@ function haversineKm(a: Location, b: Location): number | null {
 
 /**
  * Infer the best customer booking service from pickup/drop.
- * - Airport: one end is Vizag airport AND the other is in the Vizag area, or the hop is ≤35 km
- *   (Bhogapuram airport itself sits outside the city 35 km circle)
- * - Local: both ends inside Vizag
+ * Local (hourly rental) is never inferred from a From/To pair — only the Local tab.
+ * - Airport: both ends in Vizag, or one end is a Vizag airport and the hop is ≤35 km
  * - Outstation: other end outside Vizag (e.g. Airport → Kakinada, Vizag → Hyderabad)
  */
 export function inferTripServiceType(
@@ -127,14 +126,11 @@ export function inferTripServiceType(
 
   if (!drop) return null;
 
-  if (dropInVizag && pickupInVizag) {
-    if (km == null || km <= 45) return 'local';
-    return 'outstation';
-  }
+  if (dropInVizag && pickupInVizag) return 'airport';
 
   if (!dropInVizag) return 'outstation';
 
-  if (dropInVizag && !pickup) return 'local';
+  if (dropInVizag && !pickup) return 'airport';
 
   return 'outstation';
 }

@@ -1282,15 +1282,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     RESTRICTED_AIRPORT_ROUTES_ENABLED &&
     tripType === 'airport' &&
     isVizagAirportLocation(pickupLocation);
-  const airportPickupLocked = tripType === 'airport' && airportDirectionLabel !== 'To Airport';
-  const pickupInputValue =
-    airportPickupLocked && pickupLocation && isVizagAirportLocation(pickupLocation)
-      ? { ...pickupLocation }
-      : airportPickupLocked && airportLocation
-        ? { ...airportLocation }
-        : pickupLocation
-          ? { ...pickupLocation }
-          : undefined;
+  const pickupInputValue = pickupLocation ? { ...pickupLocation } : undefined;
   const dropInputValue = dropLocation ? { ...dropLocation } : undefined;
   const showFromToFields =
     tripType === 'outstation' || tripType === 'airport' || tripType === 'custom' || tripType === 'local';
@@ -1309,11 +1301,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const notifyRestrictedAirportRoute = (message: string) => {
     setRestrictedRouteNotice(message);
   };
-  const airportLockedPickupProps =
-    airportPickupLocked && vizagAirportLocations.length > 0
-      ? { airportOnly: true, suggestions: vizagAirportLocations }
-      : {};
-
   const switchAirportTripToOutstation = () => {
     const pickupIsAirport = isVizagAirportLocation(pickupLocation);
     const dropIsAirport = isVizagAirportLocation(dropLocation);
@@ -1324,6 +1311,41 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setTripType('outstation');
     sessionStorage.setItem('tripType', 'outstation');
     setAirportDirectionLabel('');
+  };
+
+  const applyInferredHomepageTab = (
+    nextPickup: Location | null,
+    nextDrop: Location | null,
+    currentType: TripType,
+  ) => {
+    if (currentType === 'tour' || currentType === 'custom') return;
+    if (visibleTabs && visibleTabs.length === 1) return;
+
+    const inferred = inferTripServiceType(nextPickup, nextDrop);
+    if (!inferred || inferred === currentType) return;
+
+    switch (inferred) {
+      case 'tour':
+        return;
+      case 'local':
+        setTripType('local');
+        sessionStorage.setItem('tripType', 'local');
+        setAirportDirectionLabel('');
+        return;
+      case 'airport':
+        setTripType('airport');
+        sessionStorage.setItem('tripType', 'airport');
+        return;
+      case 'outstation':
+        setTripType('outstation');
+        sessionStorage.setItem('tripType', 'outstation');
+        setAirportDirectionLabel('');
+        return;
+      default: {
+        const _never: never = inferred;
+        return _never;
+      }
+    }
   };
 
   /** When trip intent no longer matches a locked service page, jump to the right landing with prefill. */
@@ -1477,6 +1499,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       isInVizag: true,
     };
     setPickupLocation(nextPickup);
+    applyInferredHomepageTab(nextPickup, dropLocation, tripType);
     advanceAfterPickupSelected();
   };
   
@@ -1526,11 +1549,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
 
-    setDropLocation(withCanonicalAirportCoords(location) ?? location);
+    const nextDrop = withCanonicalAirportCoords(location) ?? location;
+    setDropLocation(nextDrop);
+    applyInferredHomepageTab(pickupLocation, nextDrop, tripType);
     advanceAfterDropSelected();
 
     const dropOutsideVizag =
-      !isLocationInVizag(location) && !isVizagAirportLocation(location);
+      !isLocationInVizag(nextDrop) && !isVizagAirportLocation(nextDrop);
     if (tripType === 'airport' && dropOutsideVizag) {
       switchAirportTripToOutstation();
     }
@@ -1569,12 +1594,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   useEffect(() => {
     if (tripType === 'tour' || tripType === 'custom') return;
     if (!pickupLocation || !dropLocation) return;
-    const inferred = inferTripServiceType(pickupLocation, dropLocation);
-    if (inferred === 'airport' && tripType === 'outstation') {
-      setTripType('airport');
-      sessionStorage.setItem('tripType', 'airport');
-    }
-  }, [pickupLocation, dropLocation, tripType]);
+    applyInferredHomepageTab(pickupLocation, dropLocation, tripType);
+  }, [pickupLocation, dropLocation, tripType, visibleTabs]);
 
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
@@ -2566,19 +2587,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setDistance(0);
     setDuration(0);
     
-    // Only clear drop location if we're not in a single-tab mode (Hero widgets)
     if (!visibleTabs || visibleTabs.length > 1) {
-      if (type === 'local' || type === 'tour' || tripType === 'local') {
-        setDropLocation(null);
-        sessionStorage.removeItem('dropLocation');
-      }
+      setDropLocation(null);
+      sessionStorage.removeItem('dropLocation');
+      sessionStorage.setItem('userClearedDropLocation', 'true');
+      window.setTimeout(() => {
+        sessionStorage.removeItem('userClearedDropLocation');
+      }, 1000);
     }
 
-    if (type === 'airport' && airportLocation) {
-      setPickupLocation(airportLocation);
-      setDropLocation(null);
-      sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
-      sessionStorage.removeItem('dropLocation');
+    if (type === 'airport' && !pickupLocation && vizagAirportLocations.length > 0) {
+      const defaultAirport =
+        vizagAirportLocations.find((loc) => loc.id === 'vizag_city_airport') ??
+        vizagAirportLocations[0];
+      setPickupLocation(defaultAirport);
+      sessionStorage.setItem('pickupLocation', JSON.stringify(defaultAirport));
       setAirportDirectionLabel('From Airport');
     }
     
@@ -2851,7 +2874,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         isPickupLocation={true}
                         tripType={tripType}
                         hideLeadingIcon
-                        {...airportLockedPickupProps}
                       />
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
@@ -2883,7 +2905,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       onLocationChange={handlePickupLocationChange}
                       isPickupLocation={true}
                       tripType={tripType}
-                      {...airportLockedPickupProps}
                     />
 
                     {showFromToFields && (
@@ -3251,7 +3272,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   isPickupLocation={true}
                                   tripType={tripType}
                                   hideLeadingIcon
-                                  {...airportLockedPickupProps}
                                 />
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
@@ -3286,7 +3306,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 onLocationChange={handlePickupLocationChange}
                                 isPickupLocation={true}
                                 tripType={tripType}
-                                {...airportLockedPickupProps}
                               />
 
                               {showFromToFields && (
@@ -3572,7 +3591,6 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               isPickupLocation={true}
                               tripType={tripType}
                               variant="desktop"
-                              {...airportLockedPickupProps}
                             />
                           </div>
                           {showFromToFields && (

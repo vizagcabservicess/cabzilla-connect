@@ -11,14 +11,98 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../config/env.js';
 
 const localRoot = path.resolve(process.cwd(), '.data', 'object-store');
+const localRecordingsRoot = path.join(localRoot, 'recordings');
 
-export function useLocalStore(): boolean {
-  const ep = (env.S3_ENDPOINT || '').toLowerCase();
+function isLoopbackS3Endpoint(endpoint: string): boolean {
+  const ep = endpoint.toLowerCase();
   return (
-    process.env.VA_LOCAL_OBJECT_STORE === '1' ||
+    !ep ||
     ep.includes('127.0.0.1') ||
-    ep.includes('localhost')
+    ep.includes('localhost') ||
+    ep.includes('0.0.0.0')
   );
+}
+
+/** On-disk chunk files only when explicitly enabled. Production Hostinger must not set this. */
+export function useLocalStore(): boolean {
+  return process.env.VA_LOCAL_OBJECT_STORE === '1';
+}
+
+/** Real remote bucket (AWS / R2 / Spaces). False for MinIO-on-localhost defaults. */
+export function hasRemoteObjectStore(): boolean {
+  if (useLocalStore()) return false;
+  if (isLoopbackS3Endpoint(env.S3_ENDPOINT)) return false;
+  const key = (env.S3_ACCESS_KEY_ID || '').trim();
+  if (!key || key === 'minioadmin') return false;
+  return true;
+}
+
+export function objectStoreMode(): 'local' | 's3' | 'db' {
+  if (useLocalStore()) return 'local';
+  if (hasRemoteObjectStore()) return 's3';
+  return 'db';
+}
+
+async function walkFiles(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...(await walkFiles(full)));
+    } else {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+async function removeEmptyDirs(dir: string): Promise<number> {
+  let removed = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    removed += await removeEmptyDirs(path.join(dir, entry.name));
+  }
+  const leftover = await fs.readdir(dir).catch(() => ['x']);
+  if (leftover.length === 0 && dir !== localRoot) {
+    await fs.rmdir(dir).catch(() => undefined);
+    removed += 1;
+  }
+  return removed;
+}
+
+/**
+ * Delete leftover Hostinger/local recording chunk files. Replay still uses MySQL payload_gzip.
+ * Pass olderThanDays=0 to remove every local recording file.
+ */
+export async function pruneLocalRecordingFiles(opts?: {
+  olderThanDays?: number;
+}): Promise<{ deletedFiles: number; deletedDirs: number }> {
+  const olderThanDays = opts?.olderThanDays ?? 0;
+  const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+  const files = await walkFiles(localRecordingsRoot);
+  let deletedFiles = 0;
+  for (const file of files) {
+    if (olderThanDays > 0) {
+      const stat = await fs.stat(file).catch(() => null);
+      if (!stat || stat.mtimeMs > cutoff) continue;
+    }
+    await fs.unlink(file).catch(() => undefined);
+    deletedFiles += 1;
+  }
+  const deletedDirs = await removeEmptyDirs(localRecordingsRoot);
+  return { deletedFiles, deletedDirs };
 }
 
 function resolveLocalPath(key: string): string {
@@ -57,26 +141,40 @@ export async function putObject(
   _contentType: string,
   _contentEncoding?: string,
 ): Promise<void> {
-  if (useLocalStore()) {
-    const file = await localPathForWrite(key);
-    const buf = typeof body === 'string' ? Buffer.from(body) : Buffer.from(body);
-    await fs.writeFile(file, buf);
-    return;
+  const mode = objectStoreMode();
+  switch (mode) {
+    case 'db':
+      return;
+    case 'local': {
+      const file = await localPathForWrite(key);
+      const buf = typeof body === 'string' ? Buffer.from(body) : Buffer.from(body);
+      await fs.writeFile(file, buf);
+      return;
+    }
+    case 's3':
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: env.S3_BUCKET,
+          Key: key,
+          Body: body,
+          ContentType: _contentType,
+          ContentEncoding: _contentEncoding,
+        }),
+      );
+      return;
+    default: {
+      const _never: never = mode;
+      return _never;
+    }
   }
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: env.S3_BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: _contentType,
-      ContentEncoding: _contentEncoding,
-    }),
-  );
 }
 
 export async function getObjectBuffer(key: string): Promise<Buffer> {
-  if (useLocalStore()) {
+  const mode = objectStoreMode();
+  if (mode === 'db') {
+    throw notFoundError(key);
+  }
+  if (mode === 'local') {
     const file = resolveLocalPath(key);
     try {
       return await fs.readFile(file);
@@ -109,7 +207,9 @@ export async function getObjectBuffer(key: string): Promise<Buffer> {
 }
 
 export async function deleteObject(key: string): Promise<void> {
-  if (useLocalStore()) {
+  const mode = objectStoreMode();
+  if (mode === 'db') return;
+  if (mode === 'local') {
     const file = resolveLocalPath(key);
     await fs.unlink(file).catch(() => undefined);
     return;
@@ -119,7 +219,9 @@ export async function deleteObject(key: string): Promise<void> {
 
 export async function deleteObjects(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
-  if (useLocalStore()) {
+  const mode = objectStoreMode();
+  if (mode === 'db') return;
+  if (mode === 'local') {
     await Promise.all(keys.map((k) => deleteObject(k)));
     return;
   }
@@ -132,7 +234,7 @@ export async function deleteObjects(keys: string[]): Promise<void> {
 }
 
 export async function presignGet(key: string, expiresIn = 3600): Promise<string> {
-  if (useLocalStore()) {
+  if (objectStoreMode() !== 's3') {
     return `local://${key}`;
   }
   return getSignedUrl(
@@ -143,7 +245,7 @@ export async function presignGet(key: string, expiresIn = 3600): Promise<string>
 }
 
 export async function presignPut(key: string, contentType: string, expiresIn = 900): Promise<string> {
-  if (useLocalStore()) {
+  if (objectStoreMode() !== 's3') {
     return `local://${key}`;
   }
   return getSignedUrl(

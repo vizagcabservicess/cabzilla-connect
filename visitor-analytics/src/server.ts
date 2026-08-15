@@ -8,6 +8,7 @@ import { ZodError } from 'zod';
 import { corsOrigins, env } from './config/env.js';
 import { pool } from './db/pool.js';
 import { realtimeHub } from './websocket/hub.js';
+import { objectStoreMode, pruneLocalRecordingFiles } from './services/s3.js';
 import trackRouter from './routes/track.js';
 import adminRouter from './routes/admin.js';
 import chatRouter from './routes/chat.js';
@@ -186,9 +187,25 @@ async function start(existingServer?: http.Server): Promise<http.Server> {
       server!.listen(port, '0.0.0.0', () => {
         server!.off('error', reject);
         console.log(`[visitor-analytics] listening on 0.0.0.0:${port}`);
+        console.log(`[visitor-analytics] recording store=${objectStoreMode()}`);
         resolve();
       });
     });
+  }
+
+  if (env.NODE_ENV === 'production' && objectStoreMode() !== 'local') {
+    void pruneLocalRecordingFiles({ olderThanDays: 0 })
+      .then((pruned) => {
+        console.log(
+          `[visitor-analytics] pruned leftover local recordings files=${pruned.deletedFiles} dirs=${pruned.deletedDirs}`,
+        );
+      })
+      .catch((err) => {
+        console.warn(
+          '[visitor-analytics] local recording prune failed',
+          err instanceof Error ? err.message : err,
+        );
+      });
   }
 
   void pool

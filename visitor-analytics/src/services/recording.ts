@@ -1,7 +1,7 @@
 import pako from 'pako';
 import { env } from '../config/env.js';
 import { query, queryOne } from '../db/pool.js';
-import { putObject, getObjectBuffer, useLocalStore } from './s3.js';
+import { putObject, getObjectBuffer, objectStoreMode } from './s3.js';
 import { realtimeHub } from '../websocket/hub.js';
 import { newId, toMysqlDateTime } from '../utils/helpers.js';
 
@@ -60,14 +60,16 @@ export async function storeRecordingChunk(params: {
 
   const s3Key = `recordings/${params.siteId}/${params.sessionId}/${params.chunkIndex}.json.gz`;
 
-  // Best-effort object store (local disk / S3). Local disk is wiped on Hostinger redeploy.
-  try {
-    await putObject(s3Key, compressed, 'application/json', 'gzip');
-  } catch (err) {
-    console.warn(
-      '[va] object-store put failed; relying on DB payload_gzip',
-      err instanceof Error ? err.message : err,
-    );
+  const store = objectStoreMode();
+  if (store !== 'db') {
+    try {
+      await putObject(s3Key, compressed, 'application/json', 'gzip');
+    } catch (err) {
+      console.warn(
+        '[va] object-store put failed; relying on DB payload_gzip',
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   const startedAt = params.startedAt.replace('T', ' ').replace('Z', '');
@@ -169,13 +171,13 @@ export async function listRecordingChunks(sessionId: string) {
 
 /**
  * Load chunk events.
- * On Hostinger local disk is wiped on redeploy — prefer MySQL payload_gzip first when local store is active.
+ * Durable copy is MySQL payload_gzip. Local disk / S3 are optional caches.
  */
 export async function loadRecordingChunkEvents(
   s3Key: string,
   opts?: { sessionId?: string; chunkIndex?: number },
 ): Promise<unknown[]> {
-  const preferDb = useLocalStore() && opts?.sessionId != null && opts.chunkIndex != null;
+  const preferDb = opts?.sessionId != null && opts.chunkIndex != null;
 
   if (preferDb) {
     const fromDb = await loadPayloadFromDb(opts.sessionId!, opts.chunkIndex!);

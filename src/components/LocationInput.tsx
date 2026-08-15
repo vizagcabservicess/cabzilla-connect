@@ -794,6 +794,11 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     !predictionsLoading &&
     inputValue.trim().length >= 2;
 
+  // Google `.pac-container` is the only list when Places is loaded. Curated
+  // suggestions otherwise stack as a second dropdown on the Airport tab.
+  const showCuratedSuggestionList =
+    showSuggestions && filteredSuggestions.length > 0 && (!isLoaded || airportOnly);
+
   const showSelectionInvalid = inputValue.trim().length > 0 && !committedLocation?.id;
 
   /** Shared markup for curated suggestions (no curated “recent/popular” — only typed matches). */
@@ -1031,7 +1036,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           {subtitleText}
         </p>
       )}
-      {showSuggestions && filteredSuggestions.length > 0 && !mobileSearchSheetOpen && (
+      {showCuratedSuggestionList && !mobileSearchSheetOpen && (
         <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
           {suggestionsListMarkup}
         </div>
@@ -1108,7 +1113,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
-            {showSuggestions && filteredSuggestions.length > 0 && (
+            {showCuratedSuggestionList && (
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">{suggestionsListMarkup}</div>
             )}
             {showEmptyGoogleDropdown && (

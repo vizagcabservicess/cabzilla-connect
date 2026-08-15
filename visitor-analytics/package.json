@@ -14,6 +14,7 @@
     "build:sdk": "cd sdk && npm run build",
     "migrate": "tsx src/utils/migrate.ts",
     "retention": "tsx src/utils/retentionJob.ts",
+    "prune-recordings": "tsx scripts/prune-local-recordings.ts",
     "test:ai-lead": "tsx scripts/test-ai-lead-flow.ts"
   },
   "dependencies": {

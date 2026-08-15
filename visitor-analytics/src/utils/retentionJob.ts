@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { pool, query, queryOne } from '../db/pool.js';
-import { deleteObjects } from '../services/s3.js';
+import { deleteObjects, pruneLocalRecordingFiles } from '../services/s3.js';
 
 interface SiteRow {
   id: string;
@@ -114,6 +114,13 @@ export async function runRetentionJob(siteId?: string): Promise<void> {
         `heatmap=${result.heatmap} bookings=${result.bookingEvents}`,
     );
   }
+
+  const pruned = await pruneLocalRecordingFiles({
+    olderThanDays: env.DEFAULT_RETENTION_DAYS,
+  });
+  console.log(
+    `[retention] local recording files deleted=${pruned.deletedFiles} dirs=${pruned.deletedDirs}`,
+  );
 
   console.log('[retention] done');
 }
