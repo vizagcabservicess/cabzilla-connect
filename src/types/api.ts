@@ -29,6 +29,8 @@ export interface BookingRequest {
   passengerCountryCode?: string;
   passengerEmail: string;
   additionalRequirements?: string;
+  /** Outstation intermediate stops, e.g. "Anakapalle → Tuni". */
+  via_stops?: string;
   distance?: number;
   totalAmount?: number;
   hourlyPackage?: string | null;
@@ -148,7 +150,9 @@ export interface Booking {
   status: BookingStatus;
   payment_status: string;
   payment_method?: string;
+  paymentMethod?: string;
   advance_paid_amount?: number;
+  advancePaidAmount?: number;
   partialPaymentReceived?: boolean;
   partialPaymentAmount?: number;
   isPaid?: boolean;

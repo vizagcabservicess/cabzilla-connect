@@ -63,6 +63,9 @@ export class URLRedirectService {
     { from: '/airport-transfer', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
     { from: '/airport-pickup', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
     { from: '/airport-drop', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
+    { from: '/bhogapuram-airport-taxi', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
+    { from: '/vizag-airport-taxi', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
+    { from: '/vtz-airport-taxi', to: '/airport-taxi', type: 'permanent', statusCode: 301 },
     
     // Old outstation pages
     { from: '/outstation', to: '/outstation-taxi', type: 'permanent', statusCode: 301 },

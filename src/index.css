@@ -232,6 +232,17 @@ font-weight: 500;
 @apply text-blue-600;
 }
 
+.airport-peek-rail {
+  min-width: 0;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.airport-peek-rail::-webkit-scrollbar {
+  display: none;
+}
+
 /* ServicesShowcase slider — no extra track padding (avoids gray band above/below cards) */
 .services-showcase-track {
   background: transparent;
@@ -1325,6 +1336,22 @@ min-height: 100vh;
   outline: none;
   box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
   border-color: rgba(100, 116, 139, 0.45);
+}
+
+/* Location fields: focus the whole cell, never a nested ring on the inner <input> */
+.premium-booking-card .ios-search-input-wrapper:focus-within {
+  border-color: rgb(59 130 246) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+}
+
+.premium-booking-card .ios-search-input-wrapper input,
+.premium-booking-card .ios-search-input-wrapper input:focus,
+.premium-booking-card .ios-search-input-wrapper input:focus-visible,
+.premium-booking-card .ios-search-input:focus,
+.premium-booking-card .ios-search-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
 }
 
 /* Bordered package / tour selects — soft slate focus (not neon blue box) */

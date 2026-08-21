@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +7,14 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { OfferCampaignOfferType, OfferCampaignPublic } from '@/types/offerCampaign';
-import { OFFER_CATEGORY_LABELS } from '@/types/offerCampaign';
+import type { OfferCampaignCategory, OfferCampaignOfferType, OfferCampaignPublic } from '@/types/offerCampaign';
+import { OFFER_CATEGORY_LABELS, formatOfferRouteScope, formatOfferTravelTimeFrom, formatOfferTravelDateRange } from '@/types/offerCampaign';
 import {
   loadHomeOfferCampaigns,
   markHomeOfferPopupSeen,
   markOfferPopupSeen,
   saveHomePendingOffer,
+  wasOfferPopupSeen,
 } from '@/components/offers/OfferCampaignPopup';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import { cn } from '@/lib/utils';
@@ -104,6 +105,19 @@ function travelDateLines(
   };
 }
 
+function offerChipLabel(campaign: OfferCampaignPublic, all: OfferCampaignPublic[]): string {
+  const sameCategory = all.filter((c) => c.category === campaign.category).length > 1;
+  if (sameCategory) {
+    const dateLabel = formatOfferTravelDateRange(
+      campaign.travel_date_from,
+      campaign.travel_date_to
+    );
+    if (dateLabel) return dateLabel;
+    return campaign.name;
+  }
+  return OFFER_CATEGORY_LABELS[campaign.category] ?? campaign.category;
+}
+
 function offerDisplay(
   offerType: OfferCampaignOfferType,
   offerValue: number,
@@ -154,13 +168,21 @@ function categoryIcon(category: string) {
  * Homepage offers dialog — lists every active category campaign (not only Airport).
  * Typographic promo layout (no vehicle imagery).
  */
-export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }) {
+export function HomeOfferCampaignPopup({
+  enabled = true,
+  categories,
+}: {
+  enabled?: boolean;
+  /** Limit to these categories (service landing). Default = all. */
+  categories?: OfferCampaignCategory[];
+}) {
   const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<OfferCampaignPublic[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [, setTick] = useState(0);
+  const skipCloseLogRef = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
@@ -168,10 +190,11 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
     let timer: number | undefined;
 
     void (async () => {
-      const result = await loadHomeOfferCampaigns();
+      const result = await loadHomeOfferCampaigns(categories);
       if (cancelled || !result.shouldShowPopup || result.campaigns.length === 0) return;
       setCampaigns(result.campaigns);
-      setSelectedId(result.campaigns[0].id);
+      const unseen = result.campaigns.find((c) => !wasOfferPopupSeen(c.category, c.id));
+      setSelectedId(unseen?.id ?? result.campaigns[0].id);
       timer = window.setTimeout(() => {
         if (!cancelled) setOpen(true);
       }, OPEN_DELAY_MS);
@@ -181,7 +204,7 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [enabled]);
+  }, [enabled, categories]);
 
   useEffect(() => {
     if (!open || campaigns.length === 0) return;
@@ -204,6 +227,12 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
   const travelLines = selected
     ? travelDateLines(selected.travel_date_from, selected.travel_date_to)
     : null;
+  const travelTimeFrom = selected
+    ? formatOfferTravelTimeFrom(selected.travel_time_from)
+    : null;
+  const route = selected
+    ? formatOfferRouteScope(selected)
+    : null;
   const clock = selected ? countdownParts(selected.ends_at) : { h: 0, m: 0, s: 0 };
   const CategoryIcon = selected ? categoryIcon(selected.category) : Tag;
 
@@ -223,12 +252,14 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
       await navigator.clipboard.writeText(selected.coupon_code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      void offerCampaignAPI.public.logEvent('copy', selected.id, selected.category);
     } catch {
       /* ignore */
     }
   };
 
   const applySelected = () => {
+    skipCloseLogRef.current = true;
     void offerCampaignAPI.public.logEvent('click', selected.id, selected.category);
     saveHomePendingOffer(selected);
     toast({
@@ -248,7 +279,17 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) markHomeOfferPopupSeen();
+        if (!next) {
+          markHomeOfferPopupSeen();
+          if (!skipCloseLogRef.current) {
+            void offerCampaignAPI.public.logEvent(
+              'popup_close',
+              selected.id,
+              selected.category
+            );
+          }
+          skipCloseLogRef.current = false;
+        }
         setOpen(next);
       }}
     >
@@ -357,13 +398,13 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
               <div className="mb-1.5 flex items-center gap-1.5">
                 <div className="h-px flex-1 bg-slate-200" />
                 <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  Choose a category
+                  Choose an offer
                 </p>
                 <div className="h-px flex-1 bg-slate-200" />
               </div>
               <div className="flex justify-center gap-1.5 overflow-x-auto">
                 {campaigns.map((c) => {
-                  const label = OFFER_CATEGORY_LABELS[c.category] ?? c.category;
+                  const label = offerChipLabel(c, campaigns);
                   const active = c.id === selected.id;
                   const Icon = categoryIcon(c.category);
                   return (
@@ -403,12 +444,18 @@ export function HomeOfferCampaignPopup({ enabled = true }: { enabled?: boolean }
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-slate-900">{selected.name}</p>
+                  {route ? (
+                    <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-700">
+                      Valid only on {route}
+                    </p>
+                  ) : null}
+                  {travelTimeFrom ? (
+                    <p className="mt-0.5 text-[11px] font-medium leading-snug text-slate-700">
+                      Pickups {travelTimeFrom}
+                    </p>
+                  ) : null}
                   <p className="mt-0.5 text-[10px] font-medium text-emerald-700">
                     {categoryLabel} · {offer.primary.toLowerCase()}
-                  </p>
-                  <p className="mt-0.5 text-[10px] leading-snug text-slate-500">
-                    Use this coupon when you book {categoryLabel.toLowerCase()} trips. Applies at
-                    checkout.
                   </p>
                 </div>
               </div>

@@ -13,6 +13,10 @@ import {
 } from '@/utils/tourConfirmationHelpers';
 import { parseSeatsFromVehicleLabel } from '@/utils/enrichBookingForWhatsApp';
 import { computeOutstationRoundTripIncludedKm } from '@/utils/outstationRoundTripLimits';
+import { resolveViaStopsLabel, stripViaStopsRequirementLine } from '@/lib/outstationStops';
+import {
+  formatWhatsAppAdvanceLine,
+} from '@/utils/bookingPaymentFields';
 
 /** True if we should show this value in customer-facing messages (omit N/A clutter). */
 function isPresentableValue(v: unknown): boolean {
@@ -411,10 +415,8 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const driverName = booking.driverName || 'to be shared';
   const driverPhone = booking.driverPhone || 'to be shared';
 
-  // Get fare details - using actual database fields
-  const fareBase = booking.fare || booking.totalAmount || 0;
-  const advanceAmount = booking.advance_paid_amount || 0;
-  const advanceMode = booking.payment_method || 'N/A';
+  // Get fare details — received advance, else 30% due for unpaid guest bookings
+  const fareBase = Number(booking.fare || booking.totalAmount || 0) || 0;
   const advanceTxnId = booking.razorpay_payment_id || 
                       (booking as any).razorpayPaymentId || 
                       (booking as any).transactionId || 
@@ -443,8 +445,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
           hour12: true
         })
       : 'Payment time not recorded';
-  const pendingAmount = Math.max(0, fareBase - advanceAmount);
-  const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
+  const {
+    line: advanceLine,
+    pendingAmount,
+    pendingDue,
+  } = formatWhatsAppAdvanceLine(booking, fareBase);
 
   // Get package details for local trips — prefer hourlyPackage id / DB fields; fare inference is last resort
   let hoursIncluded: string | number = tripType === 'local' ? '' : 'N/A';
@@ -561,12 +566,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const nightChargeRate = booking.night_charge_rate || 'N/A';
 
   // Get route and notes
-  const viaStops = booking.via_stops || 'N/A';
+  const viaStops = resolveViaStopsLabel(booking);
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
   
-  const additionalRequirements = booking.additionalRequirements || 
-                                 booking.additional_requirements || 
-                                 '';
+  const additionalRequirements = stripViaStopsRequirementLine(
+    booking.additionalRequirements || booking.additional_requirements || ''
+  );
   
   // Ensure additional requirements are properly handled
   const hasAdditionalRequirements = additionalRequirements && 
@@ -774,15 +779,10 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   }
 
   let routeAndNotesBlock = '';
-  if (hasViaStops || Boolean(allNotes)) {
-    routeAndNotesBlock = '*Route and Notes*';
-    if (hasViaStops) {
-      routeAndNotesBlock += `\n🛣️ *Via/Stops:* ${viaStops}`;
-    }
-    if (allNotes) {
-      routeAndNotesBlock += `\n📝 *Special Notes:*
+  if (Boolean(allNotes)) {
+    routeAndNotesBlock = `*Route and Notes*
+📝 *Special Notes:*
 ${allNotes}`;
-    }
   }
 
   const airportChargeLines: string[] = [];
@@ -818,6 +818,7 @@ Your cab booking has been confirmed:
 *Trip Details*
 📍 *Pickup:* ${pickupLocation}
 📍 *Destination:* ${destinationDisplay}
+${hasViaStops ? `🛑 *Stops:* ${viaStops}` : ''}
 📅 *Pickup date & time:* ${formattedDateTime}
 ${returnDate ? `📅 *Return date & time:* ${formattedReturnDate}` : ''}
 🚗 *Trip type:* ${tripTypeDisplay}
@@ -844,7 +845,7 @@ ${itineraryWhatsApp}
 
 *Fare and Payments*
 💰 *Fare (base):* ₹${fareBase}
-💳 *Advance:* ₹${advanceAmount}, mode: ${advanceMode}
+${advanceLine}
 ⏳ *Pending:* ₹${pendingAmount}, payable: ${pendingDue}
 ${gstEnabled && isPresentableValue(gstNumber) ? `🏢 *GST Details:* ${gstNumber}${isPresentableValue(companyName) ? ` (${companyName})` : ''}` : ''}
 🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt
@@ -920,8 +921,12 @@ export function generateDriverAssignmentMessage(booking: Booking): string {
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
     : 'N/A';
-  const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
+  const additionalRequirements = stripViaStopsRequirementLine(
+    (booking as any).additionalRequirements || (booking as any).additional_requirements || ''
+  );
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+  const viaStops = resolveViaStopsLabel(booking);
+  const hasViaStops = isPresentableValue(viaStops);
   
   // Ensure additional requirements are properly handled
   const hasAdditionalRequirements = additionalRequirements && 
@@ -948,6 +953,7 @@ Your driver has been assigned:
 
 📍 *Pickup:* ${pickupLocation}
 📍 *Drop:* ${dropLocation}
+${hasViaStops ? `🛑 *Stops:* ${viaStops}` : ''}
 📅 *Date:* ${booking.pickup_date || booking.pickupDate}
 ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
 ${allNotes ? `📝 *Special Notes:*
@@ -1035,8 +1041,12 @@ export function generateDriverNotificationMessage(booking: Booking): string {
       ? booking.drop_location 
       : booking.drop_location?.city || booking.dropLocation
     : 'N/A';
-  const additionalRequirements = (booking as any).additionalRequirements || (booking as any).additional_requirements || '';
+  const additionalRequirements = stripViaStopsRequirementLine(
+    (booking as any).additionalRequirements || (booking as any).additional_requirements || ''
+  );
   const specialNotes = booking.special_notes || booking.adminNotes || 'N/A';
+  const viaStops = resolveViaStopsLabel(booking);
+  const hasViaStops = isPresentableValue(viaStops);
   
   // Ensure additional requirements are properly handled
   const hasAdditionalRequirements = additionalRequirements && 
@@ -1057,6 +1067,7 @@ You have been assigned a new trip:
 
 📍 *Pickup:* ${pickupLocation}
 📍 *Drop:* ${dropLocation}
+${hasViaStops ? `🛑 *Stops:* ${viaStops}` : ''}
 📅 *Date:* ${booking.pickup_date || booking.pickupDate}
 ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalRequirements}` : ''}
 ${allNotes ? `📝 *Special Notes:*

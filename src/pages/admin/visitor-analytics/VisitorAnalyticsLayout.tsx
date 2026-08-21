@@ -40,9 +40,9 @@ import {
   exchangeOperatorToken,
   clearVaAuth,
   getAttributionReport,
-  getDailyReport,
+  getRangeReport,
+  getDailySeries,
   getLiveVisitors,
-  getStoredDailyStats,
   getStoredOperator,
   getStoredSiteId,
   getStoredVaToken,
@@ -75,7 +75,11 @@ const SessionReplayPlayer = lazy(
 );
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function addDaysIso(iso: string, days: number): string {
@@ -84,15 +88,16 @@ function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function inclusiveDayCount(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b) || b < a) return 1;
+  return Math.round((b - a) / 86_400_000) + 1;
+}
+
 function pctDelta(current: number, previous: number): number | null {
   if (previous <= 0) return current > 0 ? 100 : null;
   return ((current - previous) / previous) * 100;
-}
-
-function normalizeDay(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const s = String(value || '');
-  return s.slice(0, 10);
 }
 
 function formatDuration(ms: number | null): string {
@@ -228,91 +233,66 @@ export function VisitorAnalyticsLayout() {
   const loadOverview = useCallback(async () => {
     setMetricsLoading(true);
     const to = rangeTo || todayIso();
-    const from = rangeFrom || to;
-    const sparkFrom = addDaysIso(to, -6);
-    const prevDay = addDaysIso(to, -1);
+    const from = rangeFrom && rangeFrom <= to ? rangeFrom : to;
+    const span = inclusiveDayCount(from, to);
+    const prevTo = addDaysIso(from, -1);
+    const prevFrom = addDaysIso(prevTo, -(span - 1));
+    const sparkFrom = span <= 1 ? addDaysIso(to, -6) : from;
     try {
-      const [endRes, prevRes, storedRes] = await Promise.all([
-        getDailyReport(to),
-        getDailyReport(prevDay).catch(() => null),
-        getStoredDailyStats(sparkFrom, to).catch(() => ({ stats: [] })),
+      const [curRes, prevRes, seriesRes] = await Promise.all([
+        getRangeReport(from, to),
+        getRangeReport(prevFrom, prevTo).catch(() => null),
+        getDailySeries(sparkFrom, to).catch(() => ({ series: [] })),
       ]);
-      const end = endRes.report;
+      const cur = curRes.report;
       const prev = prevRes?.report;
-      const stats = (storedRes.stats || []).slice().sort((a, b) =>
-        normalizeDay(a.day_date).localeCompare(normalizeDay(b.day_date)),
-      );
-
-      const byDay = new Map(stats.map((s) => [normalizeDay(s.day_date), s]));
-      const sparkKeys = Array.from({ length: 7 }, (_, i) => addDaysIso(sparkFrom, i));
+      const series = seriesRes.series || [];
       const spark = (
-        field: 'sessions' | 'pageviews' | 'chats' | 'bookings_started' | 'payments_success',
-      ) => sparkKeys.map((d) => Number(byDay.get(d)?.[field] ?? 0));
-
-      let sessions = end.sessions;
-      let pageviews = end.pageviews;
-      let chats = end.chats;
-      let bookingsStarted = end.bookingsStarted;
-      let bookingsCompleted = end.bookingsCompleted;
-      let paymentsSuccess = end.paymentsSuccess;
-      let whatsappClicks = end.whatsappClicks ?? 0;
-      let phoneClicks = end.phoneClicks ?? 0;
-
-      if (from !== to) {
-        const inRange = stats.filter((s) => {
-          const d = normalizeDay(s.day_date);
-          return d >= from && d <= to;
-        });
-        if (inRange.length) {
-          sessions = inRange.reduce((n, s) => n + Number(s.sessions || 0), 0);
-          pageviews = inRange.reduce((n, s) => n + Number(s.pageviews || 0), 0);
-          chats = inRange.reduce((n, s) => n + Number(s.chats || 0), 0);
-          bookingsStarted = inRange.reduce((n, s) => n + Number(s.bookings_started || 0), 0);
-          bookingsCompleted = inRange.reduce((n, s) => n + Number(s.bookings_completed || 0), 0);
-          paymentsSuccess = inRange.reduce((n, s) => n + Number(s.payments_success || 0), 0);
-        }
-      }
+        field: 'sessions' | 'pageviews' | 'chats' | 'bookingsStarted' | 'paymentsSuccess' | 'whatsappClicks' | 'phoneClicks',
+      ) => series.map((s) => Number(s[field] || 0));
 
       setMetrics((m) => ({
         ...m,
-        sessionsToday: sessions,
-        pageviewsToday: pageviews,
-        chatsToday: chats,
-        whatsappClicks,
-        phoneClicks,
-        bookingsStarted,
-        bookingsCompleted,
-        paymentsSuccess,
+        sessionsToday: cur.sessions,
+        pageviewsToday: cur.pageviews,
+        chatsToday: cur.chats,
+        whatsappClicks: cur.whatsappClicks ?? 0,
+        phoneClicks: cur.phoneClicks ?? 0,
+        bookingsStarted: cur.bookingsStarted,
+        bookingsCompleted: cur.bookingsCompleted,
+        paymentsSuccess: cur.paymentsSuccess,
         extras: {
           sessionsToday: {
-            deltaPct: prev ? pctDelta(end.sessions, prev.sessions) : null,
+            deltaPct: prev ? pctDelta(cur.sessions, prev.sessions) : null,
             sparkline: spark('sessions'),
           },
           pageviewsToday: {
-            deltaPct: prev ? pctDelta(end.pageviews, prev.pageviews) : null,
+            deltaPct: prev ? pctDelta(cur.pageviews, prev.pageviews) : null,
             sparkline: spark('pageviews'),
           },
           chatsToday: {
-            deltaPct: prev ? pctDelta(end.chats, prev.chats) : null,
+            deltaPct: prev ? pctDelta(cur.chats, prev.chats) : null,
             sparkline: spark('chats'),
           },
           whatsappClicks: {
             deltaPct: prev
-              ? pctDelta(end.whatsappClicks ?? 0, prev.whatsappClicks ?? 0)
+              ? pctDelta(cur.whatsappClicks ?? 0, prev.whatsappClicks ?? 0)
               : null,
+            sparkline: spark('whatsappClicks'),
           },
           phoneClicks: {
             deltaPct: prev
-              ? pctDelta(end.phoneClicks ?? 0, prev.phoneClicks ?? 0)
+              ? pctDelta(cur.phoneClicks ?? 0, prev.phoneClicks ?? 0)
               : null,
+            sparkline: spark('phoneClicks'),
           },
           bookingsStarted: {
-            deltaPct: prev ? pctDelta(end.bookingsStarted, prev.bookingsStarted) : null,
-            sparkline: spark('bookings_started'),
+            deltaPct: prev ? pctDelta(cur.bookingsStarted, prev.bookingsStarted) : null,
+            sparkline: spark('bookingsStarted'),
           },
           paymentsSuccess: {
-            deltaPct: prev ? pctDelta(end.paymentsSuccess, prev.paymentsSuccess) : null,
-            sparkline: spark('payments_success'),
+            deltaPct: prev ? pctDelta(cur.paymentsSuccess, prev.paymentsSuccess) : null,
+            sparkline: spark('paymentsSuccess'),
           },
         },
       }));

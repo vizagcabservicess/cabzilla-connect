@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { useRouteError } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
@@ -9,13 +10,50 @@ interface State {
   error?: Error;
 }
 
+function ErrorFallbackActions() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <button
+        type="button"
+        onClick={() => window.location.assign('/')}
+        className="rounded-lg bg-blue-600 px-6 py-2 text-white transition-colors hover:bg-blue-700"
+      >
+        Go to home
+      </button>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="rounded-lg border border-gray-200 bg-white px-6 py-2 text-gray-800 transition-colors hover:bg-gray-50"
+      >
+        Refresh page
+      </button>
+    </div>
+  );
+}
+
+function ErrorFallbackShell() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="mx-auto max-w-md text-center">
+        <div className="rounded-lg bg-white p-8 shadow-lg">
+          <div className="mb-4 text-6xl text-red-500">⚠️</div>
+          <h1 className="mb-4 text-2xl font-bold text-gray-900">Something went wrong</h1>
+          <p className="mb-6 text-gray-600">
+            Please go back to the home page and try your search again.
+          </p>
+          <ErrorFallbackActions />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
@@ -25,29 +63,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="max-w-md mx-auto text-center">
-            <div className="bg-white rounded-lg shadow-lg p-8">
-              <div className="text-red-500 text-6xl mb-4">⚠️</div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                Something went wrong
-              </h1>
-              <p className="text-gray-600 mb-6">
-                We're sorry, but something unexpected happened. Please try refreshing the page.
-              </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </div>
-        </div>
-      );
+      return <ErrorFallbackShell />;
     }
 
     return this.props.children;
   }
+}
+
+/** React Router catches route render errors itself — this replaces the live stack dump. */
+export function RouteErrorFallback() {
+  const error = useRouteError();
+  console.error('Route error:', error);
+  return <ErrorFallbackShell />;
 }

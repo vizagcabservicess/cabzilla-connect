@@ -1,7 +1,7 @@
 import pako from 'pako';
 import { env } from '../config/env.js';
 import { query, queryOne } from '../db/pool.js';
-import { putObject, getObjectBuffer, objectStoreMode } from './s3.js';
+import { putObject, getObjectBuffer, objectStoreMode, persistRecordingBlobsInMysql } from './s3.js';
 import { realtimeHub } from '../websocket/hub.js';
 import { newId, toMysqlDateTime } from '../utils/helpers.js';
 
@@ -16,6 +16,110 @@ function asBuffer(value: unknown): Buffer | null {
   if (value instanceof Uint8Array) return value.length ? Buffer.from(value) : null;
   if (typeof value === 'string' && value.length) return Buffer.from(value, 'binary');
   return null;
+}
+
+const RECORDING_PRUNE_TARGET_RATIO = 0.8;
+let recordingBytesCache = 0;
+let recordingBytesCacheAt = 0;
+let pruneInFlight: Promise<PruneRecordingResult> | null = null;
+
+export type PruneRecordingResult = {
+  deletedChunks: number;
+  deletedSessions: number;
+  bytesBefore: number;
+  bytesAfter: number;
+};
+
+async function recordingTableBytes(): Promise<number> {
+  const now = Date.now();
+  if (now - recordingBytesCacheAt < 15_000) return recordingBytesCache;
+  const row = await queryOne<{ n: number | string }>(
+    `SELECT COALESCE(SUM(byte_size), 0) AS n FROM va_recording_chunks`,
+  );
+  recordingBytesCache = Number(row?.n || 0);
+  recordingBytesCacheAt = now;
+  return recordingBytesCache;
+}
+
+/**
+ * Delete oldest session replays when MySQL recording blobs exceed RECORDING_DB_MAX_BYTES (1GB).
+ * Stops at 80% of the cap so we are not pruning on every new chunk.
+ */
+export async function pruneRecordingDbToBudget(opts?: {
+  incomingBytes?: number;
+  protectSessionId?: string;
+}): Promise<PruneRecordingResult> {
+  const empty: PruneRecordingResult = {
+    deletedChunks: 0,
+    deletedSessions: 0,
+    bytesBefore: 0,
+    bytesAfter: 0,
+  };
+  const maxBytes = env.RECORDING_DB_MAX_BYTES;
+  if (!maxBytes || maxBytes <= 0) return empty;
+
+  if (pruneInFlight) return pruneInFlight;
+
+  pruneInFlight = (async () => {
+    const incoming = Math.max(0, opts?.incomingBytes ?? 0);
+    const bytesBefore = await recordingTableBytes();
+    if (bytesBefore + incoming <= maxBytes) {
+      recordingBytesCache = bytesBefore + incoming;
+      return { ...empty, bytesBefore, bytesAfter: bytesBefore };
+    }
+
+    const targetBytes = Math.floor(maxBytes * RECORDING_PRUNE_TARGET_RATIO);
+    let remaining = bytesBefore;
+    let deletedChunks = 0;
+    let deletedSessions = 0;
+    const protect = opts?.protectSessionId;
+
+    for (let pass = 0; pass < 10 && remaining + incoming > targetBytes; pass += 1) {
+      const oldest = await query<Array<{ session_id: string; bytes: number | string }>>(
+        `SELECT session_id, COALESCE(SUM(byte_size), 0) AS bytes
+         FROM va_recording_chunks
+         GROUP BY session_id
+         ORDER BY MIN(started_at) ASC
+         LIMIT 200`,
+      );
+      if (!oldest.length) break;
+
+      let progressed = false;
+      for (const row of oldest) {
+        if (remaining + incoming <= targetBytes) break;
+        if (protect && row.session_id === protect) continue;
+
+        const del = await query<{ affectedRows?: number }>(
+          `DELETE FROM va_recording_chunks WHERE session_id = :id`,
+          { id: row.session_id },
+        );
+        const removed = Number(del?.affectedRows || 0);
+        await query(
+          `UPDATE va_sessions SET has_recording = 0, recording_s3_key = NULL WHERE id = :id`,
+          { id: row.session_id },
+        );
+        remaining = Math.max(0, remaining - Number(row.bytes || 0));
+        deletedSessions += 1;
+        deletedChunks += removed;
+        progressed = true;
+      }
+      if (!progressed) break;
+    }
+
+    recordingBytesCacheAt = 0;
+    const bytesAfter = await recordingTableBytes();
+    if (deletedSessions > 0) {
+      console.log(
+        `[va] recording DB prune sessions=${deletedSessions} chunks=${deletedChunks} ` +
+          `before=${Math.round(bytesBefore / 1024 / 1024)}MB after=${Math.round(bytesAfter / 1024 / 1024)}MB cap=${Math.round(maxBytes / 1024 / 1024)}MB`,
+      );
+    }
+    return { deletedChunks, deletedSessions, bytesBefore, bytesAfter };
+  })().finally(() => {
+    pruneInFlight = null;
+  });
+
+  return pruneInFlight;
 }
 
 async function loadPayloadFromDb(
@@ -59,23 +163,38 @@ export async function storeRecordingChunk(params: {
   }
 
   const s3Key = `recordings/${params.siteId}/${params.sessionId}/${params.chunkIndex}.json.gz`;
-
   const store = objectStoreMode();
+  const keepBlobInDb = persistRecordingBlobsInMysql();
+
+  if (store === 'db' && !keepBlobInDb) {
+    return { s3Key, byteSize: compressed.byteLength };
+  }
+
+  if (keepBlobInDb) {
+    await pruneRecordingDbToBudget({
+      incomingBytes: compressed.byteLength,
+      protectSessionId: params.sessionId,
+    });
+  }
+
   if (store !== 'db') {
     try {
       await putObject(s3Key, compressed, 'application/json', 'gzip');
     } catch (err) {
       console.warn(
-        '[va] object-store put failed; relying on DB payload_gzip',
+        '[va] object-store put failed; chunk not stored in MySQL either',
         err instanceof Error ? err.message : err,
       );
+      if (!keepBlobInDb) {
+        return { s3Key, byteSize: compressed.byteLength };
+      }
     }
   }
 
   const startedAt = params.startedAt.replace('T', ' ').replace('Z', '');
   const endedAt = params.endedAt.replace('T', ' ').replace('Z', '');
+  const payload = keepBlobInDb ? compressed : null;
 
-  // Use positional params for MEDIUMBLOB — mysql2 named placeholders can drop Buffer values as NULL.
   try {
     await query(
       `INSERT INTO va_recording_chunks (
@@ -94,7 +213,7 @@ export async function storeRecordingChunk(params: {
         params.chunkIndex,
         s3Key,
         compressed.byteLength,
-        compressed,
+        payload,
         params.events.length,
         startedAt,
         endedAt,
@@ -103,7 +222,6 @@ export async function storeRecordingChunk(params: {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!/payload_gzip/i.test(msg)) throw err;
-    // Without this column, Hostinger redeploys make every replay unplayable.
     const missing = new Error(
       'Recording storage not ready: run sql/patches/2026-07-25_recording_payload_db.sql (add va_recording_chunks.payload_gzip)',
     ) as Error & { status?: number };
@@ -111,19 +229,23 @@ export async function storeRecordingChunk(params: {
     throw missing;
   }
 
-  // Guard: never mark has_recording if the durable payload did not land
-  const verify = await queryOne<{ n: number }>(
-    `SELECT LENGTH(payload_gzip) AS n FROM va_recording_chunks
-     WHERE session_id = ? AND chunk_index = ? LIMIT 1`,
-    [params.sessionId, params.chunkIndex],
-  );
-  if (!verify?.n) {
-    const err = new Error(
-      'Recording payload_gzip write failed (NULL after insert) — check MySQL max_allowed_packet',
-    ) as Error & { status?: number };
-    err.status = 500;
-    throw err;
+  if (keepBlobInDb) {
+    const verify = await queryOne<{ n: number }>(
+      `SELECT LENGTH(payload_gzip) AS n FROM va_recording_chunks
+       WHERE session_id = ? AND chunk_index = ? LIMIT 1`,
+      [params.sessionId, params.chunkIndex],
+    );
+    if (!verify?.n) {
+      const err = new Error(
+        'Recording payload_gzip write failed (NULL after insert) — check MySQL max_allowed_packet',
+      ) as Error & { status?: number };
+      err.status = 500;
+      throw err;
+    }
   }
+
+  recordingBytesCache += compressed.byteLength;
+  recordingBytesCacheAt = Date.now();
 
   await query(
     `UPDATE va_sessions SET has_recording = 1, recording_s3_key = :key WHERE id = :id`,

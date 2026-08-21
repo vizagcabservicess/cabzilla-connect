@@ -42,6 +42,74 @@ function stringifyOptionalNum(v: unknown): string {
   return s;
 }
 
+function parseMoneyAmount(value: unknown): number {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+  const n = Number(String(value).replace(/[₹,\s]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function resolveMobileAdvanceAmount(booking: Booking): number {
+  const record = booking as Record<string, unknown>;
+  const keys = [
+    'advance_paid_amount',
+    'advancePaidAmount',
+    'partialPaymentAmount',
+    'partial_payment_amount',
+    'advance_amount',
+    'advanceAmount',
+    'paidAmount',
+    'amountPaid',
+  ];
+  for (const key of keys) {
+    const amount = parseMoneyAmount(record[key]);
+    if (amount > 0) return amount;
+  }
+  return 0;
+}
+
+function resolveMobilePaymentMethod(booking: Booking): string {
+  const record = booking as Record<string, unknown>;
+  for (const key of ['payment_method', 'paymentMethod']) {
+    const text = String(record[key] ?? '').trim();
+    if (text && text.toLowerCase() !== 'n/a') return text;
+  }
+  if (record.razorpay_payment_id || record.razorpayPaymentId) return 'razorpay';
+  return 'N/A';
+}
+
+function formatMobileAdvanceLine(
+  booking: Booking,
+  fareBase: number,
+): { line: string; pendingAmount: number; pendingDue: string } {
+  const received = resolveMobileAdvanceAmount(booking);
+  const mode = resolveMobilePaymentMethod(booking);
+  const pendingAmount = Math.max(0, Math.round(fareBase) - Math.round(received));
+  const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
+  if (received > 0) {
+    return {
+      line: `💳 *Advance:* ₹${received} received, mode: ${mode}`,
+      pendingAmount,
+      pendingDue,
+    };
+  }
+  const due = fareBase > 0 ? Math.round(fareBase * 0.3) : 0;
+  if (due > 0) {
+    return {
+      line: `💳 *Advance:* ₹${due} due (30% to reserve), mode: pending`,
+      pendingAmount,
+      pendingDue,
+    };
+  }
+  return {
+    line: `💳 *Advance:* ₹0, mode: ${mode}`,
+    pendingAmount,
+    pendingDue,
+  };
+}
+
 /** Package id only — DB hours/km applied separately so bad 10/100 rows can be repaired. */
 function resolveLocalHoursKmFromHourlyPackageFieldMobile(booking: Booking): { hours: string; km: string } | null {
   const limits: Record<string, { hours: string; km: string }> = {
@@ -529,9 +597,12 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const driverPhone = booking.driverPhone || 'to be shared';
 
   // Get fare details - using actual database fields
-  const fareBase = booking.fare || booking.totalAmount || 0;
-  const advanceAmount = booking.advance_paid_amount || 0;
-  const advanceMode = booking.payment_method || 'N/A';
+  const fareBase = Number(booking.fare || booking.totalAmount || 0) || 0;
+  const {
+    line: advanceLine,
+    pendingAmount,
+    pendingDue,
+  } = formatMobileAdvanceLine(booking, fareBase);
   const advanceTxnId = booking.razorpay_payment_id || 
                       (booking as any).razorpayPaymentId || 
                       (booking as any).transactionId || 
@@ -560,8 +631,6 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
           hour12: true
         })
       : 'Payment time not recorded';
-  const pendingAmount = Math.max(0, fareBase - advanceAmount);
-  const pendingDue = pendingAmount > 0 ? 'Yes' : 'No';
 
   // Local package limits — prefer hourlyPackage / DB; fare inference only as fallback
   let hoursIncluded: string | number = tripType === 'local' ? '' : 'N/A';
@@ -948,7 +1017,7 @@ ${itineraryWhatsApp}
 
 *Fare and Payments*
 💰 *Fare (base):* ₹${fareBase}
-💳 *Advance:* ₹${advanceAmount}, mode: ${advanceMode}
+${advanceLine}
 ⏳ *Pending:* ₹${pendingAmount}, payable: ${pendingDue}
 ${gstEnabled && isPresentableValue(gstNumber) ? `🏢 *GST Details:* ${gstNumber}${isPresentableValue(companyName) ? ` (${companyName})` : ''}` : ''}
 🧾 *Payment Receipt:* Contact support at +91 9966363662 with your booking number ${booking.bookingNumber || booking.id} to get your receipt

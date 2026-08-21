@@ -43,6 +43,13 @@ export function objectStoreMode(): 'local' | 's3' | 'db' {
   return 'db';
 }
 
+/** Session-replay gzip blobs in MySQL. Default on when there is no real S3 bucket. */
+export function persistRecordingBlobsInMysql(): boolean {
+  if (process.env.VA_RECORDING_IN_DB === '0') return false;
+  if (hasRemoteObjectStore()) return process.env.VA_RECORDING_IN_DB === '1';
+  return true;
+}
+
 async function walkFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   let entries;

@@ -9,6 +9,45 @@ const SERVICE_PATH: Record<Exclude<CustomerTripService, 'tour'>, string> = {
   outstation: '/outstation-taxi',
 };
 
+/** Vizag city airport-transfer radius (from city center). */
+export const AIRPORT_TRANSFER_MAX_KM = 35;
+
+/** Bhogapuram Airport (ASR) — same coords as `vizag_airport` in locationData. */
+export const BHOGAPURAM_AIRPORT = { lat: 17.97611, lng: 83.50389 };
+
+/**
+ * Destinations around the new airport (Vizianagaram town ~32 km road, Srikakulam ~67 km).
+ * Measured from Bhogapuram, not Vizag city center — otherwise nearby district towns
+ * are billed as outstation (300 km/day minimum).
+ */
+export const BHOGAPURAM_AIRPORT_CATCHMENT_KM = 80;
+
+const AIRPORT_CATCHMENT_NAME_RE =
+  /\b(vizianagaram|vijayanagaram|vizianagarm|srikakulam|bhogapuram|nellimarla|denkada)\b/i;
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function locationTextBlob(location: Location): string {
+  return [location.id, location.name, location.address, location.city, location.state]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function hasReliableCoords(location: Location | null | undefined): boolean {
+  if (!location) return false;
+  if (typeof location.lat !== 'number' || typeof location.lng !== 'number') return false;
+  if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return false;
+  return !(location.lat === 0 && location.lng === 0);
+}
+
 export function textLooksLikeVizagAirport(text: string): boolean {
   const blob = (text || '').toLowerCase();
   if (!blob.trim()) return false;
@@ -47,18 +86,25 @@ export function isVizagAirportLocation(location: Location | null | undefined): b
   const address = (location.address || '').toLowerCase();
   const id = (location.id || '').toLowerCase();
   const type = String((location as { type?: string }).type || '').toLowerCase();
-  const blob = `${name} ${address} ${id}`;
+  const title = `${name} ${id}`;
 
   const looksLikeAirport =
     type === 'airport' ||
     id === 'vizag_airport' ||
     id === 'vizag_city_airport' ||
-    blob.includes('airport') ||
-    /\bvtz\b/.test(blob);
+    name.includes('airport') ||
+    /\bvtz\b/.test(name) ||
+    name.includes('vizag international') ||
+    // Google sometimes leaves the title empty and only fills formatted_address
+    (!name && (address.includes('airport') || /\bvtz\b/.test(address)));
 
   if (!looksLikeAirport) return false;
 
-  if (textLooksLikeVizagAirport(blob) || id === 'vizag_airport' || id === 'vizag_city_airport') {
+  if (textLooksLikeVizagAirport(title) || id === 'vizag_airport' || id === 'vizag_city_airport') {
+    return true;
+  }
+
+  if (!name && textLooksLikeVizagAirport(address)) {
     return true;
   }
 
@@ -66,37 +112,47 @@ export function isVizagAirportLocation(location: Location | null | undefined): b
   return isLocationInVizag(location);
 }
 
-/** Airport tab vs outstation: road/haversine km at or under this stays an airport transfer. */
-export const AIRPORT_TRANSFER_MAX_KM = 35;
+export function isBhogapuramAirportLocation(location: Location | null | undefined): boolean {
+  if (!isVizagAirportLocation(location) || !location) return false;
+  const id = (location.id || '').toLowerCase();
+  if (id === 'vizag_city_airport') return false;
+  if (id === 'vizag_airport') return true;
+  const blob = locationTextBlob(location).toLowerCase();
+  return (
+    blob.includes('alluri') ||
+    blob.includes('alluru') ||
+    blob.includes('sitaram') ||
+    blob.includes('bhogapuram')
+  );
+}
 
-function haversineKm(a: Location, b: Location): number | null {
-  if (
-    !Number.isFinite(a.lat) ||
-    !Number.isFinite(a.lng) ||
-    !Number.isFinite(b.lat) ||
-    !Number.isFinite(b.lng) ||
-    (a.lat === 0 && a.lng === 0) ||
-    (b.lat === 0 && b.lng === 0)
-  ) {
-    return null;
-  }
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const sinLat = Math.sin(dLat / 2);
-  const sinLng = Math.sin(dLng / 2);
-  const h =
-    sinLat * sinLat +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+/** Towns next to Bhogapuram Airport that should use airport fares, not outstation. */
+export function isBhogapuramAirportCatchment(location: Location | null | undefined): boolean {
+  if (!location) return false;
+  if (AIRPORT_CATCHMENT_NAME_RE.test(locationTextBlob(location))) return true;
+  if (!hasReliableCoords(location)) return false;
+  return (
+    haversineKm(location.lat, location.lng, BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng) <=
+    BHOGAPURAM_AIRPORT_CATCHMENT_KM
+  );
+}
+
+/**
+ * Other end of an airport transfer: Vizag city (35 km) or Bhogapuram catchment
+ * (Vizianagaram, Srikakulam, nearby).
+ */
+export function isAirportTransferOtherEnd(location: Location | null | undefined): boolean {
+  if (!location) return false;
+  if (isVizagAirportLocation(location) || isLocationInVizag(location)) return true;
+  return isBhogapuramAirportCatchment(location);
 }
 
 /**
  * Infer the best customer booking service from pickup/drop.
  * Local (hourly rental) is never inferred from a From/To pair — only the Local tab.
- * - Airport: both ends in Vizag, or one end is a Vizag airport and the hop is ≤35 km
- * - Outstation: other end outside Vizag (e.g. Airport → Kakinada, Vizag → Hyderabad)
+ * - Airport: one end is a Vizag airport AND the other end is in Vizag city or the
+ *   Bhogapuram catchment (Vizianagaram / Srikakulam / nearby).
+ * - Outstation: other end outside that catchment (e.g. Airport → Kakinada).
  */
 export function inferTripServiceType(
   pickup: Location | null | undefined,
@@ -108,20 +164,15 @@ export function inferTripServiceType(
   const dropIsAirport = isVizagAirportLocation(drop);
   const airportInvolved = pickupIsAirport || dropIsAirport;
 
-  // Need the non-airport end (or both city ends) before deciding
-  if (!drop && !pickupIsAirport) return null;
-  if (!pickup && !dropIsAirport && !drop) return null;
-
   const otherEnd = pickupIsAirport ? drop : dropIsAirport ? pickup : null;
   const pickupInVizag = pickup ? isLocationInVizag(pickup) || pickupIsAirport : true;
   const dropInVizag = drop ? isLocationInVizag(drop) || dropIsAirport : false;
-  const km = pickup && drop ? haversineKm(pickup, drop) : null;
 
   if (airportInvolved) {
-    if (otherEnd && isLocationInVizag(otherEnd)) return 'airport';
-    if (km != null && km <= AIRPORT_TRANSFER_MAX_KM) return 'airport';
-    if (otherEnd && !isLocationInVizag(otherEnd)) return 'outstation';
-    if (!otherEnd) return 'airport';
+    // Airport pickup/drop alone is not enough — stay on the current tab until destination is known.
+    if (!otherEnd) return null;
+    if (isAirportTransferOtherEnd(otherEnd)) return 'airport';
+    return 'outstation';
   }
 
   if (!drop) return null;

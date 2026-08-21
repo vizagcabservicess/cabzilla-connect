@@ -21,6 +21,7 @@ import type {
   OperatorStatus,
   RecordingManifest,
   UploadUrlResponse,
+  VaDailySeriesPoint,
   VaDailyStatRow,
   VaEvent,
   VaNotification,
@@ -393,6 +394,20 @@ export async function getFunnelAnalytics(
 
 export async function getDailyReport(day?: string): Promise<{ report: AnalyticsReport }> {
   return request(`/api/admin/reports/daily${qs({ day })}`);
+}
+
+export async function getRangeReport(
+  from: string,
+  to: string,
+): Promise<{ report: AnalyticsReport }> {
+  return request(`/api/admin/reports/range${qs({ from, to })}`);
+}
+
+export async function getDailySeries(
+  from: string,
+  to: string,
+): Promise<{ series: VaDailySeriesPoint[] }> {
+  return request(`/api/admin/reports/series${qs({ from, to })}`);
 }
 
 export async function getAttributionReport(
@@ -906,6 +921,8 @@ export const visitorAnalyticsAPI = {
   deleteFunnel,
   getFunnelAnalytics,
   getDailyReport,
+  getRangeReport,
+  getDailySeries,
   getWeeklyReport,
   getMonthlyReport,
   getStoredDailyStats,

@@ -422,6 +422,20 @@ const PaymentPage = () => {
                         <p className="text-sm text-gray-500">Pickup Location</p>
                         <p className="font-medium">{bookingDetails.pickupLocation?.name || 'N/A'}</p>
                       </div>
+                      {Array.isArray(bookingDetails.intermediateStops) &&
+                        bookingDetails.intermediateStops.length > 0 && (
+                          <div className="sm:col-span-2">
+                            <p className="text-sm text-gray-500">Stops</p>
+                            <p className="font-medium">
+                              {bookingDetails.intermediateStops
+                                .map((stop: { name?: string }, index: number) =>
+                                  stop?.name ? `Stop ${index + 1}: ${stop.name}` : null
+                                )
+                                .filter(Boolean)
+                                .join(' → ')}
+                            </p>
+                          </div>
+                        )}
                       <div>
                         <p className="text-sm text-gray-500">Drop Location</p>
                         <p className="font-medium">{bookingDetails.dropLocation?.name || 'N/A'}</p>

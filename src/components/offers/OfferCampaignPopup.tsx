@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,12 +6,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import type { OfferCampaignOfferType, OfferCampaignPricing, OfferCampaignPublic } from '@/types/offerCampaign';
+import type {
+  OfferCampaignCategory,
+  OfferCampaignOfferType,
+  OfferCampaignPricing,
+  OfferCampaignPublic,
+  OfferTripRoute,
+} from '@/types/offerCampaign';
 import {
   OFFER_CAMPAIGN_CATEGORIES,
   OFFER_CATEGORY_LABELS,
   formatOfferTravelDateRange,
+  formatOfferTravelTimeFrom,
+  formatOfferRouteScope,
   isOfferCampaignCategory,
+  campaignHasOfferRoute,
+  isOfferRouteEligible,
+  isOfferTravelTimeEligible,
 } from '@/types/offerCampaign';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import { ArrowRight, Check, Clock3, Copy, Sparkles } from 'lucide-react';
@@ -195,6 +206,7 @@ export function OfferCampaignPopup({
 }) {
   const [tick, setTick] = useState(0);
   const [copied, setCopied] = useState(false);
+  const skipCloseLogRef = useRef(false);
 
   useEffect(() => {
     if (!open || !campaign) return;
@@ -224,6 +236,8 @@ export function OfferCampaignPopup({
     campaign.travel_date_from,
     campaign.travel_date_to
   );
+  const travelTimeFrom = formatOfferTravelTimeFrom(campaign.travel_time_from);
+  const route = formatOfferRouteScope(campaign);
   const clock = countdownParts(campaign.ends_at);
   void tick;
 
@@ -232,13 +246,23 @@ export function OfferCampaignPopup({
       await navigator.clipboard.writeText(campaign.coupon_code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      void offerCampaignAPI.public.logEvent('copy', campaign.id, category);
     } catch {
       /* ignore */
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !skipCloseLogRef.current) {
+          void offerCampaignAPI.public.logEvent('popup_close', campaign.id, category);
+        }
+        skipCloseLogRef.current = false;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="flex w-[calc(100%-1.5rem)] max-h-[calc(100dvh-1.5rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl border-0 p-0 sm:w-full [&>button]:right-3 [&>button]:top-3 [&>button]:z-20 [&>button]:rounded-full [&>button]:bg-white/20 [&>button]:p-1.5 [&>button]:text-white [&>button]:opacity-100">
         <div className="relative shrink-0 overflow-hidden bg-[linear-gradient(145deg,#0f3d2e_0%,#166534_45%,#0f172a_100%)] px-5 pb-5 pt-9 text-white sm:pt-10">
           <p className="text-center text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-300">
@@ -249,7 +273,9 @@ export function OfferCampaignPopup({
           </DialogTitle>
           <DialogDescription className="mt-1 text-center text-sm text-emerald-50/85">
             {categoryLabel} · {headline}
+            {route ? ` · ${route}` : ''}
             {travelRange ? ` · trips ${travelRange}` : ''}
+            {travelTimeFrom ? ` · pickups ${travelTimeFrom}` : ''}
           </DialogDescription>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -303,7 +329,9 @@ export function OfferCampaignPopup({
           ) : (
             <p className="text-xs text-slate-500">
               Use this coupon when you book {categoryLabel.toLowerCase()} trips
-              {travelRange ? ` for travel on ${travelRange}` : ''}. Offer applies at checkout.
+              {route ? ` on ${route} only` : ''}
+              {travelRange ? ` for travel on ${travelRange}` : ''}
+              {travelTimeFrom ? `, pickups ${travelTimeFrom}` : ''}. Offer applies at checkout.
             </p>
           )}
 
@@ -339,6 +367,7 @@ export function OfferCampaignPopup({
               type="button"
               className="h-11 w-full bg-emerald-800 text-sm font-bold hover:bg-emerald-900"
               onClick={() => {
+                skipCloseLogRef.current = true;
                 void offerCampaignAPI.public.logEvent('click', campaign.id, category);
                 const next = {
                   ...campaign,
@@ -379,7 +408,9 @@ export async function loadOfferCampaignForSearch(
   websiteFare: number,
   travelDate?: string | null,
   vehicleId?: string | null,
-  tourId?: string | null
+  tourId?: string | null,
+  tripRoute?: OfferTripRoute | null,
+  travelTime?: string | null
 ): Promise<{
   campaign: OfferCampaignPublic | null;
   shouldShowPopup: boolean;
@@ -394,7 +425,9 @@ export async function loadOfferCampaignForSearch(
       websiteFare,
       travelDate,
       vehicleId,
-      tourId
+      tourId,
+      tripRoute,
+      travelTime
     );
     let campaign = result.campaign;
     // Legacy fallback: bare "outstation" campaign for one-way lookups
@@ -404,9 +437,46 @@ export async function loadOfferCampaignForSearch(
         websiteFare,
         travelDate,
         vehicleId,
-        tourId
+        tourId,
+        tripRoute,
+        travelTime
       );
       campaign = legacy.campaign;
+    }
+    // Vehicle/tour-specific campaigns still advertise before the matching cab is selected
+    if (!campaign) {
+      const listing = await offerCampaignAPI.public.getActiveOffer(
+        category,
+        websiteFare,
+        travelDate,
+        undefined,
+        undefined,
+        tripRoute,
+        travelTime
+      );
+      campaign = listing.campaign;
+    }
+    if (!campaign && category === 'outstation_one_way') {
+      const listingLegacy = await offerCampaignAPI.public.getActiveOffer(
+        'outstation',
+        websiteFare,
+        travelDate,
+        undefined,
+        undefined,
+        tripRoute,
+        travelTime
+      );
+      campaign = listingLegacy.campaign;
+    }
+    if (
+      campaign &&
+      campaignHasOfferRoute(campaign) &&
+      !isOfferRouteEligible(campaign, tripRoute, true)
+    ) {
+      campaign = null;
+    }
+    if (campaign && travelTime && !isOfferTravelTimeEligible(campaign, travelTime, true)) {
+      campaign = null;
     }
     if (!campaign) {
       return {
@@ -453,24 +523,24 @@ function sortHomeCampaigns(campaigns: OfferCampaignPublic[]): OfferCampaignPubli
   });
 }
 
-/** Load all active popup-enabled campaigns for the homepage. */
-export async function loadHomeOfferCampaigns(): Promise<{
+/** Load active popup-enabled campaigns (homepage or a service landing). */
+export async function loadHomeOfferCampaigns(
+  categories: OfferCampaignCategory[] = OFFER_CAMPAIGN_CATEGORIES
+): Promise<{
   campaigns: OfferCampaignPublic[];
   shouldShowPopup: boolean;
 }> {
   try {
-    const results = await Promise.all(
-      OFFER_CAMPAIGN_CATEGORIES.map((cat) => offerCampaignAPI.public.getActiveOffer(cat))
-    );
+    const cats = categories.length > 0 ? categories : OFFER_CAMPAIGN_CATEGORIES;
+    const result = await offerCampaignAPI.public.listActiveOffers(cats);
     const campaigns = sortHomeCampaigns(
-      results
-        .map((r) => r.campaign)
-        .filter((c): c is OfferCampaignPublic => Boolean(c?.popup_enabled))
+      result.campaigns.filter((c) => Boolean(c?.popup_enabled))
     );
     if (campaigns.length === 0) {
       return { campaigns: [], shouldShowPopup: false };
     }
-    return { campaigns, shouldShowPopup: !wasHomeOfferPopupSeen() };
+    const unseen = campaigns.filter((c) => !wasOfferPopupSeen(c.category, c.id));
+    return { campaigns, shouldShowPopup: unseen.length > 0 };
   } catch {
     return { campaigns: [], shouldShowPopup: false };
   }

@@ -14,6 +14,9 @@ const VIZAG_CENTER = {
 // Maximum distance for a location to be considered in Vizag (in km)
 const VIZAG_RADIUS_KM = 35;
 
+/** Tour pickup only — measured from Vizag Taxi Hub (city center). */
+export const TOUR_PICKUP_RADIUS_KM = 20;
+
 /**
  * Converts a location from the application format to the API format
  */
@@ -170,6 +173,18 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
 
   return false;
 };
+
+/** Strict 20 km radius from Vizag Taxi Hub — tours only. No keyword or airport bypass. */
+export function isWithinTourPickupRadius(
+  location: AppLocation | ApiLocation | { lat?: number; lng?: number } | null | undefined
+): boolean {
+  if (!location) return false;
+  const lat = Number(location.lat);
+  const lng = Number(location.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  return calculateDistance(lat, lng, VIZAG_CENTER.lat, VIZAG_CENTER.lng) <= TOUR_PICKUP_RADIUS_KM;
+}
 
 /**
  * Extract city from a formatted address with safe handling of undefined

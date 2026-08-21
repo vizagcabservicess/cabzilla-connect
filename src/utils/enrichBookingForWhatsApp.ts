@@ -9,6 +9,12 @@ import {
 } from '@/services/outstationFareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
 import { computeOutstationRoundTripIncludedKm } from '@/utils/outstationRoundTripLimits';
+import {
+  resolveBookingAdvanceAmount,
+  resolveBookingPaymentMethod,
+} from '@/utils/bookingPaymentFields';
+import axios from 'axios';
+import { API_BASE_URL } from '@/config';
 
 /** Parse seat count from labels like "Urbania 17 seater" or "Tempo Traveller 12-seater". */
 export function parseSeatsFromVehicleLabel(label: string): number | null {
@@ -148,6 +154,36 @@ function hasPositiveNumber(v: unknown): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
+async function fetchPaymentsPaidAmount(booking: Booking): Promise<number> {
+  const bookingNumber = String(booking.bookingNumber || '').trim();
+  const bookingId = Number(booking.id);
+  const search = bookingNumber || (Number.isFinite(bookingId) ? String(bookingId) : '');
+  if (!search) return 0;
+
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/admin/payments.php`, {
+      params: { search },
+      timeout: 8000,
+    });
+    const payments = response.data?.data?.payments;
+    if (!Array.isArray(payments)) return 0;
+
+    const match = payments.find((row: Record<string, unknown>) => {
+      const number = String(row.bookingNumber ?? row.booking_number ?? '');
+      const id = Number(row.bookingId ?? row.booking_id);
+      return (
+        (bookingNumber !== '' && number === bookingNumber) ||
+        (Number.isFinite(bookingId) && bookingId > 0 && id === bookingId)
+      );
+    }) as Record<string, unknown> | undefined;
+
+    const paid = Number(match?.paidAmount ?? match?.paid_amount ?? 0);
+    return Number.isFinite(paid) && paid > 0 ? Math.round(paid) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function enrichBookingForWhatsApp(booking: Booking): Promise<Booking> {
   let merged: Booking = { ...booking };
 
@@ -161,6 +197,16 @@ export async function enrichBookingForWhatsApp(booking: Booking): Promise<Bookin
     } catch {
       /* keep list/summary booking */
     }
+  }
+
+  const paidFromPayments = await fetchPaymentsPaidAmount(merged);
+  if (paidFromPayments > 0 && !hasPositiveNumber((merged as Booking & Record<string, unknown>).advance_paid_amount)
+    && !hasPositiveNumber((merged as Booking & Record<string, unknown>).advancePaidAmount)) {
+    merged = {
+      ...merged,
+      advance_paid_amount: paidFromPayments,
+      advancePaidAmount: paidFromPayments,
+    };
   }
 
   try {
@@ -214,7 +260,19 @@ export async function enrichBookingForWhatsApp(booking: Booking): Promise<Bookin
 
   const perKmRate = resolveOutstationPerKmRate(outstationFare, catalogVehicle);
 
+  const resolvedAdvance = resolveBookingAdvanceAmount(merged);
+  const resolvedMethod = resolveBookingPaymentMethod(merged);
+
   const patch: Record<string, unknown> = {};
+
+  if (resolvedAdvance > 0) {
+    patch.advance_paid_amount = resolvedAdvance;
+    patch.advancePaidAmount = resolvedAdvance;
+  }
+  if (resolvedMethod && resolvedMethod !== 'N/A') {
+    patch.payment_method = resolvedMethod;
+    patch.paymentMethod = resolvedMethod;
+  }
 
   if (capacity && capacity > 0) {
     patch.vehicleCapacity = capacity;

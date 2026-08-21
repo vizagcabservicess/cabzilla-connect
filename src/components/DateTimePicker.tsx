@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { format, isSameDay, startOfDay } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { isValidTripDate } from '@/lib/dateUtils';
 
 export type DateTimePickerHandle = {
   focus: () => void;
@@ -132,7 +133,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   }, []);
 
   useEffect(() => {
-    if (date) {
+    if (isValidTripDate(date)) {
       setSelectedTime(format(atMinutePrecision(date), 'HH:mm'));
     }
   }, [date]);
@@ -148,10 +149,10 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     if (disabled) return;
     const combined =
       (selectedTime && combineDateAndTime(date, selectedTime)) ||
-      (date ? atMinutePrecision(date) : atMinutePrecision(new Date()));
+      (isValidTripDate(date) ? atMinutePrecision(date) : atMinutePrecision(new Date()));
     const next = ensureSelectableInstant(combined);
     setSelectedTime(format(next, 'HH:mm'));
-    if (!date || next.getTime() !== atMinutePrecision(date).getTime()) {
+    if (!isValidTripDate(date) || next.getTime() !== atMinutePrecision(date).getTime()) {
       onDateChange(next);
     }
     setOpen(true);
@@ -203,22 +204,20 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
-    if (selectedDate) {
-      if (selectedTime) {
-        const [hours, minutes] = selectedTime.split(':').map(Number);
-        if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
-          selectedDate.setHours(hours, minutes, 0, 0);
-        }
-      } else {
-        selectedDate.setHours(0, 0, 0, 0);
+    if (!isValidTripDate(selectedDate)) return;
+    if (selectedTime) {
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+        selectedDate.setHours(hours, minutes, 0, 0);
       }
-      onDateChange(ensureSelectableInstant(selectedDate));
     } else {
-      onDateChange(undefined);
+      selectedDate.setHours(0, 0, 0, 0);
     }
+    onDateChange(ensureSelectableInstant(selectedDate));
   };
 
-  const dateSummary = date
+  const dateIsValid = isValidTripDate(date);
+  const dateSummary = dateIsValid
     ? isDesktopVariant
       ? format(date, 'MMM d, h:mm a')
       : isAppVariant
@@ -226,13 +225,13 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
         : format(date, 'PPP, hh:mm a')
     : '';
 
-  const isJourneyToday = !!date && isSameDay(date, new Date());
+  const isJourneyToday = dateIsValid && isSameDay(date, new Date());
 
   const sheetTimeLabel = (() => {
     if (!selectedTime) return '';
     const [hours, minutes] = selectedTime.split(':').map(Number);
     if (Number.isNaN(hours) || Number.isNaN(minutes)) return selectedTime;
-    const base = date ? new Date(date) : new Date();
+    const base = dateIsValid ? new Date(date) : new Date();
     base.setHours(hours, minutes, 0, 0);
     return format(base, 'h:mm a');
   })();
@@ -282,13 +281,13 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
           ) : null}
           <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
             <span className="min-w-0 select-none text-[15px] font-bold leading-tight text-gray-900">
-              {date
+              {dateIsValid
                 ? `${format(date, 'd MMM, yyyy')} at ${format(date, 'h:mm a')}`
                 : isFocused
                   ? ''
                   : 'Select date & time'}
             </span>
-            {date && isJourneyToday ? (
+            {dateIsValid && isJourneyToday ? (
               <span className="shrink-0 text-[11px] font-medium leading-none text-gray-500">(Today)</span>
             ) : null}
           </div>
@@ -303,7 +302,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
           )}
           style={{ fontSize: isDesktopVariant ? '0.9375rem' : isAppVariant ? '1rem' : '1rem' }}
         >
-          {date
+          {dateIsValid
             ? dateSummary
             : isFocused
               ? ''
@@ -323,9 +322,10 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     <>
       <Calendar
         mode="single"
-        selected={date}
+        required
+        selected={dateIsValid ? date : undefined}
         onSelect={disabled ? undefined : handleCalendarSelect}
-        disabled={minDate ? { before: startOfDay(minDate) } : undefined}
+        disabled={isValidTripDate(minDate) ? { before: startOfDay(minDate) } : undefined}
         initialFocus
         className="pointer-events-auto mx-auto w-full max-w-sm"
       />
@@ -403,9 +403,10 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1 sm:px-4">
                 <Calendar
                   mode="single"
-                  selected={date}
+                  required
+                  selected={dateIsValid ? date : undefined}
                   onSelect={disabled ? undefined : handleCalendarSelect}
-                  disabled={minDate ? { before: startOfDay(minDate) } : undefined}
+                  disabled={isValidTripDate(minDate) ? { before: startOfDay(minDate) } : undefined}
                   initialFocus
                   className="pointer-events-auto mx-auto w-full max-w-none p-1"
                   classNames={mobileCalendarClassNames}

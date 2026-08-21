@@ -15,6 +15,7 @@ export interface ServiceEmbedSeo {
 export interface ServiceEmbedIllustration {
   cdnUrl: string;
   localPath: string;
+  alt?: string;
 }
 
 export interface ServiceEmbedTrustItem {
@@ -31,6 +32,8 @@ export interface ServiceEmbedMarketingHero {
   bookingCardTitle: string;
   trustItems: ServiceEmbedTrustItem[];
   heroImageUrl: string;
+  /** Compact fact line under trust items (e.g. airport transfer time). */
+  heroNote?: string;
 }
 
 export interface ServiceEmbedConfig {
@@ -46,29 +49,32 @@ export const SERVICE_EMBED_CONFIGS: Record<ServiceEmbedSlug, ServiceEmbedConfig>
   airport: {
     slug: 'airport',
     seo: {
-      title: 'Vizag Airport Taxi | Airport Pickup & Transfer | Cabs in Visakhapatnam Airport',
+      title: 'Bhogapuram Airport Taxi | Vizag Taxi Hub',
       description:
-        'Book Vizag airport taxi, airport pickup Vizag, and airport transfer Vizag at fixed rates. Visakhapatnam airport cabs 24/7 with professional drivers. Call +91 9966363662.',
+        'Book Bhogapuram Airport taxi to or from Visakhapatnam. Fixed fares, flight tracking, meet & greet and 24/7 airport transfers with Vizag Taxi Hub.',
       keywords:
-        'vizag airport taxi, vizag airport cabs, airport pickup vizag, airport transfer vizag, airport taxi visakhapatnam, visakhapatnam airport taxi, visakhapatnam airport cabs, cabs in vizag airport',
+        'Bhogapuram Airport Taxi, Bhogapuram Airport Cab, Bhogapuram Airport Taxi to Vizag, Bhogapuram Airport to Visakhapatnam, Vizag Airport Taxi, Alluri Sitarama Raju International Airport Taxi, Alluri Sitarama Raju Airport Cab, Bhogapuram Airport Pickup, Bhogapuram Airport Drop, Bhogapuram Airport Transfer, VTZ Airport Taxi, Bhogapuram Airport to Railway Station, Bhogapuram Airport to Vizianagaram, Bhogapuram Airport to Srikakulam, Bhogapuram Airport Tempo Traveller, Bhogapuram Airport Urbania',
       canonicalUrl: 'https://vizagtaxihub.com/airport-taxi',
-      pageHeadline: 'Cabs in Visakhapatnam Airport',
-      pageSubtitle: 'Vizag airport taxi, pickup & transfer at fixed rates',
+      pageHeadline: 'Bhogapuram Airport Taxi – Alluri Sitarama Raju International Airport',
+      pageSubtitle:
+        'Fixed-rate airport transfers with flight tracking, meet & greet and 24/7 booking assistance.',
       ogImageUrl: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/taxi-services--visakhapatnam-innova-crysta.png`,
     },
     illustration: {
       cdnUrl: `${VIZAG_SITE_IMAGE_ORIGIN}/uploads/crysta-search.jpg`,
       localPath: '/uploads/hero-vizag-scene.png',
+      alt: 'Bhogapuram Airport taxi service - Alluri Sitarama Raju International Airport',
     },
     summaryBackHref: '/airport-taxi',
     marketingHero: {
-      badge: 'On-time. Fixed rates. 24/7.',
-      accentWord: 'Airport',
-      bookingCardTitle: 'Book Airport Cab',
+      badge: 'Airport Taxi · Flight tracking · 24/7',
+      accentWord: 'Bhogapuram',
+      bookingCardTitle: 'Book Your Airport Cab',
+      heroNote: '~45 km from Vizag · 60–75 minutes to central areas',
       trustItems: [
         {
           title: 'Flight Tracking',
-          subtitle: 'We monitor delays & early arrivals',
+          subtitle: 'We monitor your flight and coordinate your pickup',
           icon: 'clock',
         },
         {
@@ -78,7 +84,7 @@ export const SERVICE_EMBED_CONFIGS: Record<ServiceEmbedSlug, ServiceEmbedConfig>
         },
         {
           title: 'Safe Transfer',
-          subtitle: 'Licensed drivers with GPS',
+          subtitle: 'Experienced drivers & GPS-enabled vehicles',
           icon: 'shield',
         },
       ],

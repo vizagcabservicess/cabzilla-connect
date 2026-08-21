@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Location } from "@/lib/locationData";
-import { isLocationInVizag } from "@/lib/locationUtils";
+import { isWithinTourPickupRadius } from "@/lib/locationUtils";
 import { MapPin, Calendar, Loader2, Search, ChevronUp, ChevronDown, CheckCircle, Star, Users, Clock, Shield, Navigation, Zap } from "lucide-react";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { TourListItem } from "@/types/tour";
@@ -69,10 +69,10 @@ const ToursPage = () => {
       return;
     }
     
-    if (!isLocationInVizag(pickupLocation)) {
+    if (!isWithinTourPickupRadius(pickupLocation)) {
       toast({
-        title: "Invalid pickup location",
-        description: "Pickup location must be within Visakhapatnam city limits.",
+        title: "Pickup too far for tours",
+        description: "Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.",
         variant: "destructive",
       });
       return;
@@ -200,6 +200,7 @@ const ToursPage = () => {
             location={pickupLocation || undefined}
             onLocationChange={setPickupLocation}
             isPickupLocation={true}
+            tripType="tour"
           />
           
           <DateTimePicker

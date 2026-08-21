@@ -6,9 +6,14 @@ import type { OfferCampaignPublic } from '@/types/offerCampaign';
 import {
   isOfferCampaignCategory,
   isOfferTravelDateEligible,
+  isOfferTravelTimeEligible,
   toOfferTravelDateYmd,
-  formatOfferTravelDateRange,
+  toOfferTravelTimeHm,
+  formatOfferRouteScope,
   normalizeOfferTargetId,
+  isOfferRouteEligible,
+  offerCouponNotValidForTripMessage,
+  type OfferTripRoute,
 } from '@/types/offerCampaign';
 import { computeOfferPricing } from '@/components/offers/OfferCampaignPopup';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
@@ -28,6 +33,7 @@ export function BookingCouponSection({
   travelDate,
   vehicleId,
   tourId,
+  tripRoute,
   className = '',
 }: {
   category: string;
@@ -43,6 +49,7 @@ export function BookingCouponSection({
   vehicleId?: string | null;
   /** Selected tour id — required when campaign is tour-specific. */
   tourId?: string | null;
+  tripRoute?: OfferTripRoute | null;
   className?: string;
 }) {
   const [manualCode, setManualCode] = useState('');
@@ -52,14 +59,17 @@ export function BookingCouponSection({
   const eligible = isOfferCampaignCategory(category);
   const fare = Math.max(0, websiteFare);
   const travelYmd = toOfferTravelDateYmd(travelDate ?? null);
+  const travelHm = toOfferTravelTimeHm(travelDate ?? null);
   const vehicleTargetId = normalizeOfferTargetId(vehicleId);
   const tourTargetId = normalizeOfferTargetId(tourId);
 
   const suggestedPricing = useMemo(() => {
     if (!suggestedCampaign || fare <= 0) return null;
     if (!isOfferTravelDateEligible(suggestedCampaign, travelYmd)) return null;
+    if (!isOfferTravelTimeEligible(suggestedCampaign, travelHm, true)) return null;
+    if (!isOfferRouteEligible(suggestedCampaign, tripRoute, true)) return null;
     return computeOfferPricing(suggestedCampaign, fare);
-  }, [suggestedCampaign, fare, travelYmd]);
+  }, [suggestedCampaign, fare, travelYmd, travelHm, tripRoute]);
 
   if (!eligible) return null;
 
@@ -78,38 +88,23 @@ export function BookingCouponSection({
     try {
       let campaign = suggestedCampaign;
       if (!campaign || campaign.coupon_code.toUpperCase() !== code) {
-        const result = await offerCampaignAPI.public.getActiveOffer(
-          category,
-          fare,
-          travelYmd,
-          vehicleTargetId,
-          tourTargetId
-        );
-        campaign = result.campaign;
-        if (!campaign && category === 'outstation_one_way') {
-          const legacy = await offerCampaignAPI.public.getActiveOffer(
-            'outstation',
-            fare,
-            travelYmd,
-            vehicleTargetId,
-            tourTargetId
-          );
-          campaign = legacy.campaign;
+        const looked = await offerCampaignAPI.public.lookupCoupon(code, fare);
+        if (!looked.campaign || !looked.live) {
+          setError('Invalid or expired coupon for this trip');
+          return;
         }
+        campaign = looked.campaign;
       }
-      if (!campaign || campaign.coupon_code.toUpperCase() !== code) {
-        setError('Invalid or expired coupon for this trip');
+      if (!isOfferTravelDateEligible(campaign, travelYmd) || !isOfferTravelTimeEligible(campaign, travelHm, true)) {
+        setError(offerCouponNotValidForTripMessage(campaign));
         return;
       }
-      if (!isOfferTravelDateEligible(campaign, travelYmd)) {
-        const range = formatOfferTravelDateRange(
-          campaign.travel_date_from,
-          campaign.travel_date_to
-        );
+      if (!isOfferRouteEligible(campaign, tripRoute, true)) {
+        const route = formatOfferRouteScope(campaign);
         setError(
-          range
-            ? `Offer only valid for trips on ${range}`
-            : 'Offer not valid for this travel date'
+          route
+            ? `This offer is only valid from ${route}`
+            : 'This offer is only valid for the campaign pickup and destination'
         );
         return;
       }
@@ -119,6 +114,7 @@ export function BookingCouponSection({
         return;
       }
       onApply({ ...campaign, pricing });
+      void offerCampaignAPI.public.logEvent('apply', campaign.id, campaign.category);
       setManualCode('');
     } catch {
       setError('Could not verify coupon. Try again.');
@@ -154,6 +150,9 @@ export function BookingCouponSection({
 
   const hasSuggestion =
     Boolean(suggestedCampaign && suggestedPricing && suggestedPricing.savings > 0);
+  const suggestedRoute = suggestedCampaign
+    ? formatOfferRouteScope(suggestedCampaign)
+    : null;
 
   return (
     <div id="booking-coupon" className={`space-y-2 ${className}`}>
@@ -169,6 +168,9 @@ export function BookingCouponSection({
                 {suggestedCampaign.coupon_code}&apos;
               </p>
               <p className="text-xs text-slate-500">{suggestedCampaign.name}</p>
+              {suggestedRoute ? (
+                <p className="text-[11px] text-slate-500">Valid only on {suggestedRoute}</p>
+              ) : null}
             </div>
             <Button
               type="button"
@@ -219,9 +221,9 @@ export function BookingCouponSection({
           </Button>
         </div>
         {error && (
-          <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600">
-            <X className="h-3 w-3" />
-            {error}
+          <p className="mt-1.5 flex items-start gap-1 text-xs leading-snug text-red-600">
+            <X className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>{error}</span>
           </p>
         )}
       </div>

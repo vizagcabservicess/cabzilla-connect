@@ -9,6 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, Megaphone, Plus, RefreshCw, Rocket, Ban, Pencil, Pause, Play } from 'lucide-react';
+import { LocationInput } from '@/components/LocationInput';
+import GoogleMapComponent from '@/components/GoogleMapComponent';
+import type { Location } from '@/lib/locationData';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { tourManagementAPI } from '@/services/api/tourManagementAPI';
@@ -19,6 +22,9 @@ import {
   OFFER_CAMPAIGN_TYPE_LABELS,
   OFFER_CATEGORY_LABELS,
   formatOfferTravelDateRange,
+  formatOfferTravelTimeFrom,
+  formatOfferRouteScope,
+  campaignShowsRoute,
   type CreateOfferCampaignInput,
   type OfferCampaign,
   type OfferCampaignCategory,
@@ -76,12 +82,13 @@ function campaignToForm(c: OfferCampaign): CreateOfferCampaignInput {
     coupon_code: c.coupon_code,
     eligible_own_fleet: c.eligible_own_fleet,
     eligible_attached_fleet: c.eligible_attached_fleet,
-    absorb_own: c.absorb_own,
-    absorb_attached: c.absorb_attached,
+    absorb_own: c.absorb_own === 'owner' ? 'owner' : 'company',
+    absorb_attached: c.absorb_attached === 'owner' ? 'owner' : 'company',
     starts_at: apiDateToLocalInput(c.starts_at),
     ends_at: apiDateToLocalInput(c.ends_at),
     travel_date_from: c.travel_date_from ? c.travel_date_from.slice(0, 10) : '',
     travel_date_to: c.travel_date_to ? c.travel_date_to.slice(0, 10) : '',
+    travel_time_from: c.travel_time_from ? c.travel_time_from.slice(0, 5) : '',
     max_redemptions: c.max_redemptions,
     max_per_customer: c.max_per_customer,
     popup_enabled: c.popup_enabled,
@@ -89,6 +96,12 @@ function campaignToForm(c: OfferCampaign): CreateOfferCampaignInput {
     publish: false,
     target_vehicle_ids: c.target_vehicle_ids ?? [],
     target_tour_ids: c.target_tour_ids ?? [],
+    pickup_location: c.pickup_location ?? '',
+    drop_location: c.drop_location ?? '',
+    pickup_lat: c.pickup_lat ?? null,
+    pickup_lng: c.pickup_lng ?? null,
+    drop_lat: c.drop_lat ?? null,
+    drop_lng: c.drop_lng ?? null,
   };
 }
 
@@ -111,6 +124,7 @@ function emptyForm(): CreateOfferCampaignInput {
     ends_at: toLocalInputValue(end),
     travel_date_from: '',
     travel_date_to: '',
+    travel_time_from: '',
     max_redemptions: null,
     max_per_customer: 1,
     popup_enabled: true,
@@ -118,7 +132,43 @@ function emptyForm(): CreateOfferCampaignInput {
     publish: true,
     target_vehicle_ids: [],
     target_tour_ids: [],
+    pickup_location: '',
+    drop_location: '',
+    pickup_lat: null,
+    pickup_lng: null,
+    drop_lat: null,
+    drop_lng: null,
   };
+}
+
+function campaignPlaceToLocation(
+  name?: string | null,
+  lat?: number | null,
+  lng?: number | null
+): Location | undefined {
+  const n = (name || '').trim();
+  if (!n) return undefined;
+  return {
+    id: n,
+    name: n,
+    address: n,
+    city: '',
+    state: '',
+    lat: typeof lat === 'number' ? lat : 0,
+    lng: typeof lng === 'number' ? lng : 0,
+    type: 'other',
+    popularityScore: 50,
+  };
+}
+
+function hasOfferMapCoords(lat?: number | null, lng?: number | null): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0)
+  );
 }
 
 export default function OfferCampaignsAdminPage() {
@@ -198,8 +248,8 @@ export default function OfferCampaignsAdminPage() {
   };
 
   const openEdit = (c: OfferCampaign) => {
-    if (c.status === 'expired' || c.status === 'cancelled') {
-      toast.error('Cannot edit expired or cancelled campaigns');
+    if (c.status === 'cancelled') {
+      toast.error('Cannot edit a cancelled campaign');
       return;
     }
     setEditingId(c.id);
@@ -221,6 +271,29 @@ export default function OfferCampaignsAdminPage() {
       const endsAt = form.ends_at.replace('T', ' ') + ':00';
       const travelFrom = form.travel_date_from?.trim() || null;
       const travelTo = form.travel_date_to?.trim() || null;
+      const travelTimeFrom = form.travel_time_from?.trim() || null;
+      const pickupLocation = campaignShowsRoute(form.category)
+        ? form.pickup_location?.trim() || null
+        : null;
+      const dropLocation = campaignShowsRoute(form.category)
+        ? form.drop_location?.trim() || null
+        : null;
+      const pickupLat = campaignShowsRoute(form.category) ? form.pickup_lat ?? null : null;
+      const pickupLng = campaignShowsRoute(form.category) ? form.pickup_lng ?? null : null;
+      const dropLat = campaignShowsRoute(form.category) ? form.drop_lat ?? null : null;
+      const dropLng = campaignShowsRoute(form.category) ? form.drop_lng ?? null : null;
+      if (campaignShowsRoute(form.category)) {
+        if (!pickupLocation || !dropLocation) {
+          toast.error('Select pickup and destination from Google Maps');
+          setSaving(false);
+          return;
+        }
+        if (!hasOfferMapCoords(pickupLat, pickupLng) || !hasOfferMapCoords(dropLat, dropLng)) {
+          toast.error('Choose each place from the Google Maps suggestions list');
+          setSaving(false);
+          return;
+        }
+      }
       if (travelFrom && travelTo && travelTo < travelFrom) {
         toast.error('Travel end date must be on or after travel start date');
         setSaving(false);
@@ -242,6 +315,13 @@ export default function OfferCampaignsAdminPage() {
           ends_at: endsAt,
           travel_date_from: travelFrom,
           travel_date_to: travelTo,
+          travel_time_from: travelTimeFrom,
+          pickup_location: pickupLocation,
+          drop_location: dropLocation,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
+          drop_lat: dropLat,
+          drop_lng: dropLng,
           max_redemptions: form.max_redemptions || null,
           max_per_customer: form.max_per_customer,
           popup_enabled: form.popup_enabled,
@@ -249,7 +329,12 @@ export default function OfferCampaignsAdminPage() {
           target_vehicle_ids: form.target_vehicle_ids ?? [],
           target_tour_ids: form.target_tour_ids ?? [],
         });
-        toast.success('Campaign updated');
+        toast.success(
+          campaigns.find((c) => c.id === editingId)?.status === 'expired' &&
+            new Date(endsAt.replace(' ', 'T')).getTime() > Date.now()
+            ? 'Campaign updated and live again'
+            : 'Campaign updated'
+        );
       } else {
         const created = await offerCampaignAPI.admin.createCampaign({
           ...form,
@@ -257,6 +342,13 @@ export default function OfferCampaignsAdminPage() {
           ends_at: endsAt,
           travel_date_from: travelFrom,
           travel_date_to: travelTo,
+          travel_time_from: travelTimeFrom,
+          pickup_location: pickupLocation,
+          drop_location: dropLocation,
+          pickup_lat: pickupLat,
+          pickup_lng: pickupLng,
+          drop_lat: dropLat,
+          drop_lng: dropLng,
           max_redemptions: form.max_redemptions || null,
         });
         toast.success(
@@ -278,7 +370,7 @@ export default function OfferCampaignsAdminPage() {
   const publish = async (id: number) => {
     try {
       await offerCampaignAPI.admin.publishCampaign(id);
-      toast.success('Published');
+      toast.success('Live on the website — popup can show now');
       await loadAll();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Publish failed');
@@ -419,6 +511,11 @@ export default function OfferCampaignsAdminPage() {
                               Coupon {card.campaign.coupon_code} · ends{' '}
                               {new Date(card.campaign.ends_at).toLocaleString()}
                             </p>
+                            {formatOfferRouteScope(card.campaign) ? (
+                              <p className="text-[11px] text-sky-800">
+                                {formatOfferRouteScope(card.campaign)}
+                              </p>
+                            ) : null}
                           </>
                         ) : (
                           <p className="text-muted-foreground text-xs">
@@ -442,7 +539,9 @@ export default function OfferCampaignsAdminPage() {
                   </CardTitle>
                   <CardDescription>
                     {editingId
-                      ? 'Category and coupon code cannot be changed after create. Cancel & create a new campaign if you need a different coupon.'
+                      ? campaigns.find((c) => c.id === editingId)?.status === 'expired'
+                        ? 'Extend Offer live until to put this campaign back on the website. Category and coupon stay the same.'
+                        : 'Category and coupon code cannot be changed after create. Cancel & create a new campaign if you need a different coupon.'
                       : 'Publishing auto-deactivates any other active campaign in the same category. Discount absorb-by is required for Own and Attached fleets.'}
                   </CardDescription>
                 </CardHeader>
@@ -567,6 +666,95 @@ export default function OfferCampaignsAdminPage() {
                         )}
                       </>
                     )}
+                    {campaignShowsRoute(form.category) && (
+                      <div className="space-y-1 sm:col-span-2 rounded-md border border-sky-200 bg-sky-50/50 p-3">
+                        <p className="text-xs font-medium text-sky-900">Pickup to destination</p>
+                        <p className="text-[11px] text-muted-foreground mb-2">
+                          Search and select both places from Google Maps. If destination is
+                          Visakhapatnam, the coupon applies to every drop in the city (35 km). Pickup
+                          still must match (for example the airport).
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <LocationInput
+                            id="oc-campaign-pickup"
+                            label="Pickup location"
+                            placeholder="Search pickup on Google Maps"
+                            variant="desktop"
+                            tripType="outstation"
+                            location={campaignPlaceToLocation(
+                              form.pickup_location,
+                              form.pickup_lat,
+                              form.pickup_lng
+                            )}
+                            onLocationChange={(loc) => {
+                              const name = (loc.name || loc.address || '').trim();
+                              const ok = hasOfferMapCoords(loc.lat, loc.lng);
+                              setForm((f) => ({
+                                ...f,
+                                pickup_location: name,
+                                pickup_lat: ok ? loc.lat : null,
+                                pickup_lng: ok ? loc.lng : null,
+                              }));
+                            }}
+                          />
+                          <LocationInput
+                            id="oc-campaign-drop"
+                            label="Destination location"
+                            placeholder="Search destination on Google Maps"
+                            variant="desktop"
+                            tripType="outstation"
+                            location={campaignPlaceToLocation(
+                              form.drop_location,
+                              form.drop_lat,
+                              form.drop_lng
+                            )}
+                            onLocationChange={(loc) => {
+                              const name = (loc.name || loc.address || '').trim();
+                              const ok = hasOfferMapCoords(loc.lat, loc.lng);
+                              setForm((f) => ({
+                                ...f,
+                                drop_location: name,
+                                drop_lat: ok ? loc.lat : null,
+                                drop_lng: ok ? loc.lng : null,
+                              }));
+                            }}
+                          />
+                        </div>
+                        {campaignPlaceToLocation(
+                          form.pickup_location,
+                          form.pickup_lat,
+                          form.pickup_lng
+                        ) &&
+                          campaignPlaceToLocation(
+                            form.drop_location,
+                            form.drop_lat,
+                            form.drop_lng
+                          ) &&
+                          hasOfferMapCoords(form.pickup_lat, form.pickup_lng) &&
+                          hasOfferMapCoords(form.drop_lat, form.drop_lng) && (
+                            <div className="mt-3 overflow-hidden rounded-md border bg-white">
+                              <GoogleMapComponent
+                                pickupLocation={
+                                  campaignPlaceToLocation(
+                                    form.pickup_location,
+                                    form.pickup_lat,
+                                    form.pickup_lng
+                                  )!
+                                }
+                                dropLocation={
+                                  campaignPlaceToLocation(
+                                    form.drop_location,
+                                    form.drop_lat,
+                                    form.drop_lng
+                                  )!
+                                }
+                                tripType="outstation"
+                                mapHeight="220px"
+                              />
+                            </div>
+                          )}
+                      </div>
+                    )}
                     <div className="space-y-1 sm:col-span-2 rounded-md border border-dashed border-slate-200 bg-slate-50/80 p-3">
                       <p className="text-xs font-medium text-slate-800">When customers can book this offer</p>
                       <p className="text-[11px] text-muted-foreground mb-2">
@@ -597,7 +785,8 @@ export default function OfferCampaignsAdminPage() {
                       </p>
                       <p className="text-[11px] text-muted-foreground mb-2">
                         Coupon applies only when the customer&apos;s pickup date falls in this range.
-                        Leave blank for any travel date.
+                        Set earliest pickup time if vehicles reach later (e.g. 08:00 at the airport).
+                        Leave dates or time blank for any travel date or time.
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
@@ -619,6 +808,20 @@ export default function OfferCampaignsAdminPage() {
                               setForm((f) => ({ ...f, travel_date_to: e.target.value }))
                             }
                           />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>Earliest pickup time</Label>
+                          <Input
+                            type="time"
+                            value={form.travel_time_from || ''}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, travel_time_from: e.target.value }))
+                            }
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Coupon works only if pickup is at or after this time. Leave blank for any
+                            time.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -877,10 +1080,32 @@ export default function OfferCampaignsAdminPage() {
                             : `${c.participating_vehicles ?? 0} vendor vehicles`}{' '}
                           · {c.redemption_count} redemptions
                         </p>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          Analytics: {c.popup_close_count ?? 0} closed popup · {c.copy_count ?? 0}{' '}
+                          copied code · {c.apply_count ?? 0} applied at booking
+                          {(c.popup_view_count ?? 0) > 0
+                            ? ` · ${c.popup_view_count} popup views`
+                            : ''}
+                        </p>
+                        {formatOfferRouteScope(c) && (
+                          <p className="text-[11px] text-sky-800 mt-0.5">
+                            Route: {formatOfferRouteScope(c)}
+                          </p>
+                        )}
                         {formatOfferTravelDateRange(c.travel_date_from, c.travel_date_to) && (
                           <p className="text-[11px] text-emerald-800 mt-0.5">
                             Travel dates:{' '}
                             {formatOfferTravelDateRange(c.travel_date_from, c.travel_date_to)}
+                          </p>
+                        )}
+                        {formatOfferTravelTimeFrom(c.travel_time_from) && (
+                          <p className="text-[11px] text-emerald-800 mt-0.5">
+                            Pickup time: {formatOfferTravelTimeFrom(c.travel_time_from)}
+                          </p>
+                        )}
+                        {c.status === 'scheduled' && Boolean(c.popup_enabled) && (
+                          <p className="text-[11px] text-amber-800 mt-0.5">
+                            Website popup starts after this goes Active — click Go live now.
                           </p>
                         )}
                       </div>
@@ -896,7 +1121,7 @@ export default function OfferCampaignsAdminPage() {
                         >
                           Participants
                         </Button>
-                        {c.status !== 'cancelled' && c.status !== 'expired' && (
+                        {c.status !== 'cancelled' && (
                           <Button
                             type="button"
                             size="sm"
@@ -932,10 +1157,9 @@ export default function OfferCampaignsAdminPage() {
                         )}
                         {c.status !== 'active' &&
                           c.status !== 'paused' &&
-                          c.status !== 'cancelled' &&
-                          c.status !== 'expired' && (
+                          c.status !== 'cancelled' && (
                             <Button type="button" size="sm" onClick={() => void publish(c.id)}>
-                              Publish
+                              {c.status === 'scheduled' ? 'Go live now' : 'Publish'}
                             </Button>
                           )}
                         {c.status !== 'cancelled' && c.status !== 'expired' && (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { Location } from '@/lib/locationData';
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ interface GoogleMapComponentProps {
   pickupLocation: Location;
   dropLocation: Location;
   tripType: string;
+  waypoints?: Location[];
   onDistanceCalculated?: (distance: number, duration: number) => void;
+  mapHeight?: string;
 }
 
 // Vizag default coordinates as fallback
@@ -19,16 +21,24 @@ const DEFAULT_LNG = 83.2185;
 // Cache for directions results
 const directionsCache = new Map<string, google.maps.DirectionsResult>();
 
-// Generate a cache key for two locations
-const generateCacheKey = (origin: any, destination: any): string => {
-  return `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
+const generateCacheKey = (
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  waypoints: Array<{ lat: number; lng: number }>
+): string => {
+  const via = waypoints.map((point) => `${point.lat},${point.lng}`).join('|');
+  return via
+    ? `${origin.lat},${origin.lng}_${via}_${destination.lat},${destination.lng}`
+    : `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
 };
 
 const GoogleMapComponent = ({ 
   pickupLocation, 
   dropLocation,
   tripType,
-  onDistanceCalculated 
+  waypoints = [],
+  onDistanceCalculated,
+  mapHeight = '400px',
 }: GoogleMapComponentProps) => {
   const { isLoaded, google } = useGoogleMaps();
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -39,11 +49,14 @@ const GoogleMapComponent = ({
   const distanceCalculated = useRef<boolean>(false);
   
   // Map container style
-  const mapContainerStyle = {
-    width: "100%",
-    height: "400px",
-    position: "relative" as const
-  };
+  const mapContainerStyle = useMemo(
+    () => ({
+      width: '100%',
+      height: mapHeight,
+      position: 'relative' as const,
+    }),
+    [mapHeight]
+  );
   
   // Use the location's actual coordinates; only fall back to default for invalid (0,0) or missing
   const getValidCoordinates = (location: any): { lat: number; lng: number } => {
@@ -59,6 +72,15 @@ const GoogleMapComponent = ({
 
   const pickupCoords = getValidCoordinates(pickupLocation);
   const dropCoords = getValidCoordinates(dropLocation);
+  const waypointKey = waypoints
+    .map((stop) => `${stop.lat},${stop.lng}`)
+    .join('|');
+  const waypointCoords = useMemo(
+    () => waypoints.map((stop) => getValidCoordinates(stop)),
+    // getValidCoordinates is stable in this render; key captures lat/lng changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [waypointKey]
+  );
 
   // Check if coords are valid for routing (not 0,0 or identical invalid points)
   const hasValidCoords = (loc: any) =>
@@ -86,7 +108,7 @@ const GoogleMapComponent = ({
     if (!map || !directionsService || !google || distanceCalculated.current) return;
 
     const fetchDirections = async () => {
-      const cacheKey = generateCacheKey(pickupCoords, dropCoords);
+      const cacheKey = generateCacheKey(pickupCoords, dropCoords, waypointCoords);
 
       // Check cache first
       if (directionsCache.has(cacheKey)) {
@@ -109,6 +131,11 @@ const GoogleMapComponent = ({
         const results = await directionsService.route({
           origin: pickupCoords,
           destination: dropCoords,
+          waypoints: waypointCoords.map((coords) => ({
+            location: coords,
+            stopover: true,
+          })),
+          optimizeWaypoints: false,
           travelMode: google.maps.TravelMode.DRIVING
         });
 
@@ -124,20 +151,24 @@ const GoogleMapComponent = ({
     };
 
     fetchDirections();
-  }, [map, directionsService, pickupCoords, dropCoords, google, tripType, samePoint, pickupLocation, dropLocation, onDistanceCalculated]);
+  }, [map, directionsService, pickupCoords, dropCoords, waypointKey, google, tripType, samePoint, pickupLocation, dropLocation, onDistanceCalculated]);
   
   // Reset the calculated flag when locations or tripType change
   useEffect(() => {
     distanceCalculated.current = false;
-  }, [pickupLocation, dropLocation, tripType]);
+  }, [pickupLocation, dropLocation, tripType, waypointKey]);
   
   // Add this after the main useEffect for fetching directions
   useEffect(() => {
     if (directions && onDistanceCalculated) {
-      const leg = directions.routes[0]?.legs[0];
-      if (leg) {
-        const distanceValue = leg.distance?.value ? Math.round(leg.distance.value / 1000) : 0;
-        const durationValue = leg.duration?.value ? Math.round(leg.duration.value / 60) : 0;
+      const legs = directions.routes[0]?.legs ?? [];
+      if (legs.length > 0) {
+        const distanceValue = Math.round(
+          legs.reduce((sum, leg) => sum + (leg.distance?.value ?? 0), 0) / 1000
+        );
+        const durationValue = Math.round(
+          legs.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) / 60
+        );
         onDistanceCalculated(distanceValue, durationValue);
         distanceCalculated.current = true;
       }
@@ -201,6 +232,19 @@ const GoogleMapComponent = ({
           title={pickupLocation?.name || "Pickup Location"}
         />
         
+        {waypoints.map((stop, index) => (
+          <Marker
+            key={`stop-${stop.id || index}`}
+            position={waypointCoords[index]}
+            label={{
+              text: String(index + 1),
+              color: "white",
+              fontWeight: "bold"
+            }}
+            title={stop.name || `Stop ${index + 1}`}
+          />
+        ))}
+
         {/* Dropoff marker */}
         <Marker 
           position={dropCoords}

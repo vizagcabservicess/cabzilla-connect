@@ -96,17 +96,23 @@ function buildOwnerMessage(body) {
   const guest = body.guestPhone || '';
   const pickup = body.pickup || '';
   const drop = body.drop || '';
+  const viaStops = String(body.viaStops || body.via_stops || '').trim();
   const trip = body.tripType || '';
   const departure = body.departure || '';
   const routeSummary = formatRouteSummary(body);
   const resultsBlock = formatResultsShown(body);
   const searchedAt = formatSearchedAtIst();
+  const dropAlreadyHasStops =
+    viaStops && String(drop).toLowerCase().includes(`(via ${viaStops.toLowerCase()})`);
+  const stopsLine =
+    viaStops && !dropAlreadyHasStops ? `🛑 *Stops:* ${viaStops}\n` : '';
 
   return (
     `🚖 *New Cab Search Alert!*\n\n` +
     `👤 *Guest Number:* ${guest}\n` +
     `📍 *Pickup:* ${pickup}\n` +
     `📍 *Drop:* ${drop}\n` +
+    stopsLine +
     `🔄 *Trip Type:* ${trip}\n` +
     routeSummary +
     `📅 *Departure:* ${departure}\n` +

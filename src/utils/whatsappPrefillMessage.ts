@@ -1,6 +1,9 @@
+import { AIRPORT_TAXI_WHATSAPP_MESSAGE } from '@/seo/airportTaxiPageContent';
+
 /**
  * Prefill text for wa.me links by current path (shared with mobile bottom nav and floating actions).
  */
+
 export function getWhatsAppPrefillMessage(pathname: string): string {
   const path = pathname;
 
@@ -26,6 +29,10 @@ export function getWhatsAppPrefillMessage(pathname: string): string {
     return 'Hi Kumar! I need help with payment';
   }
 
+  if (path.startsWith('/airport-taxi')) {
+    return AIRPORT_TAXI_WHATSAPP_MESSAGE;
+  }
+
   const messages: Record<string, string> = {
     '/': 'Hi Kumar! I would like to know more about your taxi services',
     '/hire-driver': 'Hi Kumar! I would like to hire a driver',
@@ -38,7 +45,7 @@ export function getWhatsAppPrefillMessage(pathname: string): string {
     '/about': 'Hi Kumar! I would like to know more about Vizag Taxi Hub',
     '/local-taxi': 'Hi Kumar! I would like to book a local taxi',
     '/outstation-taxi': 'Hi Kumar! I would like to book an outstation taxi',
-    '/airport-taxi': 'Hi Kumar! I would like to book an airport transfer',
+    '/airport-taxi': AIRPORT_TAXI_WHATSAPP_MESSAGE,
     '/pooling': 'Hi Kumar! I would like to know more about your car pooling service',
     '/shared-carpooling': 'Hi Kumar! I would like to book a shared carpool ride for my daily commute',
     '/shared-carpooling/results': 'Hi Kumar! I found matching shared rides and would like to book a seat',

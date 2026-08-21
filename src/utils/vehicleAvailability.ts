@@ -6,7 +6,15 @@ import { CabType, InactiveDateRange } from '@/types/cab';
  * @param date - The date to check availability for
  * @returns true if vehicle is available, false if inactive
  */
+function isUsableDate(date: Date | undefined): date is Date {
+  return date instanceof Date && !Number.isNaN(date.getTime());
+}
+
 export function isVehicleAvailableOnDate(vehicle: CabType, date: Date): boolean {
+  if (!isUsableDate(date)) {
+    return Boolean(vehicle.isActive);
+  }
+
   // If vehicle is not active, it's not available
   if (!vehicle.isActive) {
     return false;
@@ -49,7 +57,10 @@ export function isVehicleAvailableForDateRange(
   startDate: Date, 
   endDate?: Date
 ): boolean {
-  const end = endDate || startDate;
+  if (!isUsableDate(startDate)) {
+    return Boolean(vehicle.isActive);
+  }
+  const end = isUsableDate(endDate) ? endDate : startDate;
   const current = new Date(startDate);
   
   while (current <= end) {
@@ -74,6 +85,9 @@ export function filterAvailableVehicles(
   date: Date, 
   endDate?: Date
 ): CabType[] {
+  if (!isUsableDate(date)) {
+    return vehicles.filter((vehicle) => vehicle.isActive !== false);
+  }
   return vehicles.filter(vehicle => {
     if (endDate) {
       return isVehicleAvailableForDateRange(vehicle, date, endDate);

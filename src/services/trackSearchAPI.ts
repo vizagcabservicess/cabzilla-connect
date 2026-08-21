@@ -16,6 +16,8 @@ export type TrackSearchPayload = {
   durationMinutesOneWay?: number;
   /** Echo trip mode so templates can show round-trip total km. */
   tripModeTrack?: TripMode;
+  /** Outstation intermediate stops, e.g. "Anakapalle → Tuni". */
+  viaStops?: string;
   /** Vehicle lines for the alert; each entry may be `Name: ₹…` so hosts that only join `carsShown` still show fares. */
   carsShown: string[];
   /** Per-vehicle fares for backends that render multi-line results (e.g. Node track-search server). */
@@ -25,14 +27,19 @@ export type TrackSearchPayload = {
 /** Stable id for pickup+drop so routed km is only reused for the same pair (avoids stale React `distance`). */
 export function buildGuestTrackRouteKey(
   pickup: Location | null | undefined,
-  drop: Location | null | undefined
+  drop: Location | null | undefined,
+  waypoints?: Array<Location | null | undefined> | null
 ): string {
   if (!pickup || !drop) return '';
   if (!Number.isFinite(pickup.lat) || !Number.isFinite(pickup.lng)) return '';
   if (!Number.isFinite(drop.lat) || !Number.isFinite(drop.lng)) return '';
   const p = pickup.placeId?.trim() || `${pickup.lat.toFixed(5)}:${pickup.lng.toFixed(5)}`;
   const d = drop.placeId?.trim() || `${drop.lat.toFixed(5)}:${drop.lng.toFixed(5)}`;
-  return `${p}|${d}`;
+  const via = (waypoints ?? [])
+    .filter((stop): stop is Location => Boolean(stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lng)))
+    .map((stop) => stop.placeId?.trim() || `${stop.lat.toFixed(5)}:${stop.lng.toFixed(5)}`)
+    .join('|');
+  return via ? `${p}|via:${via}|${d}` : `${p}|${d}`;
 }
 
 const hourlyPackageOptions = [
@@ -40,7 +47,8 @@ const hourlyPackageOptions = [
   { value: '10hrs-100km', label: '10 Hours / 100 KM' },
 ];
 
-export function formatDepartureForTrack(date: Date): string {
+export function formatDepartureForTrack(date: Date | null | undefined): string {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
   return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -116,6 +124,14 @@ export function buildRouteSummaryLinesForTripTypeField(
     return `📏 *One-way:* Approx. route: ${owDetail}\n📏 *Round-trip (approx):* Approx. route: ${rtDetail}`;
   }
   return `📏 *One-way:* Approx. route: ${owDetail}`;
+}
+
+/** Production PHP prints pickup/drop as-is — keep stops on the Drop line (newlines are often stripped). */
+export function formatGuestTrackDropField(drop: string, viaStopsLabel?: string): string {
+  const destination = (drop || '').trim();
+  const via = (viaStopsLabel || '').trim();
+  if (!via) return destination;
+  return destination ? `${destination} (via ${via})` : `(via ${via})`;
 }
 
 /** Value sent as JSON `tripType` so legacy PHP templates include route text without separate fields. */

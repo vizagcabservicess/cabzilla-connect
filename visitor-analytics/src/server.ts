@@ -8,7 +8,8 @@ import { ZodError } from 'zod';
 import { corsOrigins, env } from './config/env.js';
 import { pool } from './db/pool.js';
 import { realtimeHub } from './websocket/hub.js';
-import { objectStoreMode, pruneLocalRecordingFiles } from './services/s3.js';
+import { objectStoreMode, persistRecordingBlobsInMysql, pruneLocalRecordingFiles } from './services/s3.js';
+import { pruneRecordingDbToBudget } from './services/recording.js';
 import trackRouter from './routes/track.js';
 import adminRouter from './routes/admin.js';
 import chatRouter from './routes/chat.js';
@@ -187,7 +188,7 @@ async function start(existingServer?: http.Server): Promise<http.Server> {
       server!.listen(port, '0.0.0.0', () => {
         server!.off('error', reject);
         console.log(`[visitor-analytics] listening on 0.0.0.0:${port}`);
-        console.log(`[visitor-analytics] recording store=${objectStoreMode()}`);
+        console.log(`[visitor-analytics] recording store=${objectStoreMode()} blobsInMysql=${persistRecordingBlobsInMysql()}`);
         resolve();
       });
     });
@@ -228,6 +229,18 @@ async function start(existingServer?: http.Server): Promise<http.Server> {
           );
         } else {
           console.log('[visitor-analytics] recording DB payload column OK');
+          const cap = await pruneRecordingDbToBudget();
+          console.log(
+            `[visitor-analytics] recording DB ${Math.round(cap.bytesAfter / 1024 / 1024)}MB / ${Math.round(env.RECORDING_DB_MAX_BYTES / 1024 / 1024)}MB cap`,
+          );
+          setInterval(() => {
+            void pruneRecordingDbToBudget().catch((err) => {
+              console.warn(
+                '[visitor-analytics] recording DB prune failed',
+                err instanceof Error ? err.message : err,
+              );
+            });
+          }, 15 * 60 * 1000).unref();
         }
       } catch (checkErr) {
         console.warn(

@@ -22,8 +22,10 @@ import {
 import {
   attributionReport,
   dailyReport,
+  dailySeries,
   getStoredDailyStats,
   monthlyReport,
+  rangeReport,
   upsertDailyStats,
   weeklyReport,
 } from '../services/reports.js';
@@ -375,6 +377,34 @@ router.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const day = z.string().parse(req.query.day || new Date().toISOString().slice(0, 10));
     res.json({ report: await dailyReport(req.siteId!, day) });
+  }),
+);
+
+router.get(
+  '/reports/range',
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const from = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.from || today);
+    const to = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.to || today);
+    if (from > to) {
+      res.status(400).json({ error: 'from must be on or before to' });
+      return;
+    }
+    res.json({ report: await rangeReport(req.siteId!, from, to) });
+  }),
+);
+
+router.get(
+  '/reports/series',
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const from = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.from || today);
+    const to = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(req.query.to || today);
+    if (from > to) {
+      res.status(400).json({ error: 'from must be on or before to' });
+      return;
+    }
+    res.json({ series: await dailySeries(req.siteId!, from, to) });
   }),
 );
 

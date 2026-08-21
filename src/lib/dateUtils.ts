@@ -93,6 +93,21 @@ export function convertUTCToLocal(dateString: string): Date {
 } 
 
 // Helper function to format date for API requests (IST format)
+export function isValidTripDate(date: Date | string | null | undefined): date is Date {
+  return date instanceof Date && !Number.isNaN(date.getTime());
+}
+
+/** Always return a real Date so search/results never call getTime() on undefined. */
+export function coerceTripDate(
+  date: Date | string | null | undefined,
+  fallback?: Date,
+): Date {
+  const fallbackDate = fallback ?? new Date(Date.now() + 60 * 60 * 1000);
+  if (!date) return fallbackDate;
+  const parsed = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(parsed.getTime()) ? fallbackDate : parsed;
+}
+
 export function formatDateForAPI(date: Date): string {
   if (!date) return '';
   

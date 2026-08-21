@@ -4,17 +4,19 @@
  */
 import axios, { AxiosError } from 'axios';
 import { getApiUrl } from '@/config/api';
-import type {
-  ApplyOfferCouponResult,
-  CreateOfferCampaignInput,
-  OfferCampaign,
-  OfferCampaignCategory,
-  OfferCampaignDashboard,
-  OfferCampaignForParticipant,
-  OfferCampaignParticipant,
-  OfferCampaignPricing,
-  OfferCampaignPublic,
-  UpdateOfferCampaignInput,
+import {
+  OFFER_CAMPAIGN_CATEGORIES,
+  type ApplyOfferCouponResult,
+  type CreateOfferCampaignInput,
+  type OfferCampaign,
+  type OfferCampaignCategory,
+  type OfferCampaignDashboard,
+  type OfferCampaignForParticipant,
+  type OfferCampaignParticipant,
+  type OfferCampaignPricing,
+  type OfferCampaignPublic,
+  type OfferTripRoute,
+  type UpdateOfferCampaignInput,
 } from '@/types/offerCampaign';
 
 function adminHeaders(): Record<string, string> {
@@ -194,18 +196,72 @@ export const offerCampaignAPI = {
       websiteFare?: number,
       travelDate?: string | null,
       vehicleId?: string | null,
-      tourId?: string | null
+      tourId?: string | null,
+      tripRoute?: OfferTripRoute | null,
+      travelTime?: string | null
     ): Promise<{ campaign: OfferCampaignPublic | null; grace_window_minutes: number }> {
       try {
         return await postPublic('getActiveOffer', {
           category,
           website_fare: websiteFare,
           travel_date: travelDate || undefined,
+          travel_time: travelTime || undefined,
           vehicle_id: vehicleId || undefined,
           tour_id: tourId || undefined,
+          ...(tripRoute || {}),
         });
       } catch (e) {
         throw new Error(apiErrorMessage(e, 'Failed to load offer'));
+      }
+    },
+
+    async listActiveOffers(
+      categories?: OfferCampaignCategory[] | string[] | null
+    ): Promise<{ campaigns: OfferCampaignPublic[]; grace_window_minutes: number }> {
+      const cats =
+        categories && categories.length > 0 ? categories : OFFER_CAMPAIGN_CATEGORIES;
+      try {
+        const data = await postPublic<{
+          campaigns?: OfferCampaignPublic[];
+          grace_window_minutes?: number;
+        }>('listActiveOffers', { categories: cats });
+        return {
+          campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+          grace_window_minutes: data.grace_window_minutes ?? 15,
+        };
+      } catch {
+        const results = await Promise.all(cats.map((cat) => this.getActiveOffer(cat)));
+        return {
+          campaigns: results
+            .map((r) => r.campaign)
+            .filter((c): c is OfferCampaignPublic => Boolean(c)),
+          grace_window_minutes: results[0]?.grace_window_minutes ?? 15,
+        };
+      }
+    },
+
+    async lookupCoupon(
+      couponCode: string,
+      websiteFare?: number
+    ): Promise<{ campaign: OfferCampaignPublic | null; live: boolean }> {
+      const code = couponCode.trim().toUpperCase();
+      try {
+        const data = await postPublic<{
+          campaign?: OfferCampaignPublic | null;
+          live?: boolean;
+        }>('lookupCoupon', {
+          coupon_code: code,
+          website_fare: websiteFare,
+        });
+        return {
+          campaign: data.campaign ?? null,
+          live: Boolean(data.live && data.campaign),
+        };
+      } catch {
+        const { campaigns } = await this.listActiveOffers();
+        const campaign =
+          campaigns.find((c) => c.coupon_code.toUpperCase() === code) ?? null;
+        return { campaign, live: Boolean(campaign) };
       }
     },
 
@@ -214,15 +270,19 @@ export const offerCampaignAPI = {
       websiteFare: number,
       travelDate?: string | null,
       vehicleId?: string | null,
-      tourId?: string | null
+      tourId?: string | null,
+      tripRoute?: OfferTripRoute | null,
+      travelTime?: string | null
     ): Promise<{ campaign: OfferCampaignPublic | null; pricing: OfferCampaignPricing }> {
       try {
         return await postPublic('previewFare', {
           category,
           website_fare: websiteFare,
           travel_date: travelDate || undefined,
+          travel_time: travelTime || undefined,
           vehicle_id: vehicleId || undefined,
           tour_id: tourId || undefined,
+          ...(tripRoute || {}),
         });
       } catch (e) {
         throw new Error(apiErrorMessage(e, 'Failed to preview fare'));
@@ -235,11 +295,16 @@ export const offerCampaignAPI = {
       website_fare: number;
       booking_id?: string;
       travel_date?: string | null;
+      travel_time?: string | null;
       vehicle_id?: string | null;
       tour_id?: string | null;
+      trip_route?: OfferTripRoute | null;
     }): Promise<ApplyOfferCouponResult> {
       try {
-        return await postPublic<ApplyOfferCouponResult>('applyCoupon', { ...input });
+        return await postPublic<ApplyOfferCouponResult>('applyCoupon', {
+          ...input,
+          ...(input.trip_route || {}),
+        });
       } catch (e) {
         throw new Error(apiErrorMessage(e, 'Failed to apply coupon'));
       }

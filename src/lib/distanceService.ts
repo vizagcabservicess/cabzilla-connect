@@ -19,6 +19,10 @@ const generateCacheKey = (origin: Location, destination: Location): string => {
   return `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
 };
 
+const generateRouteCacheKey = (points: Location[]): string => {
+  return points.map((point) => `${point.lat},${point.lng}`).join('_');
+};
+
 // Function to fetch actual distance using Google Maps API directly
 export async function calculateDistanceMatrix(
   origin: Location,
@@ -264,6 +268,100 @@ export function estimateRoadKmSync(
   if (!origin || !destination) return 0;
   if (!hasValidCoordinates(origin) || !hasValidCoordinates(destination)) return 0;
   return getApproximateDistance(origin.lat, origin.lng, destination.lat, destination.lng);
+}
+
+export function estimateRoadKmAlongRoute(points: Location[]): number {
+  if (points.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    total += estimateRoadKmSync(points[i], points[i + 1]);
+  }
+  return total;
+}
+
+function sumFallbackRoute(points: Location[]): DistanceResult {
+  let distance = 0;
+  let duration = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const leg = fallbackDistanceCalculation(points[i], points[i + 1]);
+    distance += leg.distance;
+    duration += leg.duration;
+  }
+  return { distance, duration, status: 'OK' };
+}
+
+/** Pickup → optional stops → drop. Uses Directions when there are waypoints. */
+export async function calculateRouteDistance(points: Location[]): Promise<DistanceResult> {
+  if (points.length < 2) {
+    return { distance: 0, duration: 0, status: 'FAILED' };
+  }
+
+  const safePoints = points.map((point) => validateLocation(point));
+  if (safePoints.length === 2) {
+    return calculateDistanceMatrix(safePoints[0], safePoints[1]);
+  }
+
+  const cacheKey = generateRouteCacheKey(safePoints);
+  if (distanceCache.has(cacheKey)) {
+    return distanceCache.get(cacheKey)!;
+  }
+
+  if (typeof window.google === 'undefined' || !window.google.maps) {
+    const fallback = sumFallbackRoute(safePoints);
+    distanceCache.set(cacheKey, fallback);
+    return fallback;
+  }
+
+  try {
+    const origin = safePoints[0];
+    const destination = safePoints[safePoints.length - 1];
+    const waypoints = safePoints.slice(1, -1).map((point) => ({
+      location: { lat: point.lat, lng: point.lng },
+      stopover: true,
+    }));
+
+    const directionsService = new window.google.maps.DirectionsService();
+    const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+      directionsService.route(
+        {
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: { lat: destination.lat, lng: destination.lng },
+          waypoints,
+          optimizeWaypoints: false,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (response, status) => {
+          if (status === 'OK' && response) {
+            resolve(response);
+            return;
+          }
+          reject(new Error(`Directions request failed: ${status}`));
+        }
+      );
+    });
+
+    const legs = result.routes[0]?.legs ?? [];
+    if (legs.length === 0) {
+      throw new Error('Directions returned no legs');
+    }
+
+    const distanceInKm = legs.reduce((sum, leg) => sum + (leg.distance?.value ?? 0), 0) / 1000;
+    const durationInMinutes = Math.ceil(
+      legs.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) / 60
+    );
+    const computed: DistanceResult = {
+      distance: Math.round(distanceInKm),
+      duration: durationInMinutes,
+      status: 'OK',
+    };
+    distanceCache.set(cacheKey, computed);
+    return computed;
+  } catch (error) {
+    console.error('❌ Multi-stop route calculation failed:', error);
+    const fallback = sumFallbackRoute(safePoints);
+    distanceCache.set(cacheKey, fallback);
+    return fallback;
+  }
 }
 
 // Haversine formula to calculate distance between two points on Earth

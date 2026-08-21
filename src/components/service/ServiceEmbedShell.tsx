@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { BadgeCheck, Clock, Shield } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
@@ -11,6 +11,8 @@ import {
   type ServiceEmbedSlug,
   type ServiceEmbedTrustItem,
 } from '@/seo/serviceEmbedMeta';
+import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
+import type { OfferCampaignCategory } from '@/types/offerCampaign';
 
 export interface ServiceEmbedShellProps {
   slug: ServiceEmbedSlug;
@@ -27,11 +29,30 @@ export interface ServiceEmbedShellProps {
   belowFold: React.ReactNode;
   /** Optional Helmet override; defaults to serviceEmbedMeta SEO. */
   helmetExtra?: React.ReactNode;
+  /** Compact notice rendered immediately above the hero (e.g. airport move alert). */
+  heroBanner?: React.ReactNode;
   /**
    * `embed` = Tempo/Urbania compact headline + illustration.
    * `marketing` = Local mockup hero on desktop; previous compact hero on mobile.
    */
   layout?: 'embed' | 'marketing';
+}
+
+function offerCategoriesForEmbed(slug: ServiceEmbedSlug): OfferCampaignCategory[] {
+  switch (slug) {
+    case 'airport':
+      return ['airport'];
+    case 'local':
+      return ['local'];
+    case 'outstation':
+      return ['outstation_one_way', 'outstation_round_trip'];
+    case 'araku':
+      return ['tour'];
+    default: {
+      const _exhaustive: never = slug;
+      return _exhaustive;
+    }
+  }
 }
 
 function TrustIcon({ icon }: { icon: ServiceEmbedTrustItem['icon'] }) {
@@ -72,6 +93,7 @@ export function ServiceEmbedShell({
   hero,
   belowFold,
   helmetExtra,
+  heroBanner,
   layout = 'embed',
 }: ServiceEmbedShellProps) {
   const config = getServiceEmbedConfig(slug);
@@ -99,6 +121,7 @@ export function ServiceEmbedShell({
   }, []);
 
   const hideBelow = heroStep >= 2 && !revealPageGrid;
+  const offerCategories = useMemo(() => offerCategoriesForEmbed(slug), [slug]);
   /** Marketing split (copy + booking card) only on step 1; results use full-width embed. */
   const marketingLanding = Boolean(marketing) && heroStep === 1;
 
@@ -115,8 +138,11 @@ export function ServiceEmbedShell({
       : config.illustration.cdnUrl;
   };
 
+  const illustrationAlt = config.illustration.alt ?? '';
+
   const searchSlot = (
     <div
+      id={`${slug}-booking`}
       className={
         marketingLanding
           ? 'vehicle-urbania-search-slot max-lg:border-t max-lg:border-gray-100 max-lg:bg-white max-lg:px-2.5 max-lg:pb-2.5 max-lg:pt-0 lg:rounded-2xl lg:border lg:border-slate-200/80 lg:bg-white lg:p-5 lg:shadow-[0_20px_50px_-24px_rgba(15,23,42,0.28)] xl:p-6'
@@ -159,6 +185,10 @@ export function ServiceEmbedShell({
 
       <div className={`min-h-screen bg-white ${marketing ? 'lg:bg-[#F8F9FB]' : ''}`}>
         <Navbar />
+        {heroStep === 1 && (
+          <HomeOfferCampaignPopup enabled categories={offerCategories} />
+        )}
+        {heroBanner}
         <main
           id="main-content"
           className={`overflow-x-clip bg-white max-lg:max-w-[100vw] ${
@@ -196,24 +226,28 @@ export function ServiceEmbedShell({
                     {marketingLanding && (
                       <div className="relative isolate bg-white lg:hidden">
                         <div className="flex flex-col gap-0">
-                          <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
-                            <div className="max-w-xl">
-                              <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
-                                {config.seo.pageHeadline}
-                              </h1>
-                              <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
-                                {config.seo.pageSubtitle}
-                              </p>
+                          {slug === 'airport' ? (
+                            <h1 className="sr-only">{config.seo.pageHeadline}</h1>
+                          ) : (
+                            <div className="relative z-[3] shrink-0 bg-white px-2.5 pb-0 pt-2 sm:px-3 sm:pt-2">
+                              <div className="max-w-xl">
+                                <h1 className="text-left font-sans text-[1.75rem] font-bold leading-[1.08] tracking-tight text-[#001b3a] sm:text-[2.125rem]">
+                                  {config.seo.pageHeadline}
+                                </h1>
+                                <p className="mt-0.5 max-w-xl text-left font-sans text-sm font-normal leading-snug text-gray-700 sm:text-[0.9375rem]">
+                                  {config.seo.pageSubtitle}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           <div
                             className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-2.5 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-3"
-                            aria-hidden
+                            aria-hidden={!illustrationAlt}
                           >
                             <img
                               src={illustrationSrc}
-                              alt=""
+                              alt={illustrationAlt}
                               width={680}
                               height={560}
                               sizes="(max-width: 640px) 100vw, min(680px, 100vw)"
@@ -263,6 +297,11 @@ export function ServiceEmbedShell({
                               </div>
                             ))}
                           </div>
+                          {marketing.heroNote ? (
+                            <p className="mt-5 inline-flex rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-medium text-slate-700">
+                              {marketing.heroNote}
+                            </p>
+                          ) : null}
                         </div>
                       )}
 
@@ -310,11 +349,11 @@ export function ServiceEmbedShell({
 
                       <div
                         className="relative z-0 flex w-full min-h-[min(13rem,44vw)] items-center justify-center bg-white px-2.5 pb-2 pt-2 sm:min-h-[min(15rem,40vw)] sm:px-3"
-                        aria-hidden
+                        aria-hidden={!illustrationAlt}
                       >
                         <img
                           src={illustrationSrc}
-                          alt=""
+                          alt={illustrationAlt}
                           width={680}
                           height={560}
                           sizes="(max-width: 640px) 100vw, min(680px, 100vw)"
@@ -337,10 +376,10 @@ export function ServiceEmbedShell({
                         {config.seo.pageSubtitle}
                       </p>
                     </div>
-                    <div className="flex min-h-[12rem] items-center justify-center" aria-hidden>
+                    <div className="flex min-h-[12rem] items-center justify-center" aria-hidden={!illustrationAlt}>
                       <img
                         src={illustrationSrc}
-                        alt=""
+                        alt={illustrationAlt}
                         width={560}
                         height={420}
                         sizes="(min-width: 1024px) 28vw, 40vw"

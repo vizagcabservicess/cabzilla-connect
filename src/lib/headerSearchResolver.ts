@@ -292,7 +292,7 @@ export function getHeaderSearchSuggestions(rawQuery: string, limit = 6): HeaderS
     add({
       id: 'airport-transfer',
       label: 'Airport transfer',
-      subtitle: 'Vizag International Airport or Alluri Sitarama Raju International Airport',
+      subtitle: 'Alluri Sitarama Raju International Airport or Vizag City Airport (NAD)',
       action: resolveHeaderSearch('airport transfer')!,
     });
   }

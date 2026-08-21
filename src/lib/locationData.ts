@@ -54,7 +54,7 @@ export const vizagLocations: Location[] = [
   },
   {
     id: 'vizag_city_airport',
-    name: 'Vizag International Airport',
+    name: 'Vizag City Airport (NAD)',
     city: 'Visakhapatnam',
     state: 'Andhra Pradesh',
     type: 'airport',
@@ -62,7 +62,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.72111,
     lng: 83.22444,
-    address: 'Vizag International Airport (VTZ), NAD, Visakhapatnam, Andhra Pradesh'
+    address: 'Vizag City Airport (NAD), Visakhapatnam, Andhra Pradesh'
   },
   {
     id: 'rk_beach',
@@ -303,13 +303,86 @@ function isSameKnownAirport(location: Location, airport: Location): boolean {
   );
 }
 
-/** Snap a Google/airport pick to Bhogapuram or the city VTZ airport without mixing the two. */
-export function resolveCanonicalVizagAirport(location: Location): Location {
+function normalizeAirportText(text: string): string {
+  return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function textHasCityAirportCampus(text: string): boolean {
+  const blob = normalizeAirportText(text);
+  if (!blob) return false;
+  return (
+    /\bnad\b/.test(blob) ||
+    blob.includes('gajuwaka') ||
+    blob.includes('ins dega') ||
+    blob.includes('city airport') ||
+    blob.includes('vizag city airport') ||
+    blob.includes('vizag_city_airport')
+  );
+}
+
+function textHasBhogapuramAirport(text: string): boolean {
+  const blob = normalizeAirportText(text);
+  return blob.includes('bhogapuram') || blob.includes('alluri') || blob.includes('sitaram');
+}
+
+function textHasGenericVizagAirport(text: string): boolean {
+  const blob = normalizeAirportText(text);
+  if (!blob) return false;
+  const hasAirport = blob.includes('airport') || /\bvtz\b/.test(blob);
+  if (!hasAirport) return false;
+  return blob.includes('vizag') || blob.includes('visakhapatnam') || /\bvtz\b/.test(blob);
+}
+
+function pickKnownAirport(location: Location, airport: Location | undefined): Location {
+  if (!airport) return location;
+  return isSameKnownAirport(location, airport) ? location : { ...airport };
+}
+
+/**
+ * Snap a Google/airport pick to Bhogapuram (Alluri) or the city NAD airport.
+ * Guests typing "Vizag Airport" / "Vizag International Airport" always mean Alluri,
+ * even when Google still returns the old NAD campus address.
+ */
+export function resolveCanonicalVizagAirport(location: Location, typedQuery = ''): Location {
   const airports = getVizagAirportLocations();
   if (airports.length === 0) return location;
 
+  const bhogapuram = airports.find((airport) => airport.id === 'vizag_airport');
+  const cityAirport = airports.find((airport) => airport.id === 'vizag_city_airport');
+  const typed = typedQuery.trim();
+  const name = location.name || '';
+  const intentText = `${typed} ${name}`.trim();
+
+  // NAD / city campus only when the guest typed it or the place TITLE says so —
+  // Google's old VTZ formatted address still contains "NAD" and must not win.
+  if (textHasCityAirportCampus(typed) || textHasCityAirportCampus(name)) {
+    return pickKnownAirport(location, cityAirport);
+  }
+  if (
+    location.id === 'vizag_city_airport' &&
+    !textHasGenericVizagAirport(typed) &&
+    !textHasGenericVizagAirport(name)
+  ) {
+    return pickKnownAirport(location, cityAirport);
+  }
+
+  if (
+    textHasBhogapuramAirport(intentText) ||
+    textHasGenericVizagAirport(typed) ||
+    textHasGenericVizagAirport(name)
+  ) {
+    return pickKnownAirport(location, bhogapuram);
+  }
+
   const byId = airports.find((airport) => airport.id === location.id);
-  if (byId) return isSameKnownAirport(location, byId) ? location : { ...byId };
+  if (byId) return pickKnownAirport(location, byId);
+
+  const titleLooksLikeAirport =
+    location.type === 'airport' ||
+    normalizeAirportText(name).includes('airport') ||
+    /\bvtz\b/.test(normalizeAirportText(name));
+  // Nearby villages such as Pusapatirega sit next to Bhogapuram — do not snap them.
+  if (!titleLooksLikeAirport) return location;
 
   let nearest = airports[0];
   let nearestKm = Number.POSITIVE_INFINITY;
@@ -321,38 +394,16 @@ export function resolveCanonicalVizagAirport(location: Location): Location {
     }
   }
   if (nearestKm <= 8) {
-    return isSameKnownAirport(location, nearest) ? location : { ...nearest };
+    return pickKnownAirport(location, nearest);
   }
 
-  const blob = `${location.name} ${location.address} ${location.city}`.toLowerCase();
-  const bhogapuram = airports.find((airport) => airport.id === 'vizag_airport');
-  const cityAirport = airports.find((airport) => airport.id === 'vizag_city_airport');
-  if (blob.includes('bhogapuram') || blob.includes('alluri') || blob.includes('sitaram')) {
-    return bhogapuram
-      ? isSameKnownAirport(location, bhogapuram)
-        ? location
-        : { ...bhogapuram }
-      : location;
-  }
-  if (
-    blob.includes('nad') ||
-    blob.includes('gajuwaka') ||
-    blob.includes('ins dega') ||
-    blob.includes('vizag international')
-  ) {
-    return cityAirport
-      ? isSameKnownAirport(location, cityAirport)
-        ? location
-        : { ...cityAirport }
-      : location;
-  }
   return location;
 }
 
 // Map URL slugs to known locations (for prefill from query params)
 const SLUG_TO_LOCATION_ID: Record<string, string> = {
-  'visakhapatnam-vtz-international-airport': 'vizag_city_airport',
-  'vizag-international-airport': 'vizag_city_airport',
+  'visakhapatnam-vtz-international-airport': 'vizag_airport',
+  'vizag-international-airport': 'vizag_airport',
   'vizag-city-airport': 'vizag_city_airport',
   'vizag_city_airport': 'vizag_city_airport',
   'vizag-airport': 'vizag_airport',
@@ -438,7 +489,12 @@ export function locationMatchesSearchQuery(location: Location, query: string): b
     return true;
   }
   if (location.type !== 'airport') return false;
-  return VIZAG_AIRPORT_QUERY_ALIASES.some((alias) => alias.includes(q) || q.includes(alias));
+  if (location.id === 'vizag_city_airport') {
+    return textHasCityAirportCampus(q);
+  }
+  return VIZAG_AIRPORT_QUERY_ALIASES.some(
+    (alias) => q.includes(alias) || (alias.length >= 8 && alias.includes(q))
+  );
 }
 
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {

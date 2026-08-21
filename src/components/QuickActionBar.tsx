@@ -77,7 +77,7 @@ export const QuickActionBar = () => {
       '/about': 'Hi Kumar! I would like to know more about Vizag Taxi Hub',
       '/local-taxi': 'Hi Kumar! I would like to book a local taxi',
       '/outstation-taxi': 'Hi Kumar! I would like to book an outstation taxi',
-      '/airport-taxi': 'Hi Kumar! I would like to book an airport transfer',
+      '/airport-taxi': 'Hi! I need a Bhogapuram Airport taxi (Alluri Sitarama Raju International Airport).\n\n✈️ Flight Number:\n📅 Arrival Date:\n⏰ Arrival Time:\n📍 Drop Location:\n👥 Number of Passengers:',
       '/pooling': 'Hi Kumar! I would like to know more about your car pooling service',
       '/rentals': 'Hi Kumar! I would like to know more about your car rental services',
       '/support': 'Hi Kumar! I need support with my booking',

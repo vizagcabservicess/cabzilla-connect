@@ -241,6 +241,127 @@ export async function dailyReport(siteId: string, day: string) {
   return buildReport(siteId, day, day);
 }
 
+function addUtcDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayKey(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value || '').slice(0, 10);
+}
+
+export type DailySeriesPoint = {
+  day: string;
+  sessions: number;
+  pageviews: number;
+  chats: number;
+  bookingsStarted: number;
+  paymentsSuccess: number;
+  whatsappClicks: number;
+  phoneClicks: number;
+};
+
+function emptyPoint(day: string): DailySeriesPoint {
+  return {
+    day,
+    sessions: 0,
+    pageviews: 0,
+    chats: 0,
+    bookingsStarted: 0,
+    paymentsSuccess: 0,
+    whatsappClicks: 0,
+    phoneClicks: 0,
+  };
+}
+
+/** Live per-day counts for the selected range (does not depend on va_daily_stats rollups). */
+export async function dailySeries(siteId: string, from: string, to: string): Promise<DailySeriesPoint[]> {
+  const params = { siteId, ...dateRange(from, to) };
+  const [sessionRows, pvRows, chatRows, bookRows, ctaRows] = await Promise.all([
+    query<Array<{ d: unknown; c: number }>>(
+      `SELECT DATE_FORMAT(started_at, '%Y-%m-%d') AS d, COUNT(*) AS c
+       FROM va_sessions
+       WHERE site_id = :siteId AND started_at BETWEEN :from AND :to
+       GROUP BY DATE_FORMAT(started_at, '%Y-%m-%d')`,
+      params,
+    ),
+    query<Array<{ d: unknown; c: number }>>(
+      `SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d') AS d, COUNT(*) AS c
+       FROM va_events
+       WHERE site_id = :siteId AND event_type = 'page_view' AND occurred_at BETWEEN :from AND :to
+       GROUP BY DATE_FORMAT(occurred_at, '%Y-%m-%d')`,
+      params,
+    ),
+    query<Array<{ d: unknown; c: number }>>(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d, COUNT(*) AS c
+       FROM va_chat_conversations
+       WHERE site_id = :siteId AND created_at BETWEEN :from AND :to
+       GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')`,
+      params,
+    ),
+    query<Array<{ d: unknown; started: number; paid: number }>>(
+      `SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d') AS d,
+              SUM(event_type = 'booking_started') AS started,
+              SUM(event_type = 'payment_success') AS paid
+       FROM va_booking_events
+       WHERE site_id = :siteId AND occurred_at BETWEEN :from AND :to
+       GROUP BY DATE_FORMAT(occurred_at, '%Y-%m-%d')`,
+      params,
+    ),
+    query<Array<{ d: unknown; wa: number; ph: number }>>(
+      `SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d') AS d,
+              SUM(event_type = 'whatsapp_click') AS wa,
+              SUM(event_type = 'phone_click') AS ph
+       FROM va_events
+       WHERE site_id = :siteId
+         AND event_type IN ('whatsapp_click', 'phone_click')
+         AND occurred_at BETWEEN :from AND :to
+       GROUP BY DATE_FORMAT(occurred_at, '%Y-%m-%d')`,
+      params,
+    ),
+  ]);
+
+  const byDay = new Map<string, DailySeriesPoint>();
+  const point = (raw: unknown) => {
+    const day = dayKey(raw);
+    if (!day) return emptyPoint('');
+    let row = byDay.get(day);
+    if (!row) {
+      row = emptyPoint(day);
+      byDay.set(day, row);
+    }
+    return row;
+  };
+
+  for (const r of sessionRows) point(r.d).sessions = Number(r.c || 0);
+  for (const r of pvRows) point(r.d).pageviews = Number(r.c || 0);
+  for (const r of chatRows) point(r.d).chats = Number(r.c || 0);
+  for (const r of bookRows) {
+    const p = point(r.d);
+    p.bookingsStarted = Number(r.started || 0);
+    p.paymentsSuccess = Number(r.paid || 0);
+  }
+  for (const r of ctaRows) {
+    const p = point(r.d);
+    p.whatsappClicks = Number(r.wa || 0);
+    p.phoneClicks = Number(r.ph || 0);
+  }
+
+  const out: DailySeriesPoint[] = [];
+  let cursor = from;
+  while (cursor <= to) {
+    out.push(byDay.get(cursor) ?? emptyPoint(cursor));
+    cursor = addUtcDays(cursor, 1);
+  }
+  return out;
+}
+
+export async function rangeReport(siteId: string, from: string, to: string) {
+  return buildReport(siteId, from, to);
+}
+
 export async function weeklyReport(siteId: string, endDay: string) {
   const end = new Date(`${endDay}T00:00:00Z`);
   const start = new Date(end);

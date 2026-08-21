@@ -120,11 +120,13 @@ const envSchema = z.object({
   GOOGLE_MAPS_API_KEY: z.string().optional().default(''),
   /** Server Distance Matrix / Geocoding key (IP-restricted, no HTTP referrer). */
   GOOGLE_MAPS_SERVER_KEY: z.string().optional().default(''),
-  DEFAULT_RETENTION_DAYS: z.coerce.number().default(90),
+  DEFAULT_RETENTION_DAYS: z.coerce.number().default(7),
   IP_HASH_SALT: z.string().min(8).default('dev-only-ip-hash-salt'),
   MAX_EVENT_BATCH: z.coerce.number().default(100),
   /** Full SPA HTML snapshots are often >1MB gzipped; keep headroom. */
   MAX_RECORDING_CHUNK_BYTES: z.coerce.number().default(8_388_608),
+  /** Drop oldest session replays when va_recording_chunks exceeds this (Hostinger 3GB cap). */
+  RECORDING_DB_MAX_BYTES: z.coerce.number().default(1_073_741_824),
   LIVE_ENV_PATH: z.string().optional().default(''),
 });
 
@@ -168,10 +170,11 @@ export const env = parsed.success
       GOOGLE_MAPS_API_KEY:
         process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || '',
       GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY || '',
-      DEFAULT_RETENTION_DAYS: Number(process.env.DEFAULT_RETENTION_DAYS) || 90,
+      DEFAULT_RETENTION_DAYS: Number(process.env.DEFAULT_RETENTION_DAYS) || 7,
       IP_HASH_SALT: process.env.IP_HASH_SALT || 'dev-only-ip-hash-salt-min8',
       MAX_EVENT_BATCH: Number(process.env.MAX_EVENT_BATCH) || 100,
       MAX_RECORDING_CHUNK_BYTES: Number(process.env.MAX_RECORDING_CHUNK_BYTES) || 8_388_608,
+      RECORDING_DB_MAX_BYTES: Number(process.env.RECORDING_DB_MAX_BYTES) || 1_073_741_824,
       LIVE_ENV_PATH: process.env.LIVE_ENV_PATH || '',
     } as z.infer<typeof envSchema>);
 

@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { pool, query, queryOne } from '../db/pool.js';
 import { deleteObjects, pruneLocalRecordingFiles } from '../services/s3.js';
+import { pruneRecordingDbToBudget } from '../services/recording.js';
 
 interface SiteRow {
   id: string;
@@ -120,6 +121,12 @@ export async function runRetentionJob(siteId?: string): Promise<void> {
   });
   console.log(
     `[retention] local recording files deleted=${pruned.deletedFiles} dirs=${pruned.deletedDirs}`,
+  );
+
+  const dbCap = await pruneRecordingDbToBudget();
+  console.log(
+    `[retention] recording DB cap deletedSessions=${dbCap.deletedSessions} ` +
+      `after=${Math.round(dbCap.bytesAfter / 1024 / 1024)}MB`,
   );
 
   console.log('[retention] done');

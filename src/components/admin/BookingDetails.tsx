@@ -14,6 +14,7 @@ import { formatPrice } from '@/lib/utils';
 import { convertUTCToLocal } from '@/lib/dateUtils';
 import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } from '@/utils/bookingUtils';
 import { mergeTripSummary, getDefaultTripSummary, getDefaultBillingAddress } from '@/utils/invoiceTripSummaryDefaults';
+import { resolveBookingAdvanceAmount } from '@/utils/bookingPaymentFields';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -135,6 +136,7 @@ export function BookingDetails({
   // Construct the PDF URL for the invoice download
   const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
   const displayStatus = getEffectiveBookingStatus(booking);
+  const advancePaid = resolveBookingAdvanceAmount(booking);
 
   return (
     <div>
@@ -270,15 +272,15 @@ export function BookingDetails({
                 </div>
                 
                 {/* Show partial payment information if available */}
-                {(booking as any).advance_paid_amount && (booking as any).advance_paid_amount > 0 && (
+                {advancePaid > 0 && (
                   <>
                     <div className="flex justify-between items-center">
                       <p className="text-xs text-gray-500">Advance Paid</p>
-                      <p className="font-medium text-green-600">{formatPrice((booking as any).advance_paid_amount)}</p>
+                      <p className="font-medium text-green-600">{formatPrice(advancePaid)}</p>
                     </div>
                     <div className="flex justify-between items-center border-t pt-2">
                       <p className="text-xs text-gray-500">Remaining Amount</p>
-                      <p className="font-bold text-lg">{formatPrice(booking.totalAmount - (booking as any).advance_paid_amount)}</p>
+                      <p className="font-bold text-lg">{formatPrice(booking.totalAmount - advancePaid)}</p>
                     </div>
                   </>
                 )}
@@ -287,7 +289,7 @@ export function BookingDetails({
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">Payment Status</p>
                   <div className="flex items-center space-x-2">
-                    {(booking as any).payment_status === 'partial_payment' || ((booking as any).advance_paid_amount && (booking as any).advance_paid_amount > 0) ? (
+                    {(booking as any).payment_status === 'partial_payment' || advancePaid > 0 ? (
                       <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
                         PARTIAL PAYMENT
                       </span>

@@ -10,14 +10,16 @@ import {
   type CSSProperties,
 } from 'react';
 import { LocationInput, type LocationInputHandle } from './LocationInput';
+import { OutstationAddStopLink, OutstationStopRows } from './OutstationStopsEditor';
 import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { Location, getVizagAirportLocations, resolveCanonicalVizagAirport } from '@/lib/locationData';
-import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, isWithinTourPickupRadius } from '@/lib/locationUtils';
 import {
   getServicePathForTripType,
   inferTripServiceType,
+  isAirportTransferOtherEnd,
   isVizagAirportLocation,
   type CustomerTripService,
 } from '@/lib/inferTripService';
@@ -31,7 +33,6 @@ import { ChevronRight, ChevronDown, ArrowLeft, ArrowRight, X, MapPin, Edit, User
 import { FaWhatsapp } from 'react-icons/fa';
 import { TourTabIcon } from '@/components/icons/CabTabIcons';
 import { Button } from '@/components/ui/button';
-import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector, type TripSelectorTab } from './TabTripSelector';
 import { HomeHeroBanner } from '@/components/home/HomeHeroBanner';
 import { HeroValueProps } from '@/components/home/HeroValueProps';
@@ -52,12 +53,25 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 import { MobileNavigation } from './MobileNavigation';
-import { calculateDistanceMatrix, estimateRoadKmSync } from '@/lib/distanceService';
+import {
+  calculateDistanceMatrix,
+  calculateRouteDistance,
+  estimateRoadKmAlongRoute,
+  estimateRoadKmSync,
+} from '@/lib/distanceService';
+import {
+  filledOutstationStops,
+  formatViaStopsLabel,
+  MAX_OUTSTATION_STOPS,
+  parseStoredStops,
+  routePointsWithStops,
+} from '@/lib/outstationStops';
 
 import { cn } from '@/lib/utils';
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { useAuth } from '@/providers/AuthProvider';
-import { formatDateForAPI } from '@/lib/dateUtils';
+import { formatDateForAPI, coerceTripDate, isValidTripDate } from '@/lib/dateUtils';
+import { countOutstationBillingDays } from '@/utils/outstationRoundTripLimits';
 import {
   Dialog,
   DialogContent,
@@ -78,13 +92,14 @@ import {
   BookingOfferStickyBanner,
 } from '@/components/offers/BookingCouponSection';
 import type { OfferCampaignPublic } from '@/types/offerCampaign';
-import { resolveOfferCampaignCategory, toOfferTravelDateYmd, normalizeOfferTargetId } from '@/types/offerCampaign';
+import { resolveOfferCampaignCategory, toOfferTravelDateYmd, toOfferTravelTimeHm, normalizeOfferTargetId, toOfferTripRoute, isOfferRouteEligible, isOfferTravelTimeEligible, isOfferTravelDateEligible, formatOfferRouteScope, formatOfferCouponWorksOn } from '@/types/offerCampaign';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import {
   trackGuestSearch,
   formatDepartureForTrack,
   buildTripTypeLabelForTrack,
   buildGuestTrackRouteKey,
+  formatGuestTrackDropField,
 } from '@/services/trackSearchAPI';
 import { buildVehicleFareLinesForGuestTrack } from '@/lib/guestSearchFareLines';
 import { getAirportTransferFare } from '@/lib/airportFareForBooking';
@@ -94,6 +109,7 @@ import { generateVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { TourListItem } from '@/types/tour';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import { locationLooksLikeArakuTour } from '@/lib/availableTours';
 import {
   getVehicleEmbedConfig,
 } from '@/seo/vehicleEmbedMeta';
@@ -230,9 +246,13 @@ function withCanonicalAirportCoords(location: Location | null | undefined): Loca
   return resolved;
 }
 
-function isAllowedPickupLocation(location: Location | null | undefined): boolean {
+function isAllowedPickupLocation(
+  location: Location | null | undefined,
+  tripType?: TripType
+): boolean {
   if (!location) return false;
-  return isLocationInVizag(location) || isVizagAirportLocation(location);
+  if (isLocationInVizag(location) || isVizagAirportLocation(location)) return true;
+  return tripType === 'airport' && isAirportTransferOtherEnd(location);
 }
 
 function RestrictedAirportRouteNotice({ message }: { message: string }) {
@@ -317,29 +337,29 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         const prePick = prefillData.pickupLocation as Location | undefined;
         const allowAnyPickup = Boolean(prefillData.openGuestDetails);
         return {
-          pickupLocation: prePick && (allowAnyPickup || isAllowedPickupLocation(prePick))
+          pickupLocation: prePick && (allowAnyPickup || isAllowedPickupLocation(prePick, prefillData.tripType))
             ? withCanonicalAirportCoords(prePick)
             : null,
           dropLocation: prefillData.dropLocation,
-          pickupDate: prefillData.pickupDate ? (() => {
-            const parsedDate = new Date(prefillData.pickupDate);
-            const now = new Date();
-            const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-            
-            // Check if prefill date is still valid (at least 1 hour in advance)
-            if (parsedDate < oneHourFromNow) {
-              // If prefill date is too close to current time, update to minimum allowed time
-              return oneHourFromNow;
-            }
-            
-            // Preserve the prefill date if it's still valid
-            return parsedDate;
-          })() : (() => {
-            const now = new Date();
-            const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-            return oneHourFromNow;
-          })(),
-          returnDate: prefillData.returnDate ? new Date(prefillData.returnDate) : null,
+          pickupDate: coerceTripDate(
+            prefillData.pickupDate
+              ? (() => {
+                  const parsedDate = new Date(prefillData.pickupDate);
+                  const now = new Date();
+                  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+                  if (!isValidTripDate(parsedDate) || parsedDate < oneHourFromNow) {
+                    return oneHourFromNow;
+                  }
+                  return parsedDate;
+                })()
+              : undefined,
+          ),
+          returnDate: prefillData.returnDate
+            ? (() => {
+                const parsedReturn = new Date(prefillData.returnDate);
+                return isValidTripDate(parsedReturn) ? parsedReturn : null;
+              })()
+            : null,
           tripType: prefillData.tripType || 'outstation',
           tripMode: prefillData.tripMode || 'one-way',
           hourlyPackage: prefillData.hourlyPackage || hourlyPackageOptions[0].value,
@@ -355,6 +375,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             typeof prefillData.estimatedKm === 'number' && prefillData.estimatedKm > 0
               ? prefillData.estimatedKm
               : 0,
+          intermediateStops: parseStoredStops(prefillData.intermediateStops),
         };
       }
 
@@ -377,31 +398,31 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         pickupLocation: pickupData
           ? (() => {
               const p = JSON.parse(pickupData) as Location;
-              return isAllowedPickupLocation(p) ? withCanonicalAirportCoords(p) : null;
+              return isAllowedPickupLocation(p, defaultTripType) ? withCanonicalAirportCoords(p) : null;
             })()
           : null,
         dropLocation: dropData
           ? withCanonicalAirportCoords(JSON.parse(dropData) as Location)
           : null,
-        pickupDate: pickupDateStr ? (() => {
-          const parsedDate = new Date(JSON.parse(pickupDateStr));
-          const now = new Date();
-          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-          
-          // Check if stored date is still valid (at least 1 hour in advance)
-          if (parsedDate < oneHourFromNow) {
-            // If stored date is too close to current time, update to minimum allowed time
-            return oneHourFromNow;
-          }
-          
-          // Preserve the stored date if it's still valid
-          return parsedDate;
-        })() : (() => {
-          const now = new Date();
-          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-          return oneHourFromNow;
-        })(),
-        returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
+        pickupDate: coerceTripDate(
+          pickupDateStr
+            ? (() => {
+                const parsedDate = new Date(JSON.parse(pickupDateStr));
+                const now = new Date();
+                const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+                if (!isValidTripDate(parsedDate) || parsedDate < oneHourFromNow) {
+                  return oneHourFromNow;
+                }
+                return parsedDate;
+              })()
+            : undefined,
+        ),
+        returnDate: returnDateStr
+          ? (() => {
+              const parsedReturn = new Date(JSON.parse(returnDateStr));
+              return isValidTripDate(parsedReturn) ? parsedReturn : null;
+            })()
+          : null,
         tripType: tripTypeData as TripType || defaultTripType,
         tripMode: tripModeData as TripMode || 'one-way',
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
@@ -411,6 +432,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         vehicleHint: '',
         estimatedFare: 0,
         estimatedKm: 0,
+        intermediateStops: parseStoredStops(
+          (() => {
+            try {
+              const raw = sessionStorage.getItem('intermediateStops');
+              return raw ? JSON.parse(raw) : [];
+            } catch {
+              return [];
+            }
+          })()
+        ),
       };
     } catch (error) {
       console.error("Error loading data from session storage:", error);
@@ -439,6 +470,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         vehicleHint: '',
         estimatedFare: 0,
         estimatedKm: 0,
+        intermediateStops: [],
       };
     }
   };
@@ -468,8 +500,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   
   const [pickupLocation, setPickupLocation] = useState<Location | null>(editModeData.pickupLocation || savedData.pickupLocation);
   const [dropLocation, setDropLocation] = useState<Location | null>(savedData.dropLocation);
-  const [pickupDate, setPickupDate] = useState<Date>(savedData.pickupDate || new Date());
-  const [returnDate, setReturnDate] = useState<Date | null>(savedData.returnDate);
+  const [intermediateStops, setIntermediateStops] = useState<Array<Location | null>>(
+    savedData.tripType === 'outstation' ? savedData.intermediateStops ?? [] : []
+  );
+  const [pickupDate, setPickupDate] = useState<Date>(() => coerceTripDate(savedData.pickupDate));
+  const [returnDate, setReturnDate] = useState<Date | null>(() =>
+    isValidTripDate(savedData.returnDate) ? savedData.returnDate : null,
+  );
   
   // Wrap setReturnDate to track all calls
   const setReturnDateWithLogging = useCallback((value: Date | null | ((prev: Date | null) => Date | null)) => {
@@ -498,8 +535,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       currentReturnDate: returnDate,
       timestamp: new Date().toISOString()
     });
-    setReturnDate(newDate || null);
+    setReturnDate(isValidTripDate(newDate) ? newDate : null);
   }, [returnDate]);
+  const handlePickupDateChange = useCallback((date: Date | undefined) => {
+    if (isValidTripDate(date)) {
+      setPickupDate(date);
+    }
+  }, []);
   // Don't auto-select first vehicle - user must explicitly select to see booking summary
   const [selectedCab, setSelectedCabState] = useState<CabType | null>(() => {
     const cab = savedData.selectedCab || null;
@@ -508,11 +550,31 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   });
   const [distance, setDistance] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [currentStep, setCurrentStep] = useState<number>(isSearchActive ? 2 : 1);
+  const [currentStep, setCurrentStep] = useState<number>(() => {
+    if (!isSearchActive) return 1;
+    const initialType = editModeData.tripType || savedData.tripType;
+    const hasPickup = Boolean((editModeData.pickupLocation || savedData.pickupLocation)?.name);
+    const hasDrop = Boolean(savedData.dropLocation?.name);
+    if (initialType === 'local') return hasPickup ? 2 : 1;
+    return hasPickup && hasDrop ? 2 : 1;
+  });
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState<boolean>(false);
   const [animateBookingSummaryModal, setAnimateBookingSummaryModal] = useState<boolean>(false);
   const [tripType, setTripType] = useState<TripType>(editModeData.tripType || savedData.tripType);
+  const filledStops = useMemo(
+    () => (tripType === 'outstation' ? filledOutstationStops(intermediateStops) : []),
+    [tripType, intermediateStops]
+  );
+  const measureBookedRoute = useCallback(
+    async (origin: Location, dest: Location) => {
+      if (tripType === 'outstation' && filledStops.length > 0) {
+        return calculateRouteDistance(routePointsWithStops(origin, dest, filledStops));
+      }
+      return calculateDistanceMatrix(origin, dest);
+    },
+    [tripType, filledStops]
+  );
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
@@ -804,6 +866,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const resetToHomeBookingForm = useCallback(() => {
     setPickupLocation(null);
     setDropLocation(null);
+    setIntermediateStops([]);
     setReturnDate(null);
     setPickupDate(getMinimumAllowedDate());
     setSelectedCabState(null);
@@ -834,6 +897,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     sessionStorage.removeItem('routePrefillData');
     sessionStorage.removeItem('pickupLocation');
     sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('intermediateStops');
     sessionStorage.removeItem('pickupDate');
     sessionStorage.removeItem('returnDate');
     sessionStorage.removeItem('selectedCab');
@@ -1018,7 +1082,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
 
     const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
-    const syncKm = estimateRoadKmSync(pickupLocation, dropForKm);
+    const syncKm =
+      pickupLocation && dropForKm
+        ? filledStops.length > 0
+          ? estimateRoadKmAlongRoute(routePointsWithStops(pickupLocation, dropForKm, filledStops))
+          : estimateRoadKmSync(pickupLocation, dropForKm)
+        : 0;
     const km =
       estimatedKmRef.current > 0
         ? estimatedKmRef.current
@@ -1164,6 +1233,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         setIsCheckingTravelTime(false);
         return;
       }
+      if (!isValidTripDate(pickupDate)) {
+        return;
+      }
       // Enable return date picker immediately when locations are filled (don't block on API)
       setIsReturnTimeEnabled(true);
       const fallbackMinReturn = new Date(pickupDate.getTime() + 60 * 60 * 1000); // 1 hour after pickup
@@ -1172,7 +1244,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       (async () => {
         try {
           console.log('[TRAVEL TIME CALC] Calling calculateDistanceMatrix...');
-          const result = await calculateDistanceMatrix(pickupLocation, dropLocation);
+          const result = await measureBookedRoute(pickupLocation, dropLocation);
           console.log('[TRAVEL TIME CALC] Result:', result);
           
           if (result.status === 'OK') {
@@ -1230,7 +1302,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
   // Only depend on pickupLocation, dropLocation, pickupDate, tripType, tripMode
   // returnDate is NOT in dependencies to avoid infinite loops
-  }, [pickupLocation, dropLocation, pickupDate, tripType, tripMode]);
+  }, [pickupLocation, dropLocation, pickupDate, tripType, tripMode, measureBookedRoute]);
 
   // Validate returnDate when user manually edits it (round-trip only)
   useEffect(() => {
@@ -1272,10 +1344,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       (!dropLocation || !dropLocation.name || !String(dropLocation.id || '').startsWith('tour_'))
     )
       valid = false;
+    if (tripType === 'tour' && pickupLocation && !isWithinTourPickupRadius(pickupLocation)) valid = false;
     if (!pickupDate) valid = false;
     if (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) valid = false;
+    if (tripType === 'outstation' && intermediateStops.some((stop) => !stop?.name)) valid = false;
     setIsFormValid(valid);
-  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode]);
+  }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode, intermediateStops]);
 
   const isVizagAirport = (location: Location | null): boolean => isVizagAirportLocation(location);
   const hideRestrictedAirportDrops =
@@ -1305,7 +1379,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const pickupIsAirport = isVizagAirportLocation(pickupLocation);
     const dropIsAirport = isVizagAirportLocation(dropLocation);
     const otherEnd = pickupIsAirport ? dropLocation : dropIsAirport ? pickupLocation : dropLocation;
-    if (otherEnd && (isLocationInVizag(otherEnd) || isVizagAirportLocation(otherEnd))) {
+    if (otherEnd && isAirportTransferOtherEnd(otherEnd)) {
       return;
     }
     setTripType('outstation');
@@ -1323,6 +1397,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
     const inferred = inferTripServiceType(nextPickup, nextDrop);
     if (!inferred || inferred === currentType) return;
+    if (inferred === 'airport' && (!nextPickup || !nextDrop)) return;
 
     switch (inferred) {
       case 'tour':
@@ -1476,11 +1551,26 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     
     setIsTabSwitching(false); // Reset tab switching flag when user selects a location
 
-    if (!isLocationInVizag(location) && !isVizagAirportLocation(location)) {
+    if (tripType === 'tour') {
+      if (!isWithinTourPickupRadius(location)) {
+        toast({
+          title: 'Pickup too far for tours',
+          description:
+            'Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.',
+          variant: 'destructive',
+          duration: 4000,
+        });
+        return;
+      }
+    } else if (
+      !isLocationInVizag(location) &&
+      !isVizagAirportLocation(location) &&
+      !(tripType === 'airport' && isAirportTransferOtherEnd(location))
+    ) {
       toast({
         title: 'Pickup outside service area',
         description:
-          'Pickup must be within 35 km of Visakhapatnam. Please choose a location in or near the city.',
+          'Pickup must be within 35 km of Visakhapatnam or in the Bhogapuram airport area (Vizianagaram / Srikakulam).',
         variant: 'destructive',
         duration: 4000,
       });
@@ -1554,11 +1644,30 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     applyInferredHomepageTab(pickupLocation, nextDrop, tripType);
     advanceAfterDropSelected();
 
-    const dropOutsideVizag =
-      !isLocationInVizag(nextDrop) && !isVizagAirportLocation(nextDrop);
-    if (tripType === 'airport' && dropOutsideVizag) {
+    const dropOutsideAirportTransfer =
+      !isAirportTransferOtherEnd(nextDrop);
+    if (tripType === 'airport' && dropOutsideAirportTransfer) {
       switchAirportTripToOutstation();
     }
+  };
+
+  const handleAddOutstationStop = () => {
+    if (tripType !== 'outstation') return;
+    setIntermediateStops((prev) =>
+      prev.length >= MAX_OUTSTATION_STOPS ? prev : [...prev, null]
+    );
+  };
+
+  const handleOutstationStopChange = (index: number, location: Location | null) => {
+    setIntermediateStops((prev) => {
+      const next = [...prev];
+      next[index] = location;
+      return next;
+    });
+  };
+
+  const handleRemoveOutstationStop = (index: number) => {
+    setIntermediateStops((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Locked service landings only (local/airport/outstation) — never change homepage widget tabs
@@ -1616,7 +1725,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           sessionStorage.removeItem('dropLocation');
         }
         
-        if (pickupLocation && shouldTreatAsAirport(pickupLocation)) {
+        if (
+          pickupLocation &&
+          (shouldTreatAsAirport(pickupLocation) || !isWithinTourPickupRadius(pickupLocation))
+        ) {
           setPickupLocation(null);
           sessionStorage.removeItem('pickupLocation');
         }
@@ -1645,7 +1757,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     } else {
       sessionStorage.removeItem('dropLocation');
     }
-  }, [pickupLocation, dropLocation]);
+    if (tripType === 'outstation' && intermediateStops.length > 0) {
+      sessionStorage.setItem('intermediateStops', JSON.stringify(intermediateStops));
+    } else {
+      sessionStorage.removeItem('intermediateStops');
+    }
+  }, [pickupLocation, dropLocation, intermediateStops, tripType]);
+
+  useEffect(() => {
+    if (tripType !== 'outstation') {
+      setIntermediateStops([]);
+    }
+  }, [tripType]);
 
   // Handle airport-specific logic when locations change
   useEffect(() => {
@@ -1786,8 +1909,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const availableCabs = heroBookingCabList;
     const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
     const syncKm =
-      pickupLocation && dropForKm ? estimateRoadKmSync(pickupLocation, dropForKm) : 0;
-    const routeKey = buildGuestTrackRouteKey(pickupLocation, dropForKm);
+      pickupLocation && dropForKm
+        ? filledStops.length > 0
+          ? estimateRoadKmAlongRoute(routePointsWithStops(pickupLocation, dropForKm, filledStops))
+          : estimateRoadKmSync(pickupLocation, dropForKm)
+        : 0;
+    const routeKey = buildGuestTrackRouteKey(pickupLocation, dropForKm, filledStops);
     const routed = routedKmForRouteRef.current;
     const coordsOk = (loc: typeof pickupLocation) =>
       !!loc &&
@@ -1820,7 +1947,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           routed.durationMinutes > 0 ? routed.durationMinutes : undefined;
       } else {
         try {
-          const dm = await calculateDistanceMatrix(pickupLocation!, dropForKm!);
+          const dm = await measureBookedRoute(pickupLocation!, dropForKm!);
           if (dm.status === 'OK' && dm.distance > 0) {
             distanceForTrack = dm.distance;
             durationMinutesForTrack = dm.duration > 0 ? dm.duration : undefined;
@@ -1867,6 +1994,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         : availableCabs.map((c) => c.name);
     const pickup = pickupLocation?.name?.trim() || '';
     const drop = dropLocation?.name?.trim() || (tripType === 'local' ? pickup : '');
+    const viaStopsLabel = formatViaStopsLabel(filledStops);
     const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
     const distRounded = distanceForTrack > 0 ? Math.round(distanceForTrack) : undefined;
     const durRounded =
@@ -1878,7 +2006,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     trackGuestSearch({
       guestPhone,
       pickup,
-      drop,
+      drop: formatGuestTrackDropField(drop, viaStopsLabel),
+      viaStops: viaStopsLabel || undefined,
       tripType: tripTypeLabel,
       departure,
       distanceKmOneWay: distRounded,
@@ -1896,7 +2025,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             updatedAt: new Date().toISOString(),
             guestPhone,
             pickup,
-            drop,
+            drop: formatGuestTrackDropField(drop, viaStopsLabel),
+            viaStops: viaStopsLabel || undefined,
             tripType: tripTypeLabel,
             tripTypeLabel,
             departure,
@@ -1922,88 +2052,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
     if (tripType !== 'tour') {
-    // Check if drop location is Araku Valley - redirect to tour page
-    if (dropLocation && dropLocation.name) {
-      const dropLocationName = dropLocation.name.toLowerCase().trim();
-      const arakuKeywords = [
-        'araku', 'araku valley', 'araku valley station',
-        'damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
-'katiki waterfalls', 'coffee plantation', 'coffee estates', 'coffee museum',
-'tribal museum', 'padmapuram garden', 'padmapuram gardens',
-        'borra caves', 'borra guhalu', 'anjadevudu waterfalls',
-        // Additional locations from the map
-        'ananthagiri', 'ananthagiri water falls', 'ananthagiri adventure hill',
-        'tokuru', 'rayavalasa', 'sariapalle', 'haritha jungle bells tyda',
-        'patakota', 'boodi', 'kasipatnam', 'kasipatnam siva temple tree',
-        'bowdara', 'devarapalle', 'baski', 'puttapadu', 'boorja',
-        'ravvalaguda', 'madagada', 'pakanaguda', 'hattaguda',
-        'kaala naag view point', 'tadaka', 'bondam', 'rega', 'etor',
-        'aguru', 'rajupaka', 'gummakota sivalayam', 'lothug',
-        'giri grama darshini', 'bethastha',
-        // Common variations and misspellings
-        'anantagiri', 'anantagiri', 'ananthagiri falls', 'ananthagiri waterfall',
-        'borra cave', 'borra', 'caves', 'katiki', 'katiki falls',
-        'coffee', 'plantation', 'estate', 'museum', 'tribal',
-        'padmapuram', 'garden', 'gardens', 'viewpoint', 'view point',
-        'damuku', 'galikonda', 'chaparai', 'waterfalls', 'water falls'
-      ];
-      
-      // Check for exact matches and partial matches
-      const isArakuLocation = arakuKeywords.some(keyword => {
-        const match = dropLocationName.includes(keyword) || keyword.includes(dropLocationName);
-        if (match) {
-          console.log('Araku Valley keyword match:', keyword, 'in location:', dropLocationName);
-        }
-        return match;
-      });
-      
-      if (isArakuLocation) {
-        console.log('Araku Valley location detected in drop location:', dropLocationName);
-        navigate('/tours/araku-valley-tour', { replace: true });
-        return;
-      }
-    }
-
-    // Check if pickup location is also Araku Valley - redirect to tour page
-    if (pickupLocation && pickupLocation.name) {
-      const pickupLocationName = pickupLocation.name.toLowerCase().trim();
-      const arakuKeywords = [
-        'araku', 'araku valley', 'araku valley station',
-        'damuku viewpoint', 'galikonda viewpoint', 'chaparai', 'chaparai waterfalls', 
-        'katiki waterfalls', 'coffee plantation', 'coffee estates', 'coffee museum',
-        'tribal museum', 'padmapuram garden', 'padmapuram gardens',
-        'borra caves', 'borra guhalu', 'anjadevudu waterfalls',
-        // Additional locations from the map
-        'ananthagiri', 'ananthagiri water falls', 'ananthagiri adventure hill',
-        'tokuru', 'rayavalasa', 'sariapalle', 'haritha jungle bells tyda',
-        'patakota', 'boodi', 'kasipatnam', 'kasipatnam siva temple tree',
-        'bowdara', 'devarapalle', 'baski', 'puttapadu', 'boorja',
-        'ravvalaguda', 'madagada', 'pakanaguda', 'hattaguda',
-        'kaala naag view point', 'tadaka', 'bondam', 'rega', 'etor',
-        'aguru', 'rajupaka', 'gummakota sivalayam', 'lothug',
-        'giri grama darshini', 'bethastha',
-        // Common variations and misspellings
-        'anantagiri', 'anantagiri', 'ananthagiri falls', 'ananthagiri waterfall',
-        'borra cave', 'borra', 'caves', 'katiki', 'katiki falls',
-        'coffee', 'plantation', 'estate', 'museum', 'tribal',
-        'padmapuram', 'garden', 'gardens', 'viewpoint', 'view point',
-        'damuku', 'galikonda', 'chaparai', 'waterfalls', 'water falls'
-      ];
-      
-      // Check for exact matches and partial matches
-      const isArakuLocation = arakuKeywords.some(keyword => {
-        const match = pickupLocationName.includes(keyword) || keyword.includes(pickupLocationName);
-        if (match) {
-          console.log('Araku Valley keyword match:', keyword, 'in location:', pickupLocationName);
-        }
-        return match;
-      });
-      
-      if (isArakuLocation) {
-        console.log('Araku Valley location detected in pickup location:', pickupLocationName);
-        navigate('/tours/araku-valley-tour', { replace: true });
-        return;
-      }
+    const dropTourText = dropLocation
+      ? `${dropLocation.name || ''} ${dropLocation.address || ''}`
+      : '';
+    const pickupTourText = pickupLocation
+      ? `${pickupLocation.name || ''} ${pickupLocation.address || ''}`
+      : '';
+    if (locationLooksLikeArakuTour(dropTourText) || locationLooksLikeArakuTour(pickupTourText)) {
+      navigate('/tours/araku-valley-tour', { replace: true });
+      return;
     }
 
     // Check if drop location is Lambasingi - redirect to Lambasingi tour page
@@ -2126,6 +2183,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (onSearch) onSearch({
       pickupLocation,
       dropLocation,
+      intermediateStops: filledStops,
       pickupDate,
       returnDate,
       tripType,
@@ -2138,6 +2196,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     
     // If trip type is tour, go to chosen package detail or browse all tours
     if (tripType === 'tour') {
+      if (!isWithinTourPickupRadius(pickupLocation)) {
+        toast({
+          title: 'Pickup too far for tours',
+          description:
+            'Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.',
+          variant: 'destructive',
+          duration: 4000,
+        });
+        setIsLoading(false);
+        return;
+      }
       if (dropLocation?.id?.startsWith('tour_')) {
         const tourKey = dropLocation.id.replace(/^tour_/, '');
         navigate(getTourUrl({ tourId: tourKey, tourName: dropLocation.name }), {
@@ -2207,7 +2276,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
     // Only update distance for non-local trips
     if (tripType !== 'local') {
-      const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation);
+      const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation, filledStops);
       if (rk) {
         routedKmForRouteRef.current = {
           key: rk,
@@ -2276,7 +2345,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         
         totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance;
       } else {
-        const days = Math.max(1, differenceInCalendarDays(returnDate || pickupDate, pickupDate) + 1);
+        const days = countOutstationBillingDays(pickupDate, returnDate);
         const totalMinKm = days * 300;
         const effectiveDistance = distance * 2;
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
@@ -2365,9 +2434,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         : totalPrice;
   const offerCategoryKey = resolveOfferCampaignCategory(tripType, tripMode);
   const offerTravelYmd = toOfferTravelDateYmd(pickupDate);
+  const offerTravelHm = toOfferTravelTimeHm(pickupDate);
   const offerVehicleId = normalizeOfferTargetId(selectedCab?.vehicleId || selectedCab?.id || null);
   const offerTourId = normalizeOfferTargetId(
     dropLocation?.id?.startsWith('tour_') ? dropLocation.id.slice('tour_'.length) : null
+  );
+  const offerTripRoute = useMemo(
+    () => toOfferTripRoute(pickupLocation, dropLocation),
+    [
+      pickupLocation?.name,
+      pickupLocation?.address,
+      pickupLocation?.lat,
+      pickupLocation?.lng,
+      dropLocation?.name,
+      dropLocation?.address,
+      dropLocation?.lat,
+      dropLocation?.lng,
+    ]
   );
   const offerDiscountAmount =
     offerApplied && offerCampaign
@@ -2405,6 +2488,33 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   }, [offerApplied, offerCampaign]);
 
   const applyOfferCampaign = (c: OfferCampaignPublic) => {
+    if (!isOfferRouteEligible(c, offerTripRoute, true)) {
+      const route = formatOfferRouteScope(c);
+      toast({
+        title: 'Coupon not valid for this trip',
+        description: route
+          ? `This offer is only valid from ${route}`
+          : 'This offer is only valid for the campaign pickup and destination',
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
+    }
+    if (
+      !isOfferTravelDateEligible(c, offerTravelYmd) ||
+      !isOfferTravelTimeEligible(c, offerTravelHm, true)
+    ) {
+      const when = formatOfferCouponWorksOn(c);
+      toast({
+        title: 'Invalid or expired coupon for this trip',
+        description: when
+          ? `This code works for ${when}.`
+          : 'Change your pickup date or time to use this coupon',
+        variant: 'destructive',
+        duration: 6000,
+      });
+      return;
+    }
     const base = websiteFareTotal > 0 ? websiteFareTotal : totalPrice;
     const pricing =
       c.pricing && c.pricing.website_fare > 0
@@ -2454,8 +2564,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             customer_phone: String(guestDetails.phone),
             website_fare: websiteFare,
             travel_date: toOfferTravelDateYmd(pickupDate),
+            travel_time: toOfferTravelTimeHm(pickupDate),
             vehicle_id: offerVehicleId,
             tour_id: offerTourId,
+            trip_route: offerTripRoute,
           });
           redemptionId = applied.redemption_id;
           setOfferRedemptionId(applied.redemption_id);
@@ -2482,7 +2594,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         passengerPhone: guestDetails.phone,
         passengerCountryCode: guestDetails.countryCode,
         passengerEmail: guestDetails.email,
-        additionalRequirements: guestDetails.additionalRequirements,
+        additionalRequirements: [
+          guestDetails.additionalRequirements?.trim() || '',
+          formatViaStopsLabel(filledStops) ? `Via/Stops: ${formatViaStopsLabel(filledStops)}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n') || undefined,
+        via_stops: formatViaStopsLabel(filledStops) || undefined,
         gstEnabled: !!guestDetails.gstEnabled,
         gstDetails: guestDetails.gstEnabled ? {
           gstNumber: guestDetails.gstNumber,
@@ -2513,6 +2631,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         bookingNumber: response.data?.data?.bookingNumber ?? response.data?.bookingNumber ?? response.bookingNumber ?? response.data?.booking_number ?? response.booking_number,
         pickupLocation,
         dropLocation,
+        intermediateStops: filledStops,
+        via_stops: formatViaStopsLabel(filledStops) || undefined,
         pickupDate: formatDateForAPI(pickupDate),
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         selectedCab,
@@ -2587,6 +2707,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     setDistance(0);
     setDuration(0);
     
+    setIntermediateStops([]);
+    sessionStorage.removeItem('intermediateStops');
+
     if (!visibleTabs || visibleTabs.length > 1) {
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
@@ -2636,13 +2759,20 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   useEffect(() => {
-    if (isSearchActive) {
+    if (!isSearchActive) {
+      setCurrentStep(1);
+      return;
+    }
+    const hasPickup = Boolean(pickupLocation?.name);
+    const hasDrop = Boolean(dropLocation?.name);
+    const canShowResults = tripType === 'local' ? hasPickup : hasPickup && hasDrop;
+    if (canShowResults) {
       setCurrentStep(2);
       resetPageScroll();
     } else {
       setCurrentStep(1);
     }
-  }, [isSearchActive]);
+  }, [isSearchActive, pickupLocation, dropLocation, tripType]);
 
   /**
    * Load / refresh the active offer whenever results are shown.
@@ -2671,7 +2801,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         0,
         travelYmd,
         offerVehicleId,
-        offerTourId
+        offerTourId,
+        offerTripRoute,
+        offerTravelHm
       );
       if (cancelled) return;
 
@@ -2680,6 +2812,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         offerCampaignIdRef.current = null;
         setOfferApplied(false);
         setOfferRedemptionId(null);
+        setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
         return;
       }
 
@@ -2694,13 +2827,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       if (homeApplied) {
         setOfferCampaign(next);
         offerCampaignIdRef.current = next.id;
-        setOfferApplied(true);
+        setOfferApplied(
+          isOfferRouteEligible(next, offerTripRoute, true) &&
+            isOfferTravelTimeEligible(next, offerTravelHm, true)
+        );
         clearHomePendingOffer();
         return;
       }
 
       if (sameCampaign) {
-        // Same offer already loaded — do not setState (avoids re-render loops)
+        if (
+          !isOfferRouteEligible(next, offerTripRoute, true) ||
+          !isOfferTravelTimeEligible(next, offerTravelHm, true)
+        ) {
+          setOfferApplied(false);
+          setOfferRedemptionId(null);
+          setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
+        }
         return;
       }
 
@@ -2716,7 +2859,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     return () => {
       cancelled = true;
     };
-  }, [currentStep, isSearchActive, tripType, tripMode, offerTravelYmd, offerVehicleId, offerTourId]);
+  }, [currentStep, isSearchActive, tripType, tripMode, offerTravelYmd, offerTravelHm, offerVehicleId, offerTourId, offerTripRoute]);
 
   // Notify parent on initial step as well
   useEffect(() => {
@@ -2766,10 +2909,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       dropLocation
     ) {
       setIsCalculatingDistance(true);
-      calculateDistanceMatrix(pickupLocation, dropLocation)
+      measureBookedRoute(pickupLocation, dropLocation)
         .then(result => {
           if (result.status === 'OK') {
-            const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation);
+            const rk = buildGuestTrackRouteKey(pickupLocation, dropLocation, filledStops);
             if (rk) {
               routedKmForRouteRef.current = {
                 key: rk,
@@ -2784,7 +2927,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         .finally(() => setIsCalculatingDistance(false));
     }
     // Only run when these change
-  }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation]);
+  }, [isMobile, isLoaded, tripType, pickupLocation, dropLocation, filledStops, measureBookedRoute]);
 
   const canSubmitGuestPhone = guestPhoneDigits.length === guestPhoneCountry.maxLength;
   const isPremiumHomeShell = !hideBackground && !embedCompactLayout && !isSearchActive;
@@ -2875,6 +3018,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         tripType={tripType}
                         hideLeadingIcon
                       />
+                      {tripType === 'outstation' && intermediateStops.length === 0 && (
+                        <OutstationAddStopLink
+                          stopCount={0}
+                          onAdd={handleAddOutstationStop}
+                          variant="card"
+                        />
+                      )}
+                      {tripType === 'outstation' && (
+                        <OutstationStopRows
+                          stops={intermediateStops}
+                          onChange={handleOutstationStopChange}
+                          onRemove={handleRemoveOutstationStop}
+                          layout="ticket"
+                          fieldVariant={heroMobileFieldVariant}
+                          cellClassName={heroTicketCellPad}
+                          editTrigger={editTrigger}
+                        />
+                      )}
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                         variant={heroMobileFieldVariant}
@@ -2907,6 +3068,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       tripType={tripType}
                     />
 
+                    {tripType === 'outstation' && intermediateStops.length === 0 && (
+                      <OutstationAddStopLink
+                        stopCount={0}
+                        onAdd={handleAddOutstationStop}
+                        variant="card"
+                      />
+                    )}
+                    {tripType === 'outstation' && (
+                      <OutstationStopRows
+                        stops={intermediateStops}
+                        onChange={handleOutstationStopChange}
+                        onRemove={handleRemoveOutstationStop}
+                        layout="stacked"
+                        fieldVariant={heroMobileFieldVariant}
+                        cellClassName={heroTicketCellPad}
+                        editTrigger={editTrigger}
+                      />
+                    )}
+
                     {showFromToFields && (
                       <LocationInput
                         key={`drop-mobile-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
@@ -2925,6 +3105,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       />
                     )}
                   </>
+                )}
+
+                {tripType === 'outstation' && intermediateStops.length > 0 && (
+                  <OutstationAddStopLink
+                    stopCount={intermediateStops.length}
+                    onAdd={handleAddOutstationStop}
+                    more
+                    className="px-2 py-2"
+                  />
                 )}
 
                 {tripType === 'tour' && (
@@ -3058,7 +3247,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   className={heroTicketCellPad}
                   label="Trip start"
                   date={pickupDate}
-                  onDateChange={setPickupDate}
+                  onDateChange={handlePickupDateChange}
                   minDate={getMinimumAllowedDate()}
                 />
 
@@ -3273,6 +3462,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   tripType={tripType}
                                   hideLeadingIcon
                                 />
+                                {tripType === 'outstation' && intermediateStops.length === 0 && (
+                                  <OutstationAddStopLink
+                                    stopCount={0}
+                                    onAdd={handleAddOutstationStop}
+                                    variant="card"
+                                  />
+                                )}
+                                {tripType === 'outstation' && (
+                                  <OutstationStopRows
+                                    stops={intermediateStops}
+                                    onChange={handleOutstationStopChange}
+                                    onRemove={handleRemoveOutstationStop}
+                                    layout="ticket"
+                                    fieldVariant={heroMobileFieldVariant}
+                                    cellClassName={heroTicketCellPad}
+                                    editTrigger={editTrigger}
+                                  />
+                                )}
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
                                   ref={(instance) => {
@@ -3308,6 +3515,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 tripType={tripType}
                               />
 
+                              {tripType === 'outstation' && intermediateStops.length === 0 && (
+                                <OutstationAddStopLink
+                                  stopCount={0}
+                                  onAdd={handleAddOutstationStop}
+                                  variant="card"
+                                />
+                              )}
+                              {tripType === 'outstation' && (
+                                <OutstationStopRows
+                                  stops={intermediateStops}
+                                  onChange={handleOutstationStopChange}
+                                  onRemove={handleRemoveOutstationStop}
+                                  layout="stacked"
+                                  fieldVariant={heroMobileFieldVariant}
+                                  cellClassName={heroTicketCellPad}
+                                  editTrigger={editTrigger}
+                                />
+                              )}
+
                               {showFromToFields && (
                                 <LocationInput
                                   key={`drop-${tripType}-${editTrigger}-${dropLocation?.id || 'empty'}`}
@@ -3329,6 +3555,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 />
                               )}
                             </>
+                          )}
+
+                          {tripType === 'outstation' && intermediateStops.length > 0 && (
+                            <OutstationAddStopLink
+                              stopCount={intermediateStops.length}
+                              onAdd={handleAddOutstationStop}
+                              more
+                              className="px-2 py-2"
+                            />
                           )}
 
                           {tripType === 'tour' && (
@@ -3474,7 +3709,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             className={heroTicketCellPad}
                             label="Trip start"
                             date={pickupDate}
-                            onDateChange={setPickupDate}
+                            onDateChange={handlePickupDateChange}
                             onDateApplied={advanceAfterDepartureApplied}
                             minDate={getMinimumAllowedDate()}
                           />
@@ -3769,7 +4004,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     departurePickerRefs.current.desktop = instance;
                                   }}
                                   date={pickupDate}
-                                  onDateChange={setPickupDate}
+                                  onDateChange={handlePickupDateChange}
                                   onDateApplied={advanceAfterDepartureApplied}
                                   minDate={getMinimumAllowedDate()}
                                   label="Date & Time"
@@ -3792,7 +4027,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     departurePickerRefs.current.desktop = instance;
                                   }}
                                   date={pickupDate}
-                                  onDateChange={setPickupDate}
+                                  onDateChange={handlePickupDateChange}
                                   onDateApplied={advanceAfterDepartureApplied}
                                   minDate={getMinimumAllowedDate()}
                                   label="Date & Time"
@@ -3859,7 +4094,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                     departurePickerRefs.current.desktop = instance;
                                   }}
                                   date={pickupDate}
-                                  onDateChange={setPickupDate}
+                                  onDateChange={handlePickupDateChange}
                                   onDateApplied={advanceAfterDepartureApplied}
                                   minDate={getMinimumAllowedDate()}
                                   label="Departure"
@@ -3915,6 +4150,42 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             </Button>
                           </div>
                         </div>
+                        {tripType === 'outstation' && (
+                          <div className="mt-2 flex w-full flex-col gap-2">
+                            {intermediateStops.length === 0 ? (
+                              <OutstationAddStopLink
+                                stopCount={0}
+                                onAdd={handleAddOutstationStop}
+                                variant="card"
+                                className="px-0"
+                              />
+                            ) : (
+                              <>
+                                <div
+                                  className={cn(
+                                    embedDesktopCardLayout
+                                      ? 'flex flex-col gap-3'
+                                      : 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
+                                  )}
+                                >
+                                  <OutstationStopRows
+                                    stops={intermediateStops}
+                                    onChange={handleOutstationStopChange}
+                                    onRemove={handleRemoveOutstationStop}
+                                    layout="desktop"
+                                    fieldVariant="desktop"
+                                    editTrigger={editTrigger}
+                                  />
+                                </div>
+                                <OutstationAddStopLink
+                                  stopCount={intermediateStops.length}
+                                  onAdd={handleAddOutstationStop}
+                                  more
+                                />
+                              </>
+                            )}
+                          </div>
+                        )}
                         {validationError && (
                           <div className="text-red-600 text-sm mt-3 py-2">{validationError}</div>
                         )}
@@ -4062,9 +4333,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   }
                                 >
                                   <GoogleMapComponent
-                                    key={`${tripType}-${pickupLocation?.name || ''}-${dropLocation?.name || ''}`}
+                                    key={`${tripType}-${pickupLocation?.name || ''}-${filledStops.map((s) => s.id || s.name).join('|')}-${dropLocation?.name || ''}`}
                                     pickupLocation={pickupLocation}
                                     dropLocation={dropLocation}
+                                    waypoints={filledStops}
                                     tripType={tripType}
                                     onDistanceCalculated={handleDistanceCalculated}
                                   />
@@ -4123,6 +4395,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <BookingSummary 
                               pickupLocation={pickupLocation!} 
                               dropLocation={dropLocation} 
+                              intermediateStops={filledStops} 
                               pickupDate={pickupDate} 
                               returnDate={returnDate} 
                               selectedCab={selectedCab} 
@@ -4144,6 +4417,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   travelDate={pickupDate}
                                   vehicleId={offerVehicleId}
                                   tourId={offerTourId}
+                                  tripRoute={offerTripRoute}
                                   suggestedCampaign={offerCampaign}
                                   applied={offerApplied}
                                   appliedCampaign={offerCampaign}
@@ -4276,6 +4550,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         travelDate={pickupDate}
                         vehicleId={offerVehicleId}
                         tourId={offerTourId}
+                        tripRoute={offerTripRoute}
                         suggestedCampaign={offerCampaign}
                         applied={offerApplied}
                         appliedCampaign={offerCampaign}
@@ -4297,6 +4572,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     <BookingSummary
                       pickupLocation={pickupLocation!}
                       dropLocation={dropLocation}
+                      intermediateStops={filledStops}
                       pickupDate={pickupDate}
                       returnDate={returnDate}
                       selectedCab={selectedCab}
@@ -4318,6 +4594,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           travelDate={pickupDate}
                           vehicleId={offerVehicleId}
                           tourId={offerTourId}
+                          tripRoute={offerTripRoute}
                           suggestedCampaign={offerCampaign}
                           applied={offerApplied}
                           appliedCampaign={offerCampaign}
@@ -4375,6 +4652,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 <BookingSummary
                   pickupLocation={pickupLocation!}
                   dropLocation={dropLocation}
+                  intermediateStops={filledStops}
                   pickupDate={pickupDate}
                   returnDate={returnDate}
                   selectedCab={selectedCab}
@@ -4396,6 +4674,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       travelDate={pickupDate}
                       vehicleId={offerVehicleId}
                       tourId={offerTourId}
+                      tripRoute={offerTripRoute}
                       suggestedCampaign={offerCampaign}
                       applied={offerApplied}
                       appliedCampaign={offerCampaign}

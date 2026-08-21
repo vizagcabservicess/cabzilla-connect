@@ -13,6 +13,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { trackContactCta } from './utils/trackContactCta';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
+import { RouteErrorFallback } from './components/ErrorBoundary';
 import Index from './pages/Index';
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import SmartBudgetVendorAuthLayout from './pages/smart-budget/SmartBudgetVendorAuthLayout';
@@ -285,7 +286,7 @@ function Root() {
       '/about': 'Hi Kumar! I would like to know more about Vizag Taxi Hub',
       '/local-taxi': 'Hi Kumar! I would like to book a local taxi',
       '/outstation-taxi': 'Hi Kumar! I would like to book an outstation taxi',
-      '/airport-taxi': 'Hi Kumar! I would like to book an airport transfer',
+      '/airport-taxi': 'Hi! I need a Bhogapuram Airport taxi (Alluri Sitarama Raju International Airport).\n\n✈️ Flight Number:\n📅 Arrival Date:\n⏰ Arrival Time:\n📍 Drop Location:\n👥 Number of Passengers:',
       '/pooling': 'Hi Kumar! I would like to know more about your car pooling service',
       '/rentals': 'Hi Kumar! I would like to know more about your car rental services',
       '/support': 'Hi Kumar! I need support with my booking',
@@ -360,6 +361,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <Root />,
+    errorElement: <RouteErrorFallback />,
     children: [
       {
         index: true,

@@ -158,7 +158,9 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   const priceMatrixTime = localStorage.getItem('localPackagePriceMatrixUpdated') || '0';
   const globalRefreshToken = localStorage.getItem('globalFareRefreshToken') || '0';
   
-  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${shouldForceRefresh}_${cacheClearTime}_${priceMatrixTime}_${globalRefreshToken}`;
+  const pickupTs = pickupDate instanceof Date && !Number.isNaN(pickupDate.getTime()) ? pickupDate.getTime() : 0;
+  const returnTs = returnDate instanceof Date && !Number.isNaN(returnDate.getTime()) ? returnDate.getTime() : 0;
+  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupTs}_${returnTs}_${shouldForceRefresh}_${cacheClearTime}_${priceMatrixTime}_${globalRefreshToken}`;
 };
 
 // Helper to safely convert a value to lowercase

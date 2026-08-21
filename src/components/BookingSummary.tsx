@@ -4,6 +4,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
+import { isValidTripDate } from '@/lib/dateUtils';
 import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
@@ -15,6 +16,7 @@ import { normalizeVehicleId } from '@/utils/safeStringUtils';
 interface BookingSummaryProps {
   pickupLocation: Location | null;
   dropLocation: Location | null;
+  intermediateStops?: Location[];
   pickupDate: Date | undefined;
   returnDate?: Date | null;
   selectedCab: CabType | null;
@@ -38,6 +40,7 @@ interface BookingSummaryProps {
 export const BookingSummary = ({
   pickupLocation,
   dropLocation,
+  intermediateStops = [],
   pickupDate,
   returnDate,
   selectedCab,
@@ -1016,7 +1019,7 @@ export const BookingSummary = ({
     }
   }, [passedBreakdown, totalPrice, localTotal, fareData?.breakdown, fareData?.totalPrice, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
 
-  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate) {
+  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !isValidTripDate(pickupDate)) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
@@ -1123,7 +1126,7 @@ export const BookingSummary = ({
         url.searchParams.set('toLng', String(dropLocation.lng));
       }
 
-      if (pickupDate) {
+      if (isValidTripDate(pickupDate)) {
         url.searchParams.set('date', pickupDate.toISOString());
       }
       if (tripMode) {
@@ -1153,7 +1156,7 @@ export const BookingSummary = ({
       const url = new URL(`${origin}/local-taxi`);
       url.searchParams.set('from', fromSlug);
       url.searchParams.set('to', toSlug);
-      if (pickupDate) {
+      if (isValidTripDate(pickupDate)) {
         url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
       }
       url.searchParams.set('auto', '1');
@@ -1190,7 +1193,7 @@ export const BookingSummary = ({
         url.searchParams.set('toLat', String(dropLocation.lat));
         url.searchParams.set('toLng', String(dropLocation.lng));
       }
-      if (pickupDate) {
+      if (isValidTripDate(pickupDate)) {
         url.searchParams.set('date', format(pickupDate, 'yyyy-MM-dd'));
       }
       url.searchParams.set('auto', '1');
@@ -1223,6 +1226,7 @@ export const BookingSummary = ({
         pickupLocation.address !== pickupLocation.name
         ? `Pickup address: ${pickupLocation.address}`
         : undefined,
+      ...intermediateStops.map((stop, index) => `Stop ${index + 1}: ${stop.name}`),
       tripType !== 'tour' &&
         dropLocation
         ? `${tripType === 'local' ? 'Last drop at' : 'Drop-off'}: ${dropLocation.name}`
@@ -1231,12 +1235,12 @@ export const BookingSummary = ({
         dropLocation.address !== dropLocation.name
         ? `Drop-off address: ${dropLocation.address}`
         : undefined,
-      pickupDate
+      isValidTripDate(pickupDate)
         ? `Pickup date: ${format(pickupDate, 'EEE, MMM d, yyyy - h:mm a')}`
         : undefined,
       tripType === 'outstation' &&
         tripMode === 'round-trip' &&
-        returnDate
+        isValidTripDate(returnDate)
         ? `Return date: ${format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}`
         : undefined,
       distance > 0 ? `Total distance: ${distanceText}` : undefined,
@@ -1485,6 +1489,22 @@ export const BookingSummary = ({
                 )}
               </div>
 
+              {tripType === 'outstation' &&
+                intermediateStops.map((stop, index) => (
+                  <div key={stop.id || `stop-${index}`} className="flex items-start gap-2 py-3">
+                    <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        Stop {index + 1}
+                      </p>
+                      <p className="text-left text-[14px] font-semibold text-gray-900">{stop.name}</p>
+                      {stop.address && stop.address !== stop.name && (
+                        <p className="mt-1 text-left text-[12px] text-gray-600">{stop.address}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
               {tripType !== 'tour' && dropLocation && (
                 <div className="flex items-start gap-2 py-3">
                   <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
@@ -1505,7 +1525,7 @@ export const BookingSummary = ({
                 <div className="min-w-0 flex-1 text-left">
                   <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Pickup date</p>
                   <p className="text-[14px] font-semibold text-gray-900">
-                    {pickupDate ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+                    {isValidTripDate(pickupDate) ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
                   </p>
                 </div>
                 {onEditPickupDate && (
@@ -1520,7 +1540,7 @@ export const BookingSummary = ({
                 )}
               </div>
 
-              {tripType === 'outstation' && tripMode === 'round-trip' && returnDate && (
+              {tripType === 'outstation' && tripMode === 'round-trip' && isValidTripDate(returnDate) && (
                 <div className="flex items-start gap-2 py-3">
                   <Calendar className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                   <div className="min-w-0 flex-1 text-left">

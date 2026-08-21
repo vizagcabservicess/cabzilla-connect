@@ -20,6 +20,7 @@ import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
 import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
 import { resetPageScroll } from '@/lib/bookingWidgetScroll';
 import { applyVthAiCheckoutPrefill } from '@/lib/vthAiCheckoutPrefill';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Sync before Hero mounts so loadFromSessionStorage sees AI checkout prefill
 if (typeof window !== 'undefined') {
@@ -114,13 +115,15 @@ const Index = () => {
         {/* Active campaign coupon popup on homepage (Airport / Local) */}
         {!isSearch && <HomeOfferCampaignPopup enabled />}
         <main className="flex-1">
-          <Hero
-            onSearch={() => {
-              resetPageScroll();
-              setSearchParams({ search: '1' });
-            }}
-            isSearchActive={isSearch}
-          />
+          <ErrorBoundary>
+            <Hero
+              onSearch={() => {
+                resetPageScroll();
+                setSearchParams({ search: '1' });
+              }}
+              isSearchActive={isSearch}
+            />
+          </ErrorBoundary>
           
           {/* Main Content — soft premium rhythm */}
           {!isSearch && (

@@ -66,13 +66,54 @@ export function findTourRouteByKeywords(query: string): (typeof AVAILABLE_TOUR_R
   let bestLen = 0;
   for (const tour of AVAILABLE_TOUR_ROUTES) {
     for (const keyword of tour.keywords) {
-      if (lower.includes(keyword) && keyword.length > bestLen) {
+      if (keywordHitsInText(lower, keyword) && keyword.length > bestLen) {
         best = tour;
         bestLen = keyword.length;
       }
     }
   }
   return best;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function keywordHitsInText(text: string, keyword: string): boolean {
+  const blob = (text || '').toLowerCase();
+  const k = keyword.toLowerCase().trim();
+  if (!blob || !k) return false;
+  // Short tokens like "araku" / "borra" must be whole words so "Pusapatirega" ≠ Araku.
+  if (k.length <= 6) {
+    return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(k)}(?:[^a-z0-9]|$)`, 'i').test(blob);
+  }
+  return blob.includes(k);
+}
+
+/** Araku hill-station places only — not generic fragments like "rega" in Pusapatirega. */
+const ARAKU_PLACE_KEYWORDS = [
+  'araku valley',
+  'araku',
+  'borra caves',
+  'borra guhalu',
+  'borra cave',
+  'padmapuram gardens',
+  'padmapuram garden',
+  'padmapuram',
+  'katiki waterfalls',
+  'katiki falls',
+  'galikonda',
+  'chaparai',
+  'ananthagiri',
+  'anantagiri',
+  'damuku',
+  'anjadevudu',
+] as const;
+
+export function locationLooksLikeArakuTour(text: string): boolean {
+  const blob = (text || '').toLowerCase().trim();
+  if (!blob) return false;
+  return ARAKU_PLACE_KEYWORDS.some((keyword) => keywordHitsInText(blob, keyword));
 }
 
 /**

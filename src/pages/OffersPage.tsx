@@ -12,6 +12,7 @@ import {
   Route,
   ArrowRight,
   CalendarDays,
+  Clock3,
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -25,6 +26,8 @@ import {
   OFFER_CAMPAIGN_CATEGORIES,
   OFFER_CATEGORY_LABELS,
   formatOfferTravelDateRange,
+  formatOfferTravelTimeFrom,
+  formatOfferRouteScope,
 } from '@/types/offerCampaign';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -93,13 +96,8 @@ export default function OffersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const results = await Promise.all(
-        OFFER_CAMPAIGN_CATEGORIES.map((cat) => offerCampaignAPI.public.getActiveOffer(cat))
-      );
-      const list = results
-        .map((r) => r.campaign)
-        .filter((c): c is OfferCampaignPublic => Boolean(c));
-      setCampaigns(list);
+      const result = await offerCampaignAPI.public.listActiveOffers();
+      setCampaigns(result.campaigns);
     } catch {
       setCampaigns([]);
     } finally {
@@ -130,6 +128,7 @@ export default function OffersPage() {
       await navigator.clipboard.writeText(c.coupon_code);
       setCopiedId(c.id);
       window.setTimeout(() => setCopiedId(null), 2000);
+      void offerCampaignAPI.public.logEvent('copy', c.id, c.category);
       toast({
         title: 'Coupon copied',
         description: c.coupon_code,
@@ -148,8 +147,10 @@ export default function OffersPage() {
     saveHomePendingOffer(c);
     toast({
       title: 'Coupon ready',
-      description: `${c.coupon_code} will apply when you book ${
-        OFFER_CATEGORY_LABELS[c.category] || c.category
+      description: `${c.coupon_code} will apply when you book this pickup to destination${
+        formatOfferRouteScope(c)
+          ? ` (${formatOfferRouteScope(c)})`
+          : ''
       }.`,
       duration: 3500,
     });
@@ -248,6 +249,8 @@ export default function OffersPage() {
                       c.travel_date_from,
                       c.travel_date_to
                     );
+                    const travelTimeFrom = formatOfferTravelTimeFrom(c.travel_time_from);
+                    const route = formatOfferRouteScope(c);
                     const headline = offerHeadline(c);
                     return (
                       <article
@@ -268,6 +271,12 @@ export default function OffersPage() {
                         </div>
                         <div className="space-y-3 p-4">
                           <p className="text-sm font-semibold text-slate-900">{headline}</p>
+                          {route ? (
+                            <p className="flex items-start gap-1.5 text-[11px] text-slate-600">
+                              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
+                              Valid only on {route}
+                            </p>
+                          ) : null}
                           {travelRange ? (
                             <p className="flex items-start gap-1.5 text-[11px] text-slate-600">
                               <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
@@ -276,6 +285,12 @@ export default function OffersPage() {
                           ) : (
                             <p className="text-[11px] text-slate-500">Valid for any travel date</p>
                           )}
+                          {travelTimeFrom ? (
+                            <p className="flex items-start gap-1.5 text-[11px] text-slate-600">
+                              <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" />
+                              Pickups {travelTimeFrom}
+                            </p>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => void copyCoupon(c)}

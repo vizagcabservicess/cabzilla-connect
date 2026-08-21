@@ -135,6 +135,14 @@ function BookingConfirmationPage() {
                pickupLocation: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
                drop_location: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
                dropLocation: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+               via_stops:
+                 parsedData.via_stops ||
+                 (Array.isArray(parsedData.intermediateStops)
+                   ? parsedData.intermediateStops
+                       .map((stop: { name?: string }) => stop?.name)
+                       .filter(Boolean)
+                       .join(' → ')
+                   : undefined),
                pickup_date: parsedData.pickupDate || '',
                pickupDate: parsedData.pickupDate || '',
                return_date: parsedData.returnDate || '',
@@ -194,6 +202,14 @@ function BookingConfirmationPage() {
               pickupLocation: parsedData.pickupLocation?.name || parsedData.pickupLocation?.address || '',
               drop_location: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
               dropLocation: parsedData.dropLocation?.name || parsedData.dropLocation?.address || '',
+              via_stops:
+                parsedData.via_stops ||
+                (Array.isArray(parsedData.intermediateStops)
+                  ? parsedData.intermediateStops
+                      .map((stop: { name?: string }) => stop?.name)
+                      .filter(Boolean)
+                      .join(' → ')
+                  : undefined),
               pickup_date: parsedData.pickupDate || '',
               pickupDate: parsedData.pickupDate || '',
               return_date: parsedData.returnDate || '',
@@ -437,9 +453,13 @@ function BookingConfirmationPage() {
       fare: booking.totalAmount || 0,
       totalAmount: booking.totalAmount || 0,
       status: booking.status || 'confirmed',
-      payment_status: booking.payment_status || 'pending',
-      payment_method: booking.payment_method || '',
-      advance_paid_amount: booking.advance_paid_amount || 0,
+      payment_status: booking.payment_status || booking.paymentStatus || 'pending',
+      payment_method: booking.payment_method || booking.paymentMethod || '',
+      advance_paid_amount:
+        booking.advance_paid_amount ||
+        booking.advancePaidAmount ||
+        booking.partialPaymentAmount ||
+        0,
       created_at: booking.createdAt || new Date().toISOString(),
       updated_at: booking.updatedAt || new Date().toISOString(),
       updatedAt: booking.updatedAt || new Date().toISOString(),
@@ -677,6 +697,12 @@ function BookingConfirmationPage() {
                             );
                           })()}
                         </div>
+                        {booking.via_stops && (
+                          <div>
+                            <span className="text-sm font-medium text-gray-500">Stops:</span>
+                            <p className="text-gray-900 font-semibold">{booking.via_stops}</p>
+                          </div>
+                        )}
                         {booking.dropLocation && (
                           <div>
                             <span className="text-sm font-medium text-gray-500">Drop Location:</span>
@@ -974,6 +1000,19 @@ function BookingConfirmationPage() {
                             );
                           })()}
                         </div>
+                        {booking?.via_stops ? (
+                          <div style={{
+                            backgroundColor: '#fff6e5',
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: '1px solid #f3d7a3'
+                          }}>
+                            <h4 style={{ fontSize: '10px', fontWeight: '600', marginBottom: '4px', color: '#5a4520' }}>
+                              📍 STOPS
+                            </h4>
+                            <p style={{ fontSize: '12px', color: '#000', fontWeight: '500', margin: 0 }}>{booking.via_stops}</p>
+                          </div>
+                        ) : null}
                         <div style={{
                           backgroundColor: '#ffe8e8',
                           padding: '8px',

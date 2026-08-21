@@ -227,6 +227,17 @@ export interface AnalyticsReport {
   topSearchTerms: ReportTopItem[];
 }
 
+export interface VaDailySeriesPoint {
+  day: string;
+  sessions: number;
+  pageviews: number;
+  chats: number;
+  bookingsStarted: number;
+  paymentsSuccess: number;
+  whatsappClicks: number;
+  phoneClicks: number;
+}
+
 /** Row from GET /api/admin/reports/stored */
 export interface VaDailyStatRow {
   site_id: string;
