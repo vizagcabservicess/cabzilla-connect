@@ -5,6 +5,25 @@ import { getLocalPackagePrice } from './packageData';
 import axios from 'axios';
 import { getOutstationFaresForVehicle, getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 
+/** Outstation min km per calendar day (round-trip, and one-way only when via-stops are billed garage-to-garage). */
+export const OUTSTATION_INCLUDED_KM_PER_DAY = 300;
+/** Direct one-way (no stops): extra km after this base, then × 2 for empty return. */
+export const OUTSTATION_ONE_WAY_TRADITIONAL_BASE_KM = 150;
+
+export function oneWayOutstationExtra(
+  distance: number,
+  extraKmCharge: number,
+  viaStops: boolean
+): { extraKm: number; extraDistanceFare: number } {
+  if (viaStops) {
+    const extraKm = Math.max(0, distance - OUTSTATION_INCLUDED_KM_PER_DAY);
+    return { extraKm, extraDistanceFare: extraKm * extraKmCharge };
+  }
+  const extraKm = Math.max(0, distance - OUTSTATION_ONE_WAY_TRADITIONAL_BASE_KM);
+  const billedKm = extraKm * 2;
+  return { extraKm: billedKm, extraDistanceFare: billedKm * extraKmCharge };
+}
+
 // Create a fare cache with expiration and strict validation
 const fareCache = new Map<string, { expire: number, price: number, source: string }>();
 let lastCacheClearTime = Date.now();
@@ -321,12 +340,10 @@ export const calculateOutstationOneWayFare = async (cabType: CabType, distance: 
     } else if (distance >= tier4Min && distance <= tier4Max) {
       basePrice = outstationFares.tier4Price || (outstationFares.basePrice * 1.6);
     } else if (distance > tier4Max) {
-      // For distances beyond tier4Max, use the traditional calculation
       basePrice = outstationFares.basePrice;
-      const extraKm = distance - tier4Max;
       const extraKmCharge = outstationFares.extraKmCharge || outstationFares.pricePerKm;
-      const extraDistanceFare = extraKm * extraKmCharge;
-      basePrice += extraDistanceFare;
+      const extra = oneWayOutstationExtra(distance, extraKmCharge, false);
+      basePrice += extra.extraDistanceFare;
     } else {
       // For distances less than tier1Min, use the traditional calculation
       basePrice = outstationFares.basePrice;

@@ -177,13 +177,12 @@ export function inferTripServiceType(
 
   if (!drop) return null;
 
-  if (dropInVizag && pickupInVizag) return 'airport';
+  // City-to-city is not an airport transfer. Hourly rental is only chosen via the Local tab.
+  if (dropInVizag && pickupInVizag) return null;
 
-  if (!dropInVizag) return 'outstation';
+  if (!dropInVizag || !pickupInVizag) return 'outstation';
 
-  if (dropInVizag && !pickup) return 'airport';
-
-  return 'outstation';
+  return null;
 }
 
 export function getServicePathForTripType(type: CustomerTripService): string | null {

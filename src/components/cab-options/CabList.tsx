@@ -23,6 +23,7 @@ interface CabListProps {
   pickupDate?: Date;
   returnDate?: Date;
   selectedCabBreakdown?: any;
+  oneWayViaStops?: boolean;
 }
 
 const sumBreakdown = (breakdown: any) => {
@@ -69,6 +70,7 @@ const CabFareCard = ({
   returnDate,
   selectedCabBreakdown,
   isCalculatingFares = false,
+  oneWayViaStops = false,
 }: any) => {
   const awaitingRouteKm =
     (tripType === 'outstation' || tripType === 'airport' || tripType === 'custom') && distance <= 0;
@@ -146,7 +148,9 @@ const CabFareCard = ({
       tripType,
       distance,
       correctPackageType,
-      pickupDate
+      pickupDate,
+      undefined,
+      Boolean(oneWayViaStops)
     );
     fareData = fareResult.fareData;
     isLoading = fareResult.isLoading;
@@ -235,7 +239,8 @@ export const CabList: React.FC<CabListProps> = ({
   packageType,
   pickupDate,
   returnDate,
-  selectedCabBreakdown
+  selectedCabBreakdown,
+  oneWayViaStops = false,
 }) => {
   // Use the cabTypes prop directly instead of local state
   const [loading, setLoading] = useState(false);
@@ -309,6 +314,7 @@ export const CabList: React.FC<CabListProps> = ({
               returnDate={returnDate}
               selectedCabBreakdown={selectedCabBreakdown}
               isCalculatingFares={isCalculatingFares}
+              oneWayViaStops={oneWayViaStops}
             />
           ))
         )

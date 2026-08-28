@@ -538,7 +538,7 @@ export async function getOutstationFares(): Promise<Record<string, OutstationFar
 /**
  * Outstation one-way fare - matches web useFare.ts one-way logic exactly.
  * - Tier ranges: tier1 35–50, tier2 51–75, tier3 76–100, tier4 101–149 km
- * - Beyond tier4: oneWayBasePrice + (distance - 150) * 2 * extraKmCharge (web uses baseDistance 150 and roundTripExtraKm)
+ * - Beyond tier4: oneWayBasePrice + max(0, distance - 300) * extraKmCharge
  * - Below tier1: oneWayBasePrice + max(0, distance - tier1Min) * extraKmCharge
  */
 export function calculateOutstationFare(fare: OutstationFare, distanceKm: number): number {
@@ -566,12 +566,9 @@ export function calculateOutstationFare(fare: OutstationFare, distanceKm: number
   } else if (distanceKm >= tier4Min && distanceKm <= tier4Max) {
     totalBase = fare.tier4Price ?? basePrice * 1.6;
   } else if (distanceKm > tier4Max) {
-    // Web useFare: baseDistance=150, extraKm*2 (roundTripExtraKm), oneWayBasePrice
     totalBase = basePrice;
-    const baseDistance = 150;
-    const extraKm = Math.max(0, distanceKm - baseDistance);
-    const roundTripExtraKm = extraKm * 2;
-    extraDistanceFare = roundTripExtraKm * extraKmCharge;
+    const extraKm = Math.max(0, distanceKm - 150);
+    extraDistanceFare = extraKm * 2 * extraKmCharge;
   } else {
     totalBase = basePrice;
     const extraKm = Math.max(0, distanceKm - tier1Min);
@@ -1114,7 +1111,7 @@ export function calculateAirportFare(
 
 /**
  * Fare breakdown for display - matches web useFare.ts one-way logic exactly.
- * Beyond tier4: baseDistance=150, roundTripExtraKm = (distance - 150) * 2
+ * Beyond tier4: extra km after 300 km included
  */
 export function calculateOutstationFareBreakdown(
   fare: OutstationFare,
@@ -1145,13 +1142,10 @@ export function calculateOutstationFareBreakdown(
   } else if (distanceKm >= tier4Min && distanceKm <= tier4Max) {
     totalBase = fare.tier4Price ?? basePrice * 1.6;
   } else if (distanceKm > tier4Max) {
-    // Web useFare: baseDistance=150, roundTripExtraKm = extraKm * 2 (calculate both sides)
     totalBase = basePrice;
-    const baseDistance = 150;
-    const extraKm = Math.max(0, distanceKm - baseDistance);
-    const roundTripExtraKm = extraKm * 2;
-    extraKmDisplay = Math.round(roundTripExtraKm);
-    extraDistanceFare = roundTripExtraKm * extraKmCharge;
+    const extraKm = Math.max(0, distanceKm - 150);
+    extraKmDisplay = Math.round(extraKm * 2);
+    extraDistanceFare = extraKm * 2 * extraKmCharge;
   } else {
     // Below tier1 or gaps: basePrice + max(0, distance - tier1Min) * extraKmCharge
     totalBase = basePrice;

@@ -23,6 +23,8 @@ const MAX_DISTANCE_KM = 35;
 const PREDICTION_DEBOUNCE_MS = 320;
 
 const SELECT_FROM_LIST_MESSAGE_DEFAULT = 'Please select a location from the suggestions list';
+const LOCAL_LAST_DROP_MESSAGE =
+  'Last drop must be within 35 km of Visakhapatnam. Outstation places cannot be used on the Local tab.';
 
 const EMPTY_LOCATION: Location = {
   id: '',
@@ -152,16 +154,19 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 }, ref) {
   const enforceVizag35Km =
     isPickupLocation || restrictToVizagRadius || tripType === 'local';
+  const isLocalLastDrop = tripType === 'local' && !isPickupLocation;
   const isTourPickup = tripType === 'tour' && isPickupLocation;
   const vizagBiasRadiusKm = isTourPickup
     ? TOUR_PICKUP_RADIUS_KM
-    : tripType === 'airport'
+    : tripType === 'airport' && !isPickupLocation
       ? BHOGAPURAM_AIRPORT_CATCHMENT_KM
       : MAX_DISTANCE_KM;
   const selectFromListMessage = airportOnly
     ? 'Select Alluri Sitarama Raju International Airport or Vizag City Airport (NAD)'
     : isTourPickup
     ? 'Select a pickup within 20 km of Vizag Taxi Hub.'
+    : isLocalLastDrop
+    ? LOCAL_LAST_DROP_MESSAGE
     : enforceVizag35Km
     ? 'Select a valid location from suggestions (within 35 KM radius).'
     : SELECT_FROM_LIST_MESSAGE_DEFAULT;
@@ -300,8 +305,17 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
          filtered = filtered.filter((suggestion) => isWithinTourPickupRadius(suggestion));
        } else if (enforceVizag35Km || isAirportTransfer || isTourTrip) {
          filtered = filtered.filter(suggestion => {
+           if (isLocalLastDrop) {
+             return isWithinVizagRange(suggestion.lat, suggestion.lng);
+           }
            if (isVizagAirportLocation(suggestion)) return true;
-           if (isAirportTransfer && isAirportTransferOtherEnd(suggestion)) return true;
+           if (
+             isAirportTransfer &&
+             !isPickupLocation &&
+             isAirportTransferOtherEnd(suggestion)
+           ) {
+             return true;
+           }
            return isWithinVizagRange(suggestion.lat, suggestion.lng);
          });
        }
@@ -310,7 +324,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      } else {
        setFilteredSuggestions([]);
      }
-   }, [inputValue, suggestions, enforceVizag35Km, tripType, hideRestrictedAirportDrops, isPickupLocation, airportOnly, isTourPickup]);
+   }, [inputValue, suggestions, enforceVizag35Km, tripType, hideRestrictedAirportDrops, isPickupLocation, airportOnly, isTourPickup, isLocalLastDrop]);
 
   useEffect(() => {
     if (!isLoaded || !google) return;
@@ -345,7 +359,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
       if (!isOutstationDrop) {
         const biasCenter =
-          tripType === 'airport'
+          tripType === 'airport' && !isPickupLocation
             ? new google.maps.LatLng(BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng)
             : new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
         const circle = new google.maps.Circle({
@@ -353,7 +367,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           radius: vizagBiasRadiusKm * 1000,
         });
         request.bounds = circle.getBounds() as google.maps.LatLngBounds;
-        if (enforceVizag35Km && tripType !== 'airport') {
+        if (enforceVizag35Km) {
           request.strictBounds = true;
         }
       }
@@ -618,7 +632,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
       if (!isOutstationDrop) {
         const biasCenter =
-          tripType === 'airport'
+          tripType === 'airport' && !isPickupLocation
             ? new google.maps.LatLng(BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng)
             : new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
         const circle = new google.maps.Circle({
@@ -627,7 +641,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         });
         const bounds = circle.getBounds() as google.maps.LatLngBounds;
         options.bounds = bounds;
-        options.strictBounds = enforceVizag35Km && tripType !== 'airport';
+        options.strictBounds = enforceVizag35Km;
       }
 
       ac = new google.maps.places.Autocomplete(el, options);
@@ -659,25 +673,20 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             return;
           }
 
-          if (enforceVizag35Km && !isTourPickup && !isWithinVizagRange(lat, lng) && !placeIsVizagAirport) {
-            const pickedForRadius: Location = {
-              id: place.place_id || '',
-              name: place.name || '',
-              address: place.formatted_address || '',
-              city: '',
-              state: '',
-              lat,
-              lng,
-              type: 'other',
-              popularityScore: 0,
-            };
-            if (!(tripType === 'airport' && isAirportTransferOtherEnd(pickedForRadius))) {
-              toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
-              setInputValue('');
-              if (onChangeRef.current) onChangeRef.current('');
-              if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
-              return;
-            }
+          if (isLocalLastDrop && !isWithinVizagRange(lat, lng)) {
+            toast(LOCAL_LAST_DROP_MESSAGE);
+            setInputValue('');
+            if (onChangeRef.current) onChangeRef.current('');
+            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
+            return;
+          }
+
+          if (enforceVizag35Km && !isTourPickup && !isLocalLastDrop && !isWithinVizagRange(lat, lng) && !placeIsVizagAirport) {
+            toast('Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.');
+            setInputValue('');
+            if (onChangeRef.current) onChangeRef.current('');
+            if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
+            return;
           }
 
           if (isAirportTransfer && !enforceVizag35Km && !isAirportTransferOtherEnd({
@@ -745,6 +754,8 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     disabled,
     vizagBiasRadiusKm,
     isTourPickup,
+    isLocalLastDrop,
+    enforceVizag35Km,
   ]);
 
   const closeMobileSearchSheet = () => {
@@ -786,13 +797,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
        toast('Tour pickup must be within 20 km of Vizag Taxi Hub. Please choose a closer location.');
        return;
      }
+
+     if (isLocalLastDrop && !isWithinVizagRange(resolved.lat, resolved.lng)) {
+       toast(LOCAL_LAST_DROP_MESSAGE);
+       return;
+     }
      
-     // Pickup / carpool: must be within 35km of Vizag (airport pickup is allowed beyond 35 km)
-     if (enforceVizag35Km && !isTourPickup && !isWithinVizagRange(resolved.lat, resolved.lng) && !isVizagAirportLocation(resolved)) {
-       if (!(tripType === 'airport' && isAirportTransferOtherEnd(resolved))) {
-         toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
-         return;
-       }
+     // Pickup: must be within 35km of Vizag (airport campus itself is allowed)
+     if (enforceVizag35Km && !isTourPickup && !isLocalLastDrop && !isWithinVizagRange(resolved.lat, resolved.lng) && !isVizagAirportLocation(resolved)) {
+       toast("Selected location is outside the 35km radius from Visakhapatnam. Please select a location within Visakhapatnam city limits.");
+       return;
      }
      
      if (isAirportTransfer && !enforceVizag35Km && !isAirportTransferOtherEnd(resolved) && !isVizagAirportLocation(resolved)) {
@@ -831,6 +845,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
      }
      if (isTourPickup) {
        return 'Pickup must be within 20 km of Vizag Taxi Hub.';
+     }
+     if (isLocalLastDrop) {
+       return 'Last drop must be a local Vizag location (within 35 KM).';
      }
      if (enforceVizag35Km) {
        return 'Select a valid location from suggestions (within 35 KM radius).';

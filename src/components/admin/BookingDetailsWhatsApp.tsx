@@ -134,7 +134,7 @@ export function BookingDetailsWhatsApp({ booking, onClose }: BookingDetailsWhats
                   <CardContent>
                     {enrichingMsg ? (
                       <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md mb-3">
-                        Loading trip details from fleet pricing…
+                        Loading tour itinerary for WhatsApp…
                       </div>
                     ) : null}
                     <div className="text-xs whitespace-pre-line bg-gray-50 p-3 rounded-md mb-3 max-h-40 overflow-y-auto">

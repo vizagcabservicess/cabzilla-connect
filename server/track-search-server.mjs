@@ -92,6 +92,25 @@ function formatRouteSummary(body) {
   return oneWayLine(parts.join(' · '));
 }
 
+function guestDigitsForWa(guestPhone) {
+  const d = String(guestPhone || '').replace(/\D/g, '');
+  if (d.length === 10) return `91${d}`;
+  return d;
+}
+
+function buildGuestChatUrl(body) {
+  const digits = guestDigitsForWa(body.guestPhone);
+  if (digits.length < 11) return '';
+  const trip = String(body.tripType || '').split('\n')[0].trim();
+  const lines = ['Hi, this is Vizag Taxi Hub.'];
+  lines.push(`We received your${trip ? ` ${trip}` : ''} cab search.`);
+  if (body.pickup) lines.push(`Pickup: ${body.pickup}`);
+  if (body.drop) lines.push(`Drop: ${body.drop}`);
+  if (body.departure) lines.push(`Departure: ${body.departure}`);
+  lines.push('', 'How can we help you book?');
+  return `https://wa.me/${digits}?text=${encodeURIComponent(lines.join('\n'))}`;
+}
+
 function buildOwnerMessage(body) {
   const guest = body.guestPhone || '';
   const pickup = body.pickup || '';
@@ -106,6 +125,10 @@ function buildOwnerMessage(body) {
     viaStops && String(drop).toLowerCase().includes(`(via ${viaStops.toLowerCase()})`);
   const stopsLine =
     viaStops && !dropAlreadyHasStops ? `🛑 *Stops:* ${viaStops}\n` : '';
+  const chatUrl = buildGuestChatUrl(body);
+  const chatLine = chatUrl
+    ? `\n💬 *Chat guest:* ${chatUrl}\n(Opens WhatsApp with this guest — use your phone WhatsApp)\n`
+    : '';
 
   return (
     `🚖 *New Cab Search Alert!*\n\n` +
@@ -117,7 +140,8 @@ function buildOwnerMessage(body) {
     routeSummary +
     `📅 *Departure:* ${departure}\n` +
     `🚗 *Results:*\n${resultsBlock}\n` +
-    `⏰ *Searched At:* ${searchedAt}`
+    `⏰ *Searched At:* ${searchedAt}` +
+    chatLine
   );
 }
 

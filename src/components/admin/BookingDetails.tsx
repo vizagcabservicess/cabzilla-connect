@@ -15,6 +15,8 @@ import { convertUTCToLocal } from '@/lib/dateUtils';
 import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } from '@/utils/bookingUtils';
 import { mergeTripSummary, getDefaultTripSummary, getDefaultBillingAddress } from '@/utils/invoiceTripSummaryDefaults';
 import { resolveBookingAdvanceAmount } from '@/utils/bookingPaymentFields';
+import { BookingTourItinerary } from './BookingTourItinerary';
+import { isTourBooking } from '@/utils/tourConfirmationHelpers';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -132,6 +134,11 @@ export function BookingDetails({
   const isAssignmentDisabled = isCancelled || isCompleted;
   const isInvoiceDisabled = isCancelled;
   const isWhatsAppDisabled = false; // WhatsApp messaging is always enabled
+  const showTourItinerary = isTourBooking(
+    String(booking.tripType ?? booking.trip_type ?? ''),
+    booking.tour_id ?? booking.tourId,
+    booking
+  );
 
   // Construct the PDF URL for the invoice download
   const pdfUrl = `/api/admin/download-invoice.php?id=${booking.id}`;
@@ -173,6 +180,14 @@ export function BookingDetails({
           >
             Details
           </TabsTrigger>
+          {showTourItinerary && (
+            <TabsTrigger
+              value="itinerary"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Tour itinerary
+            </TabsTrigger>
+          )}
           <TabsTrigger 
             value="edit" 
             disabled={isEditDisabled}
@@ -240,8 +255,15 @@ export function BookingDetails({
                 {booking.dropLocation && <p className="text-sm mb-1"><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
                 <p className="text-sm mb-1"><span className="font-medium">Pickup Date:</span> {convertUTCToLocal(booking.pickupDate).toLocaleString()}</p>
                 <p className="text-sm mb-1"><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
+                {(booking.tourName || booking.tour_name) && (
+                  <p className="text-sm mb-1">
+                    <span className="font-medium">Tour:</span> {booking.tourName || booking.tour_name}
+                  </p>
+                )}
               </div>
             </div>
+
+            {showTourItinerary && <BookingTourItinerary booking={booking} />}
 
             {(booking.driverName || booking.driverPhone || booking.vehicleNumber) && (
               <div className="mt-3 border-t pt-3">
@@ -332,6 +354,14 @@ export function BookingDetails({
             </div>
           </Card>
         </TabsContent>
+
+        {showTourItinerary && (
+          <TabsContent value="itinerary" className="py-2">
+            <Card className="p-4">
+              <BookingTourItinerary booking={booking} variant="page" />
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="edit" className="py-2">
           <BookingEditForm

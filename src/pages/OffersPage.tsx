@@ -20,7 +20,7 @@ import { MobileNavigation } from '@/components/MobileNavigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
-import { saveHomePendingOffer } from '@/components/offers/OfferCampaignPopup';
+import { applyHomeOfferBookingPrefill } from '@/lib/applyHomeOfferBookingPrefill';
 import type { OfferCampaignCategory, OfferCampaignPublic } from '@/types/offerCampaign';
 import {
   OFFER_CAMPAIGN_CATEGORIES,
@@ -57,23 +57,6 @@ function categoryIcon(category: string) {
   if (category === 'outstation_round_trip') return Route;
   if (category.startsWith('outstation')) return Car;
   return MapPin;
-}
-
-function bookPathForCategory(category: string): string {
-  switch (category) {
-    case 'airport':
-      return '/airport-taxi';
-    case 'local':
-      return '/local-taxi';
-    case 'tour':
-      return '/tours';
-    case 'outstation_one_way':
-    case 'outstation_round_trip':
-    case 'outstation':
-      return '/outstation-taxi';
-    default:
-      return '/';
-  }
 }
 
 function formatCountdown(endsAt: string): string {
@@ -144,17 +127,14 @@ export default function OffersPage() {
   };
 
   const bookWithOffer = (c: OfferCampaignPublic) => {
-    saveHomePendingOffer(c);
+    applyHomeOfferBookingPrefill(c, navigate);
     toast({
       title: 'Coupon ready',
-      description: `${c.coupon_code} will apply when you book this pickup to destination${
-        formatOfferRouteScope(c)
-          ? ` (${formatOfferRouteScope(c)})`
-          : ''
+      description: `${c.coupon_code} is saved. Review pickup, drop, and time — then search${
+        formatOfferRouteScope(c) ? ` (${formatOfferRouteScope(c)})` : ''
       }.`,
       duration: 3500,
     });
-    navigate(bookPathForCategory(c.category));
   };
 
   return (

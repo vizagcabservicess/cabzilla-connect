@@ -165,3 +165,30 @@ export function smartBudgetWhatsAppShareUrl(opts: {
     phone.length === 10 ? `91${phone}` : phone.length >= 10 ? phone : '';
   return waPhone ? `https://wa.me/${waPhone}?text=${text}` : `https://wa.me/?text=${text}`;
 }
+
+/** E.164 digits for wa.me (India 10-digit numbers get 91). */
+export function toWhatsAppChatDigits(phone: string | null | undefined): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
+/** Open a 1:1 WhatsApp chat with the searching guest (personal / Business app). */
+export function guestSearchWhatsAppChatUrl(opts: {
+  guestPhone: string;
+  pickup?: string;
+  drop?: string;
+  departure?: string;
+  tripType?: string;
+}): string | null {
+  const waPhone = toWhatsAppChatDigits(opts.guestPhone);
+  if (waPhone.length < 11) return null;
+  const trip = (opts.tripType || '').split('\n')[0].trim();
+  const lines = ['Hi, this is Vizag Taxi Hub.'];
+  lines.push(`We received your${trip ? ` ${trip}` : ''} cab search.`);
+  if (opts.pickup?.trim()) lines.push(`Pickup: ${opts.pickup.trim()}`);
+  if (opts.drop?.trim()) lines.push(`Drop: ${opts.drop.trim()}`);
+  if (opts.departure?.trim()) lines.push(`Departure: ${opts.departure.trim()}`);
+  lines.push('', 'How can we help you book?');
+  return `https://wa.me/${waPhone}?text=${encodeURIComponent(lines.join('\n'))}`;
+}

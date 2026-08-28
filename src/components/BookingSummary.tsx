@@ -8,7 +8,7 @@ import { isValidTripDate } from '@/lib/dateUtils';
 import { Car, MapPin, Calendar, User, Info, ChevronDown, ChevronUp, Tag, Users, Briefcase, Fuel, Check, X, Edit2, MessageCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getLocalPackagePrice } from '@/lib/packageData';
-import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
+import { calculateFare, calculateOutstationRoundTripFare, OUTSTATION_INCLUDED_KM_PER_DAY, oneWayOutstationExtra } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -61,13 +61,15 @@ export const BookingSummary = ({
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
 
   // Only recalculate if no breakdown was passed - this ensures consistency with the fare shown in the list
+  const oneWayViaStops = tripType === 'outstation' && tripMode === 'one-way' && intermediateStops.length > 0;
   const { fareData, isLoading } = useFare(
     selectedCab?.id || '',
     tripType,
     distance,
     tripType === 'local' ? hourlyPackage : (tripType === 'outstation' ? tripMode : undefined),
     pickupDate,
-    tripType === 'outstation' && tripMode === 'round-trip' ? returnDate : undefined
+    tripType === 'outstation' && tripMode === 'round-trip' ? returnDate : undefined,
+    oneWayViaStops
   );
 
   // Debug: Log the fare data from useFare hook
@@ -316,13 +318,14 @@ export const BookingSummary = ({
         setExtraDistanceFare(passedBreakdown.extraDistanceFare || 0);
         setCalculatedFare(totalPrice); // ALWAYS use the totalPrice prop which matches what was shown in list
         
-        // Calculate extra distance from extraDistanceFare and extraKmCharge
-        if (tripType === 'outstation' && tripMode === 'one-way' && passedBreakdown.extraDistanceFare && passedBreakdown.extraKmCharge) {
-          const extraKmCharge = passedBreakdown.extraKmCharge;
-          const extraDistanceFare = passedBreakdown.extraDistanceFare;
-          const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
-          setExtraDistance(calculatedExtraKm);
-          console.log('BookingSummary: Calculated extra distance for one-way:', calculatedExtraKm, 'km');
+        if (tripType === 'outstation' && tripMode === 'one-way') {
+          const fromBreakdown =
+            typeof passedBreakdown.extraKm === 'number' ? passedBreakdown.extraKm : null;
+          setExtraDistance(
+            fromBreakdown != null && fromBreakdown > 0
+              ? fromBreakdown
+              : oneWayOutstationExtra(distance, 1, oneWayViaStops).extraKm
+          );
         }
       }
       return; // Don't process fareData if we have passedBreakdown
@@ -345,15 +348,14 @@ export const BookingSummary = ({
       setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
       setCalculatedFare(fareData.totalPrice);
       
-      // Calculate extra distance from extraDistanceFare and extraKmCharge
-      if (tripType === 'outstation' && tripMode === 'one-way' && fareData.breakdown.extraDistanceFare && fareData.breakdown.extraKmCharge) {
-        const extraKmCharge = fareData.breakdown.extraKmCharge;
-        const extraDistanceFare = fareData.breakdown.extraDistanceFare;
-        // For one-way outstation, extraDistanceFare is already calculated as roundTripExtraKm * extraKmCharge
-        // So we just need to divide by extraKmCharge (not 2*extraKmCharge) to get the round-trip extra km
-        const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
-        setExtraDistance(calculatedExtraKm);
-        console.log('BookingSummary: Calculated extra distance for one-way:', calculatedExtraKm, 'km');
+      if (tripType === 'outstation' && tripMode === 'one-way') {
+        const fromBreakdown =
+          typeof fareData.breakdown.extraKm === 'number' ? fareData.breakdown.extraKm : null;
+        setExtraDistance(
+          fromBreakdown != null && fromBreakdown > 0
+            ? fromBreakdown
+            : oneWayOutstationExtra(distance, 1, oneWayViaStops).extraKm
+        );
       }
     }
 
@@ -363,7 +365,7 @@ export const BookingSummary = ({
       console.log('Tier used:', fareData.breakdown.tierUsed);
       console.log('Base price from tier:', fareData.basePrice);
     }
-  }, [passedBreakdown, fareData, selectedCab, tripType, tripMode, totalPrice]);
+  }, [passedBreakdown, fareData, selectedCab, tripType, tripMode, totalPrice, distance, oneWayViaStops]);
 
   useEffect(() => {
     // Skip if breakdown was passed - don't recalculate on package change
@@ -491,15 +493,14 @@ export const BookingSummary = ({
       setNightCharges(fareData.breakdown.nightCharges || 0);
       setExtraDistanceFare(fareData.breakdown.extraDistanceFare || 0);
       
-      // Calculate extra distance from extraDistanceFare and extraKmCharge
-      if (fareData.breakdown.extraDistanceFare && fareData.breakdown.extraKmCharge) {
-        const extraKmCharge = fareData.breakdown.extraKmCharge;
-        const extraDistanceFare = fareData.breakdown.extraDistanceFare;
-        // For one-way outstation, extraDistanceFare is already calculated as roundTripExtraKm * extraKmCharge
-        // So we just need to divide by extraKmCharge (not 2*extraKmCharge) to get the round-trip extra km
-        const calculatedExtraKm = Math.round(extraDistanceFare / extraKmCharge);
-        setExtraDistance(calculatedExtraKm);
-        console.log('BookingSummary: Calculated extra distance in recalculateFareDetails:', calculatedExtraKm, 'km');
+      if (fareData.breakdown.extraDistanceFare) {
+        const fromBreakdown =
+          typeof fareData.breakdown.extraKm === 'number' ? fareData.breakdown.extraKm : null;
+        setExtraDistance(
+          fromBreakdown != null && fromBreakdown > 0
+            ? fromBreakdown
+            : oneWayOutstationExtra(distance, 1, oneWayViaStops).extraKm
+        );
       }
       return;
     }
@@ -593,10 +594,9 @@ export const BookingSummary = ({
             } else if (distance >= tier4Min && distance <= tier4Max) {
               basePrice = outstationFares.tier4Price || (outstationFares.basePrice * 1.6);
             } else if (distance > tier4Max) {
-              // For distances beyond tier4Max, use traditional calculation
               basePrice = outstationFares.basePrice;
-              const extraKm = distance - tier4Max;
-              extraDistanceFare = extraKm * extraKmCharge;
+              const extra = oneWayOutstationExtra(distance, extraKmCharge, oneWayViaStops);
+              extraDistanceFare = extra.extraDistanceFare;
             } else {
               // For distances less than tier1Min, use traditional calculation
               basePrice = outstationFares.basePrice;
@@ -611,9 +611,8 @@ export const BookingSummary = ({
             
             // Calculate and store extra distance for one-way display
             let calculatedExtraKm = 0;
-            const baseDistanceForCharging = 300; // Use 150km as base for charging, not tier4Max
             if (distance > tier4Max) {
-              calculatedExtraKm = distance - baseDistanceForCharging;
+              calculatedExtraKm = oneWayOutstationExtra(distance, extraKmCharge, oneWayViaStops).extraKm;
             } else if (distance < tier1Min) {
               calculatedExtraKm = Math.max(0, distance - tier1Min);
             }
@@ -1003,21 +1002,51 @@ export const BookingSummary = ({
   };
 
   useEffect(() => {
-    if (onFinalTotalChange) {
-      // If breakdown was passed, use the totalPrice prop to ensure consistency
-      if (passedBreakdown) {
-        onFinalTotalChange(totalPrice);
-      } else if (tripType === 'local') {
-        onFinalTotalChange(localTotal);
-      } else if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
-        onFinalTotalChange(outstationBreakdown.totalFare);
-      } else if (fareData?.totalPrice && fareData.totalPrice > 0) {
-        onFinalTotalChange(fareData.totalPrice);
-      } else {
-        onFinalTotalChange(sumBreakdown(fareData?.breakdown || {}));
-      }
+    if (!onFinalTotalChange) return;
+
+    if (passedBreakdown) {
+      onFinalTotalChange(totalPrice);
+      return;
     }
-  }, [passedBreakdown, totalPrice, localTotal, fareData?.breakdown, fareData?.totalPrice, tripType, tripMode, outstationBreakdown, onFinalTotalChange]);
+    if (tripType === 'local') {
+      onFinalTotalChange(localTotal);
+      return;
+    }
+    if (tripType === 'outstation' && tripMode === 'round-trip' && outstationBreakdown) {
+      onFinalTotalChange(outstationBreakdown.totalFare);
+      return;
+    }
+
+    const selectedId = selectedCab?.id ? normalizeVehicleId(selectedCab.id) : '';
+    const fareMatchesCab =
+      Boolean(fareData?.totalPrice && fareData.totalPrice > 0) &&
+      Boolean(selectedId) &&
+      (!fareData?.cabId || fareData.cabId === selectedId);
+
+    if (isLoading && !fareMatchesCab) {
+      return;
+    }
+    if (fareMatchesCab && fareData?.totalPrice) {
+      onFinalTotalChange(fareData.totalPrice);
+      return;
+    }
+    if (totalPrice > 0) {
+      onFinalTotalChange(totalPrice);
+    }
+  }, [
+    passedBreakdown,
+    totalPrice,
+    localTotal,
+    fareData?.breakdown,
+    fareData?.totalPrice,
+    fareData?.cabId,
+    isLoading,
+    selectedCab?.id,
+    tripType,
+    tripMode,
+    outstationBreakdown,
+    onFinalTotalChange,
+  ]);
 
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !isValidTripDate(pickupDate)) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
@@ -1345,9 +1374,7 @@ export const BookingSummary = ({
     if (tripMode === 'round-trip') {
       includedKm = distance * 2; // Actual round-trip distance
     } else if (tripMode === 'one-way') {
-      // For one-way outstation, there is no included km in the base price
-      // Extra charges apply from km 1 onwards based on the actual distance traveled
-      includedKm = 0;
+      includedKm = oneWayViaStops ? OUTSTATION_INCLUDED_KM_PER_DAY : 0;
     }
   }
 
@@ -1415,7 +1442,10 @@ export const BookingSummary = ({
   } else if (tripType === 'outstation') {
     if (computedExtraKmCharge > 0) {
       if (tripMode === 'one-way') {
-        policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance (charged on double distance i.e., distance × 2)` });
+        if (includedKm > 0) {
+          policyItems.push({ text: `${includedKm} Kms included.` });
+        }
+        policyItems.push({ text: `₹${computedExtraKmCharge}/Km will be charged for extra distance` });
       } else {
         if (includedKm > 0) {
           policyItems.push({ text: `${includedKm} Kms included.` });

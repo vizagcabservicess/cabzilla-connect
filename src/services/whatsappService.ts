@@ -8,7 +8,10 @@ import {
   coalesceTourInclusionsExclusions,
   coalesceTourItinerary,
   formatTourItineraryForWhatsApp,
+  isGenericTourName,
   isTourBooking,
+  packageNarrativeFromBooking,
+  itineraryFromPackageNarrative,
   resolveTourDurationForConfirmation,
 } from '@/utils/tourConfirmationHelpers';
 import { parseSeatsFromVehicleLabel } from '@/utils/enrichBookingForWhatsApp';
@@ -212,7 +215,7 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     : booking.dropLocation || 'N/A';
   
   // If it's a tour booking, override the drop location with tour name
-  if ((tripType === 'tour' || tourId) && tourName) {
+  if ((tripType === 'tour' || tourId) && tourName && !isGenericTourName(tourName)) {
     dropLocation = tourName;
   } else if (tripType === 'tour' && !tourName && dropLocation && pickupLocation) {
     const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
@@ -759,6 +762,20 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   if (dropLocation === 'N/A' && tripType !== 'tour') {
     destinationDisplay = tripType === 'local' ? 'Local City Ride' : 'As per itinerary';
   }
+  if (tripType === 'tour' || tourId) {
+    if (tourName && !isGenericTourName(tourName)) {
+      destinationDisplay = tourName;
+    } else {
+      const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
+      const d0 = String(dropLocation || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+      if (!d0 || d0 === p0 || isGenericTourName(d0) || d0 === 'n/a') {
+        destinationDisplay = 'As per itinerary';
+      }
+    }
+  }
 
   const hasWaitingInfo =
     isPresentableValue(waitingChargePerHour) && isPresentableValue(graceMinutes);
@@ -804,7 +821,12 @@ ${allNotes}`;
 
   const tourBooking = tourBookingForLists;
   const itineraryDays = coalesceTourItinerary(booking);
-  const itineraryWhatsApp = formatTourItineraryForWhatsApp(itineraryDays);
+  let itineraryWhatsApp = formatTourItineraryForWhatsApp(itineraryDays);
+  if (!itineraryWhatsApp) {
+    itineraryWhatsApp = formatTourItineraryForWhatsApp(
+      itineraryFromPackageNarrative(packageNarrativeFromBooking(booking))
+    );
+  }
   const tourRef = String(tourId || booking.tour_id || booking.tourId || '').trim();
   const tourDurationLine = resolveTourDurationForConfirmation(booking);
 
@@ -863,7 +885,7 @@ ${tripType === 'local' ? `*Package Limits*
 
 ${tripType === 'outstation' ? `*Outstation Charges*
 🛣️ *Kilometers included:* ${isRoundTrip ? `${outstationKmIncluded} km (round-trip distance)` : outstationKmIncluded === '0' ? '0 km (charges from km 1)' : `${outstationKmIncluded} km`}
-📈 *Extra distance:* ₹${outstationExtraKm}/km${isRoundTrip ? '' : ' (charged on double distance i.e., distance × 2)'}
+📈 *Extra distance:* ₹${outstationExtraKm}/km
 ⏱️ *Extra charges:* ₹${outstationExtraHour}/hour${isRoundTrip ? ' (12 hours per day for round-trip)' : ''}
 🔧 *Special:* During ghat roads and standby AC will turned off` : ''}
 

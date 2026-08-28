@@ -80,3 +80,20 @@ export function routePointsWithStops(
 ): Location[] {
   return [pickup, ...filledOutstationStops(stops), drop];
 }
+
+/**
+ * One-way with stops is billed garage-to-garage: pickup → stops → drop → pickup.
+ * One-way without stops stays pickup → drop (original Distance Matrix path).
+ */
+export function bookedOutstationRoutePoints(
+  pickup: Location,
+  drop: Location,
+  stops: Array<Location | null | undefined>,
+  tripMode: 'one-way' | 'round-trip'
+): Location[] {
+  const outward = routePointsWithStops(pickup, drop, stops);
+  if (tripMode === 'one-way' && filledOutstationStops(stops).length > 0) {
+    return [...outward, pickup];
+  }
+  return outward;
+}

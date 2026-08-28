@@ -307,17 +307,28 @@ function normalizeAirportText(text: string): string {
   return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function textMentionsAirport(text: string): boolean {
+  const blob = normalizeAirportText(text);
+  return blob.includes('airport') || /\bvtz\b/.test(blob);
+}
+
+/**
+ * True only when the text is actually about the old NAD / city airport —
+ * not nearby localities (Gajuwaka, NAD Junction, etc.).
+ */
 function textHasCityAirportCampus(text: string): boolean {
   const blob = normalizeAirportText(text);
   if (!blob) return false;
-  return (
-    /\bnad\b/.test(blob) ||
-    blob.includes('gajuwaka') ||
+  if (
     blob.includes('ins dega') ||
     blob.includes('city airport') ||
     blob.includes('vizag city airport') ||
     blob.includes('vizag_city_airport')
-  );
+  ) {
+    return true;
+  }
+  if (!textMentionsAirport(blob)) return false;
+  return /\bnad\b/.test(blob) || blob.includes('gajuwaka');
 }
 
 function textHasBhogapuramAirport(text: string): boolean {
@@ -490,7 +501,8 @@ export function locationMatchesSearchQuery(location: Location, query: string): b
   }
   if (location.type !== 'airport') return false;
   if (location.id === 'vizag_city_airport') {
-    return textHasCityAirportCampus(q);
+    const blob = normalizeAirportText(q);
+    return textHasCityAirportCampus(q) || /\bnad\b/.test(blob);
   }
   return VIZAG_AIRPORT_QUERY_ALIASES.some(
     (alias) => q.includes(alias) || (alias.length >= 8 && alias.includes(q))

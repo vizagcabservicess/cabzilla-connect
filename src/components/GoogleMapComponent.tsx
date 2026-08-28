@@ -10,6 +10,8 @@ interface GoogleMapComponentProps {
   dropLocation: Location;
   tripType: string;
   waypoints?: Location[];
+  /** Outstation one-way: route drop then return to pickup (garage-to-garage). */
+  returnToPickup?: boolean;
   onDistanceCalculated?: (distance: number, duration: number) => void;
   mapHeight?: string;
 }
@@ -24,12 +26,14 @@ const directionsCache = new Map<string, google.maps.DirectionsResult>();
 const generateCacheKey = (
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number },
-  waypoints: Array<{ lat: number; lng: number }>
+  waypoints: Array<{ lat: number; lng: number }>,
+  returnToPickup: boolean
 ): string => {
   const via = waypoints.map((point) => `${point.lat},${point.lng}`).join('|');
+  const prefix = returnToPickup ? 'garage:' : '';
   return via
-    ? `${origin.lat},${origin.lng}_${via}_${destination.lat},${destination.lng}`
-    : `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
+    ? `${prefix}${origin.lat},${origin.lng}_${via}_${destination.lat},${destination.lng}`
+    : `${prefix}${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
 };
 
 const GoogleMapComponent = ({ 
@@ -37,6 +41,7 @@ const GoogleMapComponent = ({
   dropLocation,
   tripType,
   waypoints = [],
+  returnToPickup = false,
   onDistanceCalculated,
   mapHeight = '400px',
 }: GoogleMapComponentProps) => {
@@ -86,7 +91,9 @@ const GoogleMapComponent = ({
   const hasValidCoords = (loc: any) =>
     loc && typeof loc.lat === 'number' && typeof loc.lng === 'number' &&
     !isNaN(loc.lat) && !isNaN(loc.lng) && (loc.lat !== 0 || loc.lng !== 0);
-  const samePoint = Math.abs(pickupCoords.lat - dropCoords.lat) < 1e-6 &&
+  const samePoint =
+    !returnToPickup &&
+    Math.abs(pickupCoords.lat - dropCoords.lat) < 1e-6 &&
     Math.abs(pickupCoords.lng - dropCoords.lng) < 1e-6;
   
   // Set the center to the pickup location
@@ -108,7 +115,7 @@ const GoogleMapComponent = ({
     if (!map || !directionsService || !google || distanceCalculated.current) return;
 
     const fetchDirections = async () => {
-      const cacheKey = generateCacheKey(pickupCoords, dropCoords, waypointCoords);
+      const cacheKey = generateCacheKey(pickupCoords, dropCoords, waypointCoords, returnToPickup);
 
       // Check cache first
       if (directionsCache.has(cacheKey)) {
@@ -126,12 +133,17 @@ const GoogleMapComponent = ({
       }
 
       try {
-        console.log("Calculating directions between:", pickupCoords, dropCoords);
+        const routeWaypoints = returnToPickup
+          ? [...waypointCoords, dropCoords]
+          : waypointCoords;
+        console.log("Calculating directions between:", pickupCoords, dropCoords, {
+          returnToPickup,
+        });
 
         const results = await directionsService.route({
           origin: pickupCoords,
-          destination: dropCoords,
-          waypoints: waypointCoords.map((coords) => ({
+          destination: returnToPickup ? pickupCoords : dropCoords,
+          waypoints: routeWaypoints.map((coords) => ({
             location: coords,
             stopover: true,
           })),
@@ -151,12 +163,12 @@ const GoogleMapComponent = ({
     };
 
     fetchDirections();
-  }, [map, directionsService, pickupCoords, dropCoords, waypointKey, google, tripType, samePoint, pickupLocation, dropLocation, onDistanceCalculated]);
+  }, [map, directionsService, pickupCoords, dropCoords, waypointKey, google, tripType, samePoint, pickupLocation, dropLocation, onDistanceCalculated, returnToPickup, waypointCoords]);
   
   // Reset the calculated flag when locations or tripType change
   useEffect(() => {
     distanceCalculated.current = false;
-  }, [pickupLocation, dropLocation, tripType, waypointKey]);
+  }, [pickupLocation, dropLocation, tripType, waypointKey, returnToPickup]);
   
   // Add this after the main useEffect for fetching directions
   useEffect(() => {

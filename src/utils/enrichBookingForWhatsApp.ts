@@ -2,6 +2,7 @@ import { bookingAPI } from '@/services/api/bookingAPI';
 import type { Booking } from '@/types/api';
 import type { CabType } from '@/types/cab';
 import { enrichTourBookingFromCatalog } from '@/utils/enrichTourBookingForConfirmation';
+import { packageNarrativeFromBooking } from '@/utils/tourConfirmationHelpers';
 import { getVehicleData } from '@/services/vehicleDataService';
 import {
   fetchAllOutstationFares,
@@ -193,6 +194,15 @@ export async function enrichBookingForWhatsApp(booking: Booking): Promise<Bookin
       const full = await bookingAPI.getBookingById(bookingId);
       if (full && typeof full === 'object') {
         merged = { ...merged, ...(full as Booking) };
+        if (!packageNarrativeFromBooking(merged) && packageNarrativeFromBooking(booking)) {
+          merged = {
+            ...merged,
+            inclusions: booking.inclusions ?? merged.inclusions,
+            adminNotes: booking.adminNotes ?? merged.adminNotes,
+            special_notes: booking.special_notes ?? merged.special_notes,
+            additionalRequirements: booking.additionalRequirements ?? merged.additionalRequirements,
+          };
+        }
       }
     } catch {
       /* keep list/summary booking */

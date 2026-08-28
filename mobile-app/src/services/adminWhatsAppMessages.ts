@@ -171,6 +171,69 @@ function normalizeTripTypeForConfirmationMobile(tripTypeRaw: string, booking: Bo
 
 type TourDay = { day: number; title: string; description: string; activities: string[] };
 
+function isGenericTourNameMobile(name: string): boolean {
+  const n = String(name || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  return n === '' || n === 'tour' || n === 'package' || n === 'tour package' || n === 'tour packages';
+}
+
+function looksLikePackageNarrativeMobile(text: string): boolean {
+  const s = String(text || '').trim();
+  if (s.length < 60) return false;
+  return /places\s+to\s+visit|day trip|padmapuram|katiki|borra caves/i.test(s);
+}
+
+function packageNarrativeFromBookingMobile(booking: Booking): string {
+  const chunks: string[] = [];
+  const push = (v: unknown) => {
+    if (v == null) return;
+    const s = Array.isArray(v)
+      ? v.map((x) => String(x).trim()).filter(Boolean).join('\n')
+      : String(v).trim();
+    if (looksLikePackageNarrativeMobile(s)) chunks.push(s);
+  };
+  push(booking.inclusions);
+  push(booking.adminNotes);
+  push(booking.admin_notes);
+  push(booking.special_notes);
+  push(booking.additionalRequirements);
+  push(booking.additional_requirements);
+  push(booking.notes);
+  if (!chunks.length) return '';
+  return chunks.sort((a: string, b: string) => b.length - a.length)[0] ?? '';
+}
+
+function itineraryFromPackageNarrativeMobile(text: string): TourDay[] {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  const placesIdx = raw.search(/places\s+to\s+visit/i);
+  let title = '';
+  let body = raw;
+  if (placesIdx >= 0) {
+    const before = raw
+      .slice(0, placesIdx)
+      .split('\n')
+      .map((l) => l.replace(/[\u200b\u200c\u200d\u2060\u00a0]/g, ' ').trim())
+      .filter(Boolean);
+    title = (before[0] || '').replace(/\s*:\s*\(.*$/, '').replace(/:+$/, '').trim();
+    body = raw.slice(placesIdx);
+  }
+  const activities: string[] = [];
+  for (const line of body.split(/\n+/)) {
+    const cleaned = line.replace(/[\u200b\u200c\u200d\u2060\u00a0]/g, ' ').trim();
+    if (/^(pricing|note|notes|inclusions|exclusions)\b/i.test(cleaned)) break;
+    const numbered = cleaned.match(/^\d+\s*[.)\-]\s*(.+)$/);
+    if (numbered?.[1]) {
+      const item = numbered[1].trim();
+      if (item && !/^-{3,}$/.test(item)) activities.push(item);
+    }
+  }
+  if (!activities.length) return [];
+  return [{ day: 1, title: title || 'Day plan', description: '', activities }];
+}
+
 function isTourBookingMobile(tripType: string, tourId: string | undefined | null, booking: Booking): boolean {
   const t = (tripType || '').toLowerCase();
   if (t === 'tour') return true;
@@ -209,7 +272,9 @@ function coalesceTourItineraryMobile(booking: Booking): TourDay[] {
     return out.sort((a, b) => a.day - b.day);
   };
   const b = booking as Booking & { tour_itinerary_json?: unknown; tourItinerary?: TourDay[] };
-  return parseValue(booking.tour_itinerary ?? b.tourItinerary ?? b.tour_itinerary_json);
+  const structured = parseValue(booking.tour_itinerary ?? b.tourItinerary ?? b.tour_itinerary_json);
+  if (structured.length) return structured;
+  return itineraryFromPackageNarrativeMobile(packageNarrativeFromBookingMobile(booking));
 }
 
 function formatTourItineraryMobile(days: TourDay[]): string {
@@ -222,7 +287,7 @@ function formatTourItineraryMobile(days: TourDay[]): string {
         d.activities?.length && d.activities.some((a) => String(a).trim())
           ? `\n${d.activities.map((a) => `• ${String(a).trim()}`).filter(Boolean).join('\n')}`
           : '';
-      return `📅 *Day ${d.day}*${titleLine}${desc}${actLine}`;
+      return `📅 *Day ${d.day < 1 ? 1 : d.day}*${titleLine}${desc}${actLine}`;
     })
     .join('\n\n');
 }
@@ -412,7 +477,7 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     : booking.dropLocation || 'N/A';
   
   // If it's a tour booking, override the drop location with tour name
-  if ((tripType === 'tour' || tourId) && tourName) {
+  if ((tripType === 'tour' || tourId) && tourName && !isGenericTourNameMobile(tourName)) {
     dropLocation = tourName;
   } else if (tripType === 'tour' && !tourName && dropLocation && pickupLocation) {
     const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
@@ -927,6 +992,20 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   if (dropLocation === 'N/A' && tripType !== 'tour') {
     destinationDisplay = tripType === 'local' ? 'Local City Ride' : 'As per itinerary';
   }
+  if (tripType === 'tour' || tourId) {
+    if (tourName && !isGenericTourNameMobile(tourName)) {
+      destinationDisplay = tourName;
+    } else {
+      const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
+      const d0 = String(dropLocation || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+      if (!d0 || d0 === p0 || isGenericTourNameMobile(d0) || d0 === 'n/a') {
+        destinationDisplay = 'As per itinerary';
+      }
+    }
+  }
 
   const hasWaitingInfo =
     isPresentableValue(waitingChargePerHour) && isPresentableValue(graceMinutes);
@@ -977,7 +1056,12 @@ ${allNotes}`;
 
   const tourBooking = tourBookingForLists;
   const itineraryDays = coalesceTourItineraryMobile(booking);
-  const itineraryWhatsApp = formatTourItineraryMobile(itineraryDays);
+  let itineraryWhatsApp = formatTourItineraryMobile(itineraryDays);
+  if (!itineraryWhatsApp) {
+    itineraryWhatsApp = formatTourItineraryMobile(
+      itineraryFromPackageNarrativeMobile(packageNarrativeFromBookingMobile(booking))
+    );
+  }
   const tourRef = String(tourId || booking.tour_id || booking.tourId || '').trim();
   const tourDurationLine = resolveTourDurationForConfirmationMobile(booking);
 
@@ -1035,7 +1119,7 @@ ${tripType === 'local' ? `*Package Limits*
 
 ${tripType === 'outstation' ? `*Outstation Charges*
 🛣️ *Kilometers included:* ${isRoundTrip ? `${outstationKmIncluded} km (round-trip distance)` : outstationKmIncluded === '0' ? '0 km (charges from km 1)' : `${outstationKmIncluded} km`}
-📈 *Extra distance:* ₹${outstationExtraKm}/km${isRoundTrip ? '' : ' (charged on double distance i.e., distance × 2)'}
+📈 *Extra distance:* ₹${outstationExtraKm}/km
 ⏱️ *Extra charges:* ₹${outstationExtraHour}/hour${isRoundTrip ? ' (12 hours per day for round-trip)' : ''}
 🔧 *Special:* During ghat roads and standby AC will turned off` : ''}
 

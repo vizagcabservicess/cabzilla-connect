@@ -3,7 +3,7 @@ import type { LocalFare, AirportFare } from '@/types/cab';
 import type { TripMode, TripType } from '@/lib/tripTypes';
 import { differenceInCalendarDays } from 'date-fns';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
-import { calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
+import { calculateOutstationRoundTripFare, oneWayOutstationExtra } from '@/lib/fareCalculationService';
 import { fetchAllOutstationFares, type OutstationFareData } from '@/services/outstationFareService';
 import { getLocalFares, getAirportFaresForVehicle } from '@/services/fareService';
 import { getAirportTransferFare } from '@/lib/airportFareForBooking';
@@ -59,7 +59,8 @@ function resolveOutstationFareRow(
 /** Mirrors `useFare` one-way outstation tier + traditional branches (guest search / CabList). */
 export function computeOutstationOneWayFareFromRow(
   outstationFares: OutstationFareData,
-  distance: number
+  distance: number,
+  viaStops: boolean = false
 ): number {
   if (distance <= 0) return 0;
 
@@ -90,10 +91,7 @@ export function computeOutstationOneWayFareFromRow(
     basePrice = outstationFares.tier4Price || (obp > 0 ? obp * 1.6 : legacyBase);
   } else if (distance > tier4Max) {
     basePrice = outstationFares.oneWayBasePrice;
-    const baseDistance = 150;
-    const extraKm = Math.max(0, distance - baseDistance);
-    const roundTripExtraKm = extraKm * 2;
-    extraDistanceFare = roundTripExtraKm * extraKmCharge;
+    extraDistanceFare = oneWayOutstationExtra(distance, extraKmCharge, viaStops).extraDistanceFare;
   } else {
     basePrice = outstationFares.oneWayBasePrice;
     const extraKm = Math.max(0, distance - tier1Min);
@@ -311,6 +309,7 @@ export type GuestSearchFareContext = {
   distance: number;
   pickupDate: Date;
   returnDate: Date | null | undefined;
+  viaStops?: boolean;
 };
 
 /**
@@ -320,7 +319,7 @@ export async function buildVehicleFareLinesForGuestTrack(
   cabs: CabType[],
   ctx: GuestSearchFareContext
 ): Promise<VehicleFareLine[]> {
-  const { tripType, tripMode, hourlyPackage, distance, pickupDate, returnDate } = ctx;
+  const { tripType, tripMode, hourlyPackage, distance, pickupDate, returnDate, viaStops = false } = ctx;
 
   let outstationAll: Record<string, OutstationFareData> = {};
   let localAll: Record<string, LocalFare> = {};
@@ -388,7 +387,7 @@ export async function buildVehicleFareLinesForGuestTrack(
       if (tripMode === 'round-trip' && !returnDate && distance > 0) {
         fare = outstationRoundTripFallbackTraditional(row, distance, pickupDate);
       } else {
-        fare = computeOutstationOneWayFareFromRow(row, distance);
+        fare = computeOutstationOneWayFareFromRow(row, distance, viaStops);
       }
     } else if (tripType === 'airport') {
       const af = airportById.get(cab.id);

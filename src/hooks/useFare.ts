@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { calculateFare, calculateOutstationRoundTripFare } from '@/lib/fareCalculationService';
+import { calculateFare, calculateOutstationRoundTripFare, oneWayOutstationExtra } from '@/lib/fareCalculationService';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { fetchOutstationFare } from '@/services/outstationFareService';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -12,6 +12,7 @@ interface FareBreakdown {
   driverAllowance?: number;
   nightCharges?: number;
   extraDistanceFare?: number;
+  extraKm?: number;
   packageLabel?: string;
   extraKmCharge?: number;
   extraHourCharge?: number;
@@ -28,6 +29,7 @@ interface FareData {
   breakdown: FareBreakdown;
   source?: string;
   timestamp?: number;
+  cabId?: string;
 }
 
 export function useFare(
@@ -36,7 +38,8 @@ export function useFare(
   distance: number, 
   packageType: string = '',
   pickupDate?: Date,
-  returnDate?: Date
+  returnDate?: Date,
+  oneWayViaStops: boolean = false
 ) {
   console.log(`useFare: Called for ${cabId} with package ${packageType}`);
   
@@ -305,6 +308,7 @@ export function useFare(
               let basePrice = 0;
               let driverAllowance = outstationFares.driverAllowance ?? 250;
               let extraDistanceFare = 0;
+              let extraKmBilled = 0;
               let extraKmCharge = outstationFares.extraKmCharge ?? 14; // Use extraKmCharge, fallback to 14
 
               // Get tier distance ranges (with defaults)
@@ -344,17 +348,14 @@ export function useFare(
                 tierUsed = 'tier4';
                 console.log(`useFare: Distance ${distance}km falls in Tier 4 (${tier4Min}-${tier4Max}km), using price: ₹${basePrice}`);
               } else if (distance > tier4Max) {
-                // For distances beyond tier4Max, use traditional calculation
                 basePrice = outstationFares.oneWayBasePrice;
-                const baseDistance = 150; // Use 150km as base distance
-                const extraKm = Math.max(0, distance - baseDistance);
-                const roundTripExtraKm = extraKm * 2; // Calculate both sides
-                extraDistanceFare = roundTripExtraKm * extraKmCharge;
+                const extra = oneWayOutstationExtra(distance, extraKmCharge, oneWayViaStops);
+                extraDistanceFare = extra.extraDistanceFare;
+                extraKmBilled = extra.extraKm;
+                extraKmBilled = extra.extraKm;
                 console.log(`useFare: Distance ${distance}km is beyond Tier 4, using traditional calculation:`);
                 console.log(`useFare: - Base Price: ₹${basePrice}`);
-                console.log(`useFare: - Base Distance: ${baseDistance}km`);
-                console.log(`useFare: - Extra KM (one-way): ${extraKm}km`);
-                console.log(`useFare: - Extra KM (round-trip): ${roundTripExtraKm}km`);
+                console.log(`useFare: - Extra KM: ${extra.extraKm}km`);
                 console.log(`useFare: - Extra KM Charge: ₹${extraKmCharge}`);
                 console.log(`useFare: - Extra Distance Fare: ₹${extraDistanceFare}`);
                 console.log(`useFare: - Total: ₹${basePrice} + ₹${extraDistanceFare} extra`);
@@ -363,6 +364,7 @@ export function useFare(
                 basePrice = outstationFares.oneWayBasePrice;
                 const extraKm = Math.max(0, distance - tier1Min);
                 extraDistanceFare = extraKm * extraKmCharge;
+                extraKmBilled = extraKm;
                 console.log(`useFare: Distance ${distance}km is below Tier 1, using traditional calculation: ₹${basePrice} + ₹${extraDistanceFare} extra`);
               }
 
@@ -383,6 +385,7 @@ export function useFare(
                 driverAllowance,
                 nightCharges,
                 extraDistanceFare,
+                extraKm: extraKmBilled,
                 extraKmCharge: extraKmCharge,
                 tierUsed: tierUsed
               };
@@ -639,7 +642,8 @@ export function useFare(
           basePrice: breakdown.basePrice || fare,
           breakdown,
           source,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          cabId: normalizedCabId,
         });
 
         if (tripType !== "outstation") {
@@ -664,7 +668,7 @@ export function useFare(
     calculateFareData();
     // Do not depend on toast — useToast() returns a new object identity every render
     // and was never used inside this effect (would infinite-loop fare calc).
-  }, [cabId, tripType, distance, packageType, pickupDate]);
+  }, [cabId, tripType, distance, packageType, pickupDate, returnDate, oneWayViaStops]);
 
   return { fareData, isLoading, error };
 }

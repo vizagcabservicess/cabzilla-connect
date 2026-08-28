@@ -33,6 +33,7 @@ import {
   generateDriverAssignmentMessage,
   generateUpcomingTripReminderMessage,
 } from '../services/adminWhatsAppMessages';
+import { enrichTourBookingFromCatalog } from '../utils/enrichTourBookingForConfirmation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AdminUpcomingTrips'>;
 
@@ -223,7 +224,8 @@ export function AdminUpcomingTripsScreen({ navigation }: Props) {
       }
       let text: string;
       if (kind === 'confirmation') {
-        text = generateBookingConfirmationMessage(full as any);
+        const enriched = await enrichTourBookingFromCatalog(full as Record<string, unknown>);
+        text = generateBookingConfirmationMessage(enriched);
       } else if (kind === 'driver') {
         text = generateDriverAssignmentMessage(full as any);
       } else {

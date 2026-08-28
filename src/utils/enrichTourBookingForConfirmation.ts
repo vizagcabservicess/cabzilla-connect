@@ -1,7 +1,8 @@
 import type { Booking } from '@/types/api';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import {
-  coalesceTourItinerary,
+  coalesceStructuredTourItinerary,
+  isGenericTourName,
   isTourBooking,
   mergeTourDetailIntoBooking,
   pickTourListItemByName,
@@ -17,8 +18,9 @@ export async function enrichTourBookingFromCatalog(booking: Booking): Promise<Bo
   if (!isTourBooking(tripTypeRaw, tid || null, booking)) return booking;
 
   const hasRef = Boolean(tid);
-  const hasItin = coalesceTourItinerary(booking).length > 0;
-  if (hasItin && hasRef) return booking;
+  const hasStructuredItin = coalesceStructuredTourItinerary(booking).length > 0;
+  const name = String(booking.tour_name ?? booking.tourName ?? '').trim();
+  if (hasStructuredItin && hasRef && !isGenericTourName(name)) return booking;
 
   try {
     const tours = await tourDetailAPI.getTours();

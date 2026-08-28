@@ -17,7 +17,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
-import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus, Link2 } from 'lucide-react';
+import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus, Link2, MessageCircle } from 'lucide-react';
 import { searchAlertsAPI, type SearchAlert } from '@/services/api/searchAlertsAPI';
 import { ConvertToBookingModal } from '@/components/admin/ConvertToBookingModal';
 import { smartBudgetAPI } from '@/services/api/smartBudgetAPI';
@@ -25,6 +25,7 @@ import {
   mapSearchAlertToSmartBudgetSession,
   smartBudgetCustomerSessionUrl,
   smartBudgetWhatsAppShareUrl,
+  guestSearchWhatsAppChatUrl,
 } from '@/utils/searchAlertSmartBudget';
 import {
   buildSearchAlertExportRows,
@@ -96,6 +97,21 @@ export default function SearchAlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<SearchAlert | null>(null);
   const [convertAlert, setConvertAlert] = useState<SearchAlert | null>(null);
   const [creatingSbAlertId, setCreatingSbAlertId] = useState<number | null>(null);
+
+  const handleChatGuestWhatsApp = (alert: SearchAlert) => {
+    const wa = guestSearchWhatsAppChatUrl({
+      guestPhone: alert.guestPhone,
+      pickup: alert.pickup,
+      drop: alert.drop,
+      departure: alert.departure,
+      tripType: alert.tripType,
+    });
+    if (!wa) {
+      toast.error('Guest number is not valid for WhatsApp');
+      return;
+    }
+    window.open(wa, '_blank', 'noopener,noreferrer');
+  };
 
   const handleCreateSmartBudgetLink = async (alert: SearchAlert) => {
     setCreatingSbAlertId(alert.id);
@@ -361,7 +377,7 @@ export default function SearchAlertsPage() {
                     <TableHead>Departure</TableHead>
                     <TableHead>Route</TableHead>
                     <TableHead className="min-w-[200px]">Results</TableHead>
-                    <TableHead className="w-[140px]">Actions</TableHead>
+                    <TableHead className="w-[220px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -420,7 +436,20 @@ export default function SearchAlertsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                          <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs whitespace-nowrap border-emerald-600 text-emerald-800 hover:bg-emerald-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleChatGuestWhatsApp(alert);
+                              }}
+                            >
+                              <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                              Chat guest
+                            </Button>
                             <Button
                               type="button"
                               variant="default"
@@ -562,7 +591,15 @@ export default function SearchAlertsPage() {
                   </p>
                 )}
               </div>
-              <DialogFooter>
+              <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  className="bg-emerald-700 hover:bg-emerald-800"
+                  onClick={() => handleChatGuestWhatsApp(selectedAlert)}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1.5" />
+                  Chat guest on WhatsApp
+                </Button>
                 <Button variant="outline" onClick={() => setSelectedAlert(null)}>
                   Close
                 </Button>

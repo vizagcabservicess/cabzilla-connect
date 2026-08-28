@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -13,9 +14,9 @@ import {
   loadHomeOfferCampaigns,
   markHomeOfferPopupSeen,
   markOfferPopupSeen,
-  saveHomePendingOffer,
   wasOfferPopupSeen,
 } from '@/components/offers/OfferCampaignPopup';
+import { applyHomeOfferBookingPrefill } from '@/lib/applyHomeOfferBookingPrefill';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import { cn } from '@/lib/utils';
 import {
@@ -177,6 +178,7 @@ export function HomeOfferCampaignPopup({
   categories?: OfferCampaignCategory[];
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<OfferCampaignPublic[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
@@ -261,18 +263,13 @@ export function HomeOfferCampaignPopup({
   const applySelected = () => {
     skipCloseLogRef.current = true;
     void offerCampaignAPI.public.logEvent('click', selected.id, selected.category);
-    saveHomePendingOffer(selected);
+    applyHomeOfferBookingPrefill(selected, navigate);
     toast({
       title: 'Coupon ready',
-      description: `${selected.coupon_code} saved for your next ${categoryLabel.toLowerCase()} booking.`,
+      description: `${selected.coupon_code} is saved. Review pickup, drop, and time — then search.`,
       duration: 4000,
     });
     setOpen(false);
-    window.setTimeout(() => {
-      document
-        .querySelector('[data-booking-widget], #booking-widget, .hero-booking')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
   };
 
   return (

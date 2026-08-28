@@ -12,6 +12,8 @@ export interface RoutePrefillPayload {
   tripType: TripType;
   tripMode: TripMode;
   autoTriggerSearch?: boolean;
+  /** ISO pickup datetime from an offer / deep link. Guest can still edit. */
+  pickupDate?: string;
 }
 
 export type HeaderSearchAction =

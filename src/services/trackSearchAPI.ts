@@ -28,7 +28,8 @@ export type TrackSearchPayload = {
 export function buildGuestTrackRouteKey(
   pickup: Location | null | undefined,
   drop: Location | null | undefined,
-  waypoints?: Array<Location | null | undefined> | null
+  waypoints?: Array<Location | null | undefined> | null,
+  tripMode?: TripMode | null
 ): string {
   if (!pickup || !drop) return '';
   if (!Number.isFinite(pickup.lat) || !Number.isFinite(pickup.lng)) return '';
@@ -39,7 +40,8 @@ export function buildGuestTrackRouteKey(
     .filter((stop): stop is Location => Boolean(stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lng)))
     .map((stop) => stop.placeId?.trim() || `${stop.lat.toFixed(5)}:${stop.lng.toFixed(5)}`)
     .join('|');
-  return via ? `${p}|via:${via}|${d}` : `${p}|${d}`;
+  const base = via ? `${p}|via:${via}|${d}` : `${p}|${d}`;
+  return tripMode ? `${base}|mode:${tripMode}` : base;
 }
 
 const hourlyPackageOptions = [

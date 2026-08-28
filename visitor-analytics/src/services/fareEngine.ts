@@ -532,7 +532,7 @@ export function computeOutstationOneWayFare(row: OutstationFareRow, distanceKm: 
     basePrice = row.oneWayBasePrice;
     const extraKm = Math.max(0, distance - 150);
     extraDistanceFare = extraKm * 2 * extraKmCharge;
-    tierUsed = `> ${t4Max}km (base + 2×extra km)`;
+    tierUsed = `> ${t4Max}km (base + extra km)`;
   } else {
     basePrice = row.oneWayBasePrice;
     extraDistanceFare = Math.max(0, distance - t1Min) * extraKmCharge;
