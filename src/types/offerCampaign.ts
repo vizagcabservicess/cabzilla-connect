@@ -65,6 +65,8 @@ export interface OfferCampaign {
   travel_date_to?: string | null;
   /** Earliest trip pickup clock time (HH:MM[:SS]). Null = any time. */
   travel_time_from?: string | null;
+  /** Latest trip pickup clock time (HH:MM[:SS]). Null = no end time. */
+  travel_time_to?: string | null;
   /** Offer route — mainly airport / outstation. Null = not shown. */
   pickup_location?: string | null;
   drop_location?: string | null;
@@ -107,6 +109,7 @@ export interface OfferCampaignPublic {
   travel_date_from?: string | null;
   travel_date_to?: string | null;
   travel_time_from?: string | null;
+  travel_time_to?: string | null;
   pickup_location?: string | null;
   drop_location?: string | null;
   pickup_lat?: number | null;
@@ -117,6 +120,10 @@ export interface OfferCampaignPublic {
   priority: OfferCampaignPriority;
   status: OfferCampaignStatus;
   pricing?: OfferCampaignPricing | null;
+  /** Limit offer to these vehicle slugs/ids. Empty / omitted = all vehicles. */
+  target_vehicle_ids?: string[];
+  /** Limit offer to these tour ids. Empty / omitted = all tours. */
+  target_tour_ids?: string[];
 }
 
 /** Vendor/driver-facing — no coupon code; offer size shown for payout clarity. */
@@ -192,6 +199,8 @@ export interface CreateOfferCampaignInput {
   travel_date_to?: string | null;
   /** Earliest trip pickup time (HH:MM). Blank = any time. */
   travel_time_from?: string | null;
+  /** Latest trip pickup time (HH:MM). Blank = no end time. */
+  travel_time_to?: string | null;
   pickup_location?: string | null;
   drop_location?: string | null;
   pickup_lat?: number | null;
@@ -209,11 +218,12 @@ export interface CreateOfferCampaignInput {
   target_tour_ids?: string[];
 }
 
-/** Fields accepted by admin updateCampaign (category & coupon are immutable). */
+/** Fields accepted by admin updateCampaign (coupon stays immutable). */
 export interface UpdateOfferCampaignInput {
   campaign_id: number;
   name: string;
   campaign_type: OfferCampaignType | string;
+  category: OfferCampaignCategory | string;
   offer_type: OfferCampaignOfferType;
   offer_value: number;
   eligible_own_fleet: boolean;
@@ -225,6 +235,7 @@ export interface UpdateOfferCampaignInput {
   travel_date_from?: string | null;
   travel_date_to?: string | null;
   travel_time_from?: string | null;
+  travel_time_to?: string | null;
   pickup_location?: string | null;
   drop_location?: string | null;
   pickup_lat?: number | null;
@@ -351,34 +362,50 @@ export function toOfferTravelTimeHm(date: Date | string | null | undefined): str
 }
 
 export function isOfferTravelTimeEligible(
-  campaign: { travel_time_from?: string | null },
+  campaign: { travel_time_from?: string | null; travel_time_to?: string | null },
   tripHm: string | null,
   requireWhenSet = true
 ): boolean {
   const from = normalizeOfferTravelTime(campaign.travel_time_from);
-  if (!from) return true;
+  const to = normalizeOfferTravelTime(campaign.travel_time_to);
+  if (!from && !to) return true;
   if (!tripHm) return !requireWhenSet;
   const trip = normalizeOfferTravelTime(tripHm);
   if (!trip) return !requireWhenSet;
-  return trip >= from;
+  if (from && trip < from) return false;
+  if (to && trip > to) return false;
+  return true;
 }
 
-/** e.g. "from 8:00 AM" */
-export function formatOfferTravelTimeFrom(raw?: string | null): string | null {
+function formatOfferClockTime(raw?: string | null): string | null {
   const t = normalizeOfferTravelTime(raw);
   if (!t) return null;
   const h = Number(t.slice(0, 2));
   const min = Number(t.slice(3, 5));
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `from ${h12}:${String(min).padStart(2, '0')} ${ampm}`;
+  return `${h12}:${String(min).padStart(2, '0')} ${ampm}`;
 }
 
-/** e.g. "trips on 22 Aug 2026, pickups from 8:00 AM" */
+/** e.g. "from 8:00 AM", "from 12:00 PM to 6:00 PM", or "until 6:00 PM" */
+export function formatOfferTravelTimeFrom(
+  raw?: string | null,
+  until?: string | null
+): string | null {
+  const start = formatOfferClockTime(raw);
+  const end = formatOfferClockTime(until);
+  if (start && end) return `from ${start} to ${end}`;
+  if (start) return `from ${start}`;
+  if (end) return `until ${end}`;
+  return null;
+}
+
+/** e.g. "trips on 22 Aug 2026, pickups from 8:00 AM to 6:00 PM" */
 export function formatOfferCouponWorksOn(campaign: {
   travel_date_from?: string | null;
   travel_date_to?: string | null;
   travel_time_from?: string | null;
+  travel_time_to?: string | null;
 }): string | null {
   const parts: string[] = [];
   const range = formatOfferTravelDateRange(
@@ -386,7 +413,7 @@ export function formatOfferCouponWorksOn(campaign: {
     campaign.travel_date_to
   );
   if (range) parts.push(`trips on ${range}`);
-  const time = formatOfferTravelTimeFrom(campaign.travel_time_from);
+  const time = formatOfferTravelTimeFrom(campaign.travel_time_from, campaign.travel_time_to);
   if (time) parts.push(`pickups ${time}`);
   return parts.length > 0 ? parts.join(', ') : null;
 }
@@ -395,6 +422,7 @@ export function offerCouponNotValidForTripMessage(campaign: {
   travel_date_from?: string | null;
   travel_date_to?: string | null;
   travel_time_from?: string | null;
+  travel_time_to?: string | null;
 }): string {
   const when = formatOfferCouponWorksOn(campaign);
   return when
@@ -653,4 +681,48 @@ export function normalizeOfferTargetId(raw?: string | null): string | null {
   const id = raw.trim().toLowerCase();
   if (!id) return null;
   return id.startsWith('tour_') ? id.slice(5) : id;
+}
+
+function offerTargetIdSet(raw?: string[] | null): string[] {
+  if (!raw?.length) return [];
+  const ids = raw
+    .map((id) => normalizeOfferTargetId(id))
+    .filter((id): id is string => Boolean(id));
+  return [...new Set(ids)];
+}
+
+/** Empty target list = every vehicle. When set, the selected vehicle must match. */
+export function isOfferVehicleEligible(
+  campaign: { target_vehicle_ids?: string[] | null },
+  vehicleId?: string | null
+): boolean {
+  const targets = offerTargetIdSet(campaign.target_vehicle_ids);
+  if (targets.length === 0) return true;
+  const selected = normalizeOfferTargetId(vehicleId);
+  return Boolean(selected && targets.includes(selected));
+}
+
+/** Empty target list = every tour. When set, the selected tour must match. */
+export function isOfferTourEligible(
+  campaign: { target_tour_ids?: string[] | null },
+  tourId?: string | null
+): boolean {
+  const targets = offerTargetIdSet(campaign.target_tour_ids);
+  if (targets.length === 0) return true;
+  const selected = normalizeOfferTargetId(tourId);
+  return Boolean(selected && targets.includes(selected));
+}
+
+export function isOfferSelectionEligible(
+  campaign: { target_vehicle_ids?: string[] | null; target_tour_ids?: string[] | null },
+  vehicleId?: string | null,
+  tourId?: string | null
+): boolean {
+  return isOfferVehicleEligible(campaign, vehicleId) && isOfferTourEligible(campaign, tourId);
+}
+
+export function offerCouponNotValidForSelectionMessage(category?: string | null): string {
+  return category === 'tour'
+    ? 'This coupon is not valid for the selected tour or vehicle'
+    : 'This coupon is not valid for the selected vehicle';
 }

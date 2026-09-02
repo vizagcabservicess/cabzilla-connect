@@ -89,6 +89,7 @@ function campaignToForm(c: OfferCampaign): CreateOfferCampaignInput {
     travel_date_from: c.travel_date_from ? c.travel_date_from.slice(0, 10) : '',
     travel_date_to: c.travel_date_to ? c.travel_date_to.slice(0, 10) : '',
     travel_time_from: c.travel_time_from ? c.travel_time_from.slice(0, 5) : '',
+    travel_time_to: c.travel_time_to ? c.travel_time_to.slice(0, 5) : '',
     max_redemptions: c.max_redemptions,
     max_per_customer: c.max_per_customer,
     popup_enabled: c.popup_enabled,
@@ -125,6 +126,7 @@ function emptyForm(): CreateOfferCampaignInput {
     travel_date_from: '',
     travel_date_to: '',
     travel_time_from: '',
+    travel_time_to: '',
     max_redemptions: null,
     max_per_customer: 1,
     popup_enabled: true,
@@ -272,6 +274,7 @@ export default function OfferCampaignsAdminPage() {
       const travelFrom = form.travel_date_from?.trim() || null;
       const travelTo = form.travel_date_to?.trim() || null;
       const travelTimeFrom = form.travel_time_from?.trim() || null;
+      const travelTimeTo = form.travel_time_to?.trim() || null;
       const pickupLocation = campaignShowsRoute(form.category)
         ? form.pickup_location?.trim() || null
         : null;
@@ -299,12 +302,18 @@ export default function OfferCampaignsAdminPage() {
         setSaving(false);
         return;
       }
+      if (travelTimeFrom && travelTimeTo && travelTimeTo < travelTimeFrom) {
+        toast.error('End pickup time must be at or after earliest pickup time');
+        setSaving(false);
+        return;
+      }
 
       if (editingId) {
         await offerCampaignAPI.admin.updateCampaign({
           campaign_id: editingId,
           name: form.name.trim(),
           campaign_type: form.campaign_type,
+          category: form.category,
           offer_type: form.offer_type,
           offer_value: form.offer_value,
           eligible_own_fleet: form.eligible_own_fleet,
@@ -316,6 +325,7 @@ export default function OfferCampaignsAdminPage() {
           travel_date_from: travelFrom,
           travel_date_to: travelTo,
           travel_time_from: travelTimeFrom,
+          travel_time_to: travelTimeTo,
           pickup_location: pickupLocation,
           drop_location: dropLocation,
           pickup_lat: pickupLat,
@@ -343,6 +353,7 @@ export default function OfferCampaignsAdminPage() {
           travel_date_from: travelFrom,
           travel_date_to: travelTo,
           travel_time_from: travelTimeFrom,
+          travel_time_to: travelTimeTo,
           pickup_location: pickupLocation,
           drop_location: dropLocation,
           pickup_lat: pickupLat,
@@ -540,8 +551,8 @@ export default function OfferCampaignsAdminPage() {
                   <CardDescription>
                     {editingId
                       ? campaigns.find((c) => c.id === editingId)?.status === 'expired'
-                        ? 'Extend Offer live until to put this campaign back on the website. Category and coupon stay the same.'
-                        : 'Category and coupon code cannot be changed after create. Cancel & create a new campaign if you need a different coupon.'
+                        ? 'Extend Offer live until to put this campaign back on the website. Coupon code stays the same.'
+                        : 'Coupon code cannot be changed after create. Category can be updated — publishing still allows only one active campaign per category.'
                       : 'Publishing auto-deactivates any other active campaign in the same category. Discount absorb-by is required for Own and Attached fleets.'}
                   </CardDescription>
                 </CardHeader>
@@ -578,9 +589,8 @@ export default function OfferCampaignsAdminPage() {
                     <div className="space-y-1">
                       <Label>Category</Label>
                       <select
-                        className="flex h-9 w-full rounded-md border px-3 text-sm"
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm cursor-pointer"
                         value={form.category}
-                        disabled={Boolean(editingId)}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
@@ -785,7 +795,7 @@ export default function OfferCampaignsAdminPage() {
                       </p>
                       <p className="text-[11px] text-muted-foreground mb-2">
                         Coupon applies only when the customer&apos;s pickup date falls in this range.
-                        Set earliest pickup time if vehicles reach later (e.g. 08:00 at the airport).
+                        Set earliest and end pickup time if vehicles reach later (e.g. 08:00–20:00 at the airport).
                         Leave dates or time blank for any travel date or time.
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -809,7 +819,7 @@ export default function OfferCampaignsAdminPage() {
                             }
                           />
                         </div>
-                        <div className="space-y-1 sm:col-span-2">
+                        <div className="space-y-1">
                           <Label>Earliest pickup time</Label>
                           <Input
                             type="time"
@@ -820,7 +830,21 @@ export default function OfferCampaignsAdminPage() {
                           />
                           <p className="text-[11px] text-muted-foreground">
                             Coupon works only if pickup is at or after this time. Leave blank for any
-                            time.
+                            start time.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>End pickup time</Label>
+                          <Input
+                            type="time"
+                            value={form.travel_time_to || ''}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, travel_time_to: e.target.value }))
+                            }
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Coupon works only if pickup is at or before this time. Leave blank for no
+                            end time.
                           </p>
                         </div>
                       </div>
@@ -1098,9 +1122,9 @@ export default function OfferCampaignsAdminPage() {
                             {formatOfferTravelDateRange(c.travel_date_from, c.travel_date_to)}
                           </p>
                         )}
-                        {formatOfferTravelTimeFrom(c.travel_time_from) && (
+                        {formatOfferTravelTimeFrom(c.travel_time_from, c.travel_time_to) && (
                           <p className="text-[11px] text-emerald-800 mt-0.5">
-                            Pickup time: {formatOfferTravelTimeFrom(c.travel_time_from)}
+                            Pickup time: {formatOfferTravelTimeFrom(c.travel_time_from, c.travel_time_to)}
                           </p>
                         )}
                         {c.status === 'scheduled' && Boolean(c.popup_enabled) && (

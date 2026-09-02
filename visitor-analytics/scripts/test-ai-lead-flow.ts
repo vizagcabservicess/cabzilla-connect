@@ -14,7 +14,15 @@ import {
   buildBookingCheckoutUrl,
   type AiLeadState,
 } from '../src/ai/assistant';
-import { extractRoutePlaces } from '../src/services/fareEngine';
+import { extractRoutePlaces, isLocalHourlyPackageIntent, looksLikeClockToken } from '../src/services/fareEngine';
+import {
+  extractFlexibleDate,
+  isAccommodationIntent,
+  isTwoDayArakuIntent,
+  isVehicleRateOnlyIntent,
+  parseFlexibleDate,
+  parseTripBlob,
+} from '../src/ai/chatIntents';
 
 let failed = 0;
 let passed = 0;
@@ -340,6 +348,69 @@ check('unknown tour id does not default to Araku', () => {
   const slug = tourCheckoutSlug(lead);
   assert.ok(!/araku/.test(slug), `got ${slug}`);
   assert.match(slug, /simhachalam/);
+});
+
+console.log('\n=== Live chat failure patterns ===');
+check('9pm to 12am is not a taxi route', () => {
+  assert.equal(extractRoutePlaces('Dormitory AC accommodation for 7 persons from 9pm to 12am'), null);
+  assert.equal(looksLikeClockToken('9pm'), true);
+});
+
+check('Vizag to arakku resolves as a route (not 960km junk)', () => {
+  const p = extractRoutePlaces('Vizag to arakku');
+  assert.ok(p);
+  assert.match(p!.to, /araku/i);
+});
+
+check('Novotel to airport at 07:00 am keeps both places', () => {
+  const p = extractRoutePlaces('Novotel to airport at 07:00 am');
+  assert.ok(p, 'expected route');
+  assert.match(p!.from, /novotel/i);
+  assert.match(p!.to, /airport/i);
+});
+
+check('flexible dates from real chats', () => {
+  assert.equal(parseFlexibleDate('15 October 2026'), '2026-10-15');
+  assert.equal(parseFlexibleDate('17th October'), extractFlexibleDate('17th October'));
+  assert.equal(parseFlexibleDate('25.08.26'), '2026-08-25');
+  assert.equal(extractFlexibleDate('At 15 October'), '2026-10-15');
+  assert.equal(extractFlexibleDate('on 7th September Monday')?.slice(5), '09-07');
+  assert.ok(extractFlexibleDate('23/10/2026'));
+});
+
+check('accommodation is not a cab quote', () => {
+  assert.equal(isAccommodationIntent('Dormitory AC Accommodation at Araku valley'), true);
+});
+
+check('Telugu innova rates detected as vehicle-rate intent', () => {
+  assert.equal(isVehicleRateOnlyIntent('నా innova Crysta కి బేరాలు చెప్పండి ప్లేస్ 7799553874'), true);
+});
+
+check('2-day Araku is distinct from 3D2N', () => {
+  assert.equal(isTwoDayArakuIntent('Aruku 2 days package'), true);
+  assert.equal(isTwoDayArakuIntent('3 days 2 nights Vizag and Araku tour package'), false);
+});
+
+check('local 8hr/80km chip is detected', () => {
+  assert.equal(isLocalHourlyPackageIntent('What is the local 8 hours / 80 km taxi package?'), true);
+});
+
+check('comma trip blob: airport, Jeypore, one-way, date, time, car', () => {
+  const blob = parseTripBlob('Vizag airport, Jeypore odisha, one-way, 14th August, 8 AM, Small car');
+  assert.match(String(blob.pickup), /airport/i);
+  assert.match(String(blob.dropoff), /jeypore/i);
+  assert.equal(blob.tripMode, 'one-way');
+  assert.equal(blob.vehicle, 'Sedan');
+  assert.ok(blob.travelDate);
+});
+
+check('15 October is date not a new destination', () => {
+  const lead = blankLead({ pickup: 'Vizag', dropoff: 'Araku Valley' });
+  applyVisitorMessageToLead(lead, 'At 15 October', [
+    { role: 'assistant', content: 'Which date do you need the cab?' },
+  ]);
+  assert.equal(lead.travelDate, '2026-10-15');
+  assert.match(String(lead.dropoff), /araku/i);
 });
 
 void Promise.all(pending).then(() => {

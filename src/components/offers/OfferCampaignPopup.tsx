@@ -236,7 +236,10 @@ export function OfferCampaignPopup({
     campaign.travel_date_from,
     campaign.travel_date_to
   );
-  const travelTimeFrom = formatOfferTravelTimeFrom(campaign.travel_time_from);
+  const travelTimeFrom = formatOfferTravelTimeFrom(
+    campaign.travel_time_from,
+    campaign.travel_time_to
+  );
   const route = formatOfferRouteScope(campaign);
   const clock = countdownParts(campaign.ends_at);
   void tick;
@@ -402,6 +405,21 @@ export function OfferCampaignPopup({
   );
 }
 
+function campaignPassesRouteAndTime(
+  campaign: OfferCampaignPublic | null,
+  tripRoute?: OfferTripRoute | null,
+  travelTime?: string | null
+): campaign is OfferCampaignPublic {
+  if (!campaign) return false;
+  if (campaignHasOfferRoute(campaign) && !isOfferRouteEligible(campaign, tripRoute, true)) {
+    return false;
+  }
+  if (travelTime && !isOfferTravelTimeEligible(campaign, travelTime, true)) {
+    return false;
+  }
+  return true;
+}
+
 /** Fetch active offer for category; popup once per browser session if enabled. */
 export async function loadOfferCampaignForSearch(
   category: string,
@@ -415,11 +433,19 @@ export async function loadOfferCampaignForSearch(
   campaign: OfferCampaignPublic | null;
   shouldShowPopup: boolean;
   grace_window_minutes: number;
+  /** True only when the selected vehicle/tour is in this campaign's target list. */
+  eligibleForSelection: boolean;
 }> {
   if (!isOfferCampaignCategory(category)) {
-    return { campaign: null, shouldShowPopup: false, grace_window_minutes: 15 };
+    return {
+      campaign: null,
+      shouldShowPopup: false,
+      grace_window_minutes: 15,
+      eligibleForSelection: false,
+    };
   }
   try {
+    const hasSelection = Boolean(vehicleId || tourId);
     const result = await offerCampaignAPI.public.getActiveOffer(
       category,
       websiteFare,
@@ -430,6 +456,7 @@ export async function loadOfferCampaignForSearch(
       travelTime
     );
     let campaign = result.campaign;
+    let eligibleForSelection = Boolean(hasSelection && campaign);
     // Legacy fallback: bare "outstation" campaign for one-way lookups
     if (!campaign && category === 'outstation_one_way') {
       const legacy = await offerCampaignAPI.public.getActiveOffer(
@@ -442,8 +469,10 @@ export async function loadOfferCampaignForSearch(
         travelTime
       );
       campaign = legacy.campaign;
+      eligibleForSelection = Boolean(hasSelection && campaign);
     }
-    // Vehicle/tour-specific campaigns still advertise before the matching cab is selected
+    // Advertise vehicle/tour-specific campaigns before the matching cab is selected.
+    // Never treat this unscoped listing as valid for the current vehicle/tour.
     if (!campaign) {
       const listing = await offerCampaignAPI.public.getActiveOffer(
         category,
@@ -455,6 +484,7 @@ export async function loadOfferCampaignForSearch(
         travelTime
       );
       campaign = listing.campaign;
+      eligibleForSelection = false;
     }
     if (!campaign && category === 'outstation_one_way') {
       const listingLegacy = await offerCampaignAPI.public.getActiveOffer(
@@ -467,33 +497,35 @@ export async function loadOfferCampaignForSearch(
         travelTime
       );
       campaign = listingLegacy.campaign;
+      eligibleForSelection = false;
     }
-    if (
-      campaign &&
-      campaignHasOfferRoute(campaign) &&
-      !isOfferRouteEligible(campaign, tripRoute, true)
-    ) {
+    if (!campaignPassesRouteAndTime(campaign, tripRoute, travelTime)) {
       campaign = null;
-    }
-    if (campaign && travelTime && !isOfferTravelTimeEligible(campaign, travelTime, true)) {
-      campaign = null;
+      eligibleForSelection = false;
     }
     if (!campaign) {
       return {
         campaign: null,
         shouldShowPopup: false,
         grace_window_minutes: result.grace_window_minutes,
+        eligibleForSelection: false,
       };
     }
     const seen = wasOfferPopupSeen(category, campaign.id);
-    const shouldShowPopup = Boolean(campaign.popup_enabled) && !seen;
+    const shouldShowPopup = Boolean(campaign.popup_enabled) && !seen && eligibleForSelection;
     return {
       campaign,
       shouldShowPopup,
       grace_window_minutes: result.grace_window_minutes,
+      eligibleForSelection,
     };
   } catch {
-    return { campaign: null, shouldShowPopup: false, grace_window_minutes: 15 };
+    return {
+      campaign: null,
+      shouldShowPopup: false,
+      grace_window_minutes: 15,
+      eligibleForSelection: false,
+    };
   }
 }
 

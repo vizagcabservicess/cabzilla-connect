@@ -93,7 +93,7 @@ import {
   BookingOfferStickyBanner,
 } from '@/components/offers/BookingCouponSection';
 import type { OfferCampaignPublic } from '@/types/offerCampaign';
-import { resolveOfferCampaignCategory, toOfferTravelDateYmd, toOfferTravelTimeHm, normalizeOfferTargetId, toOfferTripRoute, isOfferRouteEligible, isOfferTravelTimeEligible, isOfferTravelDateEligible, formatOfferRouteScope, formatOfferCouponWorksOn } from '@/types/offerCampaign';
+import { resolveOfferCampaignCategory, toOfferTravelDateYmd, toOfferTravelTimeHm, normalizeOfferTargetId, toOfferTripRoute, isOfferRouteEligible, isOfferTravelTimeEligible, isOfferTravelDateEligible, isOfferSelectionEligible, formatOfferRouteScope, formatOfferCouponWorksOn, offerCouponNotValidForSelectionMessage } from '@/types/offerCampaign';
 import { offerCampaignAPI } from '@/services/api/offerCampaignAPI';
 import {
   trackGuestSearch,
@@ -366,6 +366,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
           hourlyPackage: prefillData.hourlyPackage || hourlyPackageOptions[0].value,
           selectedCab: prefillData.selectedCab || null,
           autoTriggerSearch: prefillData.autoTriggerSearch,
+          focusField: prefillData.focusField === 'pickup' || prefillData.focusField === 'drop'
+            ? prefillData.focusField
+            : undefined,
+          skipAirportAutoFill: Boolean(prefillData.skipAirportAutoFill),
+          airportDirection:
+            prefillData.airportDirection === 'From Airport' ||
+            prefillData.airportDirection === 'To Airport'
+              ? prefillData.airportDirection
+              : undefined,
           openGuestDetails: Boolean(prefillData.openGuestDetails),
           vehicleHint: typeof prefillData.vehicleHint === 'string' ? prefillData.vehicleHint : '',
           estimatedFare:
@@ -429,6 +438,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
         selectedCab: cabData ? JSON.parse(cabData) as CabType : null,
         autoTriggerSearch: false,
+        focusField: undefined,
+        skipAirportAutoFill: false,
+        airportDirection: undefined,
         openGuestDetails: false,
         vehicleHint: '',
         estimatedFare: 0,
@@ -467,6 +479,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         hourlyPackage: hourlyPackageOptions[0].value,
         selectedCab: null,
         autoTriggerSearch: false,
+        focusField: undefined,
+        skipAirportAutoFill: false,
+        airportDirection: undefined,
         openGuestDetails: false,
         vehicleHint: '',
         estimatedFare: 0,
@@ -588,6 +603,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const [offerCampaign, setOfferCampaign] = useState<OfferCampaignPublic | null>(null);
   const [offerPopupOpen, setOfferPopupOpen] = useState(false);
   const [offerApplied, setOfferApplied] = useState(false);
+  const [offerSelectionEligible, setOfferSelectionEligible] = useState(false);
   const [offerRedemptionId, setOfferRedemptionId] = useState<number | null>(null);
   const offerCampaignIdRef = useRef<number | null>(null);
   /** Pre-discount fare from BookingSummary — used for coupon math & API apply. */
@@ -605,7 +621,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const [minValidReturnTime, setMinValidReturnTime] = useState<Date | null>(null);
   const [showMobileEditForm, setShowMobileEditForm] = useState<boolean>(false);
   // Add new state for airport direction label
-  const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>('');
+  const [airportDirectionLabel, setAirportDirectionLabel] = useState<string>(
+    savedData.airportDirection || ''
+  );
   const [isTabSwitching, setIsTabSwitching] = useState<boolean>(false);
   const [isSlidingSearch, setIsSlidingSearch] = useState<boolean>(false);
   const [dynamicVehicles, setDynamicVehicles] = useState<CabType[]>([]);
@@ -618,6 +636,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const handleContinueRef = useRef<() => void>(() => {});
   /** Header search asked to run SEARCH once locations are valid (phone gate included). */
   const pendingAutoSearchRef = useRef(false);
+  const pendingFocusFieldRef = useRef<'pickup' | 'drop' | null>(
+    savedData.focusField === 'pickup' || savedData.focusField === 'drop'
+      ? savedData.focusField
+      : null
+  );
+  const skipAirportAutoFillRef = useRef(Boolean(savedData.skipAirportAutoFill));
   const openGuestDetailsRef = useRef(Boolean(savedData.openGuestDetails));
   const vehicleHintRef = useRef(savedData.vehicleHint || '');
   const estimatedFareRef = useRef(savedData.estimatedFare || 0);
@@ -675,7 +699,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     const slot = isDesktopBookingViewport()
       ? dropLocationInputRefs.current.desktop
       : dropLocationInputRefs.current.mobile;
-    slot?.focus();
+    slot?.focus({ select: true });
   };
 
   const focusTripModeControl = () => {
@@ -994,6 +1018,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         tripMode: mode,
         autoTriggerSearch,
         pickupDate: prefillPickupDate,
+        focusField,
+        skipAirportAutoFill,
+        airportDirection,
       } = event.detail;
       setCurrentStep(1);
       setShowGuestDetailsForm(false);
@@ -1003,6 +1030,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       if (mode) setTripMode(mode);
       sessionStorage.setItem('tripType', type || 'outstation');
       if (mode) sessionStorage.setItem('tripMode', mode);
+
+      if (skipAirportAutoFill || focusField === 'drop') {
+        skipAirportAutoFillRef.current = true;
+        sessionStorage.setItem('userClearedDropLocation', 'true');
+      }
+      if (airportDirection === 'From Airport' || airportDirection === 'To Airport') {
+        setAirportDirectionLabel(airportDirection);
+      }
 
       if (prefillPickupDate) {
         const parsed = coerceTripDate(new Date(prefillPickupDate));
@@ -1016,6 +1051,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         scrollToBookingWidget();
       });
 
+      if (focusField === 'drop') {
+        window.setTimeout(() => {
+          focusDropLocationField();
+        }, 400);
+      }
+
       // Queue SEARCH (with WhatsApp phone gate) — runs when form becomes valid
       if (autoTriggerSearch !== false && pickup && drop) {
         pendingAutoSearchRef.current = true;
@@ -1024,6 +1065,15 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
     window.addEventListener('routePrefill', handleRoutePrefill as EventListener);
     return () => window.removeEventListener('routePrefill', handleRoutePrefill as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (pendingFocusFieldRef.current !== 'drop') return;
+    pendingFocusFieldRef.current = null;
+    const timer = window.setTimeout(() => {
+      focusDropLocationField();
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Pickup is Vizag city (35 km) or the airport — not Vizianagaram / Srikakulam.
@@ -1644,12 +1694,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       setRestrictedRouteNotice(null);
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
-      // Set a flag to prevent automatic airport location setting
+      // Keep this until they pick a new drop so airport auto-fill does not snap back.
       sessionStorage.setItem('userClearedDropLocation', 'true');
-      // Clear the flag after a short delay
-      setTimeout(() => {
-        sessionStorage.removeItem('userClearedDropLocation');
-      }, 1000);
+      skipAirportAutoFillRef.current = true;
       return;
     }
     
@@ -1662,6 +1709,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
 
     setRestrictedRouteNotice(null);
+    sessionStorage.removeItem('userClearedDropLocation');
+    skipAirportAutoFillRef.current = false;
     
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
@@ -1816,7 +1865,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   useEffect(() => {
     if (tripType === 'airport' && airportLocation) {
       // Check if user recently cleared locations to prevent automatic setting
-      const userClearedDropLocation = sessionStorage.getItem('userClearedDropLocation') === 'true';
+      const userClearedDropLocation =
+        skipAirportAutoFillRef.current ||
+        sessionStorage.getItem('userClearedDropLocation') === 'true';
       const userClearedPickupLocation = sessionStorage.getItem('userClearedPickupLocation') === 'true';
       
       if (!pickupLocation && !dropLocation && !userClearedPickupLocation && !userClearedDropLocation) {
@@ -1835,7 +1886,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         sessionStorage.setItem('pickupLocation', JSON.stringify(airportLocation));
       }
       
-      updateAirportDirectionLabel(pickupLocation, dropLocation);
+      // Keep offer/to-airport direction while drop is still empty for the guest to enter.
+      if (!(userClearedDropLocation && !dropLocation)) {
+        updateAirportDirectionLabel(pickupLocation, dropLocation);
+      }
     } else if (tripType !== 'airport') {
       setAirportDirectionLabel('');
     }
@@ -2509,13 +2563,14 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       : 0;
   const offerDiscountCode =
     offerApplied && offerCampaign ? offerCampaign.coupon_code : null;
+  const suggestedOfferCampaign = offerSelectionEligible ? offerCampaign : null;
   const displayDistance = tripMode === 'round-trip' ? distance * 2 : distance;
   const displayDuration = tripMode === 'round-trip' ? duration * 2 : duration;
 
   const handleBaseFareChange = useCallback((total: number) => {
     const next = Math.max(0, Number(total) || 0);
     setWebsiteFareTotal((prev) => (prev === next ? prev : next));
-    if (offerApplied && offerCampaign && next > 0) {
+    if (offerApplied && offerSelectionEligible && offerCampaign && next > 0) {
       const pricing = computeOfferPricing(offerCampaign, next);
       setOfferCampaign((prev) => {
         if (
@@ -2532,9 +2587,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
     setFinalTotal((prev) => (prev === next ? prev : next));
-  }, [offerApplied, offerCampaign]);
+  }, [offerApplied, offerSelectionEligible, offerCampaign]);
 
-  const applyOfferCampaign = (c: OfferCampaignPublic) => {
+  const applyOfferCampaign = async (c: OfferCampaignPublic) => {
     if (!isOfferRouteEligible(c, offerTripRoute, true)) {
       const route = formatOfferRouteScope(c);
       toast({
@@ -2562,13 +2617,82 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       });
       return;
     }
+    if (offerCategoryKey === 'tour' ? !offerTourId : !offerVehicleId) {
+      toast({
+        title: offerCategoryKey === 'tour' ? 'Select a tour' : 'Select a vehicle',
+        description:
+          offerCategoryKey === 'tour'
+            ? 'Choose a tour package before applying this coupon'
+            : 'Choose a vehicle before applying this coupon',
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
+    }
+    if (!isOfferSelectionEligible(c, offerVehicleId, offerTourId)) {
+      toast({
+        title: 'Coupon not valid for this vehicle',
+        description: offerCouponNotValidForSelectionMessage(c.category),
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
+    }
     const base = websiteFareTotal > 0 ? websiteFareTotal : totalPrice;
+    if (offerCategoryKey && base > 0) {
+      try {
+        const preview = await offerCampaignAPI.public.previewFare(
+          offerCategoryKey,
+          base,
+          offerTravelYmd,
+          offerVehicleId,
+          offerTourId,
+          offerTripRoute,
+          offerTravelHm
+        );
+        if (!preview.campaign || preview.campaign.id !== c.id) {
+          toast({
+            title: 'Coupon not valid for this vehicle',
+            description: offerCouponNotValidForSelectionMessage(c.category),
+            variant: 'destructive',
+            duration: 4000,
+          });
+          return;
+        }
+        const pricing =
+          preview.pricing && preview.pricing.website_fare > 0
+            ? preview.pricing
+            : computeOfferPricing(c, base);
+        setOfferCampaign({ ...c, pricing });
+        offerCampaignIdRef.current = c.id;
+        setOfferSelectionEligible(true);
+        setOfferApplied(true);
+        if (pricing.offer_fare >= 0) {
+          setFinalTotal(pricing.offer_fare);
+        }
+        toast({
+          title: 'Coupon applied',
+          description: `${c.coupon_code} · you save ₹${pricing.savings.toLocaleString('en-IN')}`,
+          duration: 3000,
+        });
+        return;
+      } catch {
+        toast({
+          title: 'Could not verify coupon',
+          description: 'Try applying again in a moment',
+          variant: 'destructive',
+          duration: 4000,
+        });
+        return;
+      }
+    }
     const pricing =
       c.pricing && c.pricing.website_fare > 0
         ? c.pricing
         : computeOfferPricing(c, base || 0);
     setOfferCampaign({ ...c, pricing });
     offerCampaignIdRef.current = c.id;
+    setOfferSelectionEligible(true);
     setOfferApplied(true);
     if (pricing.offer_fare >= 0 && base > 0) {
       setFinalTotal(pricing.offer_fare);
@@ -2623,6 +2747,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         } catch (offerErr) {
           console.warn('Offer apply failed, continuing at regular fare', offerErr);
           setOfferApplied(false);
+          latestTotal = websiteFare;
+          discountAmount = 0;
         }
       }
 
@@ -2787,6 +2913,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   // Keep Part/Full Pay in sync with the fare on the cab card the guest just tapped.
   const setSelectedCab = (cab: CabType | null, fare?: number) => {
+    const previousVehicleId = normalizeOfferTargetId(
+      selectedCab?.vehicleId || selectedCab?.id || null
+    );
+    const nextVehicleId = normalizeOfferTargetId(cab?.vehicleId || cab?.id || null);
+    const vehicleChanged = previousVehicleId !== nextVehicleId;
+    if (vehicleChanged && offerApplied) {
+      setOfferApplied(false);
+      setOfferRedemptionId(null);
+      setOfferSelectionEligible(false);
+    }
     setSelectedCabState(cab);
     if (!cab) {
       setFinalTotal(0);
@@ -2796,7 +2932,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (typeof fare === 'number' && fare > 0) {
       const next = Math.round(fare);
       setWebsiteFareTotal(next);
-      if (offerApplied && offerCampaign) {
+      if (offerApplied && offerCampaign && !vehicleChanged) {
         const pricing = computeOfferPricing(offerCampaign, next);
         setFinalTotal(pricing.offer_fare);
       } else {
@@ -2858,6 +2994,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       setOfferCampaign(null);
       offerCampaignIdRef.current = null;
       setOfferApplied(false);
+      setOfferSelectionEligible(false);
       setOfferRedemptionId(null);
       setOfferPopupOpen(false);
       return;
@@ -2881,6 +3018,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         setOfferCampaign(null);
         offerCampaignIdRef.current = null;
         setOfferApplied(false);
+        setOfferSelectionEligible(false);
         setOfferRedemptionId(null);
         setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
         return;
@@ -2893,23 +3031,25 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         pending!.id === next.id &&
         pending!.category === next.category;
       const sameCampaign = offerCampaignIdRef.current === next.id;
+      const selectionOk =
+        result.eligibleForSelection &&
+        isOfferRouteEligible(next, offerTripRoute, true) &&
+        isOfferTravelTimeEligible(next, offerTravelHm, true);
+      setOfferSelectionEligible(result.eligibleForSelection);
 
       if (homeApplied) {
         setOfferCampaign(next);
         offerCampaignIdRef.current = next.id;
-        setOfferApplied(
-          isOfferRouteEligible(next, offerTripRoute, true) &&
-            isOfferTravelTimeEligible(next, offerTravelHm, true)
-        );
+        setOfferApplied(selectionOk);
+        if (!selectionOk) {
+          setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
+        }
         clearHomePendingOffer();
         return;
       }
 
       if (sameCampaign) {
-        if (
-          !isOfferRouteEligible(next, offerTripRoute, true) ||
-          !isOfferTravelTimeEligible(next, offerTravelHm, true)
-        ) {
+        if (!selectionOk) {
           setOfferApplied(false);
           setOfferRedemptionId(null);
           setFinalTotal(websiteFareTotal > 0 ? websiteFareTotal : totalPrice);
@@ -4494,7 +4634,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   vehicleId={offerVehicleId}
                                   tourId={offerTourId}
                                   tripRoute={offerTripRoute}
-                                  suggestedCampaign={offerCampaign}
+                                  suggestedCampaign={suggestedOfferCampaign}
                                   applied={offerApplied}
                                   appliedCampaign={offerCampaign}
                                   onApply={applyOfferCampaign}
@@ -4627,7 +4767,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         vehicleId={offerVehicleId}
                         tourId={offerTourId}
                         tripRoute={offerTripRoute}
-                        suggestedCampaign={offerCampaign}
+                        suggestedCampaign={suggestedOfferCampaign}
                         applied={offerApplied}
                         appliedCampaign={offerCampaign}
                         onApply={applyOfferCampaign}
@@ -4671,7 +4811,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           vehicleId={offerVehicleId}
                           tourId={offerTourId}
                           tripRoute={offerTripRoute}
-                          suggestedCampaign={offerCampaign}
+                          suggestedCampaign={suggestedOfferCampaign}
                           applied={offerApplied}
                           appliedCampaign={offerCampaign}
                           onApply={applyOfferCampaign}
@@ -4751,7 +4891,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       vehicleId={offerVehicleId}
                       tourId={offerTourId}
                       tripRoute={offerTripRoute}
-                      suggestedCampaign={offerCampaign}
+                      suggestedCampaign={suggestedOfferCampaign}
                       applied={offerApplied}
                       appliedCampaign={offerCampaign}
                       onApply={applyOfferCampaign}
@@ -4773,7 +4913,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
               className="border-t border-gray-200 bg-white px-3 pt-2 pb-2 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] mobile-safe-bottom"
             >
               <BookingOfferStickyBanner
-                campaign={offerCampaign}
+                campaign={suggestedOfferCampaign}
                 websiteFare={websiteFareBase}
                 applied={offerApplied}
                 onApply={applyOfferCampaign}

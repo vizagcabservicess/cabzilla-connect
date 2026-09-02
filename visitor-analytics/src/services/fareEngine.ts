@@ -191,12 +191,66 @@ let googleMapsDenied = false;
 /** Well-known places so chat text matches booking pins (state-correct). */
 const PLACE_ALIASES: Array<{ match: RegExp; query: string; lat?: number; lon?: number }> = [
   { match: /\bkailasapuram\b/i, query: 'Kailasapuram, Visakhapatnam, Andhra Pradesh, India', lat: 17.7409, lon: 83.2882 },
-  { match: /\bpendurthi|pendurty\b/i, query: 'Pendurthi, Visakhapatnam, Andhra Pradesh, India', lat: 17.801, lon: 83.209 },
+  { match: /\bpendurthi|pendhurthi|pendurty\b/i, query: 'Pendurthi, Visakhapatnam, Andhra Pradesh, India', lat: 17.801, lon: 83.209 },
   {
     match: /^(?:the\s+)?airport$|\b(?:vizag|visakhapatnam)\s*airport\b|\bairport\s*(?:vizag|visakhapatnam)\b|\bvtz\b/i,
     query: 'Visakhapatnam Airport, Andhra Pradesh, India',
     lat: 17.7211,
     lon: 83.2245,
+  },
+  {
+    match: /\bbhogapuram|bhogaouram\b/i,
+    query: 'Bhogapuram, Andhra Pradesh, India',
+    lat: 17.972,
+    lon: 83.479,
+  },
+  {
+    match: /\bgadiraju\b/i,
+    query: 'Gadiraju Convention Centre, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.804,
+    lon: 83.358,
+  },
+  {
+    match: /\bvisalakshi\s*nagar|visalakshinagar\b/i,
+    query: 'Visalakshi Nagar, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.748,
+    lon: 83.341,
+  },
+  {
+    match: /\b(?:vizag|visakhapatnam)\s*railway|\brailway\s*sta(?:tion)?\b/i,
+    query: 'Visakhapatnam Railway Station, Andhra Pradesh, India',
+    lat: 17.722,
+    lon: 83.29,
+  },
+  {
+    match: /\bsimhachalam|simanchalam|simhachalm\b/i,
+    query: 'Simhachalam, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.766,
+    lon: 83.25,
+  },
+  {
+    match: /\bkailasagiri|kailashgiri|kailasgiri\b/i,
+    query: 'Kailasagiri, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.749,
+    lon: 83.342,
+  },
+  {
+    match: /\btagarapuvalasa|thagarapuvalasa|tagarapuvalasa\b/i,
+    query: 'Tagarapuvalasa, Andhra Pradesh, India',
+    lat: 17.934,
+    lon: 83.427,
+  },
+  {
+    match: /\batchuthapuram|atchutapuram|achuthapuram\b/i,
+    query: 'Atchutapuram, Andhra Pradesh, India',
+    lat: 17.56,
+    lon: 82.99,
+  },
+  {
+    match: /\banakapalli|anakapalle\b/i,
+    query: 'Anakapalle, Andhra Pradesh, India',
+    lat: 17.691,
+    lon: 83.004,
   },
   {
     match: /\bbeach\s*road\b|\brk\s*beach\b|\bramakrishna\s*beach\b/i,
@@ -247,7 +301,7 @@ const PLACE_ALIASES: Array<{ match: RegExp; query: string; lat?: number; lon?: n
   { match: /\bvijayawada|bezawada\b/i, query: 'Vijayawada, Andhra Pradesh, India', lat: 16.5062, lon: 80.648 },
   { match: /\btuni\b/i, query: 'Tuni, Andhra Pradesh, India', lat: 17.3597, lon: 82.546 },
   { match: /\bkakinada\b/i, query: 'Kakinada, Andhra Pradesh, India', lat: 16.9891, lon: 82.2475 },
-  { match: /\baraku\b/i, query: 'Araku Valley, Andhra Pradesh, India', lat: 18.3273, lon: 82.877 },
+  { match: /\b(?:araku|arakku|aruku|araku+)\b/i, query: 'Araku Valley, Andhra Pradesh, India', lat: 18.3273, lon: 82.877 },
   { match: /\bhyderabad\b/i, query: 'Hyderabad, Telangana, India', lat: 17.385, lon: 78.4867 },
   { match: /\btirupati\b/i, query: 'Tirupati, Andhra Pradesh, India', lat: 13.6288, lon: 79.4192 },
   { match: /\bsrikakulam\b/i, query: 'Srikakulam, Andhra Pradesh, India', lat: 18.2969, lon: 83.893 },
@@ -915,7 +969,7 @@ const TOUR_MATCHERS: Array<{ tourIdHints: string[]; keywords: string[]; multiDay
   {
     // Exact day-package id — never match via includes('araku') or araku_vizag_3D_2N wins
     tourIdHints: ['araku'],
-    keywords: ['araku', 'borra', 'padmapuram', 'katiki', 'galikonda', 'chaparai', 'ananthagiri', 'anantagiri'],
+    keywords: ['araku', 'arakku', 'aruku', 'borra', 'padmapuram', 'katiki', 'galikonda', 'chaparai', 'ananthagiri', 'anantagiri'],
   },
   { tourIdHints: ['lambasingi'], keywords: ['lambasingi', 'lammasingi', 'kothapalli'] },
   { tourIdHints: ['vanajangi', 'vanajangi_tour'], keywords: ['vanajangi', 'paderu'] },
@@ -929,7 +983,15 @@ const TOUR_MATCHERS: Array<{ tourIdHints: string[]; keywords: string[]; multiDay
   },
   {
     tourIdHints: ['arasavalli_srikurmam', 'arasavalli', 'srikurmam'],
-    keywords: ['arasavalli', 'srikurmam', 'srikakulam temple'],
+    keywords: [
+      'arasavalli',
+      'arsavalli',
+      'srikurmam',
+      'sreekurmum',
+      'sri kurmam',
+      'ari kurman',
+      'srikakulam temple',
+    ],
   },
 ];
 
@@ -1383,6 +1445,56 @@ export async function quoteVehicleRateCard(vehicleHint: string): Promise<string 
   }
 }
 
+export function looksLikeClockToken(raw: string): boolean {
+  const t = raw.trim().toLowerCase();
+  if (/^\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)$/i.test(t)) return true;
+  if (/^\d{1,2}\s*(?:am|pm)$/i.test(t)) return true;
+  if (/^(?:[01]?\d|2[0-3])[:.][0-5]\d$/.test(t)) return true;
+  if (/^\d{1,2}(?:am|pm)$/i.test(t)) return true;
+  return false;
+}
+
+export function isLocalHourlyPackageIntent(message: string): boolean {
+  const lower = message.toLowerCase();
+  if (/\b0?4\s*hrs?\s*[\/\-]?\s*40\b/.test(lower)) return false;
+  return (
+    /\b(?:8\s*hr(?:s|ours?)?\s*[\/\-]?\s*80|10\s*hr(?:s|ours?)?\s*[\/\-]?\s*100|local\s*(?:hourly\s*)?package)\b/i.test(
+      lower,
+    ) ||
+    (/\blocal\b/.test(lower) && /\b(8\s*hr|80\s*km|package)\b/.test(lower) && !/\baraku|outstation|airport\b/.test(lower))
+  );
+}
+
+export async function quoteLocalHourlyPackages(): Promise<string> {
+  const local = await fetchLocalRateCards();
+  const ids = ['sedan', 'ertiga', 'innova_crysta', 'tempo_traveller', 'bus'] as const;
+  const lineFor = (hours: 8 | 10) =>
+    ids
+      .map((id) => {
+        const r = local[id] || local[Object.keys(local).find((k) => normalizeVehicleId(k) === id) || ''];
+        if (!r) return null;
+        const price = hours === 8 ? r.price8hrs80km : r.price10hrs100km;
+        if (!price) return null;
+        return `• ${vehicleLabel(id)}: ₹${price.toLocaleString('en-IN')}`;
+      })
+      .filter(Boolean)
+      .join('\n');
+
+  const extra = (() => {
+    const sedan = local.sedan || local[Object.keys(local).find((k) => normalizeVehicleId(k) === 'sedan') || ''];
+    if (!sedan) return '';
+    return `Extra (Sedan): ₹${sedan.priceExtraKm}/km · ₹${sedan.priceExtraHour}/hr. `;
+  })();
+
+  return (
+    `Vizag local packages (cab only — not per person):\n\n` +
+    `8hrs / 80km:\n${lineFor(8)}\n\n` +
+    `10hrs / 100km:\n${lineFor(10)}\n\n` +
+    `${extra}4hrs/40km is discontinued.\n` +
+    `Share pickup point, date, and vehicle to book. Call +91 99663 63662.`
+  );
+}
+
 /** Parse "X to Y" / "to Y from X" style places from a visitor message. */
 export function extractRoutePlaces(message: string): { from: string; to: string } | null {
   const cleaned = message
@@ -1391,6 +1503,8 @@ export function extractRoutePlaces(message: string): { from: string; to: string 
     .replace(/\b(round\s*-?\s*trip|return\s+trip|one\s*-?\s*way)\b/gi, ' ')
     .replace(/\bfor\s+(\d+|one|two|three|four|five|six|seven)\s+days?\b/gi, ' ')
     .replace(/\b(\d+|one|two|three|four|five|six|seven)\s+days?\b/gi, ' ')
+    .replace(/\b(?:at|by)\s+\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?\b/gi, ' ')
+    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -1463,8 +1577,9 @@ function cleanPlaceToken(raw: string): string {
 
 function isPlausiblePlace(raw: string): boolean {
   if (raw.length < 2 || raw.length > 100) return false;
+  if (looksLikeClockToken(raw)) return false;
   if (
-    /^(what|whats|please|tell|need|want|how|much|time|travel|fare|price|cost|charges?|im|i'm|i|planning|vehicle|cab|taxi|car|book)$/i.test(
+    /^(what|whats|please|tell|need|want|how|much|time|travel|fare|price|cost|charges?|im|i'm|i|planning|vehicle|cab|taxi|car|book|tmrw|tomorrow|yesterday|outstation|out\s*station)$/i.test(
       raw,
     )
   ) {
@@ -1486,6 +1601,7 @@ function isPlausiblePlace(raw: string): boolean {
     return false;
   }
   if (/^(please|kindly)\b/i.test(raw)) return false;
+  if (/\b(accommodation|dormitory|hotel\s+stay|persons?)\b/i.test(raw)) return false;
   return true;
 }
 

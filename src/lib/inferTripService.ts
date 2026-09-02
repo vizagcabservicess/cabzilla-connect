@@ -150,9 +150,9 @@ export function isAirportTransferOtherEnd(location: Location | null | undefined)
 /**
  * Infer the best customer booking service from pickup/drop.
  * Local (hourly rental) is never inferred from a From/To pair — only the Local tab.
- * - Airport: one end is a Vizag airport AND the other end is in Vizag city or the
- *   Bhogapuram catchment (Vizianagaram / Srikakulam / nearby).
- * - Outstation: other end outside that catchment (e.g. Airport → Kakinada).
+ * - Airport tab: airport involved inside catchment, OR both ends in Vizag / ≤35 km
+ *   (city hops use Airport-tab slabs — same as the homepage Outstation → Airport switch).
+ * - Outstation: other end outside that catchment (e.g. Airport → Kakinada, or >35 km).
  */
 export function inferTripServiceType(
   pickup: Location | null | undefined,
@@ -175,10 +175,16 @@ export function inferTripServiceType(
     return 'outstation';
   }
 
-  if (!drop) return null;
+  if (!drop || !pickup) return null;
 
-  // City-to-city is not an airport transfer. Hourly rental is only chosen via the Local tab.
-  if (dropInVizag && pickupInVizag) return null;
+  if (hasReliableCoords(pickup) && hasReliableCoords(drop)) {
+    const km = haversineKm(pickup.lat, pickup.lng, drop.lat, drop.lng);
+    if (km <= AIRPORT_TRANSFER_MAX_KM) return 'airport';
+    return 'outstation';
+  }
+
+  // No coords: Vizag → local neighbourhood (MVP, Gajuwaka, …) still uses Airport-tab slabs.
+  if (dropInVizag && pickupInVizag) return 'airport';
 
   if (!dropInVizag || !pickupInVizag) return 'outstation';
 

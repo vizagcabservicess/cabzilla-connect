@@ -7,15 +7,40 @@ import {
   extractCalendarDays,
   extractRoutePlaces,
   formatRouteQuoteReply,
+  isLocalHourlyPackageIntent,
   isRestrictedAirportRouteQuote,
   isTourItineraryIntent,
   isTourPackageIntent,
+  quoteLocalHourlyPackages,
   quoteOutstationRoute,
   quoteTourItinerary,
   quoteTourPackage,
   quoteTourPackageWithId,
   quoteVehicleRateCard,
 } from '../services/fareEngine.js';
+import {
+  accommodationReply,
+  arakuLocalStartReply,
+  coachBusReply,
+  extractFlexibleDate,
+  extractPassengerCount,
+  isAccommodationIntent,
+  isAirportDropOrPickup,
+  isArakuLocalStartIntent,
+  isBareAirportToken,
+  isBorraCavesAsk,
+  isCoachOrLargeBusIntent,
+  isHotelIncludedAsk,
+  isHowManyDaysAsk,
+  isMultiStopSightseeingIntent,
+  isPerPersonIntent,
+  isTourFollowupIntent,
+  isTwoDayArakuIntent,
+  isVehicleRateOnlyIntent,
+  parseFlexibleDate,
+  parseTripBlob,
+  vehicleHintFromMessage,
+} from './chatIntents.js';
 
 export const VEHICLE_CATEGORIES = [
   'Sedan',
@@ -52,6 +77,10 @@ CRITICAL — FARES:
 - TOUR PACKAGES (Araku, Borra, Lambasingi, Vanajangi, Vizag city sightseeing, temple tours) use FIXED package prices from the Tours API — NEVER quote outstation tier/km fares for those.
 - TOUR ITINERARIES: NEVER invent timings or place lists. When asked for itinerary/schedule/places, only use the live website itinerary for the NAMED tour (Lambasingi ≠ Araku). If not provided, ask which tour and direct them to vizagtaxihub.com/tours.
 - LOCAL hourly packages offered: 8hrs/80km and 10hrs/100km only. NEVER mention or quote 4hrs/40km (or 04hrs/40km) — that package is discontinued on the website.
+- NEVER treat clock times (9pm, 12am, 07:00) as pickup/drop places.
+- Hotel / dormitory is NOT included in cab or tour-package fares unless the live tour inclusions say so.
+- Fares are for the whole vehicle, not per person. Arakku/Aruku = Araku Valley.
+- If name/phone are already in lead state, never ask for them again — quote or collect the missing trip field.
 - When the system message includes a ROUTE_QUOTE, TOUR_QUOTE, or LIVE RATE CARDS block, copy those numbers exactly.
 - If no fare block is present and the visitor asks for a price, say you will calculate from the booking engine and ask pickup, drop, date, and vehicle — do not guess.
 - One-way outstation between ~35km and the tier-4 max uses a FLAT tier price + driver allowance (not base×km). Longer trips use base + 2×extra km + driver.
@@ -280,33 +309,7 @@ function canSendCheckoutLink(lead: {
 
 /** Normalize DB / chat dates to YYYY-MM-DD. Never keep "Thu Nov 30" junk from String(Date).slice. */
 function normalizeTravelDate(raw: unknown): string | null {
-  if (raw == null || raw === '') return null;
-  if (raw instanceof Date) {
-    if (Number.isNaN(raw.getTime())) return null;
-    const y = raw.getFullYear();
-    const m = String(raw.getMonth() + 1).padStart(2, '0');
-    const d = String(raw.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-  const s = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-  if (dmy) {
-    const day = Number(dmy[1]);
-    const month = Number(dmy[2]);
-    let year = Number(dmy[3]);
-    if (year < 100) year += 2000;
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  }
-  if (/^(today)$/i.test(s)) return defaultTravelDateIst();
-  if (/^(tomorrow)$/i.test(s)) {
-    const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000);
-    return d.toISOString().slice(0, 10);
-  }
-  // Reject locale strings like "Thu Nov 30"
-  if (/^[A-Za-z]{3}\s/.test(s)) return null;
-  return null;
+  return parseFlexibleDate(raw);
 }
 
 function isBookIntent(message: string): boolean {
@@ -625,7 +628,10 @@ export function isGarbagePlace(raw: string | null | undefined): boolean {
   ) {
     return true;
   }
-  if (/^(tomorrow|today|yesterday|sedan|ertiga|innova|crysta|tempo|urbania)$/i.test(t)) return true;
+  if (/^(tomorrow|today|yesterday|tmrw|sedan|ertiga|innova|crysta|tempo|urbania|outstation|out\s*station)$/i.test(t)) {
+    return true;
+  }
+  if (/^\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)$/i.test(t)) return true;
   return false;
 }
 
@@ -684,19 +690,15 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
   const phoneMatch = message.match(/(?:\+?91[-\s]?)?[6-9]\d{9}\b/);
   if (phoneMatch) out.phone = normalizePhone(phoneMatch[0]);
 
-  const dateMatch = message.match(
-    /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:tomorrow|today|day after tomorrow))\b/i,
-  );
-  if (dateMatch) {
-    const normalized = normalizeTravelDate(dateMatch[1]!);
-    if (normalized) out.travelDate = normalized;
-  }
+  const dateHit = extractFlexibleDate(message);
+  if (dateHit) out.travelDate = dateHit;
 
   const time = extractTravelTime(message);
   if (time) out.travelTime = time;
 
   const lower = message.toLowerCase();
   for (const cat of VEHICLE_CATEGORIES) {
+    if (isTripCategoryLabel(cat)) continue;
     if (lower.includes(cat.toLowerCase())) {
       out.vehicle = cat;
       break;
@@ -708,14 +710,9 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
     else if (/\b(innova|crysta)\b/.test(lower)) out.vehicle = 'Innova Crysta';
     else if (/\bertiga\b/.test(lower)) out.vehicle = 'Ertiga';
     else if (/\bluxury\b/.test(lower)) out.vehicle = 'Luxury Sedan';
-    else if (/\b(sedan|dzire|desire|desiree|amaze|etios|glanza|swift)\b/.test(lower)) out.vehicle = 'Sedan';
-    else if (/\b(airport)\b/.test(lower)) out.vehicle = 'Airport Taxi';
-    else if (/\b(araku)\b/.test(lower)) out.vehicle = 'Araku Tour';
-    else if (/\bsimhachalam\b/.test(lower)) out.vehicle = 'Simhachalam';
-    else if (/\bborra\b/.test(lower)) out.vehicle = 'Borra Caves';
-    else if (/\blambasingi\b/.test(lower)) out.vehicle = 'Lambasingi';
-    else if (/\b(local|sightseeing|city tour)\b/.test(lower)) out.vehicle = 'Local Taxi';
-    else if (/\boutstation\b/.test(lower)) out.vehicle = 'Outstation';
+    else if (/\b(sedan|dzire|desire|desiree|amaze|etios|glanza|swift|small car|4 seater)\b/.test(lower)) {
+      out.vehicle = 'Sedan';
+    }
   }
 
   const nameMatch = message.match(/\b(?:my name is|i am|i'm)\s+([A-Za-z][A-Za-z\s.'-]{1,60})/i);
@@ -1007,7 +1004,7 @@ function routeFareReply(route: (typeof POPULAR_ROUTES)[number]): string {
 }
 
 
-function isHumanHandoffIntent(message: string): boolean {
+export function isHumanHandoffIntent(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     /\b(human|real\s*person|live\s*agent|agent|operator|executive|customer\s*care|support\s*agent)\b/.test(
@@ -1017,6 +1014,141 @@ function isHumanHandoffIntent(message: string): boolean {
   ) || /\b(talk\s*to\s*(a\s*)?(human|agent|operator|person)|connect\s*me|transfer\s*(me|to)|speak\s*to\s*(a\s*)?(human|agent|operator))\b/.test(
     lower,
   );
+}
+
+async function tourFollowupReply(
+  message: string,
+  lead: AiLeadState,
+  historyText: string,
+): Promise<string | null> {
+  const lastName = String(lead.meta?.lastTourName || '');
+  const lastId = typeof lead.meta?.lastTourId === 'string' ? lead.meta.lastTourId : '';
+  const historyHasTour = /araku|lambasingi|vanajangi|borra|3 days|tour package/i.test(
+    `${lastName} ${lastId} ${historyText}`,
+  );
+  if (!isTourFollowupIntent(message, lastName || (historyHasTour ? 'tour' : ''))) return null;
+
+  if (isHotelIncludedAsk(message) || isAccommodationIntent(message)) {
+    return accommodationReply();
+  }
+  if (isBorraCavesAsk(message) || /\bborra|bora cave/i.test(message)) {
+    return (
+      `Yes — the 1-day Araku Valley tour includes Borra Caves (plus viewpoints / Padmapuram as on the tour page).\n` +
+      `It is a cab package, not a hotel package. Reply "book it" or ask for the itinerary.`
+    );
+  }
+  if (isHowManyDaysAsk(message) || /^timing$/i.test(message.trim()) || /1 day plan/i.test(message)) {
+    if (/3d|3 day/i.test(`${lastId} ${lastName}`)) {
+      return 'That package is 3 days / 2 nights (Vizag + Araku). Hotel stay is extra unless listed in inclusions. Share travel date to book, or ask for the itinerary.';
+    }
+    const itin = await quoteTourItinerary(message, {
+      lastTourId: lastId || 'araku',
+      historyText,
+    });
+    if (itin?.reply) return itin.reply;
+    return 'The standard Araku Valley tour is a 1-day cab package (~260 km). For 3 days / 2 nights we have a separate Vizag + Araku package. Which one do you want?';
+  }
+  if (isPerPersonIntent(message)) {
+    const pax = extractPassengerCount(message) || 6;
+    const fares = (lead.meta?.lastTourPackageFares || {}) as Record<string, number>;
+    const whole = fares.innova_crysta || fares.ertiga || fares.sedan || Number(lead.meta?.lastQuotedFare) || 0;
+    const vehicleHint =
+      pax >= 12 ? 'Tempo Traveller / Urbania' : pax >= 6 ? 'Ertiga or Innova Crysta' : 'Sedan or Ertiga';
+    if (whole > 0) {
+      const each = Math.round(whole / pax);
+      return (
+        `Fares are for the whole vehicle, not per seat.\n` +
+        `For ${pax} people, ${vehicleHint} is typical.\n` +
+        `If you split the quoted vehicle fare of ₹${whole.toLocaleString('en-IN')}, that is about ₹${each.toLocaleString('en-IN')} per person.\n` +
+        `Reply "book it" when ready, or call +91 99663 63662.`
+      );
+    }
+    return (
+      `Our tour prices are for the whole cab, not per person. For ${pax} people use ${vehicleHint}. ` +
+      `Share the tour name (e.g. Araku 1-day or 3D/2N) and I will quote the live package.`
+    );
+  }
+  return null;
+}
+
+async function specialIntentReply(
+  message: string,
+  lead: AiLeadState,
+  historyText: string,
+): Promise<string | null> {
+  if (isCoachOrLargeBusIntent(message)) return coachBusReply();
+  if (isArakuLocalStartIntent(message)) return arakuLocalStartReply();
+  if (isAccommodationIntent(message) && !/\b(cab|taxi|tour package)\b/i.test(message)) {
+    return accommodationReply();
+  }
+  if (isVehicleRateOnlyIntent(message)) {
+    const card = await quoteVehicleRateCard(vehicleHintFromMessage(message));
+    if (card) return card;
+  }
+  if (isLocalHourlyPackageIntent(message)) {
+    return quoteLocalHourlyPackages();
+  }
+  if (isTwoDayArakuIntent(message)) {
+    const day = await quoteTourPackageWithId('Araku Valley tour package');
+    try {
+      const rt = await quoteOutstationRoute({
+        from: 'Visakhapatnam',
+        to: 'Araku Valley',
+        tripMode: 'round-trip',
+        calendarDays: 2,
+      });
+      const dayBlock = day?.reply || '';
+      const rtBlock = rt.quotes.length ? formatRouteQuoteReply(rt) : '';
+      return (
+        `We do not list a fixed 2-day / 1-night Araku package on the website.\n\n` +
+        `1-day Araku tour (fixed cab package):\n${dayBlock}\n\n` +
+        (rtBlock ? `Custom 2 days / 1 night (round-trip cab; hotel extra):\n${rtBlock}\n` : '') +
+        `Hotel / dormitory is not included. Call +91 99663 63662 for a tailored 2D/1N plan.`
+      );
+    } catch {
+      return day?.reply || null;
+    }
+  }
+  const follow = await tourFollowupReply(message, lead, historyText);
+  if (follow) return follow;
+
+  if (isMultiStopSightseeingIntent(message)) {
+    const templeTour = /arasavalli|arsavalli|srikurmam|sreekurmum|ari kurman/i.test(message);
+    if (templeTour) {
+      const quoted = await quoteTourPackageWithId(message);
+      if (quoted?.reply) {
+        return (
+          `${quoted.reply}\n\n` +
+          `If you only need a city loop (station → temples → hotel), the local 8hrs/80km package also fits. Share date and vehicle.`
+        );
+      }
+    }
+    const local = await quoteLocalHourlyPackages();
+    return (
+      `That sounds like a multi-stop Vizag / temple day.\n` +
+      `Best fit is usually the local 8hrs/80km or 10hrs/100km package (cab stays with you):\n\n${local}`
+    );
+  }
+
+  const blob = parseTripBlob(message);
+  if (blob.pickup && blob.dropoff) {
+    if (blob.travelDate) lead.travelDate = blob.travelDate;
+    if (blob.travelTime) lead.travelTime = blob.travelTime;
+    if (blob.vehicle) lead.vehicle = blob.vehicle;
+    lead.pickup = blob.pickup;
+    lead.dropoff = blob.dropoff;
+    try {
+      const quote = await quoteOutstationRoute({
+        from: blob.pickup,
+        to: blob.dropoff,
+        tripMode: blob.tripMode || 'one-way',
+      });
+      if (quote.quotes.length) return formatRouteQuoteReply(quote);
+    } catch {
+      // fall through
+    }
+  }
+  return null;
 }
 
 type FareEngineHit = {
@@ -1050,6 +1182,10 @@ async function tryFareEngineReply(
         `We no longer offer the 4hrs/40km (City Tour) local package. ` +
         `Local options are 8hrs/80km and 10hrs/100km only.${rates}`,
     };
+  }
+
+  if (isLocalHourlyPackageIntent(message)) {
+    return { reply: await quoteLocalHourlyPackages() };
   }
 
   // Live website itinerary FIRST (never let LLM invent Padmapuram/Chaparai schedules)
@@ -1443,16 +1579,27 @@ async function fallbackReply(message: string, lead: AiLeadState): Promise<string
   }
 
   if (/airport|vtz/.test(lower)) {
+    if (lead.pickup && lead.dropoff && !isGarbagePlace(lead.pickup) && !isGarbagePlace(lead.dropoff)) {
+      try {
+        const quote = await quoteOutstationRoute({
+          from: lead.pickup,
+          to: lead.dropoff,
+          tripMode: 'one-way',
+        });
+        if (quote.quotes.length) return formatRouteQuoteReply(quote);
+      } catch {
+        // continue
+      }
+    }
+    if (lead.pickup && !lead.dropoff) {
+      return `Pickup noted: ${lead.pickup}. What is the drop — Vizag Airport or another point? Also share date and vehicle.`;
+    }
     return (
       `Sure — for Vizag Airport transfers, please share pickup, drop, date, pickup time, and preferred vehicle. ` +
       `I will quote the exact live fare. Or call +91 99663 63662.`
     );
   }
 
-  if (!lead.customerName) {
-    return 'Welcome to Vizag Taxi Hub! I am VTH AI — ask any route (e.g. Kailasapuram to Tuni) and I quote using our live booking fares. What is your name?';
-  }
-  if (!lead.phone) return `Thanks${lead.customerName ? `, ${lead.customerName}` : ''}! Please share your 10-digit mobile number.`;
   if (!lead.pickup || isGarbagePlace(lead.pickup)) {
     lead.pickup = null;
     return 'Got it. Where should we pick you up?';
@@ -1570,6 +1717,21 @@ export function applyVisitorMessageToLead(
   return lead;
 }
 
+function completeAirportPair(lead: AiLeadState, message: string): void {
+  const trimmed = message.trim();
+  if (isBareAirportToken(trimmed)) {
+    if (lead.pickup && !/airport|vtz|bhogapuram/i.test(lead.pickup)) {
+      lead.dropoff = 'Visakhapatnam Airport';
+    } else if (lead.dropoff && !/airport|vtz|bhogapuram/i.test(lead.dropoff) && (!lead.pickup || isGarbagePlace(lead.pickup))) {
+      lead.pickup = 'Visakhapatnam Airport';
+    }
+    return;
+  }
+  if (/\bbhogapuram\b/i.test(trimmed) && /\bairport\b/i.test(trimmed) && lead.pickup && !/airport|bhogapuram/i.test(lead.pickup)) {
+    lead.dropoff = 'Bhogapuram, Andhra Pradesh, India';
+  }
+}
+
 export async function generateAssistantReply(input: {
   siteId: string;
   conversationId: string;
@@ -1587,6 +1749,7 @@ export async function generateAssistantReply(input: {
   await seedLeadFromVisitor(lead, input.visitorId);
 
   applyVisitorMessageToLead(lead, input.visitorMessage, input.history);
+  completeAirportPair(lead, input.visitorMessage);
 
   const llmReady = hasLlmConfigured();
   let reply: string;
@@ -1607,6 +1770,17 @@ export async function generateAssistantReply(input: {
       lead,
       leadComplete: isLeadComplete(lead),
       suggestTransfer: true,
+    };
+  }
+
+  const special = await specialIntentReply(input.visitorMessage, lead, historyText);
+  if (special) {
+    await saveLead(lead, input.siteId, input.conversationId, input.visitorId);
+    return {
+      reply: special,
+      lead,
+      leadComplete: isLeadComplete(lead),
+      suggestTransfer: false,
     };
   }
 
@@ -1650,6 +1824,39 @@ export async function generateAssistantReply(input: {
       leadComplete: isLeadComplete(lead),
       suggestTransfer: false,
     };
+  }
+
+  if (
+    lead.pickup &&
+    lead.dropoff &&
+    !isGarbagePlace(lead.pickup) &&
+    !isGarbagePlace(lead.dropoff) &&
+    (isBareAirportToken(input.visitorMessage) || isAirportDropOrPickup(input.visitorMessage))
+  ) {
+    try {
+      const quote = await quoteOutstationRoute({
+        from: lead.pickup,
+        to: lead.dropoff,
+        tripMode: 'one-way',
+      });
+      if (quote.quotes.length) {
+        lead.meta = {
+          ...(lead.meta || {}),
+          lastQuotedKind: 'route',
+          lastQuotedFare: quote.quotes[0]?.total,
+          lastQuotedKm: quote.distanceKm,
+        };
+        await saveLead(lead, input.siteId, input.conversationId, input.visitorId);
+        return {
+          reply: formatRouteQuoteReply(quote),
+          lead,
+          leadComplete: isLeadComplete(lead),
+          suggestTransfer: false,
+        };
+      }
+    } catch (err) {
+      console.error('[ai.assistant] airport pair quote failed', err);
+    }
   }
 
   const engineReply = await tryFareEngineReply(input.visitorMessage, {

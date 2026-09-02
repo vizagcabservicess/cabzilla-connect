@@ -417,9 +417,9 @@ margin-bottom: 1.5rem !important;
  padding-right: 0 !important;
 } */
 
-/* Fix Select dropdown layout shifts */
+/* Above dialog overlay/content (10050/10051). 9999 sat behind Edit Vehicle and other modals. */
 [data-radix-popper-content-wrapper] {
-z-index: 9999 !important;
+z-index: 10060 !important;
 }
 
 /* Urbania Hero embed: allow flex child to shrink so mobile width stays within the container */
@@ -440,7 +440,7 @@ z-index: 9999 !important;
 }
 
 [data-radix-select-content] {
-  z-index: 9999 !important;
+  z-index: 10060 !important;
   box-sizing: border-box;
 }
 

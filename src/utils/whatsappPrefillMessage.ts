@@ -68,6 +68,7 @@ export function getWhatsAppPrefillMessage(pathname: string): string {
 }
 
 export const VIZAG_TAXI_HUB_PHONE_E164 = '919966363662';
+export const VIZAG_TAXI_HUB_PHONE_DISPLAY = '+91 9966363662';
 
 export function buildWhatsAppMeUrl(pathname: string): string {
   const text = encodeURIComponent(getWhatsAppPrefillMessage(pathname));

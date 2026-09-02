@@ -17,7 +17,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import { pdf } from '@react-pdf/renderer';
-import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus, Link2, MessageCircle } from 'lucide-react';
+import { BellRing, Download, Eye, History, Loader2, RefreshCw, Search, Upload, CalendarPlus, Link2 } from 'lucide-react';
 import { searchAlertsAPI, type SearchAlert } from '@/services/api/searchAlertsAPI';
 import { ConvertToBookingModal } from '@/components/admin/ConvertToBookingModal';
 import { smartBudgetAPI } from '@/services/api/smartBudgetAPI';
@@ -26,7 +26,10 @@ import {
   smartBudgetCustomerSessionUrl,
   smartBudgetWhatsAppShareUrl,
   guestSearchWhatsAppChatUrl,
+  buildGuestSearchQuoteMessage,
 } from '@/utils/searchAlertSmartBudget';
+import { FaWhatsapp } from 'react-icons/fa';
+import { VIZAG_TAXI_HUB_PHONE_DISPLAY } from '@/utils/whatsappPrefillMessage';
 import {
   buildSearchAlertExportRows,
   formatSearchAlertDateTime,
@@ -98,19 +101,25 @@ export default function SearchAlertsPage() {
   const [convertAlert, setConvertAlert] = useState<SearchAlert | null>(null);
   const [creatingSbAlertId, setCreatingSbAlertId] = useState<number | null>(null);
 
+  const guestQuoteFields = (alert: SearchAlert) => ({
+    guestPhone: alert.guestPhone,
+    pickup: alert.pickup,
+    drop: alert.drop,
+    departure: alert.departure,
+    tripType: alert.tripType,
+    routeSummary: formatRouteSummary(alert),
+    vehicleFares: getVehicleFareLines(alert),
+    resultsShown: alert.resultsShown,
+  });
+
   const handleChatGuestWhatsApp = (alert: SearchAlert) => {
-    const wa = guestSearchWhatsAppChatUrl({
-      guestPhone: alert.guestPhone,
-      pickup: alert.pickup,
-      drop: alert.drop,
-      departure: alert.departure,
-      tripType: alert.tripType,
-    });
+    const wa = guestSearchWhatsAppChatUrl(guestQuoteFields(alert));
     if (!wa) {
       toast.error('Guest number is not valid for WhatsApp');
       return;
     }
     window.open(wa, '_blank', 'noopener,noreferrer');
+    toast.info(`Send from ${VIZAG_TAXI_HUB_PHONE_DISPLAY} — stay logged into this WhatsApp`);
   };
 
   const handleCreateSmartBudgetLink = async (alert: SearchAlert) => {
@@ -274,7 +283,7 @@ export default function SearchAlertsPage() {
               Search Alerts
             </h1>
             <p className="text-gray-500 mt-1">
-              Guest cab searches sent to WhatsApp — search, filter, and export.
+              Guest cab searches sent to your WhatsApp. Send guest quotes from {VIZAG_TAXI_HUB_PHONE_DISPLAY}.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -404,7 +413,20 @@ export default function SearchAlertsPage() {
                         <TableCell className="whitespace-nowrap text-sm">
                           {formatSearchAlertDateTime(alert.searchedAt)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap font-medium">{alert.guestPhone}</TableCell>
+                        <TableCell className="whitespace-nowrap font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 hover:underline"
+                            title={`Send quote from ${VIZAG_TAXI_HUB_PHONE_DISPLAY}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChatGuestWhatsApp(alert);
+                            }}
+                          >
+                            <FaWhatsapp className="h-4 w-4 shrink-0" />
+                            {alert.guestPhone}
+                          </button>
+                        </TableCell>
                         <TableCell className="max-w-[180px] truncate" title={alert.pickup}>
                           {alert.pickup}
                         </TableCell>
@@ -447,8 +469,8 @@ export default function SearchAlertsPage() {
                                 handleChatGuestWhatsApp(alert);
                               }}
                             >
-                              <MessageCircle className="h-3.5 w-3.5 mr-1" />
-                              Chat guest
+                              <FaWhatsapp className="h-3.5 w-3.5 mr-1" />
+                              Send via {VIZAG_TAXI_HUB_PHONE_DISPLAY}
                             </Button>
                             <Button
                               type="button"
@@ -591,14 +613,22 @@ export default function SearchAlertsPage() {
                   </p>
                 )}
               </div>
+              <div className="mt-3">
+                <p className="text-sm font-medium text-muted-foreground mb-2">WhatsApp message</p>
+                <Textarea
+                  readOnly
+                  value={buildGuestSearchQuoteMessage(guestQuoteFields(selectedAlert))}
+                  className="min-h-[180px] font-mono text-xs"
+                />
+              </div>
               <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
-                  className="bg-emerald-700 hover:bg-emerald-800"
+                  className="bg-[#25D366] hover:bg-[#128C7E] text-white"
                   onClick={() => handleChatGuestWhatsApp(selectedAlert)}
                 >
-                  <MessageCircle className="h-4 w-4 mr-1.5" />
-                  Chat guest on WhatsApp
+                  <FaWhatsapp className="h-4 w-4 mr-1.5" />
+                  Send from {VIZAG_TAXI_HUB_PHONE_DISPLAY}
                 </Button>
                 <Button variant="outline" onClick={() => setSelectedAlert(null)}>
                   Close

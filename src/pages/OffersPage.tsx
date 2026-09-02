@@ -130,7 +130,7 @@ export default function OffersPage() {
     applyHomeOfferBookingPrefill(c, navigate);
     toast({
       title: 'Coupon ready',
-      description: `${c.coupon_code} is saved. Review pickup, drop, and time — then search${
+      description: `${c.coupon_code} is saved. Review pickup, drop, and time — you can edit drop if you want${
         formatOfferRouteScope(c) ? ` (${formatOfferRouteScope(c)})` : ''
       }.`,
       duration: 3500,
@@ -229,7 +229,10 @@ export default function OffersPage() {
                       c.travel_date_from,
                       c.travel_date_to
                     );
-                    const travelTimeFrom = formatOfferTravelTimeFrom(c.travel_time_from);
+                    const travelTimeFrom = formatOfferTravelTimeFrom(
+                      c.travel_time_from,
+                      c.travel_time_to
+                    );
                     const route = formatOfferRouteScope(c);
                     const headline = offerHeadline(c);
                     return (

@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, Trash2, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -86,67 +85,73 @@ export function VehicleInactiveDatesPicker({
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Vehicle Inactive Dates</h3>
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Inactive Period
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Select Date Range
-                </label>
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={selectedRange?.from}
-                  selected={selectedRange}
-                  onSelect={setSelectedRange}
-                  numberOfMonths={2}
-                  disabled={(date) => date < new Date()}
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Reason (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="e.g., Maintenance, Driver leave"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setSelectedRange(undefined);
-                    setReason('');
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={addInactiveDateRange}
-                  disabled={!selectedRange?.from || !selectedRange?.to}
-                >
-                  Add Period
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Inactive Period
+        </Button>
       </div>
+
+      {isOpen && (
+        <Card className="border-slate-200">
+          <CardContent className="p-4 space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Select Date Range
+              </label>
+              <Calendar
+                mode="range"
+                defaultMonth={selectedRange?.from}
+                selected={selectedRange}
+                onSelect={setSelectedRange}
+                numberOfMonths={1}
+                disabled={(date) => date < new Date()}
+                className="rounded-md border"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Reason (Optional)
+              </label>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g., Maintenance, Driver leave"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsOpen(false);
+                  setSelectedRange(undefined);
+                  setReason('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={addInactiveDateRange}
+                disabled={!selectedRange?.from || !selectedRange?.to}
+              >
+                Add Period
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {inactiveDates.length > 0 ? (
         <div className="space-y-2">
@@ -167,6 +172,7 @@ export function VehicleInactiveDatesPicker({
                     </div>
                   </div>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => removeInactiveDateRange(range.id)}

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS oc_campaigns (
   travel_date_from DATE DEFAULT NULL COMMENT 'Eligible trip pickup from (NULL = any)',
   travel_date_to DATE DEFAULT NULL COMMENT 'Eligible trip pickup to (NULL = any)',
   travel_time_from TIME DEFAULT NULL COMMENT 'Earliest trip pickup time (NULL = any time)',
+  travel_time_to TIME DEFAULT NULL COMMENT 'Latest trip pickup time (NULL = no end time)',
   pickup_location VARCHAR(180) DEFAULT NULL COMMENT 'Offer pickup place (NULL = any / not shown)',
   drop_location VARCHAR(180) DEFAULT NULL COMMENT 'Offer destination (NULL = any / not shown)',
   pickup_lat DECIMAL(10,7) DEFAULT NULL,

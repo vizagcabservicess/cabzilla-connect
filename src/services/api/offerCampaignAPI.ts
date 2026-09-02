@@ -242,7 +242,9 @@ export const offerCampaignAPI = {
 
     async lookupCoupon(
       couponCode: string,
-      websiteFare?: number
+      websiteFare?: number,
+      vehicleId?: string | null,
+      tourId?: string | null
     ): Promise<{ campaign: OfferCampaignPublic | null; live: boolean }> {
       const code = couponCode.trim().toUpperCase();
       try {
@@ -252,6 +254,8 @@ export const offerCampaignAPI = {
         }>('lookupCoupon', {
           coupon_code: code,
           website_fare: websiteFare,
+          vehicle_id: vehicleId || undefined,
+          tour_id: tourId || undefined,
         });
         return {
           campaign: data.campaign ?? null,

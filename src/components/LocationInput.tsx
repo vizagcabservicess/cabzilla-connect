@@ -12,7 +12,7 @@ import { isRestrictedAirportDrop } from '@/lib/restrictedAirportRoutes';
 import { cn } from '@/lib/utils';
 
 export type LocationInputHandle = {
-  focus: () => void;
+  focus: (options?: { select?: boolean }) => void;
 };
 
 // Vizag coordinates
@@ -203,15 +203,20 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     isInfieldVariant && !isDesktop && !disabled && !readOnly;
 
   useImperativeHandle(ref, () => ({
-    focus: () => {
+    focus: (options?: { select?: boolean }) => {
       if (disabled || readOnly) return;
       if (fullscreenMobileSearchSheet) {
         setMobileSearchSheetOpen(true);
         fieldTriggerRef.current?.focus();
         return;
       }
-      inputRef.current?.focus();
-      inputRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (options?.select && input.value) {
+        input.select();
+      }
     },
   }), [disabled, readOnly, fullscreenMobileSearchSheet]);
   const [predictionsLoading, setPredictionsLoading] = useState(false);

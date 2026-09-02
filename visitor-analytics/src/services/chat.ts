@@ -7,6 +7,7 @@ import { realtimeHub } from '../websocket/hub.js';
 import {
   generateAssistantReply,
   getOrCreateLead,
+  isHumanHandoffIntent,
   markLeadTransferred,
   siteHasAiEnabled,
 } from '../ai/assistant.js';
@@ -327,8 +328,9 @@ async function maybeAiReply(conv: ConversationRow, visitorText: string): Promise
   const flags = await getSiteFlags(conv.site_id);
   if (!flags || !siteHasAiEnabled(flags)) return;
 
-  // AI-first always. Only stop after an operator has claimed the chat.
+  // AI-first always. Only stop after an operator has claimed the chat, or visitor asked for a human.
   if (conv.operator_id && conv.status === 'assigned') return;
+  if (Number(conv.transferred_from_ai) === 1 && !isHumanHandoffIntent(visitorText)) return;
 
   const operatorsOnline =
     realtimeHub.hasOnlineOperators(conv.site_id) || (await countOnlineOperatorsDb(conv.site_id)) > 0;
@@ -386,6 +388,18 @@ async function maybeAiReply(conv: ConversationRow, visitorText: string): Promise
         phone: result.lead.phone,
       },
     );
+  }
+
+  if (result.suggestTransfer && isHumanHandoffIntent(visitorText)) {
+    await query(
+      `UPDATE va_chat_conversations SET
+        transferred_from_ai = 1,
+        ai_handled = 0,
+        status = 'pending'
+       WHERE id = :id AND (operator_id IS NULL OR operator_id = '')`,
+      { id: conv.id },
+    );
+    await markLeadTransferred(result.lead.id);
   }
 
   if (result.suggestTransfer && operatorsOnline) {
@@ -606,9 +620,9 @@ export async function transferAiConversationsWhenOperatorOnline(siteId: string, 
   const rows = await query<Array<{ id: string }>>(
     `SELECT id FROM va_chat_conversations
      WHERE site_id = :siteId
-       AND ai_handled = 1
        AND status IN ('open','pending','offline')
        AND (operator_id IS NULL OR operator_id = '')
+       AND (ai_handled = 1 OR transferred_from_ai = 1)
      ORDER BY last_message_at ASC
      LIMIT 20`,
     { siteId },

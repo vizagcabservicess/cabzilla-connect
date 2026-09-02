@@ -6,6 +6,8 @@ import { AVAILABLE_TOUR_ROUTES, findTourRouteByKeywords, isKnownTourSlug } from 
 import { getTourDisplayName } from '@/utils/tourUrlUtils';
 import { scrollToBookingWidget } from '@/lib/bookingWidgetScroll';
 
+export type RoutePrefillFocusField = 'pickup' | 'drop';
+
 export interface RoutePrefillPayload {
   pickupLocation: Location | null;
   dropLocation: Location | null;
@@ -14,6 +16,12 @@ export interface RoutePrefillPayload {
   autoTriggerSearch?: boolean;
   /** ISO pickup datetime from an offer / deep link. Guest can still edit. */
   pickupDate?: string;
+  /** After prefill, prompt this field so the guest can enter or edit it. */
+  focusField?: RoutePrefillFocusField;
+  /** Do not auto-assign the airport after this prefill (guest may clear/edit drop). */
+  skipAirportAutoFill?: boolean;
+  /** Airport tab direction while drop/pickup may still be empty. */
+  airportDirection?: 'From Airport' | 'To Airport';
 }
 
 export type HeaderSearchAction =

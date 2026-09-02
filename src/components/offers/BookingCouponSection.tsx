@@ -12,7 +12,9 @@ import {
   formatOfferRouteScope,
   normalizeOfferTargetId,
   isOfferRouteEligible,
+  isOfferSelectionEligible,
   offerCouponNotValidForTripMessage,
+  offerCouponNotValidForSelectionMessage,
   type OfferTripRoute,
 } from '@/types/offerCampaign';
 import { computeOfferPricing } from '@/components/offers/OfferCampaignPopup';
@@ -68,8 +70,11 @@ export function BookingCouponSection({
     if (!isOfferTravelDateEligible(suggestedCampaign, travelYmd)) return null;
     if (!isOfferTravelTimeEligible(suggestedCampaign, travelHm, true)) return null;
     if (!isOfferRouteEligible(suggestedCampaign, tripRoute, true)) return null;
+    if (!isOfferSelectionEligible(suggestedCampaign, vehicleTargetId, tourTargetId)) return null;
+    if (category !== 'tour' && !vehicleTargetId) return null;
+    if (category === 'tour' && !tourTargetId) return null;
     return computeOfferPricing(suggestedCampaign, fare);
-  }, [suggestedCampaign, fare, travelYmd, travelHm, tripRoute]);
+  }, [suggestedCampaign, fare, travelYmd, travelHm, tripRoute, vehicleTargetId, tourTargetId, category]);
 
   if (!eligible) return null;
 
@@ -84,11 +89,24 @@ export function BookingCouponSection({
       setError('Fare is still loading — try Apply again in a moment');
       return;
     }
+    if (category !== 'tour' && !vehicleTargetId) {
+      setError('Select a vehicle to apply this coupon');
+      return;
+    }
+    if (category === 'tour' && !tourTargetId) {
+      setError('Select a tour to apply this coupon');
+      return;
+    }
     setApplying(true);
     try {
       let campaign = suggestedCampaign;
       if (!campaign || campaign.coupon_code.toUpperCase() !== code) {
-        const looked = await offerCampaignAPI.public.lookupCoupon(code, fare);
+        const looked = await offerCampaignAPI.public.lookupCoupon(
+          code,
+          fare,
+          vehicleTargetId,
+          tourTargetId
+        );
         if (!looked.campaign || !looked.live) {
           setError('Invalid or expired coupon for this trip');
           return;
@@ -108,7 +126,27 @@ export function BookingCouponSection({
         );
         return;
       }
-      const pricing = computeOfferPricing(campaign, fare);
+      if (!isOfferSelectionEligible(campaign, vehicleTargetId, tourTargetId)) {
+        setError(offerCouponNotValidForSelectionMessage(campaign.category));
+        return;
+      }
+      const preview = await offerCampaignAPI.public.previewFare(
+        category,
+        fare,
+        travelYmd,
+        vehicleTargetId,
+        tourTargetId,
+        tripRoute,
+        travelHm
+      );
+      if (!preview.campaign || preview.campaign.id !== campaign.id) {
+        setError(offerCouponNotValidForSelectionMessage(campaign.category));
+        return;
+      }
+      const pricing =
+        preview.pricing && preview.pricing.website_fare > 0
+          ? preview.pricing
+          : computeOfferPricing(campaign, fare);
       if (pricing.savings <= 0 && campaign.offer_type !== 'fixed_fare') {
         setError('This coupon does not reduce the current fare');
         return;

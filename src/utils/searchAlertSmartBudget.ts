@@ -8,6 +8,7 @@ import {
   SMART_BUDGET_DEFAULTS,
   type CreateSmartBudgetSessionInput,
 } from '@/types/smartBudget';
+import { VIZAG_TAXI_HUB_PHONE_DISPLAY } from '@/utils/whatsappPrefillMessage';
 
 function parseFareAmount(fareText: string): number | null {
   const digits = fareText.replace(/[^\d]/g, '');
@@ -173,22 +174,47 @@ export function toWhatsAppChatDigits(phone: string | null | undefined): string {
   return digits;
 }
 
-/** Open a 1:1 WhatsApp chat with the searching guest (personal / Business app). */
-export function guestSearchWhatsAppChatUrl(opts: {
-  guestPhone: string;
+export type GuestSearchQuoteFields = {
   pickup?: string;
   drop?: string;
   departure?: string;
   tripType?: string;
-}): string | null {
-  const waPhone = toWhatsAppChatDigits(opts.guestPhone);
-  if (waPhone.length < 11) return null;
+  routeSummary?: string;
+  vehicleFares?: Array<{ name: string; fareText: string }> | null;
+  resultsShown?: string;
+};
+
+/** Customer-facing quote for the guest WhatsApp chat. */
+export function buildGuestSearchQuoteMessage(opts: GuestSearchQuoteFields): string {
   const trip = (opts.tripType || '').split('\n')[0].trim();
-  const lines = ['Hi, this is Vizag Taxi Hub.'];
-  lines.push(`We received your${trip ? ` ${trip}` : ''} cab search.`);
+  const lines = ['Hi, this is Vizag Taxi Hub.', '', 'Here is the cab quote for your search:'];
   if (opts.pickup?.trim()) lines.push(`Pickup: ${opts.pickup.trim()}`);
   if (opts.drop?.trim()) lines.push(`Drop: ${opts.drop.trim()}`);
+  if (trip) lines.push(`Trip: ${trip}`);
   if (opts.departure?.trim()) lines.push(`Departure: ${opts.departure.trim()}`);
-  lines.push('', 'How can we help you book?');
-  return `https://wa.me/${waPhone}?text=${encodeURIComponent(lines.join('\n'))}`;
+  if (opts.routeSummary?.trim() && opts.routeSummary !== '—') {
+    lines.push(`Route: ${opts.routeSummary.trim()}`);
+  }
+
+  const fares = (opts.vehicleFares ?? []).filter((v) => v.name?.trim());
+  if (fares.length > 0) {
+    lines.push('', 'Fares:');
+    for (const fare of fares) {
+      lines.push(`• ${fare.name.trim()}: ${fare.fareText?.trim() || '—'}`);
+    }
+  } else if (opts.resultsShown?.trim() && opts.resultsShown.trim() !== '—') {
+    lines.push('', 'Fares:', opts.resultsShown.trim());
+  }
+
+  lines.push('', `Reply here or WhatsApp ${VIZAG_TAXI_HUB_PHONE_DISPLAY} to book.`);
+  return lines.join('\n');
+}
+
+/** Open a 1:1 WhatsApp chat with the searching guest (personal / Business app). */
+export function guestSearchWhatsAppChatUrl(
+  opts: GuestSearchQuoteFields & { guestPhone: string }
+): string | null {
+  const waPhone = toWhatsAppChatDigits(opts.guestPhone);
+  if (waPhone.length < 11) return null;
+  return `https://wa.me/${waPhone}?text=${encodeURIComponent(buildGuestSearchQuoteMessage(opts))}`;
 }

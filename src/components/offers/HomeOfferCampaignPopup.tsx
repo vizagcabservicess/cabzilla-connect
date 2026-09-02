@@ -230,7 +230,7 @@ export function HomeOfferCampaignPopup({
     ? travelDateLines(selected.travel_date_from, selected.travel_date_to)
     : null;
   const travelTimeFrom = selected
-    ? formatOfferTravelTimeFrom(selected.travel_time_from)
+    ? formatOfferTravelTimeFrom(selected.travel_time_from, selected.travel_time_to)
     : null;
   const route = selected
     ? formatOfferRouteScope(selected)
@@ -266,7 +266,7 @@ export function HomeOfferCampaignPopup({
     applyHomeOfferBookingPrefill(selected, navigate);
     toast({
       title: 'Coupon ready',
-      description: `${selected.coupon_code} is saved. Review pickup, drop, and time — then search.`,
+      description: `${selected.coupon_code} is saved. Review pickup, drop, and time — you can edit drop if you want, then search.`,
       duration: 4000,
     });
     setOpen(false);

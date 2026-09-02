@@ -140,7 +140,11 @@ function locationsForOffer(
   campaign: OfferCampaignPublic,
   existingPickup: Location | null,
   existingDrop: Location | null
-): { pickup: Location | null; drop: Location | null } {
+): {
+  pickup: Location | null;
+  drop: Location | null;
+  airportDirection?: 'From Airport' | 'To Airport';
+} {
   const campPickup = campaignPlaceToLocation(
     campaign.pickup_location,
     campaign.pickup_lat,
@@ -168,6 +172,7 @@ function locationsForOffer(
       return {
         pickup: keptCityPickup ?? (campaignPickupIsGeneric ? null : campPickup),
         drop: campDrop,
+        airportDirection: 'To Airport',
       };
     }
     if (pickupAirport) {
@@ -175,6 +180,7 @@ function locationsForOffer(
       return {
         pickup: campPickup,
         drop: keptCityDrop ?? (campaignDropIsGeneric ? null : campDrop),
+        airportDirection: 'From Airport',
       };
     }
   }
@@ -187,7 +193,8 @@ function locationsForOffer(
 
 /**
  * Save the coupon, then open the home booking widget on the matching tab
- * with offer date/time (and airport drop) prefilled. Pickup stays editable.
+ * with offer date/time (and airport drop) prefilled. Drop is focused so the
+ * guest can keep the offer route or edit it.
  */
 export function applyHomeOfferBookingPrefill(
   campaign: OfferCampaignPublic,
@@ -197,7 +204,7 @@ export function applyHomeOfferBookingPrefill(
 
   const { tripType, tripMode } = tripFromCategory(campaign.category);
   const pickupDate = pickupDateFromOfferCampaign(campaign);
-  const { pickup, drop } = locationsForOffer(
+  const { pickup, drop, airportDirection } = locationsForOffer(
     campaign,
     readStoredLocation('pickupLocation'),
     readStoredLocation('dropLocation')
@@ -210,6 +217,9 @@ export function applyHomeOfferBookingPrefill(
     tripMode,
     pickupDate: pickupDate.toISOString(),
     autoTriggerSearch: false,
+    focusField: 'drop',
+    skipAirportAutoFill: true,
+    airportDirection,
   };
 
   try {
@@ -227,6 +237,7 @@ export function applyHomeOfferBookingPrefill(
     } else {
       sessionStorage.removeItem('dropLocation');
     }
+    sessionStorage.setItem('userClearedDropLocation', 'true');
   } catch {
     /* ignore quota / private mode */
   }
