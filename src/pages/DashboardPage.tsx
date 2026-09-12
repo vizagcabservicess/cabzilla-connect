@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Book, CircleOff, Eye, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info, AlertTriangle, Settings, Timer, Clock, User as UserIcon } from "lucide-react";
-import { bookingAPI } from '@/services/api';
+import { bookingAPI, userAPI } from '@/services/api';
 import { authAPI } from '@/services/api/authAPI';
 import { apiHealthCheck } from '@/services/api/healthCheck';
 import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType, User, Location as ApiLocation } from '@/types/api';
@@ -21,6 +21,43 @@ import { useAuth } from '@/providers/AuthProvider';
 import AdminLayout from '@/components/admin/AdminLayout';
 
 const MAX_RETRIES = 3;
+
+function lastTenPhoneDigits(phone: unknown): string {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+async function mergeUnlinkedCustomerBookings(userId: number, existing: Booking[]): Promise<Booking[]> {
+  const usersResponse = await userAPI.getAllUsers();
+  const users = Array.isArray(usersResponse?.data)
+    ? usersResponse.data
+    : (Array.isArray(usersResponse) ? usersResponse : []);
+  const target = users.find((candidate: User) => Number(candidate.id) === userId);
+  const phoneDigits = lastTenPhoneDigits(target?.phone);
+  const email = String(target?.email ?? '').trim().toLowerCase();
+  if (!phoneDigits && !email) {
+    return existing;
+  }
+
+  const adminBookings = await bookingAPI.getAllBookings();
+  const extras = (Array.isArray(adminBookings) ? adminBookings : []).filter((booking) => {
+    const row = booking as Booking & { passenger_phone?: string; passenger_email?: string };
+    const bookingPhone = lastTenPhoneDigits(row.passengerPhone ?? row.passenger_phone);
+    const bookingEmail = String(row.passengerEmail ?? row.passenger_email ?? '').trim().toLowerCase();
+    return (phoneDigits !== '' && bookingPhone === phoneDigits)
+      || (email !== '' && bookingEmail !== '' && bookingEmail === email);
+  });
+
+  const seen = new Set(existing.map((booking) => booking.id));
+  const merged = [...existing];
+  extras.forEach((booking) => {
+    if (!seen.has(booking.id)) {
+      seen.add(booking.id);
+      merged.push(booking);
+    }
+  });
+  return merged;
+}
 
 export default function DashboardPage() {
   const { user, isLoading: loading, isAuthenticated, updateProfile } = useAuth();
@@ -146,13 +183,20 @@ export default function DashboardPage() {
         targetUserId,
         isViewingAsUser ? { viewAs: true } : undefined
       );
+      let list: Booking[] = [];
       if (Array.isArray(data)) {
-        setBookings(data);
+        list = data;
       } else if (data && Array.isArray(data.bookings)) {
-        setBookings(data.bookings);
-      } else {
-        setBookings([]);
+        list = data.bookings;
       }
+      if (isViewingAsUser && list.length === 0) {
+        try {
+          list = await mergeUnlinkedCustomerBookings(targetUserId, list);
+        } catch (mergeError) {
+          console.warn('Could not attach unlinked customer bookings', mergeError);
+        }
+      }
+      setBookings(list);
       setRetryCount(0);
     } catch (error) {
       setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
@@ -226,8 +270,14 @@ export default function DashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'admin_created': return 'bg-violet-100 text-violet-900';
+      case 'pending_offline_booking': return 'bg-violet-100 text-violet-900';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'payment_pending': return 'bg-yellow-100 text-yellow-800';
       case 'confirmed': return 'bg-green-100 text-green-800';
+      case 'assigned': return 'bg-green-100 text-green-800';
+      case 'in_progress': return 'bg-green-100 text-green-800';
+      case 'payment_received': return 'bg-green-100 text-green-800';
+      case 'continued': return 'bg-green-100 text-green-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -251,15 +301,38 @@ export default function DashboardPage() {
   const parseDate = (dateStr) => new Date(dateStr);
   const isFuture = (dateStr) => parseDate(dateStr) > now;
   const isPast = (dateStr) => parseDate(dateStr) < now;
+  const pickupAt = (booking: Booking) => booking.pickup_date || booking.pickupDate;
+  const isOpenTripStatus = (status: Booking['status']) => {
+    switch (status) {
+      case 'pending':
+      case 'confirmed':
+      case 'admin_created':
+      case 'pending_offline_booking':
+      case 'assigned':
+      case 'in_progress':
+      case 'payment_pending':
+      case 'payment_received':
+      case 'continued':
+        return true;
+      case 'completed':
+      case 'cancelled':
+        return false;
+      default: {
+        const _exhaustive: never = status;
+        void _exhaustive;
+        return false;
+      }
+    }
+  };
 
   const currentBooking = bookings.find(
-    b => ['pending', 'confirmed', 'in_progress'].includes(b.status) && isFuture(b.pickup_date || b.pickupDate)
+    b => isOpenTripStatus(b.status) && isFuture(pickupAt(b))
   );
   const upcomingBookings = bookings.filter(
-    b => ['pending', 'confirmed'].includes(b.status) && isFuture(b.pickup_date || b.pickupDate) && b !== currentBooking
+    b => isOpenTripStatus(b.status) && isFuture(pickupAt(b)) && b !== currentBooking
   );
   const pastBookings = bookings.filter(
-    b => b.status === 'completed' && isPast(b.pickup_date || b.pickupDate)
+    b => b.status !== 'cancelled' && (b.status === 'completed' || isPast(pickupAt(b)))
   );
   const cancelledBookings = bookings.filter(
     b => b.status === 'cancelled'
@@ -600,6 +673,12 @@ export default function DashboardPage() {
   );
 }
 
+function locationLabel(location: Booking['pickupLocation'] | Booking['pickup_location'] | undefined): string {
+  if (!location) return '';
+  if (typeof location === 'string') return location;
+  return location.name || location.address || `${location.city}, ${location.state}`;
+}
+
 function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, safeToFixed }: { 
   bookings: Booking[]; 
   isRefreshing: boolean;
@@ -649,12 +728,12 @@ function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, safe
                     </span>
                   </div>
                   <h3 className="mt-2 text-lg font-semibold">
-                    {booking.pickupLocation} → {booking.dropLocation}
+                    {locationLabel(booking.pickupLocation || booking.pickup_location)} → {locationLabel(booking.dropLocation || booking.drop_location)}
                   </h3>
                   <div className="mt-2 space-y-1 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      <span>{formatDate(booking.pickupDate)}</span>
+                      <span>{formatDate(booking.pickupDate || booking.pickup_date)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Car className="h-4 w-4" />

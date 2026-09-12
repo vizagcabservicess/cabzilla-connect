@@ -122,15 +122,16 @@ try {
 error_log("Debug - advance_paid_amount column exists, proceeding with full SQL");
 
 try {
-    // Extract user_id from JWT token if present
+    // Link to the customer account by passenger phone/email — never the admin JWT
     $user_id = null;
-    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!empty($auth_header) && strpos($auth_header, 'Bearer ') === 0) {
-        $token = substr($auth_header, 7);
-        $payload = verifyJwtToken($token);
-        if ($payload && isset($payload['user_id'])) {
-            $user_id = $payload['user_id'];
-        }
+    $linkHelper = __DIR__ . '/../common/customer_booking_link.php';
+    if (file_exists($linkHelper)) {
+        require_once $linkHelper;
+        $user_id = vth_resolve_booking_user_id(
+            $conn,
+            $requestData['passengerPhone'] ?? '',
+            $requestData['passengerEmail'] ?? ''
+        );
     }
     
     // Generate unique booking number

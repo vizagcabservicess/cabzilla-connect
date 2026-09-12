@@ -190,8 +190,33 @@ let googleMapsDenied = false;
 
 /** Well-known places so chat text matches booking pins (state-correct). */
 const PLACE_ALIASES: Array<{ match: RegExp; query: string; lat?: number; lon?: number }> = [
+  {
+    match: /\b(?:hotel\s+)?royal\s*fort\b/i,
+    query: 'Hotel Royal Fort, Ram Nagar, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.7265,
+    lon: 83.3055,
+  },
+  {
+    match: /\brtc\s*(?:complex|bus(?:\s*stand)?)\b/i,
+    query: 'RTC Complex, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.722,
+    lon: 83.306,
+  },
+  {
+    match: /\bthe\s+park(?:\s+hotel)?\b/i,
+    query: 'The Park Hotel, Visakhapatnam, Andhra Pradesh, India',
+    lat: 17.711,
+    lon: 83.316,
+  },
   { match: /\bkailasapuram\b/i, query: 'Kailasapuram, Visakhapatnam, Andhra Pradesh, India', lat: 17.7409, lon: 83.2882 },
   { match: /\bpendurthi|pendhurthi|pendurty\b/i, query: 'Pendurthi, Visakhapatnam, Andhra Pradesh, India', lat: 17.801, lon: 83.209 },
+  {
+    match:
+      /\b(?:vizag|visakhapatnam)\s+new\s+airport\b|\bnew\s+(?:vizag|visakhapatnam)\s+airport\b|\bbhogapuram\s+(?:intl|international)?\s*airport\b|\bairport\s+arrival\s*(?:spot|gate|hall)?\b|\barrival\s+spot\b/i,
+    query: 'Bhogapuram International Airport, Andhra Pradesh, India',
+    lat: 17.972,
+    lon: 83.479,
+  },
   {
     match: /^(?:the\s+)?airport$|\b(?:vizag|visakhapatnam)\s*airport\b|\bairport\s*(?:vizag|visakhapatnam)\b|\bvtz\b/i,
     query: 'Visakhapatnam Airport, Andhra Pradesh, India',
@@ -891,7 +916,15 @@ export async function quoteOutstationRoute(input: {
   };
 }
 
-export function formatRouteQuoteReply(q: RouteQuoteResult): string {
+export function formatRouteQuoteReply(
+  q: RouteQuoteResult,
+  opts?: {
+    passengerCount?: number | null;
+    travelDate?: string | null;
+    travelTime?: string | null;
+    vehicle?: string | null;
+  },
+): string {
   if (q.source === RESTRICTED_AIRPORT_ROUTE_SOURCE) {
     return RESTRICTED_AIRPORT_ROUTE_MESSAGE;
   }
@@ -903,12 +936,20 @@ export function formatRouteQuoteReply(q: RouteQuoteResult): string {
       .replace(/Town, Koraput, Odisha/i, 'Koraput, Odisha')
       .replace(/, Odisha/i, ', Odisha')
       .replace(/, Visakhapatnam$/i, '')
+      .replace(/\s*\(Bhogapuram\)/i, '')
       .trim();
   const lines = q.quotes
     .slice(0, 5)
     .map((v) => `• ${v.label}: ₹${v.total.toLocaleString('en-IN')}`)
     .join('\n');
   const dur = q.durationText ? ` · ~${q.durationText}` : '';
+  const pax = opts?.passengerCount && opts.passengerCount > 0 ? opts.passengerCount : null;
+  const paxNote =
+    pax && pax >= 8
+      ? `For ${pax} persons, only vehicles that fit are listed (Sedan / Ertiga / Innova cannot seat ${pax}).\n`
+      : pax
+        ? `Quoted for ${pax} persons (whole vehicle, not per seat).\n`
+        : '';
 
   let header: string;
   if (q.tripMode === 'round-trip') {
@@ -922,16 +963,21 @@ export function formatRouteQuoteReply(q: RouteQuoteResult): string {
       (rtKm > included ? ` · ${rtKm - included} km extra beyond package` : '') +
       `\n`;
   } else if (q.pricingModel === 'airport') {
-    header = `${short(q.from)} → ${short(q.to)}: ~${q.distanceKm} km${dur}.\n`;
+    header = `${short(q.from)} → ${short(q.to)}: ~${q.distanceKm} km${dur} (one-way).\n`;
   } else {
-    header = `${short(q.from)} → ${short(q.to)}: ~${q.distanceKm} km${dur}.\n`;
+    header = `${short(q.from)} → ${short(q.to)}: ~${q.distanceKm} km${dur} (one-way).\n`;
   }
 
-  return (
-    header +
-    `Fares:\n${lines}\n` +
-    `Reply "book it" to get your website checkout link, or share travel date / pickup time / vehicle. Call +91 99663 63662 anytime.`
-  );
+  const missing: string[] = [];
+  if (!opts?.travelDate) missing.push('travel date');
+  if (!opts?.travelTime) missing.push('pickup time');
+  if (!opts?.vehicle) missing.push('vehicle');
+  const cta =
+    missing.length > 0
+      ? `Reply "book it" for checkout, or share ${missing.join(' / ')}. Call +91 99663 63662 anytime.`
+      : `Reply "book it" to get your website checkout link. Call +91 99663 63662 anytime.`;
+
+  return header + paxNote + `Fares:\n${lines}\n` + cta;
 }
 
 export interface TourPackage {
@@ -1503,8 +1549,10 @@ export function extractRoutePlaces(message: string): { from: string; to: string 
     .replace(/\b(round\s*-?\s*trip|return\s+trip|one\s*-?\s*way)\b/gi, ' ')
     .replace(/\bfor\s+(\d+|one|two|three|four|five|six|seven)\s+days?\b/gi, ' ')
     .replace(/\b(\d+|one|two|three|four|five|six|seven)\s+days?\b/gi, ' ')
-    .replace(/\b(?:at|by)\s+\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?\b/gi, ' ')
-    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b/gi, ' ')
+    .replace(/\b(?:at|by)\s+\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|fn|an)?\b/gi, ' ')
+    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|fn|an)\b/gi, ' ')
+    // Flight origin is NOT the cab destination: "arriving from Chennai"
+    .replace(/\b(?:arriv(?:e|ing)|coming|landing|flight)\s+from\s+[A-Za-z][A-Za-z\s]{1,40}/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 

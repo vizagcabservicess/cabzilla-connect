@@ -99,14 +99,17 @@ if (APP_DEBUG) {
     ini_set('display_errors', 0);
 }
 
-// Session Security Configuration
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-// Only set secure if HTTPS
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-    ini_set('session.cookie_secure', 1);
+// Session Security Configuration (skip on CLI so Hostinger cron cannot die on session_start)
+if (PHP_SAPI !== 'cli') {
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_only_cookies', 1);
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        ini_set('session.cookie_secure', 1);
+    }
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
 }
-session_start();
 
 // str_starts_with polyfill for PHP < 8.0
 if (!function_exists('str_starts_with')) {

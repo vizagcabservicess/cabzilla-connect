@@ -83,6 +83,36 @@ function formatPickupDisplay(dateString: string): string {
   }
 }
 
+type CronRunInfo = {
+  booking_count: number;
+  status: string;
+  trigger: string;
+  created_at: string;
+};
+
+function formatIstDateTime(value: string): string {
+  if (!value) return '—';
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(/Z$|[+-]\d{2}:\d{2}$/.test(normalized) ? normalized : `${normalized}+05:30`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+}
+
+function cronRunSummary(run: CronRunInfo | null | undefined, label: string): string {
+  if (!run) {
+    return `${label}: never`;
+  }
+  return `${label}: ${formatIstDateTime(run.created_at)} · ${run.status} · ${run.booking_count} trip(s)`;
+}
+
 function tripTypeKey(booking: Booking): string {
   return String(booking.tripType ?? booking.trip_type ?? '').toLowerCase();
 }
@@ -122,6 +152,20 @@ export function UpcomingTripsList() {
   const [whatsappSendingId, setWhatsappSendingId] = useState<number | null>(null);
   const [bulkTomorrowOpen, setBulkTomorrowOpen] = useState(false);
   const [bulkTomorrowSending, setBulkTomorrowSending] = useState(false);
+  const [cronStatusText, setCronStatusText] = useState<string | null>(null);
+
+  const fetchCronStatus = useCallback(async () => {
+    try {
+      const res = await bookingAPI.getAdminCronStatus();
+      const lastCron = res.data?.last_cron_run;
+      const lastRun = res.data?.last_run;
+      setCronStatusText(
+        `${cronRunSummary(lastCron, 'Auto cron')} · ${cronRunSummary(lastRun, 'Last send')}`,
+      );
+    } catch {
+      setCronStatusText(null);
+    }
+  }, []);
 
   const fetchUpcoming = useCallback(async () => {
     try {
@@ -154,6 +198,10 @@ export function UpcomingTripsList() {
   useEffect(() => {
     fetchUpcoming();
   }, [fetchUpcoming]);
+
+  useEffect(() => {
+    void fetchCronStatus();
+  }, [fetchCronStatus]);
 
   const handleViewDetails = async (booking: Booking) => {
     try {
@@ -337,6 +385,7 @@ export function UpcomingTripsList() {
       }
       setBulkTomorrowOpen(false);
       await fetchUpcoming();
+      await fetchCronStatus();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Bulk WhatsApp failed');
     } finally {
@@ -486,7 +535,7 @@ export function UpcomingTripsList() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Send tomorrow&apos;s trip summary to admin WhatsApp?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Sends the same grouped summary as the daily cron to numbers in{' '}
+                  Sends the same grouped summary as the daily 7:00 PM IST cron to numbers in{' '}
                   <strong>WHATSAPP_ADMIN_PHONES</strong> (trip Cloud API line). Includes all active bookings
                   with pickup <strong>tomorrow</strong> (pending, confirmed, assigned, etc. — not completed or
                   cancelled). Long lists are split into multiple messages per admin number.
@@ -504,6 +553,9 @@ export function UpcomingTripsList() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          {cronStatusText && (
+            <p className="w-full text-xs text-muted-foreground">{cronStatusText}</p>
+          )}
         </div>
       </div>
 

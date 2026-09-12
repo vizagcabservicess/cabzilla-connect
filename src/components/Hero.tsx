@@ -15,7 +15,7 @@ import { DateTimePicker, type DateTimePickerHandle } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { Location, getVizagAirportLocations, resolveCanonicalVizagAirport } from '@/lib/locationData';
-import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, isWithinTourPickupRadius } from '@/lib/locationUtils';
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, isSelectedMapLocation, isWithinTourPickupRadius } from '@/lib/locationUtils';
 import {
   getServicePathForTripType,
   inferTripServiceType,
@@ -251,7 +251,7 @@ function isAllowedPickupLocation(
   location: Location | null | undefined,
   _tripType?: TripType
 ): boolean {
-  if (!location) return false;
+  if (!isSelectedMapLocation(location)) return false;
   if (isVizagAirportLocation(location)) return true;
   return isLocationInVizag(location);
 }
@@ -1417,13 +1417,13 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   // Validate form fields and set isFormValid
   useEffect(() => {
     let valid = true;
-    if (!pickupLocation || !pickupLocation.name) valid = false;
+    if (!isSelectedMapLocation(pickupLocation)) valid = false;
     if (
       (tripType === 'outstation' ||
         tripType === 'airport' ||
         tripType === 'custom' ||
         tripType === 'local') &&
-      (!dropLocation || !dropLocation.name)
+      !isSelectedMapLocation(dropLocation)
     )
       valid = false;
     if (
@@ -1441,7 +1441,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     }
     if (!pickupDate) valid = false;
     if (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) valid = false;
-    if (tripType === 'outstation' && intermediateStops.some((stop) => !stop?.name)) valid = false;
+    if (tripType === 'outstation' && intermediateStops.some((stop) => !isSelectedMapLocation(stop))) valid = false;
     setIsFormValid(valid);
   }, [pickupLocation, dropLocation, pickupDate, returnDate, tripType, tripMode, intermediateStops]);
 
@@ -1624,7 +1624,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
 
   const handlePickupLocationChange = (location: Location) => {
     // Check if location is null, undefined, or empty (cleared)
-    const isLocationCleared = !location || !location.name || location.name === '';
+    const isLocationCleared = !isSelectedMapLocation(location);
     
     if (isLocationCleared) {
       if (tripType === 'airport' && airportDirectionLabel !== 'To Airport' && airportLocation) {
@@ -1688,7 +1688,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   
   const handleDropLocationChange = (location: Location) => {
     // Check if location is null, undefined, or empty (cleared)
-    const isLocationCleared = !location || !location.name || location.name === '';
+    const isLocationCleared = !isSelectedMapLocation(location);
     
     if (isLocationCleared) {
       setRestrictedRouteNotice(null);
@@ -1752,7 +1752,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   const handleOutstationStopChange = (index: number, location: Location | null) => {
     setIntermediateStops((prev) => {
       const next = [...prev];
-      next[index] = location;
+      next[index] = isSelectedMapLocation(location) ? location : null;
       return next;
     });
   };
@@ -1956,7 +1956,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (!isFormValid) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields before continuing.",
+        description: "Select pickup and drop from the Google Maps suggestions, then try again.",
         variant: "destructive",
         duration: 3000,
       });
@@ -3966,7 +3966,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             searchButtonRefs.current.mobile = el;
                           }}
                           onClick={handleContinue}
-                          disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
+                          disabled={!isSelectedMapLocation(pickupLocation) || isCalculatingDistance || isLoading || !isFormValid}
                           className={cn(
                             'axis-search-btn mt-4 flex h-11 w-full items-center justify-center px-4 text-sm uppercase tracking-wide shadow-md disabled:opacity-60',
                             (urbaniaMobileEmbedShell || heroMobileUnifiedShell || isServiceLandingEmbed) && 'max-lg:mt-2'
@@ -4335,7 +4335,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 searchButtonRefs.current.desktop = el;
                               }}
                               onClick={handleContinue}
-                              disabled={!pickupLocation || !pickupLocation.name || isCalculatingDistance || isLoading || !isFormValid}
+                              disabled={!isSelectedMapLocation(pickupLocation) || isCalculatingDistance || isLoading || !isFormValid}
                               className={cn(
                                 'axis-search-btn flex h-[2.75rem] items-center gap-2 px-6 py-2.5 text-sm',
                                 embedDesktopCardLayout && 'mt-1 h-12 w-full justify-center text-base font-semibold',

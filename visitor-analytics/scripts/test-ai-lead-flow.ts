@@ -17,11 +17,16 @@ import {
 import { extractRoutePlaces, isLocalHourlyPackageIntent, looksLikeClockToken } from '../src/services/fareEngine';
 import {
   extractFlexibleDate,
+  extractFlexibleTime,
   isAccommodationIntent,
+  isClarifyingQuestion,
+  isTripModeQuestion,
   isTwoDayArakuIntent,
   isVehicleRateOnlyIntent,
   parseFlexibleDate,
   parseTripBlob,
+  parseTripModeAnswer,
+  vehicleIdsForPassengerCount,
 } from '../src/ai/chatIntents';
 
 let failed = 0;
@@ -226,6 +231,38 @@ check('book it phrase is not a place', () => {
   assert.equal(lead.dropoff, 'Rajahmundry');
 });
 
+check('one-way vs round-trip question is not a destination', () => {
+  assert.equal(isTripModeQuestion('is it a one way or round trip ?'), true);
+  assert.equal(isTripModeQuestion('Is this one-way fare?'), true);
+  assert.equal(isClarifyingQuestion('is it a one way or round trip ?'), true);
+  assert.equal(parseTripModeAnswer('is it a one way or round trip ?'), null);
+  assert.equal(parseTripModeAnswer('round trip'), 'round-trip');
+  assert.equal(parseTripModeAnswer('one way'), 'one-way');
+  assert.equal(isGarbagePlace('is it a one way or round trip ?'), true);
+
+  const lead = blankLead({
+    pickup: 'RK Beach',
+    dropoff: 'Kakinada',
+    travelDate: '2026-09-04',
+    travelTime: '10:30 AM',
+    vehicle: 'Sedan',
+    meta: { lastQuotedKm: 168, lastQuotedTripMode: 'one-way' },
+  });
+  applyVisitorMessageToLead(lead, 'is it a one way or round trip ?', []);
+  assert.equal(lead.pickup, 'RK Beach');
+  assert.match(String(lead.dropoff), /kakinada/i);
+  assert.ok(!/one way|round trip/i.test(String(lead.dropoff)));
+  assert.equal(lead.travelDate, '2026-09-04');
+  assert.equal(lead.vehicle, 'Sedan');
+});
+
+check('are these fares round trip is not a new drop', () => {
+  const lead = blankLead({ pickup: 'Vizag', dropoff: 'Hyderabad', travelDate: '2026-10-12' });
+  applyVisitorMessageToLead(lead, 'are these fares for round trip or one way', []);
+  assert.match(String(lead.dropoff), /hyderabad/i);
+  assert.equal(lead.travelDate, '2026-10-12');
+});
+
 check('Kailasapuram to Vizianagaram', () => {
   const lead = blankLead();
   applyVisitorMessageToLead(lead, 'Kailasapuram to Vizianagaram', []);
@@ -411,6 +448,193 @@ check('15 October is date not a new destination', () => {
   ]);
   assert.equal(lead.travelDate, '2026-10-15');
   assert.match(String(lead.dropoff), /araku/i);
+});
+
+console.log('\n=== Unstructured trip dumps (any phrasing) ===');
+
+type DumpExpect = {
+  pickup?: RegExp;
+  dropoff?: RegExp;
+  date?: string;
+  time?: RegExp;
+  pax?: number;
+  vehicle?: RegExp;
+  notDrop?: RegExp;
+};
+
+const TRIP_DUMPS: Array<[string, string, DumpExpect]> = [
+  [
+    'airport arrival dump',
+    '21 09 2026 MONDAY ARRIVING AT VIZAG NEW AIRPORT BY 11 30 AM 10 PERSONS DROP AT ROYAL FORT HOTEL',
+    {
+      pickup: /airport|bhogapuram/i,
+      dropoff: /royal\s*fort/i,
+      date: '2026-09-21',
+      time: /11:30\s*AM/i,
+      pax: 10,
+      notDrop: /chennai/i,
+    },
+  ],
+  [
+    'drop first + flight origin ignored',
+    'DROP AT HOTEL ROYAL FORT RAM NAGAR 10 PERSONS 21 09 2026 MONDAY 11:30 FN ARRIVING FROM CHENNAI',
+    {
+      dropoff: /royal\s*fort/i,
+      date: '2026-09-21',
+      time: /11:30\s*AM/i,
+      pax: 10,
+      notDrop: /chennai/i,
+    },
+  ],
+  [
+    'from A to B + date time pax vehicle',
+    'need cab from Gajuwaka to Vizag airport tomorrow 5am 4 persons sedan',
+    { pickup: /gajuwaka/i, dropoff: /airport/i, time: /5:00\s*AM/i, pax: 4, vehicle: /sedan/i },
+  ],
+  [
+    'pickup from / drop at',
+    'pickup from railway station drop at Novotel 25/09/2026 8pm',
+    { pickup: /railway/i, dropoff: /novotel/i, date: '2026-09-25', time: /8:00\s*PM/i },
+  ],
+  [
+    'going to city from Vizag',
+    'going to Hyderabad from Vizag 6 people innova 12 Oct 6am',
+    { pickup: /vizag/i, dropoff: /hyderabad/i, pax: 6, vehicle: /innova/i, time: /6:00\s*AM/i },
+  ],
+  [
+    'from-to one way slash date',
+    'from Akkayapalem to Rajahmundry one way 23-10-2026 10am',
+    { pickup: /akkayapalem/i, dropoff: /rajahmundry/i, date: '2026-10-23', time: /10:00\s*AM/i },
+  ],
+  [
+    'dest-only taxi + pax + tomorrow morning',
+    'want taxi to Tuni 3 pax tomorrow morning',
+    { pickup: /vizag/i, dropoff: /tuni/i, pax: 3, time: /morning/i },
+  ],
+  [
+    'pick us from / drop RTC',
+    'pick us from MVP colony drop RTC complex 4 persons',
+    { pickup: /mvp/i, dropoff: /rtc/i, pax: 4 },
+  ],
+  [
+    'landing airport drop hotel flight origin ignored',
+    'coming from Delhi landing vizag airport 2pm drop The Park hotel 6 pax',
+    {
+      pickup: /airport/i,
+      dropoff: /park/i,
+      time: /2:00\s*PM/i,
+      pax: 6,
+      notDrop: /delhi/i,
+    },
+  ],
+  [
+    'leave for city ertiga round trip',
+    'leave for Vijayawada 15.10.2026 5.30am ertiga round trip',
+    { pickup: /vizag/i, dropoff: /vijayawada/i, date: '2026-10-15', time: /5:30\s*AM/i, vehicle: /ertiga/i },
+  ],
+  [
+    'airport to locality slash date',
+    'Vizag airport to Madhurawada 21/09/2026 11:30am 2 persons',
+    { pickup: /airport/i, dropoff: /madhurawada/i, date: '2026-09-21', time: /11:30\s*AM/i, pax: 2 },
+  ],
+  [
+    'collect from NAD going to Kakinada tempo',
+    'collect from NAD junction going to Kakinada 8 persons tempo 26 Sep',
+    { pickup: /nad/i, dropoff: /kakinada/i, pax: 8, vehicle: /tempo/i },
+  ],
+  [
+    'comma blob still works',
+    'Vizag airport, Jeypore odisha, one-way, 14th August, 8 AM, Small car',
+    { pickup: /airport/i, dropoff: /jeypore/i, vehicle: /sedan/i },
+  ],
+  [
+    'hotel to airport clock time',
+    'Novotel to airport at 07:00 am',
+    { pickup: /novotel/i, dropoff: /airport/i, time: /7:00\s*AM|07:00/i },
+  ],
+  [
+    '12 members needs tempo class',
+    'Vizag to Rajahmundry 12 members 25-09-2026 7am',
+    { pickup: /vizag/i, dropoff: /rajahmundry/i, pax: 12, date: '2026-09-25' },
+  ],
+];
+
+for (const [name, message, exp] of TRIP_DUMPS) {
+  check(name, () => {
+    const lead = blankLead();
+    applyVisitorMessageToLead(lead, message);
+    if (exp.pickup) {
+      assert.match(String(lead.pickup), exp.pickup, `pickup=${lead.pickup}`);
+    }
+    if (exp.dropoff) {
+      assert.match(String(lead.dropoff), exp.dropoff, `drop=${lead.dropoff}`);
+    }
+    if (exp.notDrop) {
+      assert.ok(!exp.notDrop.test(String(lead.dropoff)), `drop must not match ${exp.notDrop}: ${lead.dropoff}`);
+    }
+    if (exp.date) assert.equal(lead.travelDate, exp.date, `date=${lead.travelDate}`);
+    if (exp.time) assert.match(String(lead.travelTime), exp.time, `time=${lead.travelTime}`);
+    if (exp.pax) assert.equal(lead.meta?.passengerCount, exp.pax, `pax=${lead.meta?.passengerCount}`);
+    if (exp.vehicle) assert.match(String(lead.vehicle), exp.vehicle, `vehicle=${lead.vehicle}`);
+    if (exp.pax && exp.pax >= 9) {
+      assert.deepEqual(vehicleIdsForPassengerCount(exp.pax), ['tempo_traveller', 'bus']);
+    }
+  });
+}
+
+check('space date 21 09 2026', () => {
+  assert.equal(extractFlexibleDate('21 09 2026 MONDAY ARRIVING AT VIZAG NEW AIRPORT'), '2026-09-21');
+  assert.equal(parseFlexibleDate('21 09 2026'), '2026-09-21');
+});
+
+check('11 30 AM and 11:30 FN times', () => {
+  assert.equal(extractFlexibleTime('BY 11 30 AM 10 PERSONS'), '11:30 AM');
+  assert.equal(extractFlexibleTime('11:30 FN ARRIVING FROM CHENNAI'), '11:30 AM');
+});
+
+check('arriving from Chennai is not a cab route', () => {
+  assert.equal(
+    extractRoutePlaces('DROP AT HOTEL ROYAL FORT RAM NAGAR ARRIVING FROM CHENNAI'),
+    null,
+  );
+});
+
+check('lead keeps airport pickup and hotel drop across the chat', () => {
+  const lead = blankLead();
+  applyVisitorMessageToLead(
+    lead,
+    '21 09 2026 MONDAY ARRIVING AT VIZAG NEW AIRPORT BY 11 30 AM 10 PERSONS DROP AT ROYAL FORT HOTEL',
+  );
+  assert.match(String(lead.pickup), /airport|bhogapuram/i, `pickup=${lead.pickup}`);
+  assert.match(String(lead.dropoff), /royal\s*fort/i, `drop=${lead.dropoff}`);
+  assert.ok(!/chennai/i.test(String(lead.dropoff)));
+  assert.equal(lead.travelDate, '2026-09-21');
+  assert.equal(lead.travelTime, '11:30 AM');
+  assert.equal(lead.meta?.passengerCount, 10);
+
+  applyVisitorMessageToLead(lead, 'AIRPORT ARRIVAL SPOT', [
+    {
+      role: 'assistant',
+      content: 'Please share pickup location, drop location, one-way or round-trip, and preferred vehicle.',
+    },
+  ]);
+  assert.match(String(lead.pickup), /airport|bhogapuram/i);
+  assert.match(String(lead.dropoff), /royal\s*fort/i);
+
+  applyVisitorMessageToLead(
+    lead,
+    'DROP AT HOTEL ROYAL FORT RAM NAGAR 10 PERSONS 21 09 2026 MONDAY 11:30 FN ARRIVING FROM CHENNAI',
+  );
+  assert.match(String(lead.pickup), /airport|bhogapuram/i, `pickup after chennai msg=${lead.pickup}`);
+  assert.match(String(lead.dropoff), /royal\s*fort/i, `drop after chennai msg=${lead.dropoff}`);
+  assert.ok(!/chennai/i.test(String(lead.dropoff)), 'drop must not become Chennai');
+  assert.equal(lead.travelDate, '2026-09-21');
+  assert.equal(lead.travelTime, '11:30 AM');
+
+  applyVisitorMessageToLead(lead, 'FOR 10 PERSONS ANY SUITABLE VEHICLE');
+  assert.equal(lead.meta?.passengerCount, 10);
+  assert.match(String(lead.vehicle), /tempo|urbania/i);
+  assert.match(String(lead.dropoff), /royal\s*fort/i);
 });
 
 void Promise.all(pending).then(() => {

@@ -5,7 +5,7 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { ArrowLeft, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { locationMatchesSearchQuery, resolveCanonicalVizagAirport, type Location } from '@/lib/locationData';
-import { TOUR_PICKUP_RADIUS_KM, isWithinTourPickupRadius } from '@/lib/locationUtils';
+import { TOUR_PICKUP_RADIUS_KM, isSelectedMapLocation, isWithinTourPickupRadius } from '@/lib/locationUtils';
 import type { TripType } from '@/lib/tripTypes';
 import { BHOGAPURAM_AIRPORT, BHOGAPURAM_AIRPORT_CATCHMENT_KM, isAirportTransferOtherEnd, isVizagAirportLocation } from '@/lib/inferTripService';
 import { isRestrictedAirportDrop } from '@/lib/restrictedAirportRoutes';
@@ -223,6 +223,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const [noGooglePredictions, setNoGooglePredictions] = useState(false);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const predictionsRequestSeq = useRef(0);
+  const justSelectedPlaceRef = useRef(false);
   /** Full input row (pin + field); Google `.pac-container` is on `body` — we sync its box to this. */
   const pacAnchorRef = useRef<HTMLDivElement | null>(null);
   /** Bottom edge of fullscreen search pill — `.pac-container` opens below here (mobile Urbania sheet). */
@@ -724,6 +725,10 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
               popularityScore: 50,
             };
             const resolved = canonicalizePickedLocation(picked, typedQuery);
+            justSelectedPlaceRef.current = true;
+            window.setTimeout(() => {
+              justSelectedPlaceRef.current = false;
+            }, 500);
             setInputValue(resolved.name || resolved.address || '');
             if (onChangeRef.current) {
               onChangeRef.current(resolved.name || resolved.address || '');
@@ -763,9 +768,26 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     enforceVizag35Km,
   ]);
 
+  const clearLocationField = () => {
+    setInputValue('');
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+    if (onChange) onChange('');
+    if (onLocationChange) {
+      onLocationChange(EMPTY_LOCATION);
+    }
+    setShowSuggestions(false);
+    setNoGooglePredictions(false);
+    if (mobileSearchSheetOpen) {
+      queueMicrotask(() => inputRef.current?.focus());
+    }
+  };
+
   const closeMobileSearchSheet = () => {
     setMobileSearchSheetOpen(false);
     setIsFocused(false);
+    window.setTimeout(revertUnselectedTypedText, 280);
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -818,6 +840,10 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
        toast("Selected location is outside the airport transfer area. We'll automatically switch to Outstation for this trip.");
        onRequestOutstationSwitchRef.current?.();
      }
+    justSelectedPlaceRef.current = true;
+    window.setTimeout(() => {
+      justSelectedPlaceRef.current = false;
+    }, 500);
     setInputValue(resolved.name || resolved.address || "");
     
     // Call the original onChange if provided
@@ -836,9 +862,68 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     }
   };
   
+  const committedLocationFromProps = (): Location | undefined => {
+    return (
+      locationRef.current ??
+      (typeof valueRef.current === 'object' && valueRef.current !== null
+        ? (valueRef.current as Location)
+        : undefined)
+    );
+  };
+
+  const revertUnselectedTypedText = (opts?: { silent?: boolean }) => {
+    if (justSelectedPlaceRef.current) return;
+    const committed = committedLocationFromProps();
+    const inputEl = inputRef.current;
+    const typed = (inputEl?.value ?? inputValue).trim();
+    if (isSelectedMapLocation(committed)) {
+      const display = (committed.name || committed.address || '').trim();
+      if (typed !== display) {
+        setInputValue(display);
+        if (inputEl) inputEl.value = display;
+      }
+      return;
+    }
+    if (!typed) return;
+    setInputValue('');
+    if (inputEl) inputEl.value = '';
+    if (onChangeRef.current) onChangeRef.current('');
+    if (onLocationChangeRef.current) onLocationChangeRef.current(EMPTY_LOCATION);
+    if (!opts?.silent) {
+      toast(selectFromListMessage);
+    }
+  };
+
   const handleInputBlur = () => {
-    // Delay hiding suggestions to allow clicking on them
     window.setTimeout(() => setShowSuggestions(false), 200);
+  };
+
+  const revertUnselectedTypedTextRef = useRef(revertUnselectedTypedText);
+  revertUnselectedTypedTextRef.current = revertUnselectedTypedText;
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || readOnly || disabled) return undefined;
+    const onNativeBlur = () => {
+      window.setTimeout(() => revertUnselectedTypedTextRef.current({ silent: true }), 0);
+      window.setTimeout(() => revertUnselectedTypedTextRef.current({ silent: true }), 80);
+      window.setTimeout(() => revertUnselectedTypedTextRef.current(), 320);
+    };
+    el.addEventListener('blur', onNativeBlur);
+    return () => el.removeEventListener('blur', onNativeBlur);
+  }, [disabled, readOnly, mobileSearchSheetOpen, fullscreenMobileSearchSheet]);
+
+  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    const pacHasItems =
+      typeof document !== 'undefined' &&
+      Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).some((el) => {
+        const st = window.getComputedStyle(el);
+        return st.display !== 'none' && !!el.querySelector('.pac-item');
+      });
+    if (pacHasItems) return;
+    e.preventDefault();
+    revertUnselectedTypedText();
   };
 
      // Determine subtitle text based on props
@@ -868,6 +953,12 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const committedLocation =
     location ??
     (typeof value === 'object' && value !== null ? (value as Location) : undefined);
+  const committedSelected = isSelectedMapLocation(committedLocation);
+  const committedLabel = committedSelected
+    ? (committedLocation?.name || committedLocation?.address || '').trim()
+    : '';
+  /** Unfocused fields never show typed-only text — only a Google / curated selection. */
+  const displayValue = isFocused ? inputValue : committedLabel;
 
   /** Custom empty panel only when Google Places is unavailable — otherwise it stacks on `.pac-container`. */
   const showEmptyGoogleDropdown =
@@ -883,7 +974,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   const showCuratedSuggestionList =
     showSuggestions && filteredSuggestions.length > 0 && (!isLoaded || airportOnly);
 
-  const showSelectionInvalid = inputValue.trim().length > 0 && !committedLocation?.id;
+  const showSelectionInvalid = inputValue.trim().length > 0 && !committedSelected;
 
   /** Shared markup for curated suggestions (no curated “recent/popular” — only typed matches). */
   const suggestionsListMarkup = (
@@ -936,7 +1027,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
           <strong>Location search limited:</strong> {error.message}
           <br />
-          <span className="text-xs">You can still type locations manually.</span>
+          <span className="text-xs">Select a place from the suggestions — typed text is not accepted.</span>
         </div>
       )}
 
@@ -1020,7 +1111,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             className={cn(
               "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
               "touch-manipulation text-base leading-tight",
-              inputValue ? "font-bold text-gray-900" : "font-normal text-gray-500"
+              displayValue ? "font-bold text-gray-900" : "font-normal text-gray-500"
             )}
             onClick={() => {
               setMobileSearchSheetOpen(true);
@@ -1028,7 +1119,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             }}
             >
             <span className="block w-full break-words text-left leading-snug line-clamp-2">
-              {inputValue || placeholder || 'Enter location'}
+              {displayValue || placeholder || 'Enter location'}
             </span>
           </button>
         ) : (
@@ -1050,6 +1141,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           }
           disabled={disabled}
           readOnly={readOnly}
+          onKeyDown={handleLocationKeyDown}
           style={{
             fontSize: isDesktopVariant
               ? isDesktop
@@ -1089,8 +1181,8 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           }}
           onBlur={() => {
             handleInputBlur();
+            setIsFocused(false);
             window.setTimeout(() => {
-              setIsFocused(false);
               hideAllPacContainers();
             }, 200);
           }}
@@ -1105,13 +1197,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             )}
             onClick={(e) => {
               e.stopPropagation();
-              setInputValue("");
-              if (onChange) onChange("");
-              if (onLocationChange) {
-                onLocationChange(EMPTY_LOCATION);
-              }
-              setShowSuggestions(false);
-              setNoGooglePredictions(false);
+              clearLocationField();
             }}
             tabIndex={-1}
             aria-label="Clear location"
@@ -1184,6 +1270,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                 autoCorrect="off"
                 autoComplete="off"
                 onChange={handleInputChange}
+                onKeyDown={handleLocationKeyDown}
                 placeholder={placeholder || 'Search location'}
                 disabled={disabled}
                 className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-base shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -1202,6 +1289,20 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                   }, 200);
                 }}
               />
+              {inputValue && !readOnly && !hideClearButton && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded-full p-2.5 text-gray-500 transition-colors hover:bg-gray-200/70 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  aria-label="Clear location"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearLocationField();
+                  }}
+                >
+                  <X className="h-5 w-5" aria-hidden />
+                </button>
+              )}
             </div>
           </div>
           {subtitleText ? (

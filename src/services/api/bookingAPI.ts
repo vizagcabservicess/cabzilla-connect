@@ -513,6 +513,44 @@ export const bookingAPI = {
   },
 
   /**
+   * Admin: last tomorrow-reminder cron / button runs from notification_logs. Requires JWT.
+   */
+  getAdminCronStatus: async () => {
+    const headers: Record<string, string> = {
+      'Cache-Control': 'no-cache',
+    };
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await axios.get(`${API_BASE_URL}/api/admin/cron-status.php`, {
+      headers,
+      timeout: 15000,
+    });
+    if (response.data?.status === 'error') {
+      throw new Error(response.data.message || 'Cron status failed');
+    }
+    return response.data as {
+      status: string;
+      data?: {
+        last_run?: {
+          booking_count: number;
+          status: string;
+          trigger: string;
+          created_at: string;
+        } | null;
+        last_cron_run?: {
+          booking_count: number;
+          status: string;
+          trigger: string;
+          created_at: string;
+        } | null;
+        server_time_ist?: string;
+      };
+    };
+  },
+
+  /**
    * Admin: send grouped "tomorrow confirmed trips" WhatsApp summary to admin numbers (trip line). Requires JWT.
    */
   sendTomorrowAdminWhatsAppBulk: async () => {

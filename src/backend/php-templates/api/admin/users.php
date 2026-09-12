@@ -181,7 +181,15 @@ try {
         }
         $bookingsExist = $conn->query("SHOW TABLES LIKE 'bookings'");
         if ($bookingsExist && $bookingsExist->num_rows > 0) {
-            $query = "SELECT $baseCols, COUNT(b.id) as bookings_count FROM users u LEFT JOIN bookings b ON u.id = b.user_id GROUP BY u.id ORDER BY u.created_at DESC";
+            $phoneExprUser = "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(u.phone, ''), '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), '.', ''), 10)";
+            $phoneExprBooking = "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(b.passenger_phone, ''), '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), '.', ''), 10)";
+            $query = "SELECT $baseCols, COUNT(DISTINCT b.id) as bookings_count FROM users u LEFT JOIN bookings b ON (
+                u.id = b.user_id
+                OR (
+                    CHAR_LENGTH({$phoneExprUser}) = 10
+                    AND {$phoneExprUser} = {$phoneExprBooking}
+                )
+            ) GROUP BY u.id ORDER BY u.created_at DESC";
         } else {
             $query = "SELECT $baseCols, 0 as bookings_count FROM users u ORDER BY u.created_at DESC";
         }

@@ -103,7 +103,7 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 /** Non-zero lat/lng from Places / geocoder — used for strict 35km check */
-function hasReliableCoordinates(
+export function hasReliableCoordinates(
   location: AppLocation | ApiLocation | null | undefined
 ): boolean {
   if (!location) return false;
@@ -111,6 +111,23 @@ function hasReliableCoordinates(
   if (isNaN(location.lat) || isNaN(location.lng)) return false;
   if (location.lat === 0 && location.lng === 0) return false;
   return true;
+}
+
+/**
+ * True only when the user picked a Google Place or a curated list item
+ * (id + coordinates). Typed-in text without a selection is rejected.
+ */
+export function isSelectedMapLocation(
+  location: AppLocation | ApiLocation | null | undefined
+): boolean {
+  if (!location) return false;
+  const name = String(location.name || location.address || '').trim();
+  const id = String(location.id || '').trim();
+  if (!name || !id) return false;
+  if (id.startsWith('tour_')) {
+    return true;
+  }
+  return hasReliableCoordinates(location);
 }
 
 /**

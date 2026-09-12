@@ -23,6 +23,7 @@ import {
   arakuLocalStartReply,
   coachBusReply,
   extractFlexibleDate,
+  extractFlexibleTime,
   extractPassengerCount,
   isAccommodationIntent,
   isAirportDropOrPickup,
@@ -30,16 +31,24 @@ import {
   isBareAirportToken,
   isBorraCavesAsk,
   isCoachOrLargeBusIntent,
+  isFlightOriginPhrase,
   isHotelIncludedAsk,
   isHowManyDaysAsk,
   isMultiStopSightseeingIntent,
   isPerPersonIntent,
+  isSuitableVehicleIntent,
   isTourFollowupIntent,
+  isTripModeQuestion,
+  isClarifyingQuestion,
   isTwoDayArakuIntent,
   isVehicleRateOnlyIntent,
   parseFlexibleDate,
   parseTripBlob,
+  parseTripModeAnswer,
+  parseUnstructuredTripDetails,
+  vehicleForPassengerCount,
   vehicleHintFromMessage,
+  vehicleIdsForPassengerCount,
 } from './chatIntents.js';
 
 export const VEHICLE_CATEGORIES = [
@@ -74,6 +83,11 @@ CRITICAL — FARES:
 - AIRPORT / LOCAL TRANSFERS: one-way trips within ~35 km (city hops, airport pickup/drop, Pendurthi, Gajuwaka, Madhurawada, etc.) use Airport-tab distance SLABS — NOT outstation base+driver. Example sedan ~15–20 km ≈ tier2 (~₹1000), not ₹4000+.
 - Airport slabs (live DB): ≤10 / ≤20 / ≤30 / ≤40 km flat tiers, then +extraKm after 40. No driver allowance on airport.
 - If the visitor asks general "airport taxi fares" / airport rates WITHOUT pickup and drop locations, do NOT dump the full slab table. Ask for: pickup, drop, date, pickup time, and preferred vehicle — then quote the exact fare for that trip.
+- Messy WhatsApp dumps often contain ALL fields in one message (date like 21 09 2026, "11 30 AM" / "11:30 FN", "10 PERSONS", "ARRIVING AT airport", "DROP AT hotel"). Extract every field from that message and NEVER re-ask for something already given.
+- "Arriving from Chennai / coming from X" is the FLIGHT origin, NOT the cab destination. Pickup is the airport; drop is the hotel they named.
+- "DROP AT X" is the destination. "ARRIVING AT airport" / "airport arrival spot" is pickup.
+- FN = AM (forenoon), AN = PM (afternoon).
+- Passenger count decides the vehicle: 1–4 Sedan, 5–7 Ertiga/Innova, 8–12 Tempo Traveller, 13–17 Urbania. NEVER quote Swift Dzire / Ertiga for 10 persons.
 - TOUR PACKAGES (Araku, Borra, Lambasingi, Vanajangi, Vizag city sightseeing, temple tours) use FIXED package prices from the Tours API — NEVER quote outstation tier/km fares for those.
 - TOUR ITINERARIES: NEVER invent timings or place lists. When asked for itinerary/schedule/places, only use the live website itinerary for the NAMED tour (Lambasingi ≠ Araku). If not provided, ask which tour and direct them to vizagtaxihub.com/tours.
 - LOCAL hourly packages offered: 8hrs/80km and 10hrs/100km only. NEVER mention or quote 4hrs/40km (or 04hrs/40km) — that package is discontinued on the website.
@@ -558,6 +572,9 @@ export function normalizeTravelTime(raw: string | null | undefined): string | nu
 
 function extractTravelTime(message: string): string | null {
   const trimmed = message.trim();
+  const flexible = extractFlexibleTime(trimmed);
+  if (flexible) return flexible;
+
   // Bare hour: "10" / "10am" when user is answering pickup time
   const bareHour = trimmed.match(/^(\d{1,2})\s*(am|pm)?$/i);
   if (bareHour) {
@@ -570,11 +587,6 @@ function extractTravelTime(message: string): string | null {
       return `${String(h).padStart(2, '0')}:00`;
     }
   }
-
-  const m = message.match(
-    /\b(?:at\s+|by\s+|pickup\s*(?:at|time)?[:\s]*)?(\d{1,2}[:.]\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|([01]?\d|2[0-3])[:.][0-5]\d)\b/i,
-  );
-  if (m) return normalizeTravelTime(m[1]!.replace(/\s+/g, ' ').trim());
 
   const soft = message.match(/\b(morning|afternoon|evening|night)\b/i);
   if (soft && /\b(time|pickup|am|pm|depart|leave|flight)\b/i.test(message)) {
@@ -602,7 +614,14 @@ function looksLikePlaceAnswer(message: string): boolean {
   }
   if (isHumanHandoffIntent(t) || isBookIntent(t)) return false;
   if (isPricingIntent(t.toLowerCase())) return false;
-  if (isVehicleOnlyAnswer(t)) return false;
+  if (isClarifyingQuestion(t) || isTripModeQuestion(t)) return false;
+  if (isVehicleOnlyAnswer(t) || isSuitableVehicleIntent(t)) return false;
+  if (
+    /\b(persons?|pax|people|passengers?)\b/i.test(t) &&
+    !/\b(hotel|airport|station|nagar|road|colony|palem)\b/i.test(t)
+  ) {
+    return false;
+  }
   if (/(?:\+?91[-\s]?)?[6-9]\d{9}\b/.test(t)) return false;
   if (/^(morning|afternoon|evening|night|\d{1,2}([:.]\d{2})?\s*(am|pm)?)$/i.test(t)) return false;
   if (/^\d{1,2}([\/\-]\d{1,2}[\/\-]\d{2,4})?$/.test(t)) return false; // date or bare number
@@ -632,6 +651,15 @@ export function isGarbagePlace(raw: string | null | undefined): boolean {
     return true;
   }
   if (/^\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)$/i.test(t)) return true;
+  if (/\?/.test(t)) return true;
+  if (/^(is it|is this|are these|does it|do you|can you|what|which|how)\b/i.test(t)) return true;
+  if (
+    /\b(one\s*-?\s*way|round\s*-?\s*trip|return\s+trip)\b/i.test(t) &&
+    /\b(or|is it|is this|fare|quote)\b/i.test(t) &&
+    !/\b(hotel|nagar|airport|beach|station|colony|palem|road)\b/i.test(t)
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -687,13 +715,14 @@ function isBareVizagCity(raw: string): boolean {
 
 export function heuristicExtract(message: string, prev: AiLeadState): Partial<AiLeadState> {
   const out: Partial<AiLeadState> = {};
+  const blob = parseUnstructuredTripDetails(message);
   const phoneMatch = message.match(/(?:\+?91[-\s]?)?[6-9]\d{9}\b/);
   if (phoneMatch) out.phone = normalizePhone(phoneMatch[0]);
 
-  const dateHit = extractFlexibleDate(message);
+  const dateHit = blob.travelDate || extractFlexibleDate(message);
   if (dateHit) out.travelDate = dateHit;
 
-  const time = extractTravelTime(message);
+  const time = blob.travelTime || extractTravelTime(message);
   if (time) out.travelTime = time;
 
   const lower = message.toLowerCase();
@@ -704,6 +733,7 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
       break;
     }
   }
+  if (!out.vehicle && blob.vehicle) out.vehicle = blob.vehicle;
   if (!out.vehicle) {
     if (/urbania|force urbania/.test(lower)) out.vehicle = 'Urbania';
     else if (/\b(tempo|traveller)\b/.test(lower)) out.vehicle = 'Tempo Traveller';
@@ -726,30 +756,52 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
     }
   }
 
-  // Explicit pickup/drop phrasing always wins (even alongside date answers)
-  const explicit = extractExplicitPickupDrop(message);
-  if (explicit.pickup) out.pickup = explicit.pickup;
-  if (explicit.dropoff) out.dropoff = explicit.dropoff;
+  if (blob.pickup) out.pickup = blob.pickup;
+  if (blob.dropoff) out.dropoff = blob.dropoff;
+  const comma = parseTripBlob(message);
+  if (comma.pickup && !out.pickup) out.pickup = comma.pickup;
+  if (comma.dropoff && !out.dropoff) out.dropoff = comma.dropoff;
+  if (comma.travelDate && !out.travelDate) out.travelDate = comma.travelDate;
+  if (comma.travelTime && !out.travelTime) out.travelTime = comma.travelTime;
+  if (comma.vehicle && !out.vehicle) out.vehicle = comma.vehicle;
 
-  // Date / time / vehicle answers must NEVER be treated as a new pickup/drop
-  if (out.travelDate || out.travelTime || out.vehicle || isVehicleOnlyAnswer(message)) {
+  // Explicit pickup/drop phrasing — do not clobber a cleaner unstructured parse
+  const explicit = extractExplicitPickupDrop(message);
+  if (explicit.pickup && !out.pickup) out.pickup = explicit.pickup;
+  if (explicit.dropoff && !out.dropoff) out.dropoff = explicit.dropoff;
+
+  const isShortFieldAnswer =
+    isVehicleOnlyAnswer(message) ||
+    isSuitableVehicleIntent(message) ||
+    /^(tomorrow|today|tmrw|morning|afternoon|evening|night|\d{1,2}([:.]\d{2})?\s*(am|pm|fn|an)?)$/i.test(
+      message.trim(),
+    );
+
+  // Date / time / vehicle-only answers must NEVER be treated as a new pickup/drop
+  if ((out.travelDate || out.travelTime || out.vehicle || isShortFieldAnswer) && !out.pickup && !out.dropoff && !blob.pickup && !blob.dropoff) {
     return out;
   }
 
   // Popular destination after "to …" — never store "I need vehicle" as pickup
   const popular = matchPopularRoute(message);
-  if (popular && /\b(?:to|towards|toward|upto|up to)\b/i.test(message) && !isHumanHandoffIntent(message)) {
+  const popularIsFlightOrigin =
+    Boolean(popular) &&
+    isFlightOriginPhrase(message) &&
+    Boolean(blob.flightOrigin) &&
+    popular!.aliases.some((a) => blob.flightOrigin!.toLowerCase().includes(a));
+
+  if (
+    popular &&
+    !popularIsFlightOrigin &&
+    !out.dropoff &&
+    /\b(?:to|towards|toward|upto|up to)\b/i.test(message) &&
+    !isHumanHandoffIntent(message)
+  ) {
     out.dropoff = popular.toLabel;
     const keepPickup = prev.pickup && !isGarbagePlace(prev.pickup) ? prev.pickup : null;
     out.pickup = keepPickup || out.pickup || null;
-    // Leave pickup null so we ask "Where should we pick you up?" (or use Vizag only after quote)
     if (!out.pickup) {
-      // Destination-only intent — default Vizag for fare quoting; user can refine
       out.pickup = 'Vizag';
-    }
-    if (!out.travelDate) {
-      out.travelDate = null;
-      out.travelTime = null;
     }
     return out;
   }
@@ -757,7 +809,7 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
   const routePair = message.match(
     /\b(?:from\s+)?([A-Za-z][A-Za-z\s]{1,40}?)\s+(?:to|towards|toward)\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:\s+(?:cost|fare|price|charges?|rate|kitna))?\.?\s*$/i,
   );
-  if (routePair && !isHumanHandoffIntent(message)) {
+  if (routePair && !isHumanHandoffIntent(message) && !isFlightOriginPhrase(message) && !out.dropoff) {
     const from = routePair[1]!.trim();
     const to = routePair[2]!.trim();
     const fromOk =
@@ -770,23 +822,16 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
     if (toOk) {
       out.dropoff = to;
       if (fromOk) {
-        // Only collapse bare city names — keep "Novotel Visakhapatnam", "Airport Vizag", etc.
         out.pickup = isBareVizagCity(from) ? 'Vizag' : from;
       } else {
         out.pickup = prev.pickup && !isGarbagePlace(prev.pickup) ? prev.pickup : 'Vizag';
       }
-      if (!out.travelDate) {
-        out.travelDate = null;
-        out.travelTime = null;
-      }
     }
-  } else if (!isHumanHandoffIntent(message)) {
-    if (popular) {
+  } else if (!isHumanHandoffIntent(message) && !out.dropoff && !out.pickup) {
+    if (popular && !popularIsFlightOrigin) {
       out.dropoff = popular.toLabel;
       out.pickup =
         (prev.pickup && !isGarbagePlace(prev.pickup) ? prev.pickup : null) || out.pickup || 'Vizag';
-      out.travelDate = null;
-      out.travelTime = null;
     } else if (looksLikePlaceAnswer(message)) {
       const place = cleanStandalonePlace(message);
       if (place && !isGarbagePlace(place)) {
@@ -798,7 +843,9 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
           out.dropoff = place;
         } else if (prev.pickup && prev.dropoff) {
           // New place after a complete route → new destination (unless message is pickup refinement)
-          if (/\bpickup|pick\s*up\b/i.test(message)) {
+          if (isClarifyingQuestion(message) || isTripModeQuestion(message)) {
+            // keep existing route
+          } else if (/\bpickup|pick\s*up\b/i.test(message)) {
             out.pickup = place;
           } else {
             out.pickup = prev.pickup;
@@ -810,6 +857,10 @@ export function heuristicExtract(message: string, prev: AiLeadState): Partial<Ai
         }
       }
     }
+  }
+
+  if (out.dropoff && !out.pickup && (!prev.pickup || isGarbagePlace(prev.pickup))) {
+    out.pickup = 'Vizag';
   }
 
   return out;
@@ -971,16 +1022,21 @@ function normalizeCityText(text: string): string {
 
 function matchPopularRoute(message: string): (typeof POPULAR_ROUTES)[number] | null {
   const lower = normalizeCityText(message);
-  // Prefer destination after "to" / "towards" when present — never match aliases inside pickup text
-  const toMatch = lower.match(/\b(?:to|towards|toward|upto|up to)\s+([a-z0-9\s]{2,40})/);
-  const haystack = toMatch ? toMatch[1]! : lower;
+  const originHit = lower.match(
+    /\b(?:arriv(?:e|ing)|coming|landing|flight)\s+from\s+([a-z0-9\s]{2,40})/,
+  );
+  const originText = originHit ? originHit[1]! : '';
+  const stripped = originHit ? lower.replace(originHit[0], ' ') : lower;
+  const toMatch = stripped.match(/\b(?:to|towards|toward|upto|up to)\s+([a-z0-9\s]{2,40})/);
+  const haystack = toMatch ? toMatch[1]! : stripped;
   for (const route of POPULAR_ROUTES) {
     if (route.aliases.some((a) => {
       const alias = normalizeCityText(a);
       if (!alias) return false;
-      // Word-boundary style: alias must appear as its own token(s), not a random substring
       const re = new RegExp(`(?:^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
-      return re.test(haystack) || (!toMatch && re.test(lower));
+      if (toMatch) return re.test(haystack);
+      if (originText && re.test(originText) && !re.test(stripped)) return false;
+      return re.test(haystack) || re.test(stripped);
     })) {
       return route;
     }
@@ -989,10 +1045,15 @@ function matchPopularRoute(message: string): (typeof POPULAR_ROUTES)[number] | n
 }
 
 function isCityToCityQuery(lower: string): boolean {
+  if (isFlightOriginPhrase(lower) && !/\b(?:to|towards|toward)\s+[a-z]/i.test(lower.replace(/\b(?:arriv(?:e|ing)|coming|landing|flight)\s+from\b[\s\S]*$/i, ''))) {
+    return false;
+  }
   if (/\b(to|towards|toward)\b/.test(lower) && /(vizag|visakhapatnam|from|cost|fare|price|charg|how much|kitna)/.test(lower)) {
     return true;
   }
-  return POPULAR_ROUTES.some((r) => r.aliases.some((a) => lower.includes(a)));
+  return POPULAR_ROUTES.some((r) =>
+    r.aliases.some((a) => new RegExp(`\\b(?:to|towards|toward)\\s+${a}\\b`, 'i').test(lower)),
+  );
 }
 
 function routeFareReply(route: (typeof POPULAR_ROUTES)[number]): string {
@@ -1071,12 +1132,140 @@ async function tourFollowupReply(
   return null;
 }
 
+function leadPassengerCount(lead: AiLeadState): number | null {
+  const n = Number(lead.meta?.passengerCount);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function quoteReplyOpts(lead: AiLeadState): {
+  passengerCount: number | null;
+  travelDate: string | null;
+  travelTime: string | null;
+  vehicle: string | null;
+} {
+  return {
+    passengerCount: leadPassengerCount(lead),
+    travelDate: lead.travelDate,
+    travelTime: lead.travelTime,
+    vehicle: lead.vehicle,
+  };
+}
+
+function applyTripBlobToLead(lead: AiLeadState, message: string): void {
+  const blob = parseUnstructuredTripDetails(message);
+  const comma = parseTripBlob(message);
+  const pickup = blob.pickup || comma.pickup;
+  const dropoff = blob.dropoff || comma.dropoff;
+  if (pickup && !isGarbagePlace(pickup) && !/^vizag$/i.test(pickup.trim())) {
+    lead.pickup = pickup;
+  } else if (pickup && !lead.pickup && !isGarbagePlace(pickup)) {
+    lead.pickup = pickup;
+  }
+  if (dropoff && !isGarbagePlace(dropoff)) lead.dropoff = dropoff;
+  if (blob.travelDate || comma.travelDate) lead.travelDate = blob.travelDate || comma.travelDate || lead.travelDate;
+  if (blob.travelTime || comma.travelTime) lead.travelTime = blob.travelTime || comma.travelTime || lead.travelTime;
+  if (blob.vehicle || comma.vehicle) lead.vehicle = blob.vehicle || comma.vehicle || lead.vehicle;
+  if (blob.passengerCount) {
+    lead.meta = { ...(lead.meta || {}), passengerCount: blob.passengerCount };
+    if (isSuitableVehicleIntent(message) && !lead.vehicle) {
+      lead.vehicle = vehicleForPassengerCount(blob.passengerCount);
+    }
+  }
+}
+
+async function quoteLeadRoute(lead: AiLeadState, message: string): Promise<string | null> {
+  if (!lead.pickup || !lead.dropoff || isGarbagePlace(lead.pickup) || isGarbagePlace(lead.dropoff)) {
+    return null;
+  }
+  const pax = leadPassengerCount(lead);
+  if (pax && pax > 17) return coachBusReply();
+  const requested = parseTripModeAnswer(message);
+  const tripMode: 'one-way' | 'round-trip' =
+    requested ||
+    (!isTripModeQuestion(message) && /round\s*-?\s*trip|return\s+trip/i.test(message)
+      ? 'round-trip'
+      : 'one-way');
+  try {
+    const quote = await quoteOutstationRoute({
+      from: lead.pickup,
+      to: lead.dropoff,
+      tripMode,
+      calendarDays: extractCalendarDays(message) || undefined,
+      vehicleIds: vehicleIdsForPassengerCount(pax),
+    });
+    if (isRestrictedAirportRouteQuote(quote)) {
+      return formatRouteQuoteReply(quote, quoteReplyOpts(lead));
+    }
+    if (!quote.quotes.length) return null;
+    lead.meta = {
+      ...(lead.meta || {}),
+      lastQuotedKind: 'route',
+      lastQuotedFare: quote.quotes[0]?.total,
+      lastQuotedKm: quote.distanceKm,
+      lastQuotedTripMode: tripMode,
+    };
+    return formatRouteQuoteReply(quote, quoteReplyOpts(lead));
+  } catch (err) {
+    console.error('[ai.assistant] lead route quote failed', err);
+    return null;
+  }
+}
+
+function shouldQuoteLeadRoute(message: string, lead: AiLeadState): boolean {
+  if (!lead.pickup || !lead.dropoff || isGarbagePlace(lead.pickup) || isGarbagePlace(lead.dropoff)) {
+    return false;
+  }
+  if (isHumanHandoffIntent(message) || isBookIntent(message)) return false;
+  if (isClarifyingQuestion(message) || isTripModeQuestion(message)) return false;
+  if (isTourPackageIntent(message) || isTourItineraryIntent(message) || isLocalHourlyPackageIntent(message)) {
+    return false;
+  }
+  const blob = parseUnstructuredTripDetails(message);
+  if (blob.pickup || blob.dropoff) return true;
+  if (isSuitableVehicleIntent(message) || extractPassengerCount(message)) return true;
+  if (isPricingIntent(message.toLowerCase())) return true;
+  if (isAirportDropOrPickup(message) || /\b(drop|hotel|arriv)/i.test(message)) return true;
+  if (looksLikePlaceAnswer(message)) return true;
+  return false;
+}
+
 async function specialIntentReply(
   message: string,
   lead: AiLeadState,
   historyText: string,
 ): Promise<string | null> {
   if (isCoachOrLargeBusIntent(message)) return coachBusReply();
+
+  const modeAnswer = parseTripModeAnswer(message);
+  if (modeAnswer && lead.pickup && lead.dropoff && !isGarbagePlace(lead.pickup) && !isGarbagePlace(lead.dropoff)) {
+    lead.meta = { ...(lead.meta || {}), lastQuotedTripMode: modeAnswer };
+    const quoted = await quoteLeadRoute(lead, message);
+    if (quoted) return quoted;
+  }
+
+  if (isTripModeQuestion(message)) {
+    const lastMode =
+      lead.meta?.lastQuotedTripMode === 'round-trip' ? 'round-trip' : 'one-way';
+    const route =
+      lead.pickup && lead.dropoff && !isGarbagePlace(lead.pickup) && !isGarbagePlace(lead.dropoff)
+        ? `${lead.pickup} → ${lead.dropoff}`
+        : 'this route';
+    const km = Number(lead.meta?.lastQuotedKm);
+    const kmBit = Number.isFinite(km) && km > 0 ? ` (~${km} km one-way)` : '';
+    if (lastMode === 'round-trip') {
+      return (
+        `Those fares are ROUND-TRIP for ${route}${kmBit}.\n` +
+        `One-way is cheaper (distance one direction only, no return-day driver allowance).\n` +
+        `Reply "one way" if you want that quote, or "book it" to continue.`
+      );
+    }
+    return (
+      `Those fares are ONE-WAY for ${route}${kmBit}.\n` +
+      `Round-trip is a return booking (usually 2 days, km both ways + driver allowance).\n` +
+      `Reply "round trip" for that quote, or "book it" to keep the one-way fares.`
+    );
+  }
+
   if (isArakuLocalStartIntent(message)) return arakuLocalStartReply();
   if (isAccommodationIntent(message) && !/\b(cab|taxi|tour package)\b/i.test(message)) {
     return accommodationReply();
@@ -1130,23 +1319,10 @@ async function specialIntentReply(
     );
   }
 
-  const blob = parseTripBlob(message);
-  if (blob.pickup && blob.dropoff) {
-    if (blob.travelDate) lead.travelDate = blob.travelDate;
-    if (blob.travelTime) lead.travelTime = blob.travelTime;
-    if (blob.vehicle) lead.vehicle = blob.vehicle;
-    lead.pickup = blob.pickup;
-    lead.dropoff = blob.dropoff;
-    try {
-      const quote = await quoteOutstationRoute({
-        from: blob.pickup,
-        to: blob.dropoff,
-        tripMode: blob.tripMode || 'one-way',
-      });
-      if (quote.quotes.length) return formatRouteQuoteReply(quote);
-    } catch {
-      // fall through
-    }
+  applyTripBlobToLead(lead, message);
+  if (shouldQuoteLeadRoute(message, lead)) {
+    const quoted = await quoteLeadRoute(lead, message);
+    if (quoted) return quoted;
   }
   return null;
 }
@@ -1207,6 +1383,10 @@ async function tryFareEngineReply(
   }
 
   let places = extractRoutePlaces(message);
+  const blob = parseUnstructuredTripDetails(message);
+  if (!places && blob.pickup && blob.dropoff) {
+    places = { from: blob.pickup, to: blob.dropoff };
+  }
   // Require fare/price intent OR a clear place-to-place — do not treat every "to" as a quote
   const wantsFare =
     /charg|price|rate|fare|cost|kitna|how much|₹|rs\.?|rupee|quota|package|tour/.test(lower);
@@ -1215,7 +1395,7 @@ async function tryFareEngineReply(
   const airportFareAsk =
     /\bairport\b/.test(lower) &&
     /(fare|charg|price|rate|cost|how much|taxi|cab|transfer|book|details)/.test(lower);
-  if (airportFareAsk && !places) {
+  if (airportFareAsk && !places && !blob.pickup && !blob.dropoff) {
     return {
       reply:
         `Sure — I can quote the exact Vizag Airport transfer fare.\n` +
@@ -1247,7 +1427,7 @@ async function tryFareEngineReply(
   }
 
   // "Rajahmundry cost" / "Tuni fare" without explicit from → assume Vizag pickup
-  if (!places && wantsFare) {
+  if (!places && wantsFare && !isFlightOriginPhrase(message)) {
     const popular = matchPopularRoute(message);
     if (popular) {
       places = {
@@ -1257,7 +1437,7 @@ async function tryFareEngineReply(
     }
   }
 
-  if (places && (wantsFare || /\b(?:to|towards|toward|->|→)\b/.test(lower))) {
+  if (places && (wantsFare || /\b(?:to|towards|toward|->|→)\b/.test(lower) || Boolean(blob.pickup && blob.dropoff))) {
     try {
       const isRoundTrip = /round\s*-?\s*trip|return\s+trip/i.test(message);
       const days = extractCalendarDays(message);
@@ -1549,29 +1729,9 @@ async function fallbackReply(message: string, lead: AiLeadState): Promise<string
   }
   const lower = message.toLowerCase();
 
-  // If lead already has pickup/drop and visitor asks cost, quote via booking engine
-  if (lead.pickup && lead.dropoff && isPricingIntent(lower)) {
-    try {
-      const quote = await quoteOutstationRoute({
-        from: lead.pickup,
-        to: lead.dropoff,
-        tripMode: /round\s*-?\s*trip|return/i.test(message) ? 'round-trip' : 'one-way',
-        calendarDays: extractCalendarDays(message) || undefined,
-      });
-      if (isRestrictedAirportRouteQuote(quote)) {
-        return formatRouteQuoteReply(quote);
-      }
-      if (quote.quotes.length) {
-        lead.meta = {
-          ...(lead.meta || {}),
-          lastQuotedFare: quote.quotes[0]?.total,
-          lastQuotedKm: quote.distanceKm,
-        };
-        return formatRouteQuoteReply(quote);
-      }
-    } catch (err) {
-      console.error('[ai.assistant] lead route quote failed', err);
-    }
+  if (shouldQuoteLeadRoute(message, lead) || (lead.pickup && lead.dropoff && (isPricingIntent(lower) || /airport|vtz/.test(lower)))) {
+    const quoted = await quoteLeadRoute(lead, message);
+    if (quoted) return quoted;
   }
 
   if (isCityToCityQuery(lower) || isPricingIntent(lower)) {
@@ -1579,23 +1739,22 @@ async function fallbackReply(message: string, lead: AiLeadState): Promise<string
   }
 
   if (/airport|vtz/.test(lower)) {
-    if (lead.pickup && lead.dropoff && !isGarbagePlace(lead.pickup) && !isGarbagePlace(lead.dropoff)) {
-      try {
-        const quote = await quoteOutstationRoute({
-          from: lead.pickup,
-          to: lead.dropoff,
-          tripMode: 'one-way',
-        });
-        if (quote.quotes.length) return formatRouteQuoteReply(quote);
-      } catch {
-        // continue
-      }
-    }
     if (lead.pickup && !lead.dropoff) {
-      return `Pickup noted: ${lead.pickup}. What is the drop — Vizag Airport or another point? Also share date and vehicle.`;
+      const extras: string[] = [];
+      if (!lead.travelDate) extras.push('date');
+      if (!lead.travelTime) extras.push('pickup time');
+      if (!lead.vehicle) extras.push('vehicle');
+      const extra = extras.length ? ` Also share ${extras.join(', ')}.` : '';
+      return `Pickup noted: ${lead.pickup}. What is the drop — a hotel, home, or another point?${extra}`;
     }
+    const known: string[] = [];
+    if (lead.pickup) known.push(`pickup ${lead.pickup}`);
+    if (lead.dropoff) known.push(`drop ${lead.dropoff}`);
+    if (lead.travelDate) known.push(`date ${lead.travelDate}`);
+    if (lead.travelTime) known.push(`time ${lead.travelTime}`);
+    const knownBit = known.length ? ` I already have ${known.join(', ')}.` : '';
     return (
-      `Sure — for Vizag Airport transfers, please share pickup, drop, date, pickup time, and preferred vehicle. ` +
+      `Sure — for Vizag Airport transfers, please share pickup, drop, date, pickup time, and vehicle.${knownBit} ` +
       `I will quote the exact live fare. Or call +91 99663 63662.`
     );
   }
@@ -1608,11 +1767,17 @@ async function fallbackReply(message: string, lead: AiLeadState): Promise<string
     lead.dropoff = null;
     return 'And what is your drop / destination?';
   }
+  const quoted = await quoteLeadRoute(lead, message);
+  if (quoted) return quoted;
   if (!lead.travelDate) return 'Which date do you need the cab?';
   if (!lead.travelTime) {
     return 'What pickup time should we schedule? (e.g. 10:30 AM or 14:00)';
   }
   if (!lead.vehicle) {
+    const pax = leadPassengerCount(lead);
+    if (pax && pax >= 8) {
+      return `For ${pax} persons, Tempo Traveller (12 seater) or Urbania (16–17 seater) is required. Which do you prefer?`;
+    }
     return `Which vehicle do you prefer? Options: Sedan, Ertiga, Innova Crysta, Luxury Sedan, Tempo Traveller, Urbania.`;
   }
   return await formatBookingLinkReply(lead);
@@ -1665,6 +1830,7 @@ export function applyVisitorMessageToLead(
     travelTime: extracted.travelTime !== undefined ? extracted.travelTime : lead.travelTime,
     vehicle: extracted.vehicle !== undefined ? extracted.vehicle : lead.vehicle,
   });
+  applyTripBlobToLead(lead, visitorMessage);
   // Never keep chat junk as places ("I need vehicle", uncleaned "Pickup location is at …")
   if (isGarbagePlace(lead.pickup)) lead.pickup = null;
   if (isGarbagePlace(lead.dropoff)) lead.dropoff = null;
@@ -1687,7 +1853,9 @@ export function applyVisitorMessageToLead(
     looksLikePlaceAnswer(visitorMessage) &&
     !extracted.travelDate &&
     !extracted.travelTime &&
-    !extracted.vehicle
+    !extracted.vehicle &&
+    !extracted.pickup &&
+    !extracted.dropoff
   ) {
     const place = cleanStandalonePlace(visitorMessage);
     if (place && !isGarbagePlace(place)) {
@@ -1719,11 +1887,16 @@ export function applyVisitorMessageToLead(
 
 function completeAirportPair(lead: AiLeadState, message: string): void {
   const trimmed = message.trim();
-  if (isBareAirportToken(trimmed)) {
+  if (isBareAirportToken(trimmed) || /\bairport\s+arrival\b/i.test(trimmed)) {
+    const airportLabel = /new|bhogapuram|arrival/i.test(trimmed)
+      ? 'Vizag New Airport (Bhogapuram)'
+      : 'Visakhapatnam Airport';
     if (lead.pickup && !/airport|vtz|bhogapuram/i.test(lead.pickup)) {
-      lead.dropoff = 'Visakhapatnam Airport';
+      lead.dropoff = airportLabel;
     } else if (lead.dropoff && !/airport|vtz|bhogapuram/i.test(lead.dropoff) && (!lead.pickup || isGarbagePlace(lead.pickup))) {
-      lead.pickup = 'Visakhapatnam Airport';
+      lead.pickup = airportLabel;
+    } else if (!lead.pickup || isGarbagePlace(lead.pickup)) {
+      lead.pickup = airportLabel;
     }
     return;
   }
@@ -1826,36 +1999,16 @@ export async function generateAssistantReply(input: {
     };
   }
 
-  if (
-    lead.pickup &&
-    lead.dropoff &&
-    !isGarbagePlace(lead.pickup) &&
-    !isGarbagePlace(lead.dropoff) &&
-    (isBareAirportToken(input.visitorMessage) || isAirportDropOrPickup(input.visitorMessage))
-  ) {
-    try {
-      const quote = await quoteOutstationRoute({
-        from: lead.pickup,
-        to: lead.dropoff,
-        tripMode: 'one-way',
-      });
-      if (quote.quotes.length) {
-        lead.meta = {
-          ...(lead.meta || {}),
-          lastQuotedKind: 'route',
-          lastQuotedFare: quote.quotes[0]?.total,
-          lastQuotedKm: quote.distanceKm,
-        };
-        await saveLead(lead, input.siteId, input.conversationId, input.visitorId);
-        return {
-          reply: formatRouteQuoteReply(quote),
-          lead,
-          leadComplete: isLeadComplete(lead),
-          suggestTransfer: false,
-        };
-      }
-    } catch (err) {
-      console.error('[ai.assistant] airport pair quote failed', err);
+  if (shouldQuoteLeadRoute(input.visitorMessage, lead)) {
+    const quoted = await quoteLeadRoute(lead, input.visitorMessage);
+    if (quoted) {
+      await saveLead(lead, input.siteId, input.conversationId, input.visitorId);
+      return {
+        reply: quoted,
+        lead,
+        leadComplete: isLeadComplete(lead),
+        suggestTransfer: false,
+      };
     }
   }
 
@@ -1889,8 +2042,16 @@ export async function generateAssistantReply(input: {
         lastQuotedKm: engineReply.quotedKm ?? lead.meta?.lastQuotedKm,
       };
     }
-    if (engineReply.pickup) lead.pickup = engineReply.pickup;
-    if (engineReply.dropoff) lead.dropoff = engineReply.dropoff;
+    if (engineReply.pickup) {
+      const blobNow = parseUnstructuredTripDetails(input.visitorMessage);
+      if (!blobNow.pickup) lead.pickup = engineReply.pickup;
+    }
+    if (engineReply.dropoff) {
+      const blobNow = parseUnstructuredTripDetails(input.visitorMessage);
+      if (!blobNow.dropoff && !isFlightOriginPhrase(input.visitorMessage)) {
+        lead.dropoff = engineReply.dropoff;
+      }
+    }
   } else if (!llmReady) {
     reply = await fallbackReply(input.visitorMessage, lead);
     suggestTransfer = isLeadComplete(lead) || /human|agent|operator|person|call me/i.test(input.visitorMessage);
@@ -1909,6 +2070,7 @@ ${JSON.stringify({
   travelDate: lead.travelDate,
   travelTime: lead.travelTime,
   vehicle: lead.vehicle,
+  passengerCount: lead.meta?.passengerCount ?? null,
 })}
 
 Respond ONLY with compact JSON:
@@ -1925,6 +2087,9 @@ Respond ONLY with compact JSON:
 }
 Merge any newly provided fields; keep previous values when not updated.
 IMPORTANT: customerName and phone are often already collected before chat — never ask for name/phone again if they appear in lead state.
+IMPORTANT: "Is it one way or round trip?" is a QUESTION — never store it as pickup or dropoff. Answer from the last quote (default one-way unless the header said round-trip). Reply "round trip" / "one way" to switch.
+IMPORTANT: Do not re-ask for fields already in lead state. If pickup and drop are known, quote the live fare; do not ask the same questions again.
+IMPORTANT: For 8+ passengers only offer Tempo Traveller / Urbania. Never quote Sedan/Dzire/Ertiga for 10 persons.
 IMPORTANT: If the visitor says "book it" / "kindly book" and pickup+drop are known, tell them you will share the website checkout link (do not invent confirmation).
 IMPORTANT: Answer the visitor's LATEST message first. If they ask about a new trip, tour, package, or route, do NOT reuse unrelated old pickup/drop from lead state in the reply — quote the relevant tour/fares instead.
 If name/phone/date/vehicle are present but pickup TIME is missing, and the visitor is continuing that same booking (not asking a new trip question), ask for pickup time before confirming.

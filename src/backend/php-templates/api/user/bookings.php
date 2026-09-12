@@ -7,6 +7,9 @@ require_once __DIR__ . '/../../config.php';
 if (file_exists(__DIR__ . '/../common/db_helper.php')) {
     require_once __DIR__ . '/../common/db_helper.php';
 }
+if (file_exists(__DIR__ . '/../common/customer_booking_link.php')) {
+    require_once __DIR__ . '/../common/customer_booking_link.php';
+}
 
 // Set response headers first - CRUCIAL to ensure we get JSON, not HTML
 header('Content-Type: application/json');
@@ -227,23 +230,19 @@ try {
     ";
     
     if ($viewAsUserId) {
-        // Admin impersonation: return only the target user's bookings
-        $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
-        $stmt = $conn->prepare($sql);
+        // Admin impersonation: bookings owned by user_id or matching the customer's phone/email
+        $stmt = prepareLinkedUserBookingsStatement($conn, $baseSql, (int) $viewAsUserId);
         if (!$stmt) {
             logMessage("Failed to prepare view-as bookings query", ['error' => $conn->error]);
             throw new Exception("Failed to prepare query: " . $conn->error);
         }
-        $stmt->bind_param("i", $viewAsUserId);
     } else if ($userId && !$isAdmin) {
-        // Get user's bookings if authenticated
-        $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
-        $stmt = $conn->prepare($sql);
+        // Customer's own bookings: user_id or passenger phone/email on guest/admin-created rows
+        $stmt = prepareLinkedUserBookingsStatement($conn, $baseSql, (int) $userId);
         if (!$stmt) {
             logMessage("Failed to prepare user bookings query", ['error' => $conn->error]);
             throw new Exception("Failed to prepare query: " . $conn->error);
         }
-        $stmt->bind_param("i", $userId);
     } else if ($isAdmin) {
         // Admins can see all bookings (when not impersonating)
         $sql = $baseSql . " ORDER BY b.created_at DESC";
@@ -458,6 +457,37 @@ try {
         'userId' => $userId,
         'auth_status' => $authSuccess ? 'success' : 'failed'
     ]);
+}
+
+/**
+ * Customer dashboard query: match bookings by user_id, passenger phone, or email.
+ * Website/admin bookings often have passenger details but user_id = 0/NULL.
+ */
+function prepareLinkedUserBookingsStatement($conn, $baseSql, $targetUserId)
+{
+    $phoneDigits = '';
+    $email = '';
+    if (function_exists('vth_lookup_user_contact')) {
+        $contact = vth_lookup_user_contact($conn, (int) $targetUserId);
+        $phoneDigits = $contact['phone_digits'];
+        $email = $contact['email'];
+    }
+
+    if (function_exists('vth_booking_owner_where_sql')) {
+        $sql = $baseSql . " WHERE " . vth_booking_owner_where_sql() . " ORDER BY b.created_at DESC";
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            $stmt->bind_param("issss", $targetUserId, $phoneDigits, $phoneDigits, $email, $email);
+            return $stmt;
+        }
+    }
+
+    $sql = $baseSql . " WHERE b.user_id = ? ORDER BY b.created_at DESC";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param("i", $targetUserId);
+    }
+    return $stmt;
 }
 
 // Helper function to create fallback booking data

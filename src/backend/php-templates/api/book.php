@@ -247,11 +247,38 @@ try {
         
         $insertedId = $stmt->insert_id;
         $booking['id'] = $insertedId;
+
+        $linkHelper = __DIR__ . '/common/customer_booking_link.php';
+        if (file_exists($linkHelper)) {
+            require_once $linkHelper;
+            $jwtUserId = null;
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            if ($authHeader !== '' && strpos($authHeader, 'Bearer ') === 0 && function_exists('verifyJwtToken')) {
+                $payload = verifyJwtToken(substr($authHeader, 7));
+                $jwtUserId = $payload['user_id'] ?? $payload['userId'] ?? $payload['id'] ?? null;
+            }
+            $linkedUserId = vth_resolve_booking_user_id(
+                $conn,
+                $booking['passengerPhone'] ?? '',
+                $booking['passengerEmail'] ?? '',
+                $jwtUserId
+            );
+            if ($linkedUserId) {
+                $linkStmt = $conn->prepare('UPDATE bookings SET user_id = ? WHERE id = ?');
+                if ($linkStmt) {
+                    $linkStmt->bind_param('ii', $linkedUserId, $insertedId);
+                    $linkStmt->execute();
+                    $linkStmt->close();
+                    $booking['userId'] = $linkedUserId;
+                }
+            }
+        }
         
         logBooking("Database insert result", [
             'insert_id' => $insertedId,
             'final_booking_id' => $booking['id'],
-            'booking_number' => $booking['bookingNumber']
+            'booking_number' => $booking['bookingNumber'],
+            'linked_user_id' => $booking['userId'] ?? null
         ]);
         
         logBooking("Booking stored in database", [
