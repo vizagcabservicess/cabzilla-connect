@@ -129,6 +129,8 @@ function buildOwnerMessage(body) {
   const chatLine = chatUrl
     ? `\n💬 *Chat guest:* ${chatUrl}\n(Opens WhatsApp with this guest — use your phone WhatsApp)\n`
     : '';
+  const summaryUrl = String(body.searchSummaryUrl || '').trim();
+  const summaryLine = summaryUrl ? `\n🔗 *Search summary:* ${summaryUrl}\n` : '';
 
   return (
     `🚖 *New Cab Search Alert!*\n\n` +
@@ -141,7 +143,8 @@ function buildOwnerMessage(body) {
     `📅 *Departure:* ${departure}\n` +
     `🚗 *Results:*\n${resultsBlock}\n` +
     `⏰ *Searched At:* ${searchedAt}` +
-    chatLine
+    chatLine +
+    summaryLine
   );
 }
 

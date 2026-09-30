@@ -66,6 +66,55 @@ $objectName = $folderPrefix . $fileBase;
 $tmpPath = $_FILES['image']['tmp_name'];
 $uploadsRoot = defined('UPLOADS_PATH') ? UPLOADS_PATH : (dirname(__DIR__) . '/uploads');
 
+function public_html_uploads_root(string $fallback): string
+{
+    $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? rtrim((string) $_SERVER['DOCUMENT_ROOT'], '/\\') : '';
+    if ($docRoot !== '') {
+        $pub = $docRoot . DIRECTORY_SEPARATOR . 'uploads';
+        if (!is_dir($pub)) {
+            @mkdir($pub, 0755, true);
+        }
+        if (is_dir($pub) && is_writable($pub)) {
+            return $pub;
+        }
+    }
+    return $fallback;
+}
+
+function save_dated_public_upload(
+    string $tmpPath,
+    string $originalName,
+    string $ext,
+    string $categoryFolder,
+    string $uploadsFallback
+): array {
+    $year = date('Y');
+    $dateFolder = date('Y-m-d');
+    $stem = strtolower((string) pathinfo($originalName, PATHINFO_FILENAME));
+    $stem = preg_replace('/[^a-z0-9._-]+/', '-', $stem) ?? '';
+    $stem = trim($stem, '.-_');
+    if ($stem === '') {
+        $stem = $categoryFolder;
+    }
+    $fileBase = $stem . '-' . date('His') . '-' . substr(uniqid('', true), -6) . '.' . $ext;
+    $relativeDir = $categoryFolder . '/' . $year . '/' . $dateFolder;
+    $localDir = public_html_uploads_root($uploadsFallback) . '/' . $relativeDir;
+    if (!is_dir($localDir) && !mkdir($localDir, 0755, true) && !is_dir($localDir)) {
+        return ['error' => 'Failed to create upload folder on Hostinger'];
+    }
+    $localPath = rtrim($localDir, '/\\') . DIRECTORY_SEPARATOR . $fileBase;
+    if (!move_uploaded_file($tmpPath, $localPath)) {
+        return ['error' => 'Failed to save file to Hostinger uploads'];
+    }
+    $relUrl = '/uploads/' . $relativeDir . '/' . $fileBase;
+    $publicBase = defined('APP_URL') ? rtrim((string) APP_URL, '/') : 'https://vizagtaxihub.com';
+    return [
+        'url' => $publicBase . $relUrl,
+        'path' => $relUrl,
+        'folder' => $relativeDir,
+    ];
+}
+
 /**
  * Carpool ID cards — local uploads/carpool-id/ (primary) + optional GCS carpool-id/ mirror.
  * Returns storage key "carpool-id/filename.ext" for admin media proxy.
@@ -86,6 +135,25 @@ if ($category === 'carpool-id') {
     }
 
     echo json_encode(['url' => $objectName]);
+    exit;
+}
+
+/**
+ * Tour main + gallery images — always public Hostinger uploads:
+ * public_html/uploads/tours/{year}/{Y-m-d}/filename.jpg
+ */
+if ($category === 'tours' || $category === 'tour' || $category === 'tour-gallery') {
+    $imageOnly = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!in_array($ext, $imageOnly, true)) {
+        echo json_encode(['error' => 'Tour images must be JPG, PNG, WEBP, or GIF']);
+        exit;
+    }
+    $saved = save_dated_public_upload($tmpPath, $filename, $ext, 'tours', $uploadsRoot);
+    if (!empty($saved['error'])) {
+        echo json_encode(['error' => $saved['error']]);
+        exit;
+    }
+    echo json_encode($saved);
     exit;
 }
 

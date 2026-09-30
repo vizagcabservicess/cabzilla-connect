@@ -10,6 +10,10 @@ RewriteBase /
 RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
 
+# Live sitemap from active tour_fares (must run even if sitemap.xml exists on disk)
+RewriteCond %{DOCUMENT_ROOT}/sitemap.php -f
+RewriteRule ^sitemap\.xml$ /sitemap.php [L]
+
 # WhatsApp / Facebook / Telegram link previews: crawlers do not run React — serve built HTML with vehicle embed OG tags (see vite: index-vehicle-*.html)
 RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|LinkedInBot|TelegramBot|vkShare|Pinterest|Slackbot|Discordbot|Applebot) [NC]
 RewriteRule ^vehicle/urbania/?$ /index-vehicle-urbania.html [L]
@@ -20,8 +24,8 @@ RewriteRule ^vehicle/tempo-traveller/?$ /index-vehicle-tempo-traveller.html [L]
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)$
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)/
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)/
 # Bots: seo-handler.php serves unique HTML for /vehicle/*, tempo URLs, etc. (see seo-handler.php thin-page block)
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 

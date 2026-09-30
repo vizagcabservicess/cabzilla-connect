@@ -41,46 +41,45 @@ const tourNameMapping: Record<string, string> = {
   'Vizag City Tour': 'vizag-north-city-tour'
 };
 
+function slugifyTourLabel(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[/]+/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 /**
  * Generate a URL-friendly slug from tour data
  * @param tour - Tour object with id, tourId, or tourName
  * @returns URL-friendly slug
  */
 export function generateTourUrl(tour: any): string {
-  // First try to use tourId if available
-  if (tour.tourId && tourUrlMapping[tour.tourId]) {
-    return tourUrlMapping[tour.tourId];
-  }
-  
-  // Then try to use id if available
-  if (tour.id && tourUrlMapping[tour.id]) {
-    return tourUrlMapping[tour.id];
-  }
-  
-  // Then try to use tourName if available
-  if (tour.tourName && tourNameMapping[tour.tourName]) {
-    return tourNameMapping[tour.tourName];
-  }
-  
-  // Fallback: convert tourName to URL-friendly format
-  if (tour.tourName) {
-    return tour.tourName
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-  }
+  const tourId = String(tour?.tourId || '').trim();
+  const recordId = String(tour?.id || '').trim();
+  const displayName = String(tour?.tourName || tour?.name || '').trim();
 
-  // Convert tourId to slug when not in mapping (e.g. "vanajangi_tour" -> "vanajangi-tour")
-  if (tour.tourId && typeof tour.tourId === 'string') {
-    return tour.tourId
-      .toLowerCase()
-      .replace(/_/g, '-')
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
+  if (tourId && tourUrlMapping[tourId]) {
+    return tourUrlMapping[tourId];
   }
-
-  // Last resort: use id as string
-  return tour.id ? tour.id.toString().toLowerCase().replace(/_/g, '-') : 'unknown';
+  if (recordId && tourUrlMapping[recordId]) {
+    return tourUrlMapping[recordId];
+  }
+  if (displayName && tourNameMapping[displayName]) {
+    return tourNameMapping[displayName];
+  }
+  if (displayName) {
+    return slugifyTourLabel(displayName);
+  }
+  if (tourId) {
+    return slugifyTourLabel(tourId.replace(/_/g, '-'));
+  }
+  if (recordId) {
+    return slugifyTourLabel(recordId.replace(/_/g, '-'));
+  }
+  return 'unknown';
 }
 
 /**

@@ -37,7 +37,11 @@ export async function uploadSmartBudgetVendorFile(
   form.append('category', category);
   const { data } = await axios.post(getApiUrl('/api/upload-image.php'), form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    validateStatus: () => true,
   });
+  if (data?.error) {
+    throw new Error(String(data.error));
+  }
   const url =
     data?.url ||
     data?.data?.url ||
@@ -45,6 +49,13 @@ export async function uploadSmartBudgetVendorFile(
     data?.data?.file_url ||
     data?.path ||
     data?.data?.path;
-  if (!url) throw new Error('Upload failed');
+  if (!url) throw new Error(data?.error || 'Upload failed');
   return resolveSmartBudgetMediaUrl(String(url));
+}
+
+export async function uploadTourImageFile(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Upload JPG, PNG, WEBP, or GIF only');
+  }
+  return uploadSmartBudgetVendorFile(file, 'tours');
 }

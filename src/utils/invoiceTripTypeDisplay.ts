@@ -2,6 +2,7 @@ import { hourlyPackages } from '@/lib/packageData';
 import type { Booking } from '@/types/api';
 import type { TripSummaryOverrides } from '@/utils/invoiceTripSummaryDefaults';
 import { normalizeTripTypeForConfirmation } from '@/utils/localPackageLimitsForConfirmation';
+import { isGenericTourName, resolveTourDisplayName } from '@/utils/tourConfirmationHelpers';
 
 /** When trip_type is wrong but DB has standard local package caps, still show Local on invoice. */
 function bookingHasKnownLocalHourlyCaps(booking: Booking): boolean {
@@ -80,8 +81,11 @@ export function getInvoiceTripTypeDisplay(booking: Booking): string {
   const modeLabel = isRound ? 'Round trip' : 'One way';
 
   if (tourRef || raw.toLowerCase() === 'tour') {
-    const name = String(booking.tourName ?? booking.tour_name ?? '').trim();
-    return name ? `Tour: ${name} (${modeLabel})` : `Tour (${modeLabel})`;
+    const name = resolveTourDisplayName(booking);
+    if (name && !isGenericTourName(name)) {
+      return `Tour: ${name} (${modeLabel})`;
+    }
+    return `Tour (${modeLabel})`;
   }
 
   const normalized = normalizeTripTypeForConfirmation(raw, booking).toLowerCase();

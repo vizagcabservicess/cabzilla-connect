@@ -25,9 +25,10 @@ import {
   Check,
   X,
   Loader2,
-  Download
+  Download,
+  ChevronDown
 } from 'lucide-react';
-import { TourDetail } from '@/types/tour';
+import { TourDetail, TourListItem } from '@/types/tour';
 import { CabType } from '@/types/cab';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { bookingAPI } from '@/services/api';
@@ -38,10 +39,22 @@ import { DateTimePicker } from '@/components/DateTimePicker';
 import { formatDateForAPI } from '@/lib/dateUtils';
 import { getTourIdFromSlug, getTourUrl, getTourIdVariantsForSlug, getTourDisplayName } from '@/utils/tourUrlUtils';
 import { getVehicleData } from '@/services/vehicleDataService';
+import { addTourToBookingWidget, readTourCartCheckout, readTourCartTripExtras, removeTourFromCart } from '@/lib/addTourToBookingWidget';
+import { useTourCart } from '@/hooks/useTourCart';
+import { LocationInput } from '@/components/LocationInput';
+import { Location } from '@/lib/locationData';
 
 interface VehicleWithPricing extends CabType {
   price: number;
 }
+
+type TourDetailNavState = {
+  pickupLocation?: { name?: string; isInVizag?: boolean } & Record<string, unknown>;
+  pickupDate?: Date | string;
+  selectedVehicle?: VehicleWithPricing;
+  openGuestForm?: boolean;
+  tourId?: string;
+};
 
 const TourDetailPage = () => {
   const { tourSlug } = useParams<{ tourSlug: string }>();
@@ -49,25 +62,58 @@ const TourDetailPage = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { items: tourCartItems } = useTourCart();
   const { isSuperAdmin } = usePrivileges();
   const { generateAndDownloadPDF, isGenerating } = usePDFExport();
   
   const [tour, setTour] = useState<TourDetail | null>(null);
-  const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithPricing | null>(null);
+  const [catalogTours, setCatalogTours] = useState<TourListItem[]>([]);
+  const navigationState = (location.state as TourDetailNavState | null) ?? null;
+  const shouldOpenGuestForm =
+    Boolean(navigationState?.openGuestForm) || searchParams.get('step') === 'guest';
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithPricing | null>(
+    () => navigationState?.selectedVehicle ?? null
+  );
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
-  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [showBookingForm, setShowBookingForm] = useState(
+    () => shouldOpenGuestForm && Boolean(navigationState?.selectedVehicle)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
   const [aiPrefillDone, setAiPrefillDone] = useState(false);
+  const [isEditingPickup, setIsEditingPickup] = useState(false);
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [pickupDraft, setPickupDraft] = useState<Location | null>(null);
+  const [showSelectedTourList, setShowSelectedTourList] = useState(true);
+  const checkoutSnapshot = readTourCartCheckout();
+  const checkoutLines = (checkoutSnapshot?.lines ?? []).map((line) => {
+    if (line.distance && line.distance > 0) return line;
+    const catalog = catalogTours.find((item) => item.tourId === line.tourId);
+    const fallback = tour && line.tourId === tour.tourId ? tour.distance : 0;
+    return {
+      ...line,
+      distance: catalog?.distance || fallback || 0,
+    };
+  });
+  const checkoutCombinedTotal = checkoutLines.reduce((sum, line) => sum + (line.price || 0), 0);
+  const checkoutAirportFare =
+    Number(checkoutSnapshot?.additionalAirportFare) > 0
+      ? Number(checkoutSnapshot?.additionalAirportFare)
+      : Number(readTourCartTripExtras()?.additionalAirportFare) || 0;
+  const checkoutAirportTransfers =
+    checkoutSnapshot?.airportTransfers?.length
+      ? checkoutSnapshot.airportTransfers
+      : readTourCartTripExtras()?.airportTransfers || [];
+  const checkoutCombinedDistance = checkoutLines.reduce((sum, line) => sum + (line.distance || 0), 0);
   
   // Load pickup details from session storage or navigation state
   const loadPickupData = () => {
     try {
       // Check navigation state first (when coming from Hero or ToursPage)
-      const navigationState = location.state as any;
-      if (navigationState && navigationState.pickupLocation) {
-        const loc = navigationState.pickupLocation;
+      const navState = location.state as TourDetailNavState | null;
+      if (navState && navState.pickupLocation) {
+        const loc = navState.pickupLocation;
         const locationName = typeof loc === 'object' && loc?.name ? loc.name : String(loc);
         const isInVizag = typeof loc === 'object' && loc?.isInVizag !== undefined ? loc.isInVizag : true;
         const location = typeof loc === 'object'
@@ -75,7 +121,7 @@ const TourDetailPage = () => {
           : { name: locationName, isInVizag: true };
         return {
           location,
-          date: navigationState.pickupDate ? new Date(navigationState.pickupDate) : new Date()
+          date: navState.pickupDate ? new Date(navState.pickupDate) : new Date()
         };
       }
       
@@ -101,49 +147,104 @@ const TourDetailPage = () => {
   const [pickupDate, setPickupDate] = useState(pickupData.date);
 
   
-  // Edit functionality
-  const handleEditTrip = () => {
-    // Navigate back to main booking page with tour context
-    const tourId = getTourIdFromSlug(tourSlug || '');
-    navigate('/', { 
-      state: { 
-        tripType: 'tour',
-        pickupLocation: pickupLocation.name,
-        tourId: tourId 
-      } 
-    });
-  };
-
-  // Edit pickup location handler
-  const handleEditPickupLocation = () => {
-    // For now, navigate back to main page to edit location
-    // In the future, this could open a location picker modal
-    const tourId = getTourIdFromSlug(tourSlug || '');
-    navigate('/', { 
-      state: { 
-        tripType: 'tour',
-        pickupLocation: pickupLocation.name,
-        tourId: tourId,
-        editLocation: true
-      } 
-    });
-  };
-
-  // Edit pickup date handler
-  const handleEditPickupDate = () => {
-    // For now, navigate back to main page to edit date
-    // In the future, this could open a date picker modal
-    const tourId = getTourIdFromSlug(tourSlug || '');
-    navigate('/', { 
-      state: { 
-        tripType: 'tour',
-        pickupLocation: pickupLocation.name,
+  const handleReturnToSelectedTours = () => {
+    const snapshot = readTourCartCheckout();
+    const cartIds = snapshot?.cartTourIds?.length
+      ? snapshot.cartTourIds
+      : tourCartItems.map((item) => item.tourId);
+    if (cartIds.length > 1) {
+      navigate('/tours', {
+        state: {
+          pickupLocation: snapshot?.pickupLocation || pickupLocation,
+          pickupDate: pickupDate,
+          cartTourIds: cartIds,
+        },
+      });
+      return;
+    }
+    navigate('/tours', {
+      state: {
+        pickupLocation: snapshot?.pickupLocation || pickupLocation,
         pickupDate: pickupDate,
-        tourId: tourId,
-        editDate: true
-      } 
+      },
     });
   };
+
+  const handleEditTrip = () => {
+    handleReturnToSelectedTours();
+  };
+
+  const handleEditPickupLocation = () => {
+    setIsEditingDate(false);
+    setPickupDraft(null);
+    setIsEditingPickup((open) => !open);
+  };
+
+  const handleEditPickupDate = () => {
+    setIsEditingPickup(false);
+    setIsEditingDate((open) => !open);
+  };
+
+  const pickupAsLocation: Location = {
+    id: String((pickupLocation as Location | undefined)?.id || 'tour-pickup'),
+    name: pickupLocation.name || 'Visakhapatnam',
+    city: (pickupLocation as Location | undefined)?.city || 'Visakhapatnam',
+    state: (pickupLocation as Location | undefined)?.state || 'Andhra Pradesh',
+    lat: Number((pickupLocation as Location | undefined)?.lat) || 17.6868,
+    lng: Number((pickupLocation as Location | undefined)?.lng) || 83.2185,
+    type: (pickupLocation as Location | undefined)?.type || 'other',
+    popularityScore: 50,
+    address: (pickupLocation as Location | undefined)?.address || pickupLocation.name || 'Visakhapatnam',
+    isInVizag: pickupLocation.isInVizag !== false,
+  };
+
+  const pickupEditor = isEditingPickup ? (
+    <LocationInput
+      label=""
+      placeholder="Search pickup location"
+      location={pickupDraft ?? pickupAsLocation}
+      onLocationChange={(loc) => {
+        const name = String(loc?.name || loc?.address || '').trim();
+        const lat = Number(loc?.lat);
+        const lng = Number(loc?.lng);
+        const picked = Boolean(
+          name && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+        );
+        if (!picked) {
+          setPickupDraft({
+            ...pickupAsLocation,
+            id: '',
+            name: '',
+            address: '',
+            lat: 0,
+            lng: 0,
+          });
+          return;
+        }
+        const next = { ...loc, name: loc.name || name, isInVizag: loc.isInVizag !== false };
+        setPickupLocation(next);
+        setPickupDraft(null);
+        sessionStorage.setItem('pickupLocation', JSON.stringify(next));
+        setIsEditingPickup(false);
+      }}
+      isPickupLocation={true}
+      tripType="tour"
+    />
+  ) : null;
+
+  const dateEditor = isEditingDate ? (
+    <DateTimePicker
+      label=""
+      date={pickupDate}
+      onDateChange={(date) => {
+        if (!date) return;
+        setPickupDate(date);
+        sessionStorage.setItem('pickupDate', JSON.stringify(date.toISOString()));
+        setIsEditingDate(false);
+      }}
+      minDate={new Date()}
+    />
+  ) : null;
 
   // Helper: Get the actual tour fare for the selected vehicle using correct DB column names.
   const getTourFare = (
@@ -261,6 +362,7 @@ const TourDetailPage = () => {
 
   // Reset booking form state when coming back from payment page
   useEffect(() => {
+    if (shouldOpenGuestForm) return;
     // Check if we're coming back from payment page
     const storedDetails = sessionStorage.getItem('bookingDetails');
     if (storedDetails) {
@@ -281,7 +383,26 @@ const TourDetailPage = () => {
         console.error('Error parsing booking details:', error);
       }
     }
-  }, [tourSlug]);
+  }, [tourSlug, shouldOpenGuestForm]);
+
+  useEffect(() => {
+    if (selectedVehicle) return;
+    const snapshot = readTourCartCheckout();
+    if (!snapshot?.vehiclesByTourId) return;
+    const tourId =
+      navigationState?.tourId ||
+      snapshot.activeTourId ||
+      getTourIdFromSlug(tourSlug || '');
+    const stored = snapshot.vehiclesByTourId[tourId];
+    if (stored && typeof stored === 'object' && stored !== null && 'price' in stored) {
+      setSelectedVehicle(stored as VehicleWithPricing);
+    }
+  }, [navigationState?.tourId, selectedVehicle, tourSlug]);
+
+  useEffect(() => {
+    if (!tour || !shouldOpenGuestForm || !selectedVehicle) return;
+    setShowBookingForm(true);
+  }, [tour, shouldOpenGuestForm, selectedVehicle]);
 
   // Scroll to top when booking form is shown (ensures correct position after React renders)
   useEffect(() => {
@@ -305,6 +426,7 @@ const TourDetailPage = () => {
 
       // First, try to get all tours to find the correct tour ID
       const allTours = await tourDetailAPI.getTours();
+      setCatalogTours(allTours);
 
       // Find the tour that matches our URL slug
       const matchingTour = allTours.find(tour => {
@@ -313,11 +435,17 @@ const TourDetailPage = () => {
         return urlSlug === tourSlug;
       });
 
-      // Build list of IDs to try (matchingTour first, then slug variants)
+      // Build list of IDs to try (cart/nav tourId first, then matchingTour, then slug variants)
       const slugVariants = getTourIdVariantsForSlug(tourSlug);
-      const idsToTry: string[] = matchingTour
-        ? [matchingTour.tourId, ...slugVariants.filter(id => id !== matchingTour.tourId)]
-        : slugVariants;
+      const navTourId = String(navigationState?.tourId || '').trim();
+      const idsToTry: string[] = [];
+      if (navTourId) idsToTry.push(navTourId);
+      if (matchingTour?.tourId && !idsToTry.includes(matchingTour.tourId)) {
+        idsToTry.push(matchingTour.tourId);
+      }
+      for (const id of slugVariants) {
+        if (!idsToTry.includes(id)) idsToTry.push(id);
+      }
 
       let tourDetail = null;
       for (const tourId of idsToTry) {
@@ -361,6 +489,14 @@ const TourDetailPage = () => {
       return;
     }
     setShowBookingForm(true);
+  };
+
+  const handleAddToBook = () => {
+    if (!tour) return;
+    addTourToBookingWidget(
+      { tourId: tour.tourId, tourName: tour.tourName },
+      { navigate }
+    );
   };
 
   // PDF Export functionality (Super Admin only)
@@ -444,13 +580,24 @@ const TourDetailPage = () => {
     try {
       setIsSubmitting(true);
       
-      const computedTotal = selectedVehicle.price;
-      const computedDistance = tour.distance;
-      
-      // For round-trip tours, drop location should be same as pickup location
-      const dropLocation = tripMode === 'round-trip' 
-        ? pickupLocation.name 
+      const pricedCheckoutLines = checkoutLines.filter((line) => line.price > 0);
+      const isMultiTourCheckout = pricedCheckoutLines.length > 1;
+      const computedTotal = isMultiTourCheckout
+        ? pricedCheckoutLines.reduce((sum, line) => sum + line.price, 0)
+        : selectedVehicle.price;
+      const computedDistance = isMultiTourCheckout
+        ? pricedCheckoutLines.reduce((sum, line) => sum + (line.distance || 0), 0) || tour.distance
+        : tour.distance;
+      const packageLabel = isMultiTourCheckout
+        ? pricedCheckoutLines.map((line) => line.tourName).join(' + ')
         : tour.tourName;
+      const tourListNote = isMultiTourCheckout
+        ? `Selected tours: ${pricedCheckoutLines
+            .map((line) => `${line.tourName} · ${line.vehicleName || selectedVehicle.name} · ₹${line.price.toLocaleString('en-IN')}`)
+            .join('; ')}`
+        : '';
+      
+      const dropLocation = packageLabel;
       
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name,
@@ -468,9 +615,12 @@ const TourDetailPage = () => {
         passengerPhone: guestDetails.phone,
         passengerCountryCode: guestDetails.countryCode,
         passengerEmail: guestDetails.email,
-        additionalRequirements: guestDetails.additionalRequirements,
+        additionalRequirements: [guestDetails.additionalRequirements, tourListNote]
+          .map((part) => String(part || '').trim())
+          .filter(Boolean)
+          .join('\n'),
         tourId: tour.tourId,
-        tourName: tour.tourName,
+        tourName: packageLabel,
         tourDuration: tour.duration || tour.timeDuration || '',
         tourDays: tour.days,
         tourItinerary: (tour.itinerary ?? []).map((d) => ({
@@ -495,7 +645,7 @@ const TourDetailPage = () => {
       
       const bookingDataForStorage = {
         tourId: tour.tourId,
-        tourName: tour.tourName,
+        tourName: packageLabel,
         pickupLocation: pickupLocation,
         dropLocation: { name: dropLocation, address: '' },
         tourDistance: computedDistance,
@@ -512,6 +662,13 @@ const TourDetailPage = () => {
       };
       
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
+      if (isMultiTourCheckout) {
+        for (const line of pricedCheckoutLines) {
+          removeTourFromCart(line.tourId);
+        }
+      } else {
+        removeTourFromCart(tour.tourId);
+      }
       
       toast({
         title: "Booking Created!",
@@ -566,7 +723,14 @@ const TourDetailPage = () => {
   const seoKeywords = `${tour.tourName.toLowerCase()}, ${tour.category.toLowerCase()} tour, ${tour.duration} package, tour from vizag, ${tour.difficulty.toLowerCase()} tour, vizag taxi hub tours`;
   const tourImage = tour.imageUrl || tour.gallery?.[0]?.url || '/og-image.png';
   const tourUrl = `https://vizagtaxihub.com${getTourUrl(tour)}`;
-
+  const payableTotal =
+    (checkoutLines.length > 1 && checkoutCombinedTotal > 0
+      ? checkoutCombinedTotal
+      : (selectedVehicle?.price ?? 0)) + checkoutAirportFare;
+  const payableDistance =
+    checkoutLines.length > 1 && checkoutCombinedDistance > 0
+      ? checkoutCombinedDistance
+      : tour.distance;
   return (
     <>
       <Helmet>
@@ -625,23 +789,118 @@ const TourDetailPage = () => {
         </script>
       </Helmet>
       
-      <div className="min-h-screen bg-gray-50 text-[14px] md:text-[15px]">
+      <div className="min-h-screen max-w-[100%] overflow-x-clip bg-gray-50 text-[14px] md:text-[15px]">
         <Navbar />
         
-        <div className="container mx-auto px-3 py-4 pb-20 max-w-6xl">
-          {/* Back Button */}
-          <Button variant="ghost" onClick={() => navigate('/tours')} className="mb-4 text-sm py-2 px-3">
+        <div className="mx-auto max-w-6xl min-w-0 overflow-x-clip pb-24 md:container md:px-3 md:py-4 md:pb-20">
+          <Button
+            variant="ghost"
+            onClick={handleReturnToSelectedTours}
+            className="mb-4 hidden text-sm py-2 px-3 md:inline-flex"
+          >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Tours
+            {checkoutLines.length > 1 ? 'Back to selected tours' : 'Back to Tours'}
           </Button>
+          {checkoutLines.length > 1 && (
+            <div className="mb-3 mx-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 md:mx-0">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-1.5 text-left"
+                  aria-expanded={showSelectedTourList}
+                  onClick={() => setShowSelectedTourList((open) => !open)}
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    Your selected tours ({checkoutLines.length})
+                  </p>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${
+                      showSelectedTourList ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                  onClick={handleReturnToSelectedTours}
+                >
+                  Edit list
+                </button>
+              </div>
+              {showSelectedTourList && (
+                <ul className="space-y-1.5">
+                  {checkoutLines.map((line) => {
+                    const isCurrent = line.tourId === tour.tourId;
+                    const lineDate = line.dateIso ? new Date(line.dateIso) : null;
+                    return (
+                      <li key={line.tourId} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-gray-900">
+                            {line.tourName}
+                            {isCurrent ? ' · this booking' : ''}
+                          </span>
+                          <span className="block text-xs text-gray-500">
+                            {lineDate && !Number.isNaN(lineDate.getTime())
+                              ? lineDate.toLocaleString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })
+                              : 'Set a date'}
+                            {line.vehicleName ? ` · ${line.vehicleName}` : ''}
+                          </span>
+                        </span>
+                        <span className="shrink-0 font-semibold text-gray-900">
+                          {line.price > 0 ? `₹${line.price.toLocaleString('en-IN')}` : '—'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {checkoutAirportTransfers.map((transfer, index) => (
+                    <li key={`airport-${index}`} className="flex items-start justify-between gap-3 text-sm">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-gray-900">
+                          {transfer.direction === 'from-airport' ? 'Airport pickup' : 'Airport drop'}
+                        </span>
+                        <span className="block text-xs text-gray-500">
+                          {transfer.placeName || 'Vizag airport transfer'}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-semibold text-gray-900">
+                        {Number(transfer.fare) > 0
+                          ? `₹${Number(transfer.fare).toLocaleString('en-IN')}`
+                          : checkoutAirportFare > 0
+                            ? ''
+                            : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className={`${showSelectedTourList ? 'mt-2 border-t border-slate-100 pt-2' : ''} flex items-center justify-between`}>
+                <span className="text-sm font-semibold text-gray-900">
+                  Combined fare · {checkoutLines.filter((line) => line.price > 0).length} tours
+                  {checkoutAirportFare > 0 ? ' + airport' : ''}
+                </span>
+                <span className="text-base font-bold text-blue-600">
+                  ₹{(checkoutCombinedTotal + checkoutAirportFare).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
 
           
           {/* Edit Module with PDF Export for Super Admin */}
-          <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="mb-4 hidden items-center justify-between gap-4 md:flex">
             <div className="flex-1">
               <TourEditModule
                 pickupLocation={pickupLocation.name}
-                destinationLocation={tour.tourName}
+                destinationLocation={
+                  checkoutLines.length > 1
+                    ? `${checkoutLines.length} selected tours`
+                    : tour.tourName
+                }
                 pickupDate={pickupDate}
                 onEdit={handleEditTrip}
               />
@@ -667,17 +926,16 @@ const TourDetailPage = () => {
           </div>
 
           {!showBookingForm ? (
-            <div className="grid lg:grid-cols-3 gap-4">
+            <div className="grid gap-4 lg:grid-cols-3">
               {/* Left Section - Tour Details */}
-              <div className="lg:col-span-2 space-y-4">
-                {/* Header */}
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
+              <div className="lg:col-span-2 md:space-y-4">
+                <div className="hidden md:block">
+                  <div className="mb-1 flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
                     <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
                   </div>
-                  <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{tour.tourName}</h1>
-                  <div className="flex items-center gap-3 text-gray-600 text-xs">
+                  <h1 className="mb-2 text-xl font-bold text-gray-900 md:text-2xl">{tour.tourName}</h1>
+                  <div className="flex items-center gap-3 text-xs text-gray-600">
                     <span className="flex items-center gap-1">
                       <MapPin size={15} />
                       {tour.distance} km
@@ -693,23 +951,66 @@ const TourDetailPage = () => {
                   </div>
                 </div>
 
-                {/* Image Gallery */}
-                <Card>
-                  <CardContent className="p-0">
-                    <TourGallery 
-                      gallery={tour.gallery} 
-                      tourName={tour.tourName}
-                      imageUrl={tour.imageUrl}
-                    />
-                  </CardContent>
-                </Card>
+                <div className="overflow-hidden bg-white md:rounded-xl md:border md:border-slate-200 md:shadow-sm">
+                  <TourGallery
+                    gallery={tour.gallery}
+                    tourName={tour.tourName}
+                    imageUrl={tour.imageUrl}
+                    overlay={(
+                      <button
+                        type="button"
+                        onClick={handleReturnToSelectedTours}
+                        className="absolute left-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md md:hidden"
+                        aria-label={checkoutLines.length > 1 ? 'Back to selected tours' : 'Back to Tours'}
+                      >
+                        <ArrowLeft className="h-5 w-5 text-slate-800" />
+                      </button>
+                    )}
+                  />
+                </div>
+
+                <div className="relative z-10 -mt-12 rounded-t-3xl bg-white px-5 pb-2 pt-8 shadow-xl md:mt-0 md:rounded-none md:bg-transparent md:px-0 md:pt-0 md:shadow-none">
+                  <div className="md:hidden">
+                    <div className="mb-1 flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">{tour.category}</Badge>
+                      <Badge variant="outline" className="text-xs">{tour.difficulty}</Badge>
+                    </div>
+                    <h1 className="text-2xl font-bold leading-tight text-slate-900">{tour.tourName}</h1>
+                    <div className="mt-3 flex flex-nowrap items-center gap-3 overflow-x-auto text-sm text-slate-600 [&::-webkit-scrollbar]:hidden">
+                      <span className="inline-flex shrink-0 items-center gap-1.5">
+                        <MapPin className="h-4 w-4 shrink-0 text-slate-500" />
+                        {tour.distance} km
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1.5">
+                        <Calendar className="h-4 w-4 shrink-0 text-slate-500" />
+                        {tour.days} day{tour.days > 1 ? 's' : ''}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1.5">
+                        <Clock className="h-4 w-4 shrink-0 text-slate-500" />
+                        {tour.timeDuration && tour.timeDuration.trim() !== '' ? tour.timeDuration : 'Full Day'}
+                      </span>
+                    </div>
+                  </div>
 
                 {/* Tabs */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList>
-                    <TabsTrigger value="overview" className="text-xs md:text-sm">Overview</TabsTrigger>
-                    <TabsTrigger value="itinerary" className="text-xs md:text-sm">Itinerary</TabsTrigger>
-                    <TabsTrigger value="inclusions" className="text-xs md:text-sm">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-5 md:mt-0">
+                  <TabsList className="h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b border-slate-200 bg-transparent p-0 md:h-10 md:w-auto md:justify-center md:gap-0 md:overflow-visible md:rounded-md md:border-0 md:bg-muted md:p-1">
+                    <TabsTrigger
+                      value="overview"
+                      className="shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 text-sm shadow-none data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none md:rounded-sm md:border-b-0 md:px-3 md:pb-1.5 md:data-[state=active]:bg-background md:data-[state=active]:text-foreground md:data-[state=active]:shadow-sm"
+                    >
+                      Overview
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="itinerary"
+                      className="shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 text-sm shadow-none data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none md:rounded-sm md:border-b-0 md:px-3 md:pb-1.5 md:data-[state=active]:bg-background md:data-[state=active]:text-foreground md:data-[state=active]:shadow-sm"
+                    >
+                      Itinerary
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="inclusions"
+                      className="shrink-0 rounded-none border-b-2 border-transparent bg-transparent px-0 pb-3 text-sm shadow-none data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none md:rounded-sm md:border-b-0 md:px-3 md:pb-1.5 md:data-[state=active]:bg-background md:data-[state=active]:text-foreground md:data-[state=active]:shadow-sm"
+                    >
                       Inclusions & Exclusions
                     </TabsTrigger>
                   </TabsList>
@@ -806,21 +1107,31 @@ const TourDetailPage = () => {
                     </div>
                   </TabsContent>
                 </Tabs>
+                </div>
               </div>
 
               {/* Right Section - Vehicle Selection & Booking */}
-              <div className="space-y-4">
+              <div className="space-y-4 px-4 md:px-0">
                 {!selectedVehicle ? (
-                  <TourVehicleSelection
-                    pricing={tour.pricing}
-                    onVehicleSelect={(vehicle) => {
-                      setSelectedVehicle(vehicle);
-                      // Don't auto-navigate to booking form - let user click "Book Now"
-                    }}
-                    selectedVehicle={selectedVehicle}
-                    onBookNow={() => {}}
-                    tourDate={pickupDate}
-                  />
+                  <>
+                    <TourVehicleSelection
+                      pricing={tour.pricing}
+                      onVehicleSelect={(vehicle) => {
+                        setSelectedVehicle(vehicle);
+                        // Don't auto-navigate to booking form - let user click "Book Now"
+                      }}
+                      selectedVehicle={selectedVehicle}
+                      onBookNow={() => {}}
+                      tourDate={pickupDate}
+                    />
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleAddToBook}
+                    >
+                      Add to book
+                    </Button>
+                  </>
                 ) : !showBookingForm ? (
                   <div className="space-y-4">
                     {/* Trip Mode Selection */}
@@ -862,24 +1173,40 @@ const TourDetailPage = () => {
                       dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                       pickupDate={pickupDate}
                       selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
-                      distance={tour.distance}
-                      totalPrice={selectedVehicle.price}
+                      distance={payableDistance}
+                      totalPrice={payableTotal}
                       tripType="tour"
                       tripMode={tripMode}
                       hourlyPackage="tour"
+                      tourLines={checkoutLines}
+                      breakdown={{
+                        basePrice: payableTotal,
+                        driverAllowance: 0,
+                        nightCharges: 0,
+                        extraDistanceFare: 0,
+                      }}
                       onEditPickupLocation={handleEditPickupLocation}
                       onEditPickupDate={handleEditPickupDate}
+                      pickupEditor={pickupEditor}
+                      dateEditor={dateEditor}
                     />
-                    <div className="flex gap-2 mt-3 mb-2">
+                    <div className="mt-3 mb-2 flex min-w-0 flex-col gap-2 sm:flex-row">
                       <Button
                         variant="outline"
-                        className="flex-1"
+                        className="min-w-0 flex-1"
                         onClick={() => setSelectedVehicle(null)}
                       >
                         ← Back to Vehicles
                       </Button>
                       <Button
-                        className="flex-1"
+                        variant="outline"
+                        className="min-w-0 flex-1"
+                        onClick={handleAddToBook}
+                      >
+                        Add to book
+                      </Button>
+                      <Button
+                        className="min-w-0 flex-1"
                         onClick={handleBookNow}
                       >
                         Book Now
@@ -890,14 +1217,18 @@ const TourDetailPage = () => {
               </div>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid gap-6 px-4 md:grid-cols-2 md:px-0">
               <div>
                 <GuestDetailsForm
                   onSubmit={handleBookingSubmit}
                   // Pass computed price
-                  totalPrice={selectedVehicle ? selectedVehicle.price : 0}
+                  totalPrice={payableTotal}
                   isLoading={isSubmitting}
                   onBack={() => {
+                    if (checkoutLines.length > 1) {
+                      handleReturnToSelectedTours();
+                      return;
+                    }
                     setShowBookingForm(false);
                     setTimeout(() => {
                       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -908,19 +1239,41 @@ const TourDetailPage = () => {
                 />
               </div>
               <div>
+                {checkoutLines.length > 1 && (
+                  <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      All selected tours
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-blue-600">
+                      ₹{checkoutCombinedTotal.toLocaleString('en-IN')}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Part pay and full pay use this combined fare for all {checkoutLines.length} tours.
+                    </p>
+                  </div>
+                )}
                 {selectedVehicle && (
                   <BookingSummary
                     pickupLocation={pickupLocation}
                     dropLocation={tripMode === 'round-trip' ? pickupLocation : null}
                     pickupDate={pickupDate}
                     selectedCab={vehicleWithPricingToCabType(selectedVehicle)}
-                    distance={tour.distance}
-                    totalPrice={selectedVehicle.price}
+                    distance={payableDistance}
+                    totalPrice={payableTotal}
                     tripType="tour"
                     tripMode={tripMode}
                     hourlyPackage="tour"
+                    tourLines={checkoutLines}
+                    breakdown={{
+                      basePrice: payableTotal,
+                      driverAllowance: 0,
+                      nightCharges: 0,
+                      extraDistanceFare: 0,
+                    }}
                     onEditPickupLocation={handleEditPickupLocation}
                     onEditPickupDate={handleEditPickupDate}
+                    pickupEditor={pickupEditor}
+                    dateEditor={dateEditor}
                   />
                 )}
               </div>

@@ -3,6 +3,7 @@ import { createBrowserRouter, Outlet, useLocation, useSearchParams, Navigate } f
 import { vehicleLoader } from './loaders/vehicleLoader';
 import { lazy, Suspense, startTransition, useEffect } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
+import { MyTourListPanel } from './components/tour/MyTourListPanel';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { RedirectHandler } from './components/RedirectHandler';
 import { useAuth } from './providers/AuthProvider';
@@ -15,6 +16,16 @@ import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import { RouteErrorFallback } from './components/ErrorBoundary';
 import Index from './pages/Index';
+import { applySharedBuildTrip, isBuildTripDeepLink } from './lib/buildYourTrip';
+
+if (typeof window !== 'undefined') {
+  try {
+    const bootParams = new URLSearchParams(window.location.search);
+    if (isBuildTripDeepLink(bootParams)) applySharedBuildTrip(bootParams);
+  } catch {
+    /* ignore */
+  }
+}
 import VehicleDetailPage from '@/pages/VehicleDetailPage';
 import SmartBudgetVendorAuthLayout from './pages/smart-budget/SmartBudgetVendorAuthLayout';
 import SmartBudgetCustomerAuthLayout from './pages/smart-budget/SmartBudgetCustomerAuthLayout';
@@ -332,6 +343,10 @@ function Root() {
         </Suspense>
       </RedirectHandler>
       
+      {!location.pathname.startsWith('/admin') &&
+        searchParams.get('search') !== '1' &&
+        searchParams.get('step') !== 'guest' && <MyTourListPanel />}
+
       {/* Global WhatsApp Floating Button - Desktop Only (public pages) */}
       {!location.pathname.startsWith('/admin') && (
       <div className="hidden md:block fixed right-6 bottom-6 z-50">

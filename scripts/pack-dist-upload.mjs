@@ -94,7 +94,7 @@ if (fs.existsSync(dataDir)) {
 }
 
 // Optional helpers often needed alongside the SPA
-for (const extra of ['.htaccess', 'sw.js', 'robots.txt', 'sitemap.xml']) {
+for (const extra of ['.htaccess', 'sw.js', 'robots.txt', 'sitemap.xml', 'sitemap.php']) {
   const p = path.join(dist, extra);
   if (fs.existsSync(p)) copyRecursive(p, path.join(outDir, extra));
 }

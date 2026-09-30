@@ -1,5 +1,6 @@
 <?php
 require_once '../config.php';
+require_once __DIR__ . '/utils/tour_fares_sort.php';
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -59,6 +60,7 @@ try {
 }
 
 function getAllTours($conn) {
+    tour_fares_ensure_sort_order_column($conn);
     $stmt = $conn->prepare("
         SELECT 
             tf.tour_id as tourId,
@@ -71,7 +73,7 @@ function getAllTours($conn) {
             tf.time_duration as timeDuration
         FROM tour_fares tf 
         WHERE tf.is_active = 1 
-        ORDER BY tf.tour_name
+        ORDER BY tf.sort_order ASC, tf.id ASC
     ");
     
     $stmt->execute();

@@ -1,4 +1,5 @@
 import { CheckCircle2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/cabData';
 import { cn } from '@/lib/utils';
@@ -12,7 +13,7 @@ export interface BookingPaymentFooterProps {
   disabled?: boolean;
   className?: string;
   /** Mobile web reference: smaller disclaimer text in grey instead of teal banner */
-  disclaimerVariant?: 'teal' | 'muted';
+  disclaimerVariant?: 'teal' | 'muted' | 'none';
 }
 
 export function BookingPaymentFooter({
@@ -28,9 +29,10 @@ export function BookingPaymentFooter({
   const partial = Math.round(finalTotal * 0.3);
   const payNow = mode === 'partial' ? partial : finalTotal;
 
-  return (
-    <div className={cn('w-full', className)}>
-      {disclaimerVariant === 'teal' ? (
+  let disclaimer: ReactNode = null;
+  switch (disclaimerVariant) {
+    case 'teal':
+      disclaimer = (
         <div className="mb-2 flex gap-2.5 rounded-xl border border-teal-100/90 bg-teal-50 px-3 py-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100">
             <CheckCircle2 className="h-4 w-4 text-teal-600" strokeWidth={2.25} aria-hidden />
@@ -40,12 +42,29 @@ export function BookingPaymentFooter({
             driver. Toll and parking as per actual.
           </p>
         </div>
-      ) : (
+      );
+      break;
+    case 'muted':
+      disclaimer = (
         <p className="mb-2 px-0.5 text-center text-[11px] leading-snug text-gray-600 sm:text-xs">
           Pay <span className="font-medium text-gray-800">{formatPrice(partial)}</span> in advance to reserve,
           rest to driver. Toll and parking as per actual.
         </p>
-      )}
+      );
+      break;
+    case 'none':
+      disclaimer = null;
+      break;
+    default: {
+      const _exhaustive: never = disclaimerVariant;
+      disclaimer = _exhaustive;
+      break;
+    }
+  }
+
+  return (
+    <div className={cn('w-full', className)}>
+      {disclaimer}
 
       <div className="mb-2 flex gap-1 rounded-xl bg-slate-900 p-1 shadow-inner">
         <button

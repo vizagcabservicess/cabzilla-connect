@@ -1,4 +1,8 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
+import { FileDown } from 'lucide-react';
+import { useAuth } from '@/providers/AuthProvider';
+import { TourCartQuotationDialog } from '@/components/tour/TourCartQuotationDialog';
+import type { TourQuoteTripPlan } from '@/components/pdf/TourCartQuotationPDF';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
@@ -12,6 +16,22 @@ import { calculateFare, calculateOutstationRoundTripFare, OUTSTATION_INCLUDED_KM
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { useFare } from '../hooks/useFare';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
+
+export type BookingSummaryTourLine = {
+  tourId: string;
+  tourName: string;
+  dateIso?: string;
+  vehicleName?: string | null;
+  price: number;
+  distance?: number;
+};
+
+function formatTourLineDate(dateIso?: string): string | null {
+  if (!dateIso) return null;
+  const parsed = new Date(dateIso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return format(parsed, 'd MMM, h:mm a');
+}
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -28,6 +48,8 @@ interface BookingSummaryProps {
   onFinalTotalChange?: (total: number) => void;
   onEditPickupLocation?: () => void;
   onEditPickupDate?: () => void;
+  pickupEditor?: ReactNode;
+  dateEditor?: ReactNode;
   hideInclusionsExclusions?: boolean;
   breakdown?: any; // Breakdown passed from selected cab - should be used instead of recalculating
   /** Rendered under Total Price (e.g. coupon entry). */
@@ -35,6 +57,9 @@ interface BookingSummaryProps {
   /** Coupon discount to show as a line before Total Price. */
   discountAmount?: number;
   discountCode?: string | null;
+  /** Multi-tour checkout lines. Combined distance and fare come from these when present. */
+  tourLines?: BookingSummaryTourLine[];
+  durationMinutes?: number;
 }
 
 export const BookingSummary = ({
@@ -52,13 +77,28 @@ export const BookingSummary = ({
   onFinalTotalChange,
   onEditPickupLocation,
   onEditPickupDate,
+  pickupEditor,
+  dateEditor,
   hideInclusionsExclusions = false,
   breakdown: passedBreakdown,
   couponSlot,
   discountAmount = 0,
   discountCode = null,
+  tourLines = [],
+  durationMinutes = 0,
 }: BookingSummaryProps) => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   console.log(`BookingSummary: Rendering with package ${hourlyPackage}`);
+
+  const selectedTourLines = tourLines.filter((line) => Boolean(line.tourName));
+  const isMultiTour = tripType === 'tour' && selectedTourLines.length > 1;
+  const combinedTourDistance = selectedTourLines.reduce(
+    (sum, line) => sum + (Number(line.distance) || 0),
+    0
+  );
+  const displayDistance = isMultiTour && combinedTourDistance > 0 ? combinedTourDistance : distance;
 
   // Only recalculate if no breakdown was passed - this ensures consistency with the fare shown in the list
   const oneWayViaStops = tripType === 'outstation' && tripMode === 'one-way' && intermediateStops.length > 0;
@@ -93,6 +133,7 @@ export const BookingSummary = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showDetailsLoading, setShowDetailsLoading] = useState<boolean>(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showTourLines, setShowTourLines] = useState(true);
   const [outstationBreakdown, setOutstationBreakdown] = useState<any>(null);
 
   const lastUpdateTimeRef = useRef<number>(0);
@@ -142,11 +183,12 @@ export const BookingSummary = ({
     airportTotal = base + airportFee + extra;
   }
 
-  // Patch: For tour bookings, use selectedCab.price or tour pricing
+  // Tour packages: prefer the passed total (combined cart fare) over the single-vehicle price.
   let tourBaseFare = 0;
   if (tripType === 'tour' && selectedCab) {
-    // Try selectedCab.price first
-    if (typeof selectedCab.price === 'number' && selectedCab.price > 0) {
+    if (typeof totalPrice === 'number' && totalPrice > 0) {
+      tourBaseFare = totalPrice;
+    } else if (typeof selectedCab.price === 'number' && selectedCab.price > 0) {
       tourBaseFare = selectedCab.price;
     }
   }
@@ -1114,6 +1156,48 @@ export const BookingSummary = ({
   const canShareOnWhatsApp =
     !!pickupLocation && !!pickupDate && !!selectedCab && summaryTotal > 0;
 
+  const quoteTripPlan = useMemo<TourQuoteTripPlan>(() => {
+    const pickupDateIso = isValidTripDate(pickupDate)
+      ? [
+          pickupDate.getFullYear(),
+          String(pickupDate.getMonth() + 1).padStart(2, '0'),
+          String(pickupDate.getDate()).padStart(2, '0'),
+        ].join('-')
+      : '';
+    const pickupTime = isValidTripDate(pickupDate)
+      ? `${String(pickupDate.getHours()).padStart(2, '0')}:${String(pickupDate.getMinutes()).padStart(2, '0')}`
+      : '';
+    const travelHours =
+      durationMinutes > 0 ? `${Math.max(1, Math.round(durationMinutes / 60))} hr(s)` : '';
+    const duration =
+      tripType === 'outstation' && tripMode === 'round-trip' && isValidTripDate(returnDate)
+        ? `${Math.max(1, Math.round((returnDate.getTime() - (pickupDate?.getTime() || 0)) / 86400000) + 1)} Days`
+        : tripType === 'local'
+          ? hourlyPackage
+          : tripType === 'airport'
+            ? travelHours || 'Airport transfer'
+            : travelHours || '1 Day';
+    return {
+      pickupLocation: pickupLocation?.name || '',
+      pickupDate: pickupDateIso,
+      pickupTime,
+      tourDuration: duration,
+      pickupPlace: pickupLocation || undefined,
+    };
+  }, [durationMinutes, hourlyPackage, pickupDate, pickupLocation, returnDate, tripMode, tripType]);
+  const [quotePlan, setQuotePlan] = useState<TourQuoteTripPlan>(quoteTripPlan);
+
+  useEffect(() => {
+    setQuotePlan(quoteTripPlan);
+  }, [quoteTripPlan]);
+
+  const quoteRouteName =
+    tripType === 'airport'
+      ? `${pickupLocation?.name || 'Airport'} to ${dropLocation?.name || 'drop'}`
+      : tripType === 'local'
+        ? `Local ${hourlyPackage}`
+        : `${pickupLocation?.name || 'Pickup'} to ${dropLocation?.name || 'Drop'}`;
+
   const buildBookingUrl = () => {
     if (typeof window === 'undefined') {
       return 'https://vizagtaxihub.com';
@@ -1239,17 +1323,24 @@ export const BookingSummary = ({
         ? `Outstation (${tripMode === 'round-trip' ? 'Round-Trip' : 'One-Way'})`
         : tripType === 'local'
         ? `Local - ${hourlyPackage || 'Package'}`
-        : tripType.charAt(0).toUpperCase() + tripType.slice(1);
+        : isMultiTour
+          ? `Tour (${selectedTourLines.length} selected tours)`
+          : tripType.charAt(0).toUpperCase() + tripType.slice(1);
 
     const distanceText =
       tripType === 'outstation' && tripMode === 'round-trip'
         ? `${distance * 2} KM (actual distance)`
-        : `${distance} KM`;
+        : `${displayDistance} KM`;
 
     const lines: (string | undefined)[] = [
       '🚖 Cab quote from Vizag Taxi Hub',
       '',
       `Trip: ${tripLabel}`,
+      ...selectedTourLines.map((line) => {
+        const when = formatTourLineDate(line.dateIso);
+        const fare = line.price > 0 ? formatPrice(line.price) : '';
+        return `• ${line.tourName}${when ? ` · ${when}` : ''}${fare ? ` · ${fare}` : ''}`;
+      }),
       pickupLocation ? `Pickup: ${pickupLocation.name}` : undefined,
       pickupLocation?.address &&
         pickupLocation.address !== pickupLocation.name
@@ -1272,11 +1363,11 @@ export const BookingSummary = ({
         isValidTripDate(returnDate)
         ? `Return date: ${format(returnDate, 'EEE, MMM d, yyyy - h:mm a')}`
         : undefined,
-      distance > 0 ? `Total distance: ${distanceText}` : undefined,
+      displayDistance > 0 ? `Total distance: ${distanceText}` : undefined,
       '',
       selectedCab ? `Vehicle: ${selectedCab.name}` : undefined,
       '',
-      `Base fare: ${formatPrice(summaryBaseFare)}`,
+      `Base fare: ${formatPrice(tripType === 'tour' ? tourBaseFare : summaryBaseFare)}`,
       summaryDriverAllowance > 0
         ? `Driver allowance: ${formatPrice(summaryDriverAllowance)}`
         : undefined,
@@ -1463,7 +1554,9 @@ export const BookingSummary = ({
         : tripType === 'local'
           ? `Local — ${hourlyPackage}`
           : tripType === 'tour'
-            ? 'Tour'
+            ? isMultiTour
+              ? `Tour · ${selectedTourLines.length} selected tours`
+              : 'Tour'
             : tripType.charAt(0).toUpperCase() + tripType.slice(1);
 
   return (
@@ -1493,18 +1586,69 @@ export const BookingSummary = ({
                       ? `${distance * 2} KM`
                       : (tripType === 'outstation' || tripType === 'airport') && distance === 0 && pickupLocation && dropLocation
                         ? <span className="animate-pulse text-blue-600">Calculating...</span>
-                        : `${distance} KM`}
+                        : `${displayDistance} KM`}
                   </p>
+                  {isMultiTour && combinedTourDistance > 0 && (
+                    <p className="mt-1 text-left text-[12px] text-gray-500">
+                      Combined distance for {selectedTourLines.length} tours
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {isMultiTour && (
+                <div className="flex items-start gap-2 py-3">
+                  <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
+                  <div className="min-w-0 flex-1 text-left">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                      aria-expanded={showTourLines}
+                      onClick={() => setShowTourLines((open) => !open)}
+                    >
+                      <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        Selected tours
+                      </p>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${
+                          showTourLines ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+                    {showTourLines && (
+                      <ul className="mt-1 space-y-2">
+                        {selectedTourLines.map((line) => {
+                          const when = formatTourLineDate(line.dateIso);
+                          return (
+                            <li key={line.tourId} className="text-left">
+                              <p className="text-[14px] font-semibold text-gray-900">{line.tourName}</p>
+                              <p className="text-[12px] text-gray-500">
+                                {[when, line.vehicleName, line.price > 0 ? formatPrice(line.price) : '']
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 py-3">
                 <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <div className="min-w-0 flex-1 text-left">
                   <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Pickup</p>
-                  <p className="text-left text-[14px] font-semibold text-gray-900">{pickupLocation.name}</p>
-                  {pickupLocation.address && pickupLocation.address !== pickupLocation.name && (
-                    <p className="mt-1 text-left text-[12px] text-gray-600">{pickupLocation.address}</p>
+                  {pickupEditor ? (
+                    pickupEditor
+                  ) : (
+                    <>
+                      <p className="text-left text-[14px] font-semibold text-gray-900">{pickupLocation.name}</p>
+                      {pickupLocation.address && pickupLocation.address !== pickupLocation.name && (
+                        <p className="mt-1 text-left text-[12px] text-gray-600">{pickupLocation.address}</p>
+                      )}
+                    </>
                   )}
                 </div>
                 {onEditPickupLocation && (
@@ -1554,9 +1698,13 @@ export const BookingSummary = ({
                 <Calendar className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
                 <div className="min-w-0 flex-1 text-left">
                   <p className="text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">Pickup date</p>
-                  <p className="text-[14px] font-semibold text-gray-900">
-                    {isValidTripDate(pickupDate) ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
-                  </p>
+                  {dateEditor ? (
+                    dateEditor
+                  ) : (
+                    <p className="text-[14px] font-semibold text-gray-900">
+                      {isValidTripDate(pickupDate) ? format(pickupDate, 'EEE, MMM d, yyyy - h:mm a') : 'Not selected'}
+                    </p>
+                  )}
                 </div>
                 {onEditPickupDate && (
                   <button
@@ -1759,6 +1907,16 @@ export const BookingSummary = ({
                 <MessageCircle className="w-4 h-4" />
                 Share summary on WhatsApp
               </button>
+              {isSuperAdmin && selectedCab ? (
+                <button
+                  type="button"
+                  className="ml-2 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-700 hover:bg-blue-100"
+                  onClick={() => setShowQuoteDialog(true)}
+                >
+                  <FileDown className="h-4 w-4" />
+                  Create / share quotation PDF
+                </button>
+              ) : null}
             </div>
             {isLoading && (
               <div className="mt-3 text-center">
@@ -1827,6 +1985,46 @@ export const BookingSummary = ({
           )}
         </div>
       </div>
+      {isSuperAdmin && selectedCab ? (
+        <TourCartQuotationDialog
+          open={showQuoteDialog}
+          onOpenChange={setShowQuoteDialog}
+          quote={{
+            tours: [
+              {
+                tourName: quoteRouteName,
+                duration: quotePlan.tourDuration,
+                price: totalAfterDiscount,
+                days: Number(/^(\d+)\s*Days/i.exec(quotePlan.tourDuration)?.[1]) || 1,
+                distance: displayDistance,
+                itinerary: [
+                  {
+                    day: 1,
+                    title: '',
+                    description: '',
+                    activities: [`${quoteRouteName} ${tripTypeHeading}`],
+                  },
+                ],
+              },
+            ],
+            routeLabel: quoteRouteName,
+            tripTypeLabel: tripTypeHeading,
+            selectedVehicleName: selectedCab.name,
+            combinedTotal: totalAfterDiscount,
+            vehicleOptions: [
+              {
+                name: selectedCab.name,
+                price: totalAfterDiscount,
+                capacity: selectedCab.capacity,
+                image: selectedCab.image,
+              },
+            ],
+            tripPlan: quotePlan,
+          }}
+          onTripPlanChange={setQuotePlan}
+          requireTourPickupRadius={false}
+        />
+      ) : null}
     </div>
   );
 };

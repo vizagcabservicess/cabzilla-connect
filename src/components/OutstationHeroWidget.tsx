@@ -51,8 +51,14 @@ export function OutstationHeroWidget({
   const autoParam = searchParams.get('auto');
   const autoTriggerSearch = autoParam === '1' || autoParam === 'true';
   const dateParam = searchParams.get('date');
+  const timeParam = searchParams.get('t');
   const returnDateParam = searchParams.get('returnDate');
   const modeParam = searchParams.get('mode');
+
+  const fromNameParam = searchParams.get('fromName');
+  const toNameParam = searchParams.get('toName');
+  if (fromNameParam?.trim()) pickup = fromNameParam.trim();
+  if (toNameParam?.trim()) drop = toNameParam.trim();
 
   if (!pickup || !drop) {
     const fromParam = searchParams.get('from');
@@ -121,16 +127,28 @@ export function OutstationHeroWidget({
     const dropData = getLocationData(drop);
     const parsedPickupDate = dateParam ? (() => {
       const d = dateParam.trim();
+      const timeMatch = /^(\d{1,2})(\d{2})$/.exec((timeParam || '').trim());
+      const hours = timeMatch ? Number(timeMatch[1]) : 7;
+      const minutes = timeMatch ? Number(timeMatch[2]) : 0;
       if (d.includes('T') || d.includes('Z')) {
         return new Date(d);
       }
       if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
         const [y, m, day] = d.split('-').map(Number);
-        return new Date(y, m - 1, day, 7, 0, 0);
+        return new Date(y, m - 1, day, hours, minutes, 0);
       }
       return new Date(d);
     })() : undefined;
-    const parsedReturnDate = returnDateParam ? new Date(returnDateParam) : undefined;
+    const parsedReturnDate = returnDateParam
+      ? (() => {
+          const d = returnDateParam.trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+            const [y, m, day] = d.split('-').map(Number);
+            return new Date(y, m - 1, day, 7, 0, 0);
+          }
+          return new Date(d);
+        })()
+      : undefined;
     const tripMode = modeParam === 'round-trip' ? 'round-trip' : 'one-way';
 
     const prefillData = {
@@ -162,14 +180,61 @@ export function OutstationHeroWidget({
       returnDate: parsedReturnDate ? parsedReturnDate.toISOString() : undefined,
       autoTriggerSearch
     };
-    sessionStorage.setItem('routePrefillData', JSON.stringify(prefillData));
+    const viaRaw = searchParams.get('via');
+    let viaStops: Array<{
+      name: string;
+      address: string;
+      id: string;
+      city: string;
+      state: string;
+      lat: number;
+      lng: number;
+      type: 'other';
+      popularityScore: number;
+    }> = [];
+    if (viaRaw) {
+      try {
+        const parsed = JSON.parse(viaRaw) as Array<{ name?: string; lat?: number; lng?: number }>;
+        if (Array.isArray(parsed)) {
+          viaStops = parsed
+            .filter((stop) => stop && String(stop.name || '').trim())
+            .slice(0, 3)
+            .map((stop, index) => ({
+              name: String(stop.name).trim(),
+              address: String(stop.name).trim(),
+              id: `prefill-via-${index}`,
+              city: String(stop.name).trim(),
+              state: '',
+              lat: Number(stop.lat) || 0,
+              lng: Number(stop.lng) || 0,
+              type: 'other' as const,
+              popularityScore: 0,
+            }));
+        }
+      } catch {
+        viaStops = [];
+      }
+    }
+    sessionStorage.setItem(
+      'routePrefillData',
+      JSON.stringify({
+        ...prefillData,
+        intermediateStops: viaStops,
+      })
+    );
     sessionStorage.setItem('pickupLocation', JSON.stringify(prefillData.pickupLocation));
     sessionStorage.setItem('dropLocation', JSON.stringify(prefillData.dropLocation));
+    if (viaStops.length > 0) {
+      sessionStorage.setItem('intermediateStops', JSON.stringify(viaStops));
+    } else {
+      sessionStorage.removeItem('intermediateStops');
+    }
   } else if (!hasCrossPagePrefill) {
     // Only clear when this visit is a blank outstation landing (not a service-page redirect)
     sessionStorage.removeItem('routePrefillData');
     sessionStorage.removeItem('pickupLocation');
     sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('intermediateStops');
   }
 
   // Clean up on unmount
@@ -183,7 +248,7 @@ export function OutstationHeroWidget({
   return (
     <div>
       <Hero
-        key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}`}
+        key={`outstation-hero-${pickup || 'none'}-${drop || 'none'}-${searchParams.get('via') || ''}-${dateParam || ''}`}
         onSearch={onSearch}
         onEditStart={onEditStart}
         onStepChange={onStepChange}

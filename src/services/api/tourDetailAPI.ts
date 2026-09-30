@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getApiUrl, defaultHeaders } from '@/config/api';
 import { TourDetail, TourListItem } from '@/types/tour';
+import { startingTourPrice } from '@/lib/tourVehiclePrice';
 
 function toursRequestBase(): string {
   if (typeof window !== 'undefined') {
@@ -25,7 +26,7 @@ async function fetchToursPayload(url: string): Promise<unknown> {
 function mapTourList(data: unknown): TourListItem[] {
   if (!data || !Array.isArray(data)) return [];
   return data.map((tour: Record<string, unknown>) => ({
-    tourId: String(tour.tourId ?? ''),
+    tourId: String(tour.tourId || tour.id || ''),
     tourName: String(tour.tourName ?? ''),
     description: String(tour.description || ''),
     distance: Number(tour.distance) || 120,
@@ -34,7 +35,7 @@ function mapTourList(data: unknown): TourListItem[] {
       String(tour.imageUrl || '') ||
       `https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop`,
     pricing: (tour.pricing as TourListItem['pricing']) || {},
-    minPrice: Number(tour.minPrice) || 0,
+    minPrice: startingTourPrice((tour.pricing as TourListItem['pricing']) || {}) || Number(tour.minPrice) || 0,
     timeDuration: String(tour.timeDuration || ''),
   }));
 }

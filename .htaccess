@@ -7,15 +7,19 @@ RewriteBase /
 
 # CRITICAL: Force non-www redirect to prevent duplicate content
 # Redirect www to non-www (301 permanent redirect)
-RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
 RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+# Live sitemap from active tour_fares (must run even if sitemap.xml exists on disk)
+RewriteCond %{DOCUMENT_ROOT}/sitemap.php -f
+RewriteRule ^sitemap\.xml$ /sitemap.php [L]
 
 # Force HTTPS redirect (optional - only if you want to force HTTPS)
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 RewriteCond %{HTTP_USER_AGENT} (googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|slackbot|discordbot|ahrefsbot|semrushbot|mozbot|rogerbot|dotbot|ia_archiver|archive\.org_bot|ia_archiver-web\.archive\.org|screamingfrog|sitebulb|deepcrawl|botify|oncrawl|seolyzer|seoptimer|seositecheckup|seochecker|seoanalyzer|seotools|seomoz|semrush|ahrefs|majestic|sistrix|searchmetrics|conductor|brightedge|seoclarity|seoprofiler|seopanel|bot|crawler|spider|scraper|indexer|fetcher|Mozilla/5\.0.*compatible.*Googlebot) [NC]
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)$
-RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|seo-handler\.php)/
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)$
+RewriteCond %{REQUEST_URI} !^/(api|admin|uploads|assets|css|js|images|fonts|favicon\.png|robots\.txt|sitemap\.xml|sitemap\.php|seo-handler\.php)/
 RewriteRule ^(.*)$ /seo-handler.php?url=$1 [L,QSA]
 
 # SEO Handler - Only when explicitly requested with ?seo=1

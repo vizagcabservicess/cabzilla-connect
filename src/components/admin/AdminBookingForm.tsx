@@ -413,7 +413,12 @@ export function AdminBookingForm() {
       
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
-        dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
+        dropLocation:
+          tripType === 'tour' && selectedTourName
+            ? selectedTourName
+            : dropLocation
+              ? `${dropLocation.name}, ${dropLocation.address}`
+              : '',
         pickupDate: formatDateForAPI(pickupDate) || '',
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         vehicleType: selectedCab?.name || '',

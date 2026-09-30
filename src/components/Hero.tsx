@@ -37,8 +37,24 @@ import { TabTripSelector, type TripSelectorTab } from './TabTripSelector';
 import { HomeHeroBanner } from '@/components/home/HomeHeroBanner';
 import { HeroValueProps } from '@/components/home/HeroValueProps';
 import { MobileTrustBanner } from '@/components/home/MobileTrustBanner';
+import { BuildYourTripHint } from '@/components/tour/BuildYourTripHint';
 import { BOOKING_HOME_RESET_EVENT } from '@/lib/bookingSessionReset';
 import { resetPageScroll, scrollToBookingWidget } from '@/lib/bookingWidgetScroll';
+import {
+  VTH_TOUR_CART_CHANGED_EVENT,
+  VTH_TOUR_CART_PROCEED_EVENT,
+  appendTourToCart,
+  findCatalogTour,
+  normalizeTourForWidget,
+  openTourListPanel,
+  removeTourFromCart,
+  readTourCart,
+  seedTourCartFromDrop,
+  type TourCartChangedDetail,
+  type TourWidgetAddPayload,
+} from '@/lib/addTourToBookingWidget';
+import { TourWidgetExtras, type TourWidgetPickable } from '@/components/tour/TourWidgetExtras';
+import { useTourCart } from '@/hooks/useTourCart';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 /** Desktop-only route map: `@react-google-maps/api` is large — keep out of initial mobile bundle. */
@@ -101,8 +117,11 @@ import {
   buildTripTypeLabelForTrack,
   buildGuestTrackRouteKey,
   formatGuestTrackDropField,
+  buildGuestSearchSummaryUrl,
+  SESSION_GUEST_TRACK_PHONE_KEY,
 } from '@/services/trackSearchAPI';
 import { buildVehicleFareLinesForGuestTrack } from '@/lib/guestSearchFareLines';
+import { resolveTourGuestSearchTrack } from '@/lib/guestSearchTourTrack';
 import { getAirportTransferFare } from '@/lib/airportFareForBooking';
 import { WhatsAppCountryPhoneRow, defaultWhatsappCountry } from '@/components/WhatsAppCountryPhoneRow';
 import type { CountryCode } from '@/lib/countryCodes';
@@ -110,7 +129,7 @@ import { generateVehicleUrl } from '@/utils/vehicleUrlUtils';
 import type { TourListItem } from '@/types/tour';
 import { tourDetailAPI } from '@/services/api/tourDetailAPI';
 import { getTourUrl } from '@/utils/tourUrlUtils';
-import { locationLooksLikeArakuTour } from '@/lib/availableTours';
+import { findRestrictedOutstationTourPlace, locationLooksLikeArakuTour } from '@/lib/availableTours';
 import {
   getVehicleEmbedConfig,
 } from '@/seo/vehicleEmbedMeta';
@@ -274,8 +293,6 @@ function RestrictedAirportRouteNotice({ message }: { message: string }) {
   );
 }
 
-/** Session: guest WhatsApp (E.164) after first successful entry — skip modal on repeat searches in this tab. */
-const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
 /** Session: last search tracking snapshot (pickup, drop, cars shown, selected cab, etc.) for support/debug. */
 const SESSION_GUEST_SEARCH_SNAPSHOT_KEY = 'guestSearchSnapshot';
 
@@ -658,14 +675,38 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   /** Tour tab: packages from public tours API (same list as /tours page). */
   const [heroTourList, setHeroTourList] = useState<TourListItem[]>([]);
   const [heroTourListLoading, setHeroTourListLoading] = useState(false);
+  const { items: tourCartItems } = useTourCart();
 
   const sortedHeroTours = useMemo(
     () => [...heroTourList].sort((a, b) => a.tourName.localeCompare(b.tourName)),
     [heroTourList]
   );
+  const activeHeroTourId = dropLocation?.id?.startsWith('tour_')
+    ? dropLocation.id.slice('tour_'.length)
+    : '';
+  const extraTourCartItems = useMemo(
+    () =>
+      tourCartItems.filter((item) => {
+        if (!activeHeroTourId) return true;
+        return !findCatalogTour([item], activeHeroTourId, dropLocation?.name);
+      }),
+    [tourCartItems, activeHeroTourId, dropLocation?.name]
+  );
+  const remainingHeroTours = useMemo(() => {
+    if (!activeHeroTourId) return [];
+    return sortedHeroTours.filter(
+      (tour) => !findCatalogTour(tourCartItems, tour.tourId, tour.tourName)
+    );
+  }, [sortedHeroTours, tourCartItems, activeHeroTourId]);
+  const selectedHeroTour = useMemo(() => {
+    if (!activeHeroTourId) return null;
+    return findCatalogTour(sortedHeroTours, activeHeroTourId, dropLocation?.name) ?? null;
+  }, [sortedHeroTours, activeHeroTourId, dropLocation?.name]);
+  const heroTourSelectValue = selectedHeroTour?.tourId || activeHeroTourId || undefined;
 
   type LocationInputSlot = { mobile: LocationInputHandle | null; desktop: LocationInputHandle | null };
   type DatePickerSlot = { mobile: DateTimePickerHandle | null; desktop: DateTimePickerHandle | null };
+  const pickupLocationInputRefs = useRef<LocationInputSlot>({ mobile: null, desktop: null });
   const dropLocationInputRefs = useRef<LocationInputSlot>({ mobile: null, desktop: null });
   const departurePickerRefs = useRef<DatePickerSlot>({ mobile: null, desktop: null });
   const returnPickerRefs = useRef<DatePickerSlot>({ mobile: null, desktop: null });
@@ -685,14 +726,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   });
   const tripTypeRef = useRef(tripType);
   const tripModeRef = useRef(tripMode);
+  const pickupLocationRef = useRef(pickupLocation);
   tripTypeRef.current = tripType;
   tripModeRef.current = tripMode;
+  pickupLocationRef.current = pickupLocation;
 
   const isDesktopBookingViewport = () =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
 
   const scheduleBookingFocus = (fn: () => void) => {
     window.setTimeout(fn, 100);
+  };
+
+  const focusPickupLocationField = () => {
+    const slot = isDesktopBookingViewport()
+      ? pickupLocationInputRefs.current.desktop
+      : pickupLocationInputRefs.current.mobile;
+    slot?.focus({ select: true });
   };
 
   const focusDropLocationField = () => {
@@ -805,7 +855,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     advanceAfterTripModeSelected();
   };
 
-  const applyHeroTourPackageSelection = useCallback((tour: TourListItem | null) => {
+  const applyHeroTourPackageSelection = useCallback((
+    tour: TourListItem | null,
+    opts?: { focus?: 'tripMode' | 'pickupOrDate' | 'none' }
+  ) => {
     if (!tour) {
       setDropLocation(null);
       try {
@@ -833,13 +886,23 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     } catch {
       /* ignore */
     }
+    const focus = opts?.focus ?? 'tripMode';
+    if (focus === 'none') return;
     window.setTimeout(() => {
+      if (focus === 'pickupOrDate') {
+        if (!isSelectedMapLocation(pickupLocationRef.current)) {
+          focusPickupLocationField();
+        } else {
+          openDeparturePicker();
+        }
+        return;
+      }
       const target = window.matchMedia('(min-width: 1024px)').matches
         ? desktopTripModeFocusRef.current
         : mobileTripModeFocusRef.current;
       target?.focus();
       target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }, 100);
+    }, focus === 'pickupOrDate' ? 250 : 100);
   }, []);
 
   useEffect(() => {
@@ -861,6 +924,12 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       cancelled = true;
     };
   }, [tripType]);
+
+  useEffect(() => {
+    if (tripType !== 'tour' || !activeHeroTourId || !selectedHeroTour) return;
+    if (selectedHeroTour.tourId === activeHeroTourId) return;
+    applyHeroTourPackageSelection(selectedHeroTour, { focus: 'none' });
+  }, [tripType, activeHeroTourId, selectedHeroTour, applyHeroTourPackageSelection]);
 
   // Helper: earliest bookable departure (now + 1 hour), minute precision
   const getMinimumAllowedDate = () => {
@@ -1093,16 +1162,139 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     sessionStorage.removeItem('dropLocation');
   }, [dropLocation, tripType]);
 
-  // Handle navigation state when coming from edit mode
-  useEffect(() => {
-    if (navigationState && navigationState.tripType === 'tour') {
-      // Set trip type to tour if coming from tour edit
-      setTripType('tour');
-      
-      // Clear the navigation state after processing
-      window.history.replaceState({}, document.title);
+  const applyTourFromWidgetCart = useCallback((payload: TourWidgetAddPayload, opts?: { focus?: 'pickupOrDate' | 'none'; scroll?: boolean; append?: boolean }) => {
+    setTripType('tour');
+    try {
+      sessionStorage.setItem('tripType', 'tour');
+    } catch {
+      /* ignore */
     }
-  }, [navigationState]);
+    if (opts?.append !== false) {
+      appendTourToCart(payload);
+    }
+    const fromList = findCatalogTour(heroTourList, payload.tourId, payload.tourName);
+    applyHeroTourPackageSelection(
+      fromList ?? {
+        tourId: payload.tourId,
+        tourName: payload.tourName,
+        description: '',
+        distance: 0,
+        days: 1,
+        imageUrl: '',
+        pricing: {},
+        minPrice: 0,
+      },
+      { focus: opts?.focus ?? 'pickupOrDate' }
+    );
+    if (opts?.scroll !== false) {
+      scrollToBookingWidget({ smooth: true });
+    }
+  }, [applyHeroTourPackageSelection, heroTourList]);
+
+  const selectHeroTourPackage = useCallback((tour: TourListItem | null) => {
+    if (tour) {
+      appendTourToCart({ tourId: tour.tourId, tourName: tour.tourName });
+    }
+    applyHeroTourPackageSelection(tour);
+  }, [applyHeroTourPackageSelection]);
+
+  const handleHeroTourSelectChange = useCallback(
+    (tourId: string) => {
+      if (tourId === '__all_tours__') {
+        navigate('/tours', { state: { pickupLocation, pickupDate } });
+        return;
+      }
+      const matched =
+        findCatalogTour(sortedHeroTours, tourId) ??
+        sortedHeroTours.find((item) => item.tourId === tourId);
+      selectHeroTourPackage(matched ?? null);
+    },
+    [navigate, pickupDate, pickupLocation, selectHeroTourPackage, sortedHeroTours]
+  );
+
+  const handleAddExtraTour = useCallback((tour: TourWidgetPickable) => {
+    const fromList = heroTourList.find((item) => item.tourId === tour.tourId);
+    appendTourToCart({
+      tourId: fromList?.tourId || tour.tourId,
+      tourName: fromList?.tourName || tour.tourName,
+      imageUrl: fromList?.imageUrl,
+      days: fromList?.days,
+      timeDuration: fromList?.timeDuration,
+      minPrice: fromList?.minPrice,
+    });
+    openTourListPanel();
+  }, [heroTourList]);
+
+  const handleTourCartSelect = useCallback((item: TourWidgetAddPayload) => {
+    applyTourFromWidgetCart(item, { focus: 'none', scroll: false });
+  }, [applyTourFromWidgetCart]);
+
+  const syncActiveTourWithCart = useCallback((items: TourWidgetAddPayload[]) => {
+    if (items.length === 0) {
+      applyHeroTourPackageSelection(null);
+      return;
+    }
+    const rawId = dropLocation?.id?.startsWith('tour_')
+      ? dropLocation.id.slice('tour_'.length)
+      : '';
+    const activeId =
+      normalizeTourForWidget({ tourId: rawId, tourName: dropLocation?.name || rawId })?.tourId || rawId;
+    if (!activeId) return;
+    const stillInCart = items.some(
+      (item) => (normalizeTourForWidget(item)?.tourId || item.tourId) === activeId
+    );
+    if (stillInCart) return;
+    const fallback = items[items.length - 1];
+    if (fallback) {
+      applyTourFromWidgetCart(fallback, { focus: 'none', scroll: false, append: false });
+    }
+  }, [applyHeroTourPackageSelection, applyTourFromWidgetCart, dropLocation]);
+
+  const handleTourCartRemove = useCallback((tourId: string) => {
+    syncActiveTourWithCart(removeTourFromCart(tourId));
+  }, [syncActiveTourWithCart]);
+
+  useEffect(() => {
+    const onProceed = (event: Event) => {
+      const detail = (event as CustomEvent<TourWidgetAddPayload>).detail;
+      if (!detail?.tourId || !detail.tourName) return;
+      applyTourFromWidgetCart(detail, { focus: 'pickupOrDate', scroll: true });
+    };
+    window.addEventListener(VTH_TOUR_CART_PROCEED_EVENT, onProceed);
+    return () => window.removeEventListener(VTH_TOUR_CART_PROCEED_EVENT, onProceed);
+  }, [applyTourFromWidgetCart]);
+
+  useEffect(() => {
+    const onCartChanged = (event: Event) => {
+      const items = (event as CustomEvent<TourCartChangedDetail>).detail?.items ?? readTourCart();
+      syncActiveTourWithCart(items);
+    };
+    window.addEventListener(VTH_TOUR_CART_CHANGED_EVENT, onCartChanged);
+    return () => window.removeEventListener(VTH_TOUR_CART_CHANGED_EVENT, onCartChanged);
+  }, [syncActiveTourWithCart]);
+
+  // Handle navigation state when coming from edit mode or plus-to-widget
+  useEffect(() => {
+    if (!navigationState || navigationState.tripType !== 'tour') return;
+    setTripType('tour');
+    const selectedTourId = String(navigationState.selectedTourId || navigationState.tourId || '').trim();
+    const selectedTourName = String(navigationState.selectedTourName || '').trim();
+    if (selectedTourId) {
+      const proceedCheckout = Boolean(navigationState.proceedCheckout);
+      applyTourFromWidgetCart(
+        {
+          tourId: selectedTourId,
+          tourName: selectedTourName || selectedTourId,
+        },
+        { focus: proceedCheckout ? 'pickupOrDate' : 'none', scroll: proceedCheckout }
+      );
+    }
+    window.history.replaceState({}, document.title);
+  }, [navigationState, applyTourFromWidgetCart]);
+
+  useEffect(() => {
+    seedTourCartFromDrop(dropLocation);
+  }, []);
 
   // Preserve stored dates instead of always resetting to current date
   useEffect(() => {
@@ -1750,6 +1942,24 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   };
 
   const handleOutstationStopChange = (index: number, location: Location | null) => {
+    if (location && isSelectedMapLocation(location)) {
+      const restricted = findRestrictedOutstationTourPlace(
+        `${location.name || ''} ${location.address || ''}`
+      );
+      if (restricted) {
+        toast({
+          title: 'Book this as a tour package',
+          description: `${restricted.label} places cannot be added as outstation stops. Use Tour Packages instead.`,
+          variant: 'destructive',
+        });
+        setIntermediateStops((prev) => {
+          const next = [...prev];
+          next[index] = null;
+          return next;
+        });
+        return;
+      }
+    }
     setIntermediateStops((prev) => {
       const next = [...prev];
       next[index] = isSelectedMapLocation(location) ? location : null;
@@ -1978,6 +2188,31 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       return;
     }
 
+    if (tripType === 'outstation') {
+      const thinDrop = String(dropLocation?.name || '').trim();
+      if (thinDrop.length > 0 && thinDrop.length < 3) {
+        toast({
+          title: 'Enter a destination',
+          description: 'Select a full drop location from the Google Maps suggestions.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      for (const stop of filledStops) {
+        const restrictedStop = findRestrictedOutstationTourPlace(
+          `${stop.name || ''} ${stop.address || ''}`
+        );
+        if (restrictedStop) {
+          toast({
+            title: 'Book this as a tour package',
+            description: `${restrictedStop.label} places cannot be used as outstation stops.`,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
+
     // Locked service pages only — redirect if locations imply a different service
     if (pickupLocation && dropLocation && tripType !== 'tour' && tripType !== 'custom') {
       const lockedTab =
@@ -2003,17 +2238,21 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
   /** POST / track-search + session snapshot (guest phone must already be in session if skipping modal). */
   async function runGuestSearchTracking(guestPhone: string) {
     const availableCabs = heroBookingCabList;
+    const tourTrack =
+      tripType === 'tour' ? await resolveTourGuestSearchTrack(dropLocation, availableCabs) : null;
     const dropForKm = tripType === 'local' ? pickupLocation : dropLocation;
     const syncKm =
-      pickupLocation && dropForKm
-        ? tripType === 'outstation'
-          ? estimateRoadKmAlongRoute(
-              bookedOutstationRoutePoints(pickupLocation, dropForKm, filledStops, tripMode)
-            ) || estimateRoadKmSync(pickupLocation, dropForKm)
-          : filledStops.length > 0
-            ? estimateRoadKmAlongRoute(routePointsWithStops(pickupLocation, dropForKm, filledStops))
-            : estimateRoadKmSync(pickupLocation, dropForKm)
-        : 0;
+      tripType === 'tour'
+        ? 0
+        : pickupLocation && dropForKm
+          ? tripType === 'outstation'
+            ? estimateRoadKmAlongRoute(
+                bookedOutstationRoutePoints(pickupLocation, dropForKm, filledStops, tripMode)
+              ) || estimateRoadKmSync(pickupLocation, dropForKm)
+            : filledStops.length > 0
+              ? estimateRoadKmAlongRoute(routePointsWithStops(pickupLocation, dropForKm, filledStops))
+              : estimateRoadKmSync(pickupLocation, dropForKm)
+          : 0;
     const routeKey = buildGuestTrackRouteKey(pickupLocation, dropForKm, filledStops, tripMode);
     const routed = routedKmForRouteRef.current;
     const coordsOk = (loc: typeof pickupLocation) =>
@@ -2027,7 +2266,10 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
      */
     let distanceForTrack: number;
     let durationMinutesForTrack: number | undefined;
-    if (tripType === 'local') {
+    if (tripType === 'tour') {
+      distanceForTrack = tourTrack && tourTrack.distanceKm > 0 ? tourTrack.distanceKm : 0;
+      durationMinutesForTrack = undefined;
+    } else if (tripType === 'local') {
       const pkgKm =
         hourlyPackage.includes('4hrs') || hourlyPackage.includes('4 hr')
           ? 40
@@ -2079,30 +2321,50 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     ) {
       durationMinutesForTrack = Math.max(1, Math.round((distanceForTrack / 50) * 60));
     }
-    const vehicleFares = await buildVehicleFareLinesForGuestTrack(availableCabs, {
-      tripType,
-      tripMode,
-      hourlyPackage,
-      distance: distanceForTrack,
-      pickupDate,
-      returnDate: returnDate || undefined,
-      viaStops: filledStops.length > 0,
-    });
+    const vehicleFares =
+      tourTrack?.vehicleFares && tourTrack.vehicleFares.length > 0
+        ? tourTrack.vehicleFares
+        : await buildVehicleFareLinesForGuestTrack(availableCabs, {
+            tripType,
+            tripMode,
+            hourlyPackage,
+            distance: distanceForTrack,
+            pickupDate,
+            returnDate: returnDate || undefined,
+            viaStops: filledStops.length > 0,
+          });
     /** Production PHP joins this with commas — include fare in each entry so legacy track-search.php shows prices. */
     const carsShown =
       vehicleFares.length > 0
         ? vehicleFares.map((v) => `${v.name}: ${v.fareText}`)
         : availableCabs.map((c) => c.name);
     const pickup = pickupLocation?.name?.trim() || '';
-    const drop = dropLocation?.name?.trim() || (tripType === 'local' ? pickup : '');
+    const drop =
+      tourTrack?.drop ||
+      dropLocation?.name?.trim() ||
+      (tripType === 'local' ? pickup : '');
     const viaStopsLabel = formatViaStopsLabel(filledStops);
-    const tripTypeLabel = buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
+    const tripTypeLabel =
+      tripType === 'tour' && tourTrack && tourTrack.tourCount > 1
+        ? `Tour · ${tourTrack.tourCount} packages`
+        : buildTripTypeLabelForTrack(tripType, tripMode, hourlyPackage, airportDirectionLabel);
     const distRounded = distanceForTrack > 0 ? Math.round(distanceForTrack) : undefined;
     const durRounded =
       durationMinutesForTrack !== undefined && durationMinutesForTrack > 0
         ? Math.round(durationMinutesForTrack)
         : undefined;
     const departure = formatDepartureForTrack(pickupDate);
+    const searchSummaryUrl = buildGuestSearchSummaryUrl({
+      tripType,
+      tripMode,
+      pickup: pickupLocation,
+      drop: dropLocation,
+      pickupDate,
+      returnDate,
+      hourlyPackage,
+      tourHref: tripType === 'tour' ? '/tours' : undefined,
+      viaStops: filledStops,
+    });
     /** PHP `search_alerts_format_route_summary` reads distance/duration fields — keep trip type label only. */
     trackGuestSearch({
       guestPhone,
@@ -2116,6 +2378,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       tripModeTrack: tripMode,
       carsShown,
       vehicleFares,
+      searchSummaryUrl,
     });
 
     try {
@@ -2137,6 +2400,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
             durationMinutesOneWay: durRounded,
             tripModeTrack: tripMode,
             selectedCab: selectedCab?.name ?? null,
+            searchSummaryUrl,
           })
         );
       }
@@ -2163,6 +2427,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
       navigate('/tours/araku-valley-tour', { replace: true });
       return;
     }
+    const dropTourPackage = findRestrictedOutstationTourPlace(dropTourText);
+    if (dropTourPackage) {
+      navigate(`/tours/${dropTourPackage.slug}`, { replace: true });
+      return;
+    }
+    const pickupTourPackage = findRestrictedOutstationTourPlace(pickupTourText);
+    if (pickupTourPackage) {
+      navigate(`/tours/${pickupTourPackage.slug}`, { replace: true });
+      return;
+    }
+    const restrictedStop = filledStops
+      .map((stop) => findRestrictedOutstationTourPlace(`${stop.name || ''} ${stop.address || ''}`))
+      .find(Boolean);
+    if (restrictedStop) {
+      toast({
+        title: 'Book this as a tour package',
+        description: `${restrictedStop.label} places cannot be used as outstation stops.`,
+        variant: 'destructive',
+      });
+      navigate(`/tours/${restrictedStop.slug}`, { replace: true });
+      return;
+    }
 
     // Check if drop location is Lambasingi - redirect to Lambasingi tour page
        if (dropLocation && dropLocation.name) {
@@ -2179,7 +2465,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (dropLocation && dropLocation.name) {
       const dropLocationName = dropLocation.name.toLowerCase().trim();
       const vanajangiKeywords = [
-        'paderu', 'vanajangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'paderu', 'vanajangi', 'vanjangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'vanjangi hills', 'vanajangi hills',
         'paderu town', 'paderu village', 'paderu mandal',
         'thotapalli', 'thotapalli reservoir', 'thotapalli dam',
         'munchingput', 'munchingput mandal', 'munchingput village',
@@ -2221,7 +2508,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
     if (pickupLocation && pickupLocation.name) {
       const pickupLocationName = pickupLocation.name.toLowerCase().trim();
       const vanajangiKeywords = [
-        'paderu', 'vanajangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'paderu', 'vanajangi', 'vanjangi', 'vanajangi view point', 'vanajangi viewpoint',
+        'vanjangi hills', 'vanajangi hills',
         'paderu town', 'paderu village', 'paderu mandal',
         'thotapalli', 'thotapalli reservoir', 'thotapalli dam',
         'munchingput', 'munchingput mandal', 'munchingput village',
@@ -2308,7 +2596,16 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         setIsLoading(false);
         return;
       }
-      if (dropLocation?.id?.startsWith('tour_')) {
+      const cartItems = readTourCart();
+      if (cartItems.length > 1) {
+        navigate('/tours', {
+          state: {
+            pickupLocation,
+            pickupDate,
+            cartTourIds: cartItems.map((item) => item.tourId),
+          },
+        });
+      } else if (dropLocation?.id?.startsWith('tour_')) {
         const tourKey = dropLocation.id.replace(/^tour_/, '');
         navigate(getTourUrl({ tourId: tourKey, tourName: dropLocation.name }), {
           state: { pickupLocation, pickupDate },
@@ -2752,9 +3049,18 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
         }
       }
 
+      const tourDropId = dropLocation?.id?.startsWith('tour_')
+        ? dropLocation.id.slice('tour_'.length)
+        : '';
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation ? `${pickupLocation.name}, ${pickupLocation.address}` : '',
         dropLocation: dropLocation ? `${dropLocation.name}, ${dropLocation.address}` : '',
+        ...(tripType === 'tour'
+          ? {
+              tourId: tourDropId || undefined,
+              tourName: dropLocation?.name || undefined,
+            }
+          : {}),
         pickupDate: formatDateForAPI(pickupDate) || '',
         returnDate: returnDate ? formatDateForAPI(returnDate) : null,
         cabType: selectedCab?.name || '',
@@ -3218,6 +3524,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                     <div className="min-w-0 flex-1 divide-y divide-gray-200">
                       <LocationInput
                         key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                        ref={(instance) => {
+                          pickupLocationInputRefs.current.mobile = instance;
+                        }}
                         variant={heroMobileFieldVariant}
                         className={heroTicketCellPad}
                         label="From"
@@ -3268,6 +3577,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   <>
                     <LocationInput
                       key={`pickup-mobile-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                      ref={(instance) => {
+                        pickupLocationInputRefs.current.mobile = instance;
+                      }}
                       variant={heroMobileFieldVariant}
                       className={heroTicketCellPad}
                       label="From"
@@ -3350,19 +3662,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                         </label>
                       )}
                       <Select
-                        value={
-                          dropLocation?.id?.startsWith('tour_')
-                            ? dropLocation.id.slice('tour_'.length)
-                            : undefined
-                        }
-                        onValueChange={(tourId) => {
-                          if (tourId === '__all_tours__') {
-                            navigate('/tours', { state: { pickupLocation, pickupDate } });
-                            return;
-                          }
-                          const t = sortedHeroTours.find((x) => x.tourId === tourId);
-                          applyHeroTourPackageSelection(t ?? null);
-                        }}
+                        value={heroTourSelectValue}
+                        onValueChange={handleHeroTourSelectChange}
                         disabled={heroTourListLoading}
                       >
                         <SelectTrigger
@@ -3388,11 +3689,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               {t.tourName}
                             </SelectItem>
                           ))}
+                          {heroTourSelectValue &&
+                          !sortedHeroTours.some((t) => t.tourId === heroTourSelectValue) &&
+                          dropLocation?.name ? (
+                            <SelectItem value={heroTourSelectValue}>{dropLocation.name}</SelectItem>
+                          ) : null}
                           <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
+                )}
+
+                {tripType === 'tour' && (
+                  <TourWidgetExtras
+                    extraItems={extraTourCartItems}
+                    remainingTours={remainingHeroTours}
+                    loading={heroTourListLoading}
+                    onAdd={handleAddExtraTour}
+                    onRemove={handleTourCartRemove}
+                    onSelect={handleTourCartSelect}
+                    layout="ticket"
+                  />
                 )}
 
                 {tripType === 'local' && (
@@ -3662,6 +3980,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               <div className="min-w-0 flex-1 divide-y divide-gray-200">
                                 <LocationInput
                                   key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                                  ref={(instance) => {
+                                    pickupLocationInputRefs.current.mobile = instance;
+                                  }}
                                   variant={heroMobileFieldVariant}
                                   className={heroTicketCellPad}
                                   label="From"
@@ -3715,6 +4036,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             <>
                               <LocationInput
                                 key={`pickup-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                                ref={(instance) => {
+                                  pickupLocationInputRefs.current.mobile = instance;
+                                }}
                                 variant={heroMobileFieldVariant}
                                 className={heroTicketCellPad}
                                 label="From"
@@ -3802,19 +4126,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                   </label>
                                 )}
                                 <Select
-                                  value={
-                                    dropLocation?.id?.startsWith('tour_')
-                                      ? dropLocation.id.slice('tour_'.length)
-                                      : undefined
-                                  }
-                                  onValueChange={(tourId) => {
-                                    if (tourId === '__all_tours__') {
-                                      navigate('/tours', { state: { pickupLocation, pickupDate } });
-                                      return;
-                                    }
-                                    const t = sortedHeroTours.find((x) => x.tourId === tourId);
-                                    applyHeroTourPackageSelection(t ?? null);
-                                  }}
+                                  value={heroTourSelectValue}
+                                  onValueChange={handleHeroTourSelectChange}
                                   disabled={heroTourListLoading}
                                 >
                                   <SelectTrigger
@@ -3843,11 +4156,28 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                         {t.tourName}
                                       </SelectItem>
                                     ))}
+                                    {heroTourSelectValue &&
+                                    !sortedHeroTours.some((t) => t.tourId === heroTourSelectValue) &&
+                                    dropLocation?.name ? (
+                                      <SelectItem value={heroTourSelectValue}>{dropLocation.name}</SelectItem>
+                                    ) : null}
                                     <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                             </div>
+                          )}
+
+                          {tripType === 'tour' && (
+                            <TourWidgetExtras
+                              extraItems={extraTourCartItems}
+                              remainingTours={remainingHeroTours}
+                              loading={heroTourListLoading}
+                              onAdd={handleAddExtraTour}
+                              onRemove={handleTourCartRemove}
+                              onSelect={handleTourCartSelect}
+                              layout="ticket"
+                            />
                           )}
 
                           {tripType === 'local' && (
@@ -4027,6 +4357,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                           <div className={embedDesktopCardLayout ? 'w-full min-w-0' : 'min-w-0 flex-1'}>
                             <LocationInput
                               key={`pickup-desk-${editTrigger}-${pickupLocation?.id || 'empty'}`}
+                              ref={(instance) => {
+                                pickupLocationInputRefs.current.desktop = instance;
+                              }}
                               label="Pickup location"
                               placeholder={
                                 embedDesktopCardLayout ? 'Enter pickup location' : 'Enter a location'
@@ -4071,19 +4404,8 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                 Tour package
                               </label>
                               <Select
-                                value={
-                                  dropLocation?.id?.startsWith('tour_')
-                                    ? dropLocation.id.slice('tour_'.length)
-                                    : undefined
-                                }
-                                onValueChange={(tourId) => {
-                                  if (tourId === '__all_tours__') {
-                                    navigate('/tours', { state: { pickupLocation, pickupDate } });
-                                    return;
-                                  }
-                                  const t = sortedHeroTours.find((x) => x.tourId === tourId);
-                                  applyHeroTourPackageSelection(t ?? null);
-                                }}
+                                value={heroTourSelectValue}
+                                onValueChange={handleHeroTourSelectChange}
                                 disabled={heroTourListLoading}
                               >
                                 <SelectTrigger
@@ -4111,6 +4433,11 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                                       {t.tourName}
                                     </SelectItem>
                                   ))}
+                                  {heroTourSelectValue &&
+                                  !sortedHeroTours.some((t) => t.tourId === heroTourSelectValue) &&
+                                  dropLocation?.name ? (
+                                    <SelectItem value={heroTourSelectValue}>{dropLocation.name}</SelectItem>
+                                  ) : null}
                                   <SelectItem value="__all_tours__">All packages — browse full list</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -4396,6 +4723,17 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                             )}
                           </div>
                         )}
+                        {tripType === 'tour' && (
+                          <TourWidgetExtras
+                            extraItems={extraTourCartItems}
+                            remainingTours={remainingHeroTours}
+                            loading={heroTourListLoading}
+                            onAdd={handleAddExtraTour}
+                            onRemove={handleTourCartRemove}
+                            onSelect={handleTourCartSelect}
+                            layout="desktop"
+                          />
+                        )}
                         {validationError && (
                           <div className="text-red-600 text-sm mt-3 py-2">{validationError}</div>
                         )}
@@ -4624,6 +4962,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                               onEditPickupLocation={handleEditPickupLocation}
                               onEditPickupDate={handleEditPickupDate}
                               hideInclusionsExclusions={true}
+                              durationMinutes={displayDuration}
                               discountAmount={offerDiscountAmount}
                               discountCode={offerDiscountCode}
                               couponSlot={
@@ -4801,6 +5140,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                       onEditPickupLocation={handleEditPickupLocation}
                       onEditPickupDate={handleEditPickupDate}
                       hideInclusionsExclusions={false}
+                      durationMinutes={displayDuration}
                       discountAmount={offerDiscountAmount}
                       discountCode={offerDiscountCode}
                       couponSlot={
@@ -4829,6 +5169,9 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                 <HeroValueProps />
               </div>
             )}
+            {showPremiumHomeBookingStack && !isSearchActive && currentStep === 1 ? (
+              <BuildYourTripHint />
+            ) : null}
             </div>
           </div>
         </div>
@@ -4881,6 +5224,7 @@ export function Hero({ onSearch, isSearchActive, visibleTabs, hideBackground, em
                   onEditPickupLocation={handleEditPickupLocation}
                   onEditPickupDate={handleEditPickupDate}
                   hideInclusionsExclusions={false}
+                  durationMinutes={displayDuration}
                   discountAmount={offerDiscountAmount}
                   discountCode={offerDiscountCode}
                   couponSlot={

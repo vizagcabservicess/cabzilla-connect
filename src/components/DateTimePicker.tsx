@@ -5,8 +5,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { format, isSameDay, startOfDay } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, X } from 'lucide-react';
+import { addMonths, format, isSameDay, startOfDay, startOfMonth, subMonths } from 'date-fns';
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { isValidTripDate } from '@/lib/dateUtils';
 
@@ -22,10 +22,14 @@ export interface DateTimePickerProps {
   className?: string;
   label?: string;
   disabled?: boolean;
-  /** app = uppercase blue label + white bordered row (mobile web parity with app); infield = caption + bold value inside trigger row (Urbania-style) */
-  variant?: 'mobile' | 'desktop' | 'app' | 'infield';
+  /** app = uppercase blue label + white bordered row (mobile web parity with app); infield = caption + bold value inside trigger row (Urbania-style); split = date + time columns, same calendar picker */
+  variant?: 'mobile' | 'desktop' | 'app' | 'infield' | 'split';
   /** Fired after the user confirms date/time via Apply. */
   onDateApplied?: () => void;
+  /** Open the full-screen calendar sheet even on desktop. Use inside narrow panels. */
+  forceSheet?: boolean;
+  /** Compact calendar popover instead of the full-screen sheet. */
+  preferPopover?: boolean;
 }
 
 /** Compare / store trip times at minute precision (avoids Apply failing on leftover seconds). */
@@ -71,12 +75,16 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   disabled = false,
   variant = 'mobile',
   onDateApplied,
+  forceSheet = false,
+  preferPopover = false,
 }, ref) {
   const isDesktopVariant = variant === 'desktop';
   const isAppVariant = variant === 'app';
   const isInfieldVariant = variant === 'infield';
+  const isSplitVariant = variant === 'split';
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState<Date>(() => startOfMonth(date && isValidTripDate(date) ? date : new Date()));
   const { toast } = useToast();
   const [isFocused, setIsFocused] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(
@@ -90,7 +98,13 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     onDateAppliedRef.current = onDateApplied;
   }, [onDateApplied]);
 
-  const useMobileSheet = isInfieldVariant && !isDesktopViewport;
+  useEffect(() => {
+    if (!open) return;
+    setDisplayMonth(startOfMonth(date && isValidTripDate(date) ? date : new Date()));
+  }, [open]);
+
+  const useMobileSheet =
+    !preferPopover && (forceSheet || ((isInfieldVariant || isSplitVariant) && !isDesktopViewport));
 
   useEffect(() => {
     function handleResize() {
@@ -115,7 +129,14 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     style.top = `-${scrollLockY.current}px`;
     style.width = '100%';
 
+    const sheet = document.querySelector('.datetime-picker-sheet');
+    const stop = (event: Event) => event.stopPropagation();
+    sheet?.addEventListener('focusin', stop);
+    sheet?.addEventListener('pointerdown', stop);
+
     return () => {
+      sheet?.removeEventListener('focusin', stop);
+      sheet?.removeEventListener('pointerdown', stop);
       style.overflow = prevOverflow;
       style.position = prevPosition;
       style.top = prevTop;
@@ -126,9 +147,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
 
   useEffect(() => {
     if (!date && !selectedTime) {
-      const now = atMinutePrecision(new Date());
-      setSelectedTime(format(now, 'HH:mm'));
-      onDateChange(now);
+      setSelectedTime(format(atMinutePrecision(new Date()), 'HH:mm'));
     }
   }, []);
 
@@ -236,18 +255,18 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     return format(base, 'h:mm a');
   })();
 
+  const earliestMonth = isValidTripDate(minDate) ? startOfMonth(minDate) : undefined;
+  const canGoPrevMonth = !earliestMonth || displayMonth.getTime() > earliestMonth.getTime();
+
   const mobileCalendarClassNames = {
     months: 'flex w-full flex-col',
     month: 'w-full space-y-3',
-    caption: 'relative mb-1 flex items-center justify-center px-1 pt-0',
-    caption_label: 'text-[15px] font-bold tracking-tight text-slate-900',
-    nav: 'flex items-center gap-1',
-    nav_button: cn(
-      'inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700',
-      'opacity-100',
-    ),
-    nav_button_previous: 'absolute left-1',
-    nav_button_next: 'absolute right-1',
+    caption: 'hidden',
+    caption_label: 'hidden',
+    nav: 'hidden',
+    nav_button: 'hidden',
+    nav_button_previous: 'hidden',
+    nav_button_next: 'hidden',
     table: 'w-full border-collapse',
     head_row: 'mb-1 flex w-full',
     head_cell:
@@ -266,7 +285,22 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
     day_hidden: 'invisible',
   } as const;
 
-  const triggerContent = (
+  const triggerContent = isSplitVariant ? (
+    <div className="flex min-w-0 w-full items-center gap-3">
+      <CalendarIcon className="h-5 w-5 shrink-0 text-blue-600" />
+      <span className="min-w-0 text-left">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          {label || 'Travel date & time'}
+        </span>
+        <span className="block truncate text-base font-bold leading-tight text-slate-900">
+            {dateIsValid ? format(date, 'MMMM d, yyyy') : 'Select date'}
+        </span>
+        {dateIsValid ? (
+          <span className="block text-[11px] text-slate-400">{format(date, 'EEEE')}</span>
+        ) : null}
+      </span>
+    </div>
+  ) : (
     <div className={cn('flex min-w-0 w-full', isInfieldVariant ? 'items-start gap-2' : 'items-center gap-2')}>
       <CalendarIcon
         className={cn(
@@ -323,6 +357,9 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
       <Calendar
         mode="single"
         required
+        month={displayMonth}
+        onMonthChange={setDisplayMonth}
+        fromMonth={earliestMonth}
         selected={dateIsValid ? date : undefined}
         onSelect={disabled ? undefined : handleCalendarSelect}
         disabled={isValidTripDate(minDate) ? { before: startOfDay(minDate) } : undefined}
@@ -354,7 +391,14 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
   const mobileSheet =
     useMobileSheet && open && typeof document !== 'undefined'
       ? createPortal(
-          <div className="fixed inset-0 z-[10070] flex flex-col justify-end" role="dialog" aria-modal="true">
+          <div
+            className="datetime-picker-sheet pointer-events-auto fixed inset-0 z-[10070] flex flex-col justify-end"
+            style={{ pointerEvents: 'auto' }}
+            role="dialog"
+            aria-modal="true"
+            onFocus={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
             <button
               type="button"
               className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
@@ -401,13 +445,37 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1 sm:px-4">
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <button
+                    type="button"
+                    aria-label="Previous month"
+                    disabled={!canGoPrevMonth}
+                    onClick={() => setDisplayMonth((month) => subMonths(month, 1))}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <p className="text-[15px] font-bold tracking-tight text-slate-900">
+                    {format(displayMonth, 'MMMM yyyy')}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="Next month"
+                    onClick={() => setDisplayMonth((month) => addMonths(month, 1))}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
                 <Calendar
                   mode="single"
                   required
+                  month={displayMonth}
+                  onMonthChange={setDisplayMonth}
+                  fromMonth={earliestMonth}
                   selected={dateIsValid ? date : undefined}
                   onSelect={disabled ? undefined : handleCalendarSelect}
                   disabled={isValidTripDate(minDate) ? { before: startOfDay(minDate) } : undefined}
-                  initialFocus
                   className="pointer-events-auto mx-auto w-full max-w-none p-1"
                   classNames={mobileCalendarClassNames}
                 />
@@ -448,7 +516,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
 
   return (
     <div className={cn('relative w-full', className)}>
-      {(isDesktopVariant || (isAppVariant && !isInfieldVariant)) && label && (
+      {(isDesktopVariant || (isAppVariant && !isInfieldVariant && !isSplitVariant)) && label && (
         <label
           className={cn(
             'pointer-events-none block font-medium',
@@ -460,7 +528,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
           {label}
         </label>
       )}
-      {!isDesktopVariant && !isAppVariant && !isInfieldVariant && label && (isFocused || date) && (
+      {!isDesktopVariant && !isAppVariant && !isInfieldVariant && !isSplitVariant && label && (isFocused || date) && (
         <label
           className="pointer-events-none absolute -top-2.5 left-4 z-10 bg-white px-1 text-xs font-semibold text-gray-900 transition-all duration-200"
           style={{ background: 'white', paddingLeft: '0.25rem', paddingRight: '0.25rem', zIndex: 10 }}
@@ -496,15 +564,15 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
             <Button
               ref={triggerRef}
               type="button"
-              variant={isInfieldVariant ? 'ghost' : 'outline'}
+              variant={isInfieldVariant || isSplitVariant ? 'ghost' : 'outline'}
               className={cn(
                 'relative w-full justify-start text-left',
                 isDesktopVariant
                   ? 'h-[2.75rem] min-w-[11rem] rounded-md border border-gray-200 bg-white pl-3 text-sm hover:bg-gray-50'
-                  : isAppVariant && !isInfieldVariant
+                  : isAppVariant && !isInfieldVariant && !isSplitVariant
                     ? 'h-auto min-h-[3rem] rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm hover:bg-white'
-                    : isInfieldVariant
-                      ? 'h-auto min-h-[2.75rem] rounded-none border border-transparent bg-transparent px-0 py-1 shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0'
+                    : isInfieldVariant || isSplitVariant
+                      ? 'h-auto min-h-[2.75rem] rounded-none border border-transparent bg-transparent px-0 py-1 text-base shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0'
                       : 'h-[3.5rem] border-gray-200 bg-white text-[1rem] font-normal hover:bg-gray-50',
               )}
               disabled={disabled}

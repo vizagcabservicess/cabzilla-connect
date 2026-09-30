@@ -19,13 +19,20 @@ import { PopularGroupTours } from '@/components/PopularGroupTours';
 import { SharedCarpoolingPopup } from '@/components/SharedCarpoolingBanner';
 import { HomeOfferCampaignPopup } from '@/components/offers/HomeOfferCampaignPopup';
 import { resetPageScroll } from '@/lib/bookingWidgetScroll';
+import {
+  applySharedBuildTrip,
+  isBuildTripDeepLink,
+} from '@/lib/buildYourTrip';
+import { openTourListPanel } from '@/lib/addTourToBookingWidget';
 import { applyVthAiCheckoutPrefill } from '@/lib/vthAiCheckoutPrefill';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Sync before Hero mounts so loadFromSessionStorage sees AI checkout prefill
 if (typeof window !== 'undefined') {
   try {
-    applyVthAiCheckoutPrefill(new URLSearchParams(window.location.search));
+    const bootParams = new URLSearchParams(window.location.search);
+    applyVthAiCheckoutPrefill(bootParams);
+    if (isBuildTripDeepLink(bootParams)) applySharedBuildTrip(bootParams);
   } catch {
     /* ignore */
   }
@@ -45,6 +52,12 @@ const Index = () => {
       resetPageScroll();
     }
   }, [isSearch]);
+
+  useEffect(() => {
+    if (isSearch || !isBuildTripDeepLink(searchParams)) return;
+    const shared = applySharedBuildTrip(searchParams);
+    if (shared.length > 0) openTourListPanel();
+  }, [isSearch, searchParams]);
 
   return (
     <>
@@ -113,7 +126,7 @@ const Index = () => {
         {/* Home carpool promo popup — off for now */}
         <SharedCarpoolingPopup enabled={false} />
         {/* Active campaign coupon popup on homepage (Airport / Local) */}
-        {!isSearch && <HomeOfferCampaignPopup enabled />}
+        {!isSearch && !isBuildTripDeepLink(searchParams) && <HomeOfferCampaignPopup enabled />}
         <main className="flex-1">
           <ErrorBoundary>
             <Hero

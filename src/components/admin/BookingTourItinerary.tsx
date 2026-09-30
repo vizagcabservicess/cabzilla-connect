@@ -6,6 +6,7 @@ import {
   coalesceTourItinerary,
   isTourBooking,
   packageNarrativeFromBooking,
+  resolveTourDisplayName,
   resolveTourDurationForConfirmation,
 } from '@/utils/tourConfirmationHelpers';
 
@@ -44,7 +45,7 @@ export function BookingTourItinerary({
   const days = coalesceTourItinerary(display);
   const inclusions = coalesceTourInclusionsExclusions(display, 'inclusions');
   const exclusions = coalesceTourInclusionsExclusions(display, 'exclusions');
-  const tourName = String(display.tour_name ?? display.tourName ?? '').trim();
+  const tourName = resolveTourDisplayName(display);
   const duration = resolveTourDurationForConfirmation(display);
   const tourRef = String(display.tour_id ?? display.tourId ?? '').trim();
   const packageNotes = packageNarrativeFromBooking(display);
@@ -61,7 +62,7 @@ export function BookingTourItinerary({
         <div className="space-y-3">
           <div>
             <p className="text-sm mb-1">
-              <span className="font-medium">Tour:</span> {tourName || 'Tour package'}
+              <span className="font-medium">Tour:</span> {tourName || 'Not identified'}
             </p>
             {tourRef ? (
               <p className="text-sm mb-1">
@@ -105,8 +106,8 @@ export function BookingTourItinerary({
             </pre>
           ) : (
             <p className="text-sm text-gray-500">
-              No day-wise itinerary is stored on this booking. Check Advanced Settings notes or the
-              live tour page.
+              No day-wise itinerary is stored on this booking, and the package could not be matched
+              from the catalog. Add the tour in Edit or paste the itinerary in Advanced Settings.
             </p>
           )}
 

@@ -108,6 +108,28 @@ export function coerceTripDate(
   return Number.isNaN(parsed.getTime()) ? fallbackDate : parsed;
 }
 
+export function dateTimeMinuteKey(date: Date | string | null | undefined): string {
+  const parsed = coerceTripDate(date);
+  return [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, '0'),
+    String(parsed.getDate()).padStart(2, '0'),
+    String(parsed.getHours()).padStart(2, '0'),
+    String(parsed.getMinutes()).padStart(2, '0'),
+  ].join('-');
+}
+
+export function addCalendarDaysKeepingTime(date: Date, days: number): Date {
+  const next = new Date(date.getTime());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+export function tourStayDays(days?: number): number {
+  const count = Number(days);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+}
+
 export function formatDateForAPI(date: Date): string {
   if (!date) return '';
   

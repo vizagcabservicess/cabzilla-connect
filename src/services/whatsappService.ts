@@ -12,6 +12,8 @@ import {
   isTourBooking,
   packageNarrativeFromBooking,
   itineraryFromPackageNarrative,
+  resolveTourDestinationLabel,
+  resolveTourDisplayName,
   resolveTourDurationForConfirmation,
 } from '@/utils/tourConfirmationHelpers';
 import { parseSeatsFromVehicleLabel } from '@/utils/enrichBookingForWhatsApp';
@@ -136,10 +138,11 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
   const tripMode = booking.tripMode || booking.trip_mode || 'one-way';
   const tourId = booking.tour_id || booking.tourId;
   let tourName =
+    resolveTourDisplayName(booking) ||
     booking.tour_name ||
     booking.tourName ||
-    (booking as any).tour_title ||
-    (booking as any).package_name ||
+    (booking as Booking & { tour_title?: string }).tour_title ||
+    (booking as Booking & { package_name?: string }).package_name ||
     '';
   
   // Smart fallback: If trip type is not set, try to infer it from the data
@@ -255,7 +258,7 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     tripTypeDisplay = 'Local hourly rental';
   } else if (tripType === 'tour' || tourId) {
     const modeDisplay = tripMode === 'round-trip' ? 'round trip' : 'one-way';
-    const tn = tourName || 'Tour package';
+    const tn = tourName && !isGenericTourName(tourName) ? tourName : 'Tour';
     tripTypeDisplay = `Tour: ${tn} (${modeDisplay})`;
   } else if (tripType === 'outstation') {
     // For outstation, include the trip mode (One Way or Round Trip)
@@ -766,14 +769,7 @@ export function generateBookingConfirmationMessage(booking: Booking): string {
     if (tourName && !isGenericTourName(tourName)) {
       destinationDisplay = tourName;
     } else {
-      const p0 = pickupLocation.split(',')[0].trim().toLowerCase();
-      const d0 = String(dropLocation || '')
-        .split(',')[0]
-        .trim()
-        .toLowerCase();
-      if (!d0 || d0 === p0 || isGenericTourName(d0) || d0 === 'n/a') {
-        destinationDisplay = 'As per itinerary';
-      }
+      destinationDisplay = resolveTourDestinationLabel(booking);
     }
   }
 
@@ -854,7 +850,7 @@ ${hasAdditionalRequirements ? `✈️ *Additional Requirements:* ${additionalReq
 ${tourBooking ? `
 
 *Your tour package*
-📦 *Tour:* ${tourName || 'Tour package'}
+📦 *Tour:* ${tourName && !isGenericTourName(tourName) ? tourName : 'Tour not identified — check booking notes'}
 🆔 *Tour reference:* ${tourRef || '—'}
 ${tourDurationLine ? `📆 *Duration:* ${tourDurationLine}
 ` : ''}${oneWayDistance > 0 ? `🛣️ *Approx. distance:* ${Math.round(oneWayDistance)} km

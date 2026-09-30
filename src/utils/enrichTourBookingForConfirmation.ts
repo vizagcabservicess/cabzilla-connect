@@ -5,6 +5,7 @@ import {
   isGenericTourName,
   isTourBooking,
   mergeTourDetailIntoBooking,
+  mergeTourListItemIntoBooking,
   pickTourListItemByName,
   pickTourListItemFromBookingContext,
 } from '@/utils/tourConfirmationHelpers';
@@ -26,20 +27,18 @@ export async function enrichTourBookingFromCatalog(booking: Booking): Promise<Bo
     const tours = await tourDetailAPI.getTours();
     if (!tours.length) return booking;
 
+    const byName = pickTourListItemByName(tours, booking);
+    const byContext = byName ? null : pickTourListItemFromBookingContext(tours, booking);
+    const listed = byName || byContext;
+    let next = listed ? mergeTourListItemIntoBooking(booking, listed) : booking;
+
     let detail = tid ? await tourDetailAPI.getTourDetail(tid) : null;
-
-    if (!detail) {
-      const byName = pickTourListItemByName(tours, booking);
-      if (byName) detail = await tourDetailAPI.getTourDetail(byName.tourId);
+    if (!detail && listed?.tourId) {
+      detail = await tourDetailAPI.getTourDetail(listed.tourId);
     }
 
-    if (!detail) {
-      const picked = pickTourListItemFromBookingContext(tours, booking);
-      if (picked) detail = await tourDetailAPI.getTourDetail(picked.tourId);
-    }
-
-    if (!detail) return booking;
-    return mergeTourDetailIntoBooking(booking, detail);
+    if (!detail) return next;
+    return mergeTourDetailIntoBooking(next, detail);
   } catch {
     return booking;
   }

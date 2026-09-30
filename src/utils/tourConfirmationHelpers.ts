@@ -11,6 +11,85 @@ export function isGenericTourName(name: string): boolean {
   return n === '' || n === 'tour' || n === 'package' || n === 'tour package' || n === 'tour packages';
 }
 
+function firstLocationLabel(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.split(',')[0].trim();
+  if (typeof value === 'object') {
+    const loc = value as { name?: string; city?: string };
+    return String(loc.name || loc.city || '').split(',')[0].trim();
+  }
+  return '';
+}
+
+function looksLikeTourPackageLabel(text: string): boolean {
+  const n = text.toLowerCase();
+  return (
+    /\btour\b/.test(n) ||
+    /araku|lambasingi|vanajangi|simhachalam|borra|katiki|padmapuram/.test(n)
+  );
+}
+
+/**
+ * Real package title for admin lists, booking details, and WhatsApp.
+ * Ignores generic "Tour package" and pickup-copied drop hotels.
+ */
+export function resolveTourDisplayName(booking: Booking): string {
+  const candidates: string[] = [];
+  const push = (raw: unknown) => {
+    const s = String(raw ?? '').trim();
+    if (!s || isGenericTourName(s)) return;
+    candidates.push(s);
+  };
+
+  push(booking.tour_name);
+  push(booking.tourName);
+  push((booking as Booking & { tour_title?: string }).tour_title);
+  push((booking as Booking & { package_name?: string }).package_name);
+
+  const extra = booking as Booking & {
+    additional_requirements?: string;
+    admin_notes?: string;
+  };
+  const notes = [
+    booking.additionalRequirements,
+    extra.additional_requirements,
+    booking.adminNotes,
+    extra.admin_notes,
+  ]
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean)
+    .join('\n');
+  const selected = notes.match(/Selected tours:\s*([^\n]+)/i);
+  if (selected?.[1]) {
+    const names = selected[1]
+      .split(';')
+      .map((part) => part.split('·')[0].trim())
+      .filter((part) => part && !isGenericTourName(part));
+    if (names.length) candidates.push(names.join(' + '));
+  }
+
+  const drop = firstLocationLabel(booking.dropLocation ?? booking.drop_location);
+  const pickup = firstLocationLabel(booking.pickupLocation ?? booking.pickup_location);
+  if (drop && drop.toLowerCase() !== pickup.toLowerCase() && looksLikeTourPackageLabel(drop)) {
+    push(drop);
+  }
+
+  for (const c of candidates) {
+    if (c && !isGenericTourName(c)) return c;
+  }
+  return '';
+}
+
+/** Destination line: tour name for tour trips, otherwise stored drop. */
+export function resolveTourDestinationLabel(booking: Booking): string {
+  const tourName = resolveTourDisplayName(booking);
+  if (tourName) return tourName;
+  const drop = firstLocationLabel(booking.dropLocation ?? booking.drop_location);
+  const pickup = firstLocationLabel(booking.pickupLocation ?? booking.pickup_location);
+  if (drop && drop.toLowerCase() === pickup.toLowerCase()) return 'As per itinerary';
+  return drop || 'As per itinerary';
+}
+
 function looksLikePackageNarrative(text: string): boolean {
   const s = String(text || '').trim();
   if (s.length < 60) return false;
@@ -156,6 +235,7 @@ function bookingTourContextBlob(booking: Booking): string {
     booking.special_notes,
     booking.additionalRequirements,
     extra.additional_requirements,
+    resolveTourDisplayName(booking),
     extra.notes,
     extra.tour_notes,
     booking.tour_name,
@@ -288,7 +368,7 @@ const TOUR_PLACE_HINTS: { test: (blob: string) => boolean; match: (t: TourListIt
     match: (t) => t.tourName.toLowerCase().includes('lambasingi') || t.tourId.toLowerCase().includes('lambasingi'),
   },
   {
-    test: (blob) => /vanajangi|paderu/.test(blob),
+    test: (blob) => /vanajangi|vanjangi|paderu/.test(blob),
     match: (t) => t.tourName.toLowerCase().includes('vanajangi') || t.tourId.toLowerCase().includes('vanajangi'),
   },
 ];
@@ -311,6 +391,8 @@ export function pickTourListItemByName(tours: TourListItem[], booking: Booking):
   if (!Array.isArray(tours) || tours.length === 0) return null;
 
   const chunks: string[] = [];
+  const resolved = resolveTourDisplayName(booking);
+  if (resolved) chunks.push(resolved);
   const tn = String(booking.tour_name ?? booking.tourName ?? '').trim();
   if (tn && !isGenericTourName(tn)) chunks.push(tn);
   const dropRaw =
@@ -497,6 +579,27 @@ function coerceStringArray(a: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+/**
+ * When catalog detail fetch fails, still attach the resolved package id and title.
+ */
+export function mergeTourListItemIntoBooking(booking: Booking, item: TourListItem): Booking {
+  const name = String(booking.tour_name ?? booking.tourName ?? '').trim();
+  const out: Booking = { ...booking };
+  if (!out.tour_id && item.tourId) out.tour_id = item.tourId;
+  if (!out.tourId && item.tourId) out.tourId = item.tourId;
+  if (!name || isGenericTourName(name)) {
+    out.tour_name = item.tourName;
+    out.tourName = item.tourName;
+  }
+  if (
+    (out.distance == null || Number(out.distance) <= 0) &&
+    Number(item.distance) > 0
+  ) {
+    out.distance = item.distance;
+  }
+  return out;
 }
 
 /**

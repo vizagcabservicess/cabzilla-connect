@@ -23,7 +23,7 @@ export const AVAILABLE_TOUR_ROUTES = [
   {
     slug: 'vanajangi-tour',
     label: 'Vanajangi Tour',
-    keywords: ['vanajangi', 'paderu'],
+    keywords: ['vanajangi', 'vanjangi', 'paderu'],
   },
   {
     slug: 'vizag-north-city-tour',
@@ -108,12 +108,38 @@ const ARAKU_PLACE_KEYWORDS = [
   'anantagiri',
   'damuku',
   'anjadevudu',
+  'tyda',
+  'jungle bells',
+  'haritha jungle',
 ] as const;
 
 export function locationLooksLikeArakuTour(text: string): boolean {
   const blob = (text || '').toLowerCase().trim();
   if (!blob) return false;
   return ARAKU_PLACE_KEYWORDS.some((keyword) => keywordHitsInText(blob, keyword));
+}
+
+export type RestrictedOutstationTourPlace = {
+  slug: string;
+  label: string;
+};
+
+/** Hill-station / package places must be booked as tours, not outstation via-stops. */
+export function findRestrictedOutstationTourPlace(
+  text: string
+): RestrictedOutstationTourPlace | null {
+  const blob = (text || '').toLowerCase().trim();
+  if (!blob) return null;
+  if (locationLooksLikeArakuTour(blob)) {
+    return { slug: 'araku-valley-tour', label: 'Araku Valley Tour' };
+  }
+  if (['lambasingi', 'kothapalli'].some((keyword) => keywordHitsInText(blob, keyword))) {
+    return { slug: 'lambasingi-tour', label: 'Lambasingi Tour' };
+  }
+  if (['vanajangi', 'vanjangi', 'paderu'].some((keyword) => keywordHitsInText(blob, keyword))) {
+    return { slug: 'vanajangi-tour', label: 'Vanajangi Tour' };
+  }
+  return null;
 }
 
 /**

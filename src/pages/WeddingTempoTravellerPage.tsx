@@ -15,6 +15,7 @@ import { TourInfo } from '@/types/cab';
 import { VehiclePricing } from '@/types/api';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { Breadcrumb } from '@/components/Breadcrumb';
+import { startingTourPrice } from '@/lib/tourVehiclePrice';
 
 // Wedding Tour Slider Component
 const WeddingTourSlider = ({ tours }: { tours: TourInfo[] }) => {
@@ -44,11 +45,8 @@ const WeddingTourSlider = ({ tours }: { tours: TourInfo[] }) => {
 
   // Helper to get price
   const getPrice = (tour: TourInfo) => {
-    if (tour.pricing && Object.keys(tour.pricing).length > 0) {
-      const prices = Object.values(tour.pricing) as number[];
-      const minPrice = Math.min(...prices);
-      return `₹${minPrice.toLocaleString('en-IN')}`;
-    }
+    const minPrice = startingTourPrice(tour.pricing);
+    if (minPrice > 0) return `₹${minPrice.toLocaleString('en-IN')}`;
     return '₹--';
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useId, forwardRef, useImperativeHandle } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { ArrowLeft, X, MapPin } from "lucide-react";
@@ -9,6 +9,11 @@ import { TOUR_PICKUP_RADIUS_KM, isSelectedMapLocation, isWithinTourPickupRadius 
 import type { TripType } from '@/lib/tripTypes';
 import { BHOGAPURAM_AIRPORT, BHOGAPURAM_AIRPORT_CATCHMENT_KM, isAirportTransferOtherEnd, isVizagAirportLocation } from '@/lib/inferTripService';
 import { isRestrictedAirportDrop } from '@/lib/restrictedAirportRoutes';
+import {
+  fetchPlaceSuggestionRows,
+  resolvePlaceSuggestionGeo,
+  type PlaceSuggestionRow,
+} from '@/lib/googlePlaceSuggestions';
 import { cn } from '@/lib/utils';
 
 export type LocationInputHandle = {
@@ -98,6 +103,51 @@ function hideAllPacContainers(): void {
   });
 }
 
+function isGooglePacOpen(): boolean {
+  if (typeof document === 'undefined') return false;
+  return Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).some((el) => {
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && el.getClientRects().length > 0;
+  });
+}
+
+function normalizePlaceQuery(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/** Google Autocomplete still lists nearby/popular places when the query does not match. */
+function googlePacItemMatchesQuery(item: HTMLElement, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  const compact = normalizePlaceQuery(query);
+  if (compact.length < 2) return true;
+  const text = (item.textContent || '').toLowerCase();
+  const compactText = normalizePlaceQuery(text);
+  if (compactText.includes(compact) || text.includes(q)) return true;
+  const words = q.split(/\s+/).filter((word) => word.length >= 2);
+  if (words.length > 1) {
+    return words.every((word) => text.includes(word));
+  }
+  return false;
+}
+
+/** Google still returns states/cities far from Vizag even with bounds. Pickup 35km must not list those. */
+const FAR_FROM_VIZAG_STATE =
+  /\b(chhattisgarh|chattisgarh|tamil\s*nadu|kerala|karnataka|maharashtra|gujarat|rajasthan|punjab|haryana|delhi|uttar\s*pradesh|bihar|west\s*bengal|telangana|madhya\s*pradesh|jharkhand|assam|goa|uttarakhand|himachal|odisha|orissa|puducherry|pondicherry|chandigarh|ladakh|manipur|meghalaya|mizoram|nagaland|sikkim|tripura)\b/i;
+
+function googlePacItemLooksInsideVizagPickup(item: HTMLElement): boolean {
+  const queryEl = item.querySelector('.pac-item-query');
+  const main = (queryEl?.textContent || '').trim();
+  const secondary = Array.from(item.querySelectorAll('span'))
+    .filter((el) => !el.classList.contains('pac-icon') && !el.classList.contains('pac-item-query') && !el.classList.contains('pac-matched'))
+    .map((el) => el.textContent || '')
+    .join(' ')
+    .trim();
+  const blob = `${main} ${secondary}`;
+  if (FAR_FROM_VIZAG_STATE.test(blob)) return false;
+  if (/^india$/i.test(secondary)) return false;
+  return true;
+}
+
 interface LocationInputProps {
   id?: string;
   label?: string;
@@ -127,6 +177,10 @@ interface LocationInputProps {
   airportOnly?: boolean;
   /** Hide the built-in clear X when the parent renders its own remove control. */
   hideClearButton?: boolean;
+  /** Smaller in-field type for compact widgets. */
+  compact?: boolean;
+  /** Hide the area hint under the field (booking widget keeps its own hint). */
+  hideSubtitle?: boolean;
 }
 
 export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>(function LocationInput({
@@ -151,6 +205,8 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   hideRestrictedAirportDrops = false,
   airportOnly = false,
   hideClearButton = false,
+  compact = false,
+  hideSubtitle = false,
 }, ref) {
   const enforceVizag35Km =
     isPickupLocation || restrictToVizagRadius || tripType === 'local';
@@ -221,13 +277,17 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   }), [disabled, readOnly, fullscreenMobileSearchSheet]);
   const [predictionsLoading, setPredictionsLoading] = useState(false);
   const [noGooglePredictions, setNoGooglePredictions] = useState(false);
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const [sheetHasNoMatchingPlaces, setSheetHasNoMatchingPlaces] = useState(false);
+  const sheetHasNoMatchingPlacesRef = useRef(false);
+  const [placePredictions, setPlacePredictions] = useState<PlaceSuggestionRow[]>([]);
+  const [suggestionPanelBox, setSuggestionPanelBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const predictionsRequestSeq = useRef(0);
   const justSelectedPlaceRef = useRef(false);
   /** Full input row (pin + field); Google `.pac-container` is on `body` — we sync its box to this. */
   const pacAnchorRef = useRef<HTMLDivElement | null>(null);
   /** Bottom edge of fullscreen search pill — `.pac-container` opens below here (mobile Urbania sheet). */
   const sheetPacBottomRef = useRef<HTMLDivElement | null>(null);
+  const sheetRootRef = useRef<HTMLDivElement | null>(null);
   const pacHintDomId = useId().replace(/:/g, '');
 
   useEffect(() => {
@@ -263,7 +323,10 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     }
 
     const inputEl = inputRef.current;
-    if (typeof document !== 'undefined' && inputEl && document.activeElement === inputEl) {
+    if (
+      mobileSearchSheetOpen ||
+      (typeof document !== 'undefined' && inputEl && document.activeElement === inputEl)
+    ) {
       initializedRef.current = true;
       return;
     }
@@ -272,7 +335,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     
     // Mark as initialized
     initializedRef.current = true;
-  }, [value, location]); // Removed label dependency to reduce re-renders
+  }, [value, location, mobileSearchSheetOpen]);
   
      // Filter suggestions based on input value
      useEffect(() => {
@@ -334,19 +397,15 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
 
   useEffect(() => {
     if (!isLoaded || !google) return;
-    autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
-    return () => {
-      autocompleteServiceRef.current = null;
-    };
-  }, [isLoaded, google]);
-
-  useEffect(() => {
-    if (!isLoaded || !google || !autocompleteServiceRef.current) return;
 
     const q = inputValue.trim();
-    if (airportOnly || readOnly || q.length < 2 || !isFocused) {
+    const useDesktopGoogleInSheet = fullscreenMobileSearchSheet && mobileSearchSheetOpen;
+    if (useDesktopGoogleInSheet || airportOnly || readOnly || q.length < 2 || (!isFocused && !mobileSearchSheetOpen)) {
       setPredictionsLoading(false);
-      setNoGooglePredictions(false);
+      if (!useDesktopGoogleInSheet) {
+        setNoGooglePredictions(false);
+        setPlacePredictions([]);
+      }
       return;
     }
 
@@ -357,50 +416,88 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     const timer = window.setTimeout(() => {
       const isOutstationDrop =
         (tripType === 'outstation' || tripType === 'custom') && !isPickupLocation;
-      const request: google.maps.places.AutocompletionRequest & { strictBounds?: boolean } = {
-        input: q,
-        componentRestrictions: { country: 'in' },
-        types: ['geocode', 'establishment'],
-      };
+      const biasLat =
+        tripType === 'airport' && !isPickupLocation ? BHOGAPURAM_AIRPORT.lat : VIZAG_LAT;
+      const biasLng =
+        tripType === 'airport' && !isPickupLocation ? BHOGAPURAM_AIRPORT.lng : VIZAG_LNG;
 
-      if (!isOutstationDrop) {
-        const biasCenter =
-          tripType === 'airport' && !isPickupLocation
-            ? new google.maps.LatLng(BHOGAPURAM_AIRPORT.lat, BHOGAPURAM_AIRPORT.lng)
-            : new google.maps.LatLng(VIZAG_LAT, VIZAG_LNG);
-        const circle = new google.maps.Circle({
-          center: biasCenter,
-          radius: vizagBiasRadiusKm * 1000,
+      void fetchPlaceSuggestionRows(google, q, {
+        isOutstationDrop,
+        vizagBiasRadiusKm,
+        enforceVizag35Km,
+        biasLat,
+        biasLng,
+      })
+        .then((rows) => {
+          if (seq !== predictionsRequestSeq.current) return;
+          setPredictionsLoading(false);
+          setNoGooglePredictions(rows.length === 0);
+          setPlacePredictions(rows);
+        })
+        .catch(() => {
+          if (seq !== predictionsRequestSeq.current) return;
+          setPredictionsLoading(false);
+          setNoGooglePredictions(true);
+          setPlacePredictions([]);
         });
-        request.bounds = circle.getBounds() as google.maps.LatLngBounds;
-        if (enforceVizag35Km) {
-          request.strictBounds = true;
-        }
-      }
-
-      autocompleteServiceRef.current!.getPlacePredictions(request, (predictions, status) => {
-        if (seq !== predictionsRequestSeq.current) return;
-        setPredictionsLoading(false);
-        const s = status as unknown as string;
-        const ok = s === google.maps.places.PlacesServiceStatus.OK;
-        const zero = s === google.maps.places.PlacesServiceStatus.ZERO_RESULTS;
-        if (!ok && !zero) {
-          setNoGooglePredictions(false);
-          return;
-        }
-        const has = !!(predictions && predictions.length > 0);
-        setNoGooglePredictions(!has);
-      });
     }, PREDICTION_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [inputValue, isFocused, isLoaded, google, enforceVizag35Km, tripType, isPickupLocation, airportOnly, readOnly, vizagBiasRadiusKm]);
+  }, [
+    inputValue,
+    isFocused,
+    isLoaded,
+    google,
+    enforceVizag35Km,
+    tripType,
+    isPickupLocation,
+    airportOnly,
+    readOnly,
+    vizagBiasRadiusKm,
+    mobileSearchSheetOpen,
+  ]);
+
+  useEffect(() => {
+    if (placePredictions.length === 0 || !isFocused) {
+      setSuggestionPanelBox(null);
+      return;
+    }
+    const sync = () => {
+      const el = pacAnchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const margin = 8;
+      const width = Math.max(200, Math.round(Math.min(rect.width, viewportWidth - margin * 2)));
+      const left = Math.max(
+        margin,
+        Math.min(Math.round(rect.left), viewportWidth - width - margin)
+      );
+      setSuggestionPanelBox({
+        top: Math.round(rect.bottom + 4),
+        left,
+        width,
+      });
+    };
+    sync();
+    window.addEventListener('resize', sync);
+    window.addEventListener('scroll', sync, true);
+    window.visualViewport?.addEventListener('resize', sync);
+    window.visualViewport?.addEventListener('scroll', sync);
+    return () => {
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('scroll', sync, true);
+      window.visualViewport?.removeEventListener('resize', sync);
+      window.visualViewport?.removeEventListener('scroll', sync);
+    };
+  }, [placePredictions, isFocused, inputValue]);
 
   // Keep Google Places `.pac-container` aligned to this field so it does not spill into sibling columns (desktop row) or fullscreen sheet.
   useEffect(() => {
     if (typeof document === 'undefined' || !isFocused) return;
+    if (fullscreenMobileSearchSheet && !mobileSearchSheetOpen) return;
 
     let cancelled = false;
     const alignPac = () => {
@@ -409,50 +506,90 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       const anchor = sheetMode ? sheetPacBottomRef.current : pacAnchorRef.current;
       if (!anchor) return;
       document.querySelectorAll<HTMLElement>('.pac-container').forEach(restorePacContainerVisibility);
-      const candidates = Array.from(document.querySelectorAll<HTMLElement>('.pac-container')).filter((el) => {
+      const allPacs = Array.from(document.querySelectorAll<HTMLElement>('.pac-container'));
+      const visible = allPacs.filter((el) => {
         const st = window.getComputedStyle(el);
         return st.display !== 'none' && st.visibility !== 'hidden' && el.getBoundingClientRect().height > 0;
       });
-      const pac = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      const withItems = allPacs.filter((el) => el.querySelector('.pac-item'));
+      const pac = (visible.length > 0 ? visible[visible.length - 1] : null)
+        || (sheetMode && withItems.length > 0 ? withItems[withItems.length - 1] : null);
       if (!pac) return;
 
-      candidates.forEach((el) => {
+      allPacs.forEach((el) => {
         if (el !== pac) el.style.display = 'none';
       });
       pac.style.removeProperty('display');
+      if (sheetMode) {
+        pac.style.setProperty('display', 'block', 'important');
+      }
 
       const s = pac.style;
 
       if (sheetMode) {
+        const query = inputRef.current?.value ?? '';
+        const items = Array.from(pac.querySelectorAll<HTMLElement>('.pac-item'));
+        let matchCount = 0;
+        const restrictToVizagList = enforceVizag35Km || isTourPickup;
+        items.forEach((item) => {
+          const matches =
+            googlePacItemMatchesQuery(item, query) &&
+            (!restrictToVizagList || googlePacItemLooksInsideVizagPickup(item));
+          item.style.setProperty('display', matches ? 'grid' : 'none', 'important');
+          if (matches) matchCount += 1;
+        });
+        const noMatch = query.trim().length >= 2 && items.length > 0 && matchCount === 0;
+        if (sheetHasNoMatchingPlacesRef.current !== noMatch) {
+          sheetHasNoMatchingPlacesRef.current = noMatch;
+          setSheetHasNoMatchingPlaces(noMatch);
+        }
+        if (noMatch) {
+          s.setProperty('display', 'none', 'important');
+          return;
+        }
+
         const rect = anchor.getBoundingClientRect();
-        const vv = window.visualViewport;
-        const viewportWidth = vv?.width ?? window.innerWidth;
-        const viewportOffsetLeft = vv?.offsetLeft ?? 0;
-        const margin = 12;
-        const w = Math.max(200, Math.round(viewportWidth - margin * 2));
-        const left = Math.round(viewportOffsetLeft + margin);
-        const top = Math.round(rect.bottom + 6);
+        const top = Math.round(rect.bottom);
 
         s.setProperty('position', 'fixed', 'important');
         s.setProperty('box-sizing', 'border-box', 'important');
-        s.setProperty('width', `${w}px`, 'important');
-        s.setProperty('min-width', `${w}px`, 'important');
-        s.setProperty('max-width', `${w}px`, 'important');
-        s.setProperty('left', `${left}px`, 'important');
-        s.setProperty('top', `${top}px`, 'important');
+        s.setProperty('width', '100%', 'important');
+        s.setProperty('min-width', '100%', 'important');
+        s.setProperty('max-width', '100%', 'important');
+        s.setProperty('left', '0', 'important');
         s.setProperty('right', 'auto', 'important');
+        s.setProperty('top', `${top}px`, 'important');
+        s.setProperty('bottom', 'auto', 'important');
+        s.setProperty('max-height', `${Math.max(160, window.innerHeight - top)}px`, 'important');
         s.setProperty('transform', 'none', 'important');
+        s.setProperty('z-index', '11000', 'important');
+        s.setProperty('display', 'block', 'important');
+        s.setProperty('visibility', 'visible', 'important');
+        s.setProperty('pointer-events', 'auto', 'important');
+        s.setProperty('border', '0', 'important');
+        s.setProperty('border-radius', '0', 'important');
+        s.setProperty('box-shadow', 'none', 'important');
+        s.setProperty('margin', '0', 'important');
+        s.setProperty('padding', '0', 'important');
       } else {
+        const query = inputRef.current?.value ?? '';
+        const restrictToVizagList = enforceVizag35Km || isTourPickup;
+        if (restrictToVizagList) {
+          pac.querySelectorAll<HTMLElement>('.pac-item').forEach((item) => {
+            const matches =
+              googlePacItemMatchesQuery(item, query) && googlePacItemLooksInsideVizagPickup(item);
+            item.style.setProperty('display', matches ? 'flex' : 'none', 'important');
+          });
+        }
+
         const rect = anchor.getBoundingClientRect();
-        const vv = window.visualViewport;
-        const viewportWidth = vv?.width ?? window.innerWidth;
-        const viewportOffsetLeft = vv?.offsetLeft ?? 0;
+        const viewportWidth = window.innerWidth;
         const margin = 8;
         const w = Math.max(200, Math.round(Math.min(rect.width, viewportWidth - margin * 2)));
         const rawLeft = Math.round(rect.left);
         const left = Math.max(
-          viewportOffsetLeft + margin,
-          Math.min(rawLeft, viewportOffsetLeft + viewportWidth - w - margin),
+          margin,
+          Math.min(rawLeft, viewportWidth - w - margin),
         );
         const top = Math.round(rect.bottom + 2);
 
@@ -465,30 +602,27 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         s.setProperty('top', `${top}px`, 'important');
         s.setProperty('right', 'auto', 'important');
         s.setProperty('transform', 'none', 'important');
+        s.setProperty('z-index', '11000', 'important');
+        s.setProperty('display', 'block', 'important');
+        s.setProperty('visibility', 'visible', 'important');
+        s.setProperty('pointer-events', 'auto', 'important');
       }
     };
 
     alignPac();
     window.addEventListener('resize', alignPac);
     window.addEventListener('scroll', alignPac, true);
-    window.visualViewport?.addEventListener('resize', alignPac);
-    window.visualViewport?.addEventListener('scroll', alignPac);
 
     const mo = new MutationObserver(alignPac);
-    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
-
-    const interval = window.setInterval(alignPac, 150);
+    mo.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       cancelled = true;
       window.removeEventListener('resize', alignPac);
       window.removeEventListener('scroll', alignPac, true);
-      window.visualViewport?.removeEventListener('resize', alignPac);
-      window.visualViewport?.removeEventListener('scroll', alignPac);
       mo.disconnect();
-      window.clearInterval(interval);
     };
-  }, [isFocused, fullscreenMobileSearchSheet, mobileSearchSheetOpen]);
+  }, [isFocused, fullscreenMobileSearchSheet, mobileSearchSheetOpen, inputValue, enforceVizag35Km, isTourPickup]);
 
   // RedBus-style hint inside Google's open suggestion panel (DOM — `.pac-container` is not React-rendered).
   useEffect(() => {
@@ -509,7 +643,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       !predictionsLoading &&
       inputValue.trim().length >= 2;
 
-    if (!isFocused || !selectionInvalid || emptyPanelOpen) {
+    if (!isFocused || !selectionInvalid || emptyPanelOpen || mobileSearchSheetOpen) {
       removeHint();
       return;
     }
@@ -565,29 +699,64 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       mo.disconnect();
       window.clearInterval(interval);
     };
-  }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId, selectFromListMessage]);
+  }, [isFocused, location, value, noGooglePredictions, predictionsLoading, inputValue, pacHintDomId, selectFromListMessage, mobileSearchSheetOpen]);
   
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mobileSearchSheetOpen) return;
-    const scrollY = window.scrollY;
-    const prevOverflow = document.body.style.overflow;
-    const prevPosition = document.body.style.position;
-    const prevTop = document.body.style.top;
-    const prevWidth = document.body.style.width;
-
-    document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-
+    const sheet = sheetRootRef.current;
+    const guardFocus = (event: Event) => {
+      const sheetEl = sheetRootRef.current;
+      if (!sheetEl) return;
+      const next = event instanceof FocusEvent ? event.relatedTarget : null;
+      const inside = (node: EventTarget | null) => node instanceof Node && sheetEl.contains(node);
+      if (event.type === 'focusin' && inside(event.target)) event.stopPropagation();
+      if (event.type === 'focusout' && inside(next)) event.stopPropagation();
+      if (event.type === 'pointerdown' && inside(event.target)) event.stopPropagation();
+    };
+    sheet?.addEventListener('focusin', guardFocus);
+    sheet?.addEventListener('pointerdown', guardFocus);
+    document.addEventListener('focusin', guardFocus, true);
+    document.addEventListener('focusout', guardFocus, true);
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.position = prevPosition;
-      document.body.style.top = prevTop;
-      document.body.style.width = prevWidth;
-      window.scrollTo(0, scrollY);
+      sheet?.removeEventListener('focusin', guardFocus);
+      sheet?.removeEventListener('pointerdown', guardFocus);
+      document.removeEventListener('focusin', guardFocus, true);
+      document.removeEventListener('focusout', guardFocus, true);
     };
   }, [mobileSearchSheetOpen]);
+
+  useEffect(() => {
+    if (!mobileSearchSheetOpen || typeof document === 'undefined') return;
+    document.documentElement.classList.add('location-search-sheet-open');
+    return () => {
+      document.documentElement.classList.remove('location-search-sheet-open');
+      sheetHasNoMatchingPlacesRef.current = false;
+      setSheetHasNoMatchingPlaces(false);
+    };
+  }, [mobileSearchSheetOpen]);
+
+  useEffect(() => {
+    if (!mobileSearchSheetOpen) return;
+    const q = inputValue.trim();
+    if (q.length < 2) {
+      sheetHasNoMatchingPlacesRef.current = false;
+      setSheetHasNoMatchingPlaces(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const items = Array.from(document.querySelectorAll<HTMLElement>('.pac-item'));
+      const anyMatch = items.some(
+        (item) =>
+          googlePacItemMatchesQuery(item, q) &&
+          (!(enforceVizag35Km || isTourPickup) || googlePacItemLooksInsideVizagPickup(item))
+      );
+      if (sheetHasNoMatchingPlacesRef.current === !anyMatch) return;
+      sheetHasNoMatchingPlacesRef.current = !anyMatch;
+      setSheetHasNoMatchingPlaces(!anyMatch);
+      if (!anyMatch) hideAllPacContainers();
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [inputValue, mobileSearchSheetOpen, enforceVizag35Km, isTourPickup]);
 
   useEffect(() => {
     if (!mobileSearchSheetOpen) return;
@@ -632,7 +801,6 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         (tripType === 'outstation' || tripType === 'custom') && !isPickupLocation;
 
       const options: google.maps.places.AutocompleteOptions = {
-        types: ['geocode', 'establishment'],
         componentRestrictions: { country: 'in' },
       };
 
@@ -647,10 +815,16 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         });
         const bounds = circle.getBounds() as google.maps.LatLngBounds;
         options.bounds = bounds;
-        options.strictBounds = enforceVizag35Km;
+        options.strictBounds = enforceVizag35Km || isTourPickup;
+        if (enforceVizag35Km || isTourPickup) {
+          (options as google.maps.places.AutocompleteOptions & {
+            locationRestriction?: google.maps.Circle;
+          }).locationRestriction = circle;
+        }
       }
 
       ac = new google.maps.places.Autocomplete(el, options);
+      ac.setFields(['place_id', 'name', 'formatted_address', 'geometry', 'address_components']);
 
       ac.addListener('place_changed', () => {
         setNoGooglePredictions(false);
@@ -784,6 +958,17 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     }
   };
 
+  const openMobileSearchSheet = () => {
+    flushSync(() => {
+      setMobileSearchSheetOpen(true);
+      setIsFocused(true);
+    });
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.fontSize = '16px';
+    input.focus();
+  };
+
   const closeMobileSearchSheet = () => {
     setMobileSearchSheetOpen(false);
     setIsFocused(false);
@@ -861,6 +1046,28 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
       setMobileSearchSheetOpen(false);
     }
   };
+
+  const selectPlacePrediction = (prediction: PlaceSuggestionRow) => {
+    if (!google || !prediction.place_id) return;
+    void resolvePlaceSuggestionGeo(google, prediction).then((geo) => {
+      if (!geo) return;
+      const picked: Location = {
+        id: geo.place_id,
+        name: geo.name,
+        address: geo.address,
+        lat: geo.lat,
+        lng: geo.lng,
+        isInVizag: isWithinVizagRange(geo.lat, geo.lng),
+        city: '',
+        state: '',
+        type: geo.name.toLowerCase().includes('airport') ? 'airport' : 'other',
+        popularityScore: 50,
+      };
+      handleSuggestionClick(
+        canonicalizePickedLocation(picked, lastTypedQueryRef.current || prediction.description || '')
+      );
+    });
+  };
   
   const committedLocationFromProps = (): Location | undefined => {
     return (
@@ -902,12 +1109,31 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
   revertUnselectedTypedTextRef.current = revertUnselectedTypedText;
 
   useEffect(() => {
+    const markPacSelection = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.pac-item, .pac-container')) {
+        justSelectedPlaceRef.current = true;
+        window.setTimeout(() => {
+          justSelectedPlaceRef.current = false;
+        }, 800);
+      }
+    };
+    document.addEventListener('pointerdown', markPacSelection, true);
+    return () => document.removeEventListener('pointerdown', markPacSelection, true);
+  }, []);
+
+  useEffect(() => {
     const el = inputRef.current;
     if (!el || readOnly || disabled) return undefined;
+    const tryRevert = (opts?: { silent?: boolean }) => {
+      if (justSelectedPlaceRef.current || isGooglePacOpen()) return;
+      revertUnselectedTypedTextRef.current(opts);
+    };
     const onNativeBlur = () => {
-      window.setTimeout(() => revertUnselectedTypedTextRef.current({ silent: true }), 0);
-      window.setTimeout(() => revertUnselectedTypedTextRef.current({ silent: true }), 80);
-      window.setTimeout(() => revertUnselectedTypedTextRef.current(), 320);
+      if (mobileSearchSheetOpen) return;
+      window.setTimeout(() => tryRevert({ silent: true }), 0);
+      window.setTimeout(() => tryRevert({ silent: true }), 80);
+      window.setTimeout(() => tryRevert(), 320);
     };
     el.addEventListener('blur', onNativeBlur);
     return () => el.removeEventListener('blur', onNativeBlur);
@@ -930,7 +1156,7 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
    const getSubtitleText = () => {
      const isAirportTransfer = tripType === 'airport';
 
-     if (airportOnly) {
+     if (hideSubtitle || airportOnly) {
        return '';
      }
      if (isTourPickup) {
@@ -1109,16 +1335,29 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             aria-expanded={mobileSearchSheetOpen}
             disabled={disabled}
             className={cn(
-              "-ml-0.5 w-full min-h-0 rounded-md py-0 pr-10 text-left outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+              "-ml-0.5 w-full min-h-0 rounded-md py-0 text-left outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+              compact ? "pr-1" : "pr-10",
               "touch-manipulation text-base leading-tight",
               displayValue ? "font-bold text-gray-900" : "font-normal text-gray-500"
             )}
-            onClick={() => {
-              setMobileSearchSheetOpen(true);
-              queueMicrotask(() => setIsFocused(true));
+            onPointerDown={(event) => {
+              if (event.pointerType === 'mouse' && event.button !== 0) return;
+              event.preventDefault();
+              openMobileSearchSheet();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              if (!mobileSearchSheetOpen) openMobileSearchSheet();
             }}
             >
-            <span className="block w-full break-words text-left leading-snug line-clamp-2">
+            <span
+              className={cn(
+                'block w-full text-left',
+                compact
+                  ? 'truncate text-[15px] font-semibold leading-tight'
+                  : 'break-words leading-snug line-clamp-2'
+              )}
+            >
               {displayValue || placeholder || 'Enter location'}
             </span>
           </button>
@@ -1143,7 +1382,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
           readOnly={readOnly}
           onKeyDown={handleLocationKeyDown}
           style={{
-            fontSize: isDesktopVariant
+            fontSize: compact
+              ? "16px"
+              : isDesktopVariant
               ? isDesktop
                 ? "0.9375rem"
                 : "1rem"
@@ -1170,7 +1411,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                     )
                   : isInfieldVariant
                     ? cn(
-                        "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:font-normal placeholder:text-gray-500"
+                        compact
+                          ? "rounded-none border-0 bg-transparent px-0 py-0 text-base font-semibold text-slate-900 shadow-none placeholder:font-normal placeholder:text-slate-400"
+                          : "rounded-none border-0 bg-transparent px-0 py-0 text-xl font-semibold shadow-none placeholder:font-normal placeholder:text-gray-500"
                       )
                     : "border-gray-300 font-bold focus:border-blue-500 focus:ring-blue-500"
           )}
@@ -1183,8 +1426,9 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
             handleInputBlur();
             setIsFocused(false);
             window.setTimeout(() => {
+              if (justSelectedPlaceRef.current || isGooglePacOpen()) return;
               hideAllPacContainers();
-            }, 200);
+            }, 400);
           }}
         />
         )}
@@ -1224,6 +1468,42 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
         </div>
       )}
 
+      {placePredictions.length > 0 &&
+      suggestionPanelBox &&
+      !mobileSearchSheetOpen &&
+      typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed z-[10080] max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"
+              style={{
+                top: suggestionPanelBox.top,
+                left: suggestionPanelBox.left,
+                width: suggestionPanelBox.width,
+              }}
+            >
+              {placePredictions.map((prediction) => (
+                <button
+                  key={prediction.place_id}
+                  type="button"
+                  className="flex w-full flex-col items-start border-b border-gray-100 px-3 py-3 text-left last:border-0 hover:bg-gray-50"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectPlacePrediction(prediction)}
+                >
+                  <span className="text-[15px] font-medium text-gray-900">
+                    {prediction.structured_formatting.main_text || prediction.description}
+                  </span>
+                  {prediction.structured_formatting.secondary_text ? (
+                    <span className="text-sm text-gray-500">
+                      {prediction.structured_formatting.secondary_text}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
+
       {showEmptyGoogleDropdown && !mobileSearchSheetOpen && (
         <div
           className={cn(
@@ -1242,16 +1522,20 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
     typeof document !== 'undefined'
       ? createPortal(
         <div
-          className="location-search-sheet fixed inset-0 z-[10070] flex w-full max-w-[100vw] flex-col overflow-x-clip bg-white"
+          ref={sheetRootRef}
+          className="location-search-sheet pointer-events-auto fixed inset-0 z-[10070] flex h-full w-full touch-manipulation flex-col overflow-hidden bg-white"
+          style={{ pointerEvents: 'auto' }}
           role="dialog"
           aria-modal="true"
           aria-label={label ? `Search ${label}` : 'Search location'}
+          onFocus={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="shrink-0 border-b border-gray-100 px-3 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
-            <div
-              ref={sheetPacBottomRef}
-              className="flex min-h-[2.875rem] items-center gap-1 rounded-full bg-gray-100 px-1 py-1 pl-1"
-            >
+          <div
+            ref={sheetPacBottomRef}
+            className="w-full shrink-0 border-b border-gray-100 px-3 pb-2 pt-[max(12px,env(safe-area-inset-top))]"
+          >
+            <div className="flex min-h-[2.875rem] w-full items-center gap-1 rounded-full bg-gray-100 px-1 py-1 pl-1">
               <button
                 type="button"
                 className="shrink-0 rounded-full p-2.5 text-gray-800 transition-colors hover:bg-gray-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
@@ -1273,43 +1557,87 @@ export const LocationInput = forwardRef<LocationInputHandle, LocationInputProps>
                 onKeyDown={handleLocationKeyDown}
                 placeholder={placeholder || 'Search location'}
                 disabled={disabled}
-                className="h-11 min-h-0 flex-1 border-0 bg-transparent px-1 text-base shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-11 min-h-0 min-w-0 flex-1 border-0 bg-transparent px-1 text-[16px] shadow-none outline-none placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0"
                 style={{ fontSize: '16px' }}
-                autoFocus
                 onFocus={() => {
-                  hideAllPacContainers();
                   setShowSuggestions(inputValue.length > 0 && suggestions.length > 0);
                   setIsFocused(true);
                 }}
-                onBlur={() => {
+                onBlur={(event) => {
                   handleInputBlur();
+                  if (justSelectedPlaceRef.current || isGooglePacOpen()) return;
+                  const next = event.relatedTarget;
+                  if (next instanceof Element && next.closest('.location-search-sheet, .pac-container')) return;
                   window.setTimeout(() => {
-                    setIsFocused(false);
-                    hideAllPacContainers();
-                  }, 200);
+                    if (justSelectedPlaceRef.current || isGooglePacOpen()) return;
+                    const sheet = sheetRootRef.current;
+                    if (!sheet?.isConnected) {
+                      setIsFocused(false);
+                      return;
+                    }
+                    const active = document.activeElement;
+                    if (active instanceof Element && (sheet.contains(active) || active.closest('.pac-container'))) {
+                      return;
+                    }
+                    inputRef.current?.focus();
+                  }, 0);
                 }}
               />
-              {inputValue && !readOnly && !hideClearButton && (
-                <button
-                  type="button"
-                  className="shrink-0 rounded-full p-2.5 text-gray-500 transition-colors hover:bg-gray-200/70 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-                  aria-label="Clear location"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    e.stopPropagation();
+              <button
+                type="button"
+                className="shrink-0 rounded-full p-2.5 text-gray-500 transition-colors hover:bg-gray-200/70 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                aria-label={inputValue ? 'Clear location' : 'Close search'}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (inputValue && !readOnly) {
                     clearLocationField();
-                  }}
-                >
-                  <X className="h-5 w-5" aria-hidden />
-                </button>
-              )}
+                    return;
+                  }
+                  closeMobileSearchSheet();
+                }}
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
             </div>
+            {subtitleText ? (
+              <p className="px-2 pt-2 text-xs text-gray-500">{subtitleText}</p>
+            ) : null}
           </div>
-          {subtitleText ? (
-            <p className="px-4 pt-2 text-xs text-gray-500">{subtitleText}</p>
-          ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-[max(12px,env(safe-area-inset-bottom))]">
+            {sheetHasNoMatchingPlaces && inputValue.trim().length >= 2 ? (
+              <div className="px-5 py-8 text-center" role="status">
+                <p className="text-[15px] font-semibold text-gray-900">Location not found</p>
+                <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-gray-500">
+                  No matching place for &quot;{inputValue.trim()}&quot;. Try a nearby area or landmark.
+                </p>
+              </div>
+            ) : null}
+            {placePredictions.length > 0 ? (
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {placePredictions.map((prediction) => (
+                  <button
+                    key={prediction.place_id}
+                    type="button"
+                    className="flex w-full flex-col items-start border-b border-gray-100 px-3 py-3 text-left last:border-0 hover:bg-gray-50"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectPlacePrediction(prediction)}
+                  >
+                    <span className="text-[15px] font-medium text-gray-900">
+                      {prediction.structured_formatting?.main_text || prediction.description}
+                    </span>
+                    {prediction.structured_formatting?.secondary_text ? (
+                      <span className="text-sm text-gray-500">
+                        {prediction.structured_formatting.secondary_text}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : predictionsLoading && inputValue.trim().length >= 2 ? (
+              <p className="px-1 py-3 text-sm text-gray-500">Searching…</p>
+            ) : null}
             {showCuratedSuggestionList && (
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">{suggestionsListMarkup}</div>
             )}

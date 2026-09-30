@@ -9,9 +9,24 @@ body {
 }
 
 html {
-  /* Always reserve vertical scrollbar space so dropdown open/close does not shift the page */
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
+  overflow-y: auto;
+}
+
+@media (min-width: 1024px) {
+  html {
+    /* Reserve vertical scrollbar space so dropdown open/close does not shift the page */
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 1023px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: clip !important;
+  }
 }
 
 /*
@@ -447,7 +462,7 @@ z-index: 10060 !important;
 /* Keep portaled Package/Tour (and other) selects inside the viewport on narrow screens */
 @media (max-width: 767px) {
   [data-radix-select-content] {
-    max-width: min(100vw - 1.5rem, var(--radix-select-trigger-width, calc(100vw - 1.5rem))) !important;
+    max-width: min(calc(100dvw - 1.5rem), var(--radix-select-trigger-width, calc(100dvw - 1.5rem))) !important;
     width: min(100%, var(--radix-select-trigger-width, 100%)) !important;
     overflow-x: hidden !important;
   }
@@ -610,9 +625,10 @@ min-height: 100vh;
 
 /* Google Places Autocomplete — sits on document body; z-index + surface so it layers above the booking row */
 .pac-container {
-  z-index: 10080 !important;
-  max-width: calc(100vw - 16px) !important;
+  z-index: 11000 !important;
+  pointer-events: auto !important;
   box-sizing: border-box !important;
+  max-width: min(100%, calc(100dvw - 16px)) !important;
   border-radius: 0.75rem;
   border: 1px solid rgb(229 231 235);
   box-shadow:
@@ -645,8 +661,113 @@ min-height: 100vh;
   background-color: rgb(249 250 251);
 }
 
+/* Mobile location sheet: Google list fills the screen under the search bar (no floating card). */
+html.location-search-sheet-open,
+html.location-search-sheet-open body {
+  overflow-x: hidden !important;
+}
+html.location-search-sheet-open .pac-container {
+  left: 0 !important;
+  right: auto !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  transform: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #fff !important;
+}
+html.location-search-sheet-open .pac-item {
+  display: grid !important;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.125rem;
+  align-items: start;
+  padding: 0.875rem 1rem !important;
+  min-height: 3.25rem;
+  cursor: pointer;
+  font-size: 16px !important;
+  color: rgb(17 24 39);
+  border-top: 0 !important;
+  border-bottom: 1px solid rgb(243 244 246) !important;
+  white-space: normal !important;
+}
+html.location-search-sheet-open .pac-item + .pac-item {
+  border-top: 0 !important;
+}
+html.location-search-sheet-open .pac-item:hover,
+html.location-search-sheet-open .pac-item-selected {
+  background-color: rgb(254 226 226) !important;
+}
+html.location-search-sheet-open .pac-icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  margin-top: 0.2rem !important;
+  margin-right: 0 !important;
+}
+html.location-search-sheet-open .pac-item-query {
+  grid-column: 2;
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgb(17 24 39);
+  white-space: normal;
+}
+html.location-search-sheet-open .pac-item > span:not(.pac-icon):not(.pac-item-query) {
+  grid-column: 2;
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: rgb(107 114 128);
+  white-space: normal;
+}
+html.location-search-sheet-open .pac-matched {
+  font-weight: 600;
+}
+html.location-search-sheet-open .pac-logo::after {
+  padding-top: 0.5rem;
+  opacity: 0.85;
+}
+
+/* iOS Safari zooms the page when a focused input is under 16px. */
+.location-search-sheet input,
+.datetime-picker-sheet input {
+  font-size: 16px !important;
+}
+
+/* Fill the visible screen. Percentage widths inside a transformed panel leave the page showing at the sides. */
+.location-search-sheet {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 100dvh !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
 /* iOS Safari auto-zooms inputs below 16px — enforce minimum on carpool forms (mobile). */
-@media (max-width: 639px) {
+@media (max-width: 767px) {
+  [data-tour-quote-dialog] {
+    align-content: start;
+  }
+
+  [data-tour-quote-dialog] input,
+  [data-tour-quote-dialog] textarea,
+  [data-tour-quote-dialog] select,
+  [data-tour-quote-dialog] [role='combobox'] {
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+
   #commute-form input,
   #commute-form select,
   #commute-form textarea,

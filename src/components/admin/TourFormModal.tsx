@@ -6,22 +6,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Image, List, CheckCircle, XCircle, MapPin, Upload } from 'lucide-react';
+import { Plus, Trash2, Image, List, CheckCircle, XCircle, MapPin, Upload, Loader2 } from 'lucide-react';
 import { TourData, TourManagementRequest, TourGalleryItem, TourItineraryDay } from '@/types/api';
 import { Vehicle } from '@/types/vehicle';
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
-import { getApiUrl } from '@/config/api';
+import { fleetPricingSnapshot } from '@/lib/tourVehiclePrice';
+import { resolveSmartBudgetMediaUrl, uploadTourImageFile } from '@/lib/smartBudgetUpload';
 
 interface TourFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (tourData: TourManagementRequest) => void;
   tour?: TourData | null;
+  lockTourId?: boolean;
+  formTitle?: string;
   vehicles: Vehicle[];
   isLoading?: boolean;
 }
 
-export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoading = false }: TourFormModalProps) => {
+export const TourFormModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  tour,
+  lockTourId = false,
+  formTitle,
+  vehicles,
+  isLoading = false,
+}: TourFormModalProps) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState<TourManagementRequest>({
     tourId: '',
@@ -35,7 +48,8 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     gallery: [],
     inclusions: [],
     exclusions: [],
-    itinerary: []
+    itinerary: [],
+    isActive: true,
   });
 
   // State for gallery image input
@@ -78,7 +92,8 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
           gallery: safeGallery,
           inclusions: safeInclusions,
           exclusions: safeExclusions,
-          itinerary: safeItinerary
+          itinerary: safeItinerary,
+          isActive: tour.isActive !== false,
         };
         
         console.log('TourFormModal: Final form data being set:', newFormData);
@@ -97,7 +112,8 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
           gallery: [],
           inclusions: [],
           exclusions: [],
-          itinerary: []
+          itinerary: [],
+          isActive: true,
         });
       }
     }
@@ -110,6 +126,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     // Filter out empty inclusions/exclusions before submit
     const cleanedFormData = {
       ...formData,
+      pricing: fleetPricingSnapshot(formData.pricing, vehicles),
       inclusions: (formData.inclusions || []).filter(i => i && i.trim() !== ""),
       exclusions: (formData.exclusions || []).filter(e => e && e.trim() !== ""),
       gallery: formData.gallery || [],
@@ -134,38 +151,13 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
   const handleFileUpload = async (file: File): Promise<string> => {
     setIsUploading(true);
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append('image', file);
-      
-      // Use the correct backend URL
-      const baseURL = getApiUrl();
-      const uploadUrl = `${baseURL}/api/upload-image.php`;
-      console.log('Uploading to:', uploadUrl);
-      
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formDataUpload,
+      const url = await uploadTourImageFile(file);
+      toast({
+        title: "Success",
+        description: "Image uploaded to Hostinger",
       });
-      
-      console.log('Upload response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('Upload response data:', data);
-      
-      if (data && data.url) {
-        toast({
-          title: "Success",
-          description: "Image uploaded successfully",
-        });
-        return data.url;
-      }
-      throw new Error(data.error || 'Image upload failed');
+      return url;
     } catch (error) {
-      console.error('Upload error:', error);
       toast({
         title: "Upload Error",
         description: error instanceof Error ? error.message : "Failed to upload image",
@@ -174,6 +166,18 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
       throw error;
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleMainImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const url = await handleFileUpload(file);
+      setFormData((prev) => ({ ...prev, imageUrl: url }));
+    } catch {
+      /* toast already shown */
     }
   };
 
@@ -323,7 +327,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
     <Dialog key={tour?.tourId || 'new'} open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{tour ? 'Edit Tour' : 'Add New Tour'}</DialogTitle>
+          <DialogTitle>{formTitle || (tour ? 'Edit Tour' : 'Add New Tour')}</DialogTitle>
           <DialogDescription>
             Create a new tour package with dynamic pricing for all available vehicles.
           </DialogDescription>
@@ -349,7 +353,7 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                     value={formData.tourId || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, tourId: e.target.value }))}
                     required
-                    disabled={!!tour}
+                    disabled={lockTourId}
                   />
                 </div>
                 <div>
@@ -362,6 +366,18 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                     required
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <Label htmlFor="tourActive">Visible on website</Label>
+                  <p className="text-xs text-gray-500">Inactive tours stay in admin but are hidden from booking.</p>
+                </div>
+                <Switch
+                  id="tourActive"
+                  checked={formData.isActive !== false}
+                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isActive: checked }))}
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
@@ -397,14 +413,49 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="imageUrl">Main Image URL</Label>
+              <div className="space-y-2">
+                <Label htmlFor="imageUrl">Main image</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUploading}
+                    onClick={() => document.getElementById('tour-main-image-file')?.click()}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-1.5" />
+                    )}
+                    {isUploading ? 'Uploading…' : 'Upload to Hostinger'}
+                  </Button>
+                  <input
+                    id="tour-main-image-file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={isUploading}
+                    onChange={handleMainImageFileChange}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Files are stored on Hostinger at public_html/uploads/tours/YEAR/YYYY-MM-DD/
+                </p>
                 <Input
                   id="imageUrl"
-                  placeholder="/tours/tour.jpg"
+                  placeholder="https://vizagtaxihub.com/uploads/tours/…"
                   value={formData.imageUrl || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
                 />
+                {formData.imageUrl ? (
+                  <div className="overflow-hidden rounded-lg border bg-slate-50">
+                    <img
+                      src={resolveSmartBudgetMediaUrl(formData.imageUrl)}
+                      alt="Tour main"
+                      className="max-h-48 w-full object-contain"
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -443,7 +494,12 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
 
             <TabsContent value="gallery" className="space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Gallery Images</h3>
+                <div>
+                  <h3 className="text-lg font-semibold">Gallery Images</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Extra photos only. The main banner is set on the Basic Info tab and will not change when you add gallery images.
+                  </p>
+                </div>
               </div>
               
               <Card>
@@ -453,9 +509,13 @@ export const TourFormModal = ({ isOpen, onClose, onSubmit, tour, vehicles, isLoa
                       <Label>Upload Image File</Label>
                       <Input 
                         type="file" 
-                        accept="image/*" 
+                        accept="image/jpeg,image/png,image/webp,image/gif" 
                         onChange={handleFileInputChange} 
+                        disabled={isUploading}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Uploads go to public_html/uploads/tours/YEAR/YYYY-MM-DD/
+                      </p>
                       <div className="text-center text-gray-500">OR</div>
                       <Label>Image URL</Label>
                       <Input 

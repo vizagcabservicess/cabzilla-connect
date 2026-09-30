@@ -7,6 +7,7 @@ import { calculateOutstationRoundTripFare, oneWayOutstationExtra } from '@/lib/f
 import { fetchAllOutstationFares, type OutstationFareData } from '@/services/outstationFareService';
 import { getLocalFares, getAirportFaresForVehicle } from '@/services/fareService';
 import { getAirportTransferFare } from '@/lib/airportFareForBooking';
+import { combinedTourPriceForVehicle } from '@/lib/tourVehiclePrice';
 
 export type VehicleFareLine = { name: string; fareText: string };
 
@@ -409,5 +410,19 @@ export async function buildVehicleFareLinesForGuestTrack(
 
     const fareText = fare > 0 ? formatTrackFareRupee(fare) : 'Fare n/a';
     return { name: cab.name, fareText };
+  });
+}
+
+/** Combined catalog prices for selected tour packages (same as ToursPage vehicle rail). */
+export function buildTourCartFareLinesForGuestTrack(
+  vehicles: CabType[],
+  selectedTours: Array<{ pricing?: Record<string, number> }>
+): VehicleFareLine[] {
+  return vehicles.map((vehicle) => {
+    const fare = combinedTourPriceForVehicle(selectedTours, vehicle);
+    return {
+      name: vehicle.name,
+      fareText: fare > 0 ? formatTrackFareRupee(fare) : 'Fare n/a',
+    };
   });
 }

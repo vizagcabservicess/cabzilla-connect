@@ -16,7 +16,7 @@ import { formatBookingStatus, getStatusColorClass, getEffectiveBookingStatus } f
 import { mergeTripSummary, getDefaultTripSummary, getDefaultBillingAddress } from '@/utils/invoiceTripSummaryDefaults';
 import { resolveBookingAdvanceAmount } from '@/utils/bookingPaymentFields';
 import { BookingTourItinerary } from './BookingTourItinerary';
-import { isTourBooking } from '@/utils/tourConfirmationHelpers';
+import { isTourBooking, resolveTourDestinationLabel, resolveTourDisplayName } from '@/utils/tourConfirmationHelpers';
 
 interface BookingDetailsProps {
   booking: Booking;
@@ -252,12 +252,23 @@ export function BookingDetails({
                 <h3 className="text-sm font-medium mb-1 text-gray-700">Trip Details</h3>
                 <p className="text-sm mb-1"><span className="font-medium">Trip Type:</span> {booking.tripType} {booking.tripMode && `(${booking.tripMode})`}</p>
                 <p className="text-sm mb-1"><span className="font-medium">Pickup:</span> {booking.pickupLocation}</p>
-                {booking.dropLocation && <p className="text-sm mb-1"><span className="font-medium">Drop:</span> {booking.dropLocation}</p>}
+                {showTourItinerary ? (
+                  <p className="text-sm mb-1">
+                    <span className="font-medium">Destination:</span> {resolveTourDestinationLabel(booking)}
+                  </p>
+                ) : (
+                  booking.dropLocation && (
+                    <p className="text-sm mb-1">
+                      <span className="font-medium">Drop:</span> {booking.dropLocation}
+                    </p>
+                  )
+                )}
                 <p className="text-sm mb-1"><span className="font-medium">Pickup Date:</span> {convertUTCToLocal(booking.pickupDate).toLocaleString()}</p>
                 <p className="text-sm mb-1"><span className="font-medium">Vehicle:</span> {booking.cabType}</p>
-                {(booking.tourName || booking.tour_name) && (
+                {showTourItinerary && (
                   <p className="text-sm mb-1">
-                    <span className="font-medium">Tour:</span> {booking.tourName || booking.tour_name}
+                    <span className="font-medium">Tour:</span>{' '}
+                    {resolveTourDisplayName(booking) || 'Not identified'}
                   </p>
                 )}
               </div>

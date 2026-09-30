@@ -1,5 +1,6 @@
 <?php
 require_once '../../config.php';
+require_once __DIR__ . '/../utils/tour_fares_sort.php';
 
 // Forcefully disable caching at the API level
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -21,10 +22,11 @@ try {
         throw new Exception('Database connection failed');
     }
 
+    tour_fares_ensure_sort_order_column($conn);
     $stmt = $conn->prepare("
         SELECT id, tour_id, tour_name, distance, days, description, image_url, time_duration 
         FROM tour_fares 
-        ORDER BY tour_name
+        ORDER BY sort_order ASC, id ASC
     ");
     $stmt->execute();
     $result = $stmt->get_result();

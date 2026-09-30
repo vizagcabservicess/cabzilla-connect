@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { VTH_OPEN_LIVE_CHAT_EVENT } from '@/lib/buildYourTrip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -397,6 +398,12 @@ export function LiveChatWidget({
   const [leadSaving, setLeadSaving] = useState(false);
 
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(VTH_OPEN_LIVE_CHAT_EVENT, onOpen);
+    return () => window.removeEventListener(VTH_OPEN_LIVE_CHAT_EVENT, onOpen);
+  }, []);
   const [widget, setWidget] = useState<ChatWidgetData | null>(null);
   const [visitorId, setVisitorId] = useState(visitorIdProp || '');
   const [sessionId, setSessionId] = useState(sessionIdProp || '');
@@ -873,26 +880,17 @@ export function LiveChatWidget({
   const showQuickReplies = !visitorHasSpoken && !loading;
   const showMidSuggestions = visitorHasSpoken && !loading && !sending;
 
-  // Mobile after cab search: redBus-style circular FAB (no wide "VTH AI" pill)
-  const [compactFab, setCompactFab] = useState(false);
+  // Mobile: circular FAB only — no wide "VTH AI" text pill
+  const [compactFab, setCompactFab] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
   useEffect(() => {
-    const sync = () => {
-      const afterSearch = document.documentElement.dataset.vthBookingUi === 'results';
-      const narrow = window.matchMedia('(max-width: 1023px)').matches;
-      setCompactFab(afterSearch && narrow);
-    };
+    const mql = window.matchMedia('(max-width: 767px)');
+    const sync = () => setCompactFab(mql.matches);
     sync();
-    const mql = window.matchMedia('(max-width: 1023px)');
     mql.addEventListener('change', sync);
-    const mo = new MutationObserver(sync);
-    mo.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-vth-booking-ui'],
-    });
-    return () => {
-      mql.removeEventListener('change', sync);
-      mo.disconnect();
-    };
+    return () => mql.removeEventListener('change', sync);
   }, []);
 
   return (
@@ -1294,7 +1292,7 @@ export function LiveChatWidget({
         className={
           compactFab
             ? 'group relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-6px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.03] active:scale-[0.97]'
-            : 'group relative flex items-center gap-3 rounded-full pl-1.5 pr-4 py-1.5 text-left shadow-[0_12px_28px_-8px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98]'
+            : 'group relative flex max-w-[calc(50vw-0.85rem)] items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5 text-left shadow-[0_12px_28px_-8px_rgba(109,40,217,0.55)] transition-transform hover:scale-[1.02] active:scale-[0.98] sm:max-w-none sm:gap-3 sm:pr-4'
         }
         style={{
           background: open

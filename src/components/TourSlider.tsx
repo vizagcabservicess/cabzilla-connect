@@ -9,6 +9,7 @@ import { tourAPI } from '@/services/api/tourAPI';
 import { vehicleAPI } from '@/services/api/vehicleAPI';
 import { useNavigate } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
+import { startingTourPrice } from '@/lib/tourVehiclePrice';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -20,6 +21,7 @@ export function TourSlider() {
   const [tours, setTours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [vehicleCapacities, setVehicleCapacities] = useState({});
+  const [vehicles, setVehicles] = useState([]);
   const navigate = useNavigate();
   const swiperRef = useRef<any>(null);
   const [isBeginning, setIsBeginning] = useState(true);
@@ -34,6 +36,7 @@ export function TourSlider() {
           vehicleAPI.getVehicles()
         ]);
         setTours(tourData);
+        setVehicles(vehicleData.vehicles || []);
         // Build vehicleId -> capacity map
         const capMap = {};
         (vehicleData.vehicles || []).forEach(v => {
@@ -43,6 +46,7 @@ export function TourSlider() {
         setVehicleCapacities(capMap);
       } catch (e) {
         setTours([]);
+        setVehicles([]);
         setVehicleCapacities({});
       } finally {
         setLoading(false);
@@ -193,9 +197,12 @@ export function TourSlider() {
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{tour.name || tour.tourName}</h3>
                           <div className="text-lg font-bold text-blue-600">
-                            {tour.pricing && Object.values(tour.pricing).length > 0
-                              ? `₹${Math.min(...(Object.values(tour.pricing) as number[])).toLocaleString('en-IN')}`
-                              : tour.price || '₹--'}
+                            {(() => {
+                              const minPrice = startingTourPrice(tour.pricing, vehicles);
+                              return minPrice > 0
+                                ? `₹${minPrice.toLocaleString('en-IN')}`
+                                : tour.price || '₹--';
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-4 mb-2 text-xs text-gray-600">

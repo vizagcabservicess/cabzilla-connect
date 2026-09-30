@@ -10,6 +10,9 @@ const BOOKING_SESSION_KEYS = [
   'tripType',
   'tripMode',
   'hourlyPackage',
+  'tourCartCheckout',
+  'tourCartPreferredVehicle',
+  'tourCartTripExtras',
 ] as const;
 
 export function clearBookingSessionStorage(): void {

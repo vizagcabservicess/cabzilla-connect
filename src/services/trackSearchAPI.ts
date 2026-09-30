@@ -4,6 +4,9 @@ import type { TripMode, TripType } from '@/lib/tripTypes';
 
 export type TrackVehicleFareLine = { name: string; fareText: string };
 
+/** Session: guest WhatsApp (E.164) after first successful entry — skip modal on later searches in this tab. */
+export const SESSION_GUEST_TRACK_PHONE_KEY = 'guestTrackWhatsAppE164';
+
 export type TrackSearchPayload = {
   guestPhone: string;
   pickup: string;
@@ -22,7 +25,136 @@ export type TrackSearchPayload = {
   carsShown: string[];
   /** Per-vehicle fares for backends that render multi-line results (e.g. Node track-search server). */
   vehicleFares?: TrackVehicleFareLine[];
+  /** Website URL that reopens this search (pickup, drop, date). */
+  searchSummaryUrl?: string;
 };
+
+function publicSiteOrigin(): string {
+  if (typeof window === 'undefined') return 'https://vizagtaxihub.com';
+  return window.location.origin.includes('localhost')
+    ? 'https://vizagtaxihub.com'
+    : window.location.origin.replace(/\/$/, '');
+}
+
+function slugifyPlaceName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function hasMapCoords(place?: { lat?: number; lng?: number } | null): boolean {
+  return Boolean(
+    place &&
+      Number.isFinite(place.lat) &&
+      Number.isFinite(place.lng) &&
+      !(place.lat === 0 && place.lng === 0)
+  );
+}
+
+function applyPlaceCoords(
+  url: URL,
+  pickup?: { lat?: number; lng?: number } | null,
+  drop?: { lat?: number; lng?: number } | null
+): void {
+  if (hasMapCoords(pickup) && pickup) {
+    url.searchParams.set('fromLat', String(pickup.lat));
+    url.searchParams.set('fromLng', String(pickup.lng));
+  }
+  if (hasMapCoords(drop) && drop) {
+    url.searchParams.set('toLat', String(drop.lat));
+    url.searchParams.set('toLng', String(drop.lng));
+  }
+}
+
+/** Prefill URL so WhatsApp “Search summary” opens the same trip on the website. */
+export function buildGuestSearchSummaryUrl(args: {
+  tripType: TripType;
+  tripMode?: TripMode;
+  pickup?: { name?: string; lat?: number; lng?: number } | null;
+  drop?: { name?: string; lat?: number; lng?: number } | null;
+  pickupDate?: Date | null;
+  returnDate?: Date | null;
+  hourlyPackage?: string;
+  tourHref?: string;
+  viaStops?: Array<{ name?: string; lat?: number; lng?: number } | null | undefined>;
+}): string {
+  const origin = publicSiteOrigin();
+  const pickupName = args.pickup?.name?.trim() || '';
+  const dropName = args.drop?.name?.trim() || pickupName;
+  const fromSlug = slugifyPlaceName(pickupName);
+  const toSlug = slugifyPlaceName(dropName);
+  const pickupDate = args.pickupDate instanceof Date && !Number.isNaN(args.pickupDate.getTime())
+    ? args.pickupDate
+    : null;
+  const returnDate = args.returnDate instanceof Date && !Number.isNaN(args.returnDate.getTime())
+    ? args.returnDate
+    : null;
+
+  switch (args.tripType) {
+    case 'outstation': {
+      const path = fromSlug && toSlug ? `/outstation-taxi/${fromSlug}-to-${toSlug}` : '/outstation-taxi';
+      const url = new URL(`${origin}${path}`);
+      applyPlaceCoords(url, args.pickup, args.drop);
+      if (pickupName) url.searchParams.set('fromName', pickupName);
+      if (dropName) url.searchParams.set('toName', dropName);
+      if (pickupDate) url.searchParams.set('date', pickupDate.toISOString());
+      if (args.tripMode) url.searchParams.set('mode', args.tripMode);
+      if (args.tripMode === 'round-trip' && returnDate) {
+        url.searchParams.set('returnDate', returnDate.toISOString());
+      }
+      const vias = (args.viaStops || [])
+        .filter((stop): stop is { name?: string; lat?: number; lng?: number } =>
+          Boolean(stop && String(stop.name || '').trim())
+        )
+        .map((stop) => ({
+          name: String(stop.name).trim(),
+          lat: Number(stop.lat) || 0,
+          lng: Number(stop.lng) || 0,
+        }));
+      if (vias.length > 0) {
+        url.searchParams.set('via', JSON.stringify(vias));
+      }
+      url.searchParams.set('auto', '1');
+      return url.toString();
+    }
+    case 'local': {
+      const url = new URL(`${origin}/local-taxi`);
+      if (fromSlug) url.searchParams.set('from', fromSlug);
+      if (toSlug) url.searchParams.set('to', toSlug);
+      applyPlaceCoords(url, args.pickup, args.drop);
+      if (pickupName) url.searchParams.set('fromName', pickupName);
+      if (dropName) url.searchParams.set('toName', dropName);
+      if (pickupDate) url.searchParams.set('date', pickupDate.toISOString());
+      if (args.hourlyPackage) url.searchParams.set('package', args.hourlyPackage);
+      url.searchParams.set('auto', '1');
+      return url.toString();
+    }
+    case 'airport': {
+      const url = new URL(`${origin}/airport-taxi`);
+      if (fromSlug) url.searchParams.set('from', fromSlug);
+      if (toSlug) url.searchParams.set('to', toSlug);
+      applyPlaceCoords(url, args.pickup, args.drop);
+      if (pickupName) url.searchParams.set('fromName', pickupName);
+      if (dropName) url.searchParams.set('toName', dropName);
+      if (pickupDate) url.searchParams.set('date', pickupDate.toISOString());
+      if (args.tripMode) url.searchParams.set('mode', args.tripMode);
+      url.searchParams.set('auto', '1');
+      return url.toString();
+    }
+    case 'tour':
+      return args.tourHref?.startsWith('http')
+        ? args.tourHref
+        : `${origin}${args.tourHref || '/tours'}`;
+    case 'custom':
+    case 'admin':
+      return `${origin}/`;
+    default: {
+      const unused: never = args.tripType;
+      return unused;
+    }
+  }
+}
 
 /** Stable id for pickup+drop so routed km is only reused for the same pair (avoids stale React `distance`). */
 export function buildGuestTrackRouteKey(

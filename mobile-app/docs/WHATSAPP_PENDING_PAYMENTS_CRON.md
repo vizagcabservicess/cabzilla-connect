@@ -8,51 +8,47 @@ In **Profile → Payments**, tap the **"Daily digest"** (WhatsApp) button in the
 
 ## Scheduled (cron)
 
-1. Set `ADMIN_CRON_SECRET` in your `.env` (a random string for security).
-2. Set `WHATSAPP_ADMIN_PHONES` (comma-separated E.164, e.g. `919966363662,918501234567`) or `WHATSAPP_ADMIN_PHONE` for a single number.
-3. In Hostinger → **Advanced → Cron Jobs**, do **not** use `wp-cron.php`. Point the job at the PHP files below.
+1. Set `ADMIN_CRON_SECRET` in `.env` (required).
+2. Set `WHATSAPP_ADMIN_PHONES` (comma-separated E.164, e.g. `919966363662`) or `WHATSAPP_ADMIN_PHONE`.
+3. In Hostinger → **Advanced → Cron Jobs**, **do not** use `wp-cron.php`.
+4. Prefer **PHP** (CLI), not **URL / wget**. Hostinger’s URL jobs drop `?secret=` and the script returns `Forbidden`.
 
-### Hostinger “PHP script” (recommended)
+### Hostinger “PHP” command (recommended)
 
-Query params are dropped in CLI. The scripts now authenticate automatically when Hostinger runs them as PHP CLI, as long as `ADMIN_CRON_SECRET` is set in `.env`.
+Point at the file under `public_html`. No query string needed; CLI is allowed when `ADMIN_CRON_SECRET` is set.
 
-Pick these files (browse under `public_html`):
-
-| Job | File | UTC time (7 AM / 7 PM IST) |
+| Job | File | UTC (7 AM / 7 PM IST) |
 |---|---|---|
-| Pending payments | `api/admin/send-pending-payments-whatsapp.php` | Minute `30`, Hour `1` |
+| Pending payments | `api/cron/pending-payments.php` | Minute `30`, Hour `1` |
 | Tomorrow’s trips | `api/cron/admin-tomorrow-reminder.php` | Minute `30`, Hour `13` |
 
-If the panel is IST instead of UTC: pending payments Hour `7` Minute `0`; tomorrow’s trips Hour `19` Minute `0`.
+If the panel is IST: pending payments Hour `7` Minute `0`; tomorrow’s trips Hour `19` Minute `0`.
 
-### curl / wget URL
+Example command:
+
+```bash
+/usr/bin/php /home/USER/domains/vizagtaxihub.com/public_html/api/cron/admin-tomorrow-reminder.php
+```
+
+### curl / wget URL (must include secret)
 
 Quote the URL. Use **non-www**.
 
 ```bash
 # Every day at 7:00 AM IST (use 30 1 * * * if the panel is UTC)
-0 7 * * * curl -fsSL "https://vizagtaxihub.com/api/admin/send-pending-payments-whatsapp.php?secret=YOUR_ADMIN_CRON_SECRET"
-```
+0 7 * * * curl -fsSL "https://vizagtaxihub.com/api/cron/pending-payments.php?secret=YOUR_ADMIN_CRON_SECRET"
 
-### Tomorrow's trips (same secret, 7:00 PM IST)
-
-```bash
-# IST crontab
+# Tomorrow's trips — 7:00 PM IST
 0 19 * * * curl -fsSL "https://vizagtaxihub.com/api/cron/admin-tomorrow-reminder.php?secret=YOUR_ADMIN_CRON_SECRET"
 
 # UTC crontab (7 PM IST = 13:30 UTC)
 30 13 * * * curl -fsSL "https://vizagtaxihub.com/api/cron/admin-tomorrow-reminder.php?secret=YOUR_ADMIN_CRON_SECRET"
 ```
 
-Also works: `/api/admin/send-tomorrow-admin-whatsapp.php?secret=YOUR_ADMIN_CRON_SECRET`
-
-Or using wget:
-
-```bash
-0 7 * * * wget -q -O - "https://vizagtaxihub.com/api/admin/send-pending-payments-whatsapp.php?secret=YOUR_ADMIN_CRON_SECRET"
-```
+Also works: `/api/admin/send-pending-payments-whatsapp.php?secret=…` and `/api/admin/send-tomorrow-admin-whatsapp.php?secret=…`
 
 ## Requirements
 
-- `send-whatsapp.php` and WhatsApp Cloud API must be configured (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID_PAYMENT or WHATSAPP_PHONE_NUMBER_ID).
-- Admin numbers must be in E.164 format (e.g. `919966363662` for +91 9966363662).
+- WhatsApp Cloud API: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID_TRIP` / `WHATSAPP_PHONE_NUMBER_ID_PAYMENT`.
+- Admin numbers in E.164 (e.g. `919966363662`).
+- After deploy, Upcoming trips shows **Auto cron: never** until the first CLI/URL run succeeds.

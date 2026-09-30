@@ -50,10 +50,21 @@ export function installScrollLockShiftFix(): () => void {
   document.addEventListener('pointerdown', onOpen, true);
   document.addEventListener('keydown', onOpen, true);
 
+  const pinHorizontalScroll = () => {
+    if (window.innerWidth >= 1024 || window.scrollX === 0) return;
+    window.scrollTo(0, window.scrollY);
+  };
+  window.addEventListener('scroll', pinHorizontalScroll, { passive: true });
+  window.visualViewport?.addEventListener('scroll', pinHorizontalScroll, { passive: true });
+  window.visualViewport?.addEventListener('resize', pinHorizontalScroll);
+
   return () => {
     obs.disconnect();
     document.removeEventListener('pointerdown', onOpen, true);
     document.removeEventListener('keydown', onOpen, true);
+    window.removeEventListener('scroll', pinHorizontalScroll);
+    window.visualViewport?.removeEventListener('scroll', pinHorizontalScroll);
+    window.visualViewport?.removeEventListener('resize', pinHorizontalScroll);
     applyNoShiftStyles(false);
   };
 }

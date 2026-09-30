@@ -164,6 +164,10 @@ export const GuestDetailsForm: React.FC<GuestDetailsFormProps> = ({
   const paymentMode = watch('paymentMode');
   const gstEnabled = watch('gstEnabled');
 
+  useEffect(() => {
+    setValue('totalPrice', totalPrice);
+  }, [totalPrice, setValue]);
+
   const handleCountryChange = useCallback(
     (country: CountryCode) => {
       setSelectedCountry(country);

@@ -1,6 +1,8 @@
 <?php
 require_once '../../config.php';
 require_once '../utils/auth.php'; // Ensure auth utilities are loaded
+require_once '../utils/tour_seo_cache.php';
+require_once '../utils/tour_fares_sort.php';
 
 // SECURITY FIX: Remove dangerous fallback function that granted admin access to anyone
 // CORS Headers - RESTRICTED for admin endpoints
@@ -14,6 +16,37 @@ header('Content-Type: application/json');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
+}
+
+function tour_fares_ensure_is_active_column(mysqli $conn): void
+{
+    $col = $conn->query("SHOW COLUMNS FROM tour_fares LIKE 'is_active'");
+    if ($col && $col->num_rows > 0) {
+        return;
+    }
+    $conn->query("ALTER TABLE tour_fares ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+}
+
+function tour_row_is_active(array $row): bool
+{
+    if (!array_key_exists('is_active', $row) || $row['is_active'] === null || $row['is_active'] === '') {
+        return true;
+    }
+    $value = $row['is_active'];
+    if (is_bool($value)) {
+        return $value;
+    }
+    return (int)$value === 1;
+}
+
+function request_has_bearer_token(): bool
+{
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    if (!is_array($headers)) {
+        $headers = [];
+    }
+    $auth = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+    return is_string($auth) && stripos($auth, 'Bearer ') === 0;
 }
 
 // Allow unauthenticated access for vehicles endpoint
@@ -44,7 +77,8 @@ if (
 
 // --- PUBLIC TOUR LIST ENDPOINT ---
 // This block is now before the admin check to allow public fetching of all tours.
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId'])) {
+// Public tour list (no JWT). Admin list with Bearer must not use this — it omitted isActive.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId']) && !request_has_bearer_token()) {
     try {
         $db_conn = getDbConnection();
         if (!$db_conn) {
@@ -52,7 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId'])) {
             exit;
         }
         
-        $tour_stmt = $db_conn->prepare("SELECT id, tour_id, tour_name, distance, days, description, image_url, time_duration FROM tour_fares ORDER BY tour_name");
+        tour_fares_ensure_is_active_column($db_conn);
+        tour_fares_ensure_sort_order_column($db_conn);
+        $tour_stmt = $db_conn->prepare("SELECT id, tour_id, tour_name, distance, days, description, image_url, time_duration, is_active, sort_order FROM tour_fares ORDER BY sort_order ASC, id ASC");
         $tour_stmt->execute();
         $tour_result = $tour_stmt->get_result();
 
@@ -67,6 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId'])) {
                 'description' => $tour_row['description'] ?? '',
                 'imageUrl' => $tour_row['image_url'] ?? '',
                 'timeDuration' => $tour_row['time_duration'] ?? '',
+                'isActive' => tour_row_is_active($tour_row),
+                'sortOrder' => intval($tour_row['sort_order'] ?? 0),
                 'pricing' => []
             ];
             
@@ -91,20 +129,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['tourId'])) {
     exit;
 }
 
-// Check authentication and admin role
-$headers = getallheaders();
-$isAdmin = false;
-
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-        $isAdmin = true;
-    }
-}
-
-if (!$isAdmin) {
+// Check authentication and admin role (admin + super_admin)
+if (!validateAdminAuth()) {
     sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
     exit;
 }
@@ -122,6 +148,7 @@ try {
         $tourId = isset($_GET['tourId']) ? $_GET['tourId'] : null;
         
         if ($tourId) {
+            tour_fares_ensure_is_active_column($conn);
             // Fetch a single tour by ID with ALL related data
             $stmt = $conn->prepare("SELECT * FROM tour_fares WHERE tour_id = ?");
             $stmt->bind_param("s", $tourId);
@@ -142,7 +169,7 @@ try {
                 'days' => intval($row['days']),
                 'description' => $row['description'] ?? '',
                 'imageUrl' => $row['image_url'] ?? '',
-                'isActive' => boolval($row['is_active']),
+                'isActive' => tour_row_is_active($row),
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at'],
                 'timeDuration' => $row['time_duration'] ?? '',
@@ -227,7 +254,9 @@ try {
             exit;
         } else {
             // This block is for fetching all tours within the admin context, which might have different requirements (e.g., include inactive tours)
-            $stmt = $conn->prepare("SELECT * FROM tour_fares ORDER BY tour_name");
+            tour_fares_ensure_is_active_column($conn);
+            tour_fares_ensure_sort_order_column($conn);
+            $stmt = $conn->prepare("SELECT * FROM tour_fares ORDER BY sort_order ASC, id ASC");
             $stmt->execute();
             $result = $stmt->get_result();
 
@@ -241,7 +270,8 @@ try {
                     'days' => intval($row['days']),
                     'description' => $row['description'] ?? '',
                     'imageUrl' => $row['image_url'] ?? '',
-                    'isActive' => boolval($row['is_active']),
+                    'isActive' => tour_row_is_active($row),
+                    'sortOrder' => intval($row['sort_order'] ?? 0),
                     'createdAt' => $row['created_at'],
                     'updatedAt' => $row['updated_at'],
                     'timeDuration' => $row['time_duration'] ?? '',
@@ -268,6 +298,31 @@ try {
     // Handle POST request - Add new tour
     else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requestData = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($requestData)) {
+            $requestData = [];
+        }
+
+        if (($requestData['action'] ?? '') === 'reorder') {
+            $tourIds = $requestData['tourIds'] ?? [];
+            if (!is_array($tourIds) || $tourIds === []) {
+                sendJsonResponse(['status' => 'error', 'message' => 'tourIds are required'], 400);
+                exit;
+            }
+            tour_fares_ensure_sort_order_column($conn);
+            $order = 1;
+            foreach ($tourIds as $orderedId) {
+                $orderedId = trim((string) $orderedId);
+                if ($orderedId === '') {
+                    continue;
+                }
+                $stmt = $conn->prepare("UPDATE tour_fares SET sort_order = ? WHERE tour_id = ?");
+                $stmt->bind_param("is", $order, $orderedId);
+                $stmt->execute();
+                $order++;
+            }
+            sendJsonResponse(['status' => 'success', 'message' => 'Tour order saved']);
+            exit;
+        }
         
         if (!isset($requestData['tourId']) || !isset($requestData['tourName'])) {
             sendJsonResponse(['status' => 'error', 'message' => 'Tour ID and name are required'], 400);
@@ -286,7 +341,13 @@ try {
         $inclusions = $requestData['inclusions'] ?? [];
         $exclusions = $requestData['exclusions'] ?? [];
         $itinerary = $requestData['itinerary'] ?? [];
-        
+        $isActive = array_key_exists('isActive', $requestData)
+            ? ((int)!empty($requestData['isActive']))
+            : 1;
+
+        tour_fares_ensure_is_active_column($conn);
+        $sortOrder = tour_fares_next_sort_order($conn);
+
         // Check if tour already exists
         $stmt = $conn->prepare("SELECT id FROM tour_fares WHERE tour_id = ?");
         $stmt->bind_param("s", $tourId);
@@ -298,8 +359,8 @@ try {
         }
         
         // Insert into tour_fares
-        $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url, time_duration) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssissss", $tourId, $tourName, $distance, $days, $description, $imageUrl, $timeDuration);
+        $stmt = $conn->prepare("INSERT INTO tour_fares (tour_id, tour_name, distance, days, description, image_url, time_duration, is_active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssissssii", $tourId, $tourName, $distance, $days, $description, $imageUrl, $timeDuration, $isActive, $sortOrder);
         $success = $stmt->execute();
         if (!$success) {
             throw new Exception("Failed to add new tour: " . $conn->error);
@@ -353,6 +414,7 @@ try {
             }
         }
         
+        vth_rebuild_tour_seo_cache($conn);
         sendJsonResponse(['status' => 'success', 'message' => 'Tour added successfully']);
     }
     // Handle PUT request - Update existing tour
@@ -364,6 +426,7 @@ try {
         }
         
         $tourId = $requestData['tourId'];
+        tour_fares_ensure_is_active_column($conn);
         $updateFields = [];
         $types = "";
         $values = [];
@@ -474,6 +537,7 @@ try {
             }
         }
         
+        vth_rebuild_tour_seo_cache($conn);
         sendJsonResponse(['status' => 'success', 'message' => 'Tour updated successfully']);
     }
     // Handle DELETE request - Delete tour
@@ -515,6 +579,7 @@ try {
             throw new Exception("Failed to delete tour: " . $conn->error);
         }
         
+        vth_rebuild_tour_seo_cache($conn);
         sendJsonResponse(['status' => 'success', 'message' => 'Tour deleted successfully']);
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);

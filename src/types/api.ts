@@ -294,6 +294,8 @@ export interface TourData {
   inclusions?: string[];
   exclusions?: string[];
   pricing?: { [vehicleId: string]: number };
+  isActive?: boolean;
+  sortOrder?: number;
 }
 
 export interface TourManagementRequest {
@@ -313,6 +315,7 @@ export interface TourManagementRequest {
   inclusions?: string[];
   exclusions?: string[];
   pricing?: { [vehicleId: string]: number };
+  isActive?: boolean;
 }
 
 export interface TourGalleryItem {

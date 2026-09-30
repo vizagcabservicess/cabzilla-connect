@@ -167,6 +167,10 @@ export default {
 			backdropBlur: {
 				'xs': '2px',
 			},
+			fontFamily: {
+				poppins: ['Poppins', 'Inter', 'sans-serif'],
+				script: ['"Great Vibes"', 'cursive'],
+			},
 			height: {
 				'screen-minus-header': 'calc(100vh - 4rem)'
 			}

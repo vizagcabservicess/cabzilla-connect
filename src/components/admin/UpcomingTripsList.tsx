@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { BookingDetailsModal } from './BookingDetailsModal';
 import { formatLocationForDisplay } from '@/utils/locationUtils';
+import { isTourBooking, resolveTourDestinationLabel } from '@/utils/tourConfirmationHelpers';
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import {
@@ -642,9 +643,15 @@ export function UpcomingTripsList() {
                         <div className="flex items-start gap-1">
                           <MapPin className="h-3.5 w-3.5 text-red-600 mt-0.5 shrink-0" />
                           <span>
-                            {formatLocationForDisplay(
-                              booking.dropLocation ?? booking.drop_location ?? '',
-                            ).name}
+                            {isTourBooking(
+                              String(booking.tripType ?? booking.trip_type ?? ''),
+                              booking.tour_id ?? booking.tourId,
+                              booking
+                            )
+                              ? resolveTourDestinationLabel(booking)
+                              : formatLocationForDisplay(
+                                  booking.dropLocation ?? booking.drop_location ?? '',
+                                ).name}
                           </span>
                         </div>
                       </div>

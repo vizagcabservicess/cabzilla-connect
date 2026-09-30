@@ -3,6 +3,35 @@ import { API_BASE_URL } from '@/config';
 import { getApiUrl } from '@/config/api';
 import { BookingRequest, BookingStatus, Booking } from '@/types/api';
 import { getRestrictedAirportRouteBlock } from '@/lib/restrictedAirportRoutes';
+import { isGenericTourName } from '@/utils/tourConfirmationHelpers';
+
+function withPersistedTourFields(bookingData: BookingRequest): BookingRequest {
+  const tripType = String(bookingData.tripType || '').toLowerCase();
+  const tourName = String(bookingData.tourName || '').trim();
+  const tourId = String(bookingData.tourId || '').trim();
+  if (tripType !== 'tour' && !tourId && !tourName) return bookingData;
+
+  const pickupHead = String(bookingData.pickupLocation || '').split(',')[0].trim().toLowerCase();
+  const dropHead = String(bookingData.dropLocation || '').split(',')[0].trim().toLowerCase();
+  let dropLocation = bookingData.dropLocation;
+  if (tourName && !isGenericTourName(tourName) && (!dropLocation || dropHead === pickupHead || isGenericTourName(dropHead))) {
+    dropLocation = tourName;
+  }
+
+  return {
+    ...bookingData,
+    dropLocation,
+    tourId: tourId || bookingData.tourId,
+    tourName: tourName || bookingData.tourName,
+    tour_id: tourId || bookingData.tourId,
+    tour_name: tourName || bookingData.tourName,
+    tour_duration: bookingData.tourDuration,
+    tour_days: bookingData.tourDays,
+    tour_itinerary: bookingData.tourItinerary,
+    tour_inclusions: bookingData.tourInclusions,
+    tour_exclusions: bookingData.tourExclusions,
+  } as BookingRequest;
+}
 
 // Helper function to create API URLs that work in both development and production
 const createApiUrl = (path) => {
@@ -167,9 +196,13 @@ export const bookingAPI = {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      const response = await axios.post(`${API_BASE_URL}/api/book.php`, bookingData, {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/book.php`,
+        withPersistedTourFields(bookingData),
+        {
         headers,
-      });
+      }
+      );
       
       // Note: Email confirmation is now sent only after successful payment verification
       // This prevents sending confirmation emails for failed payments
@@ -193,9 +226,13 @@ export const bookingAPI = {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      const response = await axios.post(`${API_BASE_URL}/api/admin/create-booking.php`, bookingData, {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/admin/create-booking.php`,
+        withPersistedTourFields(bookingData),
+        {
         headers,
-      });
+      }
+      );
       
       return response.data;
     } catch (error) {

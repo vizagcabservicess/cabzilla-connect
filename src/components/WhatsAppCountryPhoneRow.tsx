@@ -17,6 +17,7 @@ type Props = {
   disabled?: boolean;
   /** Defaults to "WhatsApp number" */
   label?: string;
+  hideLabel?: boolean;
 };
 
 export function WhatsAppCountryPhoneRow({
@@ -27,6 +28,7 @@ export function WhatsAppCountryPhoneRow({
   onPhoneDigitsChange,
   disabled = false,
   label = 'WhatsApp number',
+  hideLabel = false,
 }: Props) {
   const [countrySearchTerm, setCountrySearchTerm] = useState('');
   const [open, setOpen] = useState(false);
@@ -68,10 +70,12 @@ export function WhatsAppCountryPhoneRow({
   );
 
   return (
-    <div ref={rootRef} className="relative space-y-2">
-      <Label htmlFor={`${idPrefix}-phone`} className="text-[13px] font-semibold text-slate-700">
-        {label}
-      </Label>
+    <div ref={rootRef} className={cn('relative', hideLabel ? '' : 'space-y-2')}>
+      {hideLabel ? null : (
+        <Label htmlFor={`${idPrefix}-phone`} className="text-[13px] font-semibold text-slate-700">
+          {label}
+        </Label>
+      )}
 
       <div
         className={cn(
@@ -128,7 +132,7 @@ export function WhatsAppCountryPhoneRow({
                 placeholder="Search countries..."
                 value={countrySearchTerm}
                 onChange={(e) => setCountrySearchTerm(e.target.value)}
-                className="h-9 rounded-lg border-slate-200 pl-8 text-sm"
+                className="h-9 rounded-lg border-slate-200 pl-8 text-base md:text-sm"
                 autoFocus
               />
             </div>

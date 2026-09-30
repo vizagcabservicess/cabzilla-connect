@@ -1,27 +1,94 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, Users, Clock, Star, Shield, Plane, Tag } from 'lucide-react';
+import { Pagination } from 'swiper/modules';
+import { Card } from '@/components/ui/card';
+import { Award, Check, Flame, Leaf, MapPin, Plus, Shield, Sparkles } from 'lucide-react';
 import { tourAPI } from '@/services/api/tourAPI';
 import { Link } from 'react-router-dom';
 import { getTourUrl } from '@/utils/tourUrlUtils';
 import { SectionHeader } from '@/components/home/SectionHeader';
+import {
+  addTourToBookingWidget,
+  isTourBlockedByCart,
+  unselectTourFromBookingWidget,
+} from '@/lib/addTourToBookingWidget';
+import { useTourCart } from '@/hooks/useTourCart';
+import { startingTourPrice } from '@/lib/tourVehiclePrice';
+import { cn } from '@/lib/utils';
 
-// Import Swiper styles
 import 'swiper/css';
-import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
+function tourTitle(tour: Record<string, unknown>): string {
+  return String(tour.name || tour.tourName || 'Tour');
+}
+
+function tourImage(tour: Record<string, unknown>): string {
+  return String(tour.image || tour.imageUrl || '').trim();
+}
+
+function getPrice(tour: Record<string, unknown>): string {
+  const minPrice = startingTourPrice(tour.pricing as Record<string, number>) || Number(tour.minPrice) || 0;
+  if (minPrice > 0) return `₹${minPrice.toLocaleString('en-IN')}`;
+  return '₹--';
+}
+
+function getDays(tour: Record<string, unknown>): number {
+  return Number(tour.days) || 0;
+}
+
+function getCompactDuration(tour: Record<string, unknown>): string {
+  const days = getDays(tour);
+  if (days >= 2) return `${days}D / ${Math.max(1, days - 1)}N`;
+  const timeDuration = String(tour.timeDuration || '').trim().replace(/\s*\(.*?\)\s*/g, '');
+  if (timeDuration) return timeDuration;
+  return '1 Day';
+}
+
+function getFooterDuration(tour: Record<string, unknown>): string {
+  const days = getDays(tour);
+  if (days >= 2) {
+    const nights = Math.max(1, days - 1);
+    return `${days} Day${days > 1 ? 's' : ''} / ${nights} Night${nights > 1 ? 's' : ''}`;
+  }
+  return getCompactDuration(tour);
+}
+
+function getDescription(tour: Record<string, unknown>): string {
+  const raw = String(tour.description || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (raw) return raw;
+  return `Experience the best of ${tourTitle(tour)} with sightseeing, a private cab, and a local guide.`;
+}
+
+function getPromoBadge(tour: Record<string, unknown>): {
+  label: string;
+  className: string;
+  Icon: typeof Award;
+} {
+  const name = tourTitle(tour).toLowerCase();
+  const days = getDays(tour);
+  if (name.includes('temple') || name.includes('srikurmam') || name.includes('arasavalli')) {
+    return { label: 'Spiritual Journey', className: 'bg-violet-600', Icon: Sparkles };
+  }
+  if (days >= 3) {
+    return { label: 'Best Seller', className: 'bg-amber-500', Icon: Award };
+  }
+  if (days === 2) {
+    return { label: 'Most Popular', className: 'bg-orange-500', Icon: Flame };
+  }
+  return { label: 'Great for Day Trips', className: 'bg-emerald-600', Icon: Leaf };
+}
+
 export function DestinationsShowcase() {
+  const { items: cartItems, has: cartHas } = useTourCart();
   const [tours, setTours] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const swiperRef = useRef<any>(null);
-  const [isBeginning, setIsBeginning] = useState(true);
-  const [isEnd, setIsEnd] = useState(false);
   const [swiperInstance, setSwiperInstance] = useState<any>(null);
+  const swiperRef = useRef<any>(null);
 
   useEffect(() => {
     async function fetchTours() {
@@ -29,7 +96,7 @@ export function DestinationsShowcase() {
       try {
         const data = await tourAPI.getAvailableTours();
         setTours(data || []);
-      } catch (e) {
+      } catch {
         setTours([]);
       } finally {
         setLoading(false);
@@ -38,156 +105,122 @@ export function DestinationsShowcase() {
     fetchTours();
   }, []);
 
-  // Helper to get tour type/category
-  function getType(tour: any) {
-    if (tour.category) return tour.category.toLowerCase();
-    if (tour.name) return tour.name.toLowerCase();
-    return 'other';
-  }
-
-  // Helper to get price
-  function getPrice(tour: any) {
-    if (tour.pricing && Object.keys(tour.pricing).length > 0) {
-      const prices = Object.values(tour.pricing) as number[];
-      const minPrice = Math.min(...prices);
-      return `₹${minPrice.toLocaleString('en-IN')}`;
+  const browseTours = useMemo(() => {
+    const available: typeof tours = [];
+    const added: typeof tours = [];
+    for (const tour of tours) {
+      const title = tourTitle(tour);
+      const id = String(tour.id || tour.tourId || '');
+      if (cartHas(id, title)) {
+        added.push(tour);
+        continue;
+      }
+      if (!isTourBlockedByCart(id, title, cartItems)) {
+        available.push(tour);
+      }
     }
-    if (tour.minPrice) return `₹${tour.minPrice.toLocaleString('en-IN')}`;
-    return '₹--';
-  }
+    return [...available, ...added];
+  }, [tours, cartItems, cartHas]);
 
-  // Helper to get duration
-  function getDuration(tour: any) {
-    if (tour.timeDuration) return tour.timeDuration;
-    if (tour.days) return `${tour.days} day${tour.days > 1 ? 's' : ''}`;
-    return 'Full Day';
-  }
-
-  // Helper to get capacity
-  function getCapacity(tour: any) {
-    return tour.maxPeople ? `${tour.maxPeople} people` : '4 people';
-  }
-
-  // Helper to get bg gradient
-  function getBgGradient(type: string) {
-    if (type.toLowerCase().includes('valley') || type.toLowerCase().includes('araku')) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
-    if (type.toLowerCase().includes('city') || type.toLowerCase().includes('vizag')) return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
-    if (type.toLowerCase().includes('lambasingi') || type.toLowerCase().includes('mountain')) return 'bg-gradient-to-br from-slate-50 to-blue-50/40';
-    return 'bg-gradient-to-br from-[#F7FAFF] to-[#F0F5FF]';
-  }
-
-  // Helper to get promo code
-  function getPromoCode(tour: any, index: number) {
-    const type = getType(tour);
-    if (type.toLowerCase().includes('valley') || type.toLowerCase().includes('araku')) return 'ARAKU200';
-    if (type.toLowerCase().includes('city') || type.toLowerCase().includes('vizag')) return 'VIZAG300';
-    if (type.toLowerCase().includes('lambasingi') || type.toLowerCase().includes('mountain')) return 'LAMBA500';
-    return `TOUR${index + 1}00`;
-  }
-
-  // Helper to get highlights
-  function getHighlights(tour: any) {
-    if (tour.sightseeingPlaces && Array.isArray(tour.sightseeingPlaces)) {
-      return tour.sightseeingPlaces.slice(0, 2);
-    }
-    if (tour.inclusions && Array.isArray(tour.inclusions)) {
-      return tour.inclusions.slice(0, 2);
-    }
-    return ['Scenic Views', 'Local Guide'];
-  }
-
-  // Calculate the 4-card window behavior
   const ITEMS_PER_VIEW = 4;
-  const totalItems = tours.length;
-  
-  // Calculate if we should show navigation arrows
+  const totalItems = browseTours.length;
   const shouldShowNavigation = totalItems > ITEMS_PER_VIEW;
-  
-  // Calculate the current window start index
   const currentWindowStart = currentSlide;
   const currentWindowEnd = Math.min(currentWindowStart + ITEMS_PER_VIEW - 1, totalItems - 1);
-  
-  // Check if we're at the beginning or end
   const isAtBeginning = currentWindowStart === 0;
   const isAtEnd = currentWindowEnd === totalItems - 1;
-  
-  // Get the current 4-card window
-  const currentWindowItems = tours.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
+  const currentWindowItems = browseTours.slice(currentWindowStart, currentWindowStart + ITEMS_PER_VIEW);
 
   const renderTourCard = (tour: any, index: number) => {
     const tourUrl = getTourUrl(tour);
-    const tourType = getType(tour);
+    const title = tourTitle(tour);
+    const image = tourImage(tour);
+    const badge = getPromoBadge(tour);
+    const BadgeIcon = badge.Icon;
+    const tourKey = String(tour.id || tour.tourId || index);
+    const widgetId = String(tour.id || tour.tourId || '');
+    const inCart = cartHas(widgetId, title);
 
     return (
-      <Link
-        key={tour.id || index}
-        to={tourUrl}
-        className="block"
+      <Card
+        key={tourKey}
+        className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_14px_36px_rgba(15,23,42,0.12)]"
       >
-        <Card
-          className="group hover:shadow-xl transition-all duration-300 border border-slate-200/60 bg-white rounded-3xl overflow-hidden cursor-pointer relative h-[340px] shadow-[0_10px_32px_rgba(15,23,42,0.06)]"
-        >
-        <CardContent className="p-5 relative h-full flex flex-col">
-          {/* Background Pattern */}
-          <div className={`absolute inset-0 ${getBgGradient(tourType)} opacity-60`}></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/40 via-transparent to-blue-50/30"></div>
-
-          {/* Content */}
-          <div className="relative z-10 flex flex-col h-full">
-            {/* Category Tag */}
-            <div className="flex justify-between items-start mb-3">
-              <div className="home-soft-tag px-3 py-1 rounded-full text-xs font-medium">
-                {tour.name}
+        <Link to={tourUrl} className="flex min-h-0 flex-1 flex-col">
+          <div className="relative h-52 overflow-hidden">
+            {image ? (
+              <img
+                src={image}
+                alt={title}
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-slate-100">
+                <MapPin className="h-12 w-12 text-slate-400" />
               </div>
-            </div>
-
-            {/* Main Price and Duration Row */}
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-xl font-semibold tracking-tight text-slate-900 leading-tight">
-                {getPrice(tour)} Onwards
-              </h3>
-              <p className="text-sm text-slate-600 inline-flex items-center gap-2 bg-white/90 border border-slate-200 rounded-full px-3 py-1.5 font-medium shadow-sm">
-                {getDuration(tour)}
-              </p>
-            </div>
-
-            {/* Tour Image */}
-            <div className="flex-grow flex items-center justify-center mb-3">
-              {tour.image && typeof tour.image === 'string' && tour.image.trim() !== '' ? (
-                <img
-                  src={tour.image}
-                  alt={tour.name}
-                  className="w-full h-36 object-cover rounded-2xl shadow-sm"
-                  onError={e => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-              ) : (
-                <div className="w-full h-36 bg-slate-100 rounded-2xl flex items-center justify-center">
-                  <MapPin className="h-12 w-12 text-slate-400" />
-                </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/20" />
+            <span
+              className={cn(
+                'absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm',
+                badge.className
               )}
-            </div>
+            >
+              <BadgeIcon className="h-3.5 w-3.5" />
+              {badge.label}
+            </span>
+            <span className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-800 shadow-sm">
+              {getCompactDuration(tour)}
+            </span>
+          </div>
 
-            {/* Highlights */}
-            <div className="flex flex-wrap gap-2">
-              {getHighlights(tour).map((highlight: string, idx: number) => (
-                <div key={idx} className="text-xs text-slate-500 bg-white/80 border border-slate-100 px-2.5 py-1 rounded-full">
-                  {highlight}
-                </div>
-              ))}
+          <div className="flex flex-1 flex-col px-4 pb-3 pt-4">
+            <h3 className="line-clamp-2 text-base font-bold leading-snug text-slate-900">
+              {title}
+            </h3>
+            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-500">
+              {getDescription(tour)}
+            </p>
+            <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+              <p className="text-lg font-bold tracking-tight text-slate-900">
+                {getPrice(tour)}{' '}
+                <span className="text-sm font-medium text-slate-500">Onwards</span>
+              </p>
+              <p className="text-xs font-medium text-slate-500">{getFooterDuration(tour)}</p>
             </div>
           </div>
-        </CardContent>
+        </Link>
+
+        <div className="flex items-center gap-2 px-4 pb-4">
+          <button
+            type="button"
+            className={cn(
+              'flex h-11 flex-1 items-center justify-center gap-1.5 text-sm font-semibold transition-colors',
+              inCart
+                ? 'rounded-full bg-[#E7F8EF] text-emerald-700 hover:bg-[#d8f3e4]'
+                : 'rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+            )}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (inCart) {
+                unselectTourFromBookingWidget(tour);
+                return;
+              }
+              addTourToBookingWidget(tour);
+              setCurrentSlide(0);
+            }}
+          >
+            {inCart ? <Check className="h-4 w-4" strokeWidth={2.5} /> : <Plus className="h-4 w-4" />}
+            {inCart ? 'Added to My Trip' : 'Add to My Trip'}
+          </button>
+        </div>
       </Card>
-      </Link>
     );
   };
 
   const handleNext = () => {
     if (!isAtEnd) {
-      // Calculate the next window start
       const nextStart = Math.min(currentWindowStart + 1, totalItems - ITEMS_PER_VIEW);
       setCurrentSlide(nextStart);
     }
@@ -195,118 +228,125 @@ export function DestinationsShowcase() {
 
   const handlePrev = () => {
     if (!isAtBeginning) {
-      // Move back by 1
       const prevStart = Math.max(currentWindowStart - 1, 0);
       setCurrentSlide(prevStart);
     }
   };
 
   return (
-    <section className="home-section-band">
+    <section id="home-destinations" className="home-section-band">
       <div className="home-page-container">
         <SectionHeader
           eyebrow="DESTINATIONS"
           title="Explore Amazing Destinations"
-          subtitle="Discover the beauty of Andhra Pradesh with our carefully curated tour packages."
-        />
+          subtitle="Pick the tours you like and add them to your trip."
+        >
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {[
+              'Browse our packages',
+              'Tap + Add to trip',
+              'View or customize',
+            ].map((label) => (
+              <span
+                key={label}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        </SectionHeader>
 
-        {/* Loading State */}
         {loading ? (
           <div className="flex justify-center py-10">
             <MapPin className="h-8 w-8 animate-spin text-gray-400" />
           </div>
+        ) : browseTours.length === 0 ? (
+          <p className="rounded-2xl bg-white px-4 py-8 text-center text-sm text-slate-500">
+            No tour packages available right now. Please check back shortly.
+          </p>
         ) : (
           <>
-            {/* Desktop Layout - 4-card window with proper navigation */}
-            <div className="hidden lg:block mb-4 relative overflow-hidden">
-              <div className="flex gap-4 justify-center">
+            <div className="relative mb-4 hidden overflow-hidden lg:block">
+              <div className="flex justify-center gap-4">
                 {currentWindowItems.map((tour, index) => (
-                  <div key={tour.id || index} className="w-full max-w-[calc(25%-12px)]">
+                  <div key={tour.id || tour.tourId || index} className="w-full max-w-[calc(25%-12px)]">
                     {renderTourCard(tour, currentWindowStart + index)}
                   </div>
                 ))}
-                {/* Fill remaining slots with invisible cards to maintain 4-card layout */}
-                {currentWindowItems.length < ITEMS_PER_VIEW && 
+                {currentWindowItems.length < ITEMS_PER_VIEW &&
                   Array.from({ length: ITEMS_PER_VIEW - currentWindowItems.length }).map((_, index) => (
-                    <div key={`empty-${index}`} className="w-full max-w-[calc(25%-12px)] invisible">
-                      <div className="h-[320px]"></div>
+                    <div key={`empty-${index}`} className="invisible w-full max-w-[calc(25%-12px)]">
+                      <div className="h-[420px]" />
                     </div>
-                  ))
-                }
+                  ))}
               </div>
 
-              {/* Previous Arrow - only show if there are multiple slides and not at beginning */}
               {shouldShowNavigation && !isAtBeginning && (
                 <button
-                  className="absolute -left-5 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
+                  className="absolute -left-5 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                   onClick={handlePrev}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path d="M15 19l-7-7 7-7"/>
+                    <path d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
               )}
 
-              {/* Next Arrow - only show if there are multiple slides and not at end */}
               {shouldShowNavigation && !isAtEnd && (
                 <button
-                  className="absolute right-0 top-1/2 transform -translate-y-1/2 z-20 w-12 h-12 bg-white border border-slate-200 text-slate-600 shadow-md hover:bg-slate-50 rounded-full flex items-center justify-center transition-colors"
+                  className="absolute right-0 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md transition-colors hover:bg-slate-50"
                   onClick={handleNext}
                 >
                   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path d="M9 5l7 7-7 7"/>
+                    <path d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               )}
             </div>
 
-            {/* Tablet Layout - Grid with exactly 4 items */}
-            <div className="hidden md:block lg:hidden mb-4">
-              <div className="grid grid-cols-2 gap-4">
-                {tours.slice(0, 4).map((tour, index) => renderTourCard(tour, index))}
-              </div>
+            <div className="mb-4 hidden grid-cols-2 gap-4 md:grid lg:hidden">
+              {browseTours.slice(0, 4).map((tour, index) => renderTourCard(tour, index))}
             </div>
 
-            {/* Mobile Slider */}
-            <div className="md:hidden mb-4">
+            <div className="mb-4 md:hidden">
               <Swiper
                 modules={[Pagination]}
                 spaceBetween={12}
-                slidesPerView={1.2}
+                slidesPerView={1.15}
                 pagination={false}
-                onSwiper={setSwiperInstance}
+                onSwiper={(swiper) => {
+                  setSwiperInstance(swiper);
+                  swiperRef.current = swiper;
+                }}
                 onSlideChange={(swiper) => setCurrentSlide(swiper.activeIndex)}
                 className="destinations-swiper"
               >
-                {tours.map((tour, index) => (
-                  <SwiperSlide key={tour.id || index}>
+                {browseTours.map((tour, index) => (
+                  <SwiperSlide key={tour.id || tour.tourId || index} className="h-auto">
                     {renderTourCard(tour, index)}
                   </SwiperSlide>
                 ))}
               </Swiper>
-              
-              {/* Custom Pagination with Dots and Counter */}
-              <div className="flex justify-center items-center mt-4">
+
+              <div className="mt-4 flex items-center justify-center">
                 <div className="flex items-center gap-1">
-                  {tours.map((_, index) => {
-                    // Show the counter pill in place of the active dot
+                  {browseTours.map((_, index) => {
                     if (index === currentSlide) {
                       return (
-                        <div 
+                        <div
                           key={index}
-                          className="home-slider-dot-active px-3 py-1 rounded-full text-sm font-medium"
+                          className="home-slider-dot-active rounded-full px-3 py-1 text-sm font-medium"
                         >
-                          {currentSlide + 1}/{tours.length}
+                          {currentSlide + 1}/{browseTours.length}
                         </div>
                       );
                     }
-                    
-                    // Show regular dots for inactive slides
                     return (
                       <button
                         key={index}
                         onClick={() => swiperInstance?.slideTo(index)}
-                        className="w-2 h-2 bg-gray-300 opacity-60 rounded-full transition-all duration-200 hover:opacity-80"
+                        className="h-2 w-2 rounded-full bg-gray-300 opacity-60 transition-all duration-200 hover:opacity-80"
                       />
                     );
                   })}
@@ -316,9 +356,8 @@ export function DestinationsShowcase() {
           </>
         )}
 
-        {/* Bottom Info */}
-        <div className="text-center mt-4 bg-gray-50 rounded-2xl p-4">
-          <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
+        <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-center">
+          <div className="mb-2 flex items-center justify-center gap-2 text-green-600">
             <Shield className="h-5 w-5" />
             <span className="font-medium">Expert Guides</span>
           </div>
