@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { navigationRef } from './src/navigation/navigationRef';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from '@expo-google-fonts/inter/useFonts';
@@ -18,12 +19,25 @@ import { AuthProvider } from './src/providers/AuthProvider';
 import { PushNotificationBootstrap } from './src/components/PushNotificationBootstrap';
 import { DriverTripAssignmentOverlay } from './src/components/DriverTripAssignmentOverlay';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { EventDutyScreen } from './src/screens/EventDutyScreen';
+import { resumeEventDutyTrackingIfNeeded } from './src/lib/eventDutyLocationTask';
+import type { AppRootParamList } from './src/navigation/appRootTypes';
 
 WebBrowser.maybeCompleteAuthSession();
 
 SplashScreen.preventAutoHideAsync();
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+const AppStack = createNativeStackNavigator<AppRootParamList>();
+const linking = {
+  prefixes: ['vizagtaxihub://', 'https://www.vizagtaxihub.com', 'https://vizagtaxihub.com'],
+  config: {
+    screens: {
+      EventDuty: 'driver/register/:token',
+      Tabs: '',
+    },
+  },
+};
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -39,6 +53,10 @@ export default function App() {
     }
   }, [fontsLoaded, fontError]);
 
+  useEffect(() => {
+    void resumeEventDutyTrackingIfNeeded();
+  }, []);
+
   // Don't block app on font load failure (common on web)
   if (!fontsLoaded && !fontError) {
     return (
@@ -53,8 +71,11 @@ export default function App() {
       <AuthProvider>
         <PushNotificationBootstrap />
         <GoogleMapsProvider apiKey={GOOGLE_MAPS_API_KEY}>
-          <NavigationContainer ref={navigationRef}>
-            <RootNavigator />
+          <NavigationContainer ref={navigationRef} linking={linking}>
+            <AppStack.Navigator screenOptions={{ headerShown: false }}>
+              <AppStack.Screen name="Tabs" component={RootNavigator} />
+              <AppStack.Screen name="EventDuty" component={EventDutyScreen} />
+            </AppStack.Navigator>
           </NavigationContainer>
           {/* Modal must sit outside the navigator tree — otherwise some Android builds never show it above tabs */}
           <DriverTripAssignmentOverlay />

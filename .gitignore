@@ -26,7 +26,7 @@ vizagtaxihub-dist-upload.zip
 *.sw?
 
 # Backend PHP files
-src/backend/
+src/backend/**
 *.php
 
 # Email and notification files
@@ -37,7 +37,19 @@ src/backend/
 **/check-notifications.php
 
 # PHP templates
-**/php-templates/
+**/php-templates/**
+
+# Event & Duty Management — version this module only
+!src/backend/php-templates/
+!src/backend/php-templates/api/
+!src/backend/php-templates/api/admin/
+!src/backend/php-templates/api/admin/events.php
+!src/backend/php-templates/api/admin/event-assignments.php
+!src/backend/php-templates/api/admin/event-duties.php
+!src/backend/php-templates/api/admin/event-documents.php
+!src/backend/php-templates/api/admin/event-share.php
+!src/backend/php-templates/api/events/
+!src/backend/php-templates/api/events/**
 
 # Environment files - CRITICAL FOR SECURITY
 .env

@@ -405,7 +405,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               aria-label="Close date picker"
               onClick={() => setOpen(false)}
             />
-            <div className="relative flex max-h-[90vh] flex-col overflow-hidden rounded-t-[1.75rem] bg-white shadow-[0_-18px_50px_-20px_rgba(15,23,42,0.35)]">
+            <div className="relative mx-auto flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] bg-white shadow-[0_-18px_50px_-20px_rgba(15,23,42,0.35)]">
               <div className="flex shrink-0 justify-center pt-2.5 pb-1" aria-hidden>
                 <div className="h-1 w-10 rounded-full bg-slate-200" />
               </div>
@@ -582,7 +582,7 @@ export const DateTimePicker = forwardRef<DateTimePickerHandle, DateTimePickerPro
               {triggerContent}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="z-[10060] w-auto p-0" align="start">
+          <PopoverContent className="z-[10080] w-[20.5rem] p-0" align="start">
             {desktopPickerPanel}
           </PopoverContent>
         </Popover>

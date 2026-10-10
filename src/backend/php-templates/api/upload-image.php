@@ -59,6 +59,8 @@ if ($category === 'odometer' || $category === 'odometer_reading' || $category ==
     $folderPrefix = 'carpool-id/';
 } elseif (strpos($category, 'sb-vendor') === 0) {
     $folderPrefix = 'sb-vendor/';
+} elseif (strpos($category, 'vth-event') === 0) {
+    $folderPrefix = 'vth-event-private/';
 }
 
 $fileBase = ($folderPrefix === 'odometer-readings/' ? 'odo_' : 'img_') . uniqid('', true) . '.' . $ext;
@@ -180,6 +182,37 @@ if ($category === 'site-banner' || $category === 'site-notice' || $category === 
     echo json_encode([
         'url' => '/uploads/site-banners/' . $fileBase,
         'object' => $objectName,
+    ]);
+    exit;
+}
+
+/**
+ * Event & Duty private documents — never expose a public /uploads URL.
+ */
+if (strpos($category, 'vth-event') === 0) {
+    $privateRoot = rtrim($uploadsRoot, '/\\') . '/vth-event-private';
+    if (!is_dir($privateRoot)) {
+        @mkdir($privateRoot, 0700, true);
+    }
+    $ht = $privateRoot . '/.htaccess';
+    if (!is_file($ht)) {
+        @file_put_contents($ht, "Require all denied\nDeny from all\nOptions -Indexes\n");
+    }
+    $relDir = date('Y/m');
+    $localDir = $privateRoot . '/' . $relDir;
+    if (!is_dir($localDir)) {
+        @mkdir($localDir, 0700, true);
+    }
+    $fileBase = 'evt_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    $localPath = $localDir . '/' . $fileBase;
+    if (!move_uploaded_file($tmpPath, $localPath)) {
+        echo json_encode(['error' => 'Failed to save private document']);
+        exit;
+    }
+    @chmod($localPath, 0600);
+    echo json_encode([
+        'object' => 'vth-event-private/' . $relDir . '/' . $fileBase,
+        'private' => true,
     ]);
     exit;
 }

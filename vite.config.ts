@@ -1,10 +1,73 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import https from "node:https";
 import { componentTagger } from "lovable-tagger";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { VEHICLE_EMBED_CONFIGS } from "./src/seo/vehicleEmbedMeta";
+
+function sniffMediaType(buf: Buffer): string {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 4 && buf.toString("ascii", 0, 4) === "%PDF") return "application/pdf";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return "application/octet-stream";
+}
+
+function eventMediaProxy(): Plugin {
+  return {
+    name: "event-media-proxy",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.originalUrl || req.url || "";
+        if (!url.startsWith("/api/events/media.php") && !url.startsWith("/api/events/duty-slip-pdf.php")) {
+          next();
+          return;
+        }
+        if (req.method === "OPTIONS") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+        const target = new URL(url, "https://www.vizagtaxihub.com");
+        const headers: Record<string, string> = {
+          host: "www.vizagtaxihub.com",
+          "accept-encoding": "identity",
+        };
+        const auth = req.headers.authorization;
+        if (typeof auth === "string") headers.authorization = auth;
+        const cookie = req.headers.cookie;
+        if (typeof cookie === "string") headers.cookie = cookie;
+        https.get(target, { headers }, (up) => {
+          const chunks: Buffer[] = [];
+          up.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+          up.on("end", () => {
+            let out = Buffer.concat(chunks);
+            if (out.length && out[0] === 0x7b) {
+              try {
+                const json = JSON.parse(out.toString("utf8")) as { data?: string; mime?: string };
+                if (json.data) out = Buffer.from(json.data, "base64");
+              } catch {
+                /* keep raw */
+              }
+            }
+            const mime = sniffMediaType(out);
+            res.statusCode = up.statusCode || 200;
+            res.setHeader("Content-Type", mime);
+            res.setHeader("Content-Length", String(out.length));
+            res.setHeader("Cache-Control", "private, no-store");
+            res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "http://localhost:8080");
+            res.end(out);
+          });
+        }).on("error", () => {
+          res.statusCode = 502;
+          res.end("Media proxy failed");
+        });
+      });
+    },
+  };
+}
 
 function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -102,6 +165,26 @@ export default defineConfig(({ mode }) => ({
         timeout: 30_000,
         rewrite: (p) => p.replace(/^\/va-ws/, '/ws'),
       },
+      '/api/events/media.php': {
+        target: 'https://www.vizagtaxihub.com',
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('accept-encoding', 'identity');
+          });
+        },
+      },
+      '/api/events/duty-slip-pdf.php': {
+        target: 'https://www.vizagtaxihub.com',
+        changeOrigin: true,
+        secure: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('accept-encoding', 'identity');
+          });
+        },
+      },
       '/api': {
         target: 'https://www.vizagtaxihub.com',
         changeOrigin: true,
@@ -158,6 +241,7 @@ export default defineConfig(({ mode }) => ({
     '__BUILD_TIME__': JSON.stringify(Date.now()),
   },
   plugins: [
+    eventMediaProxy(),
     react(),
     mode === 'development' &&
     componentTagger(),

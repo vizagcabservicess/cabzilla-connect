@@ -3,7 +3,6 @@ import { createBrowserRouter, Outlet, useLocation, useSearchParams, Navigate } f
 import { vehicleLoader } from './loaders/vehicleLoader';
 import { lazy, Suspense, startTransition, useEffect } from 'react';
 import { ScrollToTop } from './components/ScrollToTop';
-import { MyTourListPanel } from './components/tour/MyTourListPanel';
 import { AdminProtectedRoute } from './components/ProtectedRoute';
 import { RedirectHandler } from './components/RedirectHandler';
 import { useAuth } from './providers/AuthProvider';
@@ -15,20 +14,11 @@ import { trackContactCta } from './utils/trackContactCta';
 import { lazyWithRetry } from './utils/dynamicImportRetry';
 import DynamicImportErrorBoundary from './components/DynamicImportErrorBoundary';
 import { RouteErrorFallback } from './components/ErrorBoundary';
-import Index from './pages/Index';
-import { applySharedBuildTrip, isBuildTripDeepLink } from './lib/buildYourTrip';
 
-if (typeof window !== 'undefined') {
-  try {
-    const bootParams = new URLSearchParams(window.location.search);
-    if (isBuildTripDeepLink(bootParams)) applySharedBuildTrip(bootParams);
-  } catch {
-    /* ignore */
-  }
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('buildTrip') === '1') {
+  const bootParams = new URLSearchParams(window.location.search);
+  void import('./lib/buildYourTrip').then(({ applySharedBuildTrip }) => applySharedBuildTrip(bootParams));
 }
-import VehicleDetailPage from '@/pages/VehicleDetailPage';
-import SmartBudgetVendorAuthLayout from './pages/smart-budget/SmartBudgetVendorAuthLayout';
-import SmartBudgetCustomerAuthLayout from './pages/smart-budget/SmartBudgetCustomerAuthLayout';
 
 const NotFound = lazy(() => import('./pages/NotFound'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -120,8 +110,18 @@ const GroupToursManagementPage = lazy(() => import('./pages/admin/GroupToursMana
 const SharedCarpoolingAdminPage = lazy(() => import('./pages/admin/SharedCarpoolingAdminPage'));
 const SearchAlertsPage = lazy(() => import('./pages/admin/SearchAlertsPage'));
 const SmartBudgetPage = lazy(() => import('./pages/admin/SmartBudgetPage'));
-import LiveChatWidget from './components/visitor-analytics/chat/LiveChatWidget';
-import { SitePromoPopup } from './components/promos/SitePromoPopup';
+const EventsPage = lazy(() => import('./pages/admin/EventsPage'));
+const EventDetailPage = lazy(() => import('./pages/admin/EventDetailPage'));
+const EventDailyReportPage = lazy(() => import('./pages/admin/EventDailyReportPage'));
+const DriverPortalPage = lazy(() => import('./pages/event-duty/DriverPortalPage'));
+const EventSharePage = lazy(() => import('./pages/event-duty/EventSharePage'));
+const Index = lazy(() => import('./pages/Index'));
+const VehicleDetailPage = lazy(() => import('@/pages/VehicleDetailPage'));
+const SmartBudgetVendorAuthLayout = lazy(() => import('./pages/smart-budget/SmartBudgetVendorAuthLayout'));
+const SmartBudgetCustomerAuthLayout = lazy(() => import('./pages/smart-budget/SmartBudgetCustomerAuthLayout'));
+const MyTourListPanel = lazy(() => import('./components/tour/MyTourListPanel').then((m) => ({ default: m.MyTourListPanel })));
+const LiveChatWidget = lazy(() => import('./components/visitor-analytics/chat/LiveChatWidget'));
+const SitePromoPopup = lazy(() => import('./components/promos/SitePromoPopup').then((m) => ({ default: m.SitePromoPopup })));
 const OfferCampaignsAdminPage = lazy(() => import('./pages/admin/OfferCampaignsAdminPage'));
 const PromosAdminPage = lazy(() => import('./pages/admin/PromosAdminPage'));
 const VisitorAnalyticsPage = lazy(() => import('./pages/admin/visitor-analytics/VisitorAnalyticsPage'));
@@ -334,6 +334,10 @@ function Root() {
     }
   }, [location.pathname]);
 
+  const publicChrome = !location.pathname.startsWith('/admin')
+    && !location.pathname.startsWith('/driver/register')
+    && !location.pathname.startsWith('/event/share');
+
   return (
     <>
       <ScrollToTop />
@@ -343,12 +347,14 @@ function Root() {
         </Suspense>
       </RedirectHandler>
       
-      {!location.pathname.startsWith('/admin') &&
-        searchParams.get('search') !== '1' &&
-        searchParams.get('step') !== 'guest' && <MyTourListPanel />}
+      {publicChrome && searchParams.get('search') !== '1' && searchParams.get('step') !== 'guest' && (
+        <Suspense fallback={null}>
+          <MyTourListPanel />
+        </Suspense>
+      )}
 
       {/* Global WhatsApp Floating Button - Desktop Only (public pages) */}
-      {!location.pathname.startsWith('/admin') && (
+      {publicChrome && (
       <div className="hidden md:block fixed right-6 bottom-6 z-50">
         <Button
           onClick={handleWhatsApp}
@@ -362,12 +368,12 @@ function Root() {
       )}
 
       {/* VTH AI travel assistant — bottom left */}
-      {!location.pathname.startsWith('/admin') && (
-        <LiveChatWidget position="bottom-left" />
+      {publicChrome && (
+        <Suspense fallback={null}>
+          <LiveChatWidget position="bottom-left" />
+          <SitePromoPopup enabled />
+        </Suspense>
       )}
-
-      {/* Admin-managed promo banner popup (public pages only) */}
-      {!location.pathname.startsWith('/admin') && <SitePromoPopup enabled />}
     </>
   );
 }
@@ -380,7 +386,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Index />,
+        element: <LazyRoute component={Index} />,
       },
       {
         path: 'login',
@@ -526,6 +532,18 @@ const router = createBrowserRouter([
           {
             path: 'operator-profiles',
             element: <OperatorProfilesPage />,
+          },
+          {
+            path: 'events',
+            element: <EventsPage />,
+          },
+          {
+            path: 'events/:eventId',
+            element: <EventDetailPage />,
+          },
+          {
+            path: 'events/:eventId/daily-report',
+            element: <EventDailyReportPage />,
           },
         ]
       },
@@ -696,7 +714,7 @@ const router = createBrowserRouter([
       {
         path: 'vehicle/:vehicleSlug',
         loader: vehicleLoader,
-        element: <VehicleDetailPage />,
+        element: <LazyRoute component={VehicleDetailPage} />,
       },
       {
         path: 'fleet',
@@ -716,6 +734,14 @@ const router = createBrowserRouter([
         element: <LazyRoute component={SharedCarpoolingLandingPage} />,
       },
       {
+        path: 'driver/register/:token',
+        element: <LazyRoute component={DriverPortalPage} />,
+      },
+      {
+        path: 'event/share/:token',
+        element: <LazyRoute component={EventSharePage} />,
+      },
+      {
         path: 'smart-budget/s/:token',
         element: <LazyRoute component={SmartBudgetCustomerSessionPage} />,
       },
@@ -729,7 +755,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'smart-budget/customer',
-        element: <SmartBudgetCustomerAuthLayout />,
+        element: <LazyRoute component={SmartBudgetCustomerAuthLayout} />,
         children: [
           {
             index: true,
@@ -755,7 +781,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'smart-budget/vendor',
-        element: <SmartBudgetVendorAuthLayout />,
+        element: <LazyRoute component={SmartBudgetVendorAuthLayout} />,
         children: [
           {
             index: true,

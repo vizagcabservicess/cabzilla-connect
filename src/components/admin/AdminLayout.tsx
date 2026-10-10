@@ -11,7 +11,7 @@ export default function AdminLayout({ children, activeTab }: { children: React.R
   const toggleMobileSidebar = () => setIsMobileSidebarOpen((open) => !open);
 
   return (
-    <div className="flex flex-col md:flex-row bg-background min-h-screen">
+    <div className="flex min-h-screen max-w-full flex-col overflow-x-hidden bg-background md:flex-row">
       {/* Mobile header with menu toggle */}
       <div className="md:hidden flex items-center justify-between p-4 bg-card border-b shadow-sm sticky top-0 z-50">
         <div className="flex items-center space-x-2">

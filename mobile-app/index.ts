@@ -1,4 +1,5 @@
 import './src/pushNotificationInit';
+import './src/lib/eventDutyLocationTask';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

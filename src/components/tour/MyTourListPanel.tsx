@@ -252,13 +252,13 @@ export function MyTourListPanel() {
   useEffect(() => {
     const hotel = airportHotelName(airportTransfers);
     const fromAirport = airportTransfers.find((transfer) => transfer.direction === 'from-airport');
-    const clamped =
-      airportTransfers.some((transfer) => transfer.direction === 'from-airport')
-        ? clampTripAfterFromAirports(tripPlan, airportTransfers)
-        : tripPlan.pickupDate
-          ? clampToLeadTime(tripPlan)
-          : tripPlan;
+    const hasFromAirport = Boolean(fromAirport);
     setTripPlan((current) => {
+      const clamped = hasFromAirport
+        ? clampTripAfterFromAirports(current, airportTransfers)
+        : current.pickupDate
+          ? clampToLeadTime(current)
+          : current;
       let changed = false;
       const next = { ...current };
       if (
@@ -269,24 +269,26 @@ export function MyTourListPanel() {
         next.pickupTime = clamped.pickupTime;
         changed = true;
       }
-      if (hotel && current.pickupLocation !== hotel) {
+      if (hotel && !current.pickupLocation.trim()) {
         next.pickupLocation = hotel;
         next.pickupPlace = fromAirport?.place || current.pickupPlace;
         changed = true;
       }
+      const saved = changed ? next : current;
+      if (saved.pickupDate) {
+        try {
+          const [year, month, day] = saved.pickupDate.split('-').map(Number);
+          const [hours, minutes] = (saved.pickupTime || '00:00').split(':').map(Number);
+          sessionStorage.setItem(
+            'pickupDate',
+            JSON.stringify(new Date(year, month - 1, day, hours || 0, minutes || 0, 0, 0))
+          );
+        } catch {
+          /* ignore */
+        }
+      }
       return changed ? next : current;
     });
-    if (!clamped.pickupDate) return;
-    try {
-      const [year, month, day] = clamped.pickupDate.split('-').map(Number);
-      const [hours, minutes] = (clamped.pickupTime || '00:00').split(':').map(Number);
-      sessionStorage.setItem(
-        'pickupDate',
-        JSON.stringify(new Date(year, month - 1, day, hours || 0, minutes || 0, 0, 0))
-      );
-    } catch {
-      /* ignore */
-    }
   }, [airportTransfers]);
 
   useEffect(() => {

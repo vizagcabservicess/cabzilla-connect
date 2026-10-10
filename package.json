@@ -21,7 +21,8 @@
     "build:analytics": "npm --prefix visitor-analytics run build",
     "test:ai-lead": "npm --prefix visitor-analytics run test:ai-lead",
     "test:checkout-prefill": "npx tsx src/lib/vthAiCheckoutPrefill.selftest.ts",
-    "test:vth-ai": "npm run test:ai-lead && npm run test:checkout-prefill"
+    "test:vth-ai": "npm run test:ai-lead && npm run test:checkout-prefill",
+    "test:event-duty": "npx tsx --tsconfig tsconfig.json src/lib/eventDuty.selftest.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

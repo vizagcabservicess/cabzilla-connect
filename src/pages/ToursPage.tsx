@@ -81,6 +81,7 @@ const ToursPage = () => {
     tourNotFound?: string;
     cartTourIds?: string[];
     proceedCheckout?: boolean;
+    proceedAt?: number;
     preferredVehicleId?: string;
     preferredVehicleName?: string;
   } | null;
@@ -93,7 +94,7 @@ const ToursPage = () => {
     locationState?.pickupLocation || null
   );
   const [pickupDate, setPickupDate] = useState<Date | undefined>(() => {
-    const fromNav = coerceTripDate(locationState?.pickupDate);
+    const fromNav = locationState?.pickupDate ? coerceTripDate(locationState.pickupDate) : undefined;
     if (fromNav) return fromNav;
     try {
       const raw = sessionStorage.getItem('pickupDate');
@@ -264,21 +265,33 @@ const ToursPage = () => {
         });
         setDatesByTourId((current) => {
           const fallback = fallbackDate;
+          const savedDates = snapshotMatches && snapshot ? snapshot.datesByTourId : null;
+          const snapshotAligns =
+            Boolean(savedDates) &&
+            scoped.some((tour) => {
+              const saved = savedDates?.[tour.tourId];
+              if (!saved) return false;
+              return Math.abs(coerceTripDate(saved).getTime() - fallback.getTime()) < 60 * 1000;
+            });
           if (Object.keys(current).length > 0) {
             const next = { ...current };
             for (const tour of scoped) {
               if (!next[tour.tourId]) next[tour.tourId] = fallback;
+            }
+            const anchor = next[scoped[0].tourId];
+            if (anchor && Math.abs(anchor.getTime() - fallback.getTime()) >= 60 * 1000) {
+              return staggeredTourDates(scoped, fallback);
             }
             if (collidingTourDateIds(scoped, next, fallback).size > 0) {
               return staggeredTourDates(scoped, fallback);
             }
             return next;
           }
-          if (snapshotMatches && snapshot.datesByTourId) {
+          if (snapshotAligns && savedDates) {
             const restored = Object.fromEntries(
               scoped.map((tour) => [
                 tour.tourId,
-                coerceTripDate(snapshot.datesByTourId[tour.tourId], fallback),
+                coerceTripDate(savedDates[tour.tourId], fallback),
               ])
             );
             if (collidingTourDateIds(scoped, restored, fallback).size > 0) {
@@ -381,7 +394,7 @@ const ToursPage = () => {
   useEffect(() => {
     if (!isCartSearch) return;
     if (!pickupLocation || !pickupDate) return;
-    if (locationState?.proceedCheckout && !searchInitiated) return;
+    if (locationState?.proceedCheckout) return;
     void handleSearchTours();
   }, [isCartSearch, navPickupKey, navDateKey, cartTourKey, handleSearchTours]);
 
@@ -407,6 +420,9 @@ const ToursPage = () => {
 
   useEffect(() => {
     if (!locationState?.proceedCheckout || !isCartSearch) return;
+    if (locationState.pickupLocation) setPickupLocation(locationState.pickupLocation);
+    if (locationState.pickupDate) setPickupDate(coerceTripDate(locationState.pickupDate));
+    setDatesByTourId({});
     setSearchInitiated(false);
     setShowSearchForm(true);
     setIsSearchActive(false);
@@ -418,7 +434,7 @@ const ToursPage = () => {
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [locationState?.proceedCheckout, cartTourKey, isCartSearch]);
+  }, [locationState?.proceedAt, locationState?.proceedCheckout, cartTourKey, isCartSearch]);
 
   const handleTourSelect = (tour: TourListItem) => {
     if (isCartSearch) {

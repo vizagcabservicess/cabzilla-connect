@@ -25,6 +25,8 @@ export const AVAILABLE_MODULES: ModulePrivilege[] = [
   { id: 'drivers_view', name: 'View Drivers', description: 'View driver information', category: 'fleet' },
   { id: 'drivers_manage', name: 'Manage Drivers', description: 'Add, edit, delete drivers', category: 'fleet' },
   { id: 'fleet_management', name: 'Fleet Management', description: 'Access fleet management module', category: 'fleet' },
+  { id: 'events_view', name: 'View Events', description: 'View event and duty management', category: 'fleet' },
+  { id: 'events_manage', name: 'Manage Events', description: 'Create events, assign vehicles/drivers and manage duties', category: 'fleet' },
   
   // Financial
   { id: 'fares_view', name: 'View Fares', description: 'View pricing and fares', category: 'financial' },

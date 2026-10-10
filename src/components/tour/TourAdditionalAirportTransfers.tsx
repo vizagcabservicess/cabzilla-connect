@@ -10,7 +10,7 @@ import { isAirportTransferOtherEnd, isVizagAirportLocation } from '@/lib/inferTr
 import { getVizagAirportLocations, type Location } from '@/lib/locationData';
 import { isSelectedMapLocation } from '@/lib/locationUtils';
 import { cn } from '@/lib/utils';
-import { earliestPickupInstant, separateAirportAndTrip, type PlanWhen } from '@/lib/tourScheduleTimes';
+import { earliestPickupInstant, planInstant, separateAirportAndTrip, type PlanWhen } from '@/lib/tourScheduleTimes';
 import { getAirportFaresForVehicle } from '@/services/fareService';
 import type { AirportFare, CabType } from '@/types/cab';
 import { normalizeVehicleId } from '@/utils/safeStringUtils';
@@ -195,8 +195,11 @@ function AirportTransferWhen({
   }, [showPicker]);
 
   const openWhen = () => {
-    if (showPicker) pickerRef.current?.open();
-    else setShowPicker(true);
+    if (showPicker) {
+      window.setTimeout(() => pickerRef.current?.open(), 30);
+      return;
+    }
+    setShowPicker(true);
   };
   const dateLabel = travelDate
     ? `${travelDate.getDate()} ${WHEN_MONTHS[travelDate.getMonth()]}, ${travelDate.getFullYear()}`
@@ -391,7 +394,13 @@ export function TourAdditionalAirportTransfers({
       }
       return changed ? next : current;
     });
-    if (tripPatch) onTripScheduleChange?.(tripPatch);
+    const patch: PlanWhen | null = tripPatch;
+    if (!patch) return;
+    const nextAt = planInstant(patch.pickupDate, patch.pickupTime);
+    const currentAt = planInstant(tripStartDate, tripStartTime);
+    if (!currentAt || (nextAt && nextAt.getTime() > currentAt.getTime())) {
+      onTripScheduleChange?.(patch);
+    }
   }, [tripStartDate, tripStartTime, tripDayCount, onTripScheduleChange]);
 
   const updateLeg = (id: string, patch: Partial<AirportTransferLeg>) => {

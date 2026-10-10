@@ -69,7 +69,9 @@ import {
   moveListItem,
   normalizeQuoteItinerary,
   padPlacesByDay,
+  quoteItineraryMatchesTour,
 } from '@/lib/tourQuoteItinerary';
+import { generateTourUrl, getTourIdVariantsForSlug } from '@/utils/tourUrlUtils';
 import { cn } from '@/lib/utils';
 import {
   defaultTourQuoteAdjustments,
@@ -585,7 +587,9 @@ export function TripPlanFields({
           <div className="relative grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => pickerRef.current?.open()}
+              onClick={() => {
+                window.setTimeout(() => pickerRef.current?.open(), 30);
+              }}
               className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left"
             >
               {menuFields ? <Calendar className="h-4 w-4 shrink-0 text-slate-500" /> : null}
@@ -605,7 +609,9 @@ export function TripPlanFields({
             </button>
             <button
               type="button"
-              onClick={() => pickerRef.current?.open()}
+              onClick={() => {
+                window.setTimeout(() => pickerRef.current?.open(), 30);
+              }}
               className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-left"
             >
               {menuFields ? <Clock className="h-4 w-4 shrink-0 text-slate-500" /> : null}
@@ -749,7 +755,11 @@ export function buildTripSchedule(
 
 function isOutsideTripSheet(target: EventTarget | null): boolean {
   const node = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
-  return Boolean(node?.closest('.location-search-sheet, .pac-container, .datetime-picker-sheet'));
+  return Boolean(
+    node?.closest(
+      '.location-search-sheet, .pac-container, .datetime-picker-sheet, [data-radix-popper-content-wrapper]'
+    )
+  );
 }
 
 export function TourCartQuotationDialog({
@@ -767,34 +777,48 @@ export function TourCartQuotationDialog({
   const [busy, setBusy] = useState<'download' | 'share' | null>(null);
   const [inclusions, setInclusions] = useState<TourQuoteInclusions>(() => defaultTourQuoteInclusions());
   const [lastDropPlace, setLastDropPlace] = useState<Location | undefined>();
-  const airportLocations = getVizagAirportLocations();
+  const quoteRef = useRef(quote);
+  quoteRef.current = quote;
+  const onTripPlanChangeRef = useRef(onTripPlanChange);
+  onTripPlanChangeRef.current = onTripPlanChange;
+  const airportSyncKey = (quote.airportTransfers || [])
+    .map((transfer) =>
+      [transfer.direction, transfer.pickupDate, transfer.pickupTime, transfer.placeName, transfer.place?.id || ''].join(
+        '|'
+      )
+    )
+    .join('~');
 
   useEffect(() => {
     if (!open) return;
-    const fromAirport = (quote.airportTransfers || []).find(
+    const currentQuote = quoteRef.current;
+    const transfers = currentQuote.airportTransfers || [];
+    const fromAirport = transfers.find(
       (transfer) => transfer.direction === 'from-airport' && (transfer.place || transfer.placeName)
     );
-    const toAirport = (quote.airportTransfers || []).find((transfer) => transfer.direction === 'to-airport');
-    if (fromAirport && onTripPlanChange) {
-      const plan = resolvedTripPlan(quote);
+    const toAirport = transfers.find((transfer) => transfer.direction === 'to-airport');
+    if (fromAirport) {
+      const plan = resolvedTripPlan(currentQuote);
       const hotelName = fromAirport.placeName || fromAirport.place?.name || '';
       const nextPlace = fromAirport.place;
-      const clamped = clampTripAfterFromAirports(plan, quote.airportTransfers || []);
-      if (
-        hotelName && (plan.pickupLocation !== hotelName || (!plan.pickupPlace?.id && nextPlace?.id))
-        || clamped.pickupDate !== plan.pickupDate
-        || clamped.pickupTime !== plan.pickupTime
-      ) {
-        onTripPlanChange({
+      const clamped = clampTripAfterFromAirports(plan, transfers);
+      const hotelInRange = Boolean(nextPlace?.id && isWithinTourPickupRadius(nextPlace));
+      const fillPickup = !plan.pickupLocation.trim() && Boolean(hotelName);
+      const dateChanged =
+        Boolean(clamped.pickupDate) &&
+        (clamped.pickupDate !== plan.pickupDate || clamped.pickupTime !== plan.pickupTime);
+      if (fillPickup || dateChanged) {
+        onTripPlanChangeRef.current({
           ...plan,
           pickupDate: clamped.pickupDate || plan.pickupDate,
           pickupTime: clamped.pickupTime || plan.pickupTime,
-          pickupLocation: hotelName || plan.pickupLocation,
-          pickupPlace: nextPlace || plan.pickupPlace,
+          pickupLocation: fillPickup ? hotelName : plan.pickupLocation,
+          pickupPlace: fillPickup && hotelInRange ? nextPlace : plan.pickupPlace,
         });
       }
     }
     if (toAirport) {
+      const airportLocations = getVizagAirportLocations();
       const airport =
         airportLocations.find((location) => location.id === 'vizag_airport') ?? airportLocations[0];
       setLastDropPlace((current) => {
@@ -802,7 +826,7 @@ export function TourCartQuotationDialog({
         return airport;
       });
     }
-  }, [open, onTripPlanChange, quote.airportTransfers]);
+  }, [open, airportSyncKey]);
   const [nightStays, setNightStays] = useState<string[]>([]);
   const [extraPlacesByDay, setExtraPlacesByDay] = useState<string[][]>([]);
   const [itinerarySeed, setItinerarySeed] = useState<string[][]>([]);
@@ -861,28 +885,45 @@ export function TourCartQuotationDialog({
 
   useEffect(() => {
     if (!open) return;
+    setExtraPlacesByDay([]);
+    const tours = quoteRef.current.tours;
     let cancelled = false;
     void Promise.all(
-      quote.tours.map(async (tour) => {
+      tours.map(async (tour) => {
         if (tour.itinerary && tour.itinerary.length > 0) return tour;
-        if (!tour.tourId) return tour;
-        try {
-          const detail = await tourDetailAPI.getTourDetail(tour.tourId);
-          return { ...tour, itinerary: normalizeQuoteItinerary(detail?.itinerary) };
-        } catch {
-          return tour;
+        const ids = [tour.tourId, ...getTourIdVariantsForSlug(generateTourUrl(tour))];
+        const seen = new Set<string>();
+        for (const id of ids) {
+          const key = id.trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          try {
+            const detail = await tourDetailAPI.getTourDetail(id);
+            if (!quoteItineraryMatchesTour(tour, detail)) continue;
+            return { ...tour, itinerary: normalizeQuoteItinerary(detail?.itinerary) };
+          } catch {
+            /* try the next id */
+          }
         }
+        return tour;
       })
-    ).then((tours) => {
-      if (!cancelled) setItinerarySeed(flattenTourItineraryPlaces(tours));
+    ).then((loaded) => {
+      if (cancelled) return;
+      const seed = flattenTourItineraryPlaces(loaded);
+      const dayCount = quoteDayCount(resolvedTripPlan(quoteRef.current).tourDuration, loaded);
+      setItinerarySeed(seed);
+      setExtraPlacesByDay(padPlacesByDay([], dayCount, seed));
     });
     return () => {
       cancelled = true;
     };
-  }, [open, quoteTourKey, quote.tours]);
+  }, [open, quoteTourKey]);
 
   useEffect(() => {
-    setExtraPlacesByDay((current) => padPlacesByDay(current, extraDayCount, itinerarySeed));
+    setExtraPlacesByDay((current) => {
+      if (current.length === 0 || current.length === extraDayCount) return current;
+      return padPlacesByDay(current, extraDayCount, itinerarySeed);
+    });
   }, [extraDayCount, itinerarySeed]);
 
   const itineraryDays = useMemo(() => {

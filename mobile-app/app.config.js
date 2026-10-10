@@ -46,6 +46,20 @@ module.exports = ({ config }) => {
       category: ['BROWSABLE', 'DEFAULT'],
     });
   }
+  const hasDutyLink = intentFilters.some((filter) =>
+    (filter.data || []).some((item) => item.pathPrefix === '/driver/register'),
+  );
+  if (!hasDutyLink) {
+    intentFilters.push({
+      action: 'VIEW',
+      autoVerify: true,
+      data: [
+        { scheme: 'https', host: 'www.vizagtaxihub.com', pathPrefix: '/driver/register' },
+        { scheme: 'https', host: 'vizagtaxihub.com', pathPrefix: '/driver/register' },
+      ],
+      category: ['BROWSABLE', 'DEFAULT'],
+    });
+  }
 
   return {
     ...base,

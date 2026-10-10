@@ -335,6 +335,45 @@ export function addTourToBookingWidget(tour: TourWidgetAddSource): boolean {
   return true;
 }
 
+function readStoredTourPickup(): Location | null {
+  const place = readTourCartTripExtras()?.tripPlan?.pickupPlace;
+  if (place?.id) return place;
+  try {
+    const raw = sessionStorage.getItem('pickupLocation');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Location;
+    return parsed?.id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredTourPickupDate(): Date | null {
+  const plan = readTourCartTripExtras()?.tripPlan;
+  if (plan?.pickupDate && /^\d{4}-\d{2}-\d{2}$/.test(plan.pickupDate)) {
+    const [year, month, day] = plan.pickupDate.split('-').map(Number);
+    const match = /^(\d{1,2}):(\d{2})$/.exec(plan.pickupTime || '');
+    const date = new Date(
+      year,
+      month - 1,
+      day,
+      match ? Number(match[1]) : 0,
+      match ? Number(match[2]) : 0,
+      0,
+      0
+    );
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  try {
+    const raw = sessionStorage.getItem('pickupDate');
+    if (!raw) return null;
+    const date = new Date(JSON.parse(raw) as string);
+    return Number.isNaN(date.getTime()) ? null : date;
+  } catch {
+    return null;
+  }
+}
+
 /** Stay on /tours and collect pickup location + date/time for the cart. */
 export function proceedTourCartToBooking(options?: {
   navigate?: NavigateFn;
@@ -355,13 +394,18 @@ export function proceedTourCartToBooking(options?: {
   const onTours =
     typeof window !== 'undefined' && window.location.pathname.startsWith('/tours');
   if (options?.navigate) {
+    const pickupLocation = readStoredTourPickup();
+    const pickupDate = readStoredTourPickupDate();
     options.navigate('/tours', {
       replace: onTours,
       state: {
         cartTourIds,
         proceedCheckout: true,
+        proceedAt: Date.now(),
         preferredVehicleId: preferredVehicle?.id,
         preferredVehicleName: preferredVehicle?.name,
+        ...(pickupLocation ? { pickupLocation } : {}),
+        ...(pickupDate ? { pickupDate } : {}),
       },
     });
     return true;
@@ -543,6 +587,7 @@ export type TourCartTripExtras = {
     pickupDate: string;
     pickupTime: string;
     tourDuration: string;
+    pickupPlace?: Location;
   };
   airportTransfers: TourCartAirportTransfer[];
   additionalAirportFare: number;

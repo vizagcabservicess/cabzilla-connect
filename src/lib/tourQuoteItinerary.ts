@@ -43,6 +43,24 @@ function placesFromItineraryDay(
   return title ? [title] : [];
 }
 
+/** True when a detail response is the tour that was requested, not a different package. */
+export function quoteItineraryMatchesTour(
+  tour: { tourId: string; tourName: string },
+  detail: { tourId?: string; id?: string | number; tourName?: string } | null | undefined
+): boolean {
+  if (!detail) return false;
+  const wantedName = tour.tourName.trim().toLowerCase();
+  const detailName = String(detail.tourName || '').trim().toLowerCase();
+  if (wantedName && detailName && wantedName !== detailName) return false;
+  const normalizeId = (value: string) => value.trim().toLowerCase().replace(/-/g, '_');
+  const detailIds = [detail.tourId, detail.id]
+    .map((id) => normalizeId(String(id || '')))
+    .filter(Boolean);
+  if (detailIds.length === 0) return Boolean(wantedName && detailName);
+  const wantedId = normalizeId(tour.tourId);
+  return detailIds.some((id) => id === wantedId);
+}
+
 export function flattenTourItineraryPlaces(
   tours: Array<{
     tourName: string;

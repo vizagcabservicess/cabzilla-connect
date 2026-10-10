@@ -186,6 +186,13 @@ export function EnhancedAdminSidebar({ activeTab, setActiveTab, onClose }: Enhan
       path: '/admin/fleet',
       show: canManageFleet()
     },
+    {
+      id: 'events',
+      label: 'Events & Duties',
+      icon: <CalendarDays size={20} />,
+      path: '/admin/events',
+      show: checkPrivilege('events_view') || checkPrivilege('events_manage') || isAdmin() || isSuperAdmin()
+    },
     
     // Financial Management
     { 

@@ -251,13 +251,25 @@ export function minTourStartInstant(transfers: AirportWhenInput[], now = new Dat
   return afterAirport.getTime() > floor.getTime() ? afterAirport : floor;
 }
 
-/** Tour pickup is the from-airport time plus 2 hours (same calendar day unless that rolls past midnight). */
-export function clampTripAfterFromAirports(trip: PlanWhen, transfers: AirportWhenInput[]): PlanWhen {
+/**
+ * Tour pickup cannot be earlier than 2 hours after the latest from-airport pickup.
+ * A later date or time chosen by the user is kept.
+ */
+export function clampTripAfterFromAirports(
+  trip: PlanWhen,
+  transfers: AirportWhenInput[],
+  now = new Date()
+): PlanWhen {
   const fromAirport = latestFromAirportWhen(transfers);
   if (!fromAirport) {
-    return trip.pickupDate ? clampToLeadTime(trip) : trip;
+    return trip.pickupDate ? clampToLeadTime(trip, now) : trip;
   }
-  return fieldsFromInstant(minTourStartInstant(transfers));
+  const min = minTourStartInstant(transfers, now);
+  const tripAt = planInstant(trip.pickupDate, trip.pickupTime);
+  if (!tripAt || tripAt.getTime() < min.getTime()) {
+    return fieldsFromInstant(min);
+  }
+  return fieldsFromInstant(tripAt);
 }
 
 export function airportHotelName(transfers: Array<AirportWhenInput & { placeName?: string }>): string {
