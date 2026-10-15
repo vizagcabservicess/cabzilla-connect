@@ -23,6 +23,9 @@ switch ($action) {
     case 'update':
         vth_event_ok(['assignment' => vth_asg_update($conn, $admin, $body)], 'Assignment updated');
         break;
+    case 'set_serial':
+        vth_event_ok(['assignment' => vth_asg_set_serial($conn, $admin, $body)], 'Serial number saved');
+        break;
     case 'delete':
         vth_asg_delete($conn, $admin, (int) ($body['id'] ?? 0));
         vth_event_ok([], 'Assignment deleted');
@@ -40,6 +43,71 @@ switch ($action) {
         vth_event_error('Unknown action');
 }
 
+function vth_asg_ensure_serial(mysqli $conn): bool
+{
+    static $has = null;
+    if ($has !== null) {
+        return $has;
+    }
+    $col = @$conn->query("SHOW COLUMNS FROM `vth_event_assignments` LIKE 'serial_no'");
+    if ($col instanceof mysqli_result && $col->num_rows > 0) {
+        $has = true;
+        return true;
+    }
+    try {
+        $added = @$conn->query('ALTER TABLE vth_event_assignments ADD COLUMN serial_no INT UNSIGNED NULL');
+    } catch (Throwable $e) {
+        $added = false;
+    }
+    if ($added) {
+        $has = true;
+        return true;
+    }
+    $col = @$conn->query("SHOW COLUMNS FROM `vth_event_assignments` LIKE 'serial_no'");
+    $has = $col instanceof mysqli_result && $col->num_rows > 0;
+    return $has;
+}
+
+function vth_asg_set_serial(mysqli $conn, array $admin, array $body): array
+{
+    if (!vth_asg_ensure_serial($conn)) {
+        vth_event_error('Serial number could not be saved');
+    }
+    $id = (int) ($body['id'] ?? 0);
+    $old = vth_asg_get($conn, $id);
+    if (!$old) {
+        vth_event_error('Assignment not found', 404);
+    }
+    $raw = $body['serialNo'] ?? null;
+    if ($raw === null || $raw === '') {
+        $stmt = $conn->prepare('UPDATE vth_event_assignments SET serial_no = NULL WHERE id = ?');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $stmt->close();
+    } else {
+        $serial = (int) $raw;
+        if ($serial < 1 || $serial > 9999) {
+            vth_event_error('Enter a serial number from 1 to 9999');
+        }
+        $stmt = $conn->prepare('UPDATE vth_event_assignments SET serial_no = ? WHERE id = ?');
+        $stmt->bind_param('ii', $serial, $id);
+        $stmt->execute();
+        $stmt->close();
+    }
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'assignment_serial', 'assignment', $id, (int) $old['event_id'], [
+        'serial_no' => $old['serial_no'] ?? null,
+    ], [
+        'serial_no' => ($raw === null || $raw === '') ? null : (int) $raw,
+    ]);
+    $list = vth_asg_list($conn, (int) $old['event_id']);
+    foreach ($list as $item) {
+        if ($item['id'] === $id) {
+            return $item;
+        }
+    }
+    return ['id' => $id];
+}
+
 function vth_asg_get(mysqli $conn, int $id): ?array
 {
     $stmt = $conn->prepare('SELECT * FROM vth_event_assignments WHERE id = ?');
@@ -55,6 +123,9 @@ function vth_asg_list(mysqli $conn, int $eventId): array
     if ($eventId < 1) {
         vth_event_error('eventId is required');
     }
+    $order = vth_asg_ensure_serial($conn)
+        ? '(a.serial_no IS NULL), a.serial_no, a.status, a.vehicle_type, a.id'
+        : 'a.status, a.vehicle_type, a.id';
     $sql = 'SELECT a.*,
             COALESCE(ev.registration_number, v.vehicle_number) AS vehicle_number,
             COALESCE(ev.make, v.make) AS make,
@@ -69,7 +140,7 @@ function vth_asg_list(mysqli $conn, int $eventId): array
             LEFT JOIN drivers dr ON dr.id = a.driver_id
             LEFT JOIN vth_event_driver_pii pii ON pii.driver_id = a.driver_id
             WHERE a.event_id = ?
-            ORDER BY a.status, a.vehicle_type, a.id';
+            ORDER BY ' . $order;
     $stmt = $conn->prepare($sql);
     $stmt->bind_param('i', $eventId);
     $stmt->execute();
@@ -153,6 +224,7 @@ function vth_asg_list(mysqli $conn, int $eventId): array
             'reportingTime' => $row['reporting_time'],
             'reportingLocation' => $row['reporting_location'],
             'notes' => $row['notes'],
+            'serialNo' => isset($row['serial_no']) && $row['serial_no'] !== null ? (int) $row['serial_no'] : null,
             'status' => $row['status'],
             'replacedFromAssignmentId' => $row['replaced_from_assignment_id'] !== null ? (int) $row['replaced_from_assignment_id'] : null,
             'dates' => $datesByAssignment[$aid] ?? [],
@@ -201,6 +273,10 @@ function vth_asg_create(mysqli $conn, array $admin, array $body): array
     }
 
     $fleetVehicleId = null;
+    $groupId = $groupId ?: null;
+    $vehicleId = $vehicleId ?: null;
+    $driverId = $driverId ?: null;
+    $pax = $pax ?: null;
     $stmt = $conn->prepare(
         'INSERT INTO vth_event_assignments
          (event_id, requirement_group_id, event_vehicle_id, fleet_vehicle_id, driver_id, vehicle_type, passenger_count, reporting_time, reporting_location, notes)
@@ -212,8 +288,12 @@ function vth_asg_create(mysqli $conn, array $admin, array $body): array
     $stmt->close();
 
     $asg = vth_asg_get($conn, $id);
+    $schedules = (isset($body['schedules']) && is_array($body['schedules'])) ? $body['schedules'] : [];
     vth_event_sync_assignment_dates($conn, $id, $dates);
-    $dutyResult = vth_event_create_duties_for_dates($conn, $asg, $dates);
+    $dutyResult = vth_event_create_duties_for_dates($conn, $asg, $dates, $schedules);
+    if ($schedules) {
+        vth_event_apply_date_schedules($conn, $id, $schedules);
+    }
     if ($dutyResult['errors'] && $dutyResult['created'] === 0 && $vehicleId) {
         $conn->query('DELETE FROM vth_event_assignments WHERE id = ' . $id);
         vth_event_error('Duty already exists for this vehicle on this date.');
@@ -257,6 +337,9 @@ function vth_asg_update(mysqli $conn, array $admin, array $body): array
     $notes = array_key_exists('notes', $body) ? (trim((string) $body['notes']) ?: null) : $old['notes'];
 
     $fleetVehicleId = null;
+    $vehicleId = $vehicleId ?: null;
+    $driverId = $driverId ?: null;
+    $pax = $pax ?: null;
     $stmt = $conn->prepare(
         'UPDATE vth_event_assignments
          SET event_vehicle_id=?, fleet_vehicle_id=?, driver_id=?, vehicle_type=?, passenger_count=?, reporting_time=?, reporting_location=?, notes=?
@@ -267,9 +350,10 @@ function vth_asg_update(mysqli $conn, array $admin, array $body): array
     $stmt->close();
 
     $asg = vth_asg_get($conn, $id);
+    $schedules = (isset($body['schedules']) && is_array($body['schedules'])) ? $body['schedules'] : [];
     if (isset($body['dates']) && is_array($body['dates'])) {
         vth_event_sync_assignment_dates($conn, $id, $body['dates']);
-        $result = vth_event_create_duties_for_dates($conn, $asg, $body['dates']);
+        $result = vth_event_create_duties_for_dates($conn, $asg, $body['dates'], $schedules);
         if ($result['errors'] && $vehicleId) {
             foreach ($result['errors'] as $err) {
                 if (str_contains($err, 'already exists')) {
@@ -279,6 +363,9 @@ function vth_asg_update(mysqli $conn, array $admin, array $body): array
         }
     }
     vth_event_refresh_assignment_snapshots($conn, $asg, true);
+    if ($schedules) {
+        vth_event_apply_date_schedules($conn, $id, $schedules);
+    }
     vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'assignment_updated', 'assignment', $id, (int) $old['event_id'], $old, $body);
     $list = vth_asg_list($conn, (int) $old['event_id']);
     foreach ($list as $item) {

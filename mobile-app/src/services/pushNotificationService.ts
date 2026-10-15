@@ -23,6 +23,12 @@ export const TRIP_ASSIGNMENT_CHANNEL_ID = 'trip_assignments_v2';
 /** Admin/fuel/booking pushes use Expo top-level `channelId: 'default'` when no Android block is sent. */
 export const DEFAULT_PUSH_CHANNEL_ID = 'default';
 
+/** Lock-screen alerts when a manager asks the driver to end duty or tap In Parking. */
+export const EVENT_DUTY_ALERT_CHANNEL_ID = 'event_duty_alerts_v1';
+
+/** Event manager alerts when a duty starts, parks, or ends. */
+export const EVENT_MANAGER_ALERT_CHANNEL_ID = 'event_manager_alerts_v1';
+
 export async function ensureDefaultPushChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(DEFAULT_PUSH_CHANNEL_ID, {
@@ -32,6 +38,45 @@ export async function ensureDefaultPushChannel(): Promise<void> {
     sound: 'default',
     enableVibrate: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+export async function ensureEventManagerAlertChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(EVENT_MANAGER_ALERT_CHANNEL_ID, {
+    name: 'Event updates',
+    description: 'Trip started, in parking, and trip ended.',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 200, 250],
+    sound: 'default',
+    enableVibrate: true,
+    showBadge: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+export async function ensureEventDutyAlertChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(EVENT_DUTY_ALERT_CHANNEL_ID, {
+    name: 'Event duty alerts',
+    description: 'End-duty and In Parking alerts. These stay on the lock screen while a duty is running.',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 500, 200, 500],
+    sound: 'default',
+    enableVibrate: true,
+    showBadge: true,
+    enableLights: true,
+    lightColor: '#f59e0b',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    bypassDnd: true,
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.ALARM,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      flags: {
+        enforceAudibility: true,
+        requestHardwareAudioVideoSynchronization: false,
+      },
+    },
   });
 }
 
@@ -127,6 +172,9 @@ export async function registerForPushNotificationsAsync(): Promise<Notifications
  */
 export async function getPushToken(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
+  if (Platform.OS === 'android' && Constants.executionEnvironment === 'storeClient') {
+    return null;
+  }
   if (!Device.isDevice) {
     console.warn('[push] Not a physical device — Expo push token unavailable (simulator).');
     return null;

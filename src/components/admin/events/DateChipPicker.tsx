@@ -8,14 +8,21 @@ interface DateChipPickerProps {
   dates: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  chipDetail?: (date: string) => string | undefined;
+  focusedDate?: string | null;
+  onDatePress?: (date: string) => void;
 }
 
 function dateFromIso(iso: string): Date {
   return new Date(`${iso}T00:00:00`);
 }
 
-export function DateChipPicker({ dates, selected, onChange }: DateChipPickerProps) {
+export function DateChipPicker({ dates, selected, onChange, chipDetail, focusedDate, onDatePress }: DateChipPickerProps) {
   const toggle = (date: string) => {
+    if (onDatePress) {
+      onDatePress(date);
+      return;
+    }
     onChange(selected.includes(date) ? selected.filter((d) => d !== date) : [...selected, date].sort());
   };
   const allowed = new Set(dates);
@@ -43,16 +50,19 @@ export function DateChipPicker({ dates, selected, onChange }: DateChipPickerProp
       <div className="flex flex-wrap gap-2">
         {dates.map((date) => {
           const active = selected.includes(date);
+          const detail = active ? chipDetail?.(date) : undefined;
+          const focused = focusedDate === date;
           return (
             <Button
               key={date}
               type="button"
               size="sm"
               variant={active ? 'default' : 'outline'}
-              className="rounded-full"
+              className={`h-auto rounded-full px-3 py-1 ${detail ? 'flex-col gap-0' : ''} ${focused ? 'ring-2 ring-sky-400 ring-offset-2' : ''}`}
               onClick={() => toggle(date)}
             >
-              {formatDutyDateShort(date)}
+              <span>{formatDutyDateShort(date)}</span>
+              {detail ? <span className={`text-[10px] font-medium leading-none ${active ? 'text-white/90' : ''}`}>{detail}</span> : null}
             </Button>
           );
         })}

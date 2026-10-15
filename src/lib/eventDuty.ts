@@ -446,6 +446,7 @@ export interface DriverEndNotice {
   endRequestedAt?: string | null;
   endRequestSeenAt?: string | null;
   endRequestNonce?: string | null;
+  pausedSeconds?: number;
   dutyPlace?: 'trip' | 'parking' | null;
   parkingPromptAt?: string | null;
   parkingPromptNonce?: string | null;
@@ -455,20 +456,23 @@ export function dutyDurationMinutes(
   start?: string | null,
   end?: string | null,
   nowMs?: number,
+  pausedSeconds = 0,
 ): number {
   const from = parseServerDateTime(start);
   if (!from) return 0;
   const to = parseServerDateTime(end) || new Date(nowMs ?? Date.now());
-  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 60000));
+  const seconds = Math.floor((to.getTime() - from.getTime()) / 1000) - Math.max(0, Math.floor(pausedSeconds));
+  return Math.max(0, Math.floor(seconds / 60));
 }
 
 export function formatDutyDurationCompact(
   start?: string | null,
   end?: string | null,
   nowMs?: number,
+  pausedSeconds = 0,
 ): string {
   if (!parseServerDateTime(start)) return '';
-  const mins = dutyDurationMinutes(start, end, nowMs);
+  const mins = dutyDurationMinutes(start, end, nowMs, pausedSeconds);
   const hours = Math.floor(mins / 60);
   const rest = mins % 60;
   if (hours <= 0) return `${rest}m`;
@@ -480,13 +484,65 @@ export function formatDutyDuration(
   start?: string | null,
   end?: string | null,
   nowMs?: number,
+  pausedSeconds = 0,
 ): string {
   if (!parseServerDateTime(start)) return '';
-  const mins = dutyDurationMinutes(start, end, nowMs);
+  const mins = dutyDurationMinutes(start, end, nowMs, pausedSeconds);
   const hours = Math.floor(mins / 60);
   const rest = mins % 60;
   const label = hours > 0 ? `${hours} hr ${rest} min` : `${rest} min`;
   return end ? label : `${label} (ongoing)`;
+}
+
+export function toDutyTimeInput(value?: string | null): string {
+  const parsed = parseServerDateTime(value);
+  if (!parsed) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
+}
+
+export function fromDutyTimeInput(value?: string | null): string | null {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return null;
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (!match) return null;
+  return `${match[1]} ${match[2]}:${match[3] || '00'}`;
+}
+
+/** Reporting time on the duty date, in the same form as other duty timestamps. */
+export function scheduledDutyStart(dutyDate?: string | null, reportingTime?: string | null): string | null {
+  if (!dutyDate || !reportingTime) return null;
+  const match = /^(\d{1,2}):(\d{2})/.exec(reportingTime.trim());
+  const date = dutyDate.slice(0, 10);
+  if (!match || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const hours = Number(match[1]);
+  if (Number.isNaN(hours) || hours < 0 || hours > 23) return null;
+  return `${date} ${String(hours).padStart(2, '0')}:${match[2]}:00`;
+}
+
+/** Start used for report totals: scheduled reporting time once the duty has begun. */
+export function reportDutyStart(duty: {
+  dutyDate?: string | null;
+  reportingTime?: string | null;
+  openingAt?: string | null;
+  closingAt?: string | null;
+  endRequestedAt?: string | null;
+}): string | null | undefined {
+  const end = billableDutyEnd(duty.closingAt, duty.endRequestedAt);
+  const started = Boolean(duty.openingAt || end);
+  return (started && scheduledDutyStart(duty.dutyDate, duty.reportingTime)) || duty.openingAt;
+}
+
+/** Report total runs from the scheduled reporting time to the billable end, not from when the driver tapped Reported. */
+export function formatReportDutyDuration(duty: {
+  dutyDate?: string | null;
+  reportingTime?: string | null;
+  openingAt?: string | null;
+  closingAt?: string | null;
+  endRequestedAt?: string | null;
+  pausedSeconds?: number | null;
+}, nowMs?: number): string {
+  return formatDutyDuration(reportDutyStart(duty), billableDutyEnd(duty.closingAt, duty.endRequestedAt), nowMs, duty.pausedSeconds || 0);
 }
 
 export function formatServerTime(value: string | null | undefined): string {

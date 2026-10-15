@@ -33,6 +33,7 @@ sed -i "s/__BUILD_TIME__/$TIMESTAMP/g" dist/index.html
 echo "📤 Ready to upload files..."
 echo "📋 Next steps:"
 echo "1. Upload the contents of the 'dist' folder to your server"
+echo "   Do not upload dist/api. The live PHP API is src/backend/php-templates/api"
 echo "2. The .htaccess file has been copied to dist/ with proper cache control"
 echo "3. Purge Cloudflare cache (Caching → Purge Everything) so old immutable JS is cleared"
 echo "4. Test the application in an incognito/private browser window"

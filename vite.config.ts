@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import https from "node:https";
 import { componentTagger } from "lovable-tagger";
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { VEHICLE_EMBED_CONFIGS } from "./src/seo/vehicleEmbedMeta";
 
@@ -292,24 +292,15 @@ export default defineConfig(({ mode }) => ({
         }
       },
     },
-    // Custom plugin to exclude api folder from build
+    // public/api is copied into dist after the bundle is written, so drop it in closeBundle
+    // and again from the build script once Vite has finished copying public/.
     {
       name: 'exclude-api-folder',
-      generateBundle() {
-        // This plugin runs during build and ensures api folder is not included
-      },
-      writeBundle() {
-        // After build, remove api folder if it was copied
+      closeBundle() {
         const distApiPath = join(process.cwd(), 'dist', 'api');
-        try {
-          const fs = require('fs');
-          if (fs.existsSync(distApiPath)) {
-            fs.rmSync(distApiPath, { recursive: true, force: true });
-            console.log('✅ Removed api folder from dist directory');
-          }
-        } catch (error) {
-          console.log('Note: api folder was not found in dist or already removed');
-        }
+        if (!existsSync(distApiPath)) return;
+        rmSync(distApiPath, { recursive: true, force: true });
+        console.log('✅ Removed api folder from dist directory');
       }
     }
   ].filter(Boolean),

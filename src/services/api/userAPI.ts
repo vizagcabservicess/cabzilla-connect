@@ -36,7 +36,7 @@ export const userAPI = {
   /**
    * Create a new user
    */
-  createUser: async (userData: Partial<User>) => {
+  createUser: async (userData: Partial<User> & { password?: string; access?: string }) => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/admin/users.php`, userData, {
         headers: getAuthHeaders()
@@ -90,11 +90,11 @@ export const userAPI = {
   /**
    * Update user role
    */
-  updateUserRole: async (userId: number | string, role: string) => {
+  updateUserRole: async (userId: number | string, role: string, access?: string) => {
     try {
       const response = await axios.put(
         `${API_BASE_URL}/api/admin/users.php`,
-        { userId, role },
+        { userId, role, access },
         {
           headers: getAuthHeaders()
         }

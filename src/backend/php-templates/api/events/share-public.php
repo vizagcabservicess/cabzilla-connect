@@ -43,6 +43,14 @@ if ($action === 'request_end') {
     $dutyId = (int) ($body['dutyId'] ?? $_GET['dutyId'] ?? 0);
     vth_event_ok(vth_event_request_driver_end($conn, $dutyId, 'share', $eid), 'Driver asked to end the duty');
 }
+if ($action === 'revoke_end') {
+    $dutyId = (int) ($body['dutyId'] ?? $_GET['dutyId'] ?? 0);
+    vth_event_ok(vth_event_revoke_driver_end($conn, $dutyId, 'share', $eid), 'End request revoked');
+}
+if ($action === 'resume_duty') {
+    $dutyId = (int) ($body['dutyId'] ?? $_GET['dutyId'] ?? 0);
+    vth_event_ok(vth_event_resume_duty($conn, $dutyId, 'share', $eid), 'Duty continued');
+}
 if ($action === 'set_place') {
     $dutyId = (int) ($body['dutyId'] ?? 0);
     $place = (string) ($body['place'] ?? '');
@@ -110,6 +118,28 @@ foreach ($rawRows as $i => $r) {
 }
 $photoDocs = vth_event_doc_checklists($conn, 'driver', $photoDriverIds);
 $driverPhones = vth_event_driver_phones($conn, $photoDriverIds);
+$serials = [];
+$serialCol = @$conn->query("SHOW COLUMNS FROM `vth_event_assignments` LIKE 'serial_no'");
+$assignmentIds = [];
+foreach ($rawRows as $i => $r) {
+    $assignmentId = (int) ($duties[$i]['assignmentId'] ?? $r['assignment_id'] ?? 0);
+    if ($assignmentId > 0) {
+        $assignmentIds[$assignmentId] = $assignmentId;
+    }
+}
+$serialSql = ($serialCol instanceof mysqli_result && $serialCol->num_rows > 0)
+    ? vth_event_id_sql($assignmentIds)
+    : '';
+if ($serialSql !== '') {
+    $serialRes = $conn->query("SELECT id, serial_no FROM vth_event_assignments WHERE id IN ($serialSql)");
+    if ($serialRes) {
+        while ($serialRow = $serialRes->fetch_assoc()) {
+            if ($serialRow['serial_no'] !== null) {
+                $serials[(int) $serialRow['id']] = (int) $serialRow['serial_no'];
+            }
+        }
+    }
+}
 $vehicles = [];
 foreach ($rawRows as $i => $r) {
     $duty = $duties[$i];
@@ -131,6 +161,7 @@ foreach ($rawRows as $i => $r) {
         'vehicleType' => $duty['vehicleTypeLabel'] ?: $duty['vehicleType'],
         'vehicleNumber' => $vehicleNumber,
         'driverName' => $driverName,
+        'serialNo' => $serials[$assignmentId] ?? null,
         'driverMobile' => $liveMobile !== '' ? $liveMobile : ($duty['driverMobile'] ?: ''),
         'driverPhotoId' => $photoId,
         'driverPhoto' => null,
@@ -148,8 +179,13 @@ foreach ($rawRows as $i => $r) {
         'closingAt' => $duty['closingAt'],
         'endRequestedAt' => $duty['endRequestedAt'] ?? null,
         'endRequestSeenAt' => $duty['endRequestSeenAt'] ?? null,
+        'pausedSeconds' => (int) ($duty['pausedSeconds'] ?? 0),
         'dutyPlace' => ($duty['dutyPlace'] ?? '') === 'parking' ? 'parking' : 'trip',
         'parkingAsked' => ($duty['dutyPlace'] ?? '') !== 'parking' && !empty($duty['parkingPromptNonce']),
+        'tripSeconds' => (int) ($duty['tripSeconds'] ?? 0),
+        'parkingSeconds' => (int) ($duty['parkingSeconds'] ?? 0),
+        'placeSince' => $duty['placeSince'] ?? null,
+        'placeSpans' => $duty['placeSpans'] ?? [],
         'openingGps' => $duty['openingGps'],
         'closingGps' => $duty['closingGps'],
     ];

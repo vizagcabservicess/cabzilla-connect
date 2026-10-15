@@ -28,9 +28,7 @@ import {
 import { colors } from '../theme/colors';
 
 /** Dev + EAS internal: set EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG=1 to see why the overlay did/didn't open */
-const SHOW_TRIP_ASSIGNMENT_DEBUG =
-  (typeof __DEV__ !== 'undefined' && __DEV__) ||
-  process.env.EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG === '1';
+const SHOW_TRIP_ASSIGNMENT_DEBUG = process.env.EXPO_PUBLIC_SHOW_TRIP_ASSIGNMENT_DEBUG === '1';
 
 type PendingAssignment = {
   /** DB id from push `data`; null when FCM only shows title/body (standalone) — we match via bookingNumber */
@@ -248,7 +246,7 @@ export function DriverTripAssignmentOverlay() {
   );
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'driver' || Platform.OS === 'web') return;
+    if (!isAuthenticated || user?.role !== 'driver' || user.appAccess === 'event_driver' || user.appAccess === 'event_manager' || Platform.OS === 'web') return;
 
     pushDebug(
       `listeners on user=${user?.id} ownership=${Constants.appOwnership ?? 'n/a'} (expo=Expo Go, standalone=store/internal build)`
@@ -340,6 +338,10 @@ export function DriverTripAssignmentOverlay() {
     await stopAlarm();
     setPending(null);
   }, [stopAlarm]);
+
+  if (user?.appAccess === 'event_driver' || user?.appAccess === 'event_manager') {
+    return null;
+  }
 
   if (!isAuthenticated || user?.role !== 'driver' || Platform.OS === 'web') {
     return SHOW_TRIP_ASSIGNMENT_DEBUG && Platform.OS !== 'web' ? (

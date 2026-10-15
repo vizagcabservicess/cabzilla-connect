@@ -180,6 +180,281 @@ function vth_event_conn(): mysqli
     return $conn;
 }
 
+function vth_event_require_user(): array
+{
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    if (!$authHeader || stripos($authHeader, 'Bearer ') !== 0) {
+        vth_event_error('Unauthorized', 401);
+    }
+    $token = trim(substr($authHeader, 7));
+    $payload = verifyJwtToken($token);
+    $role = (string) ($payload['role'] ?? '');
+    if (!$payload || !in_array($role, ['admin', 'super_admin', 'driver', 'customer', 'guest'], true)) {
+        vth_event_error('Unauthorized', 401);
+    }
+    return $payload;
+}
+
+function vth_event_jwt_user_id(array $payload): int
+{
+    foreach (['user_id', 'id', 'uid', 'sub'] as $key) {
+        if (isset($payload[$key]) && (int) $payload[$key] > 0) {
+            return (int) $payload[$key];
+        }
+    }
+    return 0;
+}
+
+function vth_event_ensure_app_access(mysqli $conn): void
+{
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS vth_user_app_access (
+          user_id INT NOT NULL PRIMARY KEY,
+          access VARCHAR(32) NOT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+}
+
+function vth_event_app_access_for(mysqli $conn, int $userId): string
+{
+    vth_event_ensure_app_access($conn);
+    if ($userId < 1) {
+        return 'full';
+    }
+    $stmt = $conn->prepare('SELECT access FROM vth_user_app_access WHERE user_id = ?');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    $access = (string) ($row['access'] ?? 'full');
+    return in_array($access, ['full', 'event_manager', 'event_driver'], true) ? $access : 'full';
+}
+
+function vth_event_driver_id_for_login(mysqli $conn, int $userId, array $payload): int
+{
+    if ($userId > 0) {
+        try {
+            $stmt = $conn->prepare('SELECT id FROM drivers WHERE user_id = ? ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $userId);
+                $stmt->execute();
+                $driver = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                $linked = (int) ($driver['id'] ?? 0);
+                if ($linked > 0) {
+                    return $linked;
+                }
+            }
+        } catch (Throwable $e) {
+            /* drivers.user_id is optional */
+        }
+    }
+
+    $phone = preg_replace('/\D+/', '', (string) ($payload['phone'] ?? $payload['mobile'] ?? ''));
+    $email = trim((string) ($payload['email'] ?? ''));
+    if ($userId > 0 && ($phone === '' || $email === '')) {
+        try {
+            $userStmt = $conn->prepare('SELECT phone, email FROM users WHERE id = ? LIMIT 1');
+            if ($userStmt) {
+                $userStmt->bind_param('i', $userId);
+                $userStmt->execute();
+                $userRow = $userStmt->get_result()->fetch_assoc();
+                $userStmt->close();
+                if ($phone === '') {
+                    $phone = preg_replace('/\D+/', '', (string) ($userRow['phone'] ?? ''));
+                }
+                if ($email === '') {
+                    $email = trim((string) ($userRow['email'] ?? ''));
+                }
+            }
+        } catch (Throwable $e) {
+            /* login row is optional when the token already carries phone or email */
+        }
+    }
+
+    if (strlen($phone) >= 10) {
+        $tail = substr($phone, -10);
+        $byPhone = $conn->prepare(
+            'SELECT id FROM drivers
+             WHERE RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(phone, ""), " ", ""), "-", ""), "+", ""), "(", ""), 10) = ?
+             ORDER BY id DESC LIMIT 1'
+        );
+        if ($byPhone) {
+            $byPhone->bind_param('s', $tail);
+            $byPhone->execute();
+            $phoneRow = $byPhone->get_result()->fetch_assoc();
+            $byPhone->close();
+            $phoneId = (int) ($phoneRow['id'] ?? 0);
+            if ($phoneId > 0) {
+                return $phoneId;
+            }
+        }
+    }
+
+    if ($email !== '') {
+        $byEmail = $conn->prepare('SELECT id FROM drivers WHERE email = ? ORDER BY id DESC LIMIT 1');
+        if ($byEmail) {
+            $byEmail->bind_param('s', $email);
+            $byEmail->execute();
+            $emailRow = $byEmail->get_result()->fetch_assoc();
+            $byEmail->close();
+            return (int) ($emailRow['id'] ?? 0);
+        }
+    }
+
+    return 0;
+}
+
+function vth_event_phone_tail(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone);
+    if (!is_string($digits) || $digits === '') {
+        return '';
+    }
+    if (strlen($digits) >= 12 && substr($digits, 0, 2) === '91') {
+        $digits = substr($digits, 2);
+    }
+    if (strlen($digits) >= 11 && substr($digits, 0, 1) === '0') {
+        $digits = substr($digits, 1);
+    }
+    if (strlen($digits) < 10) {
+        return '';
+    }
+    return substr($digits, -10);
+}
+
+function vth_event_ensure_token_plain(mysqli $conn): void
+{
+    $col = @$conn->query("SHOW COLUMNS FROM `vth_event_tokens` LIKE 'token_plain'");
+    if ($col instanceof mysqli_result && $col->num_rows > 0) {
+        return;
+    }
+    @$conn->query('ALTER TABLE vth_event_tokens ADD COLUMN token_plain VARCHAR(128) NULL');
+}
+
+function vth_event_driver_token_for_user(mysqli $conn, int $userId, array $payload = []): ?string
+{
+    vth_event_ensure_token_plain($conn);
+    $phone = preg_replace('/\D+/', '', (string) ($payload['phone'] ?? $payload['mobile'] ?? ''));
+    if ((!is_string($phone) || $phone === '') && $userId > 0) {
+        $userStmt = $conn->prepare('SELECT phone FROM users WHERE id = ? LIMIT 1');
+        if ($userStmt) {
+            $userStmt->bind_param('i', $userId);
+            $userStmt->execute();
+            $userRow = $userStmt->get_result()->fetch_assoc();
+            $userStmt->close();
+            $phone = preg_replace('/\D+/', '', (string) ($userRow['phone'] ?? ''));
+        }
+    }
+    $tail = vth_event_phone_tail(is_string($phone) ? $phone : '');
+    $driverIds = [];
+    $primary = vth_event_driver_id_for_login($conn, $userId, $payload);
+    if ($primary > 0) {
+        $driverIds[$primary] = $primary;
+    }
+    $assignmentIds = [];
+    if ($tail !== '') {
+        $like = '%' . $tail;
+        $byPhone = $conn->prepare('SELECT id FROM drivers WHERE phone LIKE ?');
+        if ($byPhone) {
+            $byPhone->bind_param('s', $like);
+            $byPhone->execute();
+            $phoneRes = $byPhone->get_result();
+            while ($phoneRow = $phoneRes->fetch_assoc()) {
+                $id = (int) ($phoneRow['id'] ?? 0);
+                if ($id > 0) {
+                    $driverIds[$id] = $id;
+                }
+            }
+            $byPhone->close();
+        }
+        $byDuty = $conn->prepare(
+            "SELECT driver_id, assignment_id FROM vth_event_duties
+             WHERE status <> 'cancelled' AND driver_mobile_snapshot LIKE ?"
+        );
+        if ($byDuty) {
+            $byDuty->bind_param('s', $like);
+            $byDuty->execute();
+            $dutyRes = $byDuty->get_result();
+            while ($dutyRow = $dutyRes->fetch_assoc()) {
+                $id = (int) ($dutyRow['driver_id'] ?? 0);
+                $assignmentId = (int) ($dutyRow['assignment_id'] ?? 0);
+                if ($id > 0) {
+                    $driverIds[$id] = $id;
+                }
+                if ($assignmentId > 0) {
+                    $assignmentIds[$assignmentId] = $assignmentId;
+                }
+            }
+            $byDuty->close();
+        }
+    }
+    if (!$driverIds && !$assignmentIds) {
+        return null;
+    }
+    $where = [];
+    if ($driverIds) {
+        $where[] = 'driver_id IN (' . implode(',', array_map('intval', $driverIds)) . ')';
+    }
+    if ($assignmentIds) {
+        $where[] = 'assignment_id IN (' . implode(',', array_map('intval', $assignmentIds)) . ')';
+    }
+    $sql = "SELECT id, token_plain, event_id, assignment_id, driver_id
+            FROM vth_event_tokens
+            WHERE token_type = 'driver' AND revoked_at IS NULL
+              AND (" . implode(' OR ', $where) . ')
+            ORDER BY id DESC
+            LIMIT 8';
+    $tokenRes = $conn->query($sql);
+    $fallback = null;
+    if ($tokenRes) {
+        while ($tokenRow = $tokenRes->fetch_assoc()) {
+            $plain = trim((string) ($tokenRow['token_plain'] ?? ''));
+            if ($plain !== '') {
+                return $plain;
+            }
+            if ($fallback === null) {
+                $fallback = $tokenRow;
+            }
+        }
+    }
+    $eventId = $fallback ? (int) ($fallback['event_id'] ?? 0) : 0;
+    $assignmentId = $fallback ? (int) ($fallback['assignment_id'] ?? 0) : 0;
+    $driverId = $fallback ? (int) ($fallback['driver_id'] ?? 0) : $primary;
+    if ($assignmentId < 1 && $assignmentIds) {
+        $assignmentId = (int) reset($assignmentIds);
+    }
+    if (($eventId < 1 || $driverId < 1) && $assignmentId > 0) {
+        $asgStmt = $conn->prepare('SELECT event_id, driver_id FROM vth_event_assignments WHERE id = ?');
+        if ($asgStmt) {
+            $asgStmt->bind_param('i', $assignmentId);
+            $asgStmt->execute();
+            $asgRow = $asgStmt->get_result()->fetch_assoc();
+            $asgStmt->close();
+            if ($eventId < 1) {
+                $eventId = (int) ($asgRow['event_id'] ?? 0);
+            }
+            if ($driverId < 1) {
+                $driverId = (int) ($asgRow['driver_id'] ?? 0);
+            }
+        }
+    }
+    if ($eventId < 1 || $assignmentId < 1) {
+        return null;
+    }
+    $issuedDriver = $driverId > 0 ? $driverId : null;
+    return vth_event_issue_token(
+        $conn,
+        'driver',
+        $eventId,
+        $assignmentId,
+        $issuedDriver,
+        date('Y-m-d H:i:s', time() + 45 * 86400)
+    );
+}
+
 function vth_event_require_admin(): array
 {
     $headers = function_exists('getallheaders') ? getallheaders() : [];
@@ -580,7 +855,87 @@ function vth_event_verification_code(): string
     return strtoupper(bin2hex(random_bytes(4)));
 }
 
-function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, array $dates): array
+function vth_event_clock_hm(?string $value): ?string
+{
+    $value = trim((string) $value);
+    if (!preg_match('/^(\d{1,2}):(\d{2})/', $value, $match)) {
+        return null;
+    }
+    $hours = (int) $match[1];
+    $minutes = (int) $match[2];
+    if ($hours < 0 || $hours > 23 || $minutes < 0 || $minutes > 59) {
+        return null;
+    }
+    return sprintf('%02d:%02d', $hours, $minutes);
+}
+
+function vth_event_schedule_map(array $schedules): array
+{
+    $map = [];
+    foreach ($schedules as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $date = substr((string) ($item['date'] ?? ''), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            continue;
+        }
+        $time = vth_event_clock_hm((string) ($item['reportingTime'] ?? ''));
+        if ($time === null) {
+            continue;
+        }
+        $locIn = trim((string) ($item['reportingLocation'] ?? ''));
+        $dutyId = (int) ($item['dutyId'] ?? 0);
+        $map[$date] = [
+            'time' => $time,
+            'location' => $locIn !== '' ? $locIn : null,
+            'dutyId' => $dutyId > 0 ? $dutyId : 0,
+        ];
+    }
+    return $map;
+}
+
+function vth_event_set_duty_schedule(mysqli $conn, int $assignmentId, string $date, string $time, ?string $location, int $dutyId = 0): void
+{
+    if ($dutyId > 0) {
+        if ($location === null) {
+            $stmt = $conn->prepare(
+                "UPDATE vth_event_duties
+                 SET reporting_time = ?, reporting_location = NULL
+                 WHERE id = ? AND assignment_id = ? AND status <> 'cancelled'"
+            );
+            $stmt->bind_param('sii', $time, $dutyId, $assignmentId);
+        } else {
+            $stmt = $conn->prepare(
+                "UPDATE vth_event_duties
+                 SET reporting_time = ?, reporting_location = ?
+                 WHERE id = ? AND assignment_id = ? AND status <> 'cancelled'"
+            );
+            $stmt->bind_param('ssii', $time, $location, $dutyId, $assignmentId);
+        }
+        $stmt->execute();
+        $stmt->close();
+    }
+    if ($location === null) {
+        $stmt = $conn->prepare(
+            "UPDATE vth_event_duties
+             SET reporting_time = ?, reporting_location = NULL
+             WHERE assignment_id = ? AND DATE(duty_date) = ? AND status <> 'cancelled'"
+        );
+        $stmt->bind_param('sis', $time, $assignmentId, $date);
+    } else {
+        $stmt = $conn->prepare(
+            "UPDATE vth_event_duties
+             SET reporting_time = ?, reporting_location = ?
+             WHERE assignment_id = ? AND DATE(duty_date) = ? AND status <> 'cancelled'"
+        );
+        $stmt->bind_param('ssis', $time, $location, $assignmentId, $date);
+    }
+    $stmt->execute();
+    $stmt->close();
+}
+
+function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, array $dates, array $schedules = []): array
 {
     $event = vth_event_get($conn, (int) $assignment['event_id']);
     if (!$event) {
@@ -589,32 +944,84 @@ function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, arra
     $created = 0;
     $skipped = 0;
     $errors = [];
+    $scheduleMap = vth_event_schedule_map($schedules);
     $eventVehicleId = isset($assignment['event_vehicle_id']) && $assignment['event_vehicle_id'] !== null
         ? (int) $assignment['event_vehicle_id'] : null;
     $fleetVehicleId = isset($assignment['fleet_vehicle_id']) && $assignment['fleet_vehicle_id'] !== null
         ? (int) $assignment['fleet_vehicle_id'] : null;
     $driverId = $assignment['driver_id'] !== null ? (int) $assignment['driver_id'] : null;
     $snap = vth_event_snapshots($conn, $eventVehicleId, $driverId, $fleetVehicleId);
+    $asgId = (int) $assignment['id'];
     foreach ($dates as $date) {
         $date = substr((string) $date, 0, 10);
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             $errors[] = "Invalid date: $date";
             continue;
         }
+        if (isset($scheduleMap[$date])) {
+            $own = $conn->prepare(
+                'SELECT id FROM vth_event_duties
+                 WHERE assignment_id = ? AND duty_date = ? AND status <> \'cancelled\' LIMIT 1'
+            );
+            $own->bind_param('is', $asgId, $date);
+            $own->execute();
+            $mine = $own->get_result()->fetch_assoc();
+            $own->close();
+            if ($mine) {
+                vth_event_set_duty_schedule(
+                    $conn,
+                    $asgId,
+                    $date,
+                    $scheduleMap[$date]['time'],
+                    $scheduleMap[$date]['location'],
+                    (int) ($scheduleMap[$date]['dutyId'] ?? 0)
+                );
+                $skipped++;
+                continue;
+            }
+        }
         if ($eventVehicleId) {
             $chk = $conn->prepare(
-                'SELECT id FROM vth_event_duties
+                'SELECT id, assignment_id, status, opening_at FROM vth_event_duties
                  WHERE event_id = ? AND event_vehicle_id = ? AND duty_date = ? AND status <> \'cancelled\' LIMIT 1'
             );
             $chk->bind_param('iis', $assignment['event_id'], $eventVehicleId, $date);
             $chk->execute();
-            if ($chk->get_result()->fetch_assoc()) {
-                $chk->close();
+            $existingVehicleDuty = $chk->get_result()->fetch_assoc();
+            $chk->close();
+            if ($existingVehicleDuty) {
+                $existingVehicleId = (int) $existingVehicleDuty['id'];
+                if (empty($existingVehicleDuty['opening_at']) && (int) $existingVehicleDuty['assignment_id'] !== $asgId) {
+                    $clash = $conn->prepare(
+                        'SELECT id FROM vth_event_duties WHERE assignment_id = ? AND duty_date = ? AND id <> ? LIMIT 1'
+                    );
+                    $clash->bind_param('isi', $asgId, $date, $existingVehicleId);
+                    $clash->execute();
+                    $blocked = (bool) $clash->get_result()->fetch_assoc();
+                    $clash->close();
+                    if (!$blocked) {
+                        $move = $conn->prepare('UPDATE vth_event_duties SET assignment_id = ? WHERE id = ? AND opening_at IS NULL');
+                        $move->bind_param('ii', $asgId, $existingVehicleId);
+                        $move->execute();
+                        $move->close();
+                    }
+                }
+                if (isset($scheduleMap[$date])) {
+                    $keepTime = $scheduleMap[$date]['time'];
+                    $keepLoc = $scheduleMap[$date]['location'];
+                    if ($keepLoc === null) {
+                        $keep = $conn->prepare('UPDATE vth_event_duties SET reporting_time = ?, reporting_location = NULL WHERE id = ?');
+                        $keep->bind_param('si', $keepTime, $existingVehicleId);
+                    } else {
+                        $keep = $conn->prepare('UPDATE vth_event_duties SET reporting_time = ?, reporting_location = ? WHERE id = ?');
+                        $keep->bind_param('ssi', $keepTime, $keepLoc, $existingVehicleId);
+                    }
+                    $keep->execute();
+                    $keep->close();
+                }
                 $skipped++;
-                $errors[] = 'Duty already exists for this vehicle on this date.';
                 continue;
             }
-            $chk->close();
         } elseif ($fleetVehicleId) {
             $chk = $conn->prepare(
                 'SELECT id FROM vth_event_duties
@@ -630,21 +1037,49 @@ function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, arra
             }
             $chk->close();
         }
-        $asgId = (int) $assignment['id'];
-        $exists = $conn->prepare('SELECT id FROM vth_event_duties WHERE assignment_id = ? AND duty_date = ? LIMIT 1');
+        $exists = $conn->prepare(
+            'SELECT id, status, opening_at FROM vth_event_duties WHERE assignment_id = ? AND duty_date = ? LIMIT 1'
+        );
         $exists->bind_param('is', $asgId, $date);
         $exists->execute();
-        if ($exists->get_result()->fetch_assoc()) {
-            $exists->close();
+        $existingDuty = $exists->get_result()->fetch_assoc();
+        $exists->close();
+        if ($existingDuty) {
+            $existingId = (int) $existingDuty['id'];
+            $canRevive = ($existingDuty['status'] ?? '') === 'cancelled' && empty($existingDuty['opening_at']);
+            if ($canRevive) {
+                $revive = $conn->prepare(
+                    "UPDATE vth_event_duties SET status = 'not_started'
+                     WHERE id = ? AND status = 'cancelled' AND opening_at IS NULL"
+                );
+                $revive->bind_param('i', $existingId);
+                $revive->execute();
+                $revive->close();
+                if (isset($scheduleMap[$date])) {
+                    vth_event_set_duty_schedule(
+                        $conn,
+                        $asgId,
+                        $date,
+                        $scheduleMap[$date]['time'],
+                        $scheduleMap[$date]['location'],
+                        $existingId
+                    );
+                }
+            }
             $skipped++;
             continue;
         }
-        $exists->close();
 
         $slip = vth_event_next_slip_no($conn, $event['event_code'], $date);
         $code = vth_event_verification_code();
         $time = $assignment['reporting_time'] ?: $event['default_reporting_time'];
         $loc = $assignment['reporting_location'] ?: $event['reporting_location'];
+        if (isset($scheduleMap[$date])) {
+            $time = $scheduleMap[$date]['time'];
+            if ($scheduleMap[$date]['location'] !== null) {
+                $loc = $scheduleMap[$date]['location'];
+            }
+        }
         $vtype = $assignment['vehicle_type'];
         $eventId = (int) $assignment['event_id'];
         $stmt = $conn->prepare(
@@ -739,7 +1174,10 @@ function vth_event_sync_assignment_dates(mysqli $conn, int $assignmentId, array 
     $locked->execute();
     $lockRes = $locked->get_result();
     while ($row = $lockRes->fetch_assoc()) {
-        $keep[] = $row['duty_date'];
+        $lockedDay = substr((string) ($row['duty_date'] ?? ''), 0, 10);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $lockedDay)) {
+            $keep[] = $lockedDay;
+        }
     }
     $locked->close();
     $keep = array_values(array_unique($keep));
@@ -747,13 +1185,13 @@ function vth_event_sync_assignment_dates(mysqli $conn, int $assignmentId, array 
         $in = implode(',', array_fill(0, count($keep), '?'));
         $types = 'i' . str_repeat('s', count($keep));
         $params = array_merge([$assignmentId], $keep);
-        $sql = "DELETE FROM vth_event_assignment_dates WHERE assignment_id = ? AND duty_date NOT IN ($in)";
+        $sql = "DELETE FROM vth_event_assignment_dates WHERE assignment_id = ? AND DATE(duty_date) NOT IN ($in)";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $stmt->close();
         $cancelSql = "UPDATE vth_event_duties SET status = 'cancelled'
-                      WHERE assignment_id = ? AND status IN ('not_started','scheduled') AND duty_date NOT IN ($in)";
+                      WHERE assignment_id = ? AND status IN ('not_started','scheduled') AND DATE(duty_date) NOT IN ($in)";
         $cancel = $conn->prepare($cancelSql);
         $cancel->bind_param($types, ...$params);
         $cancel->execute();
@@ -807,6 +1245,7 @@ function vth_event_lookup_token(mysqli $conn, string $raw, ?string $type = null)
 
 function vth_event_issue_token(mysqli $conn, string $type, int $eventId, ?int $assignmentId, ?int $driverId, ?string $expiresAt = null): string
 {
+    vth_event_ensure_token_plain($conn);
     $raw = vth_event_new_token();
     $hash = vth_event_hash_token($raw);
     $stmt = $conn->prepare(
@@ -941,7 +1380,7 @@ function vth_event_daily_stats(mysqli $conn, int $eventId, string $date): array
 
 function vth_event_schema_marker(): string
 {
-    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v12.ok';
+    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v16.ok';
 }
 
 function vth_event_schema_ready(mysqli $conn): bool
@@ -951,11 +1390,19 @@ function vth_event_schema_ready(mysqli $conn): bool
     $gpsClient = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'last_gps_client'");
     $token = @$conn->query("SHOW COLUMNS FROM `vth_event_tokens` LIKE 'token_plain'");
     $push = @$conn->query("SHOW TABLES LIKE 'vth_event_driver_push'");
+    $placeSince = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'place_since'");
+    $spans = @$conn->query("SHOW TABLES LIKE 'vth_event_duty_spans'");
+    $expo = @$conn->query("SHOW TABLES LIKE 'vth_event_driver_expo'");
+    $paused = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'paused_seconds'");
     return $duty instanceof mysqli_result && $duty->num_rows > 0
         && $prompt instanceof mysqli_result && $prompt->num_rows > 0
         && $gpsClient instanceof mysqli_result && $gpsClient->num_rows > 0
         && $token instanceof mysqli_result && $token->num_rows > 0
-        && $push instanceof mysqli_result && $push->num_rows > 0;
+        && $push instanceof mysqli_result && $push->num_rows > 0
+        && $placeSince instanceof mysqli_result && $placeSince->num_rows > 0
+        && $spans instanceof mysqli_result && $spans->num_rows > 0
+        && $expo instanceof mysqli_result && $expo->num_rows > 0
+        && $paused instanceof mysqli_result && $paused->num_rows > 0;
 }
 
 function vth_event_ensure_optional_columns(mysqli $conn): void
@@ -992,6 +1439,21 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
               PRIMARY KEY (`id`),
               UNIQUE KEY `uq_vth_event_vehicle_reg` (`event_id`, `registration_number`),
               KEY `idx_vth_event_vehicle_event` (`event_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+    } catch (Throwable $e) {
+        // table already exists
+    }
+    try {
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS `vth_event_duty_spans` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `duty_id` INT UNSIGNED NOT NULL,
+              `place` VARCHAR(12) NOT NULL,
+              `started_at` DATETIME NOT NULL,
+              `ended_at` DATETIME NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_vth_duty_span` (`duty_id`, `started_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
     } catch (Throwable $e) {
@@ -1037,6 +1499,7 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
     } catch (Throwable $e) {
         // table already exists
     }
+    vth_event_ensure_expo_table($conn);
     $alters = [
         "ALTER TABLE drivers ADD COLUMN alt_mobile VARCHAR(20) NULL",
         "ALTER TABLE drivers ADD COLUMN aadhaar_last4 CHAR(4) NULL",
@@ -1060,6 +1523,10 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
         "ALTER TABLE vth_event_duties ADD COLUMN duty_place VARCHAR(12) NOT NULL DEFAULT 'trip'",
         "ALTER TABLE vth_event_duties ADD COLUMN parking_prompt_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN parking_prompt_nonce VARCHAR(32) NULL",
+        "ALTER TABLE vth_event_duties ADD COLUMN trip_seconds INT UNSIGNED NOT NULL DEFAULT 0",
+        "ALTER TABLE vth_event_duties ADD COLUMN parking_seconds INT UNSIGNED NOT NULL DEFAULT 0",
+        "ALTER TABLE vth_event_duties ADD COLUMN place_since DATETIME NULL",
+        "ALTER TABLE vth_event_duties ADD COLUMN paused_seconds INT UNSIGNED NOT NULL DEFAULT 0",
         "ALTER TABLE vth_event_duties ADD COLUMN last_gps_client VARCHAR(64) NULL",
         "ALTER TABLE vth_event_tokens ADD COLUMN token_plain VARCHAR(128) NULL",
     ];
@@ -1198,8 +1665,72 @@ function vth_event_existing_document_ids(mysqli $conn, array $ids): array
     return $found;
 }
 
+/** Current plate on the vehicle record, so a corrected number shows on duties that already started. */
+function vth_event_stamp_live_registrations(mysqli $conn, array $rows): array
+{
+    if (!$rows) {
+        return $rows;
+    }
+    $eventIds = [];
+    $fleetIds = [];
+    foreach ($rows as $row) {
+        $eventId = (int) ($row['event_vehicle_id'] ?? 0);
+        $fleetId = (int) ($row['fleet_vehicle_id'] ?? 0);
+        if ($eventId > 0) {
+            $eventIds[$eventId] = $eventId;
+        }
+        if ($fleetId > 0) {
+            $fleetIds[$fleetId] = $fleetId;
+        }
+    }
+    $eventRegs = [];
+    $eventSql = vth_event_id_sql($eventIds);
+    if ($eventSql !== '') {
+        $res = $conn->query(
+            "SELECT id, registration_number FROM vth_event_vehicles
+             WHERE id IN ($eventSql) AND status <> 'inactive'"
+        );
+        if ($res) {
+            while ($found = $res->fetch_assoc()) {
+                $reg = trim((string) ($found['registration_number'] ?? ''));
+                if ($reg !== '') {
+                    $eventRegs[(int) $found['id']] = $reg;
+                }
+            }
+        }
+    }
+    $fleetRegs = [];
+    $fleetSql = vth_event_id_sql($fleetIds);
+    if ($fleetSql !== '') {
+        $res = $conn->query("SELECT id, vehicle_number FROM fleet_vehicles WHERE id IN ($fleetSql)");
+        if ($res) {
+            while ($found = $res->fetch_assoc()) {
+                $reg = trim((string) ($found['vehicle_number'] ?? ''));
+                if ($reg !== '') {
+                    $fleetRegs[(int) $found['id']] = $reg;
+                }
+            }
+        }
+    }
+    foreach ($rows as $i => $row) {
+        $eventId = (int) ($row['event_vehicle_id'] ?? 0);
+        $fleetId = (int) ($row['fleet_vehicle_id'] ?? 0);
+        $reg = '';
+        if ($eventId > 0 && isset($eventRegs[$eventId])) {
+            $reg = $eventRegs[$eventId];
+        } elseif ($fleetId > 0 && isset($fleetRegs[$fleetId])) {
+            $reg = $fleetRegs[$fleetId];
+        }
+        if ($reg !== '') {
+            $rows[$i]['vehicle_reg_snapshot'] = $reg;
+        }
+    }
+    return $rows;
+}
+
 function vth_event_map_duty_rows(mysqli $conn, array $rows): array
 {
+    $rows = vth_event_stamp_live_registrations($conn, $rows);
     $ids = [];
     foreach ($rows as $row) {
         if (!empty($row['opening_photo_id'])) {
@@ -1578,6 +2109,10 @@ function vth_event_gps_payload(?mysqli $conn, array $row, string $side): ?array
 
 function vth_admin_duty_row(array $row, ?mysqli $conn = null, ?array $knownDocIds = null): array
 {
+    if ($conn) {
+        $stamped = vth_event_stamp_live_registrations($conn, [$row]);
+        $row = $stamped[0];
+    }
     $openId = $row['opening_photo_id'] !== null ? (int) $row['opening_photo_id'] : null;
     $closeId = $row['closing_photo_id'] !== null ? (int) $row['closing_photo_id'] : null;
     $keepPhoto = static function (?int $id) use ($conn, $knownDocIds): ?int {
@@ -1594,6 +2129,7 @@ function vth_admin_duty_row(array $row, ?mysqli $conn = null, ?array $knownDocId
     };
     $openId = $keepPhoto($openId);
     $closeId = $keepPhoto($closeId);
+    $spanTotals = $conn ? vth_event_place_span_totals($conn, $row) : null;
     return [
         'id' => (int) $row['id'],
         'dutySlipNo' => $row['duty_slip_no'],
@@ -1626,7 +2162,18 @@ function vth_admin_duty_row(array $row, ?mysqli $conn = null, ?array $knownDocId
         'closingGps' => vth_event_gps_payload($conn, $row, 'closing'),
         'status' => $row['status'],
         'endRequestedAt' => $row['end_requested_at'] ?? null,
+        'pausedSeconds' => isset($row['paused_seconds']) ? (int) $row['paused_seconds'] : 0,
         'dutyPlace' => (($row['duty_place'] ?? '') === 'parking') ? 'parking' : 'trip',
+        'tripSeconds' => $spanTotals
+            ? (int) $spanTotals['tripSeconds']
+            : (isset($row['trip_seconds']) ? (int) $row['trip_seconds'] : 0),
+        'parkingSeconds' => $spanTotals
+            ? (int) $spanTotals['parkingSeconds']
+            : (isset($row['parking_seconds']) ? (int) $row['parking_seconds'] : 0),
+        'placeSince' => $spanTotals
+            ? $spanTotals['placeSince']
+            : (!empty($row['place_since']) ? $row['place_since'] : null),
+        'placeSpans' => ($spanTotals && !empty($spanTotals['spans'])) ? $spanTotals['spans'] : [],
         'parkingPromptAt' => $row['parking_prompt_at'] ?? null,
         'parkingPromptNonce' => $row['parking_prompt_nonce'] ?? null,
         'endRequestSeenAt' => $row['end_request_seen_at'] ?? null,
@@ -1652,21 +2199,17 @@ function vth_event_refresh_assignment_snapshots(mysqli $conn, array $assignment,
     );
     $sql = 'UPDATE vth_event_duties
             SET event_vehicle_id = ?, fleet_vehicle_id = ?, driver_id = ?, vehicle_type = ?,
-                vehicle_reg_snapshot = ?, driver_name_snapshot = ?, driver_mobile_snapshot = ?,
-                reporting_time = COALESCE(?, reporting_time),
-                reporting_location = COALESCE(?, reporting_location)
+                vehicle_reg_snapshot = ?, driver_name_snapshot = ?, driver_mobile_snapshot = ?
             WHERE assignment_id = ? AND status IN (\'not_started\', \'scheduled\')';
     if ($futureOnly) {
         $sql .= ' AND duty_date >= CURDATE()';
     }
     $did = $assignment['driver_id'] !== null ? (int) $assignment['driver_id'] : null;
     $vtype = $assignment['vehicle_type'];
-    $time = $assignment['reporting_time'];
-    $loc = $assignment['reporting_location'];
     $asg = (int) $assignment['id'];
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
-        'iiissssssi',
+        'iiissssi',
         $eventVid,
         $fleetVid,
         $did,
@@ -1674,12 +2217,25 @@ function vth_event_refresh_assignment_snapshots(mysqli $conn, array $assignment,
         $snap['vehicle_reg_snapshot'],
         $snap['driver_name_snapshot'],
         $snap['driver_mobile_snapshot'],
-        $time,
-        $loc,
         $asg
     );
     $stmt->execute();
     $stmt->close();
+    $liveVehicle = $conn->prepare(
+        "UPDATE vth_event_duties
+         SET event_vehicle_id = ?, fleet_vehicle_id = ?, vehicle_type = ?, vehicle_reg_snapshot = ?
+         WHERE assignment_id = ? AND status = 'in_progress'"
+    );
+    $liveVehicle->bind_param(
+        'iissi',
+        $eventVid,
+        $fleetVid,
+        $vtype,
+        $snap['vehicle_reg_snapshot'],
+        $asg
+    );
+    $liveVehicle->execute();
+    $liveVehicle->close();
     if ($did) {
         $live = $conn->prepare(
             "UPDATE vth_event_duties
@@ -1689,6 +2245,13 @@ function vth_event_refresh_assignment_snapshots(mysqli $conn, array $assignment,
         $live->bind_param('issi', $did, $snap['driver_name_snapshot'], $snap['driver_mobile_snapshot'], $asg);
         $live->execute();
         $live->close();
+    }
+}
+
+function vth_event_apply_date_schedules(mysqli $conn, int $assignmentId, array $schedules): void
+{
+    foreach (vth_event_schedule_map($schedules) as $date => $item) {
+        vth_event_set_duty_schedule($conn, $assignmentId, (string) $date, $item['time'], $item['location'], (int) ($item['dutyId'] ?? 0));
     }
 }
 
@@ -1770,7 +2333,8 @@ function vth_event_track_row(array $row): array
 function vth_event_track_list(mysqli $conn, int $eventId, string $date): array
 {
     $stmt = $conn->prepare(
-        'SELECT id, duty_slip_no, driver_id, vehicle_type, vehicle_reg_snapshot, driver_name_snapshot, driver_mobile_snapshot,
+        'SELECT id, duty_slip_no, driver_id, event_vehicle_id, fleet_vehicle_id, vehicle_type, vehicle_reg_snapshot,
+                driver_name_snapshot, driver_mobile_snapshot,
                 status, opening_at, closing_at, opening_lat, opening_lng, opening_gps_accuracy, opening_address,
                 last_lat, last_lng, last_gps_accuracy, last_gps_at, last_gps_address
          FROM vth_event_duties
@@ -1791,6 +2355,7 @@ function vth_event_track_list(mysqli $conn, int $eventId, string $date): array
         $raw[] = $row;
     }
     $stmt->close();
+    $raw = vth_event_stamp_live_registrations($conn, $raw);
     $phones = vth_event_driver_phones($conn, array_column($raw, 'driver_id'));
     $out = [];
     foreach ($raw as $row) {
@@ -1854,7 +2419,8 @@ function vth_event_track_ping(mysqli $conn, array $duty, float $lat, float $lng,
     $prevAccRaw = $duty['last_gps_accuracy'] ?? null;
     $prevAcc = ($prevAccRaw !== null && $prevAccRaw !== '') ? (float) $prevAccRaw : 99999.0;
     if ($age < 120 && $prevAcc > 0 && $prevAcc <= 100 && $newAcc > 300 && $moved < 400) {
-        return ['accepted' => true, 'reason' => 'kept_precise', 'track' => vth_event_track_row($duty)];
+        $kept = vth_event_stamp_live_registrations($conn, [$duty]);
+        return ['accepted' => true, 'reason' => 'kept_precise', 'track' => vth_event_track_row($kept[0])];
     }
     $insert = $age >= 20 && $moved >= 15;
     $accVal = $acc ?? 0;
@@ -1910,7 +2476,8 @@ function vth_event_track_ping(mysqli $conn, array $duty, float $lat, float $lng,
         }
     }
     $fresh = $conn->prepare(
-        'SELECT id, duty_slip_no, vehicle_type, vehicle_reg_snapshot, driver_name_snapshot, driver_mobile_snapshot,
+        'SELECT id, duty_slip_no, event_vehicle_id, fleet_vehicle_id, vehicle_type, vehicle_reg_snapshot,
+                driver_name_snapshot, driver_mobile_snapshot,
                 status, opening_at, closing_at, opening_lat, opening_lng, opening_gps_accuracy, opening_address,
                 last_lat, last_lng, last_gps_accuracy, last_gps_at, last_gps_address
          FROM vth_event_duties WHERE id = ?'
@@ -1919,7 +2486,8 @@ function vth_event_track_ping(mysqli $conn, array $duty, float $lat, float $lng,
     $fresh->execute();
     $row = $fresh->get_result()->fetch_assoc();
     $fresh->close();
-    return ['accepted' => true, 'track' => vth_event_track_row($row ?: $duty)];
+    $tracked = vth_event_stamp_live_registrations($conn, [$row ?: $duty]);
+    return ['accepted' => true, 'track' => vth_event_track_row($tracked[0])];
 }
 
 function vth_event_secret(string $name): string
@@ -1953,6 +2521,219 @@ function vth_event_load_web_push(): bool
     return false;
 }
 
+function vth_event_clip_end(array $row): int
+{
+    $now = time();
+    $closed = !empty($row['closing_at']) ? strtotime((string) $row['closing_at']) : 0;
+    $asked = !empty($row['end_requested_at']) ? strtotime((string) $row['end_requested_at']) : 0;
+    if ($asked && (!$closed || $closed > $asked)) {
+        return $asked;
+    }
+    if ($closed) {
+        return $closed;
+    }
+    return $now;
+}
+
+function vth_event_place_span_ensure(mysqli $conn): bool
+{
+    static $ok = null;
+    if ($ok === true) {
+        return true;
+    }
+    @$conn->query(
+        "CREATE TABLE IF NOT EXISTS `vth_event_duty_spans` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `duty_id` INT UNSIGNED NOT NULL,
+          `place` VARCHAR(12) NOT NULL,
+          `started_at` DATETIME NOT NULL,
+          `ended_at` DATETIME NULL,
+          PRIMARY KEY (`id`),
+          KEY `idx_vth_duty_span` (`duty_id`, `started_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $res = @$conn->query("SHOW TABLES LIKE 'vth_event_duty_spans'");
+    $ok = $res instanceof mysqli_result && $res->num_rows > 0;
+    return $ok;
+}
+
+function vth_event_place_span_totals(mysqli $conn, array $row): ?array
+{
+    if (!vth_event_place_span_ensure($conn)) {
+        return null;
+    }
+    $dutyId = (int) ($row['id'] ?? 0);
+    if ($dutyId < 1) {
+        return null;
+    }
+    $stmt = $conn->prepare('SELECT place, started_at, ended_at FROM vth_event_duty_spans WHERE duty_id = ? ORDER BY id');
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $dutyId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $spans = [];
+    while ($span = $res->fetch_assoc()) {
+        $spans[] = $span;
+    }
+    $stmt->close();
+    if (!$spans) {
+        return null;
+    }
+    $trip = 0;
+    $parking = 0;
+    $since = null;
+    $spanList = [];
+    $closedAt = !empty($row['closing_at']) ? strtotime((string) $row['closing_at']) : 0;
+    $clockEnd = $closedAt > 0 ? $closedAt : time();
+    foreach ($spans as $span) {
+        $start = strtotime((string) $span['started_at']);
+        if (!$start) {
+            continue;
+        }
+        $spanList[] = [
+            'place' => (($span['place'] ?? '') === 'parking') ? 'parking' : 'trip',
+            'at' => $span['started_at'],
+        ];
+        $stop = !empty($span['ended_at']) ? strtotime((string) $span['ended_at']) : $clockEnd;
+        if (!$stop || $stop < $start) {
+            $stop = $start;
+        }
+        $add = $stop - $start;
+        if (($span['place'] ?? '') === 'parking') {
+            $parking += $add;
+        } else {
+            $trip += $add;
+        }
+        if (empty($span['ended_at'])) {
+            $since = $span['started_at'];
+        }
+    }
+    return [
+        'tripSeconds' => $trip,
+        'parkingSeconds' => $parking,
+        'placeSince' => $since,
+        'spans' => $spanList,
+    ];
+}
+
+function vth_event_place_span_switch(mysqli $conn, int $dutyId, string $newPlace): void
+{
+    if ($dutyId < 1 || ($newPlace !== 'trip' && $newPlace !== 'parking')) {
+        return;
+    }
+    if (!vth_event_place_span_ensure($conn)) {
+        return;
+    }
+    $stmt = $conn->prepare('SELECT opening_at, closing_at, end_requested_at, duty_place FROM vth_event_duties WHERE id = ?');
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('i', $dutyId);
+    $stmt->execute();
+    $duty = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$duty || empty($duty['opening_at'])) {
+        return;
+    }
+    $stampTs = time();
+    if (!empty($duty['closing_at'])) {
+        $closedAt = strtotime((string) $duty['closing_at']);
+        if ($closedAt && $closedAt < $stampTs) {
+            $stampTs = $closedAt;
+        }
+    }
+    $stamp = date('Y-m-d H:i:s', $stampTs);
+    $openStmt = $conn->prepare(
+        'SELECT id, place FROM vth_event_duty_spans WHERE duty_id = ? AND ended_at IS NULL ORDER BY id DESC LIMIT 1'
+    );
+    if (!$openStmt) {
+        return;
+    }
+    $openStmt->bind_param('i', $dutyId);
+    $openStmt->execute();
+    $open = $openStmt->get_result()->fetch_assoc();
+    $openStmt->close();
+    if (!$open) {
+        $old = (($duty['duty_place'] ?? '') === 'parking') ? 'parking' : 'trip';
+        if ($old === $newPlace) {
+            $seed = $conn->prepare('INSERT INTO vth_event_duty_spans (duty_id, place, started_at) VALUES (?, ?, ?)');
+            if ($seed) {
+                $opening = (string) $duty['opening_at'];
+                $seed->bind_param('iss', $dutyId, $old, $opening);
+                $seed->execute();
+                $seed->close();
+            }
+            return;
+        }
+        if ($old === 'trip') {
+            $seed = $conn->prepare('INSERT INTO vth_event_duty_spans (duty_id, place, started_at, ended_at) VALUES (?, ?, ?, ?)');
+            if ($seed) {
+                $opening = (string) $duty['opening_at'];
+                $seed->bind_param('isss', $dutyId, $old, $opening, $stamp);
+                $seed->execute();
+                $seed->close();
+            }
+        }
+        $next = $conn->prepare('INSERT INTO vth_event_duty_spans (duty_id, place, started_at) VALUES (?, ?, ?)');
+        if ($next) {
+            $next->bind_param('iss', $dutyId, $newPlace, $stamp);
+            $next->execute();
+            $next->close();
+        }
+        return;
+    }
+    if (($open['place'] ?? '') === $newPlace) {
+        return;
+    }
+    $openId = (int) $open['id'];
+    $close = $conn->prepare('UPDATE vth_event_duty_spans SET ended_at = ? WHERE id = ? AND ended_at IS NULL');
+    if ($close) {
+        $close->bind_param('si', $stamp, $openId);
+        $close->execute();
+        $close->close();
+    }
+    $next = $conn->prepare('INSERT INTO vth_event_duty_spans (duty_id, place, started_at) VALUES (?, ?, ?)');
+    if ($next) {
+        $next->bind_param('iss', $dutyId, $newPlace, $stamp);
+        $next->execute();
+        $next->close();
+    }
+}
+
+function vth_event_roll_place(mysqli $conn, int $dutyId): void
+{
+    if ($dutyId < 1) {
+        return;
+    }
+    $col = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'place_since'");
+    if (!($col instanceof mysqli_result) || $col->num_rows < 1) {
+        return;
+    }
+    $stmt = $conn->prepare(
+        "UPDATE vth_event_duties
+         SET trip_seconds = trip_seconds + IF(
+                 place_since IS NULL,
+                 GREATEST(0, TIMESTAMPDIFF(SECOND, opening_at, COALESCE(closing_at, NOW()))),
+                 IF(duty_place = 'parking', 0, GREATEST(0, TIMESTAMPDIFF(SECOND, place_since, COALESCE(closing_at, NOW()))))
+             ),
+             parking_seconds = parking_seconds + IF(
+                 place_since IS NULL OR duty_place <> 'parking',
+                 0,
+                 GREATEST(0, TIMESTAMPDIFF(SECOND, place_since, COALESCE(closing_at, NOW())))
+             ),
+             place_since = COALESCE(closing_at, NOW())
+         WHERE id = ? AND opening_at IS NOT NULL"
+    );
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('i', $dutyId);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function vth_event_set_duty_place(mysqli $conn, int $dutyId, string $place, int $eventId): array
 {
     if ($place !== 'trip' && $place !== 'parking') {
@@ -1972,11 +2753,13 @@ function vth_event_set_duty_place(mysqli $conn, int $dutyId, string $place, int 
     if (($duty['status'] ?? '') !== 'in_progress' || empty($duty['opening_at']) || !empty($duty['closing_at'])) {
         vth_event_error('In Trip and In Parking are available only after the driver starts the duty');
     }
+    vth_event_place_span_switch($conn, $dutyId, $place);
+    vth_event_roll_place($conn, $dutyId);
     if ($place === 'trip') {
         $nonce = bin2hex(random_bytes(8));
         $upd = $conn->prepare(
             'UPDATE vth_event_duties
-             SET duty_place = ?, parking_prompt_at = NOW(), parking_prompt_nonce = ?
+             SET duty_place = ?, parking_prompt_at = NOW(), parking_prompt_nonce = ?, place_since = NOW()
              WHERE id = ?'
         );
         $upd->bind_param('ssi', $place, $nonce, $dutyId);
@@ -2003,7 +2786,7 @@ function vth_event_set_duty_place(mysqli $conn, int $dutyId, string $place, int 
     }
     $upd = $conn->prepare(
         'UPDATE vth_event_duties
-         SET duty_place = ?, parking_prompt_nonce = NULL
+         SET duty_place = ?, parking_prompt_nonce = NULL, place_since = NOW()
          WHERE id = ?'
     );
     $upd->bind_param('si', $place, $dutyId);
@@ -2070,6 +2853,206 @@ function vth_event_request_driver_end(mysqli $conn, int $dutyId, string $actorTy
     $delivery = vth_event_push_end_notice($conn, $fresh);
     try {
         $delivery = array_merge($delivery, vth_event_send_end_whatsapp($conn, $fresh));
+    } catch (Throwable $e) {
+        $delivery['whatsapp'] = 'failed';
+    }
+    return [
+        'duty' => vth_admin_duty_row($fresh, $conn),
+        'delivery' => $delivery,
+    ];
+}
+
+function vth_event_revoke_driver_end(mysqli $conn, int $dutyId, string $actorType, ?int $eventId = null, $actorId = null): array
+{
+    if ($dutyId < 1) {
+        vth_event_error('Duty not found', 404);
+    }
+    if ($actorType !== 'admin' && $actorType !== 'share') {
+        vth_event_error('Invalid requester');
+    }
+    $stmt = $conn->prepare('SELECT * FROM vth_event_duties WHERE id = ?');
+    $stmt->bind_param('i', $dutyId);
+    $stmt->execute();
+    $duty = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$duty) {
+        vth_event_error('Duty not found', 404);
+    }
+    if ($eventId !== null && (int) $duty['event_id'] !== $eventId) {
+        vth_event_error('Duty not found', 404);
+    }
+    if (($duty['status'] ?? '') !== 'in_progress' || empty($duty['opening_at']) || !empty($duty['closing_at'])) {
+        vth_event_error('Revoke is only available while the duty is still open');
+    }
+    if (empty($duty['end_requested_at'])) {
+        vth_event_error('There is no end request to revoke');
+    }
+    $previous = (string) $duty['end_requested_at'];
+    $upd = $conn->prepare(
+        'UPDATE vth_event_duties
+         SET end_requested_at = NULL, end_request_seen_at = NULL,
+             end_request_nonce = NULL, end_requested_by = NULL
+         WHERE id = ? AND status = \'in_progress\' AND closing_at IS NULL AND end_requested_at IS NOT NULL'
+    );
+    $upd->bind_param('i', $dutyId);
+    $upd->execute();
+    $changed = $upd->affected_rows > 0;
+    $upd->close();
+    if (!$changed) {
+        vth_event_error('This trip is no longer waiting to end');
+    }
+    vth_event_audit($conn, $actorType, $actorId, 'revoke_driver_end', 'duty', $dutyId, (int) $duty['event_id'], [
+        'endRequestedAt' => $previous,
+    ], ['revoked' => true]);
+    $freshStmt = $conn->prepare(
+        'SELECT d.*, e.name AS event_name, e.event_code,
+                e.reporting_location AS event_reporting_location, e.support_mobile
+         FROM vth_event_duties d
+         JOIN vth_events e ON e.id = d.event_id
+         WHERE d.id = ?'
+    );
+    $freshStmt->bind_param('i', $dutyId);
+    $freshStmt->execute();
+    $fresh = $freshStmt->get_result()->fetch_assoc();
+    $freshStmt->close();
+    if (!$fresh) {
+        vth_event_error('Duty not found', 404);
+    }
+    $delivery = vth_event_push_end_notice(
+        $conn,
+        $fresh,
+        'Continue this duty',
+        'The end request was cancelled. Time is counting again.',
+        'event-duty-end-' . $dutyId
+    );
+    try {
+        $delivery = array_merge($delivery, vth_event_send_continue_whatsapp($conn, $fresh));
+    } catch (Throwable $e) {
+        $delivery['whatsapp'] = 'failed';
+    }
+    return [
+        'duty' => vth_admin_duty_row($fresh, $conn),
+        'delivery' => $delivery,
+    ];
+}
+
+function vth_event_reopen_place_span(mysqli $conn, int $dutyId, string $place, ?string $closedAt): void
+{
+    if ($dutyId < 1 || !vth_event_place_span_ensure($conn)) {
+        return;
+    }
+    $count = $conn->prepare('SELECT COUNT(*) AS n FROM vth_event_duty_spans WHERE duty_id = ?');
+    if (!$count) {
+        return;
+    }
+    $count->bind_param('i', $dutyId);
+    $count->execute();
+    $existing = (int) ($count->get_result()->fetch_assoc()['n'] ?? 0);
+    $count->close();
+    if ($existing < 1) {
+        return;
+    }
+    $stamp = $closedAt && strtotime($closedAt) ? date('Y-m-d H:i:s', strtotime($closedAt)) : date('Y-m-d H:i:s');
+    $close = $conn->prepare('UPDATE vth_event_duty_spans SET ended_at = ? WHERE duty_id = ? AND ended_at IS NULL');
+    if ($close) {
+        $close->bind_param('si', $stamp, $dutyId);
+        $close->execute();
+        $close->close();
+    }
+    $next = $place === 'parking' ? 'parking' : 'trip';
+    $ins = $conn->prepare('INSERT INTO vth_event_duty_spans (duty_id, place, started_at) VALUES (?, ?, NOW())');
+    if ($ins) {
+        $ins->bind_param('is', $dutyId, $next);
+        $ins->execute();
+        $ins->close();
+    }
+}
+
+function vth_event_resume_duty(mysqli $conn, int $dutyId, string $actorType, ?int $eventId = null, $actorId = null): array
+{
+    if ($dutyId < 1) {
+        vth_event_error('Duty not found', 404);
+    }
+    if ($actorType !== 'admin' && $actorType !== 'share') {
+        vth_event_error('Invalid requester');
+    }
+    $stmt = $conn->prepare('SELECT * FROM vth_event_duties WHERE id = ?');
+    $stmt->bind_param('i', $dutyId);
+    $stmt->execute();
+    $duty = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$duty) {
+        vth_event_error('Duty not found', 404);
+    }
+    if ($eventId !== null && (int) $duty['event_id'] !== $eventId) {
+        vth_event_error('Duty not found', 404);
+    }
+    if (empty($duty['opening_at'])) {
+        vth_event_error('This duty has not started');
+    }
+    $stopped = ($duty['status'] ?? '') === 'completed' || !empty($duty['closing_at']) || $duty['closing_km'] !== null;
+    if (!$stopped) {
+        vth_event_error('This duty is already open');
+    }
+    $paused = isset($duty['paused_seconds']) ? (int) $duty['paused_seconds'] : 0;
+    if (!empty($duty['closing_at'])) {
+        $closed = strtotime((string) $duty['closing_at']);
+        if ($closed) {
+            $paused += max(0, time() - $closed);
+        }
+    }
+    $place = (($duty['duty_place'] ?? '') === 'parking') ? 'parking' : 'trip';
+    $closedAt = !empty($duty['closing_at']) ? (string) $duty['closing_at'] : null;
+    $upd = $conn->prepare(
+        'UPDATE vth_event_duties
+         SET paused_seconds = ?,
+             closing_km = NULL, closing_photo_id = NULL, closing_at = NULL,
+             closing_lat = NULL, closing_lng = NULL, closing_gps_accuracy = NULL, closing_ip = NULL,
+             closing_address = NULL, total_km = NULL,
+             end_requested_at = NULL, end_request_seen_at = NULL,
+             end_request_nonce = NULL, end_requested_by = NULL,
+             status = \'in_progress\', place_since = NOW()
+         WHERE id = ? AND opening_at IS NOT NULL'
+    );
+    $upd->bind_param('ii', $paused, $dutyId);
+    $upd->execute();
+    $changed = $upd->affected_rows > 0;
+    $upd->close();
+    if (!$changed) {
+        vth_event_error('This duty could not be continued');
+    }
+    vth_event_reopen_place_span($conn, $dutyId, $place, $closedAt);
+    vth_event_audit($conn, $actorType, $actorId, 'resume_duty', 'duty', $dutyId, (int) $duty['event_id'], [
+        'closingAt' => $duty['closing_at'] ?? null,
+        'closingKm' => $duty['closing_km'] ?? null,
+        'status' => $duty['status'] ?? null,
+    ], [
+        'pausedSeconds' => $paused,
+        'status' => 'in_progress',
+    ]);
+    $freshStmt = $conn->prepare(
+        'SELECT d.*, e.name AS event_name, e.event_code,
+                e.reporting_location AS event_reporting_location, e.support_mobile
+         FROM vth_event_duties d
+         JOIN vth_events e ON e.id = d.event_id
+         WHERE d.id = ?'
+    );
+    $freshStmt->bind_param('i', $dutyId);
+    $freshStmt->execute();
+    $fresh = $freshStmt->get_result()->fetch_assoc();
+    $freshStmt->close();
+    if (!$fresh) {
+        vth_event_error('Duty not found', 404);
+    }
+    $delivery = vth_event_push_end_notice(
+        $conn,
+        $fresh,
+        'Duty continued',
+        'The ending reading was cleared. Time is counting again.',
+        'event-duty-resume-' . $dutyId
+    );
+    try {
+        $delivery = array_merge($delivery, vth_event_send_resume_whatsapp($conn, $fresh));
     } catch (Throwable $e) {
         $delivery['whatsapp'] = 'failed';
     }
@@ -2186,12 +3169,18 @@ function vth_event_end_whatsapp_text(array $duty, string $url, string $phone): s
         . "*Vizag Taxi Hub – Operations Team*";
 }
 
-function vth_event_send_end_whatsapp(mysqli $conn, array $duty): array
+function vth_event_duty_phone(mysqli $conn, array $duty): string
 {
     $driverId = (int) ($duty['driver_id'] ?? 0);
     $phones = $driverId > 0 ? vth_event_driver_phones($conn, [$driverId]) : [];
     $phone = preg_replace('/\D+/', '', (string) ($phones[$driverId] ?? $duty['driver_mobile_snapshot'] ?? '')) ?? '';
-    if (strlen($phone) < 10) {
+    return strlen($phone) >= 10 ? $phone : '';
+}
+
+function vth_event_send_duty_text(mysqli $conn, array $duty, string $text): array
+{
+    $phone = vth_event_duty_phone($conn, $duty);
+    if ($phone === '') {
         return ['whatsapp' => 'no_phone'];
     }
     $client = __DIR__ . '/../utils/whatsapp_cloud_client.php';
@@ -2204,8 +3193,6 @@ function vth_event_send_end_whatsapp(mysqli $conn, array $duty): array
     if (!function_exists('whatsapp_send_text_message_auto_chunk') || !function_exists('admin_whatsapp_recipients')) {
         return ['whatsapp' => 'not_configured'];
     }
-    $url = vth_event_driver_duty_url($conn, $duty);
-    $text = vth_event_end_whatsapp_text($duty, $url, $phone);
     $targets = [whatsapp_normalize_phone($phone)];
     foreach (admin_whatsapp_recipients() as $adminPhone) {
         $targets[] = whatsapp_normalize_phone((string) $adminPhone);
@@ -2227,6 +3214,220 @@ function vth_event_send_end_whatsapp(mysqli $conn, array $duty): array
     return ['whatsapp' => $sent > 0 ? 'sent' : 'failed', 'whatsappSent' => $sent];
 }
 
+function vth_event_send_end_whatsapp(mysqli $conn, array $duty): array
+{
+    $phone = vth_event_duty_phone($conn, $duty);
+    if ($phone === '') {
+        return ['whatsapp' => 'no_phone'];
+    }
+    $url = vth_event_driver_duty_url($conn, $duty);
+    return vth_event_send_duty_text($conn, $duty, vth_event_end_whatsapp_text($duty, $url, $phone));
+}
+
+function vth_event_continue_whatsapp_text(array $duty, string $url): string
+{
+    $event = trim((string) ($duty['event_name'] ?? 'Event'));
+    $vehicle = trim((string) ($duty['vehicle_reg_snapshot'] ?? ''));
+    if ($vehicle === '') {
+        $vehicle = '—';
+    }
+    $driver = trim((string) ($duty['driver_name_snapshot'] ?? 'Driver'));
+    return "✅ *DUTY CONTINUES – VIZAG TAXI HUB*\n\n"
+        . "👤 *Driver:* {$driver}\n"
+        . "🚗 *Vehicle No.:* {$vehicle}\n"
+        . "📅 *Event:* {$event}\n\n"
+        . "The earlier end-duty request was cancelled.\n"
+        . "Please continue this duty. Time is counting again.\n\n"
+        . "🔗 *Duty link:*\n{$url}\n\n"
+        . "*Vizag Taxi Hub – Operations Team*";
+}
+
+function vth_event_send_continue_whatsapp(mysqli $conn, array $duty): array
+{
+    $url = vth_event_driver_duty_url($conn, $duty);
+    return vth_event_send_duty_text($conn, $duty, vth_event_continue_whatsapp_text($duty, $url));
+}
+
+function vth_event_resume_whatsapp_text(array $duty, string $url): string
+{
+    $event = trim((string) ($duty['event_name'] ?? 'Event'));
+    $vehicle = trim((string) ($duty['vehicle_reg_snapshot'] ?? ''));
+    if ($vehicle === '') {
+        $vehicle = '—';
+    }
+    $driver = trim((string) ($duty['driver_name_snapshot'] ?? 'Driver'));
+    return "✅ *DUTY CONTINUED – VIZAG TAXI HUB*\n\n"
+        . "👤 *Driver:* {$driver}\n"
+        . "🚗 *Vehicle No.:* {$vehicle}\n"
+        . "📅 *Event:* {$event}\n\n"
+        . "The ending odometer was removed. Please continue this duty.\n"
+        . "Time is counting again from where it stopped.\n"
+        . "Submit the ending reading only when the trip is finished.\n\n"
+        . "🔗 *Duty link:*\n{$url}\n\n"
+        . "*Vizag Taxi Hub – Operations Team*";
+}
+
+function vth_event_send_resume_whatsapp(mysqli $conn, array $duty): array
+{
+    $url = vth_event_driver_duty_url($conn, $duty);
+    return vth_event_send_duty_text($conn, $duty, vth_event_resume_whatsapp_text($duty, $url));
+}
+
+function vth_event_ensure_expo_table(mysqli $conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    @$conn->query(
+        "CREATE TABLE IF NOT EXISTS `vth_event_driver_expo` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `assignment_id` INT UNSIGNED NOT NULL,
+          `expo_token` VARCHAR(255) NOT NULL,
+          `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `uq_vth_driver_expo_token` (`expo_token`),
+          KEY `idx_vth_driver_expo_asg` (`assignment_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
+function vth_event_driver_plain_token(mysqli $conn, int $assignmentId): string
+{
+    if ($assignmentId < 1) {
+        return '';
+    }
+    $stmt = $conn->prepare(
+        "SELECT token_plain FROM vth_event_tokens
+         WHERE assignment_id = ? AND token_type = 'driver' AND revoked_at IS NULL
+           AND token_plain IS NOT NULL AND TRIM(token_plain) <> ''
+         ORDER BY id DESC LIMIT 1"
+    );
+    if (!$stmt) {
+        return '';
+    }
+    $stmt->bind_param('i', $assignmentId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return trim((string) ($row['token_plain'] ?? ''));
+}
+
+function vth_event_send_expo_alerts(mysqli $conn, int $assignmentId, string $title, string $body, array $duty): array
+{
+    $none = ['sent' => 0, 'subscribed' => 0, 'reason' => 'no_subscription'];
+    if ($assignmentId < 1) {
+        return $none;
+    }
+    vth_event_ensure_expo_table($conn);
+    $stmt = $conn->prepare('SELECT expo_token FROM vth_event_driver_expo WHERE assignment_id = ?');
+    if (!$stmt) {
+        return $none;
+    }
+    $stmt->bind_param('i', $assignmentId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $tokens = [];
+    while ($row = $res->fetch_assoc()) {
+        $token = trim((string) ($row['expo_token'] ?? ''));
+        if (preg_match('/^(Exponent|Expo)PushToken\[[^\]]+\]$/', $token)) {
+            $tokens[$token] = $token;
+        }
+    }
+    $stmt->close();
+    if (!$tokens) {
+        return $none;
+    }
+    $driverToken = vth_event_driver_plain_token($conn, $assignmentId);
+    $messages = [];
+    foreach ($tokens as $to) {
+        $messages[] = [
+            'to' => $to,
+            'title' => $title,
+            'body' => $body,
+            'sound' => 'default',
+            'priority' => 'high',
+            'channelId' => 'event_duty_alerts_v1',
+            'data' => [
+                'type' => 'event_duty',
+                'token' => $driverToken,
+                'dutyId' => (string) ((int) ($duty['id'] ?? 0)),
+            ],
+        ];
+    }
+    $payload = json_encode(array_values($messages), JSON_UNESCAPED_UNICODE);
+    if ($payload === false || !function_exists('curl_init')) {
+        return ['sent' => 0, 'subscribed' => count($tokens), 'reason' => 'push_failed'];
+    }
+    $ch = curl_init('https://exp.host/--/api/v2/push/send');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_USERAGENT => 'VizagTaxiHub-EventDuty/1.0',
+    ]);
+    $raw = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code < 200 || $code >= 300 || !is_string($raw) || $raw === '') {
+        return ['sent' => 0, 'subscribed' => count($tokens), 'reason' => 'push_failed'];
+    }
+    $json = json_decode($raw, true);
+    $tickets = is_array($json['data'] ?? null) ? $json['data'] : [];
+    if (isset($tickets['status'])) {
+        $tickets = [$tickets];
+    }
+    $sent = 0;
+    $tokenList = array_values($tokens);
+    foreach ($tickets as $index => $ticket) {
+        if (!is_array($ticket)) {
+            continue;
+        }
+        if (($ticket['status'] ?? '') === 'ok') {
+            $sent++;
+            continue;
+        }
+        if (($ticket['details']['error'] ?? '') === 'DeviceNotRegistered') {
+            $dead = (string) ($tokenList[$index] ?? '');
+            if ($dead !== '') {
+                $del = $conn->prepare('DELETE FROM vth_event_driver_expo WHERE expo_token = ?');
+                if ($del) {
+                    $del->bind_param('s', $dead);
+                    $del->execute();
+                    $del->close();
+                }
+            }
+        }
+    }
+    return [
+        'sent' => $sent,
+        'subscribed' => count($tokens),
+        'reason' => $sent > 0 ? 'sent' : 'push_failed',
+    ];
+}
+
+function vth_event_merge_alert_delivery(array $web, array $expo): array
+{
+    $sent = (int) ($web['sent'] ?? 0) + (int) ($expo['sent'] ?? 0);
+    $subscribed = (int) ($web['subscribed'] ?? 0) + (int) ($expo['subscribed'] ?? 0);
+    if ($sent > 0) {
+        return ['sent' => $sent, 'subscribed' => $subscribed, 'reason' => 'sent'];
+    }
+    if ($subscribed < 1) {
+        return ['sent' => 0, 'subscribed' => 0, 'reason' => 'no_subscription'];
+    }
+    $reason = (string) (($expo['subscribed'] ?? 0) > 0 ? ($expo['reason'] ?? 'push_failed') : ($web['reason'] ?? 'push_failed'));
+    if ($reason !== 'push_not_configured' && $reason !== 'push_failed' && $reason !== 'no_subscription') {
+        $reason = 'push_failed';
+    }
+    return ['sent' => 0, 'subscribed' => $subscribed, 'reason' => $reason];
+}
+
 function vth_event_push_end_notice(
     mysqli $conn,
     array $duty,
@@ -2236,9 +3437,10 @@ function vth_event_push_end_notice(
 ): array
 {
     $assignmentId = (int) ($duty['assignment_id'] ?? 0);
+    $expo = vth_event_send_expo_alerts($conn, $assignmentId, $title, $body, $duty);
     $empty = ['sent' => 0, 'subscribed' => 0, 'reason' => 'no_subscription'];
     if ($assignmentId < 1) {
-        return $empty;
+        return vth_event_merge_alert_delivery($empty, $expo);
     }
     $stmt = $conn->prepare(
         'SELECT id, endpoint, p256dh, auth_key, open_path FROM vth_event_driver_push WHERE assignment_id = ?'
@@ -2253,13 +3455,13 @@ function vth_event_push_end_notice(
     $stmt->close();
     $count = count($subs);
     if ($count < 1) {
-        return $empty;
+        return vth_event_merge_alert_delivery($empty, $expo);
     }
     $subject = vth_event_secret('WEB_PUSH_VAPID_SUBJECT');
     $public = vth_event_secret('WEB_PUSH_VAPID_PUBLIC_KEY');
     $private = vth_event_secret('WEB_PUSH_VAPID_PRIVATE_KEY');
     if ($subject === '' || $public === '' || $private === '' || !vth_event_load_web_push()) {
-        return ['sent' => 0, 'subscribed' => $count, 'reason' => 'push_not_configured'];
+        return vth_event_merge_alert_delivery(['sent' => 0, 'subscribed' => $count, 'reason' => 'push_not_configured'], $expo);
     }
     try {
         $webPush = new \Minishlink\WebPush\WebPush([
@@ -2270,7 +3472,7 @@ function vth_event_push_end_notice(
             ],
         ]);
     } catch (Throwable $e) {
-        return ['sent' => 0, 'subscribed' => $count, 'reason' => 'push_not_configured'];
+        return vth_event_merge_alert_delivery(['sent' => 0, 'subscribed' => $count, 'reason' => 'push_not_configured'], $expo);
     }
     $dutyId = (int) $duty['id'];
     if ($tag === '') {
@@ -2308,7 +3510,7 @@ function vth_event_push_end_notice(
         }
     }
     if ($queued < 1) {
-        return ['sent' => 0, 'subscribed' => $count, 'reason' => 'push_failed'];
+        return vth_event_merge_alert_delivery(['sent' => 0, 'subscribed' => $count, 'reason' => 'push_failed'], $expo);
     }
     $sent = 0;
     try {
@@ -2326,11 +3528,13 @@ function vth_event_push_end_notice(
             }
         }
     } catch (Throwable $e) {
-        return ['sent' => $sent, 'subscribed' => $count, 'reason' => $sent > 0 ? 'sent' : 'push_failed'];
+        return vth_event_merge_alert_delivery(
+            ['sent' => $sent, 'subscribed' => $count, 'reason' => $sent > 0 ? 'sent' : 'push_failed'],
+            $expo
+        );
     }
-    return [
-        'sent' => $sent,
-        'subscribed' => $count,
-        'reason' => $sent > 0 ? 'sent' : 'push_failed',
-    ];
+    return vth_event_merge_alert_delivery(
+        ['sent' => $sent, 'subscribed' => $count, 'reason' => $sent > 0 ? 'sent' : 'push_failed'],
+        $expo
+    );
 }

@@ -79,6 +79,9 @@ switch ($action) {
     case 'register_push':
         vth_event_ok(vth_driver_save_push($conn, $asg, $body), 'Alerts saved');
         break;
+    case 'register_expo':
+        vth_event_ok(vth_driver_save_expo($conn, $asg, $body), 'Phone alerts saved');
+        break;
     default:
         vth_event_error('Unknown action');
 }
@@ -321,6 +324,12 @@ function vth_driver_start(mysqli $conn, array $event, array $asg, array $token, 
     $upd->bind_param('iidddssi', $km, $photoId, $lat, $lng, $acc, $ip, $address, $dutyId);
     $upd->execute();
     $upd->close();
+    @$conn->query(
+        'UPDATE vth_event_duties
+         SET trip_seconds = 0, parking_seconds = 0, place_since = opening_at, duty_place = \'trip\'
+         WHERE id = ' . (int) $dutyId
+    );
+    vth_event_place_span_switch($conn, $dutyId, 'trip');
     vth_event_audit($conn, 'driver', $asg['driver_id'] ?? null, 'opening_km_submitted', 'duty', $dutyId, (int) $event['id'], null, [
         'opening_km' => $km,
         'photo_id' => $photoId,
@@ -387,6 +396,7 @@ function vth_driver_end(mysqli $conn, array $event, array $asg, array $token, ar
     $upd->bind_param('iidddssii', $km, $photoId, $lat, $lng, $acc, $ip, $address, $total, $dutyId);
     $upd->execute();
     $upd->close();
+    vth_event_roll_place($conn, $dutyId);
     vth_event_audit($conn, 'driver', $asg['driver_id'] ?? null, 'closing_km_submitted', 'duty', $dutyId, (int) $event['id'], null, [
         'closing_km' => $km,
         'total_km' => $total,
@@ -443,7 +453,7 @@ function vth_driver_end_notices(mysqli $conn, int $assignmentId): array
 {
     $stmt = $conn->prepare(
         'SELECT id, status, opening_at, closing_at, end_requested_at, end_request_seen_at, end_request_nonce,
-                duty_place, parking_prompt_at, parking_prompt_nonce
+                duty_place, parking_prompt_at, parking_prompt_nonce, paused_seconds
          FROM vth_event_duties WHERE assignment_id = ?'
     );
     $stmt->bind_param('i', $assignmentId);
@@ -459,6 +469,7 @@ function vth_driver_end_notices(mysqli $conn, int $assignmentId): array
             'endRequestedAt' => $row['end_requested_at'],
             'endRequestSeenAt' => $row['end_request_seen_at'],
             'endRequestNonce' => $row['end_request_nonce'],
+            'pausedSeconds' => isset($row['paused_seconds']) ? (int) $row['paused_seconds'] : 0,
             'dutyPlace' => (($row['duty_place'] ?? '') === 'parking') ? 'parking' : 'trip',
             'parkingPromptAt' => $row['parking_prompt_at'] ?? null,
             'parkingPromptNonce' => $row['parking_prompt_nonce'] ?? null,
@@ -504,9 +515,11 @@ function vth_driver_mark_parking(mysqli $conn, array $asg, array $body): array
     if (($duty['status'] ?? '') !== 'in_progress' || empty($duty['opening_at']) || !empty($duty['closing_at'])) {
         vth_event_error('In Parking is available only while the duty is in progress');
     }
+    vth_event_place_span_switch($conn, $dutyId, 'parking');
+    vth_event_roll_place($conn, $dutyId);
     $upd = $conn->prepare(
         'UPDATE vth_event_duties
-         SET duty_place = \'parking\', parking_prompt_nonce = NULL
+         SET duty_place = \'parking\', parking_prompt_nonce = NULL, place_since = NOW()
          WHERE id = ? AND assignment_id = ?'
     );
     $upd->bind_param('ii', $dutyId, $aid);
@@ -539,6 +552,28 @@ function vth_driver_save_push(mysqli $conn, array $asg, array $body): array
             open_path = VALUES(open_path)'
     );
     $stmt->bind_param('issss', $aid, $endpoint, $p256, $auth, $path);
+    $stmt->execute();
+    $stmt->close();
+    return ['saved' => true];
+}
+
+function vth_driver_save_expo(mysqli $conn, array $asg, array $body): array
+{
+    $expo = trim((string) ($body['expoToken'] ?? ''));
+    if (!preg_match('/^(Exponent|Expo)PushToken\[[^\]]+\]$/', $expo) || strlen($expo) > 255) {
+        vth_event_error('Invalid phone alert token');
+    }
+    vth_event_ensure_expo_table($conn);
+    $aid = (int) $asg['id'];
+    $stmt = $conn->prepare(
+        'INSERT INTO vth_event_driver_expo (assignment_id, expo_token)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE assignment_id = VALUES(assignment_id), updated_at = CURRENT_TIMESTAMP'
+    );
+    if (!$stmt) {
+        vth_event_error('Could not save phone alerts');
+    }
+    $stmt->bind_param('is', $aid, $expo);
     $stmt->execute();
     $stmt->close();
     return ['saved' => true];

@@ -24,6 +24,8 @@ export interface User {
   phone: string;
   role: 'customer' | 'driver' | 'admin' | 'super_admin' | 'guest';
   is_active: boolean;
+  /** full = normal app. event_manager and event_driver see only that login. */
+  appAccess?: 'full' | 'event_manager' | 'event_driver';
 }
 
 export interface LoginRequest {

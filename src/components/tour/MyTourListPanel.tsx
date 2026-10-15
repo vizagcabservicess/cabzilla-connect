@@ -988,7 +988,7 @@ export function MyTourListPanel() {
             'fixed z-[10030] max-w-[calc(50%-0.75rem)] rounded-full bg-blue-600 font-semibold text-white shadow-[0_10px_24px_-6px_rgba(37,99,235,0.55)] hover:bg-blue-700',
             'right-3',
             'bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px)+var(--vth-chat-clearance,0px))]',
-            'md:bottom-[calc(1.5rem+var(--vth-chat-clearance,0px))] md:right-6',
+            'md:bottom-[calc(5.25rem+var(--vth-chat-clearance,0px))] md:right-6',
             'flex items-center gap-2 py-1.5 pl-1.5 pr-2.5 text-left'
           )}
           onClick={() => {

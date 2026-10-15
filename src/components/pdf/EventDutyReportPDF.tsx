@@ -28,6 +28,41 @@ function isSerialColumn(header: string): boolean {
   return /^sl\.?\s*no$/i.test(header.trim());
 }
 
+function columnFlex(header: string): number {
+  const name = header.trim().toLowerCase();
+  if (isSerialColumn(header)) return 0.4;
+  if (name === 'slip') return 1.9;
+  if (name === 'vehicle') return 1.3;
+  if (name === 'driver') return 1.15;
+  if (name === 'date' || name === 'reporting time') return 0.9;
+  if (name.includes('km') || name === 'status' || name === 'total time') return 0.65;
+  if (name.includes('location')) return 1.3;
+  return 1;
+}
+
+/** Break registration numbers and slip ids so they stay inside their column. */
+function breakReportWord(word: string): string[] {
+  if (word.length <= 12) return [word];
+  const parts: string[] = [];
+  for (let index = 0; index < word.length; index += 12) {
+    parts.push(word.slice(index, index + 12));
+  }
+  return parts;
+}
+
+function reportCell(header: string) {
+  return [
+    styles.cell,
+    {
+      flexGrow: columnFlex(header),
+      flexShrink: 1,
+      flexBasis: 0,
+      minWidth: 0,
+      overflow: 'hidden' as const,
+    },
+  ];
+}
+
 export function EventDutyReportPDF({
   heading,
   subtitle,
@@ -53,8 +88,8 @@ export function EventDutyReportPDF({
           <View>
             <View style={styles.headerRow} fixed>
               {headers.map((header, index) => (
-                <View key={`h-${index}`} style={[styles.cell, { flex: isSerialColumn(header) ? 0.45 : 1 }]}>
-                  <Text style={[styles.headerText, { fontSize }]}>{header}</Text>
+                <View key={`h-${index}`} style={reportCell(header)}>
+                  <Text style={[styles.headerText, { fontSize }]} hyphenationCallback={breakReportWord}>{header}</Text>
                 </View>
               ))}
             </View>
@@ -64,8 +99,8 @@ export function EventDutyReportPDF({
               rows.map((row, rowIndex) => (
                 <View key={`r-${rowIndex}`} style={styles.row} wrap={false}>
                   {headers.map((header, index) => (
-                    <View key={`c-${rowIndex}-${index}`} style={[styles.cell, { flex: isSerialColumn(header) ? 0.45 : 1 }]}>
-                      <Text style={{ fontSize }}>{row[index] || '—'}</Text>
+                    <View key={`c-${rowIndex}-${index}`} style={reportCell(header)}>
+                      <Text style={{ fontSize }} hyphenationCallback={breakReportWord}>{row[index] || '—'}</Text>
                     </View>
                   ))}
                 </View>

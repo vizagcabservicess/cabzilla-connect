@@ -19,6 +19,10 @@ import {
   dutyDurationMinutes,
   formatDutyDuration,
   formatDutyDurationCompact,
+  formatReportDutyDuration,
+  fromDutyTimeInput,
+  scheduledDutyStart,
+  toDutyTimeInput,
   formatGps,
   formatReportingTime,
   trackSignal,
@@ -126,9 +130,28 @@ check('formats total duty time', () => {
   assert.equal(billableDutyEnd(null, '2026-10-08 13:00:25'), '2026-10-08 13:00:25');
   assert.equal(billableDutyEnd('2026-10-08 18:10:25', null), '2026-10-08 18:10:25');
   assert.equal(dutyDurationMinutes('2026-10-08 12:40:25', billableDutyEnd(null, '2026-10-08 13:00:25')), 20);
+  assert.equal(dutyDurationMinutes('2026-10-08 12:40:25', '2026-10-08 18:10:25', undefined, 7200), 210);
+  assert.equal(formatDutyDurationCompact('2026-10-08 12:40:25', '2026-10-08 18:10:25', undefined, 7200), '3h 30m');
   assert.equal(dutyClosingTime('2026-10-08 18:10:25', '2026-10-08 14:00:00'), '2026-10-08 14:00:00');
   assert.equal(dutyClosingTime('2026-10-08 18:10:25', null), '2026-10-08 18:10:25');
   assert.equal(dutyClosingTime(null, null), null);
+  assert.equal(scheduledDutyStart('2026-10-13', '07:00'), '2026-10-13 07:00:00');
+  assert.equal(formatReportDutyDuration({
+    dutyDate: '2026-10-13',
+    reportingTime: '07:00',
+    openingAt: '2026-10-13 07:51:00',
+    closingAt: '2026-10-13 20:45:00',
+  }), '13 hr 45 min');
+  assert.equal(formatReportDutyDuration({
+    dutyDate: '2026-10-13',
+    openingAt: '2026-10-13 07:51:00',
+    closingAt: '2026-10-13 20:45:00',
+  }), '12 hr 54 min');
+  assert.equal(formatReportDutyDuration({ dutyDate: '2026-10-13', reportingTime: '07:00' }), '');
+  assert.equal(toDutyTimeInput('2026-10-13 07:51:41'), '2026-10-13T07:51:41');
+  assert.equal(fromDutyTimeInput('2026-10-13T20:46:25'), '2026-10-13 20:46:25');
+  assert.equal(fromDutyTimeInput('2026-10-13T20:46'), '2026-10-13 20:46:00');
+  assert.equal(fromDutyTimeInput(''), null);
 });
 
 check('formats report GPS for maps', () => {

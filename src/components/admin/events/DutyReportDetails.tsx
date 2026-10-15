@@ -73,7 +73,7 @@ export function DutyStamp({
   );
 }
 
-export function DutyDuration({ start, end }: { start?: string | null; end?: string | null }) {
+export function DutyDuration({ start, end, pausedSeconds = 0 }: { start?: string | null; end?: string | null; pausedSeconds?: number }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!start || end) {
@@ -82,7 +82,7 @@ export function DutyDuration({ start, end }: { start?: string | null; end?: stri
     const id = window.setInterval(() => setTick((n) => n + 1), 30000);
     return () => window.clearInterval(id);
   }, [start, end]);
-  const label = formatDutyDuration(start, end);
+  const label = formatDutyDuration(start, end, undefined, pausedSeconds);
   return <div className="text-xs whitespace-nowrap">{label || '—'}</div>;
 }
 

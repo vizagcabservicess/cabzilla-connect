@@ -17,6 +17,7 @@ import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { tourAPI, type TourDetail } from '../services/tourAPI';
+import { useTripCart } from '../lib/tripCart';
 import { loadVehicles } from '../services/vehiclesAPI';
 import { DateTimePickerComponent } from '../components/DateTimePicker';
 import { LocationInput } from '../components/LocationInput';
@@ -63,6 +64,8 @@ export function TourDetailScreen({ route, navigation }: Props) {
   );
   const [tripMode, setTripMode] = useState<'one-way' | 'round-trip'>('one-way');
   const [paymentMode, setPaymentMode] = useState<'partial' | 'full'>('partial');
+  const tripCart = useTripCart();
+  const addedToTrip = Boolean(tourId && tripCart.has(tourId));
 
   const totalPrice = selectedVehicle?.price ?? 0;
   const partialAmount = Math.round(totalPrice * 0.3);
@@ -233,6 +236,28 @@ export function TourDetailScreen({ route, navigation }: Props) {
               </Text>
             </View>
           </View>
+          <TouchableOpacity
+            style={[styles.addTripBtn, addedToTrip && styles.addTripBtnOn]}
+            onPress={() => {
+              const id = tourId || tour.tourId;
+              if (!id) return;
+              const prices = Object.values(tour.pricing || {}).filter((value): value is number => typeof value === 'number' && value > 0);
+              void tripCart.toggle({
+                id,
+                name: tour.tourName,
+                days: tour.days,
+                image: tour.imageUrl,
+                minPrice: prices.length > 0 ? Math.min(...prices) : undefined,
+                timeDuration: tour.timeDuration,
+              });
+            }}
+            activeOpacity={0.85}
+          >
+            <Feather name={addedToTrip ? 'check' : 'plus'} size={16} color={addedToTrip ? '#1d4ed8' : '#fff'} />
+            <Text style={[styles.addTripBtnText, addedToTrip && styles.addTripBtnTextOn]}>
+              {addedToTrip ? 'Added to My Trip' : 'Add to My Trip'}
+            </Text>
+          </TouchableOpacity>
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
               <Feather name="map-pin" size={14} color={colors.gray600} />
@@ -540,6 +565,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: colors.gray900,
   },
+  addTripBtn: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  addTripBtnOn: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' },
+  addTripBtnText: { color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 },
+  addTripBtnTextOn: { color: '#1d4ed8' },
   durationBadge: {
     backgroundColor: colors.gray100,
     paddingHorizontal: 10,

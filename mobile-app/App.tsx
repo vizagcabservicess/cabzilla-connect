@@ -20,7 +20,9 @@ import { PushNotificationBootstrap } from './src/components/PushNotificationBoot
 import { DriverTripAssignmentOverlay } from './src/components/DriverTripAssignmentOverlay';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { EventDutyScreen } from './src/screens/EventDutyScreen';
+import { EventShareScreen } from './src/screens/EventShareScreen';
 import { resumeEventDutyTrackingIfNeeded } from './src/lib/eventDutyLocationTask';
+import * as Notifications from 'expo-notifications';
 import type { AppRootParamList } from './src/navigation/appRootTypes';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -34,6 +36,7 @@ const linking = {
   config: {
     screens: {
       EventDuty: 'driver/register/:token',
+      EventShare: 'event/share/:token',
       Tabs: '',
     },
   },
@@ -55,6 +58,13 @@ export default function App() {
 
   useEffect(() => {
     void resumeEventDutyTrackingIfNeeded();
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { type?: string; token?: string };
+      if (data?.type === 'event_duty' && data.token && navigationRef.isReady()) {
+        navigationRef.navigate('EventDuty', { token: String(data.token) });
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   // Don't block app on font load failure (common on web)
@@ -75,6 +85,7 @@ export default function App() {
             <AppStack.Navigator screenOptions={{ headerShown: false }}>
               <AppStack.Screen name="Tabs" component={RootNavigator} />
               <AppStack.Screen name="EventDuty" component={EventDutyScreen} />
+              <AppStack.Screen name="EventShare" component={EventShareScreen} />
             </AppStack.Navigator>
           </NavigationContainer>
           {/* Modal must sit outside the navigator tree — otherwise some Android builds never show it above tabs */}

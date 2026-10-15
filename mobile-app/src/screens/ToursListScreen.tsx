@@ -18,6 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { tourAPI } from '../services/tourAPI';
+import { useTripCart } from '../lib/tripCart';
 import { colors, fonts } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/types';
 import type { Location } from '../types';
@@ -58,6 +59,7 @@ export function ToursListScreen({ route, navigation }: Props) {
 
   const [pickupLocation, setPickupLocation] = useState<Location | null>(initialPickup);
   const [pickupDate, setPickupDate] = useState<Date>(initialDate);
+  const tripCart = useTripCart();
   const [tours, setTours] = useState<TourInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -140,13 +142,13 @@ export function ToursListScreen({ route, navigation }: Props) {
               const minPrice = getMinPrice(tour);
               const durationLabel = getDurationLabel(tour);
               const isFeatured = i === 0 && tours.length > 1;
+              const added = tripCart.has(tour.id);
               return (
-                <TouchableOpacity
+                <View
                   key={tour.id || i}
                   style={[styles.tourCard, isFeatured && styles.tourCardFeatured]}
-                  onPress={() => handleTourSelect(tour)}
-                  activeOpacity={0.8}
                 >
+                  <TouchableOpacity onPress={() => handleTourSelect(tour)} activeOpacity={0.8}>
                   <View style={[styles.tourCardImageWrap, isFeatured && styles.tourCardImageWrapFeatured]}>
                     {tour.image ? (
                       <Image source={{ uri: tour.image }} style={styles.tourCardImage} resizeMode="cover" />
@@ -184,7 +186,29 @@ export function ToursListScreen({ route, navigation }: Props) {
                       </View>
                     )}
                   </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  <View style={styles.addTripWrap}>
+                    <TouchableOpacity
+                      style={[styles.addTripBtn, added && styles.addTripBtnOn]}
+                      onPress={() => {
+                        void tripCart.toggle({
+                          id: tour.id,
+                          name: tour.name,
+                          days: tour.days,
+                          image: tour.image,
+                          minPrice: minPrice > 0 ? minPrice : undefined,
+                          timeDuration: tour.timeDuration,
+                        });
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name={added ? 'check' : 'plus'} size={14} color={added ? '#1d4ed8' : '#fff'} />
+                      <Text style={[styles.addTripBtnText, added && styles.addTripBtnTextOn]}>
+                        {added ? 'Added to My Trip' : 'Add to My Trip'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               );
             })}
           </View>
@@ -337,6 +361,20 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     fontFamily: fonts.regular,
   },
+  addTripWrap: { paddingHorizontal: 16, paddingBottom: 16, marginTop: -4 },
+  addTripBtn: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  addTripBtnOn: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' },
+  addTripBtnText: { color: '#fff', fontFamily: fonts.semiBold, fontSize: 14 },
+  addTripBtnTextOn: { color: '#1d4ed8' },
 
   emptyState: { alignItems: 'center', paddingVertical: 48 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },

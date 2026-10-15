@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fetchPlacePredictions, fetchPlaceDetails, validatePickupLocation, validateDropLocation } from '../services/placesAPI';
-import { GOOGLE_MAPS_API_KEY } from '../config';
 import { colors } from '../theme/colors';
 import type { Location } from '../types';
 import type { TripType } from '../types';
@@ -59,21 +58,13 @@ export function LocationInput({
       setSearchError(null);
       return;
     }
-    if (!GOOGLE_MAPS_API_KEY) {
-      setPredictions([]);
-      setSearchError('Location search needs an API key. Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to EAS (preview + production) or .env for Expo Go.');
-      setLoading(false);
-      return;
-    }
     setSearchError(null);
     setLoading(true);
     try {
       const { predictions: results, error } = await fetchPlacePredictions(text, { restrictToVizag });
       setPredictions(results);
-      if (error === 'NO_API_KEY') {
-        setSearchError('API key not set. Add to EAS secrets (for APK) or .env (for Expo Go).');
-      } else if (error === 'REQUEST_DENIED') {
-        setSearchError('API key restricted. In Google Cloud, add Android app (com.vizagtaxihub.app) or set Application restrictions to None.');
+      if (error === 'NO_API_KEY' || error === 'REQUEST_DENIED') {
+        setSearchError('Location search is unavailable right now. Try again in a moment.');
       } else if (error === 'NETWORK') {
         setSearchError('Unable to fetch locations. Check your internet connection.');
       } else {

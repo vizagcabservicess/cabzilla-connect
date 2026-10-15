@@ -1,125 +1,108 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { getResolvedApiOrigin, WEB_APP_BASE_URL } from '../config';
-import { syncEventDutyTracking } from '../lib/eventDutyLocationTask';
+import * as Location from 'expo-location';
+import { EventDriverPortal } from '../components/events/EventDriverPortal';
+import { markEventDutyScreenOpen, syncEventDutyTracking } from '../lib/eventDutyLocationTask';
 import type { AppRootParamList } from '../navigation/appRootTypes';
-import { colors } from '../theme/colors';
+import { colors, fonts } from '../theme/colors';
+
+const LOGO = 'https://www.vizagtaxihub.com/uploads/vizagtaxihub-logo.png';
 
 type Props = NativeStackScreenProps<AppRootParamList, 'EventDuty'>;
 
-type DutyRow = {
-  id: number;
-  status?: string;
-  openingAt?: string | null;
-  closingAt?: string | null;
+type EventDutyInput = {
+  route?: Props['route'];
+  embeddedToken?: string;
+  onLogout?: () => void;
 };
 
-export function EventDutyScreen({ route }: Props) {
-  const { token } = route.params;
+export function EventDutyScreen({ route, embeddedToken, onLogout }: EventDutyInput) {
+  const token = embeddedToken || route?.params.token || '';
   const navigation = useNavigation();
-  const [trackingOn, setTrackingOn] = useState(false);
-  const portalUrl = useMemo(
-    () => `${(WEB_APP_BASE_URL || 'https://www.vizagtaxihub.com').replace(/\/$/, '')}/driver/register/${token}?inApp=1`,
-    [token],
-  );
+  const [needLocation, setNeedLocation] = useState(false);
+  const [openIds, setOpenIds] = useState<number[]>([]);
 
-  const sync = useCallback(async () => {
-    const origin = getResolvedApiOrigin() || 'https://www.vizagtaxihub.com';
-    const res = await fetch(`${origin}/api/events/driver-public.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Event-Driver-Token': token,
-      },
-      body: JSON.stringify({ token, action: 'bootstrap' }),
-    });
-    const data = (await res.json()) as { duties?: DutyRow[]; data?: { duties?: DutyRow[] } };
-    const duties = data.duties || data.data?.duties || [];
-    const openIds = duties
-      .filter((duty) => duty.openingAt && !duty.closingAt && duty.status === 'in_progress')
-      .map((duty) => duty.id);
-    await syncEventDutyTracking(token, openIds);
-    return openIds.length > 0;
+  const sync = useCallback(async (ids: number[]) => {
+    await syncEventDutyTracking(token, ids);
+    if (ids.length === 0) {
+      setNeedLocation(false);
+      return;
+    }
+    const permission = await Location.getForegroundPermissionsAsync();
+    setNeedLocation(permission.status !== 'granted');
   }, [token]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const on = await sync();
-        if (!cancelled) setTrackingOn(on);
-      } catch {
-        if (!cancelled) setTrackingOn(false);
-      }
-    };
-    void run();
-    const id = setInterval(() => { void run(); }, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+  const onOpenDuties = useCallback((ids: number[]) => {
+    setOpenIds(ids);
+    void sync(ids).catch(() => setNeedLocation(false));
   }, [sync]);
+
+  useEffect(() => {
+    void markEventDutyScreenOpen(true);
+    return () => { void markEventDutyScreenOpen(false); };
+  }, []);
+
+  const allowLocation = async () => {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    setNeedLocation(permission.status !== 'granted' && openIds.length > 0);
+    if (permission.status === 'granted') await sync(openIds);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Event duty</Text>
-      </View>
-      <View style={[styles.banner, trackingOn ? styles.bannerOn : styles.bannerOff]}>
-        <Text style={styles.bannerText}>
-          {trackingOn
-            ? 'Live tracking is on. Lock the screen if you want — a small notification stays until you end duty.'
-            : 'Start duty here. Tracking then continues with the screen locked, using the VTH app — not Chrome.'}
-        </Text>
-      </View>
-      <WebView
-        source={{ uri: portalUrl }}
-        startInLoadingState
-        onMessage={(event) => {
-          try {
-            const msg = JSON.parse(event.nativeEvent.data) as { type?: string };
-            if (msg.type === 'event-duty-sync') {
-              void sync().then(setTrackingOn).catch(() => setTrackingOn(false));
-            }
-          } catch {
-            /* ignore non-JSON pages */
-          }
-        }}
-        renderLoading={() => (
-          <View style={styles.loading}>
-            <ActivityIndicator size="large" color="#2563eb" />
-          </View>
+        {onLogout ? null : (
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          </TouchableOpacity>
         )}
-        style={styles.web}
-      />
+        <View style={styles.titleWrap}>
+          <Image source={{ uri: LOGO }} style={styles.logo} resizeMode="contain" accessibilityLabel="Vizag Taxi Hub" />
+          <Text style={styles.title}>Event duty</Text>
+        </View>
+        {onLogout ? (
+          <TouchableOpacity onPress={onLogout}>
+            <Text style={styles.logout}>Log out</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {needLocation ? (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>Allow location so the trip can be tracked.</Text>
+          <TouchableOpacity onPress={() => { void allowLocation(); }}>
+            <Text style={styles.allow}>Allow location</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {token ? <EventDriverPortal token={token} onOpenDuties={onOpenDuties} /> : (
+        <Text style={styles.missing}>This duty link is missing.</Text>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#f3f6fb' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  backBtn: { padding: 4, marginRight: 8 },
-  title: { fontSize: 17, fontWeight: '700', color: colors.foreground },
-  banner: { paddingHorizontal: 12, paddingVertical: 10 },
-  bannerOn: { backgroundColor: '#ecfdf5' },
-  bannerOff: { backgroundColor: '#eff6ff' },
-  bannerText: { fontSize: 13, lineHeight: 18, color: '#1e3a5f' },
-  web: { flex: 1 },
-  loading: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  backBtn: { width: 32, padding: 4 },
+  titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logo: { width: 108, height: 36 },
+  title: { fontSize: 17, fontFamily: fonts.bold, color: colors.foreground },
+  logout: { color: '#b91c1c', fontFamily: fonts.bold, fontSize: 13 },
+  banner: { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff7ed' },
+  bannerText: { fontSize: 13, lineHeight: 18, color: '#9a3412', fontFamily: fonts.regular },
+  allow: { marginTop: 6, color: '#c2410c', fontFamily: fonts.bold },
+  missing: { padding: 24, textAlign: 'center', color: '#b91c1c', fontFamily: fonts.regular },
 });

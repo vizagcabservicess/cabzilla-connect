@@ -98,6 +98,7 @@ export interface AdminUser {
   email: string;
   phone?: string;
   role: string;
+  appAccess?: 'full' | 'event_manager' | 'event_driver';
   is_active?: boolean;
   authProvider?: 'google' | 'email';
   bookingsCount?: number;
@@ -830,7 +831,7 @@ export const adminExtendedAPI = {
   },
 
   /** Users - create (mirrors web userAPI.createUser) */
-  usersCreate: async (data: { name: string; email: string; phone?: string; role: string }) => {
+  usersCreate: async (data: { name: string; email: string; phone?: string; password?: string; role: string; access?: string }) => {
     const base = getBase();
     const headers = await authHeaders();
     const res = await axios.post(`${base}/api/admin/users.php`, data, {
@@ -842,10 +843,10 @@ export const adminExtendedAPI = {
   },
 
   /** Users - update role (mirrors web userAPI.updateUserRole) */
-  usersUpdateRole: async (userId: number | string, role: string) => {
+  usersUpdateRole: async (userId: number | string, role: string, access?: string) => {
     const base = getBase();
     const headers = await authHeaders();
-    const res = await axios.put(`${base}/api/admin/users.php`, { userId, role }, {
+    const res = await axios.put(`${base}/api/admin/users.php`, { userId, role, access }, {
       headers,
       timeout: 15000,
     });

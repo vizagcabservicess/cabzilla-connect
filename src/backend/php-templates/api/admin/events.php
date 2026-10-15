@@ -2,17 +2,57 @@
 require_once __DIR__ . '/../events/lib.php';
 
 vth_event_cors();
-$admin = vth_event_require_admin();
 $conn = vth_event_conn();
-vth_event_ensure_optional_columns($conn);
-
 $body = vth_event_body();
 $action = vth_event_action($body);
+if ($action === 'my_app_access') {
+    vth_event_ensure_optional_columns($conn);
+    $user = vth_event_require_user();
+    $userId = vth_event_jwt_user_id($user);
+    $access = vth_event_app_access_for($conn, $userId);
+    $driverToken = $access === 'event_driver' ? vth_event_driver_token_for_user($conn, $userId, $user) : null;
+    vth_event_ok(['access' => $access, 'driverToken' => $driverToken]);
+}
+$admin = vth_event_require_admin();
+vth_event_ensure_optional_columns($conn);
 if ($action === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $action = isset($_GET['id']) ? 'get' : 'list';
 }
 
 switch ($action) {
+    case 'set_app_access':
+        if (($admin['role'] ?? '') !== 'super_admin') {
+            vth_event_error('Only a super admin can set app access', 403);
+        }
+        $targetId = (int) ($body['userId'] ?? 0);
+        $access = (string) ($body['access'] ?? '');
+        if ($targetId < 1 || !in_array($access, ['full', 'event_manager', 'event_driver'], true)) {
+            vth_event_error('Choose full, event manager, or event driver access');
+        }
+        vth_event_ensure_app_access($conn);
+        $save = $conn->prepare('INSERT INTO vth_user_app_access (user_id, access) VALUES (?, ?) ON DUPLICATE KEY UPDATE access = VALUES(access)');
+        $save->bind_param('is', $targetId, $access);
+        $save->execute();
+        $save->close();
+        vth_event_ok(['userId' => $targetId, 'access' => $access], 'App access saved');
+        break;
+    case 'list_app_access':
+        if (($admin['role'] ?? '') !== 'super_admin') {
+            vth_event_error('Only a super admin can view app access', 403);
+        }
+        vth_event_ensure_app_access($conn);
+        $accesses = [];
+        $accessResult = $conn->query('SELECT user_id, access FROM vth_user_app_access');
+        if ($accessResult) {
+            while ($accessRow = $accessResult->fetch_assoc()) {
+                $accesses[] = [
+                    'userId' => (int) $accessRow['user_id'],
+                    'access' => (string) $accessRow['access'],
+                ];
+            }
+        }
+        vth_event_ok(['accesses' => $accesses]);
+        break;
     case 'dashboard':
         vth_event_ok(['dashboard' => vth_admin_dashboard($conn)]);
         break;
@@ -490,6 +530,14 @@ function vth_admin_apply_october_template(mysqli $conn, array $admin, int $event
     if (!$event) {
         vth_event_error('Event not found', 404);
     }
+    $already = $conn->prepare('SELECT id FROM vth_event_requirement_groups WHERE event_id = ? LIMIT 1');
+    $already->bind_param('i', $eventId);
+    $already->execute();
+    $hasGroups = (bool) $already->get_result()->fetch_assoc();
+    $already->close();
+    if ($hasGroups) {
+        return vth_admin_get_event($conn, $eventId) ?: [];
+    }
     $groups = [
         ['innova_crysta', 8, null, '12-17 Oct and 20-21 Oct', ['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16','2026-10-17','2026-10-20','2026-10-21']],
         ['fortuner', 1, 24, '12-18 Oct', ['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16','2026-10-17','2026-10-18']],
@@ -514,29 +562,6 @@ function vth_admin_apply_october_template(mysqli $conn, array $admin, int $event
             $ds->execute();
             $ds->close();
         }
-        for ($i = 0; $i < $qty; $i++) {
-            $as = $conn->prepare(
-                'INSERT INTO vth_event_assignments (event_id, requirement_group_id, vehicle_type, passenger_count, reporting_time, reporting_location)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            );
-            $time = $event['default_reporting_time'];
-            $loc = $event['reporting_location'];
-            $as->bind_param('iisiss', $eventId, $gid, $type, $pax, $time, $loc);
-            $as->execute();
-            $aid = (int) $conn->insert_id;
-            $as->close();
-            $asg = [
-                'id' => $aid,
-                'event_id' => $eventId,
-                'fleet_vehicle_id' => null,
-                'driver_id' => null,
-                'vehicle_type' => $type,
-                'reporting_time' => $time,
-                'reporting_location' => $loc,
-            ];
-            vth_event_sync_assignment_dates($conn, $aid, $dates);
-            vth_event_create_duties_for_dates($conn, $asg, $dates);
-        }
     }
     vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'template_applied', 'event', $eventId, $eventId, null, ['template' => 'october_2026']);
     return vth_admin_get_event($conn, $eventId) ?: [];
@@ -545,18 +570,19 @@ function vth_admin_apply_october_template(mysqli $conn, array $admin, int $event
 function vth_admin_search(mysqli $conn, string $q, array $filters): array
 {
     $q = trim($q);
-    $duties = [];
     $sql = 'SELECT d.*, e.name AS event_name, e.event_code
             FROM vth_event_duties d
             JOIN vth_events e ON e.id = d.event_id
+            LEFT JOIN vth_event_vehicles ev ON ev.id = d.event_vehicle_id AND ev.status <> \'inactive\'
+            LEFT JOIN fleet_vehicles fv ON fv.id = d.fleet_vehicle_id
             WHERE 1=1';
     $types = '';
     $params = [];
     if ($q !== '') {
-        $sql .= ' AND (d.vehicle_reg_snapshot LIKE ? OR d.driver_name_snapshot LIKE ? OR d.driver_mobile_snapshot LIKE ? OR e.name LIKE ? OR e.event_code LIKE ? OR d.duty_slip_no LIKE ?)';
-        $types .= 'ssssss';
+        $sql .= ' AND (d.vehicle_reg_snapshot LIKE ? OR ev.registration_number LIKE ? OR fv.vehicle_number LIKE ? OR d.driver_name_snapshot LIKE ? OR d.driver_mobile_snapshot LIKE ? OR e.name LIKE ? OR e.event_code LIKE ? OR d.duty_slip_no LIKE ?)';
+        $types .= 'ssssssss';
         $like = '%' . $q . '%';
-        for ($i = 0; $i < 6; $i++) {
+        for ($i = 0; $i < 8; $i++) {
             $params[] = $like;
         }
     }
@@ -587,11 +613,12 @@ function vth_admin_search(mysqli $conn, string $q, array $filters): array
     }
     $stmt->execute();
     $res = $stmt->get_result();
+    $rows = [];
     while ($row = $res->fetch_assoc()) {
-        $duties[] = vth_admin_duty_row($row);
+        $rows[] = $row;
     }
     $stmt->close();
-    return ['duties' => $duties];
+    return ['duties' => vth_event_map_duty_rows($conn, $rows)];
 }
 
 function vth_admin_event_summary(mysqli $conn, int $id): array
@@ -731,28 +758,40 @@ function vth_admin_create_vehicle(mysqli $conn, array $admin, array $body): arra
     if (!empty($insuranceSaved['error'])) {
         vth_event_error($insuranceSaved['error']);
     }
-    $chk = $conn->prepare('SELECT id FROM vth_event_vehicles WHERE event_id = ? AND registration_number = ? LIMIT 1');
+    $chk = $conn->prepare('SELECT id, status FROM vth_event_vehicles WHERE event_id = ? AND registration_number = ? LIMIT 1');
     $chk->bind_param('is', $eventId, $reg);
     $chk->execute();
-    if ($chk->get_result()->fetch_assoc()) {
-        $chk->close();
-        vth_event_error('This vehicle is already added to this event');
-    }
+    $existing = $chk->get_result()->fetch_assoc();
     $chk->close();
     $status = 'active';
-    $stmt = $conn->prepare(
-        'INSERT INTO vth_event_vehicles
-         (event_id, registration_number, vehicle_type, make, model, seating_capacity, owner_name, owner_mobile, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $stmt->bind_param('issssissss', $eventId, $reg, $type, $make, $model, $cap, $owner, $ownerMob, $notes, $status);
-    try {
-        $stmt->execute();
-    } catch (Throwable $e) {
-        vth_event_error('Could not save event vehicle');
+    if ($existing && ($existing['status'] ?? '') !== 'inactive') {
+        vth_event_error('This vehicle is already added to this event');
     }
-    $vid = (int) $conn->insert_id;
-    $stmt->close();
+    if ($existing) {
+        $vid = (int) $existing['id'];
+        $stmt = $conn->prepare(
+            'UPDATE vth_event_vehicles
+             SET vehicle_type=?, make=?, model=?, seating_capacity=?, owner_name=?, owner_mobile=?, notes=?, status=?
+             WHERE id=?'
+        );
+        $stmt->bind_param('sssissssi', $type, $make, $model, $cap, $owner, $ownerMob, $notes, $status, $vid);
+        $stmt->execute();
+        $stmt->close();
+    } else {
+        $stmt = $conn->prepare(
+            'INSERT INTO vth_event_vehicles
+             (event_id, registration_number, vehicle_type, make, model, seating_capacity, owner_name, owner_mobile, notes, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->bind_param('issssissss', $eventId, $reg, $type, $make, $model, $cap, $owner, $ownerMob, $notes, $status);
+        try {
+            $stmt->execute();
+        } catch (Throwable $e) {
+            vth_event_error('Could not save event vehicle');
+        }
+        $vid = (int) $conn->insert_id;
+        $stmt->close();
+    }
     $uploadedBy = 'admin:' . ($admin['user_id'] ?? '0');
     vth_event_insert_document($conn, $eventId, 'vehicle', $vid, 'rc', $rcSaved, $uploadedBy);
     vth_event_insert_document($conn, $eventId, 'vehicle', $vid, 'insurance', $insuranceSaved, $uploadedBy);
@@ -811,6 +850,14 @@ function vth_admin_update_vehicle(mysqli $conn, array $admin, array $body): arra
     $upd->bind_param('ssssisssi', $reg, $type, $make, $model, $cap, $owner, $ownerMob, $notes, $id);
     $upd->execute();
     $upd->close();
+    $syncPlate = $conn->prepare(
+        "UPDATE vth_event_duties
+         SET vehicle_reg_snapshot = ?
+         WHERE event_vehicle_id = ? AND status <> 'cancelled'"
+    );
+    $syncPlate->bind_param('si', $reg, $id);
+    $syncPlate->execute();
+    $syncPlate->close();
     $uploadedBy = 'admin:' . ($admin['user_id'] ?? '0');
     if (!empty($_FILES['rc']) && (($_FILES['rc']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK)) {
         vth_event_attach_posted_file($conn, $eventId, 'vehicle', $id, 'rc', 'rc', $uploadedBy);

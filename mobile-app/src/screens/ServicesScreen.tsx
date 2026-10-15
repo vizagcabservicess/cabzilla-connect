@@ -26,7 +26,7 @@ const SERVICE_ITEMS: Array<{
   label: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   tripType?: TripType;
-  action?: 'hire-driver' | 'whatsapp';
+  action?: 'hire-driver' | 'whatsapp' | 'chat' | 'build-trip';
 }> = [
   { id: 'outstation', label: 'Outstation Trips', icon: 'car-side', tripType: 'outstation' },
   { id: 'airport', label: 'Airport Transfer', icon: 'airplane', tripType: 'airport' },
@@ -34,6 +34,8 @@ const SERVICE_ITEMS: Array<{
   { id: 'tour', label: 'Tour', icon: 'map-marker-path', tripType: 'tour' },
   { id: 'hire', label: 'Hire Driver', icon: 'account', action: 'hire-driver' },
   { id: 'whatsapp', label: 'Chat on WhatsApp', icon: 'whatsapp', action: 'whatsapp' },
+  { id: 'chat', label: 'Chat', icon: 'message-text-outline', action: 'chat' },
+  { id: 'build-trip', label: 'Build My Trip', icon: 'map-marker-path', action: 'build-trip' },
 ];
 
 export function ServicesScreen() {
@@ -42,6 +44,14 @@ export function ServicesScreen() {
   const handleServicePress = (item: (typeof SERVICE_ITEMS)[0]) => {
     if (item.action === 'whatsapp') {
       Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}`).catch(() => {});
+      return;
+    }
+    if (item.action === 'chat') {
+      navigation.navigate('Chat');
+      return;
+    }
+    if (item.action === 'build-trip') {
+      navigation.navigate('BuildMyTrip');
       return;
     }
     if (item.action === 'hire-driver') {

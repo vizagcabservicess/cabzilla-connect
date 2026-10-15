@@ -21,6 +21,8 @@ $stmt->close();
 if (!$duty) {
     vth_event_error('Duty not found', 404);
 }
+$stamped = vth_event_stamp_live_registrations($conn, [$duty]);
+$duty = $stamped[0];
 
 $allowed = false;
 $headers = function_exists('getallheaders') ? getallheaders() : [];
@@ -99,11 +101,26 @@ $fmtTime = static function ($v): string {
 };
 $closingStamp = !empty($duty['end_requested_at']) ? $duty['end_requested_at'] : ($duty['closing_at'] ?? null);
 $totalTime = '—';
-if (!empty($duty['opening_at'])) {
+// Bill from the scheduled reporting time on the duty date, not from when the driver tapped open.
+$from = false;
+$dutyDate = substr((string) ($duty['duty_date'] ?? ''), 0, 10);
+$reporting = trim((string) ($duty['reporting_time'] ?? ''));
+if (preg_match('/^(\d{1,2}):(\d{2})/', $reporting, $match) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dutyDate)) {
+    $hours = (int) $match[1];
+    $minutes = (int) $match[2];
+    if ($hours >= 0 && $hours <= 23 && $minutes >= 0 && $minutes <= 59) {
+        $from = strtotime($dutyDate . ' ' . sprintf('%02d:%02d:00', $hours, $minutes));
+    }
+}
+if (!$from && !empty($duty['opening_at'])) {
     $from = strtotime((string) $duty['opening_at']);
+}
+$started = !empty($duty['opening_at']) || !empty($closingStamp);
+if ($started && $from) {
     $to = $closingStamp ? strtotime((string) $closingStamp) : time();
-    if ($from && $to && $to >= $from) {
-        $mins = intdiv($to - $from, 60);
+    if ($to && $to >= $from) {
+        $paused = isset($duty['paused_seconds']) ? (int) $duty['paused_seconds'] : 0;
+        $mins = intdiv(max(0, ($to - $from) - $paused), 60);
         $hours = intdiv($mins, 60);
         $rest = $mins % 60;
         $totalTime = $hours > 0 ? ($hours . ' hr ' . $rest . ' min') : ($rest . ' min');

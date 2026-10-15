@@ -2,8 +2,10 @@
  * Google Places Autocomplete - native only (Android/iOS).
  * Web uses Maps JS SDK via LocationInput.web.tsx (same as web app).
  */
-import { GOOGLE_MAPS_API_KEY } from '../config';
+import { API_BASE_URL } from '../config';
 import type { Location } from '../types';
+
+const API_BASE = API_BASE_URL || 'https://www.vizagtaxihub.com';
 
 const VIZAG_LAT = 17.6868;
 const VIZAG_LNG = 83.2185;
@@ -53,22 +55,14 @@ export async function fetchPlacePredictions(
   options?: PlacePredictionsOptions
 ): Promise<PlacePredictionsResult> {
   if (!input || input.length < 2) return { predictions: [] };
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('[Places API] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is not set.');
-    return { predictions: [], error: 'NO_API_KEY' };
-  }
 
   const restrictToVizag = options?.restrictToVizag !== false;
 
   try {
-    let url =
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-      `?input=${encodeURIComponent(input)}` +
-      `&key=${GOOGLE_MAPS_API_KEY}` +
-      `&components=country:in`;
-    if (restrictToVizag) {
-      url += `&location=${VIZAG_LAT},${VIZAG_LNG}&radius=35000`;
-    }
+    const url =
+      `${API_BASE}/api/mobile-places.php?action=autocomplete` +
+      `&input=${encodeURIComponent(input)}` +
+      `&vizag=${restrictToVizag ? '1' : '0'}`;
 
     const res = await fetch(url);
     const data = await res.json();
@@ -96,14 +90,12 @@ export async function fetchPlacePredictions(
 }
 
 export async function fetchPlaceDetails(placeId: string): Promise<Location | null> {
-  if (!placeId || !GOOGLE_MAPS_API_KEY) return null;
+  if (!placeId) return null;
 
   try {
     const url =
-      `https://maps.googleapis.com/maps/api/place/details/json` +
-      `?place_id=${encodeURIComponent(placeId)}` +
-      `&fields=name,formatted_address,geometry` +
-      `&key=${GOOGLE_MAPS_API_KEY}`;
+      `${API_BASE}/api/mobile-places.php?action=details` +
+      `&place_id=${encodeURIComponent(placeId)}`;
 
     const res = await fetch(url);
     const data = await res.json();
@@ -114,40 +106,6 @@ export async function fetchPlaceDetails(placeId: string): Promise<Location | nul
       const lng = r.geometry?.location?.lng ?? 0;
       const name = r.name || r.formatted_address || '';
       const address = r.formatted_address || name;
-      return {
-        id: placeId,
-        name,
-        address,
-        city: 'Visakhapatnam',
-        state: 'Andhra Pradesh',
-        lat,
-        lng,
-        type: 'other',
-        popularityScore: 50,
-        isInVizag: isWithinVizagRange(lat, lng),
-      };
-    }
-  } catch {
-    // ignored
-  }
-
-  try {
-    const res = await fetch(
-      `https://places.googleapis.com/v1/places/${placeId}`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-          'X-Goog-FieldMask': 'location,displayName,formattedAddress',
-        },
-      }
-    );
-    const data = await res.json();
-    if (res.ok && data.location) {
-      const lat = data.location.latitude ?? 0;
-      const lng = data.location.longitude ?? 0;
-      const name = data.displayName?.text || data.formattedAddress || '';
-      const address = data.formattedAddress || name;
       return {
         id: placeId,
         name,

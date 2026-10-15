@@ -175,8 +175,8 @@ async function previewFromBytes(title: string, bytes: Uint8Array, ext: string): 
 async function adminGet<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
   try {
     const { data } = await axios.get(getApiUrl(path), {
-      params,
-      headers: authHeaders(),
+      params: { ...params, _: Date.now() },
+      headers: { ...authHeaders(), 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
     });
     if (!data?.success && data?.status !== 'success') {
       throw new Error(data?.message || 'Request failed');
@@ -188,6 +188,10 @@ async function adminGet<T>(path: string, params: Record<string, string | number 
 }
 
 export const eventDutyAPI = {
+  listAppAccess: () =>
+    adminPost<{ accesses: Array<{ userId: number; access: string }> }>('/api/admin/events.php', { action: 'list_app_access' }),
+  setAppAccess: (userId: number, access: 'full' | 'event_manager' | 'event_driver') =>
+    adminPost('/api/admin/events.php', { action: 'set_app_access', userId, access }),
   dashboard: () => adminPost<{ dashboard: EventDashboard }>('/api/admin/events.php', { action: 'dashboard' }),
   listEvents: (q?: string, status?: string) =>
     adminPost<{ events: VthEvent[]; dashboard?: EventDashboard }>('/api/admin/events.php', { action: 'list', q, status }),
@@ -240,6 +244,8 @@ export const eventDutyAPI = {
     adminPost<{ assignment: EventAssignment }>('/api/admin/event-assignments.php', { action: 'update', ...payload }),
   cancelAssignment: (id: number) =>
     adminPost('/api/admin/event-assignments.php', { action: 'delete', id }),
+  setAssignmentSerial: (id: number, serialNo: number | null) =>
+    adminPost('/api/admin/event-assignments.php', { action: 'set_serial', id, serialNo }),
   replaceAssignment: (payload: Record<string, unknown>) =>
     adminPost<{ assignment: EventAssignment }>('/api/admin/event-assignments.php', { action: 'replace', ...payload }),
   expandRequirement: (payload: Record<string, unknown>) =>
@@ -252,6 +258,16 @@ export const eventDutyAPI = {
     adminGet<{ vehicles: EventTrackVehicle[] }>('/api/admin/event-duties.php', { action: 'tracking', eventId, date }),
   overrideKm: (payload: Record<string, unknown>) =>
     adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'override_km', ...payload }),
+  overrideTimes: (payload: { id: number; reportingTime: string; reportedAt: string | null; closingAt: string | null }) =>
+    adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'override_times', ...payload }),
+  setReporting: (payload: {
+    id: number;
+    reportingTime: string;
+    reportingLocation?: string | null;
+    assignmentId?: number;
+    date?: string;
+  }) =>
+    adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'set_reporting', ...payload }),
   setDutyStatus: (id: number, status: string) =>
     adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'set_status', id, status }),
   setDutyNotes: (id: number, notes: string) =>
@@ -262,6 +278,10 @@ export const eventDutyAPI = {
     adminPost<{ duty: EventDuty }>('/api/admin/event-duties.php', { action: 'reset_reading', id, side }),
   requestDutyEnd: (id: number) =>
     adminPost<{ duty: EventDuty; delivery: EndRequestDelivery }>('/api/admin/event-duties.php', { action: 'request_end', id }),
+  revokeDutyEnd: (id: number) =>
+    adminPost<{ duty: EventDuty; delivery: EndRequestDelivery }>('/api/admin/event-duties.php', { action: 'revoke_end', id }),
+  resumeDuty: (id: number) =>
+    adminPost<{ duty: EventDuty; delivery: EndRequestDelivery }>('/api/admin/event-duties.php', { action: 'resume_duty', id }),
 
   listDocuments: (eventId: number) =>
     adminGet<{ documents: EventDocumentRow[] }>('/api/admin/event-documents.php', { action: 'list', eventId }),
@@ -456,6 +476,36 @@ export async function setShareDutyPlace(
     dutyPlace: data.dutyPlace === 'parking' ? 'parking' : 'trip',
     delivery: (data.delivery ?? null) as EndRequestDelivery | null,
   };
+}
+
+export async function revokeShareDutyEnd(token: string, dutyId: number): Promise<{ duty: EventDuty; delivery: EndRequestDelivery }> {
+  const { data } = await axios.post(
+    getApiUrl('/api/events/share-public.php'),
+    { token, action: 'revoke_end', dutyId },
+    { headers: { 'Content-Type': 'application/json', 'X-Event-Share-Token': token } },
+  );
+  if (!data?.success && data?.status !== 'success') {
+    throw new Error(data?.message || 'Could not revoke the end request');
+  }
+  if (!data.duty) {
+    throw new Error('The end request could not be revoked.');
+  }
+  return data as { duty: EventDuty; delivery: EndRequestDelivery };
+}
+
+export async function resumeShareDuty(token: string, dutyId: number): Promise<{ duty: EventDuty; delivery: EndRequestDelivery }> {
+  const { data } = await axios.post(
+    getApiUrl('/api/events/share-public.php'),
+    { token, action: 'resume_duty', dutyId },
+    { headers: { 'Content-Type': 'application/json', 'X-Event-Share-Token': token } },
+  );
+  if (!data?.success && data?.status !== 'success') {
+    throw new Error(data?.message || 'Could not continue this duty');
+  }
+  if (!data.duty) {
+    throw new Error('This duty could not be continued.');
+  }
+  return data as { duty: EventDuty; delivery: EndRequestDelivery };
 }
 
 export async function requestShareDutyEnd(token: string, dutyId: number): Promise<{ duty: EventDuty; delivery: EndRequestDelivery }> {

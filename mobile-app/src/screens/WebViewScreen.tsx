@@ -2,7 +2,7 @@
  * WebViewScreen - displays web content in-app (native, stays in-app)
  * Used for admin panels, support links, etc. Keeps user in app with native chrome.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -18,14 +18,40 @@ import { useNavigation } from '@react-navigation/core';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
+import { authAPI } from '../services/authAPI';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WebView'>;
 
+function authBootstrap(token: string, userJson: string | null): string {
+  const userLine = userJson ? `localStorage.setItem('user',${JSON.stringify(userJson)});` : '';
+  return `try{localStorage.setItem('auth_token',${JSON.stringify(token)});${userLine}}catch(e){}true;`;
+}
+
+const OPEN_CHAT_SCRIPT = `(function(){var n=0;var t=setInterval(function(){n+=1;try{window.dispatchEvent(new Event('vth-open-live-chat'));}catch(e){}if(n>20)clearInterval(t);},500);})();true;`;
+
 export function WebViewScreen({ route }: Props) {
-  const { url, title, html } = route.params;
+  const { url, title, html, auth, openChat } = route.params;
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [beforeLoad, setBeforeLoad] = useState<string | null>(auth ? null : 'true;');
+
+  useEffect(() => {
+    if (!auth) {
+      setBeforeLoad('true;');
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const token = await authAPI.getStoredToken();
+      const user = await authAPI.getStoredUser();
+      const script = token ? authBootstrap(token, user ? JSON.stringify(user) : null) : 'true;';
+      if (!cancelled) setBeforeLoad(script);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth]);
 
   const isValidUrl = url && typeof url === 'string' && url.startsWith('http');
   const source = html ? { html } : isValidUrl ? { uri: url } : null;
@@ -59,11 +85,16 @@ export function WebViewScreen({ route }: Props) {
           {title ?? 'Web'}
         </Text>
       </View>
+      {beforeLoad ? (
       <WebView
         source={source}
         style={styles.webview}
         javaScriptEnabled
         domStorageEnabled
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        injectedJavaScriptBeforeContentLoaded={beforeLoad}
+        injectedJavaScript={openChat ? OPEN_CHAT_SCRIPT : undefined}
         startInLoadingState
         onLoadStart={() => { setLoading(true); setError(null); }}
         onLoadEnd={() => setLoading(false)}
@@ -81,6 +112,7 @@ export function WebViewScreen({ route }: Props) {
           </View>
         )}
       />
+      ) : null}
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />

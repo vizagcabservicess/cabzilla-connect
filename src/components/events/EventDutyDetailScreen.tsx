@@ -48,6 +48,7 @@ export interface EventDutyDetailModel {
   openingAt?: string | null;
   closingAt?: string | null;
   endRequestedAt?: string | null;
+  pausedSeconds?: number;
   openingKm?: number | null;
   closingKm?: number | null;
   totalKm?: number | null;
@@ -97,7 +98,7 @@ export function EventDutyDetailScreen({
   const askedToEnd = Boolean(model.endRequestedAt) && canEnd && !panel;
   const showParking = Boolean(parkingAction) && canEnd && !panel;
   const startedClock = formatServerTime(model.openingAt);
-  const totalTime = formatDutyDuration(model.openingAt, billableDutyEnd(model.closingAt, model.endRequestedAt)) || '—';
+  const totalTime = formatDutyDuration(model.openingAt, billableDutyEnd(model.closingAt, model.endRequestedAt), undefined, model.pausedSeconds) || '—';
   const totalKm = model.totalKm != null ? model.totalKm.toLocaleString('en-IN') : '—';
   const openingKm = model.openingKm != null ? model.openingKm.toLocaleString('en-IN') : '—';
   const mapGps = model.openingGps?.lat != null ? model.openingGps : model.closingGps;

@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../providers/AuthProvider';
+import { EventDriverPortal, EventManagerPortal } from '../screens/EventAccessApp';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ToursListScreen } from '../screens/ToursListScreen';
 import { TourDetailScreen } from '../screens/TourDetailScreen';
@@ -30,6 +31,8 @@ import { AdminVehicleFormScreen } from '../screens/AdminVehicleFormScreen';
 import { AdminCreateBookingScreen } from '../screens/AdminCreateBookingScreen';
 import { AdminComingSoonScreen } from '../screens/AdminComingSoonScreen';
 import { AdminGroupToursScreen } from '../screens/AdminGroupToursScreen';
+import { AdminEventsScreen } from '../screens/AdminEventsScreen';
+import { AdminEventDetailScreen } from '../screens/AdminEventDetailScreen';
 import { AdminFleetScreen } from '../screens/AdminFleetScreen';
 import { AdminFaresScreen } from '../screens/AdminFaresScreen';
 import { AdminCommissionScreen } from '../screens/AdminCommissionScreen';
@@ -48,6 +51,9 @@ import { AssignDriverScreen } from '../screens/AssignDriverScreen';
 import { AssignVehicleScreen } from '../screens/AssignVehicleScreen';
 import { InvoiceScreen } from '../screens/InvoiceScreen';
 import { WebViewScreen } from '../screens/WebViewScreen';
+import { ChatScreen } from '../screens/ChatScreen';
+import { BuildMyTripScreen } from '../screens/BuildMyTripScreen';
+import { QuotationScreen } from '../screens/QuotationScreen';
 import { ContactUsScreen } from '../screens/ContactUsScreen';
 import { HelpCenterScreen } from '../screens/HelpCenterScreen';
 import { StaticContentScreen } from '../screens/StaticContentScreen';
@@ -84,6 +90,8 @@ function ProfileStack() {
       <Stack.Screen name="AdminVehicleEdit" component={AdminVehicleFormScreen} />
       <Stack.Screen name="AdminCreateBooking" component={AdminCreateBookingScreen} />
       <Stack.Screen name="AdminGroupTours" component={AdminGroupToursScreen} />
+      <Stack.Screen name="AdminEvents" component={AdminEventsScreen} />
+      <Stack.Screen name="AdminEventDetail" component={AdminEventDetailScreen} />
       <Stack.Screen name="AdminFleet" component={AdminFleetScreen} />
       <Stack.Screen name="AdminFares" component={AdminFaresScreen} />
       <Stack.Screen name="AdminCommission" component={AdminCommissionScreen} />
@@ -120,6 +128,9 @@ function ServicesStack() {
     <ServicesStackNav.Navigator screenOptions={{ headerShown: false }}>
       <ServicesStackNav.Screen name="ServicesList" component={ServicesScreen} />
       <ServicesStackNav.Screen name="HireDriver" component={HireDriverScreen} />
+      <ServicesStackNav.Screen name="Chat" component={ChatScreen} />
+      <ServicesStackNav.Screen name="BuildMyTrip" component={BuildMyTripScreen} />
+      <ServicesStackNav.Screen name="Quotation" component={QuotationScreen} />
     </ServicesStackNav.Navigator>
   );
 }
@@ -150,6 +161,8 @@ function MainStack() {
         <Stack.Screen name="BookingSummary" component={BookingSummaryScreen} />
         <Stack.Screen name="PassengerInfo" component={PassengerInfoScreen} />
         <Stack.Screen name="Payment" component={PaymentScreen} />
+        <Stack.Screen name="BuildMyTrip" component={BuildMyTripScreen} />
+        <Stack.Screen name="Quotation" component={QuotationScreen} />
       </Stack.Navigator>
     </MenuProvider>
   );
@@ -168,6 +181,13 @@ function DriverFuelStack() {
 export function RootNavigator() {
   const { user, isAuthenticated } = useAuth();
   const isDriver = isAuthenticated && user?.role === 'driver';
+
+  if (isAuthenticated && user?.appAccess === 'event_manager') {
+    return <EventManagerPortal />;
+  }
+  if (isAuthenticated && user?.appAccess === 'event_driver') {
+    return <EventDriverPortal />;
+  }
 
   if (isDriver) {
     return (

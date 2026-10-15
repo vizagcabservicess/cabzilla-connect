@@ -109,6 +109,7 @@ export interface EventAssignment {
   reportingTime?: string | null;
   reportingLocation?: string | null;
   notes?: string | null;
+  serialNo?: number | null;
   status: 'active' | 'replaced' | 'cancelled';
   replacedFromAssignmentId?: number | null;
   dates: string[];
@@ -174,6 +175,7 @@ export interface EventDuty {
   endRequestedAt?: string | null;
   endRequestSeenAt?: string | null;
   endRequestNonce?: string | null;
+  pausedSeconds?: number;
   dutyPlace?: 'trip' | 'parking' | null;
   parkingPromptAt?: string | null;
   parkingPromptNonce?: string | null;
@@ -289,6 +291,7 @@ export interface EventShareView {
     vehicleNumber: string;
     driverName: string;
     driverMobile: string;
+    serialNo?: number | null;
     driverPhotoId?: number | null;
     driverPhoto?: string | null;
     reportingTime?: string | null;
@@ -304,6 +307,7 @@ export interface EventShareView {
     closingAt?: string | null;
     endRequestedAt?: string | null;
     endRequestSeenAt?: string | null;
+    pausedSeconds?: number;
     dutyPlace?: 'trip' | 'parking' | null;
     parkingAsked?: boolean;
     openingGps?: EventGps | null;

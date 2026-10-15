@@ -18,6 +18,16 @@ import {
   ensureDefaultPushChannel,
 } from '../services/pushNotificationService';
 import { navigationRef } from '../navigation/navigationRef';
+import { mobileEventAPI } from '../services/eventDutyAPI';
+
+async function withAppAccess(user: User): Promise<User> {
+  try {
+    const access = await mobileEventAPI.myAppAccess();
+    return { ...user, appAccess: access.access };
+  } catch {
+    return { ...user, appAccess: user.appAccess || 'full' };
+  }
+}
 
 function navigateAdminFromNotificationData(data: Record<string, unknown> | undefined): void {
   const t = data?.type;
@@ -65,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const u = await authAPI.getCurrentUser();
     if (u) {
-      setUser(u);
+      setUser(await withAppAccess(u));
       return;
     }
     const stillToken = await authAPI.getStoredToken();
@@ -73,7 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       return;
     }
-    setUser(await authAPI.getStoredUser());
+    const stored = await authAPI.getStoredUser();
+    setUser(stored ? await withAppAccess(stored) : null);
   }, []);
 
   useEffect(() => {
@@ -83,7 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const authenticated = await authAPI.isAuthenticated();
         if (!cancelled && authenticated) {
           const u = await authAPI.getCurrentUser();
-          if (!cancelled) setUser(u || (await authAPI.getStoredUser()));
+          const resolved = u || (await authAPI.getStoredUser());
+          if (!cancelled) setUser(resolved ? await withAppAccess(resolved) : null);
         } else if (!cancelled) {
           setUser(null);
         }
@@ -176,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const response = await authAPI.login({ email, password });
     if (response.success && response.user) {
-      setUser(response.user);
+      setUser(await withAppAccess(response.user));
     }
     return response;
   }, []);
@@ -188,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const socialLogin = useCallback(async (socialData: SocialLoginRequest) => {
     const response = await authAPI.socialLogin(socialData);
     if (response.success && response.user) {
-      setUser(response.user);
+      setUser(await withAppAccess(response.user));
     }
     return response;
   }, []);
@@ -197,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (socialData: SocialLoginRequest & { phone?: string }) => {
       const response = await authAPI.socialSignup(socialData);
       if (response.success && response.user) {
-        setUser(response.user);
+        setUser(await withAppAccess(response.user));
       }
       return response;
     },
@@ -207,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback(async (data: { name?: string; phone?: string }) => {
     const response = await authAPI.updateProfile(data);
     if (response.success && response.user) {
-      setUser(response.user);
+      setUser(await withAppAccess(response.user));
     }
     return response;
   }, []);

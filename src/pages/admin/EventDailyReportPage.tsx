@@ -12,6 +12,7 @@ import { printHtmlReport } from '@/lib/eventDutyReportPdf';
 import { eventDutyAPI } from '@/services/api/eventDutyAPI';
 import { DutyDuration, DutyStamp } from '@/components/admin/events/DutyReportDetails';
 import { AskDriverEndButton } from '@/components/events/AskDriverEndButton';
+import { ContinueDutyButton } from '@/components/events/ContinueDutyButton';
 import {
   billableDutyEnd,
   dutyClosingTime,
@@ -21,10 +22,12 @@ import {
   escapeHtml,
   eventShareMessage,
   formatDutyDate,
-  formatDutyDuration,
   formatGps,
+  formatReportDutyDuration,
+  formatReportingTime,
   formatServerDateTime,
   isRegisteredEventVehicle,
+  reportDutyStart,
   shareListStats,
   todayIsoDate,
   whatsappUrl,
@@ -59,7 +62,7 @@ export default function EventDailyReportPage() {
       `Daily report · ${event?.name || 'Event'}`,
       `<table><thead><tr>
         <th class="sl">SL.No</th><th>Vehicle</th><th>Driver</th><th>Opening KM</th><th>Closing KM</th><th>Total KM</th>
-        <th>Reported</th><th>Report location</th><th>Closing time</th><th>Odometer uploaded</th><th>Close location</th><th>Total Time</th><th>Status</th>
+        <th>Reporting time</th><th>Reported</th><th>Report location</th><th>Closing time</th><th>Odometer uploaded</th><th>Close location</th><th>Total Time</th><th>Status</th>
       </tr></thead><tbody>${rows.map((d, index) => `<tr>
         <td class="sl">${index + 1}</td>
         <td>${escapeHtml(d.vehicleNumber || d.vehicleTypeLabel)}</td>
@@ -67,12 +70,13 @@ export default function EventDailyReportPage() {
         <td>${escapeHtml(d.openingKm)}</td>
         <td>${escapeHtml(d.closingKm)}</td>
         <td>${escapeHtml(d.totalKm)}</td>
+        <td>${escapeHtml(formatReportingTime(d.reportingTime) || '—')}</td>
         <td>${escapeHtml(formatServerDateTime(d.openingAt))}</td>
         <td>${escapeHtml(formatGps(d.openingGps))}</td>
         <td>${escapeHtml(formatServerDateTime(dutyClosingTime(d.closingAt, d.endRequestedAt)))}</td>
         <td>${escapeHtml(formatServerDateTime(d.closingAt))}</td>
         <td>${escapeHtml(formatGps(d.closingGps))}</td>
-        <td>${escapeHtml(formatDutyDuration(d.openingAt, billableDutyEnd(d.closingAt, d.endRequestedAt)))}</td>
+        <td>${escapeHtml(formatReportDutyDuration(d))}</td>
         <td>${escapeHtml(dutyStatusLabel(d.status))}</td>
       </tr>`).join('')}</tbody></table>`,
       `${formatDutyDate(date)} · ${rows.length} vehicle(s)`,
@@ -82,19 +86,20 @@ export default function EventDailyReportPage() {
   const exportCsv = () => {
     downloadCsv(
       `vth-daily-${event?.eventCode || id}-${date}.csv`,
-      ['Vehicle', 'Driver', 'Opening KM', 'Closing KM', 'Total KM', 'Reported At', 'Report location', 'Closing time', 'Odometer uploaded', 'Close location', 'Total Time', 'Status'],
+      ['Vehicle', 'Driver', 'Opening KM', 'Closing KM', 'Total KM', 'Reporting time', 'Reported At', 'Report location', 'Closing time', 'Odometer uploaded', 'Close location', 'Total Time', 'Status'],
       rows.map((d) => [
         d.vehicleNumber || d.vehicleTypeLabel || '',
         d.driverName || '',
         d.openingKm ?? '',
         d.closingKm ?? '',
         d.totalKm ?? '',
+        formatReportingTime(d.reportingTime),
         d.openingAt || '',
         formatGps(d.openingGps),
         dutyClosingTime(d.closingAt, d.endRequestedAt) || '',
         d.closingAt || '',
         formatGps(d.closingGps),
-        formatDutyDuration(d.openingAt, billableDutyEnd(d.closingAt, d.endRequestedAt)),
+        formatReportDutyDuration(d),
         dutyStatusLabel(d.status),
       ]),
     );
@@ -146,6 +151,7 @@ export default function EventDailyReportPage() {
               <TableHead>Opening KM</TableHead>
               <TableHead>Closing KM</TableHead>
               <TableHead>Total KM</TableHead>
+              <TableHead>Reporting time</TableHead>
               <TableHead>Reported</TableHead>
               <TableHead>Closing Time</TableHead>
               <TableHead>Odometer uploaded</TableHead>
@@ -162,6 +168,7 @@ export default function EventDailyReportPage() {
                 <TableCell>{d.openingKm ?? '—'}</TableCell>
                 <TableCell>{d.closingKm ?? '—'}</TableCell>
                 <TableCell>{d.totalKm ?? '—'}</TableCell>
+                <TableCell>{formatReportingTime(d.reportingTime) || '—'}</TableCell>
                 <TableCell>
                   <DutyStamp label="Reported" at={d.openingAt} gps={d.openingGps} />
                 </TableCell>
@@ -170,7 +177,7 @@ export default function EventDailyReportPage() {
                   <DutyStamp label="Uploaded" at={d.closingAt} gps={d.closingGps} />
                 </TableCell>
                 <TableCell>
-                  <DutyDuration start={d.openingAt} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} />
+                  <DutyDuration start={reportDutyStart(d)} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} pausedSeconds={d.pausedSeconds} />
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary">{dutyStatusLabel(d.status)}</Badge>
@@ -188,6 +195,14 @@ export default function EventDailyReportPage() {
                     endRequestedAt={d.endRequestedAt}
                     onDone={() => setReloadKey((n) => n + 1)}
                   />
+                  <ContinueDutyButton
+                    appearance="admin"
+                    dutyId={d.id}
+                    status={d.status}
+                    openingAt={d.openingAt}
+                    closingAt={d.closingAt}
+                    onDone={() => setReloadKey((n) => n + 1)}
+                  />
                   <Button size="sm" variant="outline" onClick={() => { void eventDutyAPI.openAuthedFile(eventDutyAPI.dutySlipUrl(d.id)); }}>PDF</Button>
                   <Button size="sm" variant="ghost" asChild>
                     <a href={whatsappUrl(dutySlipMessage({
@@ -203,7 +218,7 @@ export default function EventDailyReportPage() {
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
+                <TableCell colSpan={12} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
               </TableRow>
             )}
           </TableBody>

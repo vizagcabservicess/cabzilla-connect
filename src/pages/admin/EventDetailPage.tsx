@@ -6,6 +6,7 @@ import { DutyDuration, DutyStamp } from '@/components/admin/events/DutyReportDet
 import { EventFormDialog } from '@/components/admin/events/EventFormDialog';
 import { EventListFilters } from '@/components/admin/events/EventListFilters';
 import { AskDriverEndButton } from '@/components/events/AskDriverEndButton';
+import { ContinueDutyButton } from '@/components/events/ContinueDutyButton';
 import { CroppableFileField } from '@/components/events/CroppableFileField';
 import { EventMediaViewer, type EventMediaPreview } from '@/components/events/EventMediaViewer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,9 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Download, RefreshCw } from 'lucide-react';
+import { CalendarDays, Car, Clock, Download, RefreshCw, Save, StickyNote, Trash2, UserRound, Users, X } from 'lucide-react';
 import { EventTrackingMap } from '@/components/events/EventTrackingMap';
 import { eventDutyAPI } from '@/services/api/eventDutyAPI';
 import { printHtmlReport } from '@/lib/eventDutyReportPdf';
@@ -37,13 +39,19 @@ import {
   eventVehicleTypeLabel,
   formatDutyDate,
   formatDutyDateRange,
-  formatDutyDuration,
+  formatDutyDateShort,
+  formatReportDutyDuration,
+  toLocalIsoDate,
+  formatReportingTime,
+  fromDutyTimeInput,
+  reportDutyStart,
   formatGps,
   formatServerDateTime,
   isRegisteredEventVehicle,
   keepFilled,
   qrImageUrl,
   todayIsoDate,
+  toDutyTimeInput,
   whatsappUrl,
   type DocumentOcrFields,
 } from '@/lib/eventDuty';
@@ -216,8 +224,8 @@ export default function EventDetailPage() {
 
   const from = filterFrom || event.startDate;
   const to = filterTo || event.endDate;
-  const vehicleOptions = vehicleChoices(duties, documents, [...vehicles, ...assignments]);
-  const filteredAssignments = assignments.filter((a) => assignmentMatchesFilter(a, filterVehicle, from, to));
+  const vehicleOptions = vehicleChoices(duties, [...vehicles, ...assignments]);
+  const filteredAssignments = sortAssignments(assignments.filter((a) => assignmentMatchesFilter(a, filterVehicle, from, to)));
   const filteredDuties = dutiesMatchingFilter(duties, filterVehicle, from, to);
   const reportDuties = dutiesForReport(duties, filterVehicle, from, to);
   const filteredDocuments = documents.filter((doc) => documentMatchesFilter(doc, filterVehicle, from, to));
@@ -314,8 +322,12 @@ export default function EventDetailPage() {
                   </div>
                 ))}
                 <Button variant="outline" onClick={async () => {
+                  if ((event.requirementGroups || []).length > 0) {
+                    toast.message('October requirements are already listed above');
+                    return;
+                  }
                   await eventDutyAPI.applyOctoberTemplate(event.id);
-                  toast.success('October 2026 requirement slots added');
+                  toast.success('October 2026 requirements added');
                   void reload();
                 }}>Load October 2026 vehicle requirements</Button>
               </CardContent>
@@ -344,6 +356,7 @@ export default function EventDetailPage() {
             </div>
             <AssignmentTable
               assignments={filteredAssignments}
+              duties={duties}
               eventDates={eventDates}
               onEdit={(asg) => { setEditAssignment(asg); setAssignOpen(true); }}
               onReplace={setReplaceFor}
@@ -445,8 +458,15 @@ export default function EventDetailPage() {
         eventDates={eventDates}
         vehicles={vehicles}
         drivers={drivers}
+        duties={duties}
         initial={editAssignment}
-        onSaved={reload}
+        preferredVehicleNumber={filterVehicle !== 'all' ? filterVehicle : ''}
+        onSaved={(saved) => {
+          if (filterVehicle !== 'all' && (saved?.vehicleNumber || '') !== filterVehicle) {
+            setFilterVehicle('all');
+          }
+          void reload();
+        }}
       />
       <BulkRequirementDialog
         open={bulkOpen}
@@ -1031,10 +1051,35 @@ function MasterDrivers({
   );
 }
 
+function nextDutyReport(assignment: EventAssignment, duties: EventDuty[]) {
+  const today = todayIsoDate();
+  const rows = duties
+    .filter((duty) => duty.assignmentId === assignment.id && duty.status !== 'cancelled' && duty.dutyDate > today)
+    .sort((a, b) => a.dutyDate.localeCompare(b.dutyDate));
+  const upcoming = rows[0];
+  if (upcoming) {
+    return {
+      date: upcoming.dutyDate,
+      time: formatReportingTime(upcoming.reportingTime) || formatReportingTime(assignment.reportingTime) || '—',
+      location: (upcoming.reportingLocation || assignment.reportingLocation || '').trim() || '—',
+    };
+  }
+  const date = [...assignment.dates].sort().find((item) => item > today) || '';
+  if (!date) {
+    return { date: '', time: '—', location: '—' };
+  }
+  return {
+    date,
+    time: formatReportingTime(assignment.reportingTime) || '—',
+    location: (assignment.reportingLocation || '').trim() || '—',
+  };
+}
+
 function AssignmentTable({
-  assignments, eventDates, onEdit, onReplace, onSendLink, onReload, onViewDocuments,
+  assignments, duties, eventDates, onEdit, onReplace, onSendLink, onReload, onViewDocuments,
 }: {
   assignments: EventAssignment[];
+  duties: EventDuty[];
   eventDates: string[];
   onEdit: (a: EventAssignment) => void;
   onReplace: (a: EventAssignment) => void;
@@ -1051,16 +1096,49 @@ function AssignmentTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-16">SL.No</TableHead>
             <TableHead>Vehicle</TableHead>
             <TableHead>Driver</TableHead>
-            <TableHead>Dates</TableHead>
+            <TableHead>Next reporting</TableHead>
+            <TableHead>Location</TableHead>
             <TableHead>Docs</TableHead>
             <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((a) => (
+          {rows.map((a, index) => {
+            const nextDuty = nextDutyReport(a, duties);
+            const shownSerial = a.serialNo ?? index + 1;
+            return (
             <TableRow key={a.id}>
+              <TableCell className="w-16 px-2">
+                <Input
+                  key={`${a.id}-${shownSerial}`}
+                  className="h-8 w-14 px-1 text-center tabular-nums"
+                  inputMode="numeric"
+                  aria-label={`Serial number for ${a.vehicleNumber || 'assignment'}`}
+                  defaultValue={String(shownSerial)}
+                  onBlur={(event) => {
+                    const raw = event.target.value.trim();
+                    const next = raw === '' ? null : Number(raw);
+                    if (next !== null && (!Number.isInteger(next) || next < 1 || next > 9999)) {
+                      toast.error('Enter a serial number from 1 to 9999');
+                      event.target.value = String(shownSerial);
+                      return;
+                    }
+                    if ((next == null && a.serialNo == null) || next === a.serialNo || (a.serialNo == null && next === index + 1)) return;
+                    void eventDutyAPI.setAssignmentSerial(a.id, next).then(() => {
+                      onReload();
+                    }).catch((err: unknown) => {
+                      toast.error(err instanceof Error ? err.message : 'Could not save the serial number');
+                      event.target.value = String(shownSerial);
+                    });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                />
+              </TableCell>
               <TableCell>
                 <div className="font-medium">{a.vehicleNumber || 'Not assigned'}</div>
                 <div className="text-xs text-muted-foreground">{a.vehicleTypeLabel}{a.passengerCount ? ` · ${a.passengerCount} pax` : ''}</div>
@@ -1069,7 +1147,11 @@ function AssignmentTable({
                 <div>{a.driverName || 'Not assigned'}</div>
                 <div className="text-xs text-muted-foreground">{a.driverMobile || ''}</div>
               </TableCell>
-              <TableCell className="text-xs">{formatDutyDateRange(a.dates)}</TableCell>
+              <TableCell className="text-sm">
+                <div>{nextDuty.time}</div>
+                {nextDuty.date ? <div className="text-xs text-muted-foreground">{formatDutyDateShort(nextDuty.date)}</div> : null}
+              </TableCell>
+              <TableCell className="text-sm">{nextDuty.location}</TableCell>
               <TableCell className="text-xs">
                 Photo {a.driverDocuments?.driver_photo ? '✓' : '—'} · DL {a.driverDocuments?.dl_front ? '✓' : '—'}{a.driverDocuments?.dl_back ? ' +back' : ''} · Aadhaar {a.driverDocuments?.aadhaar ? '✓' : '—'}{a.driverDocuments?.aadhaar_back ? ' +back' : ''}
                 <div>RC {a.vehicleDocuments?.rc ? '✓' : '—'}{a.vehicleDocuments?.rc_back ? ' +back' : ''} · Insurance {a.vehicleDocuments?.insurance ? '✓' : '—'}{a.vehicleDocuments?.insurance_back ? ' +back' : ''}</div>
@@ -1109,10 +1191,11 @@ function AssignmentTable({
                 </Button>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-sm text-muted-foreground">
+              <TableCell colSpan={7} className="text-sm text-muted-foreground">
                 No assignments in this filter.
               </TableCell>
             </TableRow>
@@ -1161,8 +1244,189 @@ function AddDatesDialog({
   );
 }
 
+type DateReport = { date: string; time: string; location: string; dutyId?: number | null };
+
+function dutyWeekday(iso: string): string {
+  const day = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(day.getTime())) return '';
+  return day.toLocaleDateString('en-IN', { weekday: 'short' });
+}
+
+function clockValue(value: string | null | undefined, fallback: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec((value || '').trim());
+  if (!match) {
+    const fallbackMatch = /^(\d{1,2}):(\d{2})/.exec(fallback.trim());
+    return fallbackMatch ? `${fallbackMatch[1].padStart(2, '0')}:${fallbackMatch[2]}` : '06:00';
+  }
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+function isoDay(value: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match ? match[1] : value.trim();
+}
+
+function unknownAction(err: unknown): boolean {
+  return /unknown action/i.test(err instanceof Error ? err.message : '');
+}
+
+function logSchedule(step: string, detail?: unknown) {
+  console.log('[duty-schedule]', step, detail ?? '');
+}
+
+function clockOrEmpty(value: string | null | undefined): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec((value || '').trim());
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
+}
+
+function scheduleText(rows: Array<{ date: string; time: string; location: string; dutyId?: number | null }>): string {
+  return rows.map((row) => `${isoDay(row.date)}#${row.dutyId ?? '-'} ${row.time || '-'} @ ${row.location || '-'}`).join(' | ');
+}
+
+function sameDateKey(dates: string[]): string {
+  return dates.map((date) => isoDay(date)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().join(',');
+}
+
+function dutyForDate(
+  duties: EventDuty[],
+  assignmentId: number,
+  row: Pick<DateReport, 'date' | 'dutyId'>,
+  vehicle?: { id?: number | null; number?: string },
+): EventDuty | undefined {
+  const day = isoDay(row.date);
+  const sameDay = duties.filter((item) => (
+    isoDay(String(item.dutyDate || '')) === day
+    && Number(item.assignmentId) === Number(assignmentId)
+  ));
+  const own = sameDay.find((item) => item.status !== 'cancelled')
+    || sameDay[0]
+    || duties.find((item) => row.dutyId != null && Number(item.id) === Number(row.dutyId));
+  if (own) return own;
+  const number = (vehicle?.number || '').trim();
+  const vehicleId = vehicle?.id ?? null;
+  if (!number && vehicleId == null) return undefined;
+  const sameVehicle = duties.filter((item) => {
+    if (isoDay(String(item.dutyDate || '')) !== day) return false;
+    const sameNumber = number !== '' && (item.vehicleNumber || '').trim() === number;
+    const sameId = vehicleId != null && Number(item.vehicleId) === vehicleId;
+    return sameNumber || sameId;
+  });
+  return sameVehicle.find((item) => item.status !== 'cancelled') || sameVehicle[0];
+}
+
+function readDutyRows(rows: DateReport[]): DateReport[] {
+  const times = new Map<string, string>();
+  const locations = new Map<string, string>();
+  document.querySelectorAll<HTMLInputElement>('input[data-duty-time]').forEach((input) => {
+    const date = input.dataset.dutyTime;
+    if (date && /^\d{2}:\d{2}/.test(input.value)) times.set(date, input.value.slice(0, 5));
+  });
+  document.querySelectorAll<HTMLInputElement>('input[data-duty-location]').forEach((input) => {
+    const date = input.dataset.dutyLocation;
+    if (date) locations.set(date, input.value);
+  });
+  const next = rows.map((row) => ({
+    ...row,
+    time: times.get(row.date) || row.time,
+    location: locations.has(row.date) ? (locations.get(row.date) || '') : row.location,
+  }));
+  logSchedule('inputs on screen', scheduleText(next));
+  return next;
+}
+
+async function persistDutySchedules(
+  rows: DateReport[],
+  duties: EventDuty[],
+  assignmentId: number,
+  vehicle?: { id?: number | null; number?: string },
+): Promise<string | null> {
+  const targets = rows.map((row) => {
+    const duty = dutyForDate(duties, assignmentId, row, vehicle);
+    return {
+      id: duty?.id || row.dutyId || 0,
+      date: isoDay(row.date),
+      time: clockValue(row.time, '06:00'),
+      location: row.location.trim(),
+      status: duty?.status || '',
+    };
+  });
+  logSchedule('per-duty write', scheduleText(targets.map((item) => ({
+    date: item.date,
+    time: item.time,
+    location: item.location,
+    dutyId: item.id || null,
+  }))));
+  const missing = targets.filter((item) => item.id < 1);
+  if (missing.length > 0) {
+    return `No duty slip was created for ${missing.map((item) => item.date).join(', ')}`;
+  }
+  try {
+    const results = await Promise.all(targets.map(async (item) => {
+      let saved = await eventDutyAPI.setReporting({
+        id: item.id,
+        reportingTime: item.time,
+        reportingLocation: item.location,
+        assignmentId,
+        date: item.date,
+      });
+      let duty = saved.duty as (EventDuty & { reporting_time?: string; reporting_location?: string }) | undefined;
+      if (duty?.status === 'cancelled' && !duty.openingAt) {
+        logSchedule('revive cancelled duty', `${item.date}#${duty.id}`);
+        await eventDutyAPI.setDutyStatus(duty.id, 'not_started');
+        saved = await eventDutyAPI.setReporting({
+          id: duty.id,
+          reportingTime: item.time,
+          reportingLocation: item.location,
+          assignmentId,
+          date: item.date,
+        });
+        duty = saved.duty;
+      }
+      const gotTime = clockOrEmpty(duty?.reportingTime || duty?.reporting_time);
+      const gotLoc = (duty?.reportingLocation || duty?.reporting_location || '').trim();
+      const hasTime = Boolean(duty && ('reportingTime' in duty || 'reporting_time' in duty));
+      const hasLoc = Boolean(duty && ('reportingLocation' in duty || 'reporting_location' in duty));
+      const line = `${item.date}#${duty?.id || item.id} sent ${item.time} @ ${item.location || '-'} got ${gotTime || '-'} @ ${gotLoc || '-'} status=${duty?.status || item.status || '-'}`;
+      const rejected = Boolean(duty) && (
+        duty?.status === 'cancelled'
+        || (hasTime && gotTime !== item.time)
+        || (hasLoc && gotLoc !== item.location)
+      );
+      return { line, rejected };
+    }));
+    results.forEach((item) => logSchedule('per-duty result', item.line));
+    const failed = results.find((item) => item.rejected);
+    if (failed) return failed.line;
+    logSchedule('per-duty write saved with set_reporting');
+    return null;
+  } catch (err) {
+    logSchedule('set_reporting failed', err instanceof Error ? err.message : err);
+    if (!unknownAction(err)) throw err;
+  }
+  const safe = targets.filter((item) => {
+    const duty = duties.find((entry) => Number(entry.id) === item.id);
+    return !duty?.endRequestedAt;
+  });
+  if (safe.length === 0) return 'Server has no per-duty reporting update';
+  try {
+    await Promise.all(safe.map((item) => eventDutyAPI.overrideTimes({
+      id: item.id,
+      reportingTime: item.time,
+      reportedAt: duties.find((entry) => Number(entry.id) === item.id)?.openingAt ?? null,
+      closingAt: duties.find((entry) => Number(entry.id) === item.id)?.closingAt ?? null,
+    })));
+    logSchedule('per-duty write saved with override_times');
+    return null;
+  } catch (err) {
+    logSchedule('override_times failed', err instanceof Error ? err.message : err);
+    if (!unknownAction(err)) throw err;
+  }
+  logSchedule('server has no per-duty reporting update');
+  return 'Server has no per-duty reporting update';
+}
+
 function AssignmentDialog({
-  open, onOpenChange, event, eventDates, vehicles, drivers, initial, onSaved,
+  open, onOpenChange, event, eventDates, vehicles, drivers, duties, initial, preferredVehicleNumber, onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -1170,93 +1434,457 @@ function AssignmentDialog({
   eventDates: string[];
   vehicles: EventFleetOption[];
   drivers: EventDriverOption[];
+  duties: EventDuty[];
   initial?: EventAssignment | null;
-  onSaved: () => void;
+  preferredVehicleNumber?: string;
+  onSaved: (saved?: { vehicleNumber: string }) => void;
 }) {
   const [vehicleId, setVehicleId] = useState<string>('');
   const [driverId, setDriverId] = useState<string>('');
   const [type, setType] = useState('innova_crysta');
-  const [dates, setDates] = useState<string[]>([]);
-  const [time, setTime] = useState(event.defaultReportingTime);
-  const [loc, setLoc] = useState(event.reportingLocation || '');
+  const [reports, setReports] = useState<DateReport[]>([]);
   const [pax, setPax] = useState('');
   const [notes, setNotes] = useState('');
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const reportsRef = useRef<DateReport[]>([]);
+  const seededKey = useRef<string | null>(null);
+  const editedTimes = useRef<Record<string, string>>({});
+  const wasOpen = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setVehicleId(initial?.vehicleId ? String(initial.vehicleId) : 'none');
+    if (!open) {
+      if (wasOpen.current) logSchedule('dialog closed, next open reloads from the server');
+      wasOpen.current = false;
+      seededKey.current = null;
+      return;
+    }
+    wasOpen.current = true;
+    const key = String(initial?.id ?? 'new');
+    if (seededKey.current === key) {
+      logSchedule('form kept, server refresh did not replace the open schedule', { assignmentId: key });
+      return;
+    }
+    if (initial && duties.length === 0) return;
+    seededKey.current = key;
+    const fallbackTime = clockValue(initial?.reportingTime || event.defaultReportingTime, '06:00');
+    const fallbackLoc = initial?.reportingLocation || event.reportingLocation || '';
+    const selected = initial?.dates || [];
+    const preferred = !initial
+      ? vehicles.find((item) => item.vehicleNumber === preferredVehicleNumber)
+      : undefined;
+    const seedVehicle = {
+      id: initial?.vehicleId || preferred?.id || null,
+      number: initial?.vehicleNumber || preferred?.vehicleNumber || '',
+    };
+    const byDate = new Map<string, EventDuty>();
+    if (initial) {
+      duties
+        .filter((duty) => Number(duty.assignmentId) === Number(initial.id) && duty.status !== 'cancelled')
+        .forEach((duty) => byDate.set(isoDay(duty.dutyDate), duty));
+    }
+    const nextReports = selected.map((date) => {
+      const day = isoDay(date);
+      const duty = byDate.get(day) || dutyForDate(duties, initial?.id ?? 0, { date: day, dutyId: null }, seedVehicle);
+      return {
+        date: day,
+        time: editedTimes.current[day] || clockValue(duty?.reportingTime || fallbackTime, fallbackTime),
+        location: (duty?.reportingLocation || fallbackLoc).trim(),
+        dutyId: duty?.id ?? null,
+      };
+    });
+    reportsRef.current = nextReports;
+    logSchedule('form loaded from duties', scheduleText(nextReports));
+    setVehicleId(initial?.vehicleId ? String(initial.vehicleId) : (preferred ? String(preferred.id) : 'none'));
     setDriverId(initial?.driverId ? String(initial.driverId) : 'none');
-    setType(initial?.vehicleType || 'innova_crysta');
-    setDates(initial?.dates || []);
-    setTime(initial?.reportingTime || event.defaultReportingTime);
-    setLoc(initial?.reportingLocation || event.reportingLocation || '');
+    setType(initial?.vehicleType || preferred?.vehicleType || 'innova_crysta');
+    setReports(nextReports);
     setPax(initial?.passengerCount != null ? String(initial.passengerCount) : '');
     setNotes(initial?.notes || '');
-  }, [open, initial, event.defaultReportingTime, event.reportingLocation]);
+  }, [open, initial, event.defaultReportingTime, event.reportingLocation, duties, vehicles, preferredVehicleNumber]);
+
+  const reportTemplate = (current: DateReport[]) => {
+    const sample = current[0];
+    return {
+      time: clockValue(sample?.time || initial?.reportingTime || event.defaultReportingTime, '06:00'),
+      location: sample?.location || initial?.reportingLocation || event.reportingLocation || '',
+    };
+  };
+
+  const changeDates = (next: string[]) => {
+    const normalized = next.map(isoDay);
+    setReports((current) => {
+      const currentDays = current.map((row) => isoDay(row.date));
+      if (currentDays.length === normalized.length && currentDays.every((day, index) => day === normalized[index])) {
+        return current;
+      }
+      const byDate = new Map(current.map((row) => [isoDay(row.date), row]));
+      const fallback = reportTemplate(current);
+      const next = normalized.map((date) => {
+        const prev = byDate.get(date);
+        return prev ? { ...prev, date } : { date, ...fallback, dutyId: null };
+      });
+      reportsRef.current = next;
+      return next;
+    });
+  };
+
+  const removeDate = (date: string) => {
+    changeDates(reports.filter((row) => isoDay(row.date) !== isoDay(date)).map((row) => row.date));
+  };
+
+  const updateReport = (date: string, patch: Partial<Pick<DateReport, 'time' | 'location'>>) => {
+    const day = isoDay(date);
+    logSchedule('edited', { date: day, ...patch });
+    if (patch.time) editedTimes.current[day] = clockValue(patch.time, '06:00');
+    const current = reportsRef.current.length ? reportsRef.current : reports;
+    const next = current.map((row) => (isoDay(row.date) === day ? { ...row, ...patch, time: patch.time ? clockValue(patch.time, row.time) : row.time, date: isoDay(row.date) } : row));
+    reportsRef.current = next;
+    setReports(next);
+  };
+
+  const save = async () => {
+    const rows = readDutyRows((reportsRef.current.length ? reportsRef.current : reports).map((row) => ({
+      ...row,
+      date: isoDay(row.date),
+      time: editedTimes.current[isoDay(row.date)] || clockValue(row.time, '06:00'),
+    })));
+    if (rows.length === 0) {
+      toast.error('Select at least one date');
+      return;
+    }
+    const dates = rows.map((row) => row.date);
+    const first = rows[0];
+    const payload = {
+      eventId: event.id,
+      vehicleType: type,
+      vehicleId: vehicleId && vehicleId !== 'none' ? Number(vehicleId) : null,
+      driverId: driverId && driverId !== 'none' ? Number(driverId) : null,
+      dates,
+      reportingTime: first?.time || event.defaultReportingTime,
+      reportingLocation: first?.location || event.reportingLocation || '',
+      schedules: rows.map((row) => ({
+        date: row.date,
+        dutyId: row.dutyId ?? null,
+        reportingTime: row.time,
+        reportingLocation: row.location,
+      })),
+      passengerCount: pax ? Number(pax) : null,
+      notes,
+    };
+    logSchedule('save payload', scheduleText(payload.schedules));
+    const chosenVehicle = vehicles.find((item) => String(item.id) === vehicleId);
+    const scheduleVehicle = {
+      id: vehicleId !== 'none' ? Number(vehicleId) : (initial?.vehicleId ?? null),
+      number: chosenVehicle?.vehicleNumber || initial?.vehicleNumber || '',
+    };
+    setSaving(true);
+    try {
+      let assignmentId = initial?.id ?? 0;
+      if (initial) {
+        const datesUnchanged = sameDateKey(initial.dates || []) === sameDateKey(dates);
+        const missingSlips = rows.filter((row) => {
+          const duty = dutyForDate(duties, initial.id, row, scheduleVehicle);
+          return !duty || duty.status === 'cancelled';
+        });
+        const updateBody: Record<string, unknown> = { id: initial.id, ...payload };
+        if (datesUnchanged && missingSlips.length === 0) {
+          delete updateBody.dates;
+          logSchedule('dates unchanged, assignment update will not rebuild duties');
+        } else if (missingSlips.length > 0) {
+          logSchedule('create duty slips', missingSlips.map((row) => isoDay(row.date)).join(', '));
+        }
+        logSchedule('assignment update start', `id=${initial.id} reporting ${payload.reportingTime} @ ${payload.reportingLocation || '-'}`);
+        const updated = await eventDutyAPI.updateAssignment(updateBody);
+        logSchedule('assignment update response', `id=${updated.assignment?.id ?? initial.id}`);
+      } else {
+        const created = await eventDutyAPI.createAssignment(payload);
+        assignmentId = created.assignment?.id ?? 0;
+        logSchedule('assignment created', `id=${assignmentId}`);
+      }
+      const afterUpdate = await eventDutyAPI.listDuties(event.id);
+      logSchedule('duties after assignment', scheduleText(rows.map((row) => {
+        const duty = dutyForDate(afterUpdate.duties || [], assignmentId, row, scheduleVehicle);
+        return {
+          date: row.date,
+          time: clockOrEmpty(duty?.reportingTime),
+          location: duty?.reportingLocation || '',
+          dutyId: duty?.id ?? null,
+        };
+      })));
+      let dutyRows = afterUpdate.duties || [];
+      let problem = await persistDutySchedules(rows, dutyRows, assignmentId, scheduleVehicle);
+      if (problem?.startsWith('No duty') && assignmentId) {
+        logSchedule('duty slip missing after save, creating selected dates', problem);
+        await eventDutyAPI.updateAssignment({ id: assignmentId, ...payload });
+        const created = await eventDutyAPI.listDuties(event.id);
+        dutyRows = created.duties || [];
+        logSchedule('duties after create', scheduleText(rows.map((row) => {
+          const duty = dutyForDate(dutyRows, assignmentId, row, scheduleVehicle);
+          return {
+            date: row.date,
+            time: clockOrEmpty(duty?.reportingTime),
+            location: duty?.reportingLocation || '',
+            dutyId: duty?.id ?? null,
+          };
+        })));
+        problem = await persistDutySchedules(rows, dutyRows, assignmentId, scheduleVehicle);
+      }
+      if (problem) {
+        logSchedule('per-duty write rejected', problem);
+        toast.error(`Reporting details did not save. ${problem}`);
+        return;
+      }
+      const fresh = await eventDutyAPI.listDuties(event.id);
+      const compared = rows.map((row) => {
+        const duty = dutyForDate(fresh.duties || [], assignmentId, row, scheduleVehicle);
+        return {
+          date: row.date,
+          sentTime: row.time,
+          sentLocation: row.location,
+          serverTime: duty && duty.status !== 'cancelled' ? (duty.reportingTime || '') : '',
+          serverLocation: duty && duty.status !== 'cancelled' ? (duty.reportingLocation || '') : '',
+          dutyId: duty && duty.status !== 'cancelled' ? duty.id : null,
+          status: duty?.status || '',
+        };
+      });
+      logSchedule('server read back', scheduleText(compared.map((row) => ({
+        date: row.date,
+        time: clockOrEmpty(row.serverTime),
+        location: row.serverLocation,
+        dutyId: row.dutyId,
+      }))));
+      const missed = compared.filter((row) => (
+        !row.dutyId
+        || clockOrEmpty(row.serverTime) !== clockOrEmpty(row.sentTime)
+        || row.serverLocation.trim() !== row.sentLocation.trim()
+      ));
+      if (missed.length > 0) {
+        const sample = missed[0];
+        logSchedule('reverted on server', missed.map((row) => (
+          `${row.date}#${row.dutyId ?? '-'} sent ${row.sentTime} @ ${row.sentLocation || '-'} server ${row.serverTime || '-'} @ ${row.serverLocation || '-'} status=${row.status || '-'}`
+        )).join(' | '));
+        toast.error(
+          `Reporting details for ${formatDutyDateShort(sample.date)} did not save. Sent ${sample.sentTime || 'no time'} / ${sample.sentLocation || 'no location'}, server has ${sample.serverTime || 'no time'} / ${sample.serverLocation || 'no location'}.`,
+        );
+        return;
+      }
+      toast.success(initial ? 'Assignment updated' : 'Assignment saved. Duty slips created for selected dates.');
+      rows.forEach((row) => {
+        delete editedTimes.current[isoDay(row.date)];
+      });
+      const savedVehicle = vehicleId !== 'none'
+        ? (vehicles.find((item) => String(item.id) === vehicleId)?.vehicleNumber || initial?.vehicleNumber || '')
+        : '';
+      onOpenChange(false);
+      onSaved({ vehicleNumber: savedVehicle });
+    } catch (err) {
+      logSchedule('save failed', err instanceof Error ? err.message : err);
+      toast.error(err instanceof Error ? err.message : 'Could not save assignment');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedDates = reports.map((row) => row.date);
+  const allowedDates = new Set(eventDates);
+  const fromDate = eventDates[0] ? new Date(`${eventDates[0]}T00:00:00`) : undefined;
+  const toDate = eventDates.length ? new Date(`${eventDates[eventDates.length - 1]}T00:00:00`) : undefined;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{initial ? 'Edit assignment' : 'Add vehicle assignment'}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <Label>Vehicle type</Label>
-          <Select value={type} onValueChange={setType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{EVENT_VEHICLE_TYPES.map((t) => <SelectItem key={t} value={t}>{eventVehicleTypeLabel(t)}</SelectItem>)}</SelectContent>
-          </Select>
-          <Label>Vehicle</Label>
-          {vehicles.length === 0 && (
-            <p className="text-xs text-muted-foreground">Add an event vehicle in the Vehicles tab first. These are not company fleet cars.</p>
-          )}
-          <Select value={vehicleId} onValueChange={setVehicleId}>
-            <SelectTrigger><SelectValue placeholder="Assign later" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Assign later</SelectItem>
-              {vehicles.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.vehicleNumber} · {v.model}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Label>Driver</Label>
-          <Select value={driverId} onValueChange={setDriverId}>
-            <SelectTrigger><SelectValue placeholder="Assign later" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Assign later</SelectItem>
-              {drivers.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name} · {d.phone}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Label>Duty dates</Label>
-          <DateChipPicker dates={eventDates} selected={dates} onChange={setDates} />
-          <div className="grid grid-cols-2 gap-2">
-            <div><Label>Reporting time</Label><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
-            <div><Label>Passenger count</Label><Input value={pax} onChange={(e) => setPax(e.target.value)} /></div>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        const active = document.activeElement;
+        if (!next && active instanceof HTMLInputElement && active.type === 'time') return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        className="max-h-[94vh] w-[calc(100%-1rem)] max-w-[1040px] overflow-y-auto border-0 bg-[#eef3f8] p-3 sm:p-5"
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest('input[type="time"], [data-radix-select-content], [data-radix-popper-content-wrapper]')) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest('input[type="time"], [data-radix-select-content], [data-radix-popper-content-wrapper]')) {
+            event.preventDefault();
+          }
+        }}
+        onFocusOutside={(event) => {
+          const from = event.detail.originalEvent.target;
+          if (from instanceof Element && from.closest('input[type="time"]')) {
+            event.preventDefault();
+            return;
+          }
+          const target = event.target as HTMLElement | null;
+          if (target?.closest('[data-radix-select-content], [data-radix-popper-content-wrapper]')) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader className="pr-8 text-left">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-[#2f6bff]">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg text-[#2457d6] sm:text-xl">Vehicle Duty Schedule</DialogTitle>
+              <DialogDescription className="text-sm text-slate-500">Assign vehicle, driver and duty details</DialogDescription>
+            </div>
           </div>
-          <Input placeholder="Reporting location" value={loc} onChange={(e) => setLoc(e.target.value)} />
-          <Textarea placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <Button className="w-full" onClick={async () => {
-            const payload = {
-              eventId: event.id,
-              vehicleType: type,
-              vehicleId: vehicleId && vehicleId !== 'none' ? Number(vehicleId) : null,
-              driverId: driverId && driverId !== 'none' ? Number(driverId) : null,
-              dates,
-              reportingTime: time,
-              reportingLocation: loc,
-              passengerCount: pax ? Number(pax) : null,
-              notes,
-            };
-            try {
-              if (initial) {
-                await eventDutyAPI.updateAssignment({ id: initial.id, ...payload });
-                toast.success('Assignment updated');
-              } else {
-                await eventDutyAPI.createAssignment(payload);
-                toast.success('Assignment saved. Duty slips created for selected dates.');
-              }
-              onOpenChange(false);
-              onSaved();
-            } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Could not save assignment');
-            }
-          }}>{initial ? 'Save changes' : 'Save and create duties'}</Button>
+        </DialogHeader>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <div className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700"><Car className="h-4 w-4 text-slate-500" /> Vehicle</div>
+              {vehicles.length === 0 && (
+                <p className="mb-1 text-xs text-muted-foreground">Add an event vehicle in the Vehicles tab first.</p>
+              )}
+              <Select value={vehicleId} onValueChange={(value) => {
+                setVehicleId(value);
+                const chosen = vehicles.find((item) => String(item.id) === value);
+                if (chosen?.vehicleType) setType(chosen.vehicleType);
+              }}>
+                <SelectTrigger><SelectValue placeholder="Assign later" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Assign later</SelectItem>
+                  {vehicles.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.vehicleNumber} · {item.model}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {vehicleId === 'none' && (
+              <div>
+                <Label>Vehicle type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{EVENT_VEHICLE_TYPES.map((item) => <SelectItem key={item} value={item}>{eventVehicleTypeLabel(item)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <div className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700"><UserRound className="h-4 w-4 text-slate-500" /> Driver</div>
+              <Select value={driverId} onValueChange={setDriverId}>
+                <SelectTrigger><SelectValue placeholder="Assign later" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Assign later</SelectItem>
+                  {drivers.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name} · {item.phone}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div ref={calendarRef}>
+              <div className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700"><CalendarDays className="h-4 w-4 text-slate-500" /> Duty date</div>
+              <Calendar
+                mode="multiple"
+                selected={selectedDates.map((date) => new Date(`${date}T00:00:00`))}
+                onSelect={(days) => {
+                  const next = (days || []).map(toLocalIsoDate).filter((iso) => allowedDates.has(iso)).sort();
+                  changeDates(next);
+                }}
+                disabled={(day) => !allowedDates.has(toLocalIsoDate(day))}
+                fromDate={fromDate}
+                toDate={toDate}
+                defaultMonth={fromDate}
+                className="mx-auto p-0"
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-slate-700">Selected dates ({reports.length})</span>
+                <div className="flex items-center gap-3">
+                  <button type="button" className="text-sm font-medium text-[#2f6bff]" onClick={() => changeDates([...eventDates])}>Select all</button>
+                  <button type="button" className="inline-flex items-center gap-1 text-sm font-medium text-rose-500" onClick={() => changeDates([])}>
+                    <Trash2 className="h-3.5 w-3.5" /> Clear
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {reports.map((row) => (
+                  <span key={row.date} className="inline-flex items-center gap-1 rounded-full bg-[#2f6bff] py-1 pl-3 pr-1 text-xs font-semibold text-white">
+                    {formatDutyDateShort(row.date)}
+                    <button type="button" className="rounded-full p-0.5 hover:bg-white/20" aria-label={`Remove ${formatDutyDate(row.date)}`} onClick={() => removeDate(row.date)}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <Clock className="h-4 w-4 text-[#2f6bff]" /> Reporting time for each date
+              </div>
+              {reports.length === 0 ? (
+                <p className="text-sm text-slate-500">Select dates to set a reporting time and pickup.</p>
+              ) : (
+                <div className="max-h-[22rem] overflow-y-auto overscroll-contain" onWheel={(event) => event.stopPropagation()}>
+                  <div className="hidden grid-cols-[7.5rem_9.5rem_minmax(0,1fr)_2rem] gap-2 px-1 pb-1 text-xs font-medium text-slate-400 lg:grid">
+                    <span>Date</span>
+                    <span>Reporting Time</span>
+                    <span>Location</span>
+                  </div>
+                  {reports.map((row) => (
+                    <div key={row.date} className="grid grid-cols-[4.5rem_minmax(0,0.95fr)_minmax(0,1.15fr)] items-center gap-2 border-b border-slate-100 py-2 last:border-b-0 lg:grid-cols-[7.5rem_9.5rem_minmax(0,1fr)_2rem]">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold leading-tight text-slate-800">
+                          {formatDutyDateShort(row.date)}
+                          <span className="ml-1 font-normal text-slate-400 lg:hidden">{dutyWeekday(row.date)}</span>
+                        </div>
+                        <div className="hidden text-xs text-slate-400 lg:block">{dutyWeekday(row.date)}</div>
+                      </div>
+                      <input
+                        type="time"
+                        step={60}
+                        key={row.date}
+                        data-duty-time={row.date}
+                        aria-label={`Reporting time ${formatDutyDate(row.date)}`}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                        defaultValue={editedTimes.current[row.date] || row.time}
+                        onInput={(event) => {
+                          const value = event.currentTarget.value.slice(0, 5);
+                          if (/^\d{2}:\d{2}$/.test(value)) updateReport(row.date, { time: value });
+                        }}
+                      />
+                      <Input
+                        className="h-9"
+                        aria-label={`Pickup ${formatDutyDate(row.date)}`}
+                        placeholder="Location"
+                        data-duty-location={row.date}
+                        value={row.location}
+                        onChange={(e) => updateReport(row.date, { location: e.target.value })}
+                      />
+                      <button type="button" className="hidden h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-500 lg:inline-flex" aria-label={`Remove ${formatDutyDate(row.date)}`} onClick={() => removeDate(row.date)}>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#2f6bff] lg:hidden"
+                onClick={() => calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              >
+                + Add more dates (if needed)
+              </button>
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700"><Users className="h-4 w-4 text-slate-500" /> Passenger count</div>
+              <Input placeholder="Enter passenger count" value={pax} onChange={(e) => setPax(e.target.value)} />
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700"><StickyNote className="h-4 w-4 text-slate-500" /> Notes</div>
+              <Textarea placeholder="Enter any additional notes..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+            <Button className="h-11 w-full rounded-xl bg-[#2f6bff] hover:bg-[#2457d6]" disabled={saving} onClick={() => { void save(); }}>
+              <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </section>
         </div>
       </DialogContent>
     </Dialog>
@@ -1362,6 +1990,10 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
   const [kmFor, setKmFor] = useState<EventDuty | null>(null);
   const [openKm, setOpenKm] = useState('');
   const [closeKm, setCloseKm] = useState('');
+  const [timeFor, setTimeFor] = useState<EventDuty | null>(null);
+  const [reportingTime, setReportingTime] = useState('');
+  const [reportedAt, setReportedAt] = useState('');
+  const [closingAt, setClosingAt] = useState('');
   const rows = duties.filter((d) => status === 'all' || d.status === status);
   return (
     <div className="space-y-3">
@@ -1381,6 +2013,7 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
             <TableHead>Vehicle</TableHead>
             <TableHead>Driver</TableHead>
             <TableHead>KM</TableHead>
+            <TableHead>Reporting time</TableHead>
             <TableHead>Reported</TableHead>
             <TableHead>Closing Time</TableHead>
             <TableHead>Odometer uploaded</TableHead>
@@ -1397,6 +2030,7 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
               <TableCell>{d.vehicleNumber || d.vehicleTypeLabel}</TableCell>
               <TableCell>{d.driverName || '—'}</TableCell>
               <TableCell>{d.openingKm ?? '—'} → {d.closingKm ?? '—'} ({d.totalKm ?? '—'})</TableCell>
+              <TableCell>{formatReportingTime(d.reportingTime) || '—'}</TableCell>
               <TableCell>
                 <DutyStamp label="Reported" at={d.openingAt} gps={d.openingGps} />
               </TableCell>
@@ -1405,7 +2039,7 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
                 <DutyStamp label="Uploaded" at={d.closingAt} gps={d.closingGps} />
               </TableCell>
               <TableCell>
-                <DutyDuration start={d.openingAt} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} />
+                <DutyDuration start={reportDutyStart(d)} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} pausedSeconds={d.pausedSeconds} />
               </TableCell>
               <TableCell>
                 <Badge variant="secondary">{dutyStatusLabel(d.status)}</Badge>
@@ -1423,6 +2057,14 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
                   endRequestedAt={d.endRequestedAt}
                   onDone={onReload}
                 />
+                <ContinueDutyButton
+                  appearance="admin"
+                  dutyId={d.id}
+                  status={d.status}
+                  openingAt={d.openingAt}
+                  closingAt={d.closingAt}
+                  onDone={onReload}
+                />
                 {d.openingPhotoId ? (
                   <Button size="sm" variant="outline" onClick={() => { void onViewFile(eventDutyAPI.mediaUrl(d.openingPhotoId!), 'Opening odometer'); }}>Opening photo</Button>
                 ) : null}
@@ -1435,6 +2077,13 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
                   setOpenKm(d.openingKm != null ? String(d.openingKm) : '');
                   setCloseKm(d.closingKm != null ? String(d.closingKm) : '');
                 }}>Edit KM</Button>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setTimeFor(d);
+                  const match = /^(\d{1,2}):(\d{2})/.exec((d.reportingTime || '').trim());
+                  setReportingTime(match ? `${match[1].padStart(2, '0')}:${match[2]}` : '');
+                  setReportedAt(toDutyTimeInput(d.openingAt));
+                  setClosingAt(toDutyTimeInput(dutyClosingTime(d.closingAt, d.endRequestedAt)));
+                }}>Edit time</Button>
                 {(d.openingKm != null || d.openingPhotoId || d.needsOpeningReupload) && (
                   <Button size="sm" variant="ghost" onClick={async () => {
                     if (!confirmAction('Clear the opening reading so the driver can upload a new odometer photo?')) return;
@@ -1488,7 +2137,7 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
           ))}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
+              <TableCell colSpan={12} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
             </TableRow>
           )}
         </TableBody>
@@ -1514,6 +2163,51 @@ function DutyAdminTable({ duties, onReload, onViewFile }: { duties: EventDuty[];
           </DialogContent>
         </Dialog>
       )}
+      {timeFor && (
+        <Dialog open onOpenChange={(open) => { if (!open) setTimeFor(null); }}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Edit times · {timeFor.vehicleNumber || timeFor.dutySlipNo}</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">Total time runs from the reporting time to the closing time.</p>
+            <div>
+              <Label>Reporting time</Label>
+              <Input type="time" value={reportingTime} onChange={(e) => setReportingTime(e.target.value)} />
+            </div>
+            <div>
+              <Label>Reported</Label>
+              <Input type="datetime-local" step={1} value={reportedAt} onChange={(e) => setReportedAt(e.target.value)} />
+            </div>
+            <div>
+              <Label>Closing time</Label>
+              <Input type="datetime-local" step={1} value={closingAt} onChange={(e) => setClosingAt(e.target.value)} />
+            </div>
+            <Button onClick={async () => {
+              const reported = fromDutyTimeInput(reportedAt);
+              const closing = fromDutyTimeInput(closingAt);
+              if (reportedAt && !reported) {
+                toast.error('Enter a valid reported time');
+                return;
+              }
+              if (closingAt && !closing) {
+                toast.error('Enter a valid closing time');
+                return;
+              }
+              try {
+                await eventDutyAPI.overrideTimes({
+                  id: timeFor.id,
+                  reportingTime,
+                  reportedAt: reported,
+                  closingAt: closing,
+                });
+                toast.success('Times updated');
+                setTimeFor(null);
+                onReload();
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Update failed');
+              }
+            }}>Save times</Button>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -1524,13 +2218,11 @@ function documentDate(doc: EventDocumentRow): string {
 
 function vehicleChoices(
   duties: EventDuty[],
-  documents: EventDocumentRow[] = [],
   extra: Array<{ vehicleNumber?: string | null }> = [],
 ): string[] {
   return [...new Set(
     [
       ...duties.map((d) => d.vehicleNumber),
-      ...documents.map((d) => d.vehicleNumber),
       ...extra.map((d) => d.vehicleNumber),
     ]
       .map((value) => (value || '').trim())
@@ -1538,13 +2230,33 @@ function vehicleChoices(
   )].sort();
 }
 
+function sortAssignments(rows: EventAssignment[]): EventAssignment[] {
+  return [...rows].sort((a, b) => {
+    const aSet = a.serialNo != null && a.serialNo > 0;
+    const bSet = b.serialNo != null && b.serialNo > 0;
+    if (aSet && bSet && a.serialNo !== b.serialNo) return (a.serialNo ?? 0) - (b.serialNo ?? 0);
+    if (aSet !== bSet) return aSet ? -1 : 1;
+    return a.id - b.id;
+  });
+}
+
+function isBlankAssignment(a: { vehicleNumber?: string | null; driverName?: string | null }): boolean {
+  const vehicle = (a.vehicleNumber || '').trim();
+  const driver = (a.driverName || '').trim();
+  const empty = (value: string) => value === '' || value === '-' || /^not assigned$/i.test(value);
+  return empty(vehicle) && empty(driver);
+}
+
 function assignmentMatchesFilter(a: EventAssignment, vehicle: string, from: string, to: string): boolean {
   if (a.status !== 'active') return false;
+  if (isBlankAssignment(a)) return false;
   if (vehicle !== 'all' && (a.vehicleNumber || '') !== vehicle) return false;
   if (!from && !to) return true;
-  const dates = a.dates || [];
-  if (dates.length === 0) return false;
-  return dates.some((d) => (!from || d >= from) && (!to || d <= to));
+  const dates = (a.dates || []).map((date) => isoDay(date)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+  if (dates.length === 0) return true;
+  const start = from ? isoDay(from) : '';
+  const end = to ? isoDay(to) : '';
+  return dates.some((date) => (!start || date >= start) && (!end || date <= end));
 }
 
 function documentMatchesFilter(doc: EventDocumentRow, vehicle: string, from: string, to: string): boolean {
@@ -1557,6 +2269,7 @@ function documentMatchesFilter(doc: EventDocumentRow, vehicle: string, from: str
 
 function dutiesMatchingFilter(duties: EventDuty[], vehicle: string, from: string, to: string): EventDuty[] {
   return duties.filter((duty) => {
+    if (isBlankAssignment(duty)) return false;
     if (vehicle !== 'all' && (duty.vehicleNumber || '') !== vehicle) return false;
     if (from && duty.dutyDate < from) return false;
     if (to && duty.dutyDate > to) return false;
@@ -1594,13 +2307,13 @@ function exportTabExcel(tab: string, event: VthEvent, vehicle: string, rows: Tab
     case 'assignments':
       downloadCsv(
         `${event.eventCode}-assignments.csv`,
-        ['Vehicle', 'Type', 'Driver', 'Mobile', 'Dates'],
-        rows.assignments.map((a) => [
+        ['SL.No', 'Vehicle', 'Type', 'Driver', 'Mobile'],
+        rows.assignments.map((a, index) => [
+          String(a.serialNo ?? index + 1),
           a.vehicleNumber || '',
           a.vehicleTypeLabel || '',
           a.driverName || '',
           a.driverMobile || '',
-          (a.dates || []).join(' '),
         ]),
       );
       return;
@@ -1664,14 +2377,13 @@ function exportTabPdf(
       printHtmlReport(
         `${event.name} assignments`,
         `${event.name} assignments`,
-        `<table><thead><tr><th class="sl">SL.No</th><th>Vehicle</th><th>Type</th><th>Driver</th><th>Mobile</th><th>Dates</th></tr></thead><tbody>${
+        `<table><thead><tr><th class="sl">SL.No</th><th>Vehicle</th><th>Type</th><th>Driver</th><th>Mobile</th></tr></thead><tbody>${
           rows.assignments.map((a, index) => `<tr>
-            <td class="sl">${index + 1}</td>
+            <td class="sl">${a.serialNo ?? index + 1}</td>
             <td>${escapeHtml(a.vehicleNumber)}</td>
             <td>${escapeHtml(a.vehicleTypeLabel)}</td>
             <td>${escapeHtml(a.driverName)}</td>
             <td>${escapeHtml(a.driverMobile)}</td>
-            <td>${escapeHtml(formatDutyDateRange(a.dates))}</td>
           </tr>`).join('')
         }</tbody></table>`,
         range,
@@ -1697,7 +2409,7 @@ function exportTabPdf(
     case 'overview':
     case 'duties':
     case 'reports':
-      exportVehiclePdf(event, rows.duties, vehicle, from, to);
+      exportVehiclePdf(event, rows.duties, rows.assignments, vehicle, from, to);
       return;
     default: {
       const _never: never = current;
@@ -1720,7 +2432,7 @@ function dutiesForReport(duties: EventDuty[], vehicle: string, from: string, to:
 function exportVehicleExcel(event: VthEvent, rows: EventDuty[], vehicle: string) {
   downloadCsv(
     `${event.eventCode}-${vehicle === 'all' ? 'all-vehicles' : vehicle}-duties.csv`,
-    ['Date', 'Slip', 'Vehicle', 'Driver', 'Opening KM', 'Closing KM', 'Total KM', 'Reported', 'Closing time', 'Odometer uploaded', 'Total time', 'Report location', 'Status'],
+    ['Date', 'Slip', 'Vehicle', 'Driver', 'Opening KM', 'Closing KM', 'Total KM', 'Reporting time', 'Reported', 'Closing time', 'Odometer uploaded', 'Total time', 'Report location', 'Status'],
     rows.map((d) => [
       d.dutyDate,
       d.dutySlipNo,
@@ -1729,23 +2441,45 @@ function exportVehicleExcel(event: VthEvent, rows: EventDuty[], vehicle: string)
       d.openingKm ?? '',
       d.closingKm ?? '',
       d.totalKm ?? '',
+      formatReportingTime(d.reportingTime),
       d.openingAt || '',
       dutyClosingTime(d.closingAt, d.endRequestedAt) || '',
       d.closingAt || '',
-      formatDutyDuration(d.openingAt, billableDutyEnd(d.closingAt, d.endRequestedAt)),
+      formatReportDutyDuration(d),
       formatGps(d.openingGps),
       dutyStatusLabel(d.status),
     ]),
   );
 }
 
-function exportVehiclePdf(event: VthEvent, rows: EventDuty[], vehicle: string, from: string, to: string) {
+function assignmentSlNo(assignments: EventAssignment[], assignmentId: number, vehicleNumber?: string | null): number | null {
+  const byId = assignments.findIndex((assignment) => assignment.id === assignmentId);
+  if (byId >= 0) {
+    const match = assignments[byId];
+    return match.serialNo != null && match.serialNo > 0 ? match.serialNo : byId + 1;
+  }
+  const byVehicle = assignments.findIndex((assignment) => assignment.vehicleNumber && assignment.vehicleNumber === vehicleNumber);
+  if (byVehicle >= 0) {
+    const match = assignments[byVehicle];
+    return match.serialNo != null && match.serialNo > 0 ? match.serialNo : byVehicle + 1;
+  }
+  return null;
+}
+
+function exportVehiclePdf(event: VthEvent, rows: EventDuty[], assignments: EventAssignment[], vehicle: string, from: string, to: string) {
   const heading = vehicle === 'all' ? `${event.name} · all vehicles` : `${event.name} · ${vehicle}`;
+  const ordered = [...rows].sort((a, b) => {
+    const aSerial = assignmentSlNo(assignments, a.assignmentId, a.vehicleNumber) ?? 9999;
+    const bSerial = assignmentSlNo(assignments, b.assignmentId, b.vehicleNumber) ?? 9999;
+    if (aSerial !== bSerial) return aSerial - bSerial;
+    if (a.dutyDate !== b.dutyDate) return a.dutyDate < b.dutyDate ? -1 : 1;
+    return a.id - b.id;
+  });
   const body = `<table><thead><tr>
     <th class="sl">SL.No</th><th>Date</th><th>Slip</th><th>Vehicle</th><th>Driver</th><th>Opening KM</th><th>Closing KM</th><th>Total KM</th>
-    <th>Reported</th><th>Closing time</th><th>Odometer uploaded</th><th>Total time</th><th>Location</th><th>Status</th>
-  </tr></thead><tbody>${rows.map((d, index) => `<tr>
-    <td class="sl">${index + 1}</td>
+    <th>Reporting time</th><th>Reported</th><th>Closing time</th><th>Odometer uploaded</th><th>Total time</th><th>Location</th><th>Status</th>
+  </tr></thead><tbody>${ordered.map((d) => `<tr>
+    <td class="sl">${assignmentSlNo(assignments, d.assignmentId, d.vehicleNumber) ?? '—'}</td>
     <td>${escapeHtml(formatDutyDate(d.dutyDate))}</td>
     <td>${escapeHtml(d.dutySlipNo)}</td>
     <td>${escapeHtml(d.vehicleNumber)}</td>
@@ -1753,10 +2487,11 @@ function exportVehiclePdf(event: VthEvent, rows: EventDuty[], vehicle: string, f
     <td>${escapeHtml(d.openingKm)}</td>
     <td>${escapeHtml(d.closingKm)}</td>
     <td>${escapeHtml(d.totalKm)}</td>
+    <td>${escapeHtml(formatReportingTime(d.reportingTime) || '—')}</td>
     <td>${escapeHtml(formatServerDateTime(d.openingAt))}</td>
     <td>${escapeHtml(formatServerDateTime(dutyClosingTime(d.closingAt, d.endRequestedAt)))}</td>
     <td>${escapeHtml(formatServerDateTime(d.closingAt))}</td>
-    <td>${escapeHtml(formatDutyDuration(d.openingAt, billableDutyEnd(d.closingAt, d.endRequestedAt)) || '—')}</td>
+    <td>${escapeHtml(formatReportDutyDuration(d) || '—')}</td>
     <td>${escapeHtml(formatGps(d.openingGps) || '—')}</td>
     <td>${escapeHtml(dutyStatusLabel(d.status))}</td>
   </tr>`).join('')}</tbody></table>`;
@@ -1854,6 +2589,7 @@ function VehicleReportPanel({
                 <TableHead>Vehicle</TableHead>
                 <TableHead>Driver</TableHead>
                 <TableHead>KM</TableHead>
+                <TableHead>Reporting time</TableHead>
                 <TableHead>Reported</TableHead>
                 <TableHead>Closing Time</TableHead>
                 <TableHead>Odometer uploaded</TableHead>
@@ -1868,16 +2604,17 @@ function VehicleReportPanel({
                   <TableCell>{d.vehicleNumber || d.vehicleTypeLabel}</TableCell>
                   <TableCell>{d.driverName || '—'}</TableCell>
                   <TableCell>{d.totalKm ?? '—'}</TableCell>
+                  <TableCell>{formatReportingTime(d.reportingTime) || '—'}</TableCell>
                   <TableCell><DutyStamp label="Reported" at={d.openingAt} gps={d.openingGps} /></TableCell>
                   <TableCell>{formatServerDateTime(dutyClosingTime(d.closingAt, d.endRequestedAt))}</TableCell>
                   <TableCell><DutyStamp label="Uploaded" at={d.closingAt} gps={d.closingGps} /></TableCell>
-                  <TableCell><DutyDuration start={d.openingAt} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} /></TableCell>
+                  <TableCell><DutyDuration start={reportDutyStart(d)} end={billableDutyEnd(d.closingAt, d.endRequestedAt)} pausedSeconds={d.pausedSeconds} /></TableCell>
                   <TableCell>{dutyStatusLabel(d.status)}</TableCell>
                 </TableRow>
               ))}
               {duties.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
+                  <TableCell colSpan={10} className="text-sm text-muted-foreground">No duties in this filter.</TableCell>
                 </TableRow>
               )}
             </TableBody>

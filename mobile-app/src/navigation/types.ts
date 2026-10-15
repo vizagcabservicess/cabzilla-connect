@@ -85,6 +85,8 @@ export type RootStackParamList = {
   AdminVehicleEdit: { vehicle: import('../services/adminAPI').AdminFleetVehicle };
   AdminCreateBooking: undefined;
   AdminGroupTours: undefined;
+  AdminEvents: undefined;
+  AdminEventDetail: { eventId: number; name?: string };
   AdminFleet: undefined;
   AdminFares: undefined;
   AdminCommission: undefined;
@@ -103,7 +105,7 @@ export type RootStackParamList = {
   AssignDriver: { bookingId: number; booking: Record<string, unknown> };
   AssignVehicle: { bookingId: number; booking: Record<string, unknown> };
   BookingInvoice: { bookingId: number; booking: Record<string, unknown> };
-  WebView: { url: string; title: string; html?: string };
+  WebView: { url: string; title: string; html?: string; auth?: boolean; openChat?: boolean };
   ContactUs: undefined;
   HelpCenter: undefined;
   StaticContent: { contentKey: 'terms' | 'privacy' | 'refund' };
@@ -115,6 +117,8 @@ export type RootStackParamList = {
   DriverFuelHome: undefined;
   DriverTripDetail: { trip: import('../services/driverTripsAPI').DriverTrip };
   FuelEntry: { bookingId?: number } | undefined;
+  BuildMyTrip: undefined;
+  Quotation: { tours: Array<{ id: string; name: string; days?: number }> };
   Payment: {
     pickupLocation: Location;
     dropLocation: Location | null;
@@ -145,4 +149,7 @@ export type RootStackParamList = {
 export type ServicesStackParamList = {
   ServicesList: undefined;
   HireDriver: undefined;
+  Chat: undefined;
+  BuildMyTrip: undefined;
+  Quotation: { tours: Array<{ id: string; name: string; days?: number }> };
 };

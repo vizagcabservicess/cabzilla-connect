@@ -8,12 +8,16 @@ import { Platform } from 'react-native';
 import './services/pushNotificationService';
 import {
   ensureDefaultPushChannel,
+  ensureEventDutyAlertChannel,
+  ensureEventManagerAlertChannel,
   ensureTripAssignmentNotificationChannel,
 } from './services/pushNotificationService';
 
 if (Platform.OS === 'android') {
   void (async () => {
     await ensureTripAssignmentNotificationChannel();
+    await ensureEventDutyAlertChannel();
+    await ensureEventManagerAlertChannel();
     await ensureDefaultPushChannel();
   })();
 }

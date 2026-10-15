@@ -67,7 +67,7 @@ function vth_docs_list(mysqli $conn, int $eventId): array
             FROM vth_event_documents doc
             LEFT JOIN vth_event_duties d ON doc.owner_type = \'duty\' AND d.id = doc.owner_id
             LEFT JOIN drivers dr ON doc.owner_type = \'driver\' AND dr.id = doc.owner_id
-            LEFT JOIN vth_event_vehicles ev ON doc.owner_type = \'vehicle\' AND ev.id = doc.owner_id
+            LEFT JOIN vth_event_vehicles ev ON doc.owner_type = \'vehicle\' AND ev.id = doc.owner_id AND ev.status = \'active\'
             LEFT JOIN fleet_vehicles fv ON doc.owner_type = \'vehicle\' AND fv.id = doc.owner_id
             WHERE doc.event_id = ? OR (doc.owner_type = \'duty\' AND d.event_id = ?)
             ORDER BY doc.id DESC';

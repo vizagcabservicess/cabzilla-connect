@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { endRequestResultMessage } from '@/lib/eventDuty';
-import { eventDutyAPI, requestShareDutyEnd } from '@/services/api/eventDutyAPI';
+import { eventDutyAPI, requestShareDutyEnd, revokeShareDutyEnd } from '@/services/api/eventDutyAPI';
 
 type AskDriverEndButtonProps = {
   dutyId: number;
@@ -21,7 +21,7 @@ export function AskDriverEndButton({
   shareToken,
   onDone,
 }: AskDriverEndButtonProps) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'ask' | 'revoke' | null>(null);
   if (status !== 'in_progress' || dutyId < 1) return null;
 
   const asked = Boolean(endRequestedAt);
@@ -39,7 +39,7 @@ export function AskDriverEndButton({
       );
       if (!ok) return;
     }
-    setBusy(true);
+    setBusy('ask');
     try {
       const res = appearance === 'share'
         ? await requestShareDutyEnd(shareToken || '', dutyId)
@@ -52,26 +52,66 @@ export function AskDriverEndButton({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not reach the driver');
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+
+  const revoke = async () => {
+    if (busy || !asked) return;
+    const ok = window.confirm('Revoke the end request? This trip stays open, and time after the request counts again.');
+    if (!ok) return;
+    setBusy('revoke');
+    try {
+      const res = appearance === 'share'
+        ? await revokeShareDutyEnd(shareToken || '', dutyId)
+        : await eventDutyAPI.revokeDutyEnd(dutyId);
+      if (!res.duty) {
+        throw new Error('The end request could not be revoked.');
+      }
+      toast.success('End request revoked. Time is counting again.');
+      onDone?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not revoke the end request');
+    } finally {
+      setBusy(null);
     }
   };
 
   if (appearance === 'share') {
     return (
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => { void send(); }}
-        className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 sm:text-[11px]"
-      >
-        {busy ? '…' : label}
-      </button>
+      <>
+        <button
+          type="button"
+          disabled={busy != null}
+          onClick={() => { void send(); }}
+          className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60 sm:text-[11px]"
+        >
+          {busy === 'ask' ? '…' : label}
+        </button>
+        {asked ? (
+          <button
+            type="button"
+            disabled={busy != null}
+            onClick={() => { void revoke(); }}
+            className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200 disabled:opacity-60 sm:text-[11px]"
+          >
+            {busy === 'revoke' ? '…' : 'Revoke'}
+          </button>
+        ) : null}
+      </>
     );
   }
 
   return (
-    <Button size="sm" variant="outline" disabled={busy} onClick={() => { void send(); }}>
-      {busy ? 'Sending…' : label}
-    </Button>
+    <>
+      <Button size="sm" variant="outline" disabled={busy != null} onClick={() => { void send(); }}>
+        {busy === 'ask' ? 'Sending…' : label}
+      </Button>
+      {asked ? (
+        <Button size="sm" variant="outline" disabled={busy != null} onClick={() => { void revoke(); }}>
+          {busy === 'revoke' ? 'Revoking…' : 'Revoke end'}
+        </Button>
+      ) : null}
+    </>
   );
 }

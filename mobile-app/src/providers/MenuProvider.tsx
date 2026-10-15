@@ -155,6 +155,16 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
                 <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
               </TouchableOpacity>
 
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => navAndClose(() => navigation.navigate('BuildMyTrip'))}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="map" size={20} color={colors.foreground} />
+                <Text style={styles.menuLabel}>Build Your Trip</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.gray600} />
+              </TouchableOpacity>
+
               {/* Hire Driver */}
               <TouchableOpacity
                 style={styles.menuItem}

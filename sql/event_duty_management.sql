@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS `vth_event_assignments` (
   `reporting_time` CHAR(5) NULL,
   `reporting_location` VARCHAR(255) NULL,
   `notes` TEXT NULL,
+  `serial_no` INT UNSIGNED NULL,
   `replaced_from_assignment_id` INT UNSIGNED NULL,
   `status` ENUM('active','replaced','cancelled') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  Share2,
   XCircle,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
@@ -17,6 +18,7 @@ import { AddToHomeButton } from '@/components/events/AddToHomeButton';
 import { EventLinkSeo } from '@/components/events/EventLinkSeo';
 import { DriverFace } from '@/components/events/DriverFace';
 import { AskDriverEndButton } from '@/components/events/AskDriverEndButton';
+import { ContinueDutyButton } from '@/components/events/ContinueDutyButton';
 import { EventDutyDetailScreen } from '@/components/events/EventDutyDetailScreen';
 import { EventTrackingMap } from '@/components/events/EventTrackingMap';
 import { toast } from 'sonner';
@@ -31,6 +33,7 @@ import {
   isShareVehicleAssigned,
   shareListStats,
   tripPromptResultMessage,
+  whatsappUrl,
 } from '@/lib/eventDuty';
 import type { EventShareView, EventTrackVehicle } from '@/types/eventDuty';
 
@@ -72,6 +75,29 @@ function displayMobile(mobile: string): string {
   const digits = mobile.replace(/\D/g, '');
   if (digits.length === 10) return `+91 ${digits}`;
   return mobile;
+}
+
+function driverShareText(row: ShareRow, serial: number): string {
+  return [
+    `SL.No: ${serial}`,
+    `Driver: ${row.driverName || '—'}`,
+    `Phone: ${row.driverMobile ? displayMobile(row.driverMobile) : '—'}`,
+    `Vehicle: ${row.vehicleType || '—'}`,
+    `Vehicle No: ${row.vehicleNumber || '—'}`,
+  ].join('\n');
+}
+
+async function shareDriverCard(row: ShareRow, serial: number): Promise<void> {
+  const text = driverShareText(row, serial);
+  try {
+    if (typeof navigator.share === 'function') {
+      await navigator.share({ title: row.driverName || 'Driver', text });
+      return;
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+  }
+  window.open(whatsappUrl(text), '_blank', 'noopener,noreferrer');
 }
 
 function sharePhotoUrl(token: string, photoId?: number | null): string | null {
@@ -166,6 +192,8 @@ export default function EventSharePage() {
       fresh.dutyPlace !== selected.dutyPlace
       || Boolean(fresh.parkingAsked) !== Boolean(selected.parkingAsked)
       || fresh.status !== selected.status
+      || fresh.vehicleNumber !== selected.vehicleNumber
+      || fresh.vehicleType !== selected.vehicleType
       || fresh.endRequestedAt !== selected.endRequestedAt
       || fresh.endRequestSeenAt !== selected.endRequestSeenAt
     ) {
@@ -305,7 +333,7 @@ export default function EventSharePage() {
         const aOpen = Boolean(a.openingAt && !a.closingAt);
         const bOpen = Boolean(b.openingAt && !b.closingAt);
         if (aOpen !== bOpen) return aOpen ? -1 : 1;
-        return dutyDurationMinutes(b.openingAt, b.closingAt, nowMs) - dutyDurationMinutes(a.openingAt, a.closingAt, nowMs);
+        return dutyDurationMinutes(b.openingAt, b.closingAt, nowMs, b.pausedSeconds) - dutyDurationMinutes(a.openingAt, a.closingAt, nowMs, a.pausedSeconds);
       });
   }, [assignedVehicles, query, chip, typeFilter, statusFilter, nowMs]);
 
@@ -460,13 +488,13 @@ export default function EventSharePage() {
         </div>
 
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.75rem] items-center gap-x-2 border-b border-slate-100 px-3 py-2 text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_6.5rem] sm:px-4 sm:text-[10px]">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6.25rem] items-center gap-x-2 border-b border-slate-100 px-3 py-2 text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_7rem] sm:px-4 sm:text-[10px]">
             <div>Vehicle Details</div>
             <div>Driver Details</div>
             <div className="text-right">Action</div>
           </div>
           {rows.map((row, index) => {
-            const duration = formatDutyDurationCompact(row.openingAt, billableDutyEnd(row.closingAt, row.endRequestedAt), nowMs);
+            const duration = formatDutyDurationCompact(row.openingAt, billableDutyEnd(row.closingAt, row.endRequestedAt), nowMs, row.pausedSeconds);
             const session = sessionLabel(rowStatus(row));
             const asked = row.status === 'in_progress' && row.endRequestedAt;
             const sessionText = asked
@@ -474,6 +502,8 @@ export default function EventSharePage() {
               : session.text;
             const sessionClass = asked ? 'text-red-600' : session.className;
             const started = dutyStarted(row);
+            const listedAt = assignedVehicles.findIndex((item) => item.dutySlipNo === row.dutySlipNo && item.dutyId === row.dutyId);
+            const serial = row.serialNo != null && row.serialNo > 0 ? row.serialNo : listedAt + 1;
             return (
               <div
                 key={`${row.dutySlipNo}-${index}`}
@@ -486,7 +516,7 @@ export default function EventSharePage() {
                     setSelected(row);
                   }
                 }}
-                className="grid cursor-pointer grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.75rem] items-center gap-x-2 border-t border-slate-50 px-3 py-2.5 hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_6.5rem] sm:px-4"
+                className="grid cursor-pointer grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6.25rem] items-center gap-x-2 border-t border-slate-50 px-3 py-2.5 hover:bg-slate-50 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_7rem] sm:px-4"
               >
                 <div className="min-w-0">
                   <div className="truncate text-[11px] font-semibold leading-tight sm:text-sm">{row.vehicleType}</div>
@@ -516,6 +546,16 @@ export default function EventSharePage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    aria-label={`Share ${row.driverName || 'driver'}`}
+                    title="Share"
+                    onClick={() => { void shareDriverCard(row, serial); }}
+                    className="inline-flex h-6 items-center gap-1 rounded-full bg-slate-100 px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
+                  >
+                    <Share2 className="h-3 w-3" />
+                    Share
+                  </button>
                   {row.dutyId ? (
                     <AskDriverEndButton
                       appearance="share"
@@ -549,13 +589,26 @@ export default function EventSharePage() {
                       ) : null}
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setSelected(row)}
-                      className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-100 sm:px-3 sm:text-[11px]"
-                    >
-                      View
-                    </button>
+                    <>
+                      {row.dutyId ? (
+                        <ContinueDutyButton
+                          appearance="share"
+                          shareToken={token}
+                          dutyId={row.dutyId}
+                          status={row.status}
+                          openingAt={row.openingAt}
+                          closingAt={row.closingAt}
+                          onDone={load}
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setSelected(row)}
+                        className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-100 sm:px-3 sm:text-[11px]"
+                      >
+                        View
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -590,6 +643,7 @@ export default function EventSharePage() {
               openingAt: selected.openingAt,
               closingAt: selected.closingAt,
               endRequestedAt: selected.endRequestedAt,
+              pausedSeconds: selected.pausedSeconds,
               openingKm: selected.openingKm,
               closingKm: selected.closingKm,
               totalKm: selected.totalKm,

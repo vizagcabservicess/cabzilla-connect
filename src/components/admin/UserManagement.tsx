@@ -16,6 +16,34 @@ import { userAPI } from '@/services/api/userAPI';
 import { User as UserType } from '@/types/api';
 import { reloadUsers } from '@/lib/userData';
 
+type AppAccess = 'full' | 'event_manager' | 'event_driver';
+type AccountChoice = 'guest' | 'admin' | 'super_admin' | 'driver' | 'event_manager' | 'event_driver';
+type StoredRole = 'guest' | 'admin' | 'super_admin' | 'driver';
+
+function storedRole(choice: AccountChoice): StoredRole {
+  if (choice === 'event_manager') return 'admin';
+  if (choice === 'event_driver') return 'driver';
+  return choice;
+}
+
+function shownRole(role: string, access?: AppAccess): string {
+  if (access === 'event_manager' || access === 'event_driver') return access;
+  return role;
+}
+
+function RoleChoices() {
+  return (
+    <>
+      <SelectItem value="guest">Guest</SelectItem>
+      <SelectItem value="admin">Admin</SelectItem>
+      <SelectItem value="super_admin">Super Admin</SelectItem>
+      <SelectItem value="driver">Driver</SelectItem>
+      <SelectItem value="event_manager">Event manager</SelectItem>
+      <SelectItem value="event_driver">Event driver</SelectItem>
+    </>
+  );
+}
+
 const formSchema = z.object({
   name: z.string().min(2, {
     message: "Username must be at least 2 characters.",
@@ -24,7 +52,8 @@ const formSchema = z.object({
     message: "Please enter a valid email address.",
   }),
   phone: z.string().optional(),
-  role: z.enum(['guest', 'admin', 'super_admin', 'driver']).default('guest'),
+  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  role: z.enum(['guest', 'admin', 'super_admin', 'driver', 'event_manager', 'event_driver']).default('guest'),
 });
 
 export function UserManagement() {
@@ -34,6 +63,7 @@ export function UserManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [username, setUsername] = useState<string>('');
+  const [appAccess, setAppAccess] = useState<Record<string, AppAccess>>({});
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,6 +71,7 @@ export function UserManagement() {
       name: "",
       email: "",
       phone: "",
+      password: "",
       role: 'guest',
     },
   });
@@ -48,6 +79,16 @@ export function UserManagement() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const rememberAccess = (rows: Array<UserType & { appAccess?: string }>) => {
+    const next: Record<string, AppAccess> = {};
+    for (const row of rows) {
+      if (row.appAccess === 'event_manager' || row.appAccess === 'event_driver' || row.appAccess === 'full') {
+        next[String(row.id)] = row.appAccess;
+      }
+    }
+    setAppAccess(next);
+  };
   
   const fetchUsers = async () => {
     try {
@@ -56,10 +97,10 @@ export function UserManagement() {
       
       const data = await userAPI.getAllUsers();
       
-      if (Array.isArray(data)) {
-        setUsers(data);
-      } else if (data && Array.isArray(data.data)) {
-        setUsers(data.data);
+      const rows = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : null);
+      if (rows) {
+        setUsers(rows);
+        rememberAccess(rows);
       } else {
         console.warn("Invalid user data format:", data);
         setError("Failed to load users. Invalid data format.");
@@ -81,9 +122,12 @@ export function UserManagement() {
       
       await reloadUsers();
       
-      const data = await userAPI.createUser(values);
-      
-      toast.success("User created successfully");
+      const access = values.role === 'event_manager' || values.role === 'event_driver' ? values.role : 'full';
+      await userAPI.createUser({ ...values, role: storedRole(values.role), access });
+
+      toast.success(values.role === 'event_manager' || values.role === 'event_driver'
+        ? 'User created. This login sees only the event screens after signing in.'
+        : 'User created successfully');
       fetchUsers();
       form.reset();
     } catch (error) {
@@ -123,21 +167,26 @@ export function UserManagement() {
     }
   };
 
-  const handleUserRoleUpdate = async (userId: string | number, role: "guest" | "admin" | "super_admin" | "driver") => {
+  const handleUserRoleUpdate = async (userId: string | number, choice: AccountChoice) => {
     try {
-      // Convert userId to a number if possible
-      const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ? 
+      const numericId = typeof userId === 'string' && !isNaN(Number(userId)) ?
         Number(userId) : userId;
-      
+      const role = storedRole(choice);
+
       setIsLoading(true);
-      
-      // Call the API with numericId
-      await userAPI.updateUserRole(numericId, role);
-      
-      toast.success(`User role updated to ${role}`);
-      
-      // Update the local user list
-      setUsers(prev => prev.map(user => 
+
+      const access: AppAccess = choice === 'event_manager' || choice === 'event_driver' ? choice : 'full';
+      const updated = await userAPI.updateUserRole(numericId, role, access);
+      if ((choice === 'event_manager' || choice === 'event_driver') && updated?.accessSaved !== true) {
+        toast.error('Upload api/admin/users.php, then set this role again. The event limit was not saved.');
+        return;
+      }
+
+      const label = choice.replace(/_/g, ' ');
+      toast.success(`User role updated to ${label}`);
+      setAppAccess((prev) => ({ ...prev, [String(userId)]: access }));
+
+      setUsers(prev => prev.map(user =>
         user.id === userId ? { ...user, role } : user
       ));
     } catch (error) {
@@ -225,6 +274,20 @@ export function UserManagement() {
               
               <FormField
                 control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input placeholder="At least 6 characters" type="password" autoComplete="new-password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="role"
                 render={({ field }) => (
                   <FormItem>
@@ -236,10 +299,7 @@ export function UserManagement() {
                         </SelectTrigger>
                       </FormControl>
                         <SelectContent>
-                          <SelectItem value="guest">Guest</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="super_admin">Super Admin</SelectItem>
-                          <SelectItem value="driver">Driver</SelectItem>
+                          <RoleChoices />
                         </SelectContent>
                     </Select>
                     <FormMessage />
@@ -310,22 +370,17 @@ export function UserManagement() {
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.phone || '-'}</TableCell>
                     <TableCell>
-                      <Select 
-                        value={user.role}
+                      <Select
+                        value={shownRole(user.role, appAccess[String(user.id)])}
                         onValueChange={(newRole) => {
-                          // Cast the role value to ensure it's one of the allowed types
-                          const typedRole = newRole as "guest" | "admin" | "super_admin" | "driver";
-                          handleUserRoleUpdate(user.id, typedRole);
+                          void handleUserRoleUpdate(user.id, newRole as AccountChoice);
                         }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder={user.role} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="guest">Guest</SelectItem>
-<SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="super_admin">Super Admin</SelectItem>
-                          <SelectItem value="driver">Driver</SelectItem>
+                          <RoleChoices />
                         </SelectContent>
                       </Select>
                     </TableCell>

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --mode production",
-    "build:dev": "vite build --mode development",
-    "build:prod": "vite build --mode production",
+    "build": "vite build --mode production && node scripts/remove-dist-api.mjs",
+    "build:dev": "vite build --mode development && node scripts/remove-dist-api.mjs",
+    "build:prod": "vite build --mode production && node scripts/remove-dist-api.mjs",
     "pack:upload": "node scripts/pack-dist-upload.mjs",
     "build:upload": "npm run build:tracker && npm run build && npm run pack:upload",
     "lint": "eslint .",

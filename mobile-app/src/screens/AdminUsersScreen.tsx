@@ -22,13 +22,23 @@ import { useNavigation } from '@react-navigation/core';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { adminExtendedAPI, AdminUser } from '../services/adminExtendedAPI';
-
 const ROLES = [
   { value: 'guest', label: 'Guest' },
   { value: 'admin', label: 'Admin' },
   { value: 'super_admin', label: 'Super Admin' },
   { value: 'driver', label: 'Driver' },
+  { value: 'event_manager', label: 'Event manager' },
+  { value: 'event_driver', label: 'Event driver' },
 ] as const;
+
+type AccountChoice = (typeof ROLES)[number]['value'];
+type StoredRole = 'guest' | 'admin' | 'super_admin' | 'driver';
+
+function storedRole(choice: AccountChoice): StoredRole {
+  if (choice === 'event_manager') return 'admin';
+  if (choice === 'event_driver') return 'driver';
+  return choice;
+}
 
 export function AdminUsersScreen() {
   const navigation = useNavigation<any>();
@@ -42,17 +52,27 @@ export function AdminUsersScreen() {
     name: '',
     email: '',
     phone: '',
-    role: 'guest' as const,
+    password: '',
+    role: 'guest' as AccountChoice,
   });
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
-  /** Android Alert.alert allows at most 3 buttons — use a modal so Driver and all roles appear. */
+  const [accessByUser, setAccessByUser] = useState<Record<number, 'full' | 'event_manager' | 'event_driver'>>({});
+  /** Android Alert.alert allows at most 3 buttons — use a modal so every role appears. */
   const [roleModalUser, setRoleModalUser] = useState<AdminUser | null>(null);
 
   const load = async () => {
     try {
       setError(null);
       const list = await adminExtendedAPI.usersList();
-      setUsers(Array.isArray(list) ? list : []);
+      const rows = Array.isArray(list) ? list : [];
+      setUsers(rows);
+      const next: Record<number, 'full' | 'event_manager' | 'event_driver'> = {};
+      for (const row of rows) {
+        if (row.appAccess === 'full' || row.appAccess === 'event_manager' || row.appAccess === 'event_driver') {
+          next[row.id] = row.appAccess;
+        }
+      }
+      setAccessByUser(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
       setUsers([]);
@@ -72,22 +92,27 @@ export function AdminUsersScreen() {
   };
 
   const handleAddUser = async () => {
-    if (!addForm.name.trim() || !addForm.email.trim()) {
-      Alert.alert('Validation', 'Name and email are required');
+    if (!addForm.name.trim() || !addForm.email.trim() || addForm.password.trim().length < 6) {
+      Alert.alert('Validation', 'Name, email, and a password of at least 6 characters are required');
       return;
     }
     try {
       setAddLoading(true);
+      const access = addForm.role === 'event_manager' || addForm.role === 'event_driver' ? addForm.role : 'full';
       await adminExtendedAPI.usersCreate({
         name: addForm.name.trim(),
         email: addForm.email.trim(),
         phone: addForm.phone.trim() || undefined,
-        role: addForm.role,
+        password: addForm.password,
+        role: storedRole(addForm.role),
+        access,
       });
       setShowAddModal(false);
-      setAddForm({ name: '', email: '', phone: '', role: 'guest' });
+      setAddForm({ name: '', email: '', phone: '', password: '', role: 'guest' });
       load();
-      Alert.alert('Success', 'User created successfully');
+      Alert.alert('Success', addForm.role === 'event_manager' || addForm.role === 'event_driver'
+        ? 'User created. This login sees only the event screens after signing in.'
+        : 'User created successfully');
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create user');
     } finally {
@@ -99,22 +124,33 @@ export function AdminUsersScreen() {
     setRoleModalUser(u);
   };
 
-  const applyRoleFromModal = async (role: (typeof ROLES)[number]['value']) => {
+  const shownChoice = (u: AdminUser): string => {
+    const access = accessByUser[u.id];
+    if (access === 'event_manager' || access === 'event_driver') return access;
+    return u.role || 'guest';
+  };
+
+  const applyRoleFromModal = async (role: AccountChoice) => {
     const u = roleModalUser;
     if (!u) return;
-    const current = (u.role || 'guest') as string;
-    if (role === current) {
+    if (role === shownChoice(u)) {
       setRoleModalUser(null);
       return;
     }
     setRoleModalUser(null);
-    await updateRole(u.id, role);
+    const access = role === 'event_manager' || role === 'event_driver' ? role : 'full';
+    await updateRole(u.id, storedRole(role), access);
   };
 
-  const updateRole = async (userId: number, role: string) => {
+  const updateRole = async (userId: number, role: string, access: 'full' | 'event_manager' | 'event_driver' = 'full') => {
     try {
       setActionLoadingId(userId);
-      await adminExtendedAPI.usersUpdateRole(userId, role);
+      const updated = await adminExtendedAPI.usersUpdateRole(userId, role, access);
+      if ((access === 'event_manager' || access === 'event_driver') && updated?.accessSaved !== true) {
+        Alert.alert('Role not limited', 'Upload api/admin/users.php, then set Event manager or Event driver again.');
+        return;
+      }
+      setAccessByUser((prev) => ({ ...prev, [userId]: access }));
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role } : u))
       );
@@ -231,7 +267,7 @@ export function AdminUsersScreen() {
                     <View style={styles.metaRow}>
                       <View style={styles.roleBadge}>
                         <Text style={styles.roleText}>
-                          {(u.role ?? '—').replace(/_/g, ' ')}
+                          {shownChoice(u).replace(/_/g, ' ')}
                         </Text>
                       </View>
                       <Text style={styles.authText}>
@@ -325,6 +361,15 @@ export function AdminUsersScreen() {
                 onChangeText={(t) => setAddForm((f) => ({ ...f, phone: t }))}
                 keyboardType="phone-pad"
               />
+              <Text style={styles.inputLabel}>Password *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="At least 6 characters"
+                value={addForm.password}
+                onChangeText={(t) => setAddForm((f) => ({ ...f, password: t }))}
+                secureTextEntry
+                autoCapitalize="none"
+              />
               <Text style={styles.inputLabel}>Role</Text>
               <View style={styles.rolePicker}>
                 {ROLES.map((r) => (
@@ -400,7 +445,7 @@ export function AdminUsersScreen() {
             <Text style={styles.inputLabel}>Select role</Text>
             <View style={styles.rolePicker}>
               {ROLES.map((r) => {
-                const active = (roleModalUser?.role || 'guest') === r.value;
+                const active = roleModalUser ? shownChoice(roleModalUser) === r.value : false;
                 return (
                   <TouchableOpacity
                     key={r.value}
@@ -596,6 +641,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.gray200,
+  },
+  accessOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    marginBottom: 8,
   },
   roleOptionActive: {
     borderColor: colors.primary,

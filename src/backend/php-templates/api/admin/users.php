@@ -170,6 +170,45 @@ try {
     exit;
 }
 
+function vth_users_save_app_access($conn, $userId, $access) {
+    $userId = (int) $userId;
+    $access = (string) $access;
+    if ($userId < 1 || !in_array($access, array('full', 'event_manager', 'event_driver'), true)) {
+        return false;
+    }
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS vth_user_app_access (
+          user_id INT NOT NULL PRIMARY KEY,
+          access VARCHAR(32) NOT NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $stmt = $conn->prepare('INSERT INTO vth_user_app_access (user_id, access) VALUES (?, ?) ON DUPLICATE KEY UPDATE access = VALUES(access)');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('is', $userId, $access);
+    $saved = $stmt->execute();
+    $stmt->close();
+    return (bool) $saved;
+}
+
+function vth_users_app_access_map($conn) {
+    $map = array();
+    $check = $conn->query("SHOW TABLES LIKE 'vth_user_app_access'");
+    if (!$check || $check->num_rows < 1) {
+        return $map;
+    }
+    $rows = $conn->query('SELECT user_id, access FROM vth_user_app_access');
+    if (!$rows) {
+        return $map;
+    }
+    while ($row = $rows->fetch_assoc()) {
+        $map[(int) $row['user_id']] = (string) $row['access'];
+    }
+    return $map;
+}
+
 try {
     // Handle GET request to fetch all users
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -199,14 +238,18 @@ try {
             throw new Exception("Failed to fetch users: " . $conn->error);
         }
         
+        $accessMap = vth_users_app_access_map($conn);
         $users = [];
         while ($row = $result->fetch_assoc()) {
+            $uid = intval($row['id']);
+            $savedAccess = isset($accessMap[$uid]) ? $accessMap[$uid] : 'full';
             $u = [
-                'id' => intval($row['id']),
+                'id' => $uid,
                 'name' => $row['name'],
                 'email' => $row['email'],
                 'phone' => $row['phone'],
                 'role' => $row['role'],
+                'appAccess' => $savedAccess,
                 'createdAt' => $row['created_at'],
                 'authProvider' => $row['authProvider'] ?? 'email',
                 'bookingsCount' => isset($row['bookings_count']) ? (int)$row['bookings_count'] : 0
@@ -270,6 +313,11 @@ try {
             throw new Exception("Failed to update user role: " . $conn->error);
         }
 
+        $accessSaved = true;
+        if (isset($requestData['access']) && $requestData['access'] !== '') {
+            $accessSaved = vth_users_save_app_access($conn, (int) $targetUserId, (string) $requestData['access']);
+        }
+
         $linkPath = __DIR__ . '/../utils/driver_user_link.php';
         if (is_readable($linkPath)) {
             try {
@@ -292,28 +340,40 @@ try {
         $result = $stmt->get_result();
         $userData = $result->fetch_assoc();
         
+        $updatedAccess = 'full';
+        if (isset($requestData['access']) && in_array($requestData['access'], array('full', 'event_manager', 'event_driver'), true)) {
+            $updatedAccess = (string) $requestData['access'];
+        }
         $updatedUser = [
             'id' => intval($userData['id']),
             'name' => $userData['name'],
             'email' => $userData['email'],
             'phone' => $userData['phone'],
             'role' => $userData['role'],
+            'appAccess' => $accessSaved ? $updatedAccess : 'full',
             'createdAt' => $userData['created_at']
         ];
         
         secureLog("Successfully updated user role for user $targetUserId to $newRole", "INFO");
-        sendJsonResponse(['status' => 'success', 'message' => 'User role updated successfully', 'data' => $updatedUser]);
+        sendJsonResponse([
+            'status' => 'success',
+            'message' => 'User role updated successfully',
+            'accessSaved' => $accessSaved,
+            'data' => $updatedUser,
+        ]);
     }
     // Handle POST request to create a new user
     else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requestBody = file_get_contents('php://input');
-        secureLog("Received POST request body", "DEBUG", ['body' => $requestBody]);
         $requestData = json_decode($requestBody, true);
+        $logData = is_array($requestData) ? $requestData : [];
+        unset($logData['password']);
+        secureLog("Received POST request body", "DEBUG", ['body' => $logData]);
 
         // Validate required fields
-        if (!isset($requestData['name']) || !isset($requestData['email']) || !isset($requestData['role'])) {
+        if (!isset($requestData['name']) || !isset($requestData['email']) || !isset($requestData['role']) || !isset($requestData['password'])) {
             secureLog("Missing required fields for user creation", "WARNING");
-            sendJsonResponse(['status' => 'error', 'message' => 'Name, email, and role are required'], 400);
+            sendJsonResponse(['status' => 'error', 'message' => 'Name, email, password, and role are required'], 400);
             exit;
         }
 
@@ -321,6 +381,12 @@ try {
         $email = $requestData['email'];
         $phone = isset($requestData['phone']) ? $requestData['phone'] : null;
         $role = $requestData['role'];
+        $passwordPlain = trim((string) $requestData['password']);
+        if (strlen($passwordPlain) < 6) {
+            sendJsonResponse(['status' => 'error', 'message' => 'Password must be at least 6 characters'], 400);
+            exit;
+        }
+        $passwordHash = password_hash($passwordPlain, PASSWORD_BCRYPT);
         
         // Validate role for new user creation
         if (!in_array($role, ['guest', 'user', 'admin', 'super_admin', 'driver', 'provider', 'customer'])) {
@@ -329,9 +395,11 @@ try {
             exit;
         }
 
-        // Insert new user
-        $stmt = $conn->prepare("INSERT INTO users (name, email, phone, role, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
-        $stmt->bind_param("ssss", $name, $email, $phone, $role);
+        // Insert new user. Admin-created logins are active so they can sign in immediately.
+        $emailVerified = 1;
+        $isActive = 1;
+        $stmt = $conn->prepare("INSERT INTO users (name, email, phone, password, role, email_verified, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+        $stmt->bind_param("sssssii", $name, $email, $phone, $passwordHash, $role, $emailVerified, $isActive);
         $success = $stmt->execute();
 
         if (!$success) {
@@ -355,6 +423,10 @@ try {
             'role' => $userData['role'],
             'createdAt' => $userData['created_at']
         ];
+
+        if (isset($requestData['access']) && $requestData['access'] !== '') {
+            vth_users_save_app_access($conn, (int) $newUserId, (string) $requestData['access']);
+        }
 
         if ($role === 'driver') {
             $linkPath = __DIR__ . '/../utils/driver_user_link.php';

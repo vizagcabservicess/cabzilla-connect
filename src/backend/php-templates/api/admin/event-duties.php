@@ -30,6 +30,12 @@ switch ($action) {
     case 'override_km':
         vth_event_ok(['duty' => vth_duty_override_km($conn, $admin, $body)], 'Kilometres updated');
         break;
+    case 'override_times':
+        vth_event_ok(['duty' => vth_duty_override_times($conn, $admin, $body)], 'Times updated');
+        break;
+    case 'set_reporting':
+        vth_event_ok(['duty' => vth_duty_set_reporting($conn, $admin, $body)], 'Reporting time updated');
+        break;
     case 'set_status':
         vth_event_ok(['duty' => vth_duty_set_status($conn, $admin, $body)], 'Status updated');
         break;
@@ -48,6 +54,20 @@ switch ($action) {
         vth_event_ok(
             vth_event_request_driver_end($conn, $id, 'admin', null, $admin['id'] ?? null),
             'Driver asked to end the duty'
+        );
+        break;
+    case 'revoke_end':
+        $id = (int) ($body['id'] ?? 0);
+        vth_event_ok(
+            vth_event_revoke_driver_end($conn, $id, 'admin', null, $admin['id'] ?? null),
+            'End request revoked'
+        );
+        break;
+    case 'resume_duty':
+        $id = (int) ($body['id'] ?? 0);
+        vth_event_ok(
+            vth_event_resume_duty($conn, $id, 'admin', null, $admin['id'] ?? null),
+            'Duty continued'
         );
         break;
     case 'tracking':
@@ -151,6 +171,162 @@ function vth_duty_override_km(mysqli $conn, array $admin, array $body): array
         'total_km' => $total,
     ]);
     return vth_duty_get($conn, $id) ?: [];
+}
+
+function vth_duty_clock(?string $value): ?string
+{
+    $value = trim(str_replace('T', ' ', (string) $value));
+    if ($value === '') {
+        return null;
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/', $value)) {
+        vth_event_error('Enter a valid date and time');
+    }
+    if (strlen($value) === 16) {
+        $value .= ':00';
+    }
+    return $value;
+}
+
+function vth_duty_override_times(mysqli $conn, array $admin, array $body): array
+{
+    $id = (int) ($body['id'] ?? 0);
+    $stmt = $conn->prepare('SELECT * FROM vth_event_duties WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $old = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$old) {
+        vth_event_error('Duty not found', 404);
+    }
+    $reporting = substr(trim((string) ($body['reportingTime'] ?? '')), 0, 5);
+    if (!preg_match('/^\d{2}:\d{2}$/', $reporting)) {
+        vth_event_error('Enter a reporting time');
+    }
+    $opening = vth_duty_clock(isset($body['reportedAt']) ? (string) $body['reportedAt'] : null);
+    $closing = vth_duty_clock(isset($body['closingAt']) ? (string) $body['closingAt'] : null);
+    if ($opening && $closing && strtotime($closing) < strtotime($opening)) {
+        vth_event_error('Closing time cannot be earlier than the reported time.');
+    }
+    $end = !empty($old['end_requested_at']) ? $closing : ($old['end_requested_at'] ?? null);
+    $upd = $conn->prepare(
+        'UPDATE vth_event_duties
+         SET reporting_time = ?, opening_at = ?, closing_at = ?, end_requested_at = ?, admin_override = 1
+         WHERE id = ?'
+    );
+    $upd->bind_param('ssssi', $reporting, $opening, $closing, $end, $id);
+    $upd->execute();
+    $upd->close();
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'admin_edited_times', 'duty', $id, (int) $old['event_id'], [
+        'reporting_time' => $old['reporting_time'],
+        'opening_at' => $old['opening_at'],
+        'closing_at' => $old['closing_at'],
+        'end_requested_at' => $old['end_requested_at'] ?? null,
+    ], [
+        'reporting_time' => $reporting,
+        'opening_at' => $opening,
+        'closing_at' => $closing,
+        'end_requested_at' => $end,
+    ]);
+    return vth_duty_get($conn, $id) ?: [];
+}
+
+function vth_duty_apply_reporting(mysqli $conn, int $id, string $reporting, ?string $loc, bool $revive): void
+{
+    if ($revive && $loc === null) {
+        $upd = $conn->prepare(
+            "UPDATE vth_event_duties
+             SET reporting_time = ?, reporting_location = NULL, status = 'not_started'
+             WHERE id = ? AND opening_at IS NULL"
+        );
+        $upd->bind_param('si', $reporting, $id);
+    } elseif ($revive) {
+        $upd = $conn->prepare(
+            "UPDATE vth_event_duties
+             SET reporting_time = ?, reporting_location = ?, status = 'not_started'
+             WHERE id = ? AND opening_at IS NULL"
+        );
+        $upd->bind_param('ssi', $reporting, $loc, $id);
+    } elseif ($loc === null) {
+        $upd = $conn->prepare(
+            'UPDATE vth_event_duties SET reporting_time = ?, reporting_location = NULL WHERE id = ?'
+        );
+        $upd->bind_param('si', $reporting, $id);
+    } else {
+        $upd = $conn->prepare(
+            'UPDATE vth_event_duties SET reporting_time = ?, reporting_location = ? WHERE id = ?'
+        );
+        $upd->bind_param('ssi', $reporting, $loc, $id);
+    }
+    $upd->execute();
+    $upd->close();
+}
+
+function vth_duty_set_reporting(mysqli $conn, array $admin, array $body): array
+{
+    $id = (int) ($body['id'] ?? 0);
+    $stmt = $conn->prepare('SELECT * FROM vth_event_duties WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $old = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$old) {
+        vth_event_error('Duty not found', 404);
+    }
+    $reporting = vth_event_clock_hm((string) ($body['reportingTime'] ?? ''));
+    if ($reporting === null) {
+        vth_event_error('Enter a reporting time');
+    }
+    $loc = array_key_exists('reportingLocation', $body)
+        ? (trim((string) $body['reportingLocation']) ?: null)
+        : ($old['reporting_location'] ?? null);
+    $date = substr((string) ($body['date'] ?? $old['duty_date']), 0, 10);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        $date = substr((string) $old['duty_date'], 0, 10);
+    }
+    $assignmentId = (int) ($body['assignmentId'] ?? $old['assignment_id']);
+    if ($assignmentId < 1) {
+        $assignmentId = (int) $old['assignment_id'];
+    }
+    $live = $conn->prepare(
+        "SELECT id FROM vth_event_duties
+         WHERE assignment_id = ? AND duty_date = ? AND status <> 'cancelled'
+         ORDER BY id DESC LIMIT 1"
+    );
+    $live->bind_param('is', $assignmentId, $date);
+    $live->execute();
+    $liveRow = $live->get_result()->fetch_assoc();
+    $live->close();
+    $oldDate = substr((string) $old['duty_date'], 0, 10);
+    $target = $liveRow ? (int) $liveRow['id'] : 0;
+    $revive = false;
+    if ($target < 1 && $oldDate === $date && ($old['status'] ?? '') === 'cancelled' && empty($old['opening_at'])) {
+        $target = (int) $old['id'];
+        $revive = true;
+    } elseif ($target < 1 && $oldDate === $date && ($old['status'] ?? '') !== 'cancelled') {
+        $target = (int) $old['id'];
+    }
+    if ($target < 1) {
+        vth_event_error('No open duty for ' . $date);
+    }
+    vth_duty_apply_reporting($conn, $target, $reporting, $loc, $revive);
+    $fresh = vth_duty_get($conn, $target) ?: [];
+    $savedTime = vth_event_clock_hm((string) ($fresh['reportingTime'] ?? ''));
+    $savedLoc = trim((string) ($fresh['reportingLocation'] ?? ''));
+    $wantLoc = $loc === null ? '' : $loc;
+    if ($savedTime !== $reporting || $savedLoc !== $wantLoc || ($fresh['status'] ?? '') === 'cancelled') {
+        vth_event_error('Reporting details for ' . $date . ' did not save');
+    }
+    vth_event_audit($conn, 'admin', $admin['user_id'] ?? null, 'admin_edited_reporting', 'duty', $target, (int) $old['event_id'], [
+        'reporting_time' => $old['reporting_time'],
+        'reporting_location' => $old['reporting_location'],
+        'status' => $old['status'],
+    ], [
+        'reporting_time' => $reporting,
+        'reporting_location' => $loc,
+        'duty_id' => $target,
+    ]);
+    return $fresh;
 }
 
 function vth_duty_set_status(mysqli $conn, array $admin, array $body): array

@@ -27,6 +27,8 @@ export const AVAILABLE_MODULES: ModulePrivilege[] = [
   { id: 'fleet_management', name: 'Fleet Management', description: 'Access fleet management module', category: 'fleet' },
   { id: 'events_view', name: 'View Events', description: 'View event and duty management', category: 'fleet' },
   { id: 'events_manage', name: 'Manage Events', description: 'Create events, assign vehicles/drivers and manage duties', category: 'fleet' },
+  { id: 'event_manager', name: 'Event manager app', description: 'Login sees only the event vehicle list', category: 'fleet' },
+  { id: 'event_driver', name: 'Event driver app', description: 'Login sees only the driver duty screen', category: 'fleet' },
   
   // Financial
   { id: 'fares_view', name: 'View Fares', description: 'View pricing and fares', category: 'financial' },

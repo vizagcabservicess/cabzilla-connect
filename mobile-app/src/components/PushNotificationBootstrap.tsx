@@ -18,14 +18,14 @@ import {
   getPushToken,
   installGlobalPushNotificationLogger,
 } from '../services/pushNotificationService';
+import { useAuth } from '../providers/AuthProvider';
 
-const SHOW_DEBUG_UI =
-  typeof __DEV__ !== 'undefined' && __DEV__
-    ? true
-    : process.env.EXPO_PUBLIC_SHOW_PUSH_DEBUG === '1';
+const SHOW_DEBUG_UI = process.env.EXPO_PUBLIC_SHOW_PUSH_DEBUG === '1';
 
 export function PushNotificationBootstrap() {
   const { width } = useWindowDimensions();
+  const { user } = useAuth();
+  const eventOnly = user?.appAccess === 'event_manager' || user?.appAccess === 'event_driver';
   const [permissionLabel, setPermissionLabel] = useState<string>('—');
   const [token, setToken] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export function PushNotificationBootstrap() {
     };
   }, []);
 
-  if (Platform.OS === 'web' || !SHOW_DEBUG_UI) {
+  if (Platform.OS === 'web' || !SHOW_DEBUG_UI || eventOnly) {
     return null;
   }
 
