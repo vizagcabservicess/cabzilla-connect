@@ -3,6 +3,10 @@ import { AUTH_API_BASE } from '@/lib/authLogic';
 
 const API_BASE_URL = AUTH_API_BASE;
 
+function isPublicDutyLink(url: string): boolean {
+  return /\/api\/events\/(driver-public|share-public|ocr-odometer)\.php/.test(url);
+}
+
 export interface User {
   id: number;
   name: string;
@@ -63,7 +67,7 @@ class AuthAPI {
     axios.interceptors.request.use((config) => {
       const url = config.url ?? '';
       const isAuthEndpoint = /\/api\/auth\/(login|register|social-login|social-signup)\.php/.test(url);
-      if (this.token && url.includes('/api/') && !isAuthEndpoint) {
+      if (this.token && url.includes('/api/') && !isAuthEndpoint && !isPublicDutyLink(url)) {
         config.headers.Authorization = `Bearer ${this.token}`;
       }
       return config;
@@ -71,7 +75,8 @@ class AuthAPI {
     axios.interceptors.response.use(
       (r) => r,
       (err) => {
-        if (err?.response?.status === 401 && err?.config?.url?.includes('/api/')) {
+        const url = err?.config?.url ?? '';
+        if (err?.response?.status === 401 && url.includes('/api/') && !isPublicDutyLink(url)) {
           this.setToken(null);
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem('user');

@@ -34,10 +34,10 @@ async function savePdfBlob(blob: Blob, filename: string): Promise<void> {
 }
 
 /** Saves the report as a PDF file. Phones do not open the system print sheet. */
-export function printHtmlReport(title: string, heading: string, tableHtml: string, subtitle?: string): void {
+export function printHtmlReport(title: string, heading: string, tableHtml: string, subtitle?: string, confirmation = false): void {
   const { headers, rows } = parseReportTable(tableHtml);
   const filename = reportPdfFileName(title);
-  void pdf(EventDutyReportPDF({ heading, subtitle, headers, rows }))
+  void pdf(EventDutyReportPDF({ heading, subtitle, headers, rows, confirmation }))
     .toBlob()
     .then((blob) => savePdfBlob(blob, filename))
     .catch((error: unknown) => {

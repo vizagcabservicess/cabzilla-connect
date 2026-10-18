@@ -298,12 +298,13 @@ function vth_duty_set_reporting(mysqli $conn, array $admin, array $body): array
     $liveRow = $live->get_result()->fetch_assoc();
     $live->close();
     $oldDate = substr((string) $old['duty_date'], 0, 10);
+    $oldAssignment = (int) $old['assignment_id'];
     $target = $liveRow ? (int) $liveRow['id'] : 0;
     $revive = false;
-    if ($target < 1 && $oldDate === $date && ($old['status'] ?? '') === 'cancelled' && empty($old['opening_at'])) {
+    if ($target < 1 && $oldAssignment === $assignmentId && $oldDate === $date && ($old['status'] ?? '') === 'cancelled' && empty($old['opening_at'])) {
         $target = (int) $old['id'];
         $revive = true;
-    } elseif ($target < 1 && $oldDate === $date && ($old['status'] ?? '') !== 'cancelled') {
+    } elseif ($target < 1 && $oldAssignment === $assignmentId && $oldDate === $date && ($old['status'] ?? '') !== 'cancelled') {
         $target = (int) $old['id'];
     }
     if ($target < 1) {

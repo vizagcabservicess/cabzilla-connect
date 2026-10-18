@@ -234,6 +234,7 @@ function vth_admin_event_row(array $row): array
         'notes' => $row['notes'],
         'status' => $row['status'],
         'gpsRequired' => (bool) $row['gps_required'],
+        'showSerialNo' => !empty($row['show_serial_no']),
         'supportMobile' => $row['support_mobile'] ?? null,
         'assignmentCount' => (int) ($row['assignment_count'] ?? 0),
         'dutyCount' => (int) ($row['duty_count'] ?? 0),
@@ -332,6 +333,7 @@ function vth_admin_save_event(mysqli $conn, array $admin, array $body, ?int $id)
         $status = 'draft';
     }
     $gps = !empty($body['gpsRequired'] ?? $body['gps_required']) ? 1 : 0;
+    $showSerial = !empty($body['showSerialNo'] ?? $body['show_serial_no']) ? 1 : 0;
     $supportIn = $body['supportMobile'] ?? $body['support_mobile'] ?? null;
     $support = $supportIn ? vth_event_validate_mobile((string) $supportIn) : null;
     if ($supportIn && !$support) {
@@ -344,11 +346,14 @@ function vth_admin_save_event(mysqli $conn, array $admin, array $body, ?int $id)
         if (!$old) {
             vth_event_error('Event not found', 404);
         }
+        if (!array_key_exists('showSerialNo', $body) && !array_key_exists('show_serial_no', $body)) {
+            $showSerial = !empty($old['show_serial_no']) ? 1 : 0;
+        }
         $stmt = $conn->prepare(
             'UPDATE vth_events SET event_code=?, name=?, client_name=?, client_mobile=?, support_mobile=?, start_date=?, end_date=?,
-             reporting_location=?, default_reporting_time=?, notes=?, status=?, gps_required=? WHERE id=?'
+             reporting_location=?, default_reporting_time=?, notes=?, status=?, gps_required=?, show_serial_no=? WHERE id=?'
         );
-        $stmt->bind_param('sssssssssssii', $code, $name, $client, $mobile, $support, $start, $end, $loc, $time, $notes, $status, $gps, $id);
+        $stmt->bind_param('sssssssssssiii', $code, $name, $client, $mobile, $support, $start, $end, $loc, $time, $notes, $status, $gps, $showSerial, $id);
         $stmt->execute();
         $stmt->close();
         if ($old['start_date'] !== $start || $old['end_date'] !== $end) {
@@ -358,10 +363,10 @@ function vth_admin_save_event(mysqli $conn, array $admin, array $body, ?int $id)
     } else {
         $stmt = $conn->prepare(
             'INSERT INTO vth_events (event_code, name, client_name, client_mobile, support_mobile, start_date, end_date,
-             reporting_location, default_reporting_time, notes, status, gps_required, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             reporting_location, default_reporting_time, notes, status, gps_required, show_serial_no, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->bind_param('sssssssssssii', $code, $name, $client, $mobile, $support, $start, $end, $loc, $time, $notes, $status, $gps, $uid);
+        $stmt->bind_param('sssssssssssiii', $code, $name, $client, $mobile, $support, $start, $end, $loc, $time, $notes, $status, $gps, $showSerial, $uid);
         try {
             $stmt->execute();
         } catch (Throwable $e) {

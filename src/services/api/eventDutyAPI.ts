@@ -378,26 +378,30 @@ export const eventDutyAPI = {
 };
 
 export async function driverPortalRequest<T>(token: string, action: string, extra?: FormData | Record<string, unknown>): Promise<T> {
-  if (extra instanceof FormData) {
-    extra.append('token', token);
-    extra.append('action', action);
-    const { data } = await axios.post(getApiUrl('/api/events/driver-public.php'), extra, {
-      headers: { 'X-Event-Driver-Token': token },
-    });
+  try {
+    if (extra instanceof FormData) {
+      extra.append('token', token);
+      extra.append('action', action);
+      const { data } = await axios.post(getApiUrl('/api/events/driver-public.php'), extra, {
+        headers: { 'X-Event-Driver-Token': token },
+      });
+      if (!data?.success && data?.status !== 'success') {
+        throw new Error(data?.message || 'Request failed');
+      }
+      return data as T;
+    }
+    const { data } = await axios.post(
+      getApiUrl('/api/events/driver-public.php'),
+      { token, action, ...(extra || {}) },
+      { headers: { 'Content-Type': 'application/json', 'X-Event-Driver-Token': token } },
+    );
     if (!data?.success && data?.status !== 'success') {
       throw new Error(data?.message || 'Request failed');
     }
     return data as T;
+  } catch (err) {
+    throw apiError(err);
   }
-  const { data } = await axios.post(
-    getApiUrl('/api/events/driver-public.php'),
-    { token, action, ...(extra || {}) },
-    { headers: { 'Content-Type': 'application/json', 'X-Event-Driver-Token': token } },
-  );
-  if (!data?.success && data?.status !== 'success') {
-    throw new Error(data?.message || 'Request failed');
-  }
-  return data as T;
 }
 
 export const driverPortalAPI = {

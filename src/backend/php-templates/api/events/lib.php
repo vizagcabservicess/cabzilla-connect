@@ -991,7 +991,8 @@ function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, arra
             $chk->close();
             if ($existingVehicleDuty) {
                 $existingVehicleId = (int) $existingVehicleDuty['id'];
-                if (empty($existingVehicleDuty['opening_at']) && (int) $existingVehicleDuty['assignment_id'] !== $asgId) {
+                $ownsDuty = (int) $existingVehicleDuty['assignment_id'] === $asgId;
+                if (empty($existingVehicleDuty['opening_at']) && !$ownsDuty) {
                     $clash = $conn->prepare(
                         'SELECT id FROM vth_event_duties WHERE assignment_id = ? AND duty_date = ? AND id <> ? LIMIT 1'
                     );
@@ -1004,20 +1005,18 @@ function vth_event_create_duties_for_dates(mysqli $conn, array $assignment, arra
                         $move->bind_param('ii', $asgId, $existingVehicleId);
                         $move->execute();
                         $move->close();
+                        $ownsDuty = true;
                     }
                 }
-                if (isset($scheduleMap[$date])) {
-                    $keepTime = $scheduleMap[$date]['time'];
-                    $keepLoc = $scheduleMap[$date]['location'];
-                    if ($keepLoc === null) {
-                        $keep = $conn->prepare('UPDATE vth_event_duties SET reporting_time = ?, reporting_location = NULL WHERE id = ?');
-                        $keep->bind_param('si', $keepTime, $existingVehicleId);
-                    } else {
-                        $keep = $conn->prepare('UPDATE vth_event_duties SET reporting_time = ?, reporting_location = ? WHERE id = ?');
-                        $keep->bind_param('ssi', $keepTime, $keepLoc, $existingVehicleId);
-                    }
-                    $keep->execute();
-                    $keep->close();
+                if ($ownsDuty && isset($scheduleMap[$date])) {
+                    vth_event_set_duty_schedule(
+                        $conn,
+                        $asgId,
+                        $date,
+                        $scheduleMap[$date]['time'],
+                        $scheduleMap[$date]['location'],
+                        $existingVehicleId
+                    );
                 }
                 $skipped++;
                 continue;
@@ -1303,6 +1302,7 @@ function vth_event_format_public(array $event): array
         'defaultReportingTime' => $event['default_reporting_time'],
         'status' => $event['status'],
         'gpsRequired' => (bool) $event['gps_required'],
+        'showSerialNo' => !empty($event['show_serial_no']),
         'supportMobile' => !empty($event['support_mobile']) ? (string) $event['support_mobile'] : '9966363662',
         'updatedAt' => $event['updated_at'] ?? null,
     ];
@@ -1380,7 +1380,7 @@ function vth_event_daily_stats(mysqli $conn, int $eventId, string $date): array
 
 function vth_event_schema_marker(): string
 {
-    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v16.ok';
+    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'vth_event_schema_v17.ok';
 }
 
 function vth_event_schema_ready(mysqli $conn): bool
@@ -1394,6 +1394,7 @@ function vth_event_schema_ready(mysqli $conn): bool
     $spans = @$conn->query("SHOW TABLES LIKE 'vth_event_duty_spans'");
     $expo = @$conn->query("SHOW TABLES LIKE 'vth_event_driver_expo'");
     $paused = @$conn->query("SHOW COLUMNS FROM `vth_event_duties` LIKE 'paused_seconds'");
+    $showSerial = @$conn->query("SHOW COLUMNS FROM `vth_events` LIKE 'show_serial_no'");
     return $duty instanceof mysqli_result && $duty->num_rows > 0
         && $prompt instanceof mysqli_result && $prompt->num_rows > 0
         && $gpsClient instanceof mysqli_result && $gpsClient->num_rows > 0
@@ -1402,7 +1403,8 @@ function vth_event_schema_ready(mysqli $conn): bool
         && $placeSince instanceof mysqli_result && $placeSince->num_rows > 0
         && $spans instanceof mysqli_result && $spans->num_rows > 0
         && $expo instanceof mysqli_result && $expo->num_rows > 0
-        && $paused instanceof mysqli_result && $paused->num_rows > 0;
+        && $paused instanceof mysqli_result && $paused->num_rows > 0
+        && $showSerial instanceof mysqli_result && $showSerial->num_rows > 0;
 }
 
 function vth_event_ensure_optional_columns(mysqli $conn): void
@@ -1516,6 +1518,7 @@ function vth_event_ensure_optional_columns(mysqli $conn): void
         "ALTER TABLE vth_event_duties ADD COLUMN last_gps_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN last_gps_address VARCHAR(255) NULL",
         "ALTER TABLE vth_events ADD COLUMN support_mobile VARCHAR(20) NULL",
+        "ALTER TABLE vth_events ADD COLUMN show_serial_no TINYINT(1) NOT NULL DEFAULT 0",
         "ALTER TABLE vth_event_duties ADD COLUMN end_requested_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN end_request_seen_at DATETIME NULL",
         "ALTER TABLE vth_event_duties ADD COLUMN end_request_nonce VARCHAR(32) NULL",

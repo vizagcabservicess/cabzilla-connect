@@ -2,7 +2,8 @@
 require_once __DIR__ . '/lib.php';
 
 vth_event_cors();
-vth_event_rate_limit('vth_event_driver', 40, 60);
+// Shared hotel Wi-Fi and mobile-carrier addresses must not block every driver.
+vth_event_rate_limit('vth_event_driver_ip', 800, 60);
 
 $conn = vth_event_conn();
 vth_event_ensure_optional_columns($conn);
@@ -16,6 +17,9 @@ $token = (string) ($body['token'] ?? $_GET['token'] ?? '');
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 if ($token === '') {
     $token = (string) ($headers['X-Event-Driver-Token'] ?? $headers['x-event-driver-token'] ?? '');
+}
+if ($token !== '') {
+    vth_event_rate_limit('vth_event_driver_' . substr(hash('sha256', $token), 0, 24), 120, 60);
 }
 $row = vth_event_lookup_token($conn, $token, 'driver');
 if (!$row) {

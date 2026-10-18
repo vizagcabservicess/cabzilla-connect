@@ -123,6 +123,7 @@ export type ShareVehicle = {
   vehicleNumber: string;
   driverName: string;
   driverMobile: string;
+  serialNo?: number | null;
   status: string;
   dutySlipNo: string;
   openingAt?: string | null;
@@ -153,7 +154,7 @@ export type ShareStats = {
 };
 
 export type EventSharePayload = {
-  event: { id: number; name: string; eventCode: string; startDate: string; endDate: string };
+  event: { id: number; name: string; eventCode: string; startDate: string; endDate: string; showSerialNo?: boolean };
   dates: string[];
   selectedDate: string;
   stats: ShareStats;

@@ -36,6 +36,12 @@ type Tab = 'dashboard' | 'vehicles' | 'map' | 'more';
 type Chip = 'all' | 'trip' | 'parking' | 'completed';
 type StatusFilter = 'all' | 'trip' | 'parking' | 'completed' | 'pending';
 
+function vehicleSerial(row: ShareVehicle, list: ShareVehicle[]): number {
+  if (row.serialNo != null && row.serialNo > 0) return row.serialNo;
+  const index = list.findIndex((item) => item.dutySlipNo === row.dutySlipNo && item.dutyId === row.dutyId);
+  return index >= 0 ? index + 1 : 1;
+}
+
 function initials(name?: string | null): string {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
   const letters = `${parts[0]?.[0] || ''}${parts[1]?.[0] || ''}`.toUpperCase();
@@ -772,7 +778,12 @@ export function EventManagerBoard({
                 <View style={styles.cardTop}>
                   <View style={styles.cardMain}>
                     <Text style={styles.vehicleName} numberOfLines={1}>{row.vehicleType || 'Vehicle'}</Text>
-                    <Text style={styles.reg} numberOfLines={1}>{row.vehicleNumber}</Text>
+                    <View style={styles.regRow}>
+                      <Text style={styles.reg} numberOfLines={1}>{row.vehicleNumber}</Text>
+                      {view?.event.showSerialNo ? (
+                        <Text style={styles.serial}>{vehicleSerial(row, vehicles)}</Text>
+                      ) : null}
+                    </View>
                     {duration ? <Text style={styles.duration}>{duration}</Text> : null}
                   </View>
                   <View style={styles.driverCol}>
@@ -1436,7 +1447,9 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardMain: { flex: 1.05, minWidth: 0 },
   vehicleName: { fontFamily: fonts.semiBold, fontSize: 12, color: '#0f172a' },
-  reg: { fontFamily: fonts.regular, fontSize: 10, color: '#94a3b8', marginTop: 1 },
+  regRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
+  reg: { flexShrink: 1, fontFamily: fonts.regular, fontSize: 10, color: '#94a3b8' },
+  serial: { flexShrink: 0, overflow: 'hidden', borderRadius: 6, backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 1, fontFamily: fonts.bold, fontSize: 10, color: '#334155' },
   duration: { alignSelf: 'flex-start', marginTop: 3, backgroundColor: '#fef3c7', color: '#92400e', fontFamily: fonts.bold, fontSize: 9, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, overflow: 'hidden' },
   driverCol: { flex: 1.25, minWidth: 0 },
   driverName: { fontFamily: fonts.medium, fontSize: 12, color: '#0f172a' },

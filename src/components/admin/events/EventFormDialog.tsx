@@ -30,6 +30,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSubmit }: EventFo
     notes: '',
     status: 'active',
     gpsRequired: false,
+    showSerialNo: false,
     supportMobile: '9966363662',
   });
 
@@ -49,6 +50,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSubmit }: EventFo
         notes: event.notes || '',
         status: event.status,
         gpsRequired: event.gpsRequired,
+        showSerialNo: Boolean(event.showSerialNo),
         supportMobile: event.supportMobile || '9966363662',
       });
     } else {
@@ -64,6 +66,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSubmit }: EventFo
         notes: '',
         status: 'active',
         gpsRequired: false,
+        showSerialNo: false,
         supportMobile: '9966363662',
       });
     }
@@ -174,6 +177,13 @@ export function EventFormDialog({ open, onOpenChange, event, onSubmit }: EventFo
               <p className="text-xs text-muted-foreground">If off, drivers can still start duty when they deny location.</p>
             </div>
             <Switch checked={!!form.gpsRequired} onCheckedChange={(gpsRequired) => setForm({ ...form, gpsRequired })} />
+          </div>
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div>
+              <Label>Show vehicle serial numbers</Label>
+              <p className="text-xs text-muted-foreground">When on, each vehicle’s SL.No appears beside its number on the event vehicle list.</p>
+            </div>
+            <Switch checked={!!form.showSerialNo} onCheckedChange={(showSerialNo) => setForm({ ...form, showSerialNo })} />
           </div>
           <div>
             <Label>Notes</Label>

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -108,6 +109,7 @@ export default function EventDetailPage() {
   const [mediaPreview, setMediaPreview] = useState<EventMediaPreview[] | null>(null);
   const [mediaFolder, setMediaFolder] = useState('');
   const [booted, setBooted] = useState(false);
+  const [serialBusy, setSerialBusy] = useState(false);
   const bootedFor = useRef(0);
 
   const viewFile = async (url: string, title: string) => {
@@ -408,6 +410,43 @@ export default function EventDetailPage() {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle>Vehicle list</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium">Show serial numbers</div>
+                  <p className="text-xs text-muted-foreground">Turn this on to show each vehicle’s SL.No beside its number on the shared event list.</p>
+                </div>
+                <Switch
+                  checked={Boolean(event.showSerialNo)}
+                  disabled={serialBusy}
+                  onCheckedChange={(showSerialNo) => {
+                    setSerialBusy(true);
+                    void eventDutyAPI.updateEvent({
+                      id: event.id,
+                      name: event.name,
+                      eventCode: event.eventCode,
+                      clientName: event.clientName || '',
+                      clientMobile: event.clientMobile || '',
+                      startDate: event.startDate,
+                      endDate: event.endDate,
+                      reportingLocation: event.reportingLocation || '',
+                      defaultReportingTime: event.defaultReportingTime,
+                      notes: event.notes || '',
+                      status: event.status,
+                      gpsRequired: event.gpsRequired,
+                      supportMobile: event.supportMobile || '',
+                      showSerialNo,
+                    }).then((saved) => {
+                      setEvent(saved.event);
+                      toast.success(showSerialNo ? 'Serial numbers are on' : 'Serial numbers are off');
+                    }).catch((err: unknown) => {
+                      toast.error(err instanceof Error ? err.message : 'Could not update serial numbers');
+                    }).finally(() => setSerialBusy(false));
+                  }}
+                />
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader><CardTitle>Audit trail</CardTitle></CardHeader>
               <CardContent className="max-h-[480px] overflow-auto">
@@ -1294,19 +1333,24 @@ function dutyForDate(
   vehicle?: { id?: number | null; number?: string },
 ): EventDuty | undefined {
   const day = isoDay(row.date);
+  const sameAssignment = (item: EventDuty) => (
+    Number(assignmentId) < 1 || Number(item.assignmentId) === Number(assignmentId)
+  );
   const sameDay = duties.filter((item) => (
     isoDay(String(item.dutyDate || '')) === day
     && Number(item.assignmentId) === Number(assignmentId)
   ));
-  const own = sameDay.find((item) => item.status !== 'cancelled')
-    || sameDay[0]
-    || duties.find((item) => row.dutyId != null && Number(item.id) === Number(row.dutyId));
+  const own = sameDay.find((item) => item.status !== 'cancelled') || sameDay[0];
   if (own) return own;
+  if (row.dutyId != null) {
+    const byId = duties.find((item) => Number(item.id) === Number(row.dutyId) && isoDay(String(item.dutyDate || '')) === day);
+    if (byId && sameAssignment(byId)) return byId;
+  }
   const number = (vehicle?.number || '').trim();
   const vehicleId = vehicle?.id ?? null;
   if (!number && vehicleId == null) return undefined;
   const sameVehicle = duties.filter((item) => {
-    if (isoDay(String(item.dutyDate || '')) !== day) return false;
+    if (!sameAssignment(item) || isoDay(String(item.dutyDate || '')) !== day) return false;
     const sameNumber = number !== '' && (item.vehicleNumber || '').trim() === number;
     const sameId = vehicleId != null && Number(item.vehicleId) === vehicleId;
     return sameNumber || sameId;
@@ -1314,14 +1358,57 @@ function dutyForDate(
   return sameVehicle.find((item) => item.status !== 'cancelled') || sameVehicle[0];
 }
 
-function readDutyRows(rows: DateReport[]): DateReport[] {
+function reportsForAssignment(
+  initial: EventAssignment | null | undefined,
+  duties: EventDuty[],
+  event: VthEvent,
+  vehicles: EventFleetOption[],
+  preferredVehicleNumber?: string,
+): { reports: DateReport[]; vehicleId: string; driverId: string; type: string; pax: string; notes: string } {
+  const fallbackTime = clockValue(initial?.reportingTime || event.defaultReportingTime, '06:00');
+  const fallbackLoc = initial?.reportingLocation || event.reportingLocation || '';
+  const preferred = !initial
+    ? vehicles.find((item) => item.vehicleNumber === preferredVehicleNumber)
+    : undefined;
+  const seedVehicle = {
+    id: initial?.vehicleId || preferred?.id || null,
+    number: initial?.vehicleNumber || preferred?.vehicleNumber || '',
+  };
+  const byDate = new Map<string, EventDuty>();
+  if (initial) {
+    duties
+      .filter((duty) => Number(duty.assignmentId) === Number(initial.id) && duty.status !== 'cancelled')
+      .forEach((duty) => byDate.set(isoDay(duty.dutyDate), duty));
+  }
+  const reports = (initial?.dates || []).map((date) => {
+    const day = isoDay(date);
+    const duty = byDate.get(day) || dutyForDate(duties, initial?.id ?? 0, { date: day, dutyId: null }, seedVehicle);
+    return {
+      date: day,
+      time: clockValue(duty?.reportingTime || fallbackTime, fallbackTime),
+      location: (duty?.reportingLocation || fallbackLoc).trim(),
+      dutyId: duty && Number(duty.assignmentId) === Number(initial?.id) ? duty.id : null,
+    };
+  });
+  return {
+    reports,
+    vehicleId: initial?.vehicleId ? String(initial.vehicleId) : (preferred ? String(preferred.id) : 'none'),
+    driverId: initial?.driverId ? String(initial.driverId) : 'none',
+    type: initial?.vehicleType || preferred?.vehicleType || 'innova_crysta',
+    pax: initial?.passengerCount != null ? String(initial.passengerCount) : '',
+    notes: initial?.notes || '',
+  };
+}
+
+function readDutyRows(root: ParentNode | null, rows: DateReport[]): DateReport[] {
   const times = new Map<string, string>();
   const locations = new Map<string, string>();
-  document.querySelectorAll<HTMLInputElement>('input[data-duty-time]').forEach((input) => {
+  const scope = root ?? document;
+  scope.querySelectorAll<HTMLInputElement>('input[data-duty-time]').forEach((input) => {
     const date = input.dataset.dutyTime;
     if (date && /^\d{2}:\d{2}/.test(input.value)) times.set(date, input.value.slice(0, 5));
   });
-  document.querySelectorAll<HTMLInputElement>('input[data-duty-location]').forEach((input) => {
+  scope.querySelectorAll<HTMLInputElement>('input[data-duty-location]').forEach((input) => {
     const date = input.dataset.dutyLocation;
     if (date) locations.set(date, input.value);
   });
@@ -1446,62 +1533,28 @@ function AssignmentDialog({
   const [pax, setPax] = useState('');
   const [notes, setNotes] = useState('');
   const calendarRef = useRef<HTMLDivElement>(null);
+  const scheduleRef = useRef<HTMLDivElement>(null);
   const reportsRef = useRef<DateReport[]>([]);
-  const seededKey = useRef<string | null>(null);
   const editedTimes = useRef<Record<string, string>>({});
-  const wasOpen = useRef(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      if (wasOpen.current) logSchedule('dialog closed, next open reloads from the server');
-      wasOpen.current = false;
-      seededKey.current = null;
-      return;
-    }
-    wasOpen.current = true;
-    const key = String(initial?.id ?? 'new');
-    if (seededKey.current === key) {
-      logSchedule('form kept, server refresh did not replace the open schedule', { assignmentId: key });
-      return;
-    }
-    if (initial && duties.length === 0) return;
-    seededKey.current = key;
-    const fallbackTime = clockValue(initial?.reportingTime || event.defaultReportingTime, '06:00');
-    const fallbackLoc = initial?.reportingLocation || event.reportingLocation || '';
-    const selected = initial?.dates || [];
-    const preferred = !initial
-      ? vehicles.find((item) => item.vehicleNumber === preferredVehicleNumber)
-      : undefined;
-    const seedVehicle = {
-      id: initial?.vehicleId || preferred?.id || null,
-      number: initial?.vehicleNumber || preferred?.vehicleNumber || '',
-    };
-    const byDate = new Map<string, EventDuty>();
-    if (initial) {
-      duties
-        .filter((duty) => Number(duty.assignmentId) === Number(initial.id) && duty.status !== 'cancelled')
-        .forEach((duty) => byDate.set(isoDay(duty.dutyDate), duty));
-    }
-    const nextReports = selected.map((date) => {
-      const day = isoDay(date);
-      const duty = byDate.get(day) || dutyForDate(duties, initial?.id ?? 0, { date: day, dutyId: null }, seedVehicle);
-      return {
-        date: day,
-        time: editedTimes.current[day] || clockValue(duty?.reportingTime || fallbackTime, fallbackTime),
-        location: (duty?.reportingLocation || fallbackLoc).trim(),
-        dutyId: duty?.id ?? null,
-      };
-    });
-    reportsRef.current = nextReports;
-    logSchedule('form loaded from duties', scheduleText(nextReports));
-    setVehicleId(initial?.vehicleId ? String(initial.vehicleId) : (preferred ? String(preferred.id) : 'none'));
-    setDriverId(initial?.driverId ? String(initial.driverId) : 'none');
-    setType(initial?.vehicleType || preferred?.vehicleType || 'innova_crysta');
-    setReports(nextReports);
-    setPax(initial?.passengerCount != null ? String(initial.passengerCount) : '');
-    setNotes(initial?.notes || '');
-  }, [open, initial, event.defaultReportingTime, event.reportingLocation, duties, vehicles, preferredVehicleNumber]);
+  const formKey = open ? String(initial?.id ?? 'new') : 'closed';
+  const waitingForDuties = open && Boolean(initial) && duties.length === 0;
+  if (loadedKey !== formKey && !waitingForDuties) {
+    const seeded = formKey === 'closed'
+      ? { reports: [] as DateReport[], vehicleId: '', driverId: '', type: 'innova_crysta', pax: '', notes: '' }
+      : reportsForAssignment(initial, duties, event, vehicles, preferredVehicleNumber);
+    reportsRef.current = seeded.reports;
+    editedTimes.current = {};
+    logSchedule(formKey === 'closed' ? 'dialog closed, next open reloads this vehicle only' : 'form loaded from this vehicle', scheduleText(seeded.reports));
+    setLoadedKey(formKey);
+    setReports(seeded.reports);
+    setVehicleId(seeded.vehicleId);
+    setDriverId(seeded.driverId);
+    setType(seeded.type);
+    setPax(seeded.pax);
+    setNotes(seeded.notes);
+  }
 
   const reportTemplate = (current: DateReport[]) => {
     const sample = current[0];
@@ -1544,7 +1597,7 @@ function AssignmentDialog({
   };
 
   const save = async () => {
-    const rows = readDutyRows((reportsRef.current.length ? reportsRef.current : reports).map((row) => ({
+    const rows = readDutyRows(scheduleRef.current, (reportsRef.current.length ? reportsRef.current : reports).map((row) => ({
       ...row,
       date: isoDay(row.date),
       time: editedTimes.current[isoDay(row.date)] || clockValue(row.time, '06:00'),
@@ -1814,7 +1867,7 @@ function AssignmentDialog({
             </div>
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section ref={scheduleRef} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div>
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
                 <Clock className="h-4 w-4 text-[#2f6bff]" /> Reporting time for each date
@@ -1840,12 +1893,12 @@ function AssignmentDialog({
                       <input
                         type="time"
                         step={60}
-                        key={row.date}
+                        key={`${formKey}-${row.date}`}
                         data-duty-time={row.date}
                         aria-label={`Reporting time ${formatDutyDate(row.date)}`}
                         className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                        defaultValue={editedTimes.current[row.date] || row.time}
-                        onInput={(event) => {
+                        value={row.time}
+                        onChange={(event) => {
                           const value = event.currentTarget.value.slice(0, 5);
                           if (/^\d{2}:\d{2}$/.test(value)) updateReport(row.date, { time: value });
                         }}
@@ -2429,15 +2482,21 @@ function dutiesForReport(duties: EventDuty[], vehicle: string, from: string, to:
   });
 }
 
+function activeDutyRows(rows: EventDuty[]): EventDuty[] {
+  return rows.filter((duty) => (duty.status || '').trim().toLowerCase() !== 'cancelled');
+}
+
 function exportVehicleExcel(event: VthEvent, rows: EventDuty[], vehicle: string) {
+  const active = activeDutyRows(rows);
   downloadCsv(
     `${event.eventCode}-${vehicle === 'all' ? 'all-vehicles' : vehicle}-duties.csv`,
-    ['Date', 'Slip', 'Vehicle', 'Driver', 'Opening KM', 'Closing KM', 'Total KM', 'Reporting time', 'Reported', 'Closing time', 'Odometer uploaded', 'Total time', 'Report location', 'Status'],
-    rows.map((d) => [
+    ['Date', 'Slip', 'Vehicle', 'Driver', 'Driver number', 'Opening KM', 'Closing KM', 'Total KM', 'Reporting time', 'Reported', 'Closing time', 'Odometer uploaded', 'Total time', 'Report location', 'Status'],
+    active.map((d) => [
       d.dutyDate,
       d.dutySlipNo,
       d.vehicleNumber || '',
       d.driverName || '',
+      d.driverMobile || '',
       d.openingKm ?? '',
       d.closingKm ?? '',
       d.totalKm ?? '',
@@ -2467,8 +2526,10 @@ function assignmentSlNo(assignments: EventAssignment[], assignmentId: number, ve
 }
 
 function exportVehiclePdf(event: VthEvent, rows: EventDuty[], assignments: EventAssignment[], vehicle: string, from: string, to: string) {
-  const heading = vehicle === 'all' ? `${event.name} · all vehicles` : `${event.name} · ${vehicle}`;
-  const ordered = [...rows].sort((a, b) => {
+  const heading = vehicle === 'all'
+    ? 'Summary of duty slips of all the vehicles'
+    : `Summary of duty slips of ${vehicle}`;
+  const ordered = activeDutyRows(rows).sort((a, b) => {
     const aSerial = assignmentSlNo(assignments, a.assignmentId, a.vehicleNumber) ?? 9999;
     const bSerial = assignmentSlNo(assignments, b.assignmentId, b.vehicleNumber) ?? 9999;
     if (aSerial !== bSerial) return aSerial - bSerial;
@@ -2496,10 +2557,11 @@ function exportVehiclePdf(event: VthEvent, rows: EventDuty[], assignments: Event
     <td>${escapeHtml(dutyStatusLabel(d.status))}</td>
   </tr>`).join('')}</tbody></table>`;
   printHtmlReport(
-    heading,
+    `${event.eventCode || event.name}-${vehicle === 'all' ? 'all-vehicles' : vehicle}-duty-slips`,
     heading,
     body,
-    `${formatDutyDate(from)} – ${formatDutyDate(to)} · ${rows.length} duty day(s)`,
+    `${event.name} · ${formatDutyDate(from)} – ${formatDutyDate(to)} · ${ordered.length} duty day(s)`,
+    true,
   );
 }
 

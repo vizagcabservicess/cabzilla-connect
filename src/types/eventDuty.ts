@@ -47,6 +47,7 @@ export interface VthEvent {
   notes?: string | null;
   status: EventStatus;
   gpsRequired: boolean;
+  showSerialNo?: boolean;
   supportMobile?: string | null;
   assignmentCount?: number;
   dutyCount?: number;
@@ -281,7 +282,7 @@ export interface EventTrackVehicle {
 }
 
 export interface EventShareView {
-  event: Pick<VthEvent, 'id' | 'eventCode' | 'name' | 'startDate' | 'endDate' | 'updatedAt' | 'status' | 'gpsRequired'>;
+  event: Pick<VthEvent, 'id' | 'eventCode' | 'name' | 'startDate' | 'endDate' | 'updatedAt' | 'status' | 'gpsRequired' | 'showSerialNo'>;
   dates: string[];
   selectedDate: string;
   stats: EventDailyStats;
@@ -350,5 +351,6 @@ export interface EventSavePayload {
   notes?: string;
   status?: EventStatus;
   gpsRequired?: boolean;
+  showSerialNo?: boolean;
   supportMobile?: string;
 }

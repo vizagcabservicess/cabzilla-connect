@@ -77,18 +77,24 @@ function displayMobile(mobile: string): string {
   return mobile;
 }
 
-function driverShareText(row: ShareRow, serial: number): string {
+function rowSerial(row: ShareRow, vehicles: ShareRow[]): number {
+  if (row.serialNo != null && row.serialNo > 0) return row.serialNo;
+  const listedAt = vehicles.findIndex((item) => item.dutySlipNo === row.dutySlipNo && item.dutyId === row.dutyId);
+  return listedAt >= 0 ? listedAt + 1 : 1;
+}
+
+function driverShareText(row: ShareRow, serial: number, showSerial: boolean): string {
   return [
-    `SL.No: ${serial}`,
+    showSerial ? `SL.No: ${serial}` : '',
     `Driver: ${row.driverName || '—'}`,
     `Phone: ${row.driverMobile ? displayMobile(row.driverMobile) : '—'}`,
     `Vehicle: ${row.vehicleType || '—'}`,
     `Vehicle No: ${row.vehicleNumber || '—'}`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
-async function shareDriverCard(row: ShareRow, serial: number): Promise<void> {
-  const text = driverShareText(row, serial);
+async function shareDriverCard(row: ShareRow, serial: number, showSerial: boolean): Promise<void> {
+  const text = driverShareText(row, serial, showSerial);
   try {
     if (typeof navigator.share === 'function') {
       await navigator.share({ title: row.driverName || 'Driver', text });
@@ -354,6 +360,7 @@ export default function EventSharePage() {
     );
   }
 
+  const showSerial = Boolean(view.event.showSerialNo);
   const chips: Array<{ id: ChipId; label: string; count: number; icon: typeof Car }> = [
     { id: 'all', label: 'All Vehicles', count: stats.totalVehicles, icon: Car },
     { id: 'trip', label: 'In Trip', count: tripCount, icon: Play },
@@ -502,8 +509,7 @@ export default function EventSharePage() {
               : session.text;
             const sessionClass = asked ? 'text-red-600' : session.className;
             const started = dutyStarted(row);
-            const listedAt = assignedVehicles.findIndex((item) => item.dutySlipNo === row.dutySlipNo && item.dutyId === row.dutyId);
-            const serial = row.serialNo != null && row.serialNo > 0 ? row.serialNo : listedAt + 1;
+            const serial = rowSerial(row, assignedVehicles);
             return (
               <div
                 key={`${row.dutySlipNo}-${index}`}
@@ -520,7 +526,17 @@ export default function EventSharePage() {
               >
                 <div className="min-w-0">
                   <div className="truncate text-[11px] font-semibold leading-tight sm:text-sm">{row.vehicleType}</div>
-                  <div className="truncate text-[10px] leading-tight text-slate-400 sm:text-xs">{row.vehicleNumber}</div>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <div className="truncate text-[10px] leading-tight text-slate-400 sm:text-xs">{row.vehicleNumber}</div>
+                    {showSerial ? (
+                      <span
+                        aria-label={`Serial ${serial}`}
+                        className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums leading-none text-slate-700 sm:text-[11px]"
+                      >
+                        {serial}
+                      </span>
+                    ) : null}
+                  </div>
                   {duration ? (
                     <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800 sm:text-[10px]">
                       {duration}
@@ -550,7 +566,7 @@ export default function EventSharePage() {
                     type="button"
                     aria-label={`Share ${row.driverName || 'driver'}`}
                     title="Share"
-                    onClick={() => { void shareDriverCard(row, serial); }}
+                    onClick={() => { void shareDriverCard(row, serial, showSerial); }}
                     className="inline-flex h-6 items-center gap-1 rounded-full bg-slate-100 px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-200"
                   >
                     <Share2 className="h-3 w-3" />

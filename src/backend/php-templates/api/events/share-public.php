@@ -2,7 +2,7 @@
 require_once __DIR__ . '/lib.php';
 
 vth_event_cors();
-vth_event_rate_limit('vth_event_share', 60, 60);
+vth_event_rate_limit('vth_event_share_ip', 800, 60);
 
 $conn = vth_event_conn();
 vth_event_ensure_optional_columns($conn);
@@ -11,6 +11,9 @@ $token = (string) ($_GET['token'] ?? ($body['token'] ?? ''));
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 if ($token === '') {
     $token = (string) ($headers['X-Event-Share-Token'] ?? $headers['x-event-share-token'] ?? '');
+}
+if ($token !== '') {
+    vth_event_rate_limit('vth_event_share_' . substr(hash('sha256', $token), 0, 24), 120, 60);
 }
 $row = vth_event_lookup_token($conn, $token, 'event_share');
 if (!$row) {
